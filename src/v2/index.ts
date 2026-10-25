@@ -25,6 +25,13 @@ import { attachConversationTopic, type KernelEvent } from './stream/conversation
 import { attachWorkspacesTopic } from './stream/workspaces-topic.ts';
 import { attachSubagentTopic, type LoadSubagent } from './stream/subagent-topic.ts';
 import { createStuckWatch } from './stream/stuck-watch.ts';
+import {
+  diffView,
+  findKernelChange,
+  posixPath,
+  type KernelChange,
+  type KernelDiffBody,
+} from './views/changes.ts';
 import { MANUAL_CONTINUE_TEXT } from './views/continuation.ts';
 import {
   conversationSnapshot,
@@ -32,6 +39,12 @@ import {
   toolOutputView,
   type LoadConversation,
 } from './views/conversation.ts';
+import {
+  readWorkspaceFile,
+  saveWorkspaceFile,
+  workspaceTreeView,
+  type FileOpError,
+} from './views/files.ts';
 import {
   buildWorkspacesSnapshot,
   conversationSummaryView,
@@ -53,6 +66,11 @@ type WorkspaceRemoved = components['schemas']['WorkspaceRemoved'];
 type WorkspaceBusy = components['schemas']['WorkspaceBusy'];
 type SubagentSnapshot = components['schemas']['SubagentSnapshot'];
 type SubagentMessageAccepted = components['schemas']['SubagentMessageAccepted'];
+type Diff = components['schemas']['Diff'];
+type FileTree = components['schemas']['FileTree'];
+type FileContent = components['schemas']['FileContent'];
+type SaveResult = components['schemas']['SaveResult'];
+type FileConflict = components['schemas']['FileConflict'];
 type V2JsonBody =
   | ServiceInfo
   | WebCode
@@ -67,7 +85,12 @@ type V2JsonBody =
   | WorkspaceRemoved
   | WorkspaceBusy
   | SubagentSnapshot
-  | SubagentMessageAccepted;
+  | SubagentMessageAccepted
+  | Diff
+  | FileTree
+  | FileContent
+  | SaveResult
+  | FileConflict;
 
 export type ConversationRow = {
   id?: unknown;
@@ -77,6 +100,7 @@ export type ConversationRow = {
 
 export type WorkspaceRow = {
   removedAt?: unknown;
+  path?: unknown;
   [key: string]: unknown;
 };
 
@@ -108,7 +132,14 @@ export type SendToAgentFn = (
 ) => Promise<{ status: number; body?: { ok?: unknown; error?: unknown } }>;
 export type StopAgentFn = (cid: string, agentId: string) => Promise<{ status: number }>;
 
-export type { LoadConversation, LoadSubagent, KernelEvent };
+export type ChangesConversationFn = (cid: string) => Promise<KernelChange[]>;
+export type DiffConversationFn = (
+  cid: string,
+  filePath: string,
+) => Promise<{ status: number; body?: KernelDiffBody }>;
+export type NotifyConversationFn = (cid: string) => void;
+
+export type { LoadConversation, LoadSubagent, KernelEvent, KernelChange };
 
 export type V2Handler = (req: IncomingMessage, res: ServerResponse, url: URL) => Promise<boolean>;
 
@@ -269,6 +300,51 @@ function writeSseFrame(res: ServerResponse, frame: SseFrame): void {
   }
 }
 
+function errCode(err: unknown): string {
+  if (err && typeof err === 'object' && 'code' in err && (err as { code?: unknown }).code != null) {
+    return String((err as { code?: unknown }).code);
+  }
+  return '';
+}
+
+function sendFileOpError(
+  res: ServerResponse,
+  pathname: string,
+  method: string,
+  err: unknown,
+): boolean {
+  const code = errCode(err);
+  if (code === 'E_SANDBOX') {
+    sendV2(res, pathname, method, 403, { error: 'path outside workspace', code: 'E_SANDBOX' } satisfies V2Error);
+    return true;
+  }
+  if (code === 'ENOENT') {
+    sendV2(res, pathname, method, 404, { error: 'not found' } satisfies V2Error);
+    return true;
+  }
+  if (code === 'EISDIR') {
+    sendV2(res, pathname, method, 400, { error: 'is a directory', code: 'E_BAD_REQUEST' } satisfies V2Error);
+    return true;
+  }
+  if (code === 'E_CONFLICT') {
+    const current = (err as FileOpError).current;
+    if (!current) return false;
+    sendV2(res, pathname, method, 409, {
+      error: 'conflict',
+      code: 'E_CONFLICT',
+      current,
+    } satisfies FileConflict);
+    return true;
+  }
+  return false;
+}
+
+function workspacePathOf(ws: WorkspaceRow | null | undefined): string {
+  if (!ws || ws.removedAt != null) return '';
+  if (ws.path == null) return '';
+  return String(ws.path);
+}
+
 function sidebarLoader(opts: {
   listWorkspaces?: ListWorkspacesFn;
   listConversations?: ListConversationsFn;
@@ -326,6 +402,9 @@ export function createV2Handler(opts: {
   sendToAgent?: SendToAgentFn;
   stopAgent?: StopAgentFn;
   demo?: boolean;
+  changesConversation?: ChangesConversationFn;
+  diffConversation?: DiffConversationFn;
+  notifyConversation?: NotifyConversationFn;
 }): V2Handler {
   const { serviceVersion, startedAt, auth, hub } = opts;
   const pid = opts.pid ?? process.pid;
@@ -493,6 +572,122 @@ export function createV2Handler(opts: {
       return true;
     }
 
+    const treeMatch = /^\/api\/v2\/workspaces\/([^/]+)\/tree$/.exec(pathname);
+    if (method === 'GET' && treeMatch) {
+      const workspaceId = decodeURIComponent(treeMatch[1]);
+      let ws: WorkspaceRow | null | undefined = null;
+      try {
+        ws = opts.getWorkspace ? await opts.getWorkspace(workspaceId) : null;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'workspace check failed';
+        sendV2(res, pathname, method, 500, { error: message, code: 'E_INTERNAL' } satisfies V2Error);
+        return true;
+      }
+      const root = workspacePathOf(ws);
+      if (!root) {
+        sendV2(res, pathname, method, 404, { error: 'not found' } satisfies V2Error);
+        return true;
+      }
+      try {
+        const tree = await workspaceTreeView(root);
+        sendV2(res, pathname, method, 200, tree);
+      } catch (err) {
+        if (sendFileOpError(res, pathname, method, err)) return true;
+        const message = err instanceof Error ? err.message : 'tree failed';
+        sendV2(res, pathname, method, 500, { error: message, code: 'E_INTERNAL' } satisfies V2Error);
+      }
+      return true;
+    }
+
+    const filesMatch = /^\/api\/v2\/workspaces\/([^/]+)\/files$/.exec(pathname);
+    if (method === 'GET' && filesMatch) {
+      const workspaceId = decodeURIComponent(filesMatch[1]);
+      const rel = url.searchParams.get('path');
+      if (rel == null || rel === '') {
+        sendV2(res, pathname, method, 400, { error: 'path required', code: 'E_BAD_REQUEST' } satisfies V2Error);
+        return true;
+      }
+      let ws: WorkspaceRow | null | undefined = null;
+      try {
+        ws = opts.getWorkspace ? await opts.getWorkspace(workspaceId) : null;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'workspace check failed';
+        sendV2(res, pathname, method, 500, { error: message, code: 'E_INTERNAL' } satisfies V2Error);
+        return true;
+      }
+      const root = workspacePathOf(ws);
+      if (!root) {
+        sendV2(res, pathname, method, 404, { error: 'not found' } satisfies V2Error);
+        return true;
+      }
+      try {
+        const file = await readWorkspaceFile(root, rel);
+        sendV2(res, pathname, method, 200, file);
+      } catch (err) {
+        if (sendFileOpError(res, pathname, method, err)) return true;
+        const message = err instanceof Error ? err.message : 'read failed';
+        sendV2(res, pathname, method, 500, { error: message, code: 'E_INTERNAL' } satisfies V2Error);
+      }
+      return true;
+    }
+    if (method === 'PUT' && filesMatch) {
+      const workspaceId = decodeURIComponent(filesMatch[1]);
+      const body = await readObjectBody(req, res, pathname, method);
+      if (!body) return true;
+      if (typeof body.path !== 'string' || body.path === '') {
+        sendV2(res, pathname, method, 400, { error: 'path required', code: 'E_BAD_REQUEST' } satisfies V2Error);
+        return true;
+      }
+      if (typeof body.text !== 'string') {
+        sendV2(res, pathname, method, 400, { error: 'text required', code: 'E_BAD_REQUEST' } satisfies V2Error);
+        return true;
+      }
+      let baseVersion: string | undefined;
+      if (Object.prototype.hasOwnProperty.call(body, 'baseVersion') && body.baseVersion != null) {
+        if (typeof body.baseVersion !== 'string') {
+          sendV2(res, pathname, method, 400, { error: 'invalid baseVersion', code: 'E_BAD_REQUEST' } satisfies V2Error);
+          return true;
+        }
+        baseVersion = body.baseVersion;
+      }
+      let ws: WorkspaceRow | null | undefined = null;
+      try {
+        ws = opts.getWorkspace ? await opts.getWorkspace(workspaceId) : null;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'workspace check failed';
+        sendV2(res, pathname, method, 500, { error: message, code: 'E_INTERNAL' } satisfies V2Error);
+        return true;
+      }
+      const root = workspacePathOf(ws);
+      if (!root) {
+        sendV2(res, pathname, method, 404, { error: 'not found' } satisfies V2Error);
+        return true;
+      }
+      try {
+        const saved = await saveWorkspaceFile({
+          root,
+          path: body.path,
+          text: body.text,
+          baseVersion,
+        });
+        try {
+          const convs = opts.listConversations ? await opts.listConversations(workspaceId) : [];
+          for (const conv of convs) {
+            const cid = conv.id == null ? '' : String(conv.id);
+            if (cid) opts.notifyConversation?.(cid);
+          }
+        } catch (err) {
+          console.error('WEFT_V2_FILE_NOTIFY', err);
+        }
+        sendV2(res, pathname, method, 200, saved);
+      } catch (err) {
+        if (sendFileOpError(res, pathname, method, err)) return true;
+        const message = err instanceof Error ? err.message : 'save failed';
+        sendV2(res, pathname, method, 500, { error: message, code: 'E_INTERNAL' } satisfies V2Error);
+      }
+      return true;
+    }
+
     const convMatch = /^\/api\/v2\/conversations\/([^/]+)$/.exec(pathname);
     if (method === 'GET' && convMatch) {
       const id = decodeURIComponent(convMatch[1]);
@@ -514,6 +709,54 @@ export function createV2Handler(opts: {
         sendV2(res, pathname, method, 200, snapshot);
       } catch (err) {
         const message = err instanceof Error ? err.message : 'snapshot failed';
+        sendV2(res, pathname, method, 500, { error: message, code: 'E_INTERNAL' } satisfies V2Error);
+      }
+      return true;
+    }
+
+    const diffMatch = /^\/api\/v2\/conversations\/([^/]+)\/diff$/.exec(pathname);
+    if (method === 'GET' && diffMatch) {
+      const id = decodeURIComponent(diffMatch[1]);
+      const filePath = url.searchParams.get('path');
+      if (filePath == null || filePath === '') {
+        sendV2(res, pathname, method, 400, { error: 'path required', code: 'E_BAD_REQUEST' } satisfies V2Error);
+        return true;
+      }
+      if (!opts.getConversation) {
+        sendV2(res, pathname, method, 500, { error: 'kernel not ready', code: 'E_INTERNAL' } satisfies V2Error);
+        return true;
+      }
+      let conv: ConversationRow | null | undefined = null;
+      try {
+        conv = await opts.getConversation(id);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'load conversation failed';
+        sendV2(res, pathname, method, 500, { error: message, code: 'E_INTERNAL' } satisfies V2Error);
+        return true;
+      }
+      if (!conv) {
+        sendV2(res, pathname, method, 404, { error: 'not found' } satisfies V2Error);
+        return true;
+      }
+      try {
+        const rows = opts.changesConversation ? await opts.changesConversation(id) : [];
+        const hit = findKernelChange(rows, filePath);
+        if (!hit) {
+          sendV2(res, pathname, method, 404, { error: 'not found' } satisfies V2Error);
+          return true;
+        }
+        const originalPath = hit.path == null ? posixPath(filePath) : String(hit.path);
+        const result = opts.diffConversation
+          ? await opts.diffConversation(id, originalPath)
+          : { status: 404, body: undefined };
+        if (result.status === 404 || result.body == null) {
+          sendV2(res, pathname, method, 404, { error: 'not found' } satisfies V2Error);
+          return true;
+        }
+        sendV2(res, pathname, method, 200, diffView(result.body, originalPath));
+      } catch (err) {
+        if (sendFileOpError(res, pathname, method, err)) return true;
+        const message = err instanceof Error ? err.message : 'diff failed';
         sendV2(res, pathname, method, 500, { error: message, code: 'E_INTERNAL' } satisfies V2Error);
       }
       return true;
@@ -811,6 +1054,8 @@ export function createV2Runtime(opts: {
   sendToAgent?: SendToAgentFn;
   stopAgent?: StopAgentFn;
   demo?: boolean;
+  changesConversation?: ChangesConversationFn;
+  diffConversation?: DiffConversationFn;
 }): V2Runtime {
   const pid = opts.pid ?? process.pid;
   const auth = createV2Auth({
@@ -836,6 +1081,7 @@ export function createV2Runtime(opts: {
   const stuck = createStuckWatch({ now: opts.now });
   const conversationTopic = attachConversationTopic(hub, {
     loadConversation: opts.loadConversation,
+    loadChanges: opts.changesConversation,
     subscribe: opts.subscribeConversation,
     now: opts.now,
     stuck,
@@ -881,6 +1127,9 @@ export function createV2Runtime(opts: {
     sendToAgent: opts.sendToAgent,
     stopAgent: opts.stopAgent,
     demo: opts.demo,
+    changesConversation: opts.changesConversation,
+    diffConversation: opts.diffConversation,
+    notifyConversation: (cid) => conversationTopic.notify(cid),
   });
 
   return {

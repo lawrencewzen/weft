@@ -1,6 +1,7 @@
 /** Live `conversation:<id>` topic: snapshot entities + kernel-driven upserts. */
 
 import type { components } from '../contract.gen.ts';
+import { changeViews, type Change, type KernelChange } from '../views/changes.ts';
 import {
   conversationSnapshot,
   type ConversationSnapshot,
@@ -30,8 +31,11 @@ export type KernelEvent = {
   data?: unknown;
 };
 
+export type LoadChanges = (cid: string) => Promise<KernelChange[] | Change[] | null | undefined>;
+
 export type ConversationTopicOpts = {
   loadConversation?: LoadConversation;
+  loadChanges?: LoadChanges;
   subscribe?: (cid: string, fn: (ev: KernelEvent) => void) => () => void;
   coalesceMs?: number;
   pathCacheMs?: number;
@@ -41,7 +45,7 @@ export type ConversationTopicOpts = {
   log?: (line: string) => void;
 };
 
-type TopicSnapshot = ConversationSnapshot & { subagents: Subagent[] };
+type TopicSnapshot = ConversationSnapshot & { subagents: Subagent[]; changes: Change[] };
 
 type ThreadItem = components['schemas']['ThreadItem'];
 type ToolCall = components['schemas']['ToolCall'];
@@ -63,6 +67,7 @@ type TopicState = {
 
 export type ConversationTopic = {
   kernelSubscriptionCount(): number;
+  notify(cid: string): void;
   dispose(): void;
 };
 
@@ -123,6 +128,9 @@ export function entitiesFromSnapshot(snap: TopicSnapshot | ConversationSnapshot)
   for (const agent of 'subagents' in snap ? snap.subagents : []) {
     out.push({ entity: 'subagent', id: agent.id, value: agent });
   }
+  for (const change of 'changes' in snap ? snap.changes : []) {
+    out.push({ entity: 'change', id: change.path, value: change });
+  }
   return out;
 }
 
@@ -155,6 +163,7 @@ function mapsFromSnapshot(snap: TopicSnapshot): Map<EntityKey, object> {
   for (const item of snap.items) map.set(entityKey('item', item.id), item);
   for (const tool of snap.tools) map.set(entityKey('tool', tool.id), tool);
   for (const agent of snap.subagents) map.set(entityKey('subagent', agent.id), agent);
+  for (const change of snap.changes) map.set(entityKey('change', change.path), change);
   return map;
 }
 
@@ -163,6 +172,7 @@ function orderedUpsertKeys(snap: TopicSnapshot): EntityKey[] {
   for (const id of snap.conversation.itemIds) keys.push(entityKey('item', id));
   for (const tool of snap.tools) keys.push(entityKey('tool', tool.id));
   for (const agent of snap.subagents) keys.push(entityKey('subagent', agent.id));
+  for (const change of snap.changes) keys.push(entityKey('change', change.path));
   keys.push(entityKey('conversation', snap.conversation.id));
   return keys;
 }
@@ -242,6 +252,15 @@ export function attachConversationTopic(hub: EventHub, opts: ConversationTopicOp
       lang,
       exists: existsFor(cid, workspacePath),
     });
+    let changes: Change[] = [];
+    if (opts.loadChanges) {
+      try {
+        changes = changeViews(await opts.loadChanges(cid));
+      } catch (err) {
+        console.error(`WEFT_V2_CONV_CHANGES ${cid}`, err);
+        changes = [];
+      }
+    }
     const t = now();
     return overlayLive({
       ...snap,
@@ -250,6 +269,7 @@ export function attachConversationTopic(hub: EventHub, opts: ConversationTopicOp
         now: t,
         stuckAfterMs,
       }),
+      changes,
     }, state.lives);
   }
 
@@ -466,6 +486,10 @@ export function attachConversationTopic(hub: EventHub, opts: ConversationTopicOp
   return {
     kernelSubscriptionCount() {
       return kernelUnsubs.size;
+    },
+    notify(cid: string) {
+      if (disposed || !kernelUnsubs.has(cid)) return;
+      enqueue(cid, () => recompute(cid));
     },
     dispose() {
       disposed = true;

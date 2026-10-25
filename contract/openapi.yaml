@@ -150,8 +150,9 @@ paths:
         - `item`：id 为 ThreadItem.id，值为 ThreadItem
         - `tool`：id 为 ToolCall.id，值为 ToolCall
         - `subagent`：id 为子 Agent id，值为 Subagent。卡住由服务端判定：kernel 状态为 running 且超过 stuckAfterMs（默认 60000，环境变量 WEFT_SUBAGENT_STUCK_MS）没有活动时 status 为 stuck，到点推送 upsert。
+        - `change`：id 为相对工作区的路径（统一用 `/`），值为 Change。快照带上当前变更列表。工具结束（write / edit / bash 都可能改文件）或经保存接口写入后随重算更新：变了才 upsert，从列表消失则 remove。不做文件监听。
 
-        快照是 GET /api/v2/conversations/{id} 的 conversation / items / tools，再加上该对话的 subagent 实体。模型流式输出时先 upsert 一条 `item`，id 以 `live:` 开头、`streaming` 为 true、`text` 为空；随后用 `text.delta` 追加。正式助手消息到来后 remove 这条流式项，再 upsert 正式项和 conversation。
+        快照是 GET /api/v2/conversations/{id} 的 conversation / items / tools，再加上该对话的 subagent 和 change 实体。模型流式输出时先 upsert 一条 `item`，id 以 `live:` 开头、`streaming` 为 true、`text` 为空；随后用 `text.delta` 追加。正式助手消息到来后 remove 这条流式项，再 upsert 正式项和 conversation。
 
         主题 `subagent:<cid>:<agentId>`（`<cid>` 为父对话 id，`<agentId>` 为子 Agent id）按前缀动态注册。实体：
         - `subagent`：id 为子 Agent id，值为 Subagent
@@ -376,6 +377,202 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/V2Error"
+  /api/v2/workspaces/{id}/tree:
+    get:
+      operationId: getWorkspaceTree
+      summary: 工作区文件树
+      description: |
+        复用 listWorkspaceTree：最多 500 条、深度 8，跳过 .git 和 node_modules。
+        达到条数上限时 truncated 为 true。path 相对工作区，统一用 `/`。
+        越界的符号链接跳过。工作区不存在或已移除 404。
+      security:
+        - bearerAuth: []
+        - sessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: 工作区 id
+      responses:
+        "200":
+          description: 文件树
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FileTree"
+        "401":
+          description: 未授权
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        "403":
+          description: 路径越界
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        "404":
+          description: 工作区不存在
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        4XX:
+          description: 客户端错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        5XX:
+          description: 服务端错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+  /api/v2/workspaces/{id}/files:
+    get:
+      operationId: getWorkspaceFile
+      summary: 读工作区文件
+      description: |
+        返回 FileContent。超过 2 MB（环境变量 WEFT_V2_MAX_FILE_BYTES，仅测试用）时 tooLarge 为 true、text 为 null。
+        前 8 KB 里有 NUL 字节或不是合法 UTF-8 时 binary 为 true、text 为 null。
+        version 是内容 sha256 的十六进制前 16 位，保存时用来检测冲突。
+        越界 403 E_SANDBOX；不存在 404；是目录 400。
+      security:
+        - bearerAuth: []
+        - sessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: 工作区 id
+        - name: path
+          in: query
+          required: true
+          schema:
+            type: string
+          description: 相对工作区的文件路径
+      responses:
+        "200":
+          description: 文件内容
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FileContent"
+        "400":
+          description: 路径是目录或缺少 path
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        "401":
+          description: 未授权
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        "403":
+          description: 路径越界
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        "404":
+          description: 工作区或文件不存在
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        4XX:
+          description: 客户端错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        5XX:
+          description: 服务端错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+    put:
+      operationId: saveWorkspaceFile
+      summary: 保存工作区文件
+      description: |
+        请求体 `{ path, text, baseVersion? }`。带了 baseVersion 且和磁盘当前内容的 version 不同时
+        返回 409 `{ error, code: E_CONFLICT, current: FileContent }`，不写入。
+        否则写入（需要时建目录），返回 200 `{ path, version, added, removed }`。
+        越界 403 E_SANDBOX。写入后若该文件在某个对话的变更列表里，对应 conversation 主题会重算。
+      security:
+        - bearerAuth: []
+        - sessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: 工作区 id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SaveFileRequest"
+      responses:
+        "200":
+          description: 已保存
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SaveResult"
+        "400":
+          description: 请求体无效或路径是目录
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        "401":
+          description: 未授权
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        "403":
+          description: 路径越界
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        "404":
+          description: 工作区不存在
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        "409":
+          description: baseVersion 与磁盘当前 version 不一致
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FileConflict"
+        4XX:
+          description: 客户端错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        5XX:
+          description: 服务端错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
   /api/v2/conversations/{id}:
     get:
       operationId: getConversation
@@ -414,6 +611,66 @@ paths:
                 $ref: "#/components/schemas/V2Error"
         "404":
           description: 对话不存在
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        4XX:
+          description: 客户端错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        5XX:
+          description: 服务端错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+  /api/v2/conversations/{id}/diff:
+    get:
+      operationId: getConversationDiff
+      summary: 某个变更文件的结构化 diff
+      description: |
+        从现有 liveDiff 的 before/after 生成结构化 hunks，与旧接口 unified 内容逐行一致。
+        文件过大时 tooLarge 为 true、hunks 为空。没有这个路径的变更 404。
+      security:
+        - bearerAuth: []
+        - sessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: 对话 id
+        - name: path
+          in: query
+          required: true
+          schema:
+            type: string
+          description: 相对工作区的文件路径
+      responses:
+        "200":
+          description: 结构化 diff
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Diff"
+        "400":
+          description: 缺少 path
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        "401":
+          description: 未授权
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        "404":
+          description: 对话不存在或没有这个路径的变更
           content:
             application/json:
               schema:
@@ -1849,3 +2106,210 @@ components:
           items:
             $ref: "#/components/schemas/ToolCall"
       description: GET /api/v2/conversations/{id}/subagents/{agentId} 的响应。
+    Change:
+      type: object
+      additionalProperties: false
+      required:
+        - path
+        - added
+        - removed
+        - error
+      properties:
+        path:
+          type: string
+          description: 相对工作区的路径，统一用 `/`
+        added:
+          type: integer
+        removed:
+          type: integer
+        error:
+          description: 例如文件过大。没有则为 null
+          oneOf:
+            - type: "null"
+            - type: string
+      description: 对话右栏变更列表的一项。SSE conversation 主题里 entity=change，id 为 path。
+    DiffLine:
+      type: object
+      additionalProperties: false
+      required:
+        - op
+        - text
+        - oldLine
+        - newLine
+      properties:
+        op:
+          type: string
+          enum:
+            - ctx
+            - add
+            - del
+        text:
+          type: string
+          description: 不含换行符的一行
+        oldLine:
+          description: 旧文件行号（1 起）。add 为 null
+          oneOf:
+            - type: "null"
+            - type: integer
+        newLine:
+          description: 新文件行号（1 起）。del 为 null
+          oneOf:
+            - type: "null"
+            - type: integer
+    DiffHunk:
+      type: object
+      additionalProperties: false
+      required:
+        - oldStart
+        - oldLines
+        - newStart
+        - newLines
+        - lines
+      properties:
+        oldStart:
+          type: integer
+        oldLines:
+          type: integer
+        newStart:
+          type: integer
+        newLines:
+          type: integer
+        lines:
+          type: array
+          items:
+            $ref: "#/components/schemas/DiffLine"
+    Diff:
+      type: object
+      additionalProperties: false
+      required:
+        - path
+        - added
+        - removed
+        - hunks
+        - tooLarge
+      properties:
+        path:
+          type: string
+          description: 相对工作区的路径，统一用 `/`
+        added:
+          type: integer
+        removed:
+          type: integer
+        hunks:
+          type: array
+          items:
+            $ref: "#/components/schemas/DiffHunk"
+        tooLarge:
+          type: boolean
+          description: 文件过大时为 true，此时 hunks 为空
+      description: GET /api/v2/conversations/{id}/diff 的响应。
+    FileNode:
+      type: object
+      additionalProperties: false
+      required:
+        - path
+        - type
+      properties:
+        path:
+          type: string
+          description: 相对工作区的路径，统一用 `/`
+        type:
+          type: string
+          enum:
+            - file
+            - dir
+      description: 工作区文件树的一项。
+    FileTree:
+      type: object
+      additionalProperties: false
+      required:
+        - entries
+        - truncated
+      properties:
+        entries:
+          type: array
+          items:
+            $ref: "#/components/schemas/FileNode"
+        truncated:
+          type: boolean
+          description: 达到 500 条上限时为 true
+      description: GET /api/v2/workspaces/{id}/tree 的响应。
+    FileContent:
+      type: object
+      additionalProperties: false
+      required:
+        - path
+        - size
+        - binary
+        - tooLarge
+        - text
+        - version
+      properties:
+        path:
+          type: string
+          description: 相对工作区的路径，统一用 `/`
+        size:
+          type: integer
+          description: 字节数
+        binary:
+          type: boolean
+        tooLarge:
+          type: boolean
+        text:
+          description: 文本内容。binary 或 tooLarge 时为 null
+          oneOf:
+            - type: "null"
+            - type: string
+        version:
+          type: string
+          description: 内容 sha256 十六进制前 16 位
+      description: GET /api/v2/workspaces/{id}/files 的响应。
+    SaveFileRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - path
+        - text
+      properties:
+        path:
+          type: string
+        text:
+          type: string
+        baseVersion:
+          type: string
+          description: 上次读到的 version。带了且与磁盘当前不同则 409，不写入
+      description: PUT /api/v2/workspaces/{id}/files 的请求体。
+    SaveResult:
+      type: object
+      additionalProperties: false
+      required:
+        - path
+        - version
+        - added
+        - removed
+      properties:
+        path:
+          type: string
+        version:
+          type: string
+        added:
+          type: integer
+        removed:
+          type: integer
+      description: PUT /api/v2/workspaces/{id}/files 成功。
+    FileConflict:
+      type: object
+      additionalProperties: false
+      required:
+        - error
+        - code
+        - current
+      properties:
+        error:
+          type: string
+        code:
+          type: string
+          const: E_CONFLICT
+        current:
+          $ref: "#/components/schemas/FileContent"
+      description: 保存时 baseVersion 过期。

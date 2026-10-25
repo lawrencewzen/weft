@@ -2,8 +2,10 @@ import fs from 'node:fs/promises';
 import { resolveInWorkspace } from './paths.mjs';
 
 const SKIP_DIRS = new Set(['.git', 'node_modules']);
-const MAX_ENTRIES = 500;
-const MAX_DEPTH = 8;
+export const WORKSPACE_TREE_MAX_ENTRIES = 500;
+export const WORKSPACE_TREE_MAX_DEPTH = 8;
+const MAX_ENTRIES = WORKSPACE_TREE_MAX_ENTRIES;
+const MAX_DEPTH = WORKSPACE_TREE_MAX_DEPTH;
 
 /**
  * List files and directories under a workspace root.
