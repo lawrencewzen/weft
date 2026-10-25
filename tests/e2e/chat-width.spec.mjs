@@ -36,8 +36,20 @@ async function applyChatLayout(page, { width, leftW, rightW, leftOpen, rightOpen
   await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
 }
 
-async function measureChat(page) {
-  return page.evaluate(() => {
+/**
+ * Snapshot layout. When `injectNotice` is set, (re)create `.center-notice-row`
+ * in the same turn as the measurement: `renderCenterNotice()` / `renderChatThread()`
+ * wipe `#center-notice`, so a separate inject can lose the race with a late
+ * usage/status paint.
+ */
+async function measureChat(page, { injectNotice = false } = {}) {
+  return page.evaluate((injectNotice) => {
+    if (injectNotice) {
+      const host = document.getElementById('center-notice');
+      if (host) {
+        host.innerHTML = '<div class="center-notice-row"><span class="center-notice-text">notice</span></div>';
+      }
+    }
     const boxWidth = (el) => el ? el.getBoundingClientRect().width : 0;
     const contentWidth = (el) => {
       if (!el) return 0;
@@ -70,6 +82,7 @@ async function measureChat(page) {
       thread: contentWidth(inner),
       threadBox: boxWidth(inner),
       notice: boxWidth(notice),
+      noticeFound: Boolean(notice),
       composerBottom: box?.getBoundingClientRect().bottom ?? 0,
       footerBottom: composer?.getBoundingClientRect().bottom ?? 0,
       heroMid: heroBox ? (heroBox.top + heroBox.bottom) / 2 : 0,
@@ -83,7 +96,7 @@ async function measureChat(page) {
       scrollWidth: se.scrollWidth,
       innerWidth: window.innerWidth,
     };
-  });
+  }, injectNotice);
 }
 
 test('composer, thread and notice follow W; empty composer sits at the filled bottom', async ({ page }) => {
@@ -104,14 +117,6 @@ test('composer, thread and notice follow W; empty composer sits at the filled bo
   await expect(page.locator('.thread-inner')).toBeVisible();
   await expect(page.locator('.col-center')).not.toHaveClass(/is-draft/);
 
-  const injectNotice = () => page.evaluate(() => {
-    const host = document.getElementById('center-notice');
-    if (host && !host.querySelector('.center-notice-row')) {
-      host.innerHTML = '<div class="center-notice-row"><span class="center-notice-text">notice</span></div>';
-    }
-  });
-  await injectNotice();
-
   const filled = await measureChat(page);
   expect(Math.abs(filled.composerBottom - empty.composerBottom)).toBeLessThanOrEqual(2);
   expect(Math.abs(filled.footerBottom - empty.footerBottom)).toBeLessThanOrEqual(2);
@@ -120,8 +125,8 @@ test('composer, thread and notice follow W; empty composer sits at the filled bo
 
   for (const c of CASES) {
     await applyChatLayout(page, c);
-    await injectNotice();
-    const m = await measureChat(page);
+    const m = await measureChat(page, { injectNotice: true });
+    expect(m.noticeFound, `${c.name} notice row present`).toBe(true);
     const fromCenter = chatW(m.center, m.viewport);
     expect(Math.abs(m.composer - c.expected), `${c.name} composer vs example W`).toBeLessThanOrEqual(2);
     expect(Math.abs(m.thread - c.expected), `${c.name} thread vs example W`).toBeLessThanOrEqual(2);
