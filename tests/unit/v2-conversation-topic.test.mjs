@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { mkdtemp, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import http from 'node:http';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -120,6 +120,34 @@ async function getV2(base, apiPath, token) {
   let body = null;
   try { body = text ? JSON.parse(text) : null; } catch { body = null; }
   return { status: res.status, body, text, headers: res.headers };
+}
+
+async function postV2(base, apiPath, token, body = {}) {
+  const res = await fetch(base + apiPath, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      ...(token ? v2Headers(token) : {}),
+    },
+    body: JSON.stringify(body),
+  });
+  const text = await res.text();
+  let parsed = null;
+  try { parsed = text ? JSON.parse(text) : null; } catch { parsed = null; }
+  return { status: res.status, body: parsed, text, headers: res.headers };
+}
+
+async function waitForFile(file, timeoutMs = 15000) {
+  const started = Date.now();
+  while (Date.now() - started < timeoutMs) {
+    try {
+      await readFile(file, 'utf8');
+      return;
+    } catch {
+      await sleep(30);
+    }
+  }
+  throw new Error(`file not ready: ${file}`);
 }
 
 async function openConversation(base) {
@@ -668,6 +696,142 @@ test('subscribing to a missing conversation yields an empty snapshot with missin
     assert.equal(events.some((ev) => ev.event === 'upsert' || ev.event === 'remove'), false);
   } finally {
     await stopServer(srv);
+  }
+});
+
+function assertLivePushSequence(events, convId, expectedText) {
+  assertPushedEntities(events.filter((ev) => ev.event !== 'heartbeat'));
+  const userAt = events.findIndex((ev) => (
+    ev.event === 'upsert' && ev.data.entity === 'item' && ev.data.value?.kind === 'user'
+  ));
+  const runningAt = events.findIndex((ev) => (
+    ev.event === 'upsert' && ev.data.entity === 'conversation' && ev.data.value?.status === 'running'
+  ));
+  const liveAt = events.findIndex((ev) => (
+    ev.event === 'upsert'
+    && ev.data.entity === 'item'
+    && ev.data.value?.kind === 'assistant'
+    && ev.data.value?.streaming === true
+  ));
+  const liveId = liveIdFromEvents(events);
+  assert.ok(liveId, JSON.stringify(events.map((ev) => ev.event)));
+  const deltas = events.filter((ev) => ev.event === 'text.delta' && ev.data.itemId === liveId);
+  const removeAt = events.findIndex((ev) => ev.event === 'remove' && ev.data.entity === 'item' && ev.data.id === liveId);
+  const formalAt = events.findIndex((ev) => (
+    ev.event === 'upsert'
+    && ev.data.entity === 'item'
+    && ev.data.value?.kind === 'assistant'
+    && ev.data.value?.streaming === false
+    && !String(ev.data.id).startsWith('live:')
+  ));
+  const idleAt = events.findIndex((ev) => (
+    ev.event === 'upsert' && ev.data.entity === 'conversation' && ev.data.value?.status === 'idle'
+  ));
+  assert.ok(userAt >= 0, 'missing user upsert');
+  assert.ok(runningAt >= 0, 'missing running conversation');
+  assert.ok(liveAt >= 0, 'missing live item');
+  assert.ok(userAt < runningAt, 'user should arrive before running conversation');
+  assert.ok(userAt < liveAt, 'user should arrive before live item');
+  assert.ok(runningAt < liveAt, 'running should arrive before live item');
+  assert.equal(deltas.length >= 1, true, JSON.stringify(deltas));
+  let offset = 0;
+  let text = '';
+  for (const delta of deltas) {
+    assert.equal(delta.data.offset, offset, JSON.stringify(deltas));
+    text += delta.data.append;
+    offset += String(delta.data.append).length;
+  }
+  const formal = events[formalAt];
+  assert.ok(formal, 'missing formal assistant');
+  assert.equal(text, formal.data.value.text);
+  assert.equal(formal.data.value.text, expectedText);
+  assert.ok(removeAt > liveAt, 'live item should be removed after streaming');
+  assert.ok(formalAt > removeAt, 'formal assistant after live remove');
+  assert.ok(idleAt > formalAt, 'conversation returns to idle');
+  assert.equal(events[idleAt].data.value.itemIds.includes(liveId), false);
+  assert.equal(events[runningAt].data.id, convId);
+}
+
+test('v2 POST /messages while subscribed matches old-API push sequence; v2 POST /stop ends a held run', { timeout: 90_000 }, async () => {
+  const streamSrv = await startScriptServer([{ text: STREAM_TEXT }], { WEFT_FAUX_TPS: '4' });
+  try {
+    const discovery = await readDiscovery(streamSrv.dataDir);
+    const { conv } = await openConversation(streamSrv.base);
+    const session = await openEvents({
+      port: streamSrv.port,
+      token: discovery.token,
+      topics: `conversation:${conv.id}`,
+      lang: 'zh',
+    });
+    await waitEvents(session, (list) => list.some((ev) => ev.event === 'snapshot'));
+    const sent = await postV2(streamSrv.base, `/api/v2/conversations/${conv.id}/messages`, discovery.token, {
+      text: 'go',
+    });
+    assert.equal(sent.status, 202, sent.text);
+    assert.equal(typeof sent.body?.runId, 'string');
+    assert.ok(sent.body.runId);
+    const events = await waitEvents(session, (list) => {
+      const liveId = liveIdFromEvents(list);
+      if (!liveId) return false;
+      const removed = list.some((ev) => ev.event === 'remove' && ev.data.entity === 'item' && ev.data.id === liveId);
+      const deltas = list.filter((ev) => ev.event === 'text.delta' && ev.data.itemId === liveId);
+      return removed && deltas.length > 0 && runSettled(list, conv.id);
+    }, 40000, 300);
+    session.close();
+    assertLivePushSequence(events, conv.id, STREAM_TEXT);
+  } finally {
+    await stopServer(streamSrv);
+  }
+
+  const dataDir = await mkdtemp(path.join(tmpdir(), 'weft-v2-topic-stop-'));
+  const ready = path.join(dataDir, 'hold-ready');
+  const stopSrv = await startServer({
+    token: TOKEN,
+    dataDir,
+    env: {
+      WEFT_LLM: 'faux',
+      WEFT_FAUX_HOLD: '1',
+      WEFT_FAUX_HOLD_READY: ready,
+    },
+  });
+  try {
+    const discovery = await readDiscovery(stopSrv.dataDir);
+    const { conv } = await openConversation(stopSrv.base);
+    const session = await openEvents({
+      port: stopSrv.port,
+      token: discovery.token,
+      topics: `conversation:${conv.id}`,
+      lang: 'zh',
+    });
+    await waitEvents(session, (list) => list.some((ev) => ev.event === 'snapshot'));
+    const sent = await postV2(stopSrv.base, `/api/v2/conversations/${conv.id}/messages`, discovery.token, {
+      text: 'hold-stop',
+    });
+    assert.equal(sent.status, 202, sent.text);
+    await waitForFile(ready);
+    await waitEvents(session, (list) => list.some((ev) => (
+      ev.event === 'upsert'
+      && ev.data.entity === 'conversation'
+      && (ev.data.value?.run?.status === 'running' || ev.data.value?.status === 'running')
+    )));
+    const stopped = await postV2(stopSrv.base, `/api/v2/conversations/${conv.id}/stop`, discovery.token, {});
+    assert.equal(stopped.status, 202, stopped.text);
+    assert.equal(stopped.body?.stopping, true);
+    const afterStop = await waitEvents(session, (list) => list.some((ev) => (
+      ev.event === 'upsert'
+      && ev.data.entity === 'conversation'
+      && ['stopped', 'idle'].includes(ev.data.value?.run?.status)
+    )));
+    session.close();
+    assertPushedEntities(afterStop.filter((ev) => ev.event !== 'heartbeat'));
+    const runStatus = [...afterStop].reverse().find((ev) => (
+      ev.event === 'upsert'
+      && ev.data.entity === 'conversation'
+      && ['stopped', 'idle'].includes(ev.data.value?.run?.status)
+    ))?.data?.value?.run?.status;
+    assert.ok(['stopped', 'idle'].includes(runStatus), JSON.stringify(runStatus));
+  } finally {
+    await stopServer(stopSrv);
   }
 });
 
