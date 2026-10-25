@@ -79,6 +79,8 @@ if (PROXY_ENV && process.env.NODE_USE_ENV_PROXY !== '1') {
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC = path.join(ROOT, 'public');
+const PUBLIC_NEXT = path.join(ROOT, 'public-next');
+const NEXT_NOT_BUILT = '新网页端还没构建，请运行 npm run build:web';
 const PORT = process.env.PORT !== undefined && process.env.PORT !== '' ? Number(process.env.PORT) : 3000;
 const DATA_DIR = process.env.WEFT_DATA_DIR || path.join(ROOT, 'data');
 const SKILL_DIRS = [path.join(ROOT, 'skills'), path.join(DATA_DIR, 'skills')];
@@ -253,6 +255,15 @@ async function agentsFor(conv, messages) {
   return buildAgents({ conv, messages });
 }
 
+function sendStaticFile(req, res, fp, type) {
+  res.writeHead(200, { ...SECURITY_HEADERS, 'content-type': type });
+  if (req.method === 'HEAD') {
+    res.end();
+    return;
+  }
+  createReadStream(fp).pipe(res);
+}
+
 function serveStatic(req, res, url) {
   if (!existsSync(PUBLIC)) {
     res.writeHead(404, { ...SECURITY_HEADERS });
@@ -281,6 +292,58 @@ function serveStatic(req, res, url) {
   const type = MIME[path.extname(fp)] || 'application/octet-stream';
   res.writeHead(200, { ...SECURITY_HEADERS, 'content-type': type });
   createReadStream(fp).pipe(res);
+}
+
+/** New React app at /next. Returns true when the request was handled. */
+function serveNext(req, res, url) {
+  const pathname = url.pathname;
+  if (pathname === '/next') {
+    res.writeHead(302, {
+      ...SECURITY_HEADERS,
+      'cache-control': 'no-store',
+      Location: `/next/${url.search || ''}`,
+    });
+    res.end();
+    return true;
+  }
+  if (!pathname.startsWith('/next/')) return false;
+
+  if (!existsSync(PUBLIC_NEXT)) {
+    res.writeHead(404, {
+      ...SECURITY_HEADERS,
+      'content-type': 'text/plain; charset=utf-8',
+      'cache-control': 'no-store',
+    });
+    res.end(NEXT_NOT_BUILT);
+    return true;
+  }
+
+  let rel = decodeURIComponent(pathname.slice('/next'.length));
+  if (rel === '/') rel = '/index.html';
+  const fp = path.resolve(PUBLIC_NEXT, `.${rel}`);
+  if (!fp.startsWith(PUBLIC_NEXT + path.sep) && fp !== PUBLIC_NEXT) {
+    res.writeHead(403, { ...SECURITY_HEADERS });
+    res.end('Forbidden');
+    return true;
+  }
+  if (existsSync(fp) && statSync(fp).isFile()) {
+    const type = MIME[path.extname(fp)] || 'application/octet-stream';
+    sendStaticFile(req, res, fp, type);
+    return true;
+  }
+  if (path.extname(rel)) {
+    res.writeHead(404, { ...SECURITY_HEADERS });
+    res.end('Not found');
+    return true;
+  }
+  const fallback = path.join(PUBLIC_NEXT, 'index.html');
+  if (existsSync(fallback) && statSync(fallback).isFile()) {
+    sendStaticFile(req, res, fallback, 'text/html; charset=utf-8');
+    return true;
+  }
+  res.writeHead(404, { ...SECURITY_HEADERS });
+  res.end('Not found');
+  return true;
 }
 
 function isSsePath(p) {
@@ -417,6 +480,7 @@ const server = createServer(async (req, res) => {
       return;
     }
     if (req.method === 'GET' || req.method === 'HEAD') {
+      if (serveNext(req, res, url)) return;
       serveStatic(req, res, url);
       return;
     }
