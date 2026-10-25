@@ -1,5 +1,7 @@
 # Weft 架构
 
+> 目标架构见 [ARCHITECTURE_V2.md](ARCHITECTURE_V2.md)，正在迁移；本文描述当前实现。
+
 内核是 Pi Durable Harness（`@earendil-works/pi-durable`）。对话、任务、检查点、断点续跑、子 Agent、中止都走 Harness。模型调用走 `@earendil-works/pi-ai`。`server.mjs` 启动时打开 `<dataDir>/harness/session.sqlite` 并 `resume()`。没有环境变量可以切回旧的自写编排器；那个运行循环已经删除。
 
 没有 harness id 的旧对话不出现在列表里。升级前用 `scripts/export-legacy-conversations.mjs` 把它们导出成 Markdown。
