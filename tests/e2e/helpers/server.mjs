@@ -43,6 +43,7 @@ export async function startServer({ script = 'basic.json', dataDir, port = 0, ex
     WEFT_FAUX_SCRIPT: path.join(FIXTURES, script),
     WEFT_RETRY_BASE_MS: '50',
     WEFT_RETRY_MAX: '5',
+    WEFT_V2_VALIDATE: '1',
     ...extraEnv,
   };
   if (!Object.prototype.hasOwnProperty.call(extraEnv, 'WEFT_TOKEN')) delete env.WEFT_TOKEN;

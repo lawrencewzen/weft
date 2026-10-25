@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import { Ajv, type ErrorObject, type ValidateFunction } from 'ajv';
+import { Ajv2020, type ErrorObject, type ValidateFunction } from 'ajv/dist/2020.js';
 import { PROTOCOL_VERSION } from './version.ts';
 
 type JsonSchema = Record<string, unknown>;
@@ -19,7 +19,20 @@ const spec = JSON.parse(
   readFileSync(new URL('../../contract/openapi.json', import.meta.url), 'utf8'),
 ) as OpenApiSpec;
 
-const ajv = new Ajv({ allErrors: true, strict: false });
+const ajv = new Ajv2020({ allErrors: true, strict: true });
+
+/** OpenAPI 标注关键字：只允许出现，不参与校验。 */
+const OPENAPI_ANNOTATION_KEYWORDS = ['example', 'discriminator', 'xml', 'externalDocs', 'deprecated'] as const;
+for (const keyword of OPENAPI_ANNOTATION_KEYWORDS) {
+  if (ajv.getKeyword(keyword)) continue;
+  try {
+    ajv.addKeyword(keyword);
+  } catch (err) {
+    if (err instanceof Error && /already defined/i.test(err.message)) continue;
+    throw err;
+  }
+}
+
 const cache = new Map<string, ValidateFunction>();
 
 export type ValidateResult = {
@@ -62,6 +75,10 @@ function responseSchema(requestPath: string, method: string, status: number): Js
   return undefined;
 }
 
+export function compileSchema(schema: object): ValidateFunction {
+  return ajv.compile(schema);
+}
+
 export function validateResponse(
   requestPath: string,
   method: string,
@@ -75,7 +92,7 @@ export function validateResponse(
     if (!schema) {
       return { ok: false, errors: [{ message: `no schema for ${key}` }] };
     }
-    const compiled = ajv.compile(structuredClone(schema));
+    const compiled = compileSchema(structuredClone(schema));
     cache.set(key, compiled);
     validator = compiled;
   }

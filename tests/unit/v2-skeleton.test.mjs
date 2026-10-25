@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { PROTOCOL_VERSION } from '../../src/v2/version.ts';
-import { validateResponse } from '../../src/v2/validate.ts';
+import { compileSchema, validateResponse } from '../../src/v2/validate.ts';
 import { ROOT } from './_root.mjs';
 import { startServer, stopServer } from './_server.mjs';
 
@@ -39,6 +39,17 @@ test('validateResponse accepts a conforming service body', () => {
     startedAt: 1,
   });
   assert.equal(result.ok, true);
+});
+
+test('Ajv2020 enforces JSON Schema 2020-12 unevaluatedProperties', () => {
+  const validate = compileSchema({
+    type: 'object',
+    properties: { a: { type: 'number' } },
+    required: ['a'],
+    unevaluatedProperties: false,
+  });
+  assert.equal(validate({ a: 1 }), true);
+  assert.equal(validate({ a: 1, extra: true }), false);
 });
 
 test('GET /api/v2/service returns ServiceInfo with Weft-Protocol', async () => {
