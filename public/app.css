@@ -396,11 +396,18 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.6; backgroun
 /* ==========================================================================
    CENTER
    ========================================================================== */
-.col-center { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--bg); position: relative; container-type: inline-size; }
-/* W follows the center pane: 48px gutters, floor 560px, cap 100vw-800px, never closer than 16px to the pane edges. Defined on descendants so 100cqw resolves against .col-center. */
+.col-center { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--bg); position: relative; }
+/* Fallback when cqw is missing (Chrome/Edge < 105): 16px gutters, cap 920px so the pane does not go full-bleed. */
 .center-notice-row, .thread-inner, .composer-stack {
-  --chat-w: min(100cqw - 32px, max(560px, min(100cqw - 96px, 100vw - 800px)));
-  width: var(--chat-w); max-width: none; margin-left: auto; margin-right: auto;
+  width: min(100% - 32px, 920px); max-width: none; margin-left: auto; margin-right: auto;
+}
+/* W follows the center pane: 48px gutters, floor 560px, cap 100vw-800px, never closer than 16px to the pane edges. Defined on descendants so 100cqw resolves against .col-center. */
+@supports (width: 1cqw) {
+  .col-center { container-type: inline-size; }
+  .center-notice-row, .thread-inner, .composer-stack {
+    --chat-w: min(100cqw - 32px, max(560px, min(100cqw - 96px, 100vw - 800px)));
+    width: var(--chat-w);
+  }
 }
 .center-top-bar { height: 52px; flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 12px; }
 .top-left { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1; }
@@ -459,7 +466,7 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.6; backgroun
 .col-center.is-draft .draft-hint:not(:empty), .col-center.is-empty .draft-hint:not(:empty) { display: block; font-size: 12px; color: var(--mute); text-align: center; line-height: 1.6; }
 
 /* Thread */
-.center-thread { flex: 1; min-height: 0; overflow: auto; }
+.center-thread { flex: 1; min-height: 0; overflow: auto; scrollbar-gutter: stable both-edges; }
 .thread-inner { padding: 20px 0 96px; display: flex; flex-direction: column; gap: 18px; }
 .thread-inner > * { flex-shrink: 0; }
 .msg-group { display: flex; flex-direction: column; gap: 6px; min-width: 0; max-width: 100%; }
