@@ -21,6 +21,7 @@ import {
   SUBAGENT_REPORTER_KIND,
   SUBAGENTS_DOC_KIND,
 } from './ids.mjs';
+import { formatSubagentReport } from './subagent-report.mjs';
 
 export const DELEGATE_DESCRIPTION = 'Run a self-contained task on a subagent and return its answer. The subagent cannot see this conversation, or your instructions; put everything it needs in task: what to do, where, when it is done, and what to report back.';
 export const SUBAGENT_DESCRIPTION = `${DELEGATE_DESCRIPTION} On spawn, pass that text as message. \`name\` is used later with send, wait, and stop.`;
@@ -72,14 +73,22 @@ const Reporter = defineTask({
           checkpoint: { phase: 'report', ...(report === undefined ? {} : { report }) },
         });
         if (settled.status === 'unanswered') {
-          return next(settled.reason === 'aborted' ? undefined : `[subagent ${name} failed: ${settled.reason}]`);
+          return next(settled.reason === 'aborted' ? undefined : formatSubagentReport({
+            name,
+            kind: 'failed',
+            body: settled.reason,
+          }));
         }
         if (settled.type !== 'input') return next();
         const agent = (await tx.doc(Subagents, runtime.conversationId)).agents[name];
         if (!agent || agent.reported.includes(settled.answer)) return next();
         agent.reported.push(settled.answer);
         const answer = (await tx.entry(AssistantEntry, settled.answer))?.model?.[0];
-        return next(`[subagent ${name} answered, no reply needed] ${messageText(answer)}`);
+        return next(formatSubagentReport({
+          name,
+          kind: 'answered',
+          body: messageText(answer),
+        }));
       }, taskContext);
     },
     report: async (reporter, runtime, taskContext) => {

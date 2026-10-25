@@ -6,6 +6,7 @@ import { redactAuthText } from '../core/grok-auth.mjs';
 import { overlayContextWindow, presentContext } from '../core/usage.mjs';
 import { isAutoContinueText } from './continuation.mjs';
 import { parentNoteText, USER_TO_SUBAGENT_KIND } from './subagent-control.mjs';
+import { isSubagentReportText } from './subagent-report.mjs';
 import { latestCallUsage, reportedUsage } from './usage.mjs';
 
 /** messageId for an assistant partial that has no transcript entry yet. */
@@ -34,6 +35,12 @@ export function createMapContext({ retry = DEFAULT_RETRY_POLICY, contextWindow =
     liveId: null,
     contextWindow: contextWindow ?? null,
   };
+}
+
+function kindOfUserText(text) {
+  if (isAutoContinueText(text)) return 'auto-continue';
+  if (isSubagentReportText(text)) return 'subagent-report';
+  return '';
 }
 
 export function textOf(content) {
@@ -68,7 +75,8 @@ function messageDone(entry) {
   if (text) data.text = text;
   if (entry.kind === 'pi.user') {
     data.role = 'user';
-    if (isAutoContinueText(text)) data.kind = 'auto-continue';
+    const kind = kindOfUserText(text);
+    if (kind) data.kind = kind;
   } else {
     const model = assistantModelName(entry);
     if (model) data.model = model;
@@ -297,7 +305,10 @@ export function messagesFromEntries(entries) {
       if (entry.kind === 'pi.assistant' && !text) continue;
       const msg = { id: String(entry.id), role: entry.kind === 'pi.user' ? 'user' : 'assistant' };
       if (text) msg.text = text;
-      if (entry.kind === 'pi.user' && isAutoContinueText(text)) msg.kind = 'auto-continue';
+      if (entry.kind === 'pi.user') {
+        const kind = kindOfUserText(text);
+        if (kind) msg.kind = kind;
+      }
       if (entry.kind === 'pi.assistant') {
         const model = assistantModelName(entry);
         if (model) msg.model = model;

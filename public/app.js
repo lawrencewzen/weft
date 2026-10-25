@@ -66,6 +66,7 @@ import {
   statusKeepsStreaming,
 } from './stream.js';
 import { isPromptUserMessage, MANUAL_CONTINUE_TEXT } from './continuation.js';
+import { parseSubagentReport } from './subagent-report.js';
 import { renderMarkdown } from './markdown.js';
 
 // Application State
@@ -99,6 +100,7 @@ const state = {
   activeSettingsTab: 'general',
   expandedTools: new Set(),
   expandedToolGroups: new Set(),
+  expandedSubagentReports: new Set(),
   expandedToolOutputs: new Set(),
   collapsedToolDetails: new Set(),
   expandedToolGroupOlder: new Set(),
@@ -2497,6 +2499,53 @@ function agentsCardHtml(agents) {
   return `<div class="agents-card" data-testid="subagents-card">${agents.map(realSubagentRowHtml).join('')}</div>`;
 }
 
+const SUBAGENT_REPORT_ICON =
+  '<svg class="subagent-report-icon icon" viewBox="0 0 24 24" aria-hidden="true">' +
+  '<polyline points="9 10 4 15 9 20"></polyline>' +
+  '<path d="M20 4v7a4 4 0 0 1-4 4H4"></path>' +
+  '</svg>';
+
+function findAgentForReport(name) {
+  const key = String(name || '');
+  if (!key) return null;
+  return listedSubagents(state.activeConversationData?.agents)
+    .find((agent) => String(agent.name || '') === key) || null;
+}
+
+function subagentReportHtml(message, report) {
+  const agent = findAgentForReport(report?.name);
+  const displayName = agent ? subagentSummary(agent) : String(report?.name || '');
+  const failed = report?.kind === 'failed';
+  const title = failed
+    ? t('subagent_report_failed', { name: displayName })
+    : t('subagent_report_answered', { name: displayName });
+  const reason = failed ? oneLine(report?.body, 48) : '';
+  const id = String(message?.id || '');
+  const open = Boolean(id) && state.expandedSubagentReports.has(id);
+  const openBtn = agent?.id
+    ? `<button type="button" class="subagent-report-open" data-testid="subagent-report-open" data-action="open-subagent" data-agent-id="${escapeHtml(agent.id)}" title="${escapeHtml(t('subagent_open_title'))}">${escapeHtml(t('subagent_open'))}</button>`
+    : '';
+  const classes = [
+    'subagent-report',
+    'msg-side-agent',
+    open ? 'is-open' : '',
+    failed ? 'is-failed' : '',
+  ].filter(Boolean).join(' ');
+  return (
+    `<div class="${classes}" data-testid="subagent-report" data-role="system" data-kind="subagent-report"${id ? ` data-message-id="${escapeHtml(id)}"` : ''}>` +
+    `<div class="subagent-report-head">` +
+    `<button type="button" class="subagent-report-summary" data-testid="subagent-report-summary" data-action="toggle-subagent-report" data-message-id="${escapeHtml(id)}" aria-expanded="${open ? 'true' : 'false'}">` +
+    SUBAGENT_REPORT_ICON +
+    `<span class="subagent-report-text">${escapeHtml(title)}${reason ? `<span class="subagent-report-reason">${escapeHtml(reason)}</span>` : ''}</span>` +
+    `<svg class="subagent-report-chevron icon" data-testid="subagent-report-chevron" viewBox="0 0 24 24" aria-hidden="true"><polyline points="9 6 15 12 9 18"></polyline></svg>` +
+    `</button>` +
+    openBtn +
+    `</div>` +
+    `<div class="subagent-report-body msg-body" data-testid="subagent-report-body">${renderMarkdown(report?.body || '')}</div>` +
+    `</div>`
+  );
+}
+
 function lastVisibleAssistant(msgs) {
   for (let i = (msgs || []).length - 1; i >= 0; i -= 1) {
     const m = msgs[i];
@@ -2557,6 +2606,15 @@ function threadBlocksHtml(msgs, { afterToolRun, senderName, streamSpin, liveTail
       continue;
     }
     if (m.role === 'user') {
+      const report = parseSubagentReport(m.text) || (m.kind === 'subagent-report' ? {
+        name: '',
+        kind: 'answered',
+        body: String(m.text || ''),
+      } : null);
+      if (report) {
+        rendered.push(subagentReportHtml(m, report));
+        continue;
+      }
       if (!isPromptUserMessage(m)) {
         rendered.push(
           `<div class="handoff-note msg-side-agent" data-testid="auto-continue-note" data-role="system" data-kind="auto-continue">` +
@@ -3064,6 +3122,13 @@ export function toggleToolGroup(id) {
   if (!id) return;
   if (state.expandedToolGroups.has(id)) state.expandedToolGroups.delete(id);
   else state.expandedToolGroups.add(id);
+  renderChatThread();
+}
+
+export function toggleSubagentReport(id) {
+  if (!id) return;
+  if (state.expandedSubagentReports.has(id)) state.expandedSubagentReports.delete(id);
+  else state.expandedSubagentReports.add(id);
   renderChatThread();
 }
 
@@ -5017,6 +5082,9 @@ document.addEventListener('click', (e) => {
       break;
     case 'toggle-tool-group':
       toggleToolGroup(actionEl.getAttribute('data-group-id'));
+      break;
+    case 'toggle-subagent-report':
+      toggleSubagentReport(actionEl.getAttribute('data-message-id'));
       break;
     case 'expand-tool-group-older':
       expandToolGroupOlder(actionEl.getAttribute('data-group-id'));

@@ -1,6 +1,13 @@
 // Pure chat-stream merge. The browser and the unit tests share this so a
 // replay of SSE events cannot leave a second assistant bubble behind.
 import { isAutoContinueText } from './continuation.js';
+import { isSubagentReportText } from './subagent-report.js';
+
+function kindOfUserData(data) {
+  if (data?.kind === 'subagent-report' || isSubagentReportText(data?.text)) return 'subagent-report';
+  if (data?.kind === 'auto-continue' || isAutoContinueText(data?.text)) return 'auto-continue';
+  return '';
+}
 
 function carriedText(data) {
   return data?.text != null && data.text !== '';
@@ -65,13 +72,13 @@ export function applyMessageDone(msgs, data) {
   if (data.role === 'user') {
     const id = data.messageId != null ? String(data.messageId) : '';
     let user = id ? msgs.find((msg) => msg && msg.id === id) : null;
-    const autoContinue = isAutoContinueText(data.text) || data.kind === 'auto-continue';
-    if (!user && autoContinue && (id || carriedText(data))) {
+    const kind = kindOfUserData(data);
+    if (!user && kind && (id || carriedText(data))) {
       user = {
         id: id || `usr-${Date.now()}`,
         role: 'user',
         text: carriedText(data) ? data.text : '',
-        kind: 'auto-continue',
+        kind,
         streaming: false,
         done: true,
       };
@@ -80,7 +87,7 @@ export function applyMessageDone(msgs, data) {
     }
     if (user) {
       if (carriedText(data)) user.text = data.text;
-      if (autoContinue) user.kind = 'auto-continue';
+      if (kind) user.kind = kind;
       user.streaming = false;
       user.done = true;
     }
