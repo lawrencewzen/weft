@@ -33,6 +33,10 @@ for (const keyword of OPENAPI_ANNOTATION_KEYWORDS) {
   }
 }
 
+for (const [name, schema] of Object.entries(spec.components?.schemas || {})) {
+  ajv.addSchema(structuredClone(schema), `#/components/schemas/${name}`);
+}
+
 const cache = new Map<string, ValidateFunction>();
 
 export type ValidateResult = {
@@ -62,8 +66,36 @@ function resolveSchema(node: unknown, seen = new Set<string>()): JsonSchema | un
   return rec as JsonSchema;
 }
 
+/** `{id}` matches one path segment that does not contain `/`. */
+export function pathTemplateMatches(template: string, requestPath: string): boolean {
+  const tParts = template.split('/');
+  const pParts = requestPath.split('/');
+  if (tParts.length !== pParts.length) return false;
+  for (let i = 0; i < tParts.length; i += 1) {
+    const t = tParts[i];
+    const p = pParts[i];
+    if (t.startsWith('{') && t.endsWith('}') && t.length > 2) {
+      if (!p) return false;
+      continue;
+    }
+    if (t !== p) return false;
+  }
+  return true;
+}
+
+/** Exact path first, then OpenAPI path templates. */
+export function matchContractPath(requestPath: string): string | undefined {
+  if (spec.paths && Object.prototype.hasOwnProperty.call(spec.paths, requestPath)) return requestPath;
+  for (const template of Object.keys(spec.paths || {})) {
+    if (!template.includes('{')) continue;
+    if (pathTemplateMatches(template, requestPath)) return template;
+  }
+  return undefined;
+}
+
 function responseSchema(requestPath: string, method: string, status: number): JsonSchema | undefined {
-  const op = spec.paths?.[requestPath]?.[method.toLowerCase()];
+  const specPath = matchContractPath(requestPath) ?? requestPath;
+  const op = spec.paths?.[specPath]?.[method.toLowerCase()];
   const responses = op?.responses;
   if (responses) {
     const ranged = status >= 500 ? '5XX' : status >= 400 ? '4XX' : undefined;
@@ -85,12 +117,13 @@ export function validateResponse(
   status: number,
   body: unknown,
 ): ValidateResult {
-  const key = `${method.toUpperCase()} ${requestPath} ${status}`;
+  const specPath = matchContractPath(requestPath) ?? requestPath;
+  const key = `${method.toUpperCase()} ${specPath} ${status}`;
   let validator = cache.get(key);
   if (!validator) {
     const schema = responseSchema(requestPath, method, status);
     if (!schema) {
-      return { ok: false, errors: [{ message: `no schema for ${key}` }] };
+      return { ok: false, errors: [{ message: `no schema for ${method.toUpperCase()} ${requestPath} ${status}` }] };
     }
     const compiled = compileSchema(structuredClone(schema));
     cache.set(key, compiled);

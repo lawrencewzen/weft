@@ -1,0 +1,6 @@
+{ "turns": [
+  { "tool": "subagent", "args": { "action": "spawn", "name": "巡查", "message": "请在后台查看仓库。" } },
+  { "text": "已派出巡查。" },
+  { "when": "请在后台查看仓库。", "text": "仓库干净，没有未提交改动。" },
+  { "when": "no reply needed", "text": "已记下巡查结果。" }
+] }

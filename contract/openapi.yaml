@@ -203,6 +203,60 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/V2Error"
+  /api/v2/conversations/{id}:
+    get:
+      operationId: getConversation
+      summary: 对话完整快照
+      description: |
+        一次返回 ConversationView、对话流 ThreadItem 列表和工具行 ToolCall。
+        组装在服务端完成。`lang` 为 zh 或 en（缺省 zh，不认识的按 zh）。
+      security:
+        - bearerAuth: []
+        - sessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: 对话 id
+        - name: lang
+          in: query
+          schema:
+            type: string
+            default: zh
+          description: 客户端语言。先支持 zh、en；缺省或不认识的按 zh。
+      responses:
+        "200":
+          description: 对话快照
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConversationSnapshot"
+        "401":
+          description: 未授权
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        "404":
+          description: 对话不存在
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        4XX:
+          description: 客户端错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        5XX:
+          description: 服务端错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
 components:
   securitySchemes:
     bearerAuth:
@@ -597,3 +651,304 @@ components:
             - full
           description: percent < 80 为 ok，80 到 94 为 warn，≥ 95 为 full
       description: 上下文用量视图。窗口由调用方传入（手动覆盖 → Provider 默认 → 模型目录 → 环境变量）；缺省 128000。
+    ThreadItemUser:
+      type: object
+      additionalProperties: false
+      required:
+        - kind
+        - id
+        - text
+        - pathRefs
+      properties:
+        kind:
+          type: string
+          const: user
+        id:
+          type: string
+        text:
+          type: string
+          description: Markdown 原文
+        pathRefs:
+          type: array
+          items:
+            $ref: "#/components/schemas/PathRef"
+      description: 用户消息。
+    ThreadItemAssistant:
+      type: object
+      additionalProperties: false
+      required:
+        - kind
+        - id
+        - text
+        - pathRefs
+        - streaming
+        - truncated
+      properties:
+        kind:
+          type: string
+          const: assistant
+        id:
+          type: string
+        text:
+          type: string
+          description: Markdown 原文
+        pathRefs:
+          type: array
+          items:
+            $ref: "#/components/schemas/PathRef"
+        model:
+          type: string
+          description: 这条回复用的模型 id。没有则省略
+        streaming:
+          type: boolean
+        truncated:
+          type: boolean
+          description: 最后一条可见回复且 stopReason 为 length 时为 true，客户端显示继续
+      description: 助手回复。空文字的助手消息不进入对话流。
+    ThreadItemToolGroup:
+      type: object
+      additionalProperties: false
+      required:
+        - kind
+        - id
+        - toolIds
+        - summary
+        - live
+      properties:
+        kind:
+          type: string
+          const: tool_group
+        id:
+          type: string
+          description: 工具组 id，等于 toolGroupKey
+        toolIds:
+          type: array
+          items:
+            type: string
+          description: 组内 ToolCall id，按出现顺序
+        summary:
+          $ref: "#/components/schemas/ToolGroupSummary"
+        live:
+          type: boolean
+          description: 它是对话流最后一项且对话正在运行时为 true
+      description: 连续工具调用合成的一组。
+    ThreadItemSubagentReport:
+      type: object
+      additionalProperties: false
+      required:
+        - kind
+        - id
+        - subagentId
+        - name
+        - reportKind
+        - body
+      properties:
+        kind:
+          type: string
+          const: subagent_report
+        id:
+          type: string
+        subagentId:
+          description: 按 name 找到的子 Agent id；找不到为 null
+          oneOf:
+            - type: "null"
+            - type: string
+        name:
+          type: string
+        reportKind:
+          type: string
+          enum:
+            - answered
+            - failed
+        body:
+          type: string
+      description: 子 Agent 汇报。存成用户输入，界面不画成用户气泡。
+    ThreadItemSystemNote:
+      type: object
+      additionalProperties: false
+      required:
+        - kind
+        - id
+        - noteKind
+        - text
+      properties:
+        kind:
+          type: string
+          const: system_note
+        id:
+          type: string
+        noteKind:
+          type: string
+          enum:
+            - auto_continue
+            - correction
+            - note
+        text:
+          type: string
+      description: 系统提示。auto_continue 的 text 是服务端出成的句子。
+    ThreadItem:
+      oneOf:
+        - $ref: "#/components/schemas/ThreadItemUser"
+        - $ref: "#/components/schemas/ThreadItemAssistant"
+        - $ref: "#/components/schemas/ThreadItemToolGroup"
+        - $ref: "#/components/schemas/ThreadItemSubagentReport"
+        - $ref: "#/components/schemas/ThreadItemSystemNote"
+      discriminator:
+        propertyName: kind
+        mapping:
+          user: "#/components/schemas/ThreadItemUser"
+          assistant: "#/components/schemas/ThreadItemAssistant"
+          tool_group: "#/components/schemas/ThreadItemToolGroup"
+          subagent_report: "#/components/schemas/ThreadItemSubagentReport"
+          system_note: "#/components/schemas/ThreadItemSystemNote"
+      description: 对话流里的一项。按 kind 区分。
+    RunState:
+      type: object
+      additionalProperties: false
+      required:
+        - status
+        - startedAt
+        - pendingText
+        - canSend
+        - canStop
+        - lockedReason
+        - error
+      properties:
+        status:
+          type: string
+          enum:
+            - idle
+            - running
+            - waiting
+            - failed
+            - stopped
+          description: present() 状态归一。recovering、resuming 算 running；paused 算 waiting；error 算 failed；done 算 idle
+        startedAt:
+          description: 这次运行的开始时间（毫秒）。Harness 提交记录没有该字段时为 null
+          oneOf:
+            - type: "null"
+            - type: integer
+        pendingText:
+          description: running 时的等待句子，其它状态为 null
+          oneOf:
+            - type: "null"
+            - type: string
+        canSend:
+          type: boolean
+          description: 有工作区时为 true。运行中也能发，会作为插话
+        canStop:
+          type: boolean
+          description: running 时为 true
+        lockedReason:
+          description: 没有工作区时为 no_workspace，否则 null
+          oneOf:
+            - type: "null"
+            - type: string
+              const: no_workspace
+        error:
+          description: status 为 failed 时带上，否则 null
+          oneOf:
+            - type: "null"
+            - type: object
+              additionalProperties: false
+              required:
+                - code
+                - message
+              properties:
+                code:
+                  type: string
+                message:
+                  type: string
+                retry:
+                  type: object
+                  additionalProperties: false
+                  required:
+                    - attempt
+                    - delayMs
+                  properties:
+                    attempt:
+                      type: integer
+                    delayMs:
+                      type: integer
+      description: 当前运行状态。供输入框、停止按钮和等待提示使用。
+    ConversationModel:
+      type: object
+      additionalProperties: false
+      required:
+        - sourceId
+        - modelId
+        - label
+      properties:
+        sourceId:
+          type: string
+        modelId:
+          type: string
+        label:
+          type: string
+          description: 先用 modelId
+      description: 对话当前模型。取对话自己选的或默认模型。
+    ConversationView:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - workspaceId
+        - title
+        - updatedAt
+        - status
+        - model
+        - run
+        - context
+        - itemIds
+      properties:
+        id:
+          type: string
+        workspaceId:
+          type: string
+        title:
+          type: string
+        updatedAt:
+          type: integer
+          description: 毫秒时间戳
+        status:
+          type: string
+          enum:
+            - idle
+            - running
+            - waiting
+            - failed
+          description: 按设计 6.1 归一。stopped 算 idle
+        model:
+          description: 解析不到时为 null
+          oneOf:
+            - type: "null"
+            - $ref: "#/components/schemas/ConversationModel"
+        run:
+          $ref: "#/components/schemas/RunState"
+        context:
+          $ref: "#/components/schemas/ContextUsage"
+        itemIds:
+          type: array
+          items:
+            type: string
+          description: 对话流 ThreadItem id 的顺序
+      description: 一个对话的视图。摘要字段加上模型、运行状态、上下文和对话流顺序。
+    ConversationSnapshot:
+      type: object
+      additionalProperties: false
+      required:
+        - conversation
+        - items
+        - tools
+      properties:
+        conversation:
+          $ref: "#/components/schemas/ConversationView"
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ThreadItem"
+        tools:
+          type: array
+          items:
+            $ref: "#/components/schemas/ToolCall"
+      description: GET /api/v2/conversations/{id} 的响应。客户端按 itemIds 画对话流，按 toolIds 取工具行。

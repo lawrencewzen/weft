@@ -18,6 +18,7 @@ import {
   createApiSource,
   applySourcePatch,
   contextWindowForConversation,
+  resolveConversationTarget,
   grokSourceTemplate,
   sourceFromEnv,
   probeModels,
@@ -98,6 +99,22 @@ const v2 = createV2Runtime({
   hasActiveWork: () => kernelApi?.hasActiveWork?.() ?? false,
   onIdleExit: () => shutdown(),
   onRestart: () => shutdown(),
+  async loadConversation(id) {
+    if (!kernelApi) return null;
+    const conv = await store.getConversation(id);
+    if (!conv) return null;
+    const presented = await kernelApi.present(conv, { includeMessages: true });
+    const subagents = await kernelApi.listSubagents(presented);
+    const settings = await ensureSettings();
+    const grok = await currentGrok();
+    const grokSignedIn = Boolean(grok?.signedIn);
+    return {
+      presented,
+      subagents,
+      modelTarget: resolveConversationTarget(settings, presented, { grokSignedIn }),
+      window: contextWindowForConversation(settings, presented, { grokSignedIn }),
+    };
+  },
 });
 
 let dataLock;

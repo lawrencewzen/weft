@@ -1,0 +1,4 @@
+{ "turns": [
+  { "tool": "read", "args": { "path": "src/app.js" } },
+  { "text": "请看 `src/app.js:3` 和 `nope/missing.ts`。" }
+] }
