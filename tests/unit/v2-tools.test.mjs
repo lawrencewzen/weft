@@ -12,6 +12,8 @@ import {
 import {
   TOOL_KINDS,
   clipOutputText,
+  clipTailLines,
+  TOOL_COMMAND_PREVIEW_LINES,
   isProbeFailure,
   outputLineCount,
   relativizePath,
@@ -360,6 +362,30 @@ test('output clips to 20 lines until show-all', () => {
   assert.equal(clipOutputText('one\ntwo', false).clipped, false);
   const err = clipOutputText(lines.join('\n'), false, 8);
   assert.equal(err.text.split('\n').length, 8);
+});
+
+test('bash preview keeps the last 5 lines', () => {
+  const lines = Array.from({ length: 30 }, (_, i) => `L${String(i + 1).padStart(2, '0')}`);
+  const raw = `${lines.join('\n')}\n`;
+  const clipped = clipTailLines(raw, TOOL_COMMAND_PREVIEW_LINES);
+  assert.equal(clipped.clipped, true);
+  assert.equal(clipped.text, 'L26\nL27\nL28\nL29\nL30');
+  assert.equal(clipped.text.includes('L25'), false);
+  assert.equal(clipTailLines('L01\nL02\n', 5).clipped, false);
+
+  const view = toolCallView(
+    tool('bash', {
+      id: 'bash-lines',
+      input: { command: 'seq' },
+      output: raw,
+    }),
+    [],
+    { lang: 'zh' },
+  );
+  assertValidToolCall(view, 'bash-tail');
+  assert.equal(view.output.truncated, true);
+  assert.equal(view.output.preview, 'L26\nL27\nL28\nL29\nL30');
+  assert.equal(view.output.totalLines, 30);
 });
 
 test('diff counts fall back to the write output line', () => {

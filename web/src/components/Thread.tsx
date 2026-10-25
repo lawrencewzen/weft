@@ -42,11 +42,10 @@ export function Thread({ items, toolsById, lang, running, actions, stickNonce }:
 
   return (
     <div className="center-thread" data-testid="next-thread" ref={scroller} onScroll={onScroll}>
-      {items.length === 0 ? (
-        <div className="thread-empty">{t(lang, 'empty_chat_hint')}</div>
-      ) : (
-        <div className="thread-inner">
-          {items.map((item) => {
+      <div className="thread-inner">
+        {items.length === 0 ? (
+          <div className="thread-empty">{t(lang, 'empty_chat_hint')}</div>
+        ) : items.map((item) => {
             if (item.kind === 'user') return <UserMessage key={item.id} item={item} lang={lang} />;
             if (item.kind === 'assistant') {
               return (
@@ -78,8 +77,7 @@ export function Thread({ items, toolsById, lang, running, actions, stickNonce }:
             }
             return null;
           })}
-        </div>
-      )}
+      </div>
     </div>
   );
 }
