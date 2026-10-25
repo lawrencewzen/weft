@@ -7,7 +7,8 @@ public/vendor/
 /e2e-shots/
 /tests/test-results/
 /tests/playwright-report/
-data/
+# Runtime data dir at the repo root. Leading slash so web/src/data is not ignored.
+/data/
 .env
 .env.*
 !.env.example

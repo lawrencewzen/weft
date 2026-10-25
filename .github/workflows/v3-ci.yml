@@ -20,6 +20,7 @@ jobs:
       - run: npm run typecheck:web
       - run: npm run check:contract
       - run: npm test
+      - run: npm run test:web
   e2e:
     runs-on: ubuntu-latest
     timeout-minutes: 20
