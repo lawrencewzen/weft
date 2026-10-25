@@ -129,6 +129,10 @@ const v2 = createV2Runtime({
     if (!kernelApi) return { status: 500, body: { error: 'kernel not ready' } };
     return kernelApi.stopConversation(id);
   },
+  subscribeConversation(cid, fn) {
+    if (!kernelApi) return () => {};
+    return kernelApi.subscribe(cid, fn);
+  },
 });
 
 let dataLock;

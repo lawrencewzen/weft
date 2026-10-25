@@ -70,6 +70,15 @@ export interface paths {
          *     订阅的主题和上次不同时，客户端不要带 Last-Event-ID / lastEventId，直接重新连接拿快照（续传只保证同一组主题）。
          *     心跳每 15 秒一次，不带 id，不进缓冲。
          *
+         *     主题 `conversation:<id>`（`<id>` 为对话 id）按前缀动态注册。实体：
+         *     - `conversation`：id 为对话 id，值为 ConversationView
+         *     - `item`：id 为 ThreadItem.id，值为 ThreadItem
+         *     - `tool`：id 为 ToolCall.id，值为 ToolCall
+         *
+         *     快照是 GET /api/v2/conversations/{id} 同一套数据拆成上述实体。模型流式输出时先 upsert 一条 `item`，id 以 `live:` 开头、`streaming` 为 true、`text` 为空；随后用 `text.delta` 追加。正式助手消息到来后 remove 这条流式项，再 upsert 正式项和 conversation。
+         *
+         *     订阅不存在的对话时仍返回 200：先发 snapshot，entities 为空，并在 snapshot 数据里加 `missing: ["conversation:<id>"]`，连接保持。
+         *
          *     事件名与 data 的对应关系：
          *     - `snapshot` → SnapshotEvent
          *     - `upsert` → UpsertEvent
@@ -277,11 +286,13 @@ export interface components {
                 [key: string]: unknown;
             };
         };
-        /** @description SSE event=snapshot 的 data。连接时或续传补不上时发送；SSE id 为当时最新序号。 */
+        /** @description SSE event=snapshot 的 data。连接时或续传补不上时发送；SSE id 为当时最新序号。订阅不存在的 conversation:<id> 时 entities 为空，并列出 missing。 */
         SnapshotEvent: {
             protocolVersion: string;
             topics: string[];
             entities: components["schemas"]["EntityRef"][];
+            /** @description 已订阅但快照阶段发现不存在的主题（例如 conversation:<id> 对应的对话不存在）。空则省略。 */
+            missing?: string[];
         };
         /** @description SSE event=upsert 的 data。实体整个替换，客户端按 id 覆盖。 */
         UpsertEvent: {
@@ -692,7 +703,7 @@ export interface operations {
     getEvents: {
         parameters: {
             query: {
-                /** @description 逗号分隔的主题列表。空或含未注册主题时 400。 */
+                /** @description 逗号分隔的主题列表。空或含未注册主题时 400。`conversation:<id>` 按前缀视为已注册。 */
                 topics: string;
                 /** @description 客户端语言。先支持 zh、en；缺省或不认识的按 zh。 */
                 lang?: string;

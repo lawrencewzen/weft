@@ -143,7 +143,7 @@ function collectCodespans(markdown: string): string[] {
   return out;
 }
 
-async function fileExistsInWorkspace(workspacePath: string, rel: string): Promise<boolean> {
+export async function fileExistsInWorkspace(workspacePath: string, rel: string): Promise<boolean> {
   if (!workspacePath || typeof rel !== 'string' || !rel) return false;
   try {
     const resolved = await resolveInWorkspace(workspacePath, rel);
