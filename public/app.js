@@ -1315,6 +1315,14 @@ function conversationMeta(conv) {
   return { text: conv.updatedAt ? formatRelativeTime(conv.updatedAt) : '', cls: '', ts: conv.updatedAt };
 }
 
+function conversationStatusKind(status) {
+  const st = status || 'idle';
+  if (st === 'running' || st === 'recovering' || st === 'resuming') return 'running';
+  if (st === 'waiting' || st === 'paused') return 'waiting';
+  if (st === 'failed' || st === 'error') return 'failed';
+  return '';
+}
+
 function conversationRowHtml(conv, { wsId = '' } = {}) {
   const isActive = conv.id === state.activeConversationId;
   const status = conv.status || 'idle';
@@ -1323,18 +1331,16 @@ function conversationRowHtml(conv, { wsId = '' } = {}) {
   const agents = isActive ? listedSubagents(state.activeConversationData?.agents || []) : [];
   const tree = agents.length ? subagentTreeHtml(conv.id, agents) : '';
   const collapsed = state.collapsedSubagentTrees.has(conv.id);
-  const orbit = agents.length ? subagentOrbitHtml(agents, Date.now()) : '';
-  const toggle = agents.length
-    ? `<button type="button" class="subagent-tree-toggle${collapsed ? '' : ' is-open'}" data-testid="subagent-tree-toggle" data-action="toggle-subagent-tree" data-conv-id="${escapeHtml(conv.id)}" aria-label="${escapeHtml(collapsed ? t('subagent_tree_expand') : t('subagent_tree_collapse'))}" aria-expanded="${collapsed ? 'false' : 'true'}">${CHEV_SVG}</button>`
-    : '';
+  const chip = agents.length ? subagentChipHtml(conv.id, agents, collapsed) : '';
+  const kind = conversationStatusKind(status);
+  const dot = kind ? `<span class="conv-status-dot is-${kind}"></span>` : '';
   return (
     `<div class="conv-tree-node ${isActive ? 'conv-active' : ''}" data-testid="conversation-item" data-id="${escapeHtml(conv.id)}" data-status="${escapeHtml(status)}">` +
     `<div class="conv-node-header" data-action="switch-ws-conv" data-ws-id="${escapeHtml(wsId)}" data-conv-id="${escapeHtml(conv.id)}" data-ctx="conversation" title="${escapeHtml(conv.title || '')}">` +
-    `<span class="status-dot dot-${escapeHtml(status)}"></span>` +
+    `<span class="conv-status-slot">${dot}</span>` +
     `<span class="conv-node-title">${escapeHtml(conv.title || t('default_conversation_title'))}</span>` +
-    (orbit ? '' : `<span class="conv-node-meta ${meta.cls}"${relAttrs}>${escapeHtml(meta.text || '')}</span>`) +
-    orbit +
-    toggle +
+    chip +
+    `<span class="conv-node-meta ${meta.cls}"${relAttrs}>${escapeHtml(meta.text || '')}</span>` +
     `</div>` +
     tree +
     `</div>`
@@ -1437,9 +1443,17 @@ const SUBAGENT_STATUS_ICON =
   '<svg class="subagent-status-icon" viewBox="0 0 12 12" aria-hidden="true" data-testid="subagent-status-icon">' +
   '<circle class="sa-ring" cx="6" cy="6" r="5" fill="none"></circle>' +
   '<circle class="sa-arc" cx="6" cy="6" r="5" fill="none"></circle>' +
-  '<circle class="sa-fill" cx="6" cy="6" r="5"></circle>' +
-  '<path class="sa-check" d="M3.55 6.2l1.75 1.75 3.2-3.35" fill="none"></path>' +
+  '<path class="sa-check" d="M3.2 6.2l2 2 3.6-4" fill="none"></path>' +
   '<rect class="sa-stop" x="4.35" y="4.35" width="3.3" height="3.3" rx="0.45"></rect>' +
+  '<path class="sa-fail" d="M4 4l4 4M8 4l-4 4" fill="none"></path>' +
+  '</svg>';
+
+const SUBAGENT_CHIP_ICON =
+  '<svg class="subagent-chip-icon" viewBox="0 0 12 12" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+  '<circle cx="3" cy="2.4" r="1.35"></circle>' +
+  '<circle cx="3" cy="9.6" r="1.35"></circle>' +
+  '<circle cx="9" cy="6" r="1.35"></circle>' +
+  '<path d="M3 3.75v4.5M3 6h4.65"></path>' +
   '</svg>';
 
 const SUBAGENT_ENDED = new Set(['done', 'stopped', 'failed']);
@@ -1514,6 +1528,32 @@ function subagentTimeText(agent, now = Date.now()) {
   return formatMmSs(now - started);
 }
 
+function subagentTreeVisual(agent, now = Date.now()) {
+  if ((agent?.status || '') === 'failed') return 'failed';
+  return subagentVisualStatus(agent, now);
+}
+
+function subagentTreeTimeText(agent, now = Date.now()) {
+  if (subagentTreeVisual(agent, now) === 'done') return '';
+  return subagentTimeText(agent, now);
+}
+
+function subagentChipLabel(agents) {
+  const live = (agents || []).filter(isLiveSubagent).length;
+  const total = (agents || []).length;
+  return live > 0 ? `${live}/${total}` : String(total);
+}
+
+function subagentChipHtml(convId, agents, collapsed) {
+  const live = (agents || []).filter(isLiveSubagent).length;
+  return (
+    `<button type="button" class="subagent-chip${live ? ' is-live' : ''}" data-testid="subagent-chip" data-action="toggle-subagent-tree" data-conv-id="${escapeHtml(convId)}" aria-label="${escapeHtml(collapsed ? t('subagent_tree_expand') : t('subagent_tree_collapse'))}" aria-expanded="${collapsed ? 'false' : 'true'}">` +
+    SUBAGENT_CHIP_ICON +
+    `<span class="subagent-chip-count">${escapeHtml(subagentChipLabel(agents))}</span>` +
+    `</button>`
+  );
+}
+
 function subagentActionText(agent, visual) {
   if (visual !== 'running' && visual !== 'stuck') return '';
   return String(agent?.currentAction || '').replace(/\s+/g, ' ').trim();
@@ -1552,33 +1592,12 @@ function subagentRowFxClass(id) {
   return bits.length ? ` ${bits.join(' ')}` : '';
 }
 
-function subagentOrbitHtml(agents, now) {
-  const live = agents.filter(isLiveSubagent).length;
-  const allEnded = agents.length > 0 && live === 0;
-  const sats = agents.map((agent, i) => {
-    const visual = subagentVisualStatus(agent, now);
-    const dur = (1.6 + 0.45 * i).toFixed(2);
-    const delay = (-((i * 137) % 360) / 360 * (1.6 + 0.45 * i)).toFixed(3);
-    return `<span class="subagent-orbit-track" data-sat="${escapeHtml(visual)}" style="--sat-dur:${dur}s;--sat-delay:${delay}s"><span class="subagent-orbit-sat"></span></span>`;
-  }).join('');
-  const count = allEnded
-    ? t('subagent_orbit_done', { n: agents.length })
-    : t('subagent_orbit_frac', { live, total: agents.length });
-  return (
-    `<span class="subagent-orbit-cluster" data-testid="subagent-orbit-cluster" data-action="noop">` +
-    `<span class="subagent-orbit${allEnded ? ' is-done' : ''}" data-testid="subagent-orbit" aria-hidden="true">` +
-    `<span class="subagent-orbit-core"></span>${sats}</span>` +
-    `<span class="subagent-orbit-count ${allEnded ? 'is-done' : 'is-running'}" data-testid="subagent-orbit-count">${escapeHtml(count)}</span>` +
-    `</span>`
-  );
-}
-
-function subagentTreeRowHtml(agent) {
+function subagentTreeRowHtml(agent, { last = false } = {}) {
   const now = Date.now();
   const st = agent.status || 'waiting';
-  const visual = subagentVisualStatus(agent, now);
+  const visual = subagentTreeVisual(agent, now);
   const summary = subagentSummary(agent);
-  const time = subagentTimeText(agent, now);
+  const time = subagentTreeTimeText(agent, now);
   const action = subagentActionText(agent, visual);
   const open = state.viewingAgentId === agent.id;
   const fx = subagentRowFxClass(agent.id || '');
@@ -1586,7 +1605,7 @@ function subagentTreeRowHtml(agent) {
   return (
     `<div class="subagent-tree-row-shell${fx}">` +
     `<div class="subagent-tree-row-shell-inner">` +
-    `<div class="subagent-tree-row${open ? ' is-active' : ''}${visual === 'stuck' ? ' is-stuck' : ''}${fx.includes('is-just-ended') ? ' is-just-ended' : ''}" data-testid="subagent-tree-row" data-agent-id="${escapeHtml(agent.id || '')}" data-depth="0" data-status="${escapeHtml(st)}" data-visual="${escapeHtml(visual)}" data-action="open-subagent" data-ctx="subagent" title="${escapeHtml(title)}">` +
+    `<div class="subagent-tree-row${open ? ' is-active' : ''}${visual === 'stuck' ? ' is-stuck' : ''}${last ? ' is-last' : ''}${fx.includes('is-just-ended') ? ' is-just-ended' : ''}" data-testid="subagent-tree-row" data-agent-id="${escapeHtml(agent.id || '')}" data-depth="0" data-status="${escapeHtml(st)}" data-visual="${escapeHtml(visual)}" data-action="open-subagent" data-ctx="subagent" title="${escapeHtml(title)}">` +
     SUBAGENT_STATUS_ICON +
     `<div class="subagent-tree-main">` +
     `<div class="subagent-tree-line">` +
@@ -1607,7 +1626,7 @@ function subagentTreeHtml(convId, agents) {
   const collapsed = state.collapsedSubagentTrees.has(convId);
   return (
     `<div class="subagent-tree-wrap${collapsed ? '' : ' is-open'}" data-testid="subagent-tree-wrap" data-conv-id="${escapeHtml(convId || '')}">` +
-    `<div class="subagent-tree-clip"><div class="subagent-tree">${rows.map(subagentTreeRowHtml).join('')}</div></div>` +
+    `<div class="subagent-tree-clip"><div class="subagent-tree">${rows.map((agent, i) => subagentTreeRowHtml(agent, { last: i === rows.length - 1 })).join('')}</div></div>` +
     `</div>`
   );
 }
@@ -1642,11 +1661,11 @@ function tickSubagentClock() {
   document.querySelectorAll('[data-testid="subagent-tree-row"]').forEach((row) => {
     const agent = byId.get(row.getAttribute('data-agent-id'));
     if (!agent) return;
-    const visual = subagentVisualStatus(agent, now);
+    const visual = subagentTreeVisual(agent, now);
     if (row.getAttribute('data-visual') !== visual) row.setAttribute('data-visual', visual);
     row.classList.toggle('is-stuck', visual === 'stuck');
     const timeEl = row.querySelector('[data-testid="subagent-tree-time"]');
-    const nextTime = subagentTimeText(agent, now);
+    const nextTime = subagentTreeTimeText(agent, now);
     if (timeEl && timeEl.textContent !== nextTime) timeEl.textContent = nextTime;
     timeEl?.classList.toggle('is-idle', visual === 'stuck');
     const slot = row.querySelector('.subagent-tree-action-slot');
@@ -1656,26 +1675,13 @@ function tickSubagentClock() {
     if (actionEl && actionEl.textContent !== action) actionEl.textContent = action;
   });
   tickPanelSubagentClocks(byId, now);
-  const cluster = document.querySelector('[data-testid="subagent-orbit-cluster"]');
-  if (!cluster) return;
+  const chip = document.querySelector('[data-testid="subagent-chip"]');
+  if (!chip) return;
   const live = agents.filter(isLiveSubagent).length;
-  const allEnded = agents.length > 0 && live === 0;
-  cluster.querySelector('[data-testid="subagent-orbit"]')?.classList.toggle('is-done', allEnded);
-  cluster.querySelectorAll('.subagent-orbit-track').forEach((track, i) => {
-    const agent = agents[i];
-    if (!agent) return;
-    const visual = subagentVisualStatus(agent, now);
-    if (track.getAttribute('data-sat') !== visual) track.setAttribute('data-sat', visual);
-  });
-  const countEl = cluster.querySelector('[data-testid="subagent-orbit-count"]');
-  if (countEl) {
-    const count = allEnded
-      ? t('subagent_orbit_done', { n: agents.length })
-      : t('subagent_orbit_frac', { live, total: agents.length });
-    if (countEl.textContent !== count) countEl.textContent = count;
-    countEl.classList.toggle('is-running', !allEnded);
-    countEl.classList.toggle('is-done', allEnded);
-  }
+  const countEl = chip.querySelector('.subagent-chip-count');
+  const next = subagentChipLabel(agents);
+  if (countEl && countEl.textContent !== next) countEl.textContent = next;
+  chip.classList.toggle('is-live', live > 0);
 }
 
 function armSubagentClock() {
@@ -1726,10 +1732,9 @@ function toggleSubagentTree(convId) {
   else state.collapsedSubagentTrees.add(convId);
   const collapsed = state.collapsedSubagentTrees.has(convId);
   const wrap = document.querySelector(`[data-testid="subagent-tree-wrap"][data-conv-id="${convId.replace(/"/g, '')}"]`);
-  const btn = document.querySelector(`[data-testid="subagent-tree-toggle"][data-conv-id="${convId.replace(/"/g, '')}"]`);
+  const btn = document.querySelector(`[data-testid="subagent-chip"][data-conv-id="${convId.replace(/"/g, '')}"]`);
   wrap?.classList.toggle('is-open', !collapsed);
   if (btn) {
-    btn.classList.toggle('is-open', !collapsed);
     btn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
     btn.setAttribute('aria-label', collapsed ? t('subagent_tree_expand') : t('subagent_tree_collapse'));
   }
