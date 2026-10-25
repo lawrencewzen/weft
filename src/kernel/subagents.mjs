@@ -569,10 +569,11 @@ export function createSubagentHost({
     return { change };
   }
 
-  async function listSubagents(conv) {
-    if (!conv?.id || conv.harnessId == null) return [];
+  /** Child conversation roster from parent details, LiveDoc tools, roster, and taskGraph. */
+  async function collectChildren(conv, sharedGraph) {
     const meta = new Map();
     const order = [];
+    if (!conv?.id || conv.harnessId == null) return { meta, order };
     const parent = await readTranscript(conv.harnessId);
     for (const entry of parent.entries || []) {
       const result = entry?.model?.[0];
@@ -595,15 +596,50 @@ export function createSubagentHost({
         });
       }
     }
-    const graph = await harness.taskGraph(context);
+    const ownGraph = sharedGraph == null;
+    const graph = ownGraph ? await harness.taskGraph(context) : sharedGraph;
     try {
       for (const node of Object.values(graph.value?.tasks || {})) {
         if (Number(node.conversationId) !== Number(conv.harnessId)) continue;
         for (const id of node.conversations || []) takeChild(meta, order, id, {});
       }
     } finally {
+      if (ownGraph) graph.dispose();
+    }
+    return { meta, order };
+  }
+
+  async function subagentDigest(conv, sharedGraph) {
+    const { meta, order } = await collectChildren(conv, sharedGraph);
+    let total = 0;
+    let live = 0;
+    for (const key of order) {
+      const entry = meta.get(key);
+      if (!entry?.conversationId) continue;
+      total += 1;
+      const childLive = await harness.snapshot(LiveDoc, entry.conversationId, context);
+      if (childLive?.run) live += 1;
+    }
+    return { total, live };
+  }
+
+  async function subagentDigests(convs) {
+    const rows = Array.isArray(convs) ? convs : [];
+    const graph = await harness.taskGraph(context);
+    try {
+      const out = new Map();
+      for (const conv of rows) {
+        if (!conv?.id) continue;
+        out.set(conv.id, await subagentDigest(conv, graph));
+      }
+      return out;
+    } finally {
       graph.dispose();
     }
+  }
+
+  async function listSubagents(conv) {
+    const { meta, order } = await collectChildren(conv);
     const generations = order.length === 0 ? new Map() : await harness.commit(async (tx) => {
       const found = new Map();
       for (const key of order) {
@@ -685,6 +721,8 @@ export function createSubagentHost({
     prepareChild,
     onChild,
     listSubagents,
+    subagentDigest,
+    subagentDigests,
     async seed(rows) {
       for (const row of rows || []) {
         if (!row?.harnessId) continue;

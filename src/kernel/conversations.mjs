@@ -357,6 +357,9 @@ export async function openConversationKernel({
         };
       }));
     },
+    subagentDigests(convs) {
+      return subagents.subagentDigests(convs);
+    },
     childMessages(cid, agentId) {
       return subagents.childMessages(cid, agentId);
     },

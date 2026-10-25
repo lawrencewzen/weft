@@ -49,7 +49,7 @@
 | `POST /workspaces` | `{name, path}` | `201 {id,name,path}`；path 不存在 → 400 |
 | `GET /workspaces` | | `[{id,name,path}]` |
 | `POST /workspaces/:wid/conversations` | `{title?, modelSourceId?, modelId?}` | `201 {id, workspaceId, title, status:'idle', modelSourceId, modelId}`。`modelSourceId`/`modelId` 成对可选；都缺或都为 `null` 表示跟随 `settings.models.default`。来源不存在、或该来源模型列表里没有这个模型 → 400 `{errors}`。若仍带 `pipelineId` 或其它未知字段则忽略、不报错 |
-| `GET /workspaces/:wid/conversations?q=` | | 列表，按更新时间倒序 |
+| `GET /workspaces/:wid/conversations?q=` | | 列表，按更新时间倒序。有子 Agent 的对话带 `subagents:{total, live}`：`total` 为该对话子 Agent 个数，`live` 为其中子对话 LiveDoc 仍有 `run` 的个数（与 `GET /conversations/:cid` 里子 Agent `status:'running'` 的依据相同）。`total` 为 0 时不带这个字段。一次列表请求只读一次 `harness.taskGraph`，不读子对话 transcript |
 | `GET /conversations/:cid` | | `{id,title,status,modelSourceId,modelId,messages:[...],usage,contextWindow,contextLabel}`。不返回 `roleId`。`usage` 是最近一次模型调用上报的 token 计数（没有则为 `null`，不估算）。`contextWindow` 为该对话实际模型（与 `modelFor` 相同的源 + 模型名）的窗口：用户在来源 `contextWindows` 里的设置 > pi-ai 模型目录里该模型的 `contextWindow` > `LLM_CONTEXT_WINDOW` > 128000。用户设置优先于 usage 里报的窗口。对话没有可用模型时仍是 usage 窗口或环境默认值。`contextLabel` 为 `1.2k / 128k` 或 `—`。失败时带 `llmError`。不返回 `pipelineId` / `pipelineStep` |
 | `POST /conversations/:cid/messages` | `{text}` | `202 {runId, status:'running'}`。对话忙时用 `whenBusy:'steer'` 插入当前运行，不返回 409 |
 | `PATCH /conversations/:cid` | `{modelSourceId?, modelId?}` | `200 {id, modelSourceId, modelId, status, agents}`。不返回 `roleId`。`modelSourceId`/`modelId` 为 `null` 表示跟随 `settings.models.default`。来源不存在或模型不在该来源列表里 → 400 `{errors}`。若仍带 `pipelineId` 或其它未知字段则忽略、不报错。运行中也可改模型，下一轮生效 |
@@ -213,6 +213,7 @@ JSON：`{"turns":[ {"text":"..."} | {"text":"...","stopReason":"length"} | {"too
 
 | 方法 路径 | 响应 |
 |---|---|
+| `GET /api/conversations/:cid/agents` | `200 {agents:[...]}`。只含子 Agent，不含主 Agent、不含 messages。字段与 `GET /api/conversations/:cid` 的 `agents` 去掉第一项（主 Agent）后完全一致，含 `title`、`brief`、`startedAt`、`lastActivityAt`、`endedAt`、`currentAction`、`mode`（拿得到才返回）。对话不存在 `404 {error:'conversation not found'}` |
 | `GET /api/conversations/:cid/agents/:aid/messages` | `200 {id, name, status, mode, messages}`。`mode` 与芯片相同。`messages` 与父对话消息同形。对话不存在 `404 {error:'conversation not found'}`；`aid` 不是这个对话的子 Agent `404 {error:'agent not found'}` |
 | `POST /api/conversations/:cid/agents/:aid/messages` | `{text}`。`200 {ok:true}`。对运行中的子对话 `submit({type:'input', content, whenBusy:'steer'})`；再给主对话写一条 `app.weft.user-to-subagent`，不唤醒主对话。空文本 `400 {error:'text required'}`；未知对话或子 Agent `404`；`status` 不是 `running` `409 {error:'agent not running'}` |
 | `POST /api/conversations/:cid/agents/:aid/stop` | `200 {status:'stopped'}`。只 abort 这个子对话，不碰主对话和其他子 Agent。未知 `404`。主对话 SSE 推一条该子 Agent 的 `agent` 事件，`status` 为 `stopped` |
