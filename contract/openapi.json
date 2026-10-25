@@ -621,6 +621,179 @@
         "type": "object",
         "additionalProperties": false,
         "description": "SSE event=heartbeat 的 data。不带 id，不进环形缓冲。"
+      },
+      "ToolCall": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "groupId",
+          "kind",
+          "status",
+          "heading",
+          "hint",
+          "failure",
+          "diff",
+          "output"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "groupId": {
+            "type": "string",
+            "description": "所属工具组 id，由组内第一条调用算出"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "read",
+              "write",
+              "edit",
+              "ls",
+              "grep",
+              "bash",
+              "other"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "running",
+              "failed",
+              "interrupted",
+              "done"
+            ]
+          },
+          "heading": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "title",
+              "detail",
+              "fromIntent"
+            ],
+            "properties": {
+              "title": {
+                "type": "string"
+              },
+              "detail": {
+                "type": "string"
+              },
+              "fromIntent": {
+                "type": "boolean",
+                "description": "title 是否来自 input.description"
+              }
+            }
+          },
+          "path": {
+            "type": "string",
+            "description": "相对工作区路径。没有则省略"
+          },
+          "hint": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "text",
+              "failed"
+            ],
+            "properties": {
+              "text": {
+                "type": "string"
+              },
+              "failed": {
+                "type": "boolean"
+              }
+            }
+          },
+          "failure": {
+            "type": "string",
+            "enum": [
+              "none",
+              "probe",
+              "real"
+            ]
+          },
+          "diff": {
+            "description": "没有增删行数时为 null",
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "added",
+                  "removed"
+                ],
+                "properties": {
+                  "added": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "removed": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          "exitCode": {
+            "type": "integer",
+            "description": "bash 有退出码时带上，否则省略"
+          },
+          "output": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "preview",
+              "truncated",
+              "totalLines"
+            ],
+            "properties": {
+              "preview": {
+                "type": "string",
+                "description": "成功取前 20 行，失败取 TOOL_ERROR_PREVIEW_LINES 行"
+              },
+              "truncated": {
+                "type": "boolean"
+              },
+              "totalLines": {
+                "type": "integer"
+              }
+            }
+          }
+        },
+        "description": "单条工具调用的视图模型。全文按需拉 GET /api/v2/tools/<id>/output。"
+      },
+      "ToolGroupSummary": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "text",
+          "failed",
+          "running"
+        ],
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "按客户端语言出成的摘要句子"
+          },
+          "failed": {
+            "type": "integer",
+            "description": "组内真实失败（不含试探失败）的条数"
+          },
+          "running": {
+            "type": "boolean"
+          }
+        },
+        "description": "工具组摘要。对应 ThreadItem.tool_group.summary。"
       }
     }
   }
