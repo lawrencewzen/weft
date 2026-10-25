@@ -114,3 +114,31 @@ test('settings has no Agent tab; default model can be chosen, saved, and kept af
   await expect(page.getByTestId('model-pick')).toContainText('gpt-4o');
   expect(pageErrors, 'console has no unhandled errors when /api/roles is 404').toEqual([]);
 });
+
+test('API drawer add-model button stays on one line in zh and en', async ({ page }) => {
+  const token = await boot();
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await login(page, srv.url, token);
+  await page.locator('[data-action=open-settings]').click();
+
+  for (const lang of ['zh', 'en']) {
+    await page.locator('[data-action=set-settings-tab][data-tab=general]').click();
+    await page.locator(`[data-action=switch-language][data-lang=${lang}]`).click();
+    await expect(page.locator(`[data-action=switch-language][data-lang=${lang}]`)).toHaveClass(/on/);
+    await page.locator('[data-tab=models]').click();
+    await expect(page.getByTestId('models-page')).toBeVisible();
+    await page.locator('[data-testid=model-source]').filter({ hasText: 'OpenAI' }).locator('[data-action=ms-edit-source]').click();
+    await expect(page.getByTestId('model-drawer')).toBeVisible();
+    const add = page.locator('[data-action=ms-add-manual]');
+    await expect(add).toHaveText(lang === 'zh' ? '加入' : 'Add');
+    await expect.poll(async () => {
+      const measured = await add.boundingBox();
+      return measured?.height ?? 0;
+    }, { timeout: 8_000 }).toBeGreaterThan(2);
+    const box = await add.boundingBox();
+    expect(box, `${lang} add-model button`).toBeTruthy();
+    expect(box.height, `${lang} add-model height`).toBeLessThanOrEqual(34);
+    await page.locator('.ms-dr-head [data-action=ms-close-drawer]').click();
+    await expect(page.getByTestId('model-drawer')).toHaveCount(0);
+  }
+});

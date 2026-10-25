@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
 import { startServer, tmpdir } from './helpers/server.mjs';
-import { login } from './helpers/ui.mjs';
+import { login, waitForStableLayout } from './helpers/ui.mjs';
 import { startFakeGitlab } from '../helpers/fake-gitlab.mjs';
 
 const PAT = 'glpat-e2e-secret-9k3q';
@@ -173,4 +173,42 @@ test('settings Git connection imports a GitLab project', async ({ browser }) => 
   await expect(slim.getByTestId('git-project').filter({ hasText: 'acme/widget' })).toBeVisible();
   await assertFits(slim);
   await narrow.close();
+});
+
+function boxesOverlap(a, b) {
+  return a.x < b.x + b.width && b.x < a.x + a.width
+    && a.y < b.y + b.height && b.y < a.y + a.height;
+}
+
+function horizontalGap(a, b) {
+  const left = a.x <= b.x ? a : b;
+  const right = a.x <= b.x ? b : a;
+  return right.x - (left.x + left.width);
+}
+
+test('git settings add button stays clear of the close control in zh and en', async ({ page }) => {
+  srv = await startServer({ script: 'basic.json' });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await login(page, srv.url);
+
+  for (const lang of ['zh', 'en']) {
+    await page.locator('[data-action=open-settings]').click();
+    await page.locator('[data-action=set-settings-tab][data-tab=general]').click();
+    await page.locator(`[data-action=switch-language][data-lang=${lang}]`).click();
+    await expect(page.locator(`[data-action=switch-language][data-lang=${lang}]`)).toHaveClass(/on/);
+    await page.locator('[data-testid=settings-tab-git]').click();
+    await expect(page.getByTestId('git-page')).toBeVisible();
+    const add = page.getByTestId('git-add');
+    const close = page.locator('.sm-git [data-action=close-settings]');
+    await expect(add).toHaveText(lang === 'zh' ? '＋ 添加' : '+ Add');
+    await waitForStableLayout(page, add);
+    const addBox = await add.boundingBox();
+    const closeBox = await close.boundingBox();
+    expect(addBox, `${lang} add button`).toBeTruthy();
+    expect(closeBox, `${lang} close control`).toBeTruthy();
+    expect(boxesOverlap(addBox, closeBox), `${lang} add and close overlap`).toBe(false);
+    expect(horizontalGap(addBox, closeBox), `${lang} horizontal gap`).toBeGreaterThanOrEqual(12);
+    await page.locator('.sm-git [data-action=close-settings]').click();
+    await expect(page.locator('.sm')).toBeHidden();
+  }
 });
