@@ -76,8 +76,9 @@ const RICH_AGENTS = [
 function mockedConversation(cid, bag) {
   return {
     id: cid,
-    title: '请派子代理',
-    status: 'idle',
+    title: bag.title || '请派子代理',
+    status: bag.status || 'idle',
+    updatedAt: bag.updatedAt,
     modelSourceId: null,
     modelId: null,
     messages: [
@@ -102,6 +103,26 @@ function agentMessages(aid, extras = {}, agents = AGENTS) {
 }
 
 async function mockSubagentApi(page, bag) {
+  await page.route(/\/api\/workspaces\/[^/]+\/conversations(?:\?.*)?$/, async (route) => {
+    if (route.request().method() !== 'GET') {
+      await route.continue();
+      return;
+    }
+    const res = await route.fetch();
+    const list = await res.json();
+    if (!Array.isArray(list)) {
+      await route.fulfill({ json: list });
+      return;
+    }
+    await route.fulfill({
+      json: list.map((item) => ({
+        ...item,
+        ...(bag.status != null ? { status: bag.status } : {}),
+        ...(bag.updatedAt != null ? { updatedAt: bag.updatedAt } : {}),
+        ...(bag.title != null ? { title: bag.title } : {}),
+      })),
+    });
+  });
   await page.route(/\/api\/conversations\//, async (route) => {
     const req = route.request();
     const url = new URL(req.url());
@@ -148,7 +169,16 @@ async function dispatchAgentEvent(page, data) {
   }, data);
 }
 
-async function boot(page, { agents = AGENTS, now } = {}) {
+async function dispatchStatusEvent(page, data) {
+  await page.evaluate((payload) => {
+    const sources = window.__testEventSources || [];
+    const es = sources[sources.length - 1];
+    if (!es) throw new Error('no EventSource');
+    es.dispatchEvent(new MessageEvent('status', { data: JSON.stringify(payload) }));
+  }, data);
+}
+
+async function boot(page, { agents = AGENTS, now, status, title, updatedAt } = {}) {
   const prepared = await prepareWorkspaces(['repo']);
   const scriptPath = path.join(prepared.root, 'sidebar.json');
   await fs.writeFile(scriptPath, JSON.stringify({ turns: [{ text: '主对话已收到。' }] }));
@@ -164,6 +194,9 @@ async function boot(page, { agents = AGENTS, now } = {}) {
     posts: [],
     stops: [],
     agentExtras: {},
+    status,
+    title,
+    updatedAt,
   };
   if (now != null) {
     await page.addInitScript((t0) => {
@@ -197,7 +230,7 @@ function rowOf(page, id) {
 test.use({ viewport: { width: 1440, height: 900 } });
 test.describe.configure({ timeout: 90_000 });
 
-test('sidebar tree, orbit, pane interrupt/stop, note, and narrow overflow', async ({ page }) => {
+test('sidebar tree, chip, pane interrupt/stop, note, and narrow overflow', async ({ page }) => {
   const { srv, bag } = await boot(page);
   try {
     const rows = page.getByTestId('subagent-tree-row');
@@ -205,51 +238,64 @@ test('sidebar tree, orbit, pane interrupt/stop, note, and narrow overflow', asyn
     const testerRow = rowOf(page, TESTER);
     const coderRow = rowOf(page, CODER);
     const auditorRow = rowOf(page, AUDITOR);
+    const conv = page.getByTestId('conversation-item').first();
     await expect(testerRow).toHaveAttribute('data-status', 'running');
     await expect(testerRow).toHaveAttribute('data-depth', '0');
     await expect(coderRow).toHaveAttribute('data-depth', '0');
     await expect(auditorRow).toHaveAttribute('data-depth', '0');
-    await expect(coderRow.getByTestId('subagent-tree-time')).toHaveText('完成');
+    await expect(coderRow.getByTestId('subagent-tree-time')).toHaveText('');
+    await expect(coderRow).toHaveAttribute('data-visual', 'done');
     await expect(testerRow.getByTestId('subagent-tree-summary')).toContainText('正在写登录测试');
     await expect(testerRow.getByTestId('subagent-tree-action')).toHaveCount(0);
     expect(await testerRow.getByTestId('subagent-tree-time').textContent()).toBe('');
+    await expect(page.locator('.col-left')).not.toContainText('个完成');
 
     const pads = await page.evaluate(() => [...document.querySelectorAll('[data-testid=subagent-tree-row]')].map((el) => getComputedStyle(el).paddingLeft));
     expect(new Set(pads).size).toBe(1);
-    expect(pads[0]).toBe('32px');
+    await expect.poll(async () => auditorRow.evaluate((el) => el.getBoundingClientRect().height)).toBeGreaterThanOrEqual(26);
+    const connectors = await page.evaluate(() => [...document.querySelectorAll('[data-testid=subagent-tree-row]')].map((el, i, all) => {
+      const before = getComputedStyle(el, '::before');
+      const after = getComputedStyle(el, '::after');
+      return {
+        last: el.classList.contains('is-last'),
+        isLastIndex: i === all.length - 1,
+        beforeH: parseFloat(before.height),
+        afterW: parseFloat(after.width),
+        rowH: el.getBoundingClientRect().height,
+        treeLine: getComputedStyle(el.closest('.subagent-tree'), '::before').content,
+      };
+    }));
+    expect(connectors.every((item) => item.isLastIndex === item.last)).toBe(true);
+    expect(connectors.at(-1).last).toBe(true);
+    expect(connectors.slice(0, -1).every((item) => !item.last)).toBe(true);
+    expect(connectors.every((item) => item.afterW === 9)).toBe(true);
+    expect(connectors.at(-1).beforeH).toBe(13);
+    expect(connectors[0].beforeH).toBeGreaterThan(connectors.at(-1).beforeH);
+    expect(connectors[0].treeLine === 'none' || connectors[0].treeLine === '').toBe(true);
 
-    const orbit = page.getByTestId('subagent-orbit');
-    await expect(orbit).toBeVisible();
-    const orbitBox = await orbit.evaluate((el) => {
+    const chip = page.getByTestId('subagent-chip');
+    await expect(chip).toBeVisible();
+    await expect(chip).toHaveText('2/3');
+    await expect(chip).toHaveClass(/is-live/);
+    await expect(chip).toHaveAttribute('aria-label', /折叠/);
+    await expect(chip).toHaveAttribute('aria-expanded', 'true');
+    const chipBox = await chip.evaluate((el) => {
       const box = el.getBoundingClientRect();
-      return { w: Math.round(box.width), h: Math.round(box.height), sats: el.querySelectorAll('.subagent-orbit-track').length };
+      return { h: Math.round(box.height) };
     });
-    expect(orbitBox.w).toBe(18);
-    expect(orbitBox.h).toBe(18);
-    expect(orbitBox.sats).toBe(3);
-    await expect(page.getByTestId('subagent-orbit-count')).toHaveText('2/3');
-    const cluster = page.getByTestId('subagent-orbit-cluster');
-    await expect(cluster).toBeVisible();
-    await expect(cluster).toHaveCSS('cursor', 'default');
+    expect(chipBox.h).toBe(18);
+    await expect(page.getByTestId('subagent-orbit')).toHaveCount(0);
+    await expect(page.getByTestId('subagent-tree-toggle')).toHaveCount(0);
+    await expect(conv.locator('.conv-node-meta')).toBeVisible();
 
-    const toggle = page.getByTestId('subagent-tree-toggle');
-    await expect(toggle).toBeVisible();
-    await expect(toggle).toHaveAttribute('aria-label', /折叠/);
-    await expect(toggle).toHaveAttribute('aria-expanded', 'true');
-    const toggleBox = await toggle.evaluate((el) => {
-      const box = el.getBoundingClientRect();
-      return { w: Math.round(box.width), h: Math.round(box.height) };
-    });
-    expect(toggleBox.w).toBe(20);
-    expect(toggleBox.h).toBe(20);
-
-    await page.getByTestId('subagent-orbit-cluster').click();
+    await chip.click();
     await expect(page.getByTestId('subagent-pane')).toHaveCount(0);
-    await expect(rows).toHaveCount(3);
-    await expect(toggle).toHaveAttribute('aria-expanded', 'true');
-    await expect(rows.first()).toBeVisible();
+    await expect(conv).toHaveClass(/conv-active/);
+    await expect(chip).toHaveAttribute('aria-expanded', 'false');
+    await expect(chip).toHaveAttribute('aria-label', /展开/);
 
     const wrap = page.getByTestId('subagent-tree-wrap');
+    await expect(wrap).not.toHaveClass(/is-open/);
     const wrapTransition = await wrap.evaluate((el) => getComputedStyle(el).transition);
     expect(wrapTransition).toMatch(/grid-template-rows/);
     const arcTransition = await testerRow.locator('.sa-arc').evaluate((el) => {
@@ -258,8 +304,8 @@ test('sidebar tree, orbit, pane interrupt/stop, note, and narrow overflow', asyn
     });
     expect(arcTransition.transition).toMatch(/stroke|opacity/);
     expect(arcTransition.name).not.toBe('none');
-    const doneFill = await coderRow.locator('.sa-fill').evaluate((el) => getComputedStyle(el).transition);
-    expect(doneFill).toMatch(/transform|opacity/);
+    const doneCheck = await coderRow.locator('.sa-check').evaluate((el) => getComputedStyle(el).stroke);
+    expect(doneCheck).not.toBe('none');
     const actionSlot = await testerRow.locator('.subagent-tree-action-slot').evaluate((el) => getComputedStyle(el).transition);
     expect(actionSlot).toMatch(/grid-template-rows/);
 
@@ -268,12 +314,9 @@ test('sidebar tree, orbit, pane interrupt/stop, note, and narrow overflow', asyn
       expect(text).not.toMatch(/undefined|NaN/);
     }
 
-    await toggle.click();
-    await expect(toggle).toHaveAttribute('aria-expanded', 'false');
-    await expect(toggle).toHaveAttribute('aria-label', /展开/);
-    await expect(wrap).not.toHaveClass(/is-open/);
     await expect.poll(async () => wrap.evaluate((el) => el.getBoundingClientRect().height)).toBeLessThan(2);
-    await toggle.click();
+    await chip.click();
+    await expect(chip).toHaveAttribute('aria-expanded', 'true');
     await expect(rows).toHaveCount(3);
     await expect(rows.first()).toBeVisible();
     await expect.poll(async () => wrap.evaluate((el) => el.getBoundingClientRect().height)).toBeGreaterThan(20);
@@ -344,7 +387,7 @@ test('sidebar tree, orbit, pane interrupt/stop, note, and narrow overflow', asyn
       const nodes = [
         ...document.querySelectorAll('[data-testid=subagent-tree-row]'),
         ...document.querySelectorAll('.conv-node-header'),
-        ...document.querySelectorAll('[data-testid=subagent-orbit-cluster]'),
+        ...document.querySelectorAll('[data-testid=subagent-chip]'),
       ];
       return nodes.map((row) => {
         const box = row.getBoundingClientRect();
@@ -367,7 +410,7 @@ test('sidebar tree, orbit, pane interrupt/stop, note, and narrow overflow', asyn
 });
 
 test('brief, elapsed mm:ss, idle, and currentAction', async ({ page }) => {
-  const { srv } = await boot(page, { agents: RICH_AGENTS, now: FROZEN_NOW });
+  const { srv } = await boot(page, { agents: RICH_AGENTS, now: FROZEN_NOW, status: 'running' });
   try {
     const testerRow = rowOf(page, TESTER);
     const coderRow = rowOf(page, CODER);
@@ -381,7 +424,7 @@ test('brief, elapsed mm:ss, idle, and currentAction', async ({ page }) => {
     await expect(testerRow).toHaveAttribute('data-visual', 'running');
 
     await expect(coderRow.getByTestId('subagent-tree-summary')).toHaveText('改完 auth 模块');
-    await expect(coderRow.getByTestId('subagent-tree-time')).toHaveText('完成');
+    await expect(coderRow.getByTestId('subagent-tree-time')).toHaveText('');
     await expect(coderRow.getByTestId('subagent-tree-action')).toHaveCount(0);
     await expect(coderRow).toHaveAttribute('data-visual', 'done');
 
@@ -397,7 +440,12 @@ test('brief, elapsed mm:ss, idle, and currentAction', async ({ page }) => {
     expect(Number.parseFloat(stuckArc.duration)).toBeGreaterThan(2);
     expect(stuckArc.transition).toMatch(/stroke|opacity/);
 
-    await expect(page.getByTestId('subagent-orbit-count')).toHaveText('2/3');
+    await expect(page.getByTestId('subagent-chip')).toHaveText('2/3');
+    await expect(page.getByTestId('subagent-chip')).toHaveClass(/is-live/);
+    const convDot = page.getByTestId('conversation-item').first().locator('.conv-status-dot');
+    await expect(convDot).toHaveClass(/is-running/);
+    const pulse = await convDot.evaluate((el) => getComputedStyle(el).animationName);
+    expect(pulse).toMatch(/pulse/);
 
     await page.evaluate(() => { window.__WEFT_NOW += 1000; });
     await expect.poll(async () => testerRow.getByTestId('subagent-tree-time').textContent(), { timeout: 2500 }).toBe('00:06');
@@ -407,6 +455,129 @@ test('brief, elapsed mm:ss, idle, and currentAction', async ({ page }) => {
     for (const text of rowText) {
       expect(text).not.toMatch(/undefined|NaN/);
     }
+  } finally {
+    await srv?.kill();
+  }
+});
+
+const DONE_AGENTS = RICH_AGENTS.map((item) => ({
+  ...item,
+  status: 'done',
+  currentAction: undefined,
+  lastActivityAt: FROZEN_NOW - 3_000,
+  endedAt: FROZEN_NOW - 3_000,
+}));
+
+test('quiet list: all done chip, relative time, and no 完成', async ({ page }) => {
+  const { srv } = await boot(page, {
+    agents: DONE_AGENTS,
+    now: FROZEN_NOW,
+    status: 'idle',
+    updatedAt: FROZEN_NOW - 30_000,
+  });
+  try {
+    const conv = page.getByTestId('conversation-item').first();
+    const chip = page.getByTestId('subagent-chip');
+    await expect(chip).toHaveText('3');
+    await expect(chip).not.toHaveClass(/is-live/);
+    await expect(conv.locator('.conv-node-meta')).toContainText('秒前');
+    await expect(conv.locator('.conv-status-dot')).toHaveCount(0);
+    await expect(rowOf(page, TESTER).getByTestId('subagent-tree-time')).toHaveText('');
+    await expect(rowOf(page, CODER).getByTestId('subagent-tree-time')).toHaveText('');
+    await expect(rowOf(page, AUDITOR).getByTestId('subagent-tree-time')).toHaveText('');
+    await expect(page.locator('.col-left')).not.toContainText('个完成');
+    await expect(page.getByTestId('subagent-tree-row').last()).toHaveClass(/is-last/);
+    await expect(page.getByTestId('subagent-tree-row').last()).toHaveAttribute('data-agent-id', AUDITOR);
+  } finally {
+    await srv?.kill();
+  }
+});
+
+test('quiet list: status dots, failed row, chip toggle, and 200px sidebar', async ({ page }) => {
+  const longTitle = '请派子代理来处理一个非常非常非常非常非常非常长的标题好截成省略号';
+  const { srv, bag } = await boot(page, {
+    agents: RICH_AGENTS,
+    now: FROZEN_NOW,
+    status: 'running',
+    title: longTitle,
+    updatedAt: FROZEN_NOW - 5_000,
+  });
+  try {
+    const conv = page.getByTestId('conversation-item').first();
+    const chip = page.getByTestId('subagent-chip');
+    await expect(chip).toHaveText('2/3');
+    await expect(conv.locator('.conv-status-dot')).toHaveClass(/is-running/);
+    await expect(rowOf(page, AUDITOR).getByTestId('subagent-tree-time')).toHaveText('无动作 01:05');
+    await expect(conv).toHaveClass(/conv-active/);
+
+    await chip.click();
+    await expect(chip).toHaveAttribute('aria-expanded', 'false');
+    await expect(chip).toHaveAttribute('aria-label', /展开/);
+    await expect(page.getByTestId('subagent-pane')).toHaveCount(0);
+    await expect(conv).toHaveClass(/conv-active/);
+    await expect(page.getByTestId('subagent-tree-wrap')).not.toHaveClass(/is-open/);
+    await chip.click();
+    await expect(chip).toHaveAttribute('aria-expanded', 'true');
+    await expect(page.getByTestId('subagent-tree-row').first()).toBeVisible();
+
+    bag.status = 'idle';
+    await dispatchStatusEvent(page, { status: 'idle' });
+    await expect(conv).toHaveAttribute('data-status', 'idle');
+    await expect(conv.locator('.conv-status-dot')).toHaveCount(0);
+
+    bag.status = 'waiting';
+    await dispatchStatusEvent(page, { status: 'waiting' });
+    await expect(conv.locator('.conv-status-dot')).toHaveClass(/is-waiting/);
+
+    bag.status = 'failed';
+    await dispatchStatusEvent(page, { status: 'failed' });
+    await expect(conv.locator('.conv-status-dot')).toHaveClass(/is-failed/);
+
+    bag.status = 'done';
+    await dispatchStatusEvent(page, { status: 'done' });
+    await expect(conv.locator('.conv-status-dot')).toHaveCount(0);
+
+    const coder = bag.agents.find((item) => item.id === CODER);
+    if (coder) coder.status = 'failed';
+    await dispatchAgentEvent(page, { id: CODER, status: 'failed' });
+    await expect(rowOf(page, CODER)).toHaveAttribute('data-visual', 'failed');
+    await expect(rowOf(page, CODER).getByTestId('subagent-tree-time')).toHaveText('失败');
+
+    await page.evaluate(() => {
+      document.getElementById('app-shell').style.setProperty('--left-w', '200px');
+    });
+    const measured = await page.evaluate(() => {
+      const left = document.querySelector('.col-left');
+      const body = document.querySelector('.left-body');
+      const header = document.querySelector('.conv-active .conv-node-header');
+      const title = header.querySelector('.conv-node-title');
+      const chipEl = header.querySelector('[data-testid=subagent-chip]');
+      const meta = header.querySelector('.conv-node-meta');
+      const leftBox = left.getBoundingClientRect();
+      const chipBox = chipEl.getBoundingClientRect();
+      const metaBox = meta.getBoundingClientRect();
+      return {
+        leftW: Math.round(leftBox.width),
+        leftScroll: left.scrollWidth,
+        leftClient: left.clientWidth,
+        bodyScroll: body.scrollWidth,
+        bodyClient: body.clientWidth,
+        headerScroll: header.scrollWidth,
+        headerClient: header.clientWidth,
+        titleEllipsis: getComputedStyle(title).textOverflow,
+        wrap: getComputedStyle(header).flexWrap,
+        chipVisible: chipBox.width > 0 && chipBox.right <= leftBox.right + 1,
+        metaVisible: metaBox.width > 0 && metaBox.right <= leftBox.right + 1,
+      };
+    });
+    expect(measured.leftW).toBe(200);
+    expect(measured.leftScroll).toBeLessThanOrEqual(measured.leftClient + 1);
+    expect(measured.bodyScroll).toBeLessThanOrEqual(measured.bodyClient + 1);
+    expect(measured.headerScroll).toBeLessThanOrEqual(measured.headerClient + 1);
+    expect(measured.chipVisible).toBe(true);
+    expect(measured.metaVisible).toBe(true);
+    expect(measured.wrap).toBe('nowrap');
+    expect(measured.titleEllipsis).toBe('ellipsis');
   } finally {
     await srv?.kill();
   }
