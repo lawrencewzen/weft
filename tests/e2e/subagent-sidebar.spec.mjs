@@ -582,3 +582,301 @@ test('quiet list: status dots, failed row, chip toggle, and 200px sidebar', asyn
     await srv?.kill();
   }
 });
+
+const OTHER_AGENTS = [
+  {
+    id: TESTER,
+    name: '测试',
+    status: 'running',
+    title: '写登录单测',
+    brief: '写登录测试',
+    startedAt: FROZEN_NOW - 5_000,
+    lastActivityAt: FROZEN_NOW - 2_000,
+    currentAction: '正在读 auth.test.js',
+    mode: 'foreground',
+  },
+  {
+    id: CODER,
+    name: '编码',
+    status: 'done',
+    title: '改完 auth 模块',
+    brief: '改完 auth 模块',
+    startedAt: FROZEN_NOW - 120_000,
+    endedAt: FROZEN_NOW - 3_000,
+    lastText: '改完了 auth',
+    mode: 'foreground',
+  },
+  {
+    id: AUDITOR,
+    name: '审计',
+    status: 'stopped',
+    title: '审查权限边界',
+    brief: '审查权限边界',
+    startedAt: FROZEN_NOW - 90_000,
+    endedAt: FROZEN_NOW - 10_000,
+    lastText: 'auditor',
+    mode: 'foreground',
+  },
+];
+
+function convNode(page, cid) {
+  return page.locator(`[data-testid=conversation-item][data-id="${cid}"]`);
+}
+
+async function mockOtherSubagentApi(page, bag) {
+  await page.route(/\/api\/workspaces\/[^/]+\/conversations(?:\?.*)?$/, async (route) => {
+    const req = route.request();
+    const method = req.method();
+    if (method === 'POST') {
+      let res;
+      try {
+        res = await route.fetch();
+      } catch {
+        await route.abort();
+        return;
+      }
+      const body = await res.json();
+      bag.created.push(body.id);
+      if (bag.created.length === 1) {
+        bag.aId = body.id;
+        bag.agents[body.id] = [];
+      } else if (bag.created.length === 2) {
+        bag.bId = body.id;
+        bag.subagents[body.id] = { total: 3, live: 1 };
+        bag.agents[body.id] = OTHER_AGENTS.map((item) => ({ ...item }));
+      }
+      await route.fulfill({ status: res.status(), json: body });
+      return;
+    }
+    if (method !== 'GET') {
+      await route.continue();
+      return;
+    }
+    let res;
+    try {
+      res = await route.fetch();
+    } catch {
+      await route.fulfill({ json: [] });
+      return;
+    }
+    const list = await res.json();
+    if (!Array.isArray(list)) {
+      await route.fulfill({ json: list });
+      return;
+    }
+    await route.fulfill({
+      json: list.map((item) => ({
+        ...item,
+        ...(bag.subagents[item.id] ? { subagents: { ...bag.subagents[item.id] } } : {}),
+      })),
+    });
+  });
+  await page.route(/\/api\/conversations\//, async (route) => {
+    const req = route.request();
+    const url = new URL(req.url());
+    const pathname = url.pathname;
+    const method = req.method();
+
+    const convGet = pathname.match(/\/api\/conversations\/([^/]+)$/);
+    if (method === 'GET' && convGet) {
+      const cid = decodeURIComponent(convGet[1]);
+      await route.fulfill({
+        json: mockedConversation(cid, {
+          title: cid === bag.bId ? '对话B' : '对话A',
+          agents: (bag.agents[cid] || []).map((item) => ({ ...item })),
+        }),
+      });
+      return;
+    }
+
+    const agentsList = pathname.match(/\/api\/conversations\/([^/]+)\/agents$/);
+    if (method === 'GET' && agentsList) {
+      const cid = decodeURIComponent(agentsList[1]);
+      bag.agentListHits.push(cid);
+      await route.fulfill({ json: { agents: (bag.agents[cid] || []).map((item) => ({ ...item })) } });
+      return;
+    }
+
+    const msg = pathname.match(/\/api\/conversations\/([^/]+)\/agents\/([^/]+)\/messages$/);
+    if (msg) {
+      const aid = decodeURIComponent(msg[2]);
+      if (method === 'GET') {
+        await route.fulfill({ json: agentMessages(aid, {}, bag.agents[bag.bId] || OTHER_AGENTS) });
+        return;
+      }
+    }
+
+    await route.continue();
+  });
+}
+
+async function bootTwoConversations(page) {
+  const prepared = await prepareWorkspaces(['repo']);
+  const scriptPath = path.join(prepared.root, 'sidebar-other.json');
+  await fs.writeFile(scriptPath, JSON.stringify({ turns: [{ text: '主对话已收到。' }] }));
+  const srv = await startServer({
+    extraEnv: {
+      WEFT_FAUX_SCRIPT: scriptPath,
+      WEFT_WORKSPACE_ROOT: prepared.root,
+    },
+  });
+  const bag = {
+    created: [],
+    aId: '',
+    bId: '',
+    subagents: {},
+    agents: {},
+    agentListHits: [],
+  };
+  await page.addInitScript(() => {
+    const Orig = window.EventSource;
+    window.EventSource = class extends Orig {
+      constructor(url, config) {
+        super(url, config);
+        window.__testEventSources = window.__testEventSources || [];
+        window.__testEventSources.push(this);
+      }
+    };
+  });
+  await mockOtherSubagentApi(page, bag);
+  await openApp(page, srv);
+  await createWorkspace(page, 'demo', prepared.dirs[0]);
+  await newConversation(page);
+  await send(page, '对话A');
+  await expect.poll(() => bag.aId).toBeTruthy();
+  await expect(page.getByTestId('conversation-item')).toHaveCount(1, { timeout: 20000 });
+  await newConversation(page);
+  await send(page, '对话B');
+  await expect.poll(() => bag.bId).toBeTruthy();
+  await expect(page.getByTestId('conversation-item')).toHaveCount(2, { timeout: 20000 });
+  await expect(convNode(page, bag.bId)).toHaveClass(/conv-active/);
+  await expect(convNode(page, bag.bId).getByTestId('subagent-tree-row')).toHaveCount(3, { timeout: 20000 });
+  await convNode(page, bag.aId).locator('.conv-node-header').click();
+  await expect(convNode(page, bag.aId)).toHaveClass(/conv-active/);
+  await expect(convNode(page, bag.bId)).not.toHaveClass(/conv-active/);
+  return { srv, bag };
+}
+
+async function shutdown(page, srv) {
+  await page.unrouteAll({ behavior: 'ignoreErrors' }).catch(() => {});
+  await srv?.kill();
+}
+
+test('other conversation chip stays collapsed until expanded, then opens pane', async ({ page }) => {
+  const { srv, bag } = await bootTwoConversations(page);
+  try {
+    const convA = convNode(page, bag.aId);
+    const convB = convNode(page, bag.bId);
+    const chipB = convB.getByTestId('subagent-chip');
+
+    await expect(convA).toHaveClass(/conv-active/);
+    await expect(convA.getByTestId('subagent-chip')).toHaveCount(0);
+    await expect(chipB).toBeVisible();
+    await expect(chipB).toHaveText('1/3');
+    await expect(chipB).toHaveClass(/is-live/);
+    await expect(chipB).toHaveAttribute('aria-expanded', 'false');
+    await expect(convB.getByTestId('subagent-tree-row')).toHaveCount(0);
+    await expect(convB.getByTestId('subagent-tree-wrap')).toHaveCount(0);
+    expect(bag.agentListHits).toEqual([]);
+
+    await chipB.click();
+    await expect(chipB).toHaveAttribute('aria-expanded', 'true');
+    await expect(convA).toHaveClass(/conv-active/);
+    await expect(convB).not.toHaveClass(/conv-active/);
+    await expect(convB.getByTestId('subagent-tree-row')).toHaveCount(3);
+    await expect(convB.getByTestId('subagent-tree-wrap')).toHaveClass(/is-open/);
+    await expect(convB.getByTestId('subagent-tree-row').last()).toHaveClass(/is-last/);
+    const connectors = await convB.getByTestId('subagent-tree-row').evaluateAll((rows) => rows.map((el, i, all) => {
+      const before = getComputedStyle(el, '::before');
+      const after = getComputedStyle(el, '::after');
+      return {
+        last: el.classList.contains('is-last'),
+        isLastIndex: i === all.length - 1,
+        afterW: parseFloat(after.width),
+        beforeH: parseFloat(before.height),
+      };
+    }));
+    expect(connectors.every((item) => item.isLastIndex === item.last)).toBe(true);
+    expect(connectors.every((item) => item.afterW === 9)).toBe(true);
+    expect(connectors.at(-1).beforeH).toBe(13);
+    await expect.poll(() => bag.agentListHits.length).toBeGreaterThan(0);
+    expect(bag.agentListHits[0]).toBe(bag.bId);
+
+    const testerRow = convB.locator(`[data-testid=subagent-tree-row][data-agent-id="${TESTER}"]`);
+    await expect(testerRow).toHaveAttribute('data-conv-id', bag.bId);
+    await testerRow.click();
+    await expect(convB).toHaveClass(/conv-active/);
+    await expect(page.getByTestId('subagent-pane')).toBeVisible();
+    await expect(page.getByTestId('subagent-banner')).toHaveAttribute('data-agent-id', TESTER);
+    await expect(page.getByTestId('subagent-banner-text')).toContainText('写登录单测');
+    await expect(convB.locator(`[data-testid=subagent-tree-row][data-agent-id="${TESTER}"]`)).toHaveClass(/is-active/);
+  } finally {
+    await shutdown(page, srv);
+  }
+});
+
+test('expanded other conversation refreshes on the 2s poll until live is 0', async ({ page }) => {
+  const { srv, bag } = await bootTwoConversations(page);
+  try {
+    const convB = convNode(page, bag.bId);
+    const chipB = convB.getByTestId('subagent-chip');
+    await chipB.click();
+    await expect(convB.getByTestId('subagent-tree-row')).toHaveCount(3);
+    await expect.poll(() => bag.agentListHits.length).toBeGreaterThan(0);
+    await expect.poll(() => bag.agentListHits.length, { timeout: 8000 }).toBeGreaterThan(1);
+
+    bag.subagents[bag.bId] = { total: 3, live: 0 };
+    for (const agent of bag.agents[bag.bId] || []) {
+      if (agent.status === 'running' || agent.status === 'waiting') agent.status = 'done';
+    }
+    await page.waitForTimeout(2500);
+    const afterIdle = bag.agentListHits.length;
+    await page.waitForTimeout(5000);
+    expect(bag.agentListHits.length).toBe(afterIdle);
+
+    await chipB.click();
+    await expect(chipB).toHaveAttribute('aria-expanded', 'false');
+    await page.waitForTimeout(4500);
+    expect(bag.agentListHits.length).toBe(afterIdle);
+    expect(bag.agentListHits.every((cid) => cid === bag.bId)).toBe(true);
+  } finally {
+    await shutdown(page, srv);
+  }
+});
+
+test('other tree expand set is independent of the current conversation', async ({ page }) => {
+  const { srv, bag } = await bootTwoConversations(page);
+  try {
+    const convA = convNode(page, bag.aId);
+    const convB = convNode(page, bag.bId);
+    const chipB = convB.getByTestId('subagent-chip');
+
+    await expect(chipB).toHaveAttribute('aria-expanded', 'false');
+    await convB.locator('.conv-node-title').click();
+    await expect(convB).toHaveClass(/conv-active/);
+    await expect(chipB).toHaveAttribute('aria-expanded', 'true');
+    await expect(convB.getByTestId('subagent-tree-row')).toHaveCount(3);
+
+    await convA.locator('.conv-node-header').click();
+    await expect(convA).toHaveClass(/conv-active/);
+    await expect(chipB).toHaveAttribute('aria-expanded', 'false');
+    await expect(convB.getByTestId('subagent-tree-row')).toHaveCount(0);
+
+    await chipB.click();
+    await expect(chipB).toHaveAttribute('aria-expanded', 'true');
+    await expect(convB.getByTestId('subagent-tree-row')).toHaveCount(3);
+    await expect(convA).toHaveClass(/conv-active/);
+
+    await convB.locator('.conv-node-title').click();
+    await expect(convB).toHaveClass(/conv-active/);
+    await expect(chipB).toHaveAttribute('aria-expanded', 'true');
+
+    await convA.locator('.conv-node-header').click();
+    await expect(convA).toHaveClass(/conv-active/);
+    await expect(chipB).toHaveAttribute('aria-expanded', 'true');
+    await expect(convB.getByTestId('subagent-tree-wrap')).toHaveClass(/is-open/);
+    await expect(convB.getByTestId('subagent-tree-row')).toHaveCount(3);
+  } finally {
+    await shutdown(page, srv);
+  }
+});
