@@ -29,6 +29,19 @@ test('renders a GFM table', () => {
   assert.equal(body.querySelectorAll('p').length, 0);
 });
 
+test('tables are wrapped in md-table and keep column alignment', () => {
+  const { body } = parse('| left | mid | right |\n| --- | :---: | ---: |\n| a | b | c |');
+  const wrap = body.querySelector('.md-table');
+  assert.ok(wrap);
+  assert.equal(wrap.querySelector('table')?.parentElement, wrap);
+  const ths = [...wrap.querySelectorAll('th')];
+  assert.equal(ths[0].getAttribute('align'), null);
+  assert.equal(ths[1].getAttribute('align'), 'center');
+  assert.equal(ths[2].getAttribute('align'), 'right');
+  const tds = [...wrap.querySelectorAll('td')];
+  assert.equal(tds[2].getAttribute('align'), 'right');
+});
+
 test('renders a thematic break', () => {
   const { body } = parse('hello\n\n---\n\nworld');
   assert.equal(body.querySelectorAll('hr').length, 1);
@@ -60,6 +73,42 @@ test('renders a fenced code block with the language bar', () => {
   assert.equal(card.querySelector('pre.code-block-pre code')?.textContent, 'console.log(1)');
 });
 
+test('code block includes a copy-code button', () => {
+  const { body } = parse('```js\nconsole.log(1)\n```');
+  const btn = body.querySelector('button[data-action="copy-code"]');
+  assert.ok(btn);
+  assert.equal(btn.getAttribute('type'), 'button');
+  assert.ok(btn.querySelector('[data-copy-label]'));
+});
+
+test('bash code block wraps lines with has-prompt and textContent has no dollar prompt', () => {
+  const { body } = parse('```bash\necho hi\nls\n```');
+  const lines = [...body.querySelectorAll('pre.code-block-pre .code-line')];
+  assert.equal(lines.length, 2);
+  assert.ok(lines.every((el) => el.classList.contains('has-prompt')));
+  assert.equal(body.querySelector('pre.code-block-pre code')?.textContent, 'echo hi\nls');
+  assert.doesNotMatch(body.querySelector('pre.code-block-pre code')?.textContent || '', /\$ /);
+});
+
+test('python code block has no shell prompt', () => {
+  const { body } = parse('```python\nprint(1)\n```');
+  assert.equal(body.querySelectorAll('.code-line').length, 0);
+  assert.equal(body.querySelectorAll('.has-prompt').length, 0);
+  assert.equal(body.querySelector('pre.code-block-pre code')?.textContent, 'print(1)');
+});
+
+test('bash line already starting with "$ " does not get has-prompt', () => {
+  const { body } = parse('```shell\n$ echo hi\n\nls\n```');
+  const lines = [...body.querySelectorAll('pre.code-block-pre .code-line')];
+  assert.equal(lines.length, 3);
+  assert.equal(lines[0].className, 'code-line');
+  assert.equal(lines[0].textContent, '$ echo hi');
+  assert.equal(lines[1].className, 'code-line');
+  assert.equal(lines[1].textContent, '');
+  assert.ok(lines[2].classList.contains('has-prompt'));
+  assert.equal(lines[2].textContent, 'ls');
+});
+
 test('renders a link with target and rel', () => {
   const { body } = parse('see [docs](https://example.com/path)');
   const a = body.querySelector('a');
@@ -76,6 +125,38 @@ test('renders task lists', () => {
   assert.equal(items[0].querySelector('input[type="checkbox"]')?.hasAttribute('checked'), false);
   assert.equal(items[1].querySelector('input[type="checkbox"]')?.hasAttribute('checked'), true);
   assert.ok(items[0].querySelector('input')?.disabled);
+});
+
+test('checked task items get is-done', () => {
+  const { body } = parse('- [ ] todo\n- [x] done');
+  const items = body.querySelectorAll('ul.contains-task-list > li.task-list-item');
+  assert.equal(items[0].classList.contains('is-done'), false);
+  assert.ok(items[1].classList.contains('is-done'));
+});
+
+test('DOMPurify keeps copy button and svg', () => {
+  const { html, body } = parse('```js\nconsole.log(1)\n```');
+  const btn = body.querySelector('button[data-action="copy-code"]');
+  const svg = btn?.querySelector('svg');
+  const rects = svg ? svg.querySelectorAll('rect') : [];
+  assert.ok(btn);
+  assert.ok(svg);
+  assert.equal(rects.length, 2);
+  assert.match(html, /data-action="copy-code"/);
+  assert.match(html, /<svg/i);
+});
+
+test('strips forged data-action and extra data attributes from raw HTML', () => {
+  const { body } = parse(
+    '<button data-action="git-delete">x</button>\n\n'
+    + '<span data-action="delete-skill" data-foo="1">y</span>\n\n'
+    + '```js\nconsole.log(1)\n```'
+  );
+  assert.equal(body.querySelectorAll('[data-action="git-delete"]').length, 0);
+  assert.equal(body.querySelectorAll('[data-action="delete-skill"]').length, 0);
+  assert.equal(body.querySelectorAll('[data-foo]').length, 0);
+  assert.ok(body.querySelector('button.code-copy-btn[data-action="copy-code"]'));
+  assert.ok(body.querySelector('[data-copy-label]'));
 });
 
 test('strips script tags', () => {

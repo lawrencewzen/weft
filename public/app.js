@@ -4798,13 +4798,30 @@ function openCtxMenu(e, items, title = '') {
   menu.style.top = `${y}px`;
 }
 
-async function copyText(text) {
+async function copyText(text, opts = {}) {
   try {
     await navigator.clipboard.writeText(text);
-    showToast('copied');
+    if (!opts.silent) showToast('copied');
+    return true;
   } catch {
     showToast('err_copy');
+    return false;
   }
+}
+
+const copyCodeResetTimers = new WeakMap();
+
+async function copyCodeBlock(btn, text) {
+  const ok = await copyText(text, { silent: true });
+  if (!ok) return;
+  const label = btn.querySelector('[data-copy-label]') || btn;
+  label.textContent = t('copied');
+  const prev = copyCodeResetTimers.get(btn);
+  if (prev) clearTimeout(prev);
+  copyCodeResetTimers.set(btn, setTimeout(() => {
+    if (label.isConnected) label.textContent = t('copy_code');
+    copyCodeResetTimers.delete(btn);
+  }, 1500));
 }
 
 function projectMenuItems(wid) {
@@ -5139,6 +5156,12 @@ document.addEventListener('click', (e) => {
     case 'project-chip-menu':
       openProjectChipMenu(e);
       break;
+    case 'copy-code': {
+      const card = actionEl.closest('.code-block-card');
+      const raw = (card?.querySelector('pre code')?.textContent || '').replace(/\n$/, '');
+      copyCodeBlock(actionEl, raw);
+      break;
+    }
     case 'load-workspace-file':
       state.userPickedFile = true;
       state.activeRightTab = 'file';
