@@ -7,6 +7,7 @@ Weft 是基于 Pi Durable（`@earendil-works/pi-durable`，作为库嵌入）的
 - 禁止自写编排器、任务调度或检查点机制来替代 Pi Durable 已有的能力。Pi Durable 做不到、需要绕开或改换内核的，必须先停下来报告，经用户同意后才能动。
 - 现状（2026-10-20，T12-2）：默认运行时已经是 Pi Durable Harness（`src/kernel/`）。对话状态只在 Harness 里，应用库只留最近一次提交的 id。卡住和重试只用它的 `stream.timeoutMs` 和 `retry`。没有 harness id 的旧对话不出现在列表里。
 - 改动架构（内核、存储、模型调用层）属于需用户确认的决定；`docs/ARCHITECTURE.md` 必须如实反映现状，不能为了贴合代码就悄悄改掉原定架构。
+- v2（2026-10-25 定，见 `docs/ARCHITECTURE_V2.md`）只重做服务端对外的一层（协议、视图模型、服务进程、鉴权）和客户端，内核规定一条不变：对话和任务怎么跑全部交给 Pi Durable。v2 里的卡住判定定时器、空闲退出计时、SSE 事件缓存只服务于显示和进程管理，不调度、不存检查点；以后通过 Provider 接外部 agent，也必须用 Pi Durable 的 Task 实现。
 
 ## 核心模型
 - **工作区（Workspace）** > **对话（Conversation）** > **主 Agent（Main Agent）** > **子 Agent（Sub Agents）**。
@@ -17,6 +18,7 @@ Weft 是基于 Pi Durable（`@earendil-works/pi-durable`，作为库嵌入）的
 ## 文档
 - 计划与设计：`docs/PLAN.md`、`docs/ARCHITECTURE.md`、`design/`。接口契约以测试仓库的 `docs/API_CONTRACT.md` 为准。
 - Pi API 以 `node_modules/@earendil-works/*/dist/**/*.d.ts` 和 `node_modules/@earendil-works/pi-durable/README.md` 为准，不凭记忆编 API。
+- v2 目标架构：`docs/ARCHITECTURE_V2.md`（迁移中）。迁移期间旧接口 `/api/*` 和旧前端 `/`（`public/`）保持可用，但不在旧前端上开新功能；新功能做在 `/api/v2` 和 `/next`。
 
 ## 分工
 - **编排者（总指挥）**：拆分任务、合并分支、最终亲手验收（默认用测试结果证明，确实需要看画面时另行说明），只有编排者往 `main` 合并。
