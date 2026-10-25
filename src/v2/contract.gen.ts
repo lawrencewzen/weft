@@ -70,6 +70,12 @@ export interface paths {
          *     订阅的主题和上次不同时，客户端不要带 Last-Event-ID / lastEventId，直接重新连接拿快照（续传只保证同一组主题）。
          *     心跳每 15 秒一次，不带 id，不进缓冲。
          *
+         *     主题 `workspaces` 注册为精确主题。实体：
+         *     - `workspace`：id 为工作区 id，值为 Workspace
+         *     - `conversation_summary`：id 为对话 id，值为 ConversationSummary
+         *
+         *     快照与 GET /api/v2/workspaces 同一套数据拆成上述实体。工作区或对话增删改、运行状态或子 Agent 计数变化时 upsert；实体删除时 remove。
+         *
          *     主题 `conversation:<id>`（`<id>` 为对话 id）按前缀动态注册。实体：
          *     - `conversation`：id 为对话 id，值为 ConversationView
          *     - `item`：id 为 ThreadItem.id，值为 ThreadItem
@@ -90,6 +96,70 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/workspaces": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 侧栏工作区和对话列表
+         * @description 返回当前未移除的工作区，以及每个工作区下的对话摘要。
+         *     对话状态用 statusOf，子 Agent 计数用 subagentDigests，不读完整对话记录。
+         *     每个工作区下的对话按 updatedAt 倒序。
+         */
+        get: operations["getWorkspaces"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/workspaces/{id}/conversations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 在工作区新建对话
+         * @description 调用和旧接口相同的创建逻辑。`title` 缺省为 New conversation。
+         *     工作区不存在或已移除时 404。成功返回新对话的 ConversationSummary。
+         */
+        post: operations["createWorkspaceConversation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/workspaces/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * 移除工作区
+         * @description 只隐藏工作区，磁盘文件和对话记录保留。有运行中的对话时 409 E_WS_BUSY，并返回这些对话 id。
+         *     工作区不存在或已移除时 404。
+         */
+        delete: operations["removeWorkspace"];
         options?: never;
         head?: never;
         patch?: never;
@@ -494,6 +564,64 @@ export interface components {
             /** @description 先用 modelId */
             label: string;
         };
+        /** @description 侧栏工作区。 */
+        Workspace: {
+            id: string;
+            name: string;
+            path: string;
+            /** @enum {string} */
+            source: "local" | "git";
+            /** @description 该工作区下的对话数 */
+            conversationCount: number;
+            /** @description 状态为 running 的对话数（recovering、resuming 算 running） */
+            runningCount: number;
+        };
+        /** @description 子 Agent 总数和正在跑的数量。没有子 Agent 时 ConversationSummary.subagents 为 null。 */
+        SubagentCounts: {
+            total: number;
+            live: number;
+        };
+        /** @description 侧栏对话摘要。 */
+        ConversationSummary: {
+            id: string;
+            workspaceId: string;
+            title: string;
+            /** @description 毫秒时间戳 */
+            updatedAt: number;
+            /**
+             * @description 按设计 6.1 归一。recovering、resuming 算 running；paused 算 waiting；error 算 failed；stopped 算 idle
+             * @enum {string}
+             */
+            status: "idle" | "running" | "waiting" | "failed";
+            /** @description 主 Agent 运行算 1，加上运行中的子 Agent 数。与旧版 conversationMeta「N 个 Agent 运行中」一致 */
+            runningAgents: number;
+            /** @description 没有子 Agent 时为 null */
+            subagents: null | components["schemas"]["SubagentCounts"];
+            archived: boolean;
+        };
+        /** @description GET /api/v2/workspaces 的响应。 */
+        WorkspacesSnapshot: {
+            workspaces: components["schemas"]["Workspace"][];
+            /** @description 每个工作区下的对话按 updatedAt 倒序，再按工作区列表顺序拼接 */
+            conversations: components["schemas"]["ConversationSummary"][];
+        };
+        /** @description 新建对话。title 缺省为 New conversation。 */
+        CreateConversationRequest: {
+            title?: string;
+        };
+        /** @description DELETE /api/v2/workspaces/{id} 成功。 */
+        WorkspaceRemoved: {
+            /** @constant */
+            removed: true;
+        };
+        /** @description 工作区里还有运行中的对话。 */
+        WorkspaceBusy: {
+            error: string;
+            /** @constant */
+            code: "E_WS_BUSY";
+            /** @description 正在运行、因此挡住移除的对话 id */
+            conversations: string[];
+        };
         /** @description 一个对话的视图。摘要字段加上模型、运行状态、上下文和对话流顺序。 */
         ConversationView: {
             id: string;
@@ -703,7 +831,7 @@ export interface operations {
     getEvents: {
         parameters: {
             query: {
-                /** @description 逗号分隔的主题列表。空或含未注册主题时 400。`conversation:<id>` 按前缀视为已注册。 */
+                /** @description 逗号分隔的主题列表。空或含未注册主题时 400。`workspaces` 已注册；`conversation:<id>` 按前缀视为已注册。 */
                 topics: string;
                 /** @description 客户端语言。先支持 zh、en；缺省或不认识的按 zh。 */
                 lang?: string;
@@ -744,6 +872,193 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 客户端错误 */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 服务端错误 */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+        };
+    };
+    getWorkspaces: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 工作区和对话摘要 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspacesSnapshot"];
+                };
+            };
+            /** @description 未授权 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 客户端错误 */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 服务端错误 */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+        };
+    };
+    createWorkspaceConversation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 工作区 id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateConversationRequest"];
+            };
+        };
+        responses: {
+            /** @description 已创建 */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConversationSummary"];
+                };
+            };
+            /** @description 请求体无效 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 未授权 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 工作区不存在 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 客户端错误 */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 服务端错误 */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+        };
+    };
+    removeWorkspace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 工作区 id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 已移除 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceRemoved"];
+                };
+            };
+            /** @description 未授权 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 工作区不存在 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 有运行中的对话，不能移除 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceBusy"];
                 };
             };
             /** @description 客户端错误 */

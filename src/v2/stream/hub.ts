@@ -31,6 +31,8 @@ export type SnapshotResult = Entity[] | SnapshotPayload;
 
 export type TopicHandler = {
   snapshot: (lang: string) => SnapshotResult | Promise<SnapshotResult>;
+  onFirstSubscribe?: (topic: string) => void;
+  onLastUnsubscribe?: (topic: string) => void;
 };
 
 export type PatternHandler = {
@@ -331,7 +333,7 @@ export function createEventHub(opts: {
     subscribers.set(topic, n);
     if (n !== 1) return;
     const resolved = resolveTopic(topic);
-    if (resolved?.kind !== 'pattern') return;
+    if (!resolved) return;
     try {
       resolved.handler.onFirstSubscribe?.(topic);
     } catch (err) {
@@ -347,7 +349,7 @@ export function createEventHub(opts: {
     }
     subscribers.delete(topic);
     const resolved = resolveTopic(topic);
-    if (resolved?.kind !== 'pattern') return;
+    if (!resolved) return;
     try {
       resolved.handler.onLastUnsubscribe?.(topic);
     } catch (err) {

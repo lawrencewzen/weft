@@ -22,6 +22,7 @@ import {
 import { contractMismatchLog, validateResponse } from './validate.ts';
 import { PROTOCOL_VERSION } from './version.ts';
 import { attachConversationTopic, type KernelEvent } from './stream/conversation-topic.ts';
+import { attachWorkspacesTopic } from './stream/workspaces-topic.ts';
 import { MANUAL_CONTINUE_TEXT } from './views/continuation.ts';
 import {
   conversationSnapshot,
@@ -29,6 +30,11 @@ import {
   toolOutputView,
   type LoadConversation,
 } from './views/conversation.ts';
+import {
+  buildWorkspacesSnapshot,
+  conversationSummaryView,
+  type SidebarLoader,
+} from './views/sidebar.ts';
 
 type ServiceInfo = components['schemas']['ServiceInfo'];
 type V2Error = components['schemas']['V2Error'];
@@ -38,6 +44,10 @@ type ConversationSnapshot = components['schemas']['ConversationSnapshot'];
 type RunAccepted = components['schemas']['RunAccepted'];
 type StopAccepted = components['schemas']['StopAccepted'];
 type ToolOutput = components['schemas']['ToolOutput'];
+type WorkspacesSnapshot = components['schemas']['WorkspacesSnapshot'];
+type ConversationSummary = components['schemas']['ConversationSummary'];
+type WorkspaceRemoved = components['schemas']['WorkspaceRemoved'];
+type WorkspaceBusy = components['schemas']['WorkspaceBusy'];
 type V2JsonBody =
   | ServiceInfo
   | WebCode
@@ -46,7 +56,11 @@ type V2JsonBody =
   | ConversationSnapshot
   | RunAccepted
   | StopAccepted
-  | ToolOutput;
+  | ToolOutput
+  | WorkspacesSnapshot
+  | ConversationSummary
+  | WorkspaceRemoved
+  | WorkspaceBusy;
 
 export type ConversationRow = {
   id?: unknown;
@@ -67,6 +81,18 @@ export type PostMessage = (
   opts?: { requestId?: string },
 ) => Promise<{ status: number; body?: { runId?: unknown } }>;
 export type StopConversationFn = (id: string) => Promise<{ status: number }>;
+export type ListWorkspacesFn = () => Promise<WorkspaceRow[]>;
+export type ListConversationsFn = (workspaceId: string) => Promise<ConversationRow[]>;
+export type StatusOfFn = (conv: ConversationRow) => Promise<unknown>;
+export type SubagentDigestsFn = (
+  convs: ConversationRow[],
+) => Promise<Map<string, { total: number; live: number }>>;
+export type CreateConversationFn = (
+  workspaceId: string,
+  fields?: { title?: string },
+) => Promise<{ status: number; conv?: ConversationRow }>;
+export type RemoveWorkspaceFn = (id: string) => Promise<void>;
+export type SubscribeAllFn = (fn: (cid: string, ev: KernelEvent) => void) => () => void;
 
 export type { LoadConversation, KernelEvent };
 
@@ -80,6 +106,7 @@ export type V2Runtime = {
   touch: IdleWatcher['touch'];
   trackConnection: IdleWatcher['trackConnection'];
   startIdleExit: IdleWatcher['start'];
+  notifySidebarChanged: () => void;
   dispose: () => void;
 };
 
@@ -228,6 +255,28 @@ function writeSseFrame(res: ServerResponse, frame: SseFrame): void {
   }
 }
 
+function sidebarLoader(opts: {
+  listWorkspaces?: ListWorkspacesFn;
+  listConversations?: ListConversationsFn;
+  statusOf?: StatusOfFn;
+  subagentDigests?: SubagentDigestsFn;
+}): SidebarLoader {
+  return {
+    async listWorkspaces() {
+      return opts.listWorkspaces ? opts.listWorkspaces() : [];
+    },
+    async listConversations(workspaceId) {
+      return opts.listConversations ? opts.listConversations(workspaceId) : [];
+    },
+    async statusOf(conv) {
+      return opts.statusOf ? opts.statusOf(conv) : 'idle';
+    },
+    async subagentDigests(convs) {
+      return opts.subagentDigests ? opts.subagentDigests(convs) : new Map();
+    },
+  };
+}
+
 function serviceInfo(opts: { serviceVersion: string; startedAt: number; pid: number }): ServiceInfo {
   return {
     protocolVersion: PROTOCOL_VERSION,
@@ -251,6 +300,13 @@ export function createV2Handler(opts: {
   getWorkspace?: GetWorkspace;
   postMessage?: PostMessage;
   stopConversation?: StopConversationFn;
+  listWorkspaces?: ListWorkspacesFn;
+  listConversations?: ListConversationsFn;
+  statusOf?: StatusOfFn;
+  subagentDigests?: SubagentDigestsFn;
+  createConversation?: CreateConversationFn;
+  removeWorkspace?: RemoveWorkspaceFn;
+  onSidebarChanged?: () => void;
 }): V2Handler {
   const { serviceVersion, startedAt, auth, hub } = opts;
   const pid = opts.pid ?? process.pid;
@@ -310,6 +366,110 @@ export function createV2Handler(opts: {
         console.log('WEFT_SERVICE_RESTART');
         opts.onRestart?.();
       });
+      return true;
+    }
+
+    if (method === 'GET' && pathname === '/api/v2/workspaces') {
+      try {
+        const snapshot = await buildWorkspacesSnapshot(sidebarLoader(opts));
+        sendV2(res, pathname, method, 200, snapshot);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'list workspaces failed';
+        sendV2(res, pathname, method, 500, { error: message, code: 'E_INTERNAL' } satisfies V2Error);
+      }
+      return true;
+    }
+
+    const createConvMatch = /^\/api\/v2\/workspaces\/([^/]+)\/conversations$/.exec(pathname);
+    if (method === 'POST' && createConvMatch) {
+      const workspaceId = decodeURIComponent(createConvMatch[1]);
+      const body = await readObjectBody(req, res, pathname, method);
+      if (!body) return true;
+      let title: string | undefined;
+      if (Object.prototype.hasOwnProperty.call(body, 'title') && body.title != null) {
+        if (typeof body.title !== 'string') {
+          sendV2(res, pathname, method, 400, { error: 'invalid title', code: 'E_BAD_REQUEST' } satisfies V2Error);
+          return true;
+        }
+        const trimmed = body.title.trim();
+        if (trimmed) title = trimmed;
+      }
+      if (!opts.createConversation) {
+        sendV2(res, pathname, method, 500, { error: 'kernel not ready', code: 'E_INTERNAL' } satisfies V2Error);
+        return true;
+      }
+      try {
+        const created = await opts.createConversation(workspaceId, title ? { title } : {});
+        if (created.status === 404 || !created.conv) {
+          sendV2(res, pathname, method, 404, { error: 'not found' } satisfies V2Error);
+          return true;
+        }
+        if (created.status !== 201) {
+          sendV2(res, pathname, method, created.status >= 400 ? created.status : 500, {
+            error: 'create failed',
+            code: 'E_INTERNAL',
+          } satisfies V2Error);
+          return true;
+        }
+        const conv = created.conv;
+        const status = opts.statusOf ? await opts.statusOf(conv) : 'idle';
+        const digests = opts.subagentDigests ? await opts.subagentDigests([conv]) : new Map();
+        const cid = conv.id == null ? '' : String(conv.id);
+        const summary = conversationSummaryView({
+          conv,
+          status,
+          digest: cid ? digests.get(cid) : undefined,
+        });
+        opts.onSidebarChanged?.();
+        sendV2(res, pathname, method, 201, summary);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'create failed';
+        sendV2(res, pathname, method, 500, { error: message, code: 'E_INTERNAL' } satisfies V2Error);
+      }
+      return true;
+    }
+
+    const removeWsMatch = /^\/api\/v2\/workspaces\/([^/]+)$/.exec(pathname);
+    if (method === 'DELETE' && removeWsMatch) {
+      const workspaceId = decodeURIComponent(removeWsMatch[1]);
+      let ws: WorkspaceRow | null | undefined = null;
+      try {
+        ws = opts.getWorkspace ? await opts.getWorkspace(workspaceId) : null;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'workspace check failed';
+        sendV2(res, pathname, method, 500, { error: message, code: 'E_INTERNAL' } satisfies V2Error);
+        return true;
+      }
+      if (!ws || ws.removedAt != null) {
+        sendV2(res, pathname, method, 404, { error: 'not found' } satisfies V2Error);
+        return true;
+      }
+      try {
+        const convs = opts.listConversations ? await opts.listConversations(workspaceId) : [];
+        const busy: string[] = [];
+        for (const conv of convs) {
+          const status = opts.statusOf ? String(await opts.statusOf(conv) || '') : '';
+          if (status === 'running') busy.push(String(conv.id || ''));
+        }
+        if (busy.length) {
+          sendV2(res, pathname, method, 409, {
+            error: 'workspace has active conversations',
+            code: 'E_WS_BUSY',
+            conversations: busy,
+          } satisfies WorkspaceBusy);
+          return true;
+        }
+        if (!opts.removeWorkspace) {
+          sendV2(res, pathname, method, 500, { error: 'store not ready', code: 'E_INTERNAL' } satisfies V2Error);
+          return true;
+        }
+        await opts.removeWorkspace(workspaceId);
+        opts.onSidebarChanged?.();
+        sendV2(res, pathname, method, 200, { removed: true } satisfies WorkspaceRemoved);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'remove failed';
+        sendV2(res, pathname, method, 500, { error: message, code: 'E_INTERNAL' } satisfies V2Error);
+      }
       return true;
     }
 
@@ -521,6 +681,13 @@ export function createV2Runtime(opts: {
   postMessage?: PostMessage;
   stopConversation?: StopConversationFn;
   subscribeConversation?: (cid: string, fn: (ev: KernelEvent) => void) => () => void;
+  listWorkspaces?: ListWorkspacesFn;
+  listConversations?: ListConversationsFn;
+  statusOf?: StatusOfFn;
+  subagentDigests?: SubagentDigestsFn;
+  createConversation?: CreateConversationFn;
+  removeWorkspace?: RemoveWorkspaceFn;
+  subscribeAll?: SubscribeAllFn;
 }): V2Runtime {
   const pid = opts.pid ?? process.pid;
   const auth = createV2Auth({
@@ -546,6 +713,10 @@ export function createV2Runtime(opts: {
     loadConversation: opts.loadConversation,
     subscribe: opts.subscribeConversation,
   });
+  const workspacesTopic = attachWorkspacesTopic(hub, {
+    loader: sidebarLoader(opts),
+    subscribeAll: opts.subscribeAll,
+  });
   const idle = createIdleWatcher({
     hasActiveWork: opts.hasActiveWork ?? (() => false),
     shutdown: () => opts.onIdleExit?.(),
@@ -566,6 +737,13 @@ export function createV2Runtime(opts: {
     getWorkspace: opts.getWorkspace,
     postMessage: opts.postMessage,
     stopConversation: opts.stopConversation,
+    listWorkspaces: opts.listWorkspaces,
+    listConversations: opts.listConversations,
+    statusOf: opts.statusOf,
+    subagentDigests: opts.subagentDigests,
+    createConversation: opts.createConversation,
+    removeWorkspace: opts.removeWorkspace,
+    onSidebarChanged: () => workspacesTopic.notify(),
   });
 
   return {
@@ -589,7 +767,11 @@ export function createV2Runtime(opts: {
     touch: idle.touch,
     trackConnection: idle.trackConnection,
     startIdleExit: idle.start,
+    notifySidebarChanged() {
+      workspacesTopic.notify();
+    },
     dispose() {
+      workspacesTopic.dispose();
       conversationTopic.dispose();
       hub.dispose();
       idle.dispose();
