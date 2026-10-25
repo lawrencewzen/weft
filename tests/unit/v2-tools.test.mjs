@@ -286,6 +286,30 @@ test('short file-error hints and workspace-relative paths', () => {
   }), 'zh').text, 'EIO: i/o error, read');
 });
 
+test('relativizeText strips mixed Windows separators', () => {
+  const root = 'C:\\Users\\me\\proj';
+  assert.equal(relativizeText(`${root}/src/a.js\nline-02`, root), 'src/a.js\nline-02');
+  assert.equal(relativizeText(`${root}\\src\\a.js`, root), 'src\\a.js');
+  assert.equal(relativizeText('C:/Users/me/proj/src/a.js', root), 'src/a.js');
+  assert.equal(
+    relativizeText(`ENOENT: open '${root}/missing.ts'`, root),
+    "ENOENT: open 'missing.ts'",
+  );
+  const view = toolCallView(
+    tool('read', {
+      id: 'win-read',
+      path: `${root}\\src\\a.js`,
+      output: `${root}/src/a.js\n${Array.from({ length: 24 }, (_, i) => `L${i + 2}`).join('\n')}`,
+    }),
+    [],
+    { lang: 'zh', workspacePath: root },
+  );
+  assert.equal(view.path, 'src/a.js');
+  assert.equal(view.output.truncated, true);
+  assert.equal(view.output.preview.includes(root), false);
+  assert.equal(view.output.preview.startsWith('src/a.js\n'), true);
+});
+
 test('english summary capitalizes the first clause', () => {
   const summary = summarizeToolGroup([
     tool('read', { id: 'r1', path: 'a.js' }),

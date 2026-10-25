@@ -117,8 +117,11 @@ export function relativizeText(text: unknown, workspacePath: unknown): string {
   if (!raw) return raw;
   let out = raw;
   for (const root of rootVariants(workspacePath)) {
-    const sep = root.includes('\\') ? '\\' : '/';
-    out = out.split(root + sep).join('');
+    // Text may mix separators (Windows `C:\\proj` + `/src/a.js` from path.join-style
+    // concatenation). Try both after each root variant.
+    for (const sep of ['\\', '/'] as const) {
+      out = out.split(root + sep).join('');
+    }
     const quoted = new RegExp(`(['"])${root.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\1`, 'g');
     out = out.replace(quoted, '$1.$1');
   }
