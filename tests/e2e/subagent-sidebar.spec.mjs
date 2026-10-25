@@ -240,6 +240,11 @@ async function boot(page, { agents = AGENTS, now, status, title, updatedAt } = {
   return { srv, bag };
 }
 
+async function shutdown(page, srv) {
+  await page.unrouteAll({ behavior: 'ignoreErrors' }).catch(() => {});
+  await srv?.kill();
+}
+
 function rowOf(page, id) {
   return page.locator(`[data-testid=subagent-tree-row][data-agent-id="${id}"]`);
 }
@@ -422,7 +427,7 @@ test('sidebar tree, chip, pane interrupt/stop, note, and narrow overflow', async
       expect(row.scroll, row.id).toBeLessThanOrEqual(row.client + 1);
     }
   } finally {
-    await srv?.kill();
+    await shutdown(page, srv);
   }
 });
 
@@ -476,7 +481,7 @@ test('brief, elapsed mm:ss, idle, and currentAction', async ({ page }) => {
       expect(text).not.toMatch(/undefined|NaN/);
     }
   } finally {
-    await srv?.kill();
+    await shutdown(page, srv);
   }
 });
 
@@ -509,7 +514,7 @@ test('quiet list: all done chip, relative time, and no 完成', async ({ page })
     await expect(page.getByTestId('subagent-tree-row').last()).toHaveClass(/is-last/);
     await expect(page.getByTestId('subagent-tree-row').last()).toHaveAttribute('data-agent-id', AUDITOR);
   } finally {
-    await srv?.kill();
+    await shutdown(page, srv);
   }
 });
 
@@ -599,7 +604,7 @@ test('quiet list: status dots, failed row, chip toggle, and 200px sidebar', asyn
     expect(measured.wrap).toBe('nowrap');
     expect(measured.titleEllipsis).toBe('ellipsis');
   } finally {
-    await srv?.kill();
+    await shutdown(page, srv);
   }
 });
 
@@ -775,11 +780,6 @@ async function bootTwoConversations(page) {
   await expect(convNode(page, bag.aId)).toHaveClass(/conv-active/);
   await expect(convNode(page, bag.bId)).not.toHaveClass(/conv-active/);
   return { srv, bag };
-}
-
-async function shutdown(page, srv) {
-  await page.unrouteAll({ behavior: 'ignoreErrors' }).catch(() => {});
-  await srv?.kill();
 }
 
 test('other conversation chip stays collapsed until expanded, then opens pane', async ({ page }) => {
