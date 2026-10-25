@@ -154,6 +154,7 @@ function main() {
       }
     }
 
+    // 5.23.0 es/features/modelConfig.js has 103 modelMappings (the task sheet said 104).
     const models = extractModelMappings(readUtf8(path.join(packed.root, 'es', 'features', 'modelConfig.js')));
     for (const row of models) {
       if (!lookup(row.brand)) throw new Error(`model brand ${row.brand} not in toc`);
