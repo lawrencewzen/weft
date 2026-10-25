@@ -1959,7 +1959,8 @@ button.agent-pane-tag:hover { color: var(--ink); }
 }
 .ms-chk input { accent-color: var(--text-secondary); }
 .ms-manual { display: flex; gap: 6px; margin-top: 6px; }
-.ms-manual .btn { height: 30px; }
+.ms-manual .ms-in { flex: 1; min-width: 0; }
+.ms-manual .btn { height: 30px; flex-shrink: 0; white-space: nowrap; }
 .ms-lead { color: var(--text-secondary); font-size: 13px; line-height: 1.5; }
 .ms-step { display: flex; gap: 12px; margin-top: 16px; }
 .ms-no {
@@ -2014,12 +2015,14 @@ button.agent-pane-tag:hover { color: var(--ink); }
 .sm-git.show .ms-drawer { display: flex; }
 [data-theme$="-dark"] .sm-git .ms-drawer-scrim { background: rgba(0, 0, 0, 0.45); }
 .git-head {
-  padding: 22px 28px 12px;
+  /* Right padding leaves room for .sm-x (28px at right:12px) plus ≥12px gap. */
+  padding: 22px 56px 12px 28px;
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
 }
+.git-head > .btn { flex-shrink: 0; }
 .git-head h2 {
   font-size: 17px;
   font-weight: 600;
