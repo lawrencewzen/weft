@@ -36,6 +36,7 @@ const STRIP = [
   'WEFT_LAUNCHED_BY',
   'WEFT_IDLE_EXIT_MINUTES',
   'WEFT_SUBAGENT_STUCK_MS',
+  'WEFT_V2_MAX_FILE_BYTES',
 ];
 
 function childEnv(dataDir, { token, extra = {} } = {}) {

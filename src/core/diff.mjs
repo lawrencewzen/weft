@@ -62,31 +62,13 @@ function hunkHeader(oldStart, oldCount, newStart, newCount) {
   return `@@ -${oldStart},${oldCount} +${newStart},${newCount} @@`;
 }
 
-/** Unified diff with 3 lines of context. */
-/**
- * Diff the stored baseline against the file's current text.
- * `diskText === undefined` means the disk read failed and the stored snapshot is used.
- * `diskText === null` or `''` means the file is missing or empty.
- */
-export function liveDiff({ path: filePath, before, storedAfter, diskText }) {
-  const oldText = before ?? '';
-  const after = diskText === undefined ? (storedAfter ?? '') : (diskText ?? '');
-  const { added, removed } = diffStats(oldText, after);
-  return {
-    path: filePath,
-    before: oldText,
-    after,
-    unified: unifiedDiff(filePath, oldText, after),
-    added,
-    removed,
-  };
-}
-
-export function unifiedDiff(filePath, oldText, newText) {
+/** Shared hunks for unified and structured diffs (3 lines of context). */
+export function diffHunks(oldText, newText) {
   const a = splitLines(oldText);
   const b = splitLines(newText);
+  const { added, removed } = diffStats(oldText, newText);
   const ops = diffOps(a, b);
-  if (!ops.some((op) => op.type !== 'equal')) return `--- a/${filePath}\n+++ b/${filePath}\n`;
+  if (!ops.some((op) => op.type !== 'equal')) return { added, removed, hunks: [] };
 
   const indexed = [];
   let oi = 0;
@@ -108,7 +90,7 @@ export function unifiedDiff(filePath, oldText, newText) {
   const context = 3;
   const changeIdx = [];
   for (let i = 0; i < indexed.length; i++) if (indexed[i].type !== 'equal') changeIdx.push(i);
-  if (changeIdx.length === 0) return `--- a/${filePath}\n+++ b/${filePath}\n`;
+  if (changeIdx.length === 0) return { added, removed, hunks: [] };
 
   const ranges = [];
   let start = Math.max(0, changeIdx[0] - context);
@@ -125,31 +107,76 @@ export function unifiedDiff(filePath, oldText, newText) {
   }
   ranges.push([start, end]);
 
-  const parts = [`--- a/${filePath}`, `+++ b/${filePath}`];
+  const hunks = [];
   for (const [hs, he] of ranges) {
     const slice = indexed.slice(hs, he + 1);
-    let oldCount = 0;
-    let newCount = 0;
+    let oldLines = 0;
+    let newLines = 0;
     for (const op of slice) {
-      if (op.type === 'equal' || op.type === 'remove') oldCount++;
-      if (op.type === 'equal' || op.type === 'add') newCount++;
+      if (op.type === 'equal' || op.type === 'remove') oldLines++;
+      if (op.type === 'equal' || op.type === 'add') newLines++;
     }
     let oldStart;
     let newStart;
     const firstOld = slice.find((op) => op.type === 'equal' || op.type === 'remove');
     const firstNew = slice.find((op) => op.type === 'equal' || op.type === 'add');
-    if (oldCount === 0) oldStart = slice[0]?.oldLine ?? 0;
+    if (oldLines === 0) oldStart = slice[0]?.oldLine ?? 0;
     else oldStart = firstOld.oldLine;
-    if (newCount === 0) newStart = slice[0]?.newLine ?? 0;
+    if (newLines === 0) newStart = slice[0]?.newLine ?? 0;
     else newStart = firstNew.newLine;
-    if (oldCount === 0 && a.length === 0) oldStart = 0;
-    if (newCount === 0 && b.length === 0) newStart = 0;
-    parts.push(hunkHeader(oldStart, oldCount, newStart, newCount));
+    if (oldLines === 0 && a.length === 0) oldStart = 0;
+    if (newLines === 0 && b.length === 0) newStart = 0;
+    const lines = [];
     for (const op of slice) {
-      if (op.type === 'equal') parts.push(` ${op.line}`);
-      else if (op.type === 'remove') parts.push(`-${op.line}`);
-      else parts.push(`+${op.line}`);
+      if (op.type === 'equal') {
+        lines.push({ op: 'ctx', text: op.line, oldLine: op.oldLine, newLine: op.newLine });
+      } else if (op.type === 'remove') {
+        lines.push({ op: 'del', text: op.line, oldLine: op.oldLine, newLine: null });
+      } else {
+        lines.push({ op: 'add', text: op.line, oldLine: null, newLine: op.newLine });
+      }
+    }
+    hunks.push({ oldStart, oldLines, newStart, newLines, lines });
+  }
+  return { added, removed, hunks };
+}
+
+/**
+ * Diff the stored baseline against the file's current text.
+ * `diskText === undefined` means the disk read failed and the stored snapshot is used.
+ * `diskText === null` or `''` means the file is missing or empty.
+ */
+export function liveDiff({ path: filePath, before, storedAfter, diskText }) {
+  const oldText = before ?? '';
+  const after = diskText === undefined ? (storedAfter ?? '') : (diskText ?? '');
+  const { added, removed } = diffStats(oldText, after);
+  return {
+    path: filePath,
+    before: oldText,
+    after,
+    unified: unifiedDiff(filePath, oldText, after),
+    added,
+    removed,
+  };
+}
+
+/** Unified diff with 3 lines of context. */
+export function unifiedDiff(filePath, oldText, newText) {
+  const { hunks } = diffHunks(oldText, newText);
+  const parts = [`--- a/${filePath}`, `+++ b/${filePath}`];
+  for (const hunk of hunks) {
+    parts.push(hunkHeader(hunk.oldStart, hunk.oldLines, hunk.newStart, hunk.newLines));
+    for (const line of hunk.lines) {
+      if (line.op === 'ctx') parts.push(` ${line.text}`);
+      else if (line.op === 'del') parts.push(`-${line.text}`);
+      else parts.push(`+${line.text}`);
     }
   }
-  return parts.join('\n') + '\n';
+  return `${parts.join('\n')}\n`;
+}
+
+/** Structured hunks that match unifiedDiff line-for-line. */
+export function structuredDiff(filePath, oldText, newText) {
+  const { added, removed, hunks } = diffHunks(oldText, newText);
+  return { path: filePath, added, removed, hunks };
 }

@@ -1,7 +1,20 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { load } from './_root.mjs';
-const { diffStats, unifiedDiff, liveDiff } = await load('src/core/diff.mjs');
+const { diffStats, unifiedDiff, liveDiff, structuredDiff } = await load('src/core/diff.mjs');
+
+function unifiedFromStructured(filePath, structured) {
+  const parts = [`--- a/${filePath}`, `+++ b/${filePath}`];
+  for (const hunk of structured.hunks) {
+    parts.push(`@@ -${hunk.oldStart},${hunk.oldLines} +${hunk.newStart},${hunk.newLines} @@`);
+    for (const line of hunk.lines) {
+      if (line.op === 'ctx') parts.push(` ${line.text}`);
+      else if (line.op === 'del') parts.push(`-${line.text}`);
+      else parts.push(`+${line.text}`);
+    }
+  }
+  return `${parts.join('\n')}\n`;
+}
 
 test('new file counts all lines added', () => {
   assert.deepEqual(diffStats(null, 'a\nb\nc\n'), { added: 3, removed: 0 });
@@ -55,4 +68,22 @@ test('live diff prefers the file on disk over the stored snapshot', () => {
     diskText: undefined,
   });
   assert.equal(unread.after, 'stored\n');
+});
+
+test('structuredDiff hunks reconstruct the same unified text', () => {
+  const cases = [
+    ['new.txt', '', 'a\nb\nc\n'],
+    ['del.txt', 'a\nb\n', ''],
+    ['edit.txt', 'a\nb\nc\n', 'a\nB\nc\nd\n'],
+    ['same.txt', 'a\nb\n', 'a\nb\n'],
+    ['ctx.txt', '1\n2\n3\n4\n5\n6\n7\n', '1\n2\n3\nX\n5\n6\n7\n'],
+  ];
+  for (const [filePath, before, after] of cases) {
+    const unified = unifiedDiff(filePath, before, after);
+    const structured = structuredDiff(filePath, before, after);
+    assert.equal(unifiedFromStructured(filePath, structured), unified, filePath);
+    const stats = diffStats(before, after);
+    assert.equal(structured.added, stats.added, `${filePath} added`);
+    assert.equal(structured.removed, stats.removed, `${filePath} removed`);
+  }
 });

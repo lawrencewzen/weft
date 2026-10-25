@@ -191,6 +191,14 @@ const v2 = createV2Runtime({
     if (!kernelApi) return { status: 500, body: { error: 'kernel not ready' } };
     return kernelApi.stopAgent(cid, agentId);
   },
+  async changesConversation(cid) {
+    if (!kernelApi) return [];
+    return kernelApi.changes(cid);
+  },
+  async diffConversation(cid, filePath) {
+    if (!kernelApi) return { status: 500, body: { error: 'kernel not ready' } };
+    return kernelApi.diff(cid, filePath);
+  },
 });
 
 let dataLock;

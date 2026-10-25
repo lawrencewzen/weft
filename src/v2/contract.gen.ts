@@ -81,8 +81,9 @@ export interface paths {
          *     - `item`：id 为 ThreadItem.id，值为 ThreadItem
          *     - `tool`：id 为 ToolCall.id，值为 ToolCall
          *     - `subagent`：id 为子 Agent id，值为 Subagent。卡住由服务端判定：kernel 状态为 running 且超过 stuckAfterMs（默认 60000，环境变量 WEFT_SUBAGENT_STUCK_MS）没有活动时 status 为 stuck，到点推送 upsert。
+         *     - `change`：id 为相对工作区的路径（统一用 `/`），值为 Change。快照带上当前变更列表。工具结束（write / edit / bash 都可能改文件）或经保存接口写入后随重算更新：变了才 upsert，从列表消失则 remove。不做文件监听。
          *
-         *     快照是 GET /api/v2/conversations/{id} 的 conversation / items / tools，再加上该对话的 subagent 实体。模型流式输出时先 upsert 一条 `item`，id 以 `live:` 开头、`streaming` 为 true、`text` 为空；随后用 `text.delta` 追加。正式助手消息到来后 remove 这条流式项，再 upsert 正式项和 conversation。
+         *     快照是 GET /api/v2/conversations/{id} 的 conversation / items / tools，再加上该对话的 subagent 和 change 实体。模型流式输出时先 upsert 一条 `item`，id 以 `live:` 开头、`streaming` 为 true、`text` 为空；随后用 `text.delta` 追加。正式助手消息到来后 remove 这条流式项，再 upsert 正式项和 conversation。
          *
          *     主题 `subagent:<cid>:<agentId>`（`<cid>` 为父对话 id，`<agentId>` 为子 Agent id）按前缀动态注册。实体：
          *     - `subagent`：id 为子 Agent id，值为 Subagent
@@ -173,6 +174,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/workspaces/{id}/tree": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 工作区文件树
+         * @description 复用 listWorkspaceTree：最多 500 条、深度 8，跳过 .git 和 node_modules。
+         *     达到条数上限时 truncated 为 true。path 相对工作区，统一用 `/`。
+         *     越界的符号链接跳过。工作区不存在或已移除 404。
+         */
+        get: operations["getWorkspaceTree"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/workspaces/{id}/files": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 读工作区文件
+         * @description 返回 FileContent。超过 2 MB（环境变量 WEFT_V2_MAX_FILE_BYTES，仅测试用）时 tooLarge 为 true、text 为 null。
+         *     前 8 KB 里有 NUL 字节或不是合法 UTF-8 时 binary 为 true、text 为 null。
+         *     version 是内容 sha256 的十六进制前 16 位，保存时用来检测冲突。
+         *     越界 403 E_SANDBOX；不存在 404；是目录 400。
+         */
+        get: operations["getWorkspaceFile"];
+        /**
+         * 保存工作区文件
+         * @description 请求体 `{ path, text, baseVersion? }`。带了 baseVersion 且和磁盘当前内容的 version 不同时
+         *     返回 409 `{ error, code: E_CONFLICT, current: FileContent }`，不写入。
+         *     否则写入（需要时建目录），返回 200 `{ path, version, added, removed }`。
+         *     越界 403 E_SANDBOX。写入后若该文件在某个对话的变更列表里，对应 conversation 主题会重算。
+         */
+        put: operations["saveWorkspaceFile"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/conversations/{id}": {
         parameters: {
             query?: never;
@@ -186,6 +239,27 @@ export interface paths {
          *     组装在服务端完成。`lang` 为 zh 或 en（缺省 zh，不认识的按 zh）。
          */
         get: operations["getConversation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/conversations/{id}/diff": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 某个变更文件的结构化 diff
+         * @description 从现有 liveDiff 的 before/after 生成结构化 hunks，与旧接口 unified 内容逐行一致。
+         *     文件过大时 tooLarge 为 true、hunks 为空。没有这个路径的变更 404。
+         */
+        get: operations["getConversationDiff"];
         put?: never;
         post?: never;
         delete?: never;
@@ -760,6 +834,89 @@ export interface components {
             items: components["schemas"]["ThreadItem"][];
             tools: components["schemas"]["ToolCall"][];
         };
+        /** @description 对话右栏变更列表的一项。SSE conversation 主题里 entity=change，id 为 path。 */
+        Change: {
+            /** @description 相对工作区的路径，统一用 `/` */
+            path: string;
+            added: number;
+            removed: number;
+            /** @description 例如文件过大。没有则为 null */
+            error: null | string;
+        };
+        DiffLine: {
+            /** @enum {string} */
+            op: "ctx" | "add" | "del";
+            /** @description 不含换行符的一行 */
+            text: string;
+            /** @description 旧文件行号（1 起）。add 为 null */
+            oldLine: null | number;
+            /** @description 新文件行号（1 起）。del 为 null */
+            newLine: null | number;
+        };
+        DiffHunk: {
+            oldStart: number;
+            oldLines: number;
+            newStart: number;
+            newLines: number;
+            lines: components["schemas"]["DiffLine"][];
+        };
+        /** @description GET /api/v2/conversations/{id}/diff 的响应。 */
+        Diff: {
+            /** @description 相对工作区的路径，统一用 `/` */
+            path: string;
+            added: number;
+            removed: number;
+            hunks: components["schemas"]["DiffHunk"][];
+            /** @description 文件过大时为 true，此时 hunks 为空 */
+            tooLarge: boolean;
+        };
+        /** @description 工作区文件树的一项。 */
+        FileNode: {
+            /** @description 相对工作区的路径，统一用 `/` */
+            path: string;
+            /** @enum {string} */
+            type: "file" | "dir";
+        };
+        /** @description GET /api/v2/workspaces/{id}/tree 的响应。 */
+        FileTree: {
+            entries: components["schemas"]["FileNode"][];
+            /** @description 达到 500 条上限时为 true */
+            truncated: boolean;
+        };
+        /** @description GET /api/v2/workspaces/{id}/files 的响应。 */
+        FileContent: {
+            /** @description 相对工作区的路径，统一用 `/` */
+            path: string;
+            /** @description 字节数 */
+            size: number;
+            binary: boolean;
+            tooLarge: boolean;
+            /** @description 文本内容。binary 或 tooLarge 时为 null */
+            text: null | string;
+            /** @description 内容 sha256 十六进制前 16 位 */
+            version: string;
+        };
+        /** @description PUT /api/v2/workspaces/{id}/files 的请求体。 */
+        SaveFileRequest: {
+            path: string;
+            text: string;
+            /** @description 上次读到的 version。带了且与磁盘当前不同则 409，不写入 */
+            baseVersion?: string;
+        };
+        /** @description PUT /api/v2/workspaces/{id}/files 成功。 */
+        SaveResult: {
+            path: string;
+            version: string;
+            added: number;
+            removed: number;
+        };
+        /** @description 保存时 baseVersion 过期。 */
+        FileConflict: {
+            error: string;
+            /** @constant */
+            code: "E_CONFLICT";
+            current: components["schemas"]["FileContent"];
+        };
     };
     responses: never;
     parameters: never;
@@ -1194,6 +1351,244 @@ export interface operations {
             };
         };
     };
+    getWorkspaceTree: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 工作区 id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 文件树 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FileTree"];
+                };
+            };
+            /** @description 未授权 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 路径越界 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 工作区不存在 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 客户端错误 */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 服务端错误 */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+        };
+    };
+    getWorkspaceFile: {
+        parameters: {
+            query: {
+                /** @description 相对工作区的文件路径 */
+                path: string;
+            };
+            header?: never;
+            path: {
+                /** @description 工作区 id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 文件内容 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FileContent"];
+                };
+            };
+            /** @description 路径是目录或缺少 path */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 未授权 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 路径越界 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 工作区或文件不存在 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 客户端错误 */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 服务端错误 */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+        };
+    };
+    saveWorkspaceFile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 工作区 id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaveFileRequest"];
+            };
+        };
+        responses: {
+            /** @description 已保存 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SaveResult"];
+                };
+            };
+            /** @description 请求体无效或路径是目录 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 未授权 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 路径越界 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 工作区不存在 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description baseVersion 与磁盘当前 version 不一致 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FileConflict"];
+                };
+            };
+            /** @description 客户端错误 */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 服务端错误 */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+        };
+    };
     getConversation: {
         parameters: {
             query?: {
@@ -1228,6 +1623,77 @@ export interface operations {
                 };
             };
             /** @description 对话不存在 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 客户端错误 */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 服务端错误 */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+        };
+    };
+    getConversationDiff: {
+        parameters: {
+            query: {
+                /** @description 相对工作区的文件路径 */
+                path: string;
+            };
+            header?: never;
+            path: {
+                /** @description 对话 id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 结构化 diff */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Diff"];
+                };
+            };
+            /** @description 缺少 path */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 未授权 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 对话不存在或没有这个路径的变更 */
             404: {
                 headers: {
                     [name: string]: unknown;
