@@ -39,4 +39,5 @@ Weft 是基于 Pi Durable（`@earendil-works/pi-durable`，作为库嵌入）的
 - 不读取、不打印 `.env` 和密钥；不访问未授权的远程服务器。
 - 交付前运行 `npm run check`、`npm test` 及适用的本地验证；交付时列出改了哪些文件、怎么验证的、哪些没验证。
 - UI 风格：简洁、低饱和；效果图一律 4K。
+- 前端品牌图标来自 `@lobehub/icons-static-svg`（MIT），由 `postinstall` 拷到 `public/vendor/brand-icons/`。品牌映射数据由 `scripts/gen-brand-data.mjs` 从 `@lobehub/icons` 生成到 `public/brand-data.json` 并提交；不要把 `@lobehub/icons`（React 组件包）加进 dependencies 或 devDependencies，也不要走 CDN。
 
