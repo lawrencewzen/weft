@@ -69,9 +69,10 @@ function KindIcon({ kind }: { kind: ToolCall['kind'] }) {
 export function ToolRow({ tool, lang, onLoadOutput }: Props) {
   const realFail = tool.failure === 'real';
   const changeKind = tool.kind === 'write' || tool.kind === 'edit';
-  const [open, setOpen] = useState(realFail && !changeKind);
+  const [toggled, setToggled] = useState<boolean | null>(null);
   const [fullText, setFullText] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const open = toggled ?? (realFail && !changeKind);
 
   const showDiff = Boolean(tool.diff && (tool.diff.added != null || tool.diff.removed != null));
   const added = tool.diff?.added != null ? `+${tool.diff.added}` : '';
@@ -85,7 +86,7 @@ export function ToolRow({ tool, lang, onLoadOutput }: Props) {
 
   async function toggle() {
     if (changeKind) return;
-    setOpen((value) => !value);
+    setToggled((value) => !(value ?? (realFail && !changeKind)));
   }
 
   async function showAll(event: MouseEvent) {
@@ -135,9 +136,9 @@ export function ToolRow({ tool, lang, onLoadOutput }: Props) {
         </div>
         <div className="tool-meta">
           {realFail ? (
-            <span className="tool-row-status is-failed">{t(lang, 'tool_status_failed')}</span>
+            <span className="tool-row-status is-failed" data-testid="next-tool-row-status">{t(lang, 'tool_status_failed')}</span>
           ) : tool.status === 'interrupted' ? (
-            <span className="tool-row-status is-interrupted">{t(lang, 'tool_status_interrupted')}</span>
+            <span className="tool-row-status is-interrupted" data-testid="next-tool-row-status">{t(lang, 'tool_status_interrupted')}</span>
           ) : null}
         </div>
         {!changeKind ? (

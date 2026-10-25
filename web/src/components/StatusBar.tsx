@@ -8,9 +8,10 @@ type ConversationView = components['schemas']['ConversationView'];
 type Props = {
   conversation: ConversationView;
   lang: Lang;
+  hidePending?: boolean;
 };
 
-export function StatusBar({ conversation, lang }: Props) {
+export function StatusBar({ conversation, lang, hidePending = false }: Props) {
   const run = conversation.run;
   const running = run.status === 'running';
   const failed = run.status === 'failed';
@@ -34,17 +35,26 @@ export function StatusBar({ conversation, lang }: Props) {
   const remain = Math.max(0, 100 - ctx.percent);
   const circumference = 2 * Math.PI * 5;
   const levelClass = ctx.level === 'full' ? 'is-full' : ctx.level === 'warn' ? 'is-warn' : '';
+  const itemCount = Array.isArray(conversation.itemIds) ? conversation.itemIds.length : 0;
+  const statusKey = run.status === 'running' ? 'status_running'
+    : run.status === 'stopped' ? 'status_stopped'
+      : run.status === 'failed' ? 'status_failed'
+        : run.status === 'waiting' ? 'status_waiting'
+          : itemCount > 0 ? 'status_done' : 'status_idle';
 
   return (
     <header className="next-status" data-testid="next-status">
       <div className="next-status-inner">
         <div className="pending-line">
-          {running ? <span className="run-spin" aria-hidden="true"><span /></span> : null}
+          {running && !hidePending ? <span className="run-spin" aria-hidden="true"><span /></span> : null}
           <span className="top-title">{conversation.title}</span>
-          {running && run.pendingText ? (
+          <span className="status-pill" data-testid="next-run-status" data-status={run.status}>
+            {t(lang, statusKey)}
+          </span>
+          {running && !hidePending && run.pendingText ? (
             <span className="pending-status" data-testid="next-pending">{run.pendingText}</span>
           ) : null}
-          {elapsed ? (
+          {elapsed && !hidePending ? (
             <span className="pending-elapsed" data-testid="next-elapsed">{elapsed}</span>
           ) : null}
         </div>

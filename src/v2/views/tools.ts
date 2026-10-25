@@ -37,6 +37,7 @@ const OUTPUT_PREVIEW_LINES = 20;
 
 export const TOOL_GROUP_PREVIEW = 8;
 export const TOOL_ERROR_PREVIEW_LINES = 8;
+export const TOOL_COMMAND_PREVIEW_LINES = 5;
 export const TOOL_KINDS = ['read', 'write', 'edit', 'ls', 'grep', 'bash'] as const;
 
 function translator(lang: Lang): Translate {
@@ -684,6 +685,15 @@ export function clipOutputText(text: unknown, showAll: boolean, limit = OUTPUT_P
   return { text: lines.slice(0, limit).join('\n'), clipped: true };
 }
 
+/** Command rows keep the last `limit` lines, matching public/app.js clipTailLines. */
+export function clipTailLines(text: unknown, limit = TOOL_COMMAND_PREVIEW_LINES): { text: string; clipped: boolean } {
+  const raw = text == null ? '' : String(text);
+  const lines = raw.split(/\r?\n/);
+  if (lines.length && lines[lines.length - 1] === '') lines.pop();
+  if (lines.length <= limit) return { text: raw, clipped: false };
+  return { text: lines.slice(-limit).join('\n'), clipped: true };
+}
+
 /** Badge numbers from the tool, or from `wrote path (+N −M)` when the payload omitted them. */
 export function toolDiffCounts(tool: ToolLike | null | undefined): { added: number | null; removed: number | null } {
   if (!tool) return { added: null, removed: null };
@@ -774,7 +784,9 @@ export function toolCallView(
   const path = displayPath(tool, workspacePath);
   const outputText = toolOutputText(tool, workspacePath);
   const failed = isCallFailed(tool);
-  const clipped = clipOutputText(outputText, false, failed ? TOOL_ERROR_PREVIEW_LINES : OUTPUT_PREVIEW_LINES);
+  const clipped = kind === 'bash'
+    ? clipTailLines(outputText, TOOL_COMMAND_PREVIEW_LINES)
+    : clipOutputText(outputText, false, failed ? TOOL_ERROR_PREVIEW_LINES : OUTPUT_PREVIEW_LINES);
   const view: ToolCall = {
     id: String(tool?.id ?? ''),
     groupId: toolGroupKey(group),

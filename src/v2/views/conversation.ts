@@ -2,6 +2,7 @@
 
 import type { Lang } from '../phrases/index.ts';
 import type { components } from '../contract.gen.ts';
+import { contextWindowFromEnv } from '../../core/usage.mjs';
 import { contextUsageView } from './context.ts';
 import { conversationStatus, runStateView } from './run.ts';
 import { buildThread, type BuildThreadOptions, type ThreadMessage, type ThreadSubagent } from './thread.ts';
@@ -92,7 +93,10 @@ export async function conversationSnapshot({
     status: conversationStatus(run.status),
     model: conversationModelView(modelTarget),
     run,
-    context: contextUsageView({ usage: presented?.usage, window }),
+    context: contextUsageView({
+      usage: presented?.usage,
+      window: window ?? contextWindowFromEnv(),
+    }),
     itemIds: thread.items.map((item) => item.id),
   };
   return { conversation, items: thread.items, tools: thread.tools };

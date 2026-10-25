@@ -34,10 +34,14 @@ export function CenterPane({ cid, lang }: Props) {
     );
   }
 
+  const liveTools = items.some((item) => (
+    item.kind === 'tool_group' && (item.live || item.summary.running)
+  ));
+
   return (
     <div className="next-shell" data-testid="next-app">
       <main className="col-center">
-        <StatusBar conversation={conversation} lang={lang} />
+        <StatusBar conversation={conversation} lang={lang} hidePending={liveTools} />
         <Thread
           items={items}
           toolsById={toolsById}
