@@ -10,6 +10,14 @@
       "get": {
         "operationId": "getService",
         "summary": "查询服务信息",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "当前进程的服务信息",
@@ -17,6 +25,80 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ServiceInfo"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "未授权",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "客户端错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "服务端错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/auth/web-code": {
+      "post": {
+        "operationId": "createWebCode",
+        "summary": "用本机令牌签发一次性网页登录码",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "一次性登录码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebCode"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "未授权（仅接受 Bearer 本机令牌）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
                 }
               }
             }
@@ -46,6 +128,19 @@
     }
   },
   "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "发现文件里的本机令牌"
+      },
+      "sessionCookie": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "weft_session",
+        "description": "网页端一次性码换来的会话 cookie"
+      }
+    },
     "schemas": {
       "ServiceInfo": {
         "type": "object",
@@ -72,6 +167,59 @@
           }
         }
       },
+      "ServiceDiscovery": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "protocolVersion",
+          "serviceVersion",
+          "pid",
+          "port",
+          "startedAt",
+          "token"
+        ],
+        "properties": {
+          "protocolVersion": {
+            "type": "string"
+          },
+          "serviceVersion": {
+            "type": "string"
+          },
+          "pid": {
+            "type": "integer"
+          },
+          "port": {
+            "type": "integer",
+            "description": "服务实际监听的端口"
+          },
+          "startedAt": {
+            "type": "integer",
+            "description": "进程启动时间（毫秒时间戳）"
+          },
+          "token": {
+            "type": "string",
+            "description": "本机令牌。只存在内存和本文件，服务每次启动轮换"
+          }
+        },
+        "description": "数据目录里的发现文件 `<dataDir>/service.json`，不对应 HTTP 接口。"
+      },
+      "WebCode": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "code",
+          "expiresAt"
+        ],
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "expiresAt": {
+            "type": "integer",
+            "description": "过期时间（毫秒时间戳）"
+          }
+        }
+      },
       "V2Error": {
         "type": "object",
         "required": [
@@ -85,6 +233,58 @@
             "type": "string"
           }
         }
+      },
+      "Device": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "name",
+          "platform",
+          "createdAt",
+          "lastSeenAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "platform": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "integer",
+            "description": "创建时间（毫秒时间戳）"
+          },
+          "lastSeenAt": {
+            "type": "integer",
+            "description": "最近出现时间（毫秒时间戳）"
+          }
+        },
+        "description": "远程设备。契约先定义形状，实现以后再做。"
+      },
+      "PairingRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "code",
+          "deviceName",
+          "platform"
+        ],
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "deviceName": {
+            "type": "string"
+          },
+          "platform": {
+            "type": "string"
+          }
+        },
+        "description": "设备配对请求。契约先定义形状，实现以后再做。"
       }
     }
   }

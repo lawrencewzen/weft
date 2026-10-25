@@ -20,6 +20,11 @@ async function tmpBase() {
 
 export async function tmpdir(p = 'piw-e2e-') { return fs.realpath(await fs.mkdtemp(path.join(await tmpBase(), p))); }
 
+export async function readDiscovery(dataDir) {
+  const text = await fs.readFile(path.join(dataDir, 'service.json'), 'utf8');
+  return JSON.parse(text);
+}
+
 /** Child directories the server will accept. Pass `root` as WEFT_WORKSPACE_ROOT. */
 export async function prepareWorkspaces(names = ['repo']) {
   const root = await tmpdir('piw-wsroot-');

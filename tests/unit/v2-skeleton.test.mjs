@@ -5,7 +5,7 @@ import path from 'node:path';
 import { PROTOCOL_VERSION } from '../../src/v2/version.ts';
 import { compileSchema, validateResponse } from '../../src/v2/validate.ts';
 import { ROOT } from './_root.mjs';
-import { startServer, stopServer } from './_server.mjs';
+import { readDiscovery, startServer, stopServer } from './_server.mjs';
 
 const spec = JSON.parse(readFileSync(path.join(ROOT, 'contract/openapi.json'), 'utf8'));
 
@@ -55,7 +55,10 @@ test('Ajv2020 enforces JSON Schema 2020-12 unevaluatedProperties', () => {
 test('GET /api/v2/service returns ServiceInfo with Weft-Protocol', async () => {
   const srv = await startServer();
   try {
-    const res = await getJson(srv.base, '/api/v2/service');
+    const discovery = await readDiscovery(srv.dataDir);
+    const res = await getJson(srv.base, '/api/v2/service', {
+      authorization: `Bearer ${discovery.token}`,
+    });
     assert.equal(res.status, 200);
     assert.equal(res.headers.get('weft-protocol'), PROTOCOL_VERSION);
     assert.equal(res.headers.get('cache-control'), 'no-store');
@@ -75,27 +78,16 @@ test('GET /api/v2/service returns ServiceInfo with Weft-Protocol', async () => {
 test('GET /api/v2/nope returns 404 V2Error', async () => {
   const srv = await startServer();
   try {
-    const res = await getJson(srv.base, '/api/v2/nope');
+    const discovery = await readDiscovery(srv.dataDir);
+    const res = await getJson(srv.base, '/api/v2/nope', {
+      authorization: `Bearer ${discovery.token}`,
+    });
     assert.equal(res.status, 404);
     assert.equal(res.headers.get('weft-protocol'), PROTOCOL_VERSION);
     const checked = validateResponse('/api/v2/nope', 'GET', 404, res.body);
     assert.equal(checked.ok, true, JSON.stringify(checked.errors));
     assert.equal(typeof res.body.error, 'string');
     assert.ok(res.body.error);
-  } finally {
-    await stopServer(srv);
-  }
-});
-
-test('WEFT_TOKEN still gates /api/v2/service via legacy auth', async () => {
-  const token = 't36-2-legacy-auth';
-  const srv = await startServer({ token });
-  try {
-    const denied = await getJson(srv.base, '/api/v2/service');
-    assert.equal(denied.status, 401);
-    const allowed = await getJson(srv.base, '/api/v2/service', { authorization: `Bearer ${token}` });
-    assert.equal(allowed.status, 200);
-    assert.equal(allowed.headers.get('weft-protocol'), PROTOCOL_VERSION);
   } finally {
     await stopServer(srv);
   }

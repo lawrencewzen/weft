@@ -45,6 +45,10 @@ export function App() {
         const res = await fetch('/api/v2/service', { signal: ac.signal });
         const text = await res.text();
         if (!res.ok) {
+          if (res.status === 401) {
+            setError('请用 weft open 打开新版网页端');
+            return;
+          }
           setError(errorFromBody(res.status, res.statusText, text));
           return;
         }
