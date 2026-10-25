@@ -49,6 +49,7 @@ function childEnv(dataDir, { token, extra = {} } = {}) {
     WEFT_RETRY_BASE_MS: '20',
     WEFT_RETRY_MAX: '5',
     WEFT_V2_VALIDATE: '1',
+    WEFT_STDIN_EXIT: '1',
     ...(token ? { WEFT_TOKEN: token } : {}),
     ...extra,
   };
@@ -72,7 +73,18 @@ export function stopServer(srv) {
       clearTimeout(timer);
       resolve();
     });
-    proc.kill('SIGTERM');
+    // Close the stdin pipe so the child runs shutdown() even on Windows,
+    // where child.kill('SIGTERM') is TerminateProcess.
+    let graceful = false;
+    if (proc.stdin && !proc.stdin.destroyed) {
+      try {
+        proc.stdin.end();
+        graceful = true;
+      } catch { /* ignore */ }
+    }
+    if (!graceful) {
+      try { proc.kill('SIGTERM'); } catch { /* ignore */ }
+    }
   });
 }
 
@@ -92,8 +104,9 @@ export async function startServer({
   const proc = spawn(process.execPath, [...nodeArgs, 'server.mjs'], {
     cwd: ROOT,
     env: childEnv(dataDir, { token, extra }),
-    stdio: ['ignore', 'pipe', 'pipe'],
+    stdio: ['pipe', 'pipe', 'pipe'],
   });
+  proc.stdin?.on('error', () => {});
   let log = '';
   const base = await new Promise((resolve, reject) => {
     const timer = setTimeout(() => {

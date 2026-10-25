@@ -370,7 +370,10 @@ async function reloadKernelPlugins() {
   }
 }
 
+let shuttingDown = false;
 function shutdown() {
+  if (shuttingDown) return;
+  shuttingDown = true;
   try { v2.removeDiscoveryFile(); } catch { /* ignore */ }
   try { v2.dispose(); } catch { /* ignore */ }
   try { store.close(); } catch { /* ignore */ }
@@ -388,6 +391,14 @@ process.on('exit', () => {
 });
 for (const sig of ['SIGINT', 'SIGTERM']) {
   process.on(sig, shutdown);
+}
+// Tests spawn with a pipe on stdin (Windows cannot deliver SIGTERM). Closing
+// that pipe is the portable graceful-exit path; interactive TTY is unchanged.
+if (String(process.env.WEFT_STDIN_EXIT || '').trim() === '1') {
+  process.stdin.on('end', shutdown);
+  process.stdin.on('error', () => {});
+  process.stdin.resume();
+  if (process.stdin.readableEnded) shutdown();
 }
 
 const grokAuth = createGrokAuth();

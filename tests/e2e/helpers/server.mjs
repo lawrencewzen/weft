@@ -49,14 +49,16 @@ export async function startServer({ script = 'basic.json', dataDir, port = 0, ex
     WEFT_RETRY_BASE_MS: '50',
     WEFT_RETRY_MAX: '5',
     WEFT_V2_VALIDATE: '1',
+    WEFT_STDIN_EXIT: '1',
     ...extraEnv,
   };
   if (!Object.prototype.hasOwnProperty.call(extraEnv, 'WEFT_TOKEN')) delete env.WEFT_TOKEN;
   const proc = spawn(process.execPath, ['server.mjs'], {
     cwd: ROOT,
     env,
-    stdio: ['ignore', 'pipe', 'pipe'],
+    stdio: ['pipe', 'pipe', 'pipe'],
   });
+  proc.stdin?.on('error', () => {});
   let log = '';
   const url = await new Promise((resolve, reject) => {
     const to = setTimeout(() => reject(new Error('server not ready:\n' + log)), 20000);
@@ -65,7 +67,16 @@ export async function startServer({ script = 'basic.json', dataDir, port = 0, ex
     proc.on('exit', (c) => { clearTimeout(to); reject(new Error(`server exited ${c}:\n${log}`)); });
   });
   proc.removeAllListeners('exit');
-  const kill = (sig = 'SIGKILL') => new Promise((r) => { if (proc.exitCode !== null) return r(); proc.once('exit', r); proc.kill(sig); });
+  const kill = (sig = 'SIGKILL') => new Promise((r) => {
+    if (proc.exitCode !== null) return r();
+    proc.once('exit', r);
+    if (sig === 'SIGKILL' || sig === 'SIGTERM') {
+      if (sig !== 'SIGKILL' && proc.stdin && !proc.stdin.destroyed) {
+        try { proc.stdin.end(); return; } catch { /* fall through */ }
+      }
+    }
+    proc.kill(sig);
+  });
   return { url, dataDir, proc, kill, logs: () => log, port: Number(new URL(url).port) };
 }
 
