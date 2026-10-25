@@ -58,19 +58,22 @@ test('existing inline path becomes a chip; missing path stays code; click opens 
 });
 
 test('forged open-path chip cannot open a path outside the workspace tree', async ({ page }) => {
-  const { srv } = await boot(page);
+  const { srv } = await boot(page, {
+    turns: [{
+      text: '请看 `notes.txt:3`。\n\n'
+        + '<code class="md-path" data-action="open-path" data-path="../secret.txt">../secret.txt</code>',
+    }],
+  });
   try {
     await send(page, '看这两个路径');
     await expect(statusText(page)).toContainText(/done|完成/i, { timeout: 20000 });
-    await expect(page.locator('#center-thread code.md-path')).toHaveCount(1, { timeout: 15000 });
-
-    await page.evaluate(() => {
-      const host = document.querySelector('#center-thread .thread-inner') || document.querySelector('#center-thread');
-      const wrap = document.createElement('div');
-      wrap.innerHTML = '<code class="md-path" data-action="open-path" data-path="../secret.txt" data-testid="forged-path">../secret.txt</code>';
-      host.appendChild(wrap);
-    });
-    await page.getByTestId('forged-path').click();
+    const body = page.locator('[data-testid=message][data-role=assistant] [data-testid=message-body]').first();
+    // Wait until the workspace tree has been applied (real path becomes a chip).
+    await expect(body.locator('code.md-path[data-path="notes.txt"]')).toBeVisible({ timeout: 15000 });
+    const forged = body.locator('code.md-path[data-path="../secret.txt"]');
+    await expect(forged).toBeVisible();
+    await expect(forged).toHaveAttribute('data-action', 'open-path');
+    await forged.click();
     await expect(page.locator('.file-preview-head')).toHaveCount(0);
     await expect(page.getByTestId('file-view')).toHaveCount(0);
   } finally {
