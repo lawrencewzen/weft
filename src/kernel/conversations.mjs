@@ -84,6 +84,7 @@ export async function openConversationKernel({
   const watches = new Map();
   const tails = new Map();
   const listeners = new Map();
+  const allListeners = new Set();
   const settings = kernelSettings(env);
   let agentHost;
 
@@ -130,6 +131,9 @@ export async function openConversationKernel({
   function push(cid, ev) {
     for (const fn of listeners.get(cid) || []) {
       try { fn(ev); } catch { /* a detached response must not stop the watch */ }
+    }
+    for (const fn of allListeners) {
+      try { fn(cid, ev); } catch { /* a detached response must not stop the watch */ }
     }
   }
 
@@ -483,6 +487,7 @@ export async function openConversationKernel({
       if (!conv) return { status: 404, body: { error: 'conversation not found' } };
       return agentHost.patchConversation(cid, body);
     },
+    statusOf,
     subscribe(cid, fn) {
       let set = listeners.get(cid);
       if (!set) {
@@ -493,6 +498,12 @@ export async function openConversationKernel({
       return () => {
         set.delete(fn);
         if (set.size === 0) listeners.delete(cid);
+      };
+    },
+    subscribeAll(fn) {
+      allListeners.add(fn);
+      return () => {
+        allListeners.delete(fn);
       };
     },
     async streamEvents(req, res, cid, { headers }) {

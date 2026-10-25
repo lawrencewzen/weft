@@ -133,6 +133,39 @@ const v2 = createV2Runtime({
     if (!kernelApi) return () => {};
     return kernelApi.subscribe(cid, fn);
   },
+  listWorkspaces() {
+    return store.listWorkspaces();
+  },
+  listConversations(workspaceId) {
+    return store.listConversations(workspaceId);
+  },
+  statusOf(conv) {
+    if (!kernelApi) return Promise.resolve('idle');
+    return kernelApi.statusOf(conv);
+  },
+  subagentDigests(convs) {
+    if (!kernelApi) return Promise.resolve(new Map());
+    return kernelApi.subagentDigests(convs);
+  },
+  async createConversation(workspaceId, fields = {}) {
+    const ws = await store.getWorkspace(workspaceId);
+    if (!ws || ws.removedAt) return { status: 404 };
+    if (!kernelApi) return { status: 500 };
+    const conv = await kernelApi.createConversation({
+      workspaceId,
+      workspacePath: ws.path,
+      title: fields.title || 'New conversation',
+      status: 'idle',
+    });
+    return { status: 201, conv };
+  },
+  async removeWorkspace(id) {
+    await store.removeWorkspace(id);
+  },
+  subscribeAll(fn) {
+    if (!kernelApi) return () => {};
+    return kernelApi.subscribeAll(fn);
+  },
 });
 
 let dataLock;
@@ -986,6 +1019,7 @@ async function routeApi(req, res, url) {
           worktrees: [],
         });
         sendJson(res, 201, { id: ws.id, name: ws.name, path: ws.path, source: ws.source, gitUrl: ws.gitUrl, branch: ws.branch, rootPath: ws.rootPath, worktrees: ws.worktrees });
+        v2.notifySidebarChanged();
       } catch (err) {
         sendJson(res, err.status || 400, gitFailureBody(err));
       }
@@ -1004,6 +1038,7 @@ async function routeApi(req, res, url) {
         worktrees: [],
       });
       sendJson(res, 201, { id: ws.id, name: ws.name, path: ws.path, source: ws.source, gitUrl: ws.gitUrl, branch: ws.branch, rootPath: ws.rootPath, worktrees: ws.worktrees });
+      v2.notifySidebarChanged();
       return;
     }
     let resolved;
@@ -1019,6 +1054,7 @@ async function routeApi(req, res, url) {
     const ws = (await store.restoreWorkspaceByPath(resolved, body.name))
       || await store.createWorkspace({ name: body.name, path: resolved, source: 'local', rootPath: resolved, worktrees: [] });
     sendJson(res, 201, { id: ws.id, name: ws.name, path: ws.path, source: ws.source, gitUrl: ws.gitUrl, branch: ws.branch, rootPath: ws.rootPath, worktrees: ws.worktrees });
+    v2.notifySidebarChanged();
     return;
   }
 
@@ -1045,6 +1081,7 @@ async function routeApi(req, res, url) {
       // Only hides the workspace. Files on disk and conversation records are kept.
       await store.removeWorkspace(wid);
       sendJson(res, 200, { id: wid, removed: true });
+      v2.notifySidebarChanged();
       return;
     }
   }
@@ -1076,6 +1113,7 @@ async function routeApi(req, res, url) {
       modelSourceId: conv.modelSourceId || null,
       modelId: conv.modelId || null,
     });
+    v2.notifySidebarChanged();
     return;
   }
   if (match && m === 'GET') {
@@ -1223,6 +1261,7 @@ async function routeApi(req, res, url) {
     const body = await readBody(req);
     const patched = await kernelApi.patchConversation(cid, body);
     sendJson(res, patched.status, patched.body);
+    if (patched.status < 400) v2.notifySidebarChanged();
     return;
   }
 

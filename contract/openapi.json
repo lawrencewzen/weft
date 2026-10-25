@@ -217,7 +217,7 @@
       "get": {
         "operationId": "getEvents",
         "summary": "SSE 推送流",
-        "description": "一个客户端一条 SSE 连接，用查询参数 `topics` 订阅主题（逗号分隔），`lang` 为 zh 或 en（缺省 zh，不认识的按 zh）。\n每条业务事件带全局递增序号，写成标准 SSE：`id: <序号>`、`event: <类型>`、`data: <JSON>`。\n断线后带 `Last-Event-ID` 头（或查询参数 `lastEventId`）续传；环形缓冲里补不上（太旧、比当前还新、或格式不对）时先发一份新快照。\n没带 Last-Event-ID 时先发快照。快照的 SSE id 是当时的最新序号。\n订阅的主题和上次不同时，客户端不要带 Last-Event-ID / lastEventId，直接重新连接拿快照（续传只保证同一组主题）。\n心跳每 15 秒一次，不带 id，不进缓冲。\n\n主题 `conversation:<id>`（`<id>` 为对话 id）按前缀动态注册。实体：\n- `conversation`：id 为对话 id，值为 ConversationView\n- `item`：id 为 ThreadItem.id，值为 ThreadItem\n- `tool`：id 为 ToolCall.id，值为 ToolCall\n\n快照是 GET /api/v2/conversations/{id} 同一套数据拆成上述实体。模型流式输出时先 upsert 一条 `item`，id 以 `live:` 开头、`streaming` 为 true、`text` 为空；随后用 `text.delta` 追加。正式助手消息到来后 remove 这条流式项，再 upsert 正式项和 conversation。\n\n订阅不存在的对话时仍返回 200：先发 snapshot，entities 为空，并在 snapshot 数据里加 `missing: [\"conversation:<id>\"]`，连接保持。\n\n事件名与 data 的对应关系：\n- `snapshot` → SnapshotEvent\n- `upsert` → UpsertEvent\n- `remove` → RemoveEvent\n- `text.delta` → TextDeltaEvent\n- `heartbeat` → HeartbeatEvent\n",
+        "description": "一个客户端一条 SSE 连接，用查询参数 `topics` 订阅主题（逗号分隔），`lang` 为 zh 或 en（缺省 zh，不认识的按 zh）。\n每条业务事件带全局递增序号，写成标准 SSE：`id: <序号>`、`event: <类型>`、`data: <JSON>`。\n断线后带 `Last-Event-ID` 头（或查询参数 `lastEventId`）续传；环形缓冲里补不上（太旧、比当前还新、或格式不对）时先发一份新快照。\n没带 Last-Event-ID 时先发快照。快照的 SSE id 是当时的最新序号。\n订阅的主题和上次不同时，客户端不要带 Last-Event-ID / lastEventId，直接重新连接拿快照（续传只保证同一组主题）。\n心跳每 15 秒一次，不带 id，不进缓冲。\n\n主题 `workspaces` 注册为精确主题。实体：\n- `workspace`：id 为工作区 id，值为 Workspace\n- `conversation_summary`：id 为对话 id，值为 ConversationSummary\n\n快照与 GET /api/v2/workspaces 同一套数据拆成上述实体。工作区或对话增删改、运行状态或子 Agent 计数变化时 upsert；实体删除时 remove。\n\n主题 `conversation:<id>`（`<id>` 为对话 id）按前缀动态注册。实体：\n- `conversation`：id 为对话 id，值为 ConversationView\n- `item`：id 为 ThreadItem.id，值为 ThreadItem\n- `tool`：id 为 ToolCall.id，值为 ToolCall\n\n快照是 GET /api/v2/conversations/{id} 同一套数据拆成上述实体。模型流式输出时先 upsert 一条 `item`，id 以 `live:` 开头、`streaming` 为 true、`text` 为空；随后用 `text.delta` 追加。正式助手消息到来后 remove 这条流式项，再 upsert 正式项和 conversation。\n\n订阅不存在的对话时仍返回 200：先发 snapshot，entities 为空，并在 snapshot 数据里加 `missing: [\"conversation:<id>\"]`，连接保持。\n\n事件名与 data 的对应关系：\n- `snapshot` → SnapshotEvent\n- `upsert` → UpsertEvent\n- `remove` → RemoveEvent\n- `text.delta` → TextDeltaEvent\n- `heartbeat` → HeartbeatEvent\n",
         "security": [
           {
             "bearerAuth": []
@@ -234,7 +234,7 @@
             "schema": {
               "type": "string"
             },
-            "description": "逗号分隔的主题列表。空或含未注册主题时 400。`conversation:<id>` 按前缀视为已注册。"
+            "description": "逗号分隔的主题列表。空或含未注册主题时 400。`workspaces` 已注册；`conversation:<id>` 按前缀视为已注册。"
           },
           {
             "name": "lang",
@@ -290,6 +290,249 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "客户端错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "服务端错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/workspaces": {
+      "get": {
+        "operationId": "getWorkspaces",
+        "summary": "侧栏工作区和对话列表",
+        "description": "返回当前未移除的工作区，以及每个工作区下的对话摘要。\n对话状态用 statusOf，子 Agent 计数用 subagentDigests，不读完整对话记录。\n每个工作区下的对话按 updatedAt 倒序。\n",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "工作区和对话摘要",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspacesSnapshot"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "未授权",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "客户端错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "服务端错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/workspaces/{id}/conversations": {
+      "post": {
+        "operationId": "createWorkspaceConversation",
+        "summary": "在工作区新建对话",
+        "description": "调用和旧接口相同的创建逻辑。`title` 缺省为 New conversation。\n工作区不存在或已移除时 404。成功返回新对话的 ConversationSummary。\n",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "工作区 id"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateConversationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "已创建",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConversationSummary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "请求体无效",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "未授权",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "工作区不存在",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "客户端错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "服务端错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/workspaces/{id}": {
+      "delete": {
+        "operationId": "removeWorkspace",
+        "summary": "移除工作区",
+        "description": "只隐藏工作区，磁盘文件和对话记录保留。有运行中的对话时 409 E_WS_BUSY，并返回这些对话 id。\n工作区不存在或已移除时 404。\n",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "工作区 id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "已移除",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceRemoved"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "未授权",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "工作区不存在",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "有运行中的对话，不能移除",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceBusy"
                 }
               }
             }
@@ -1753,6 +1996,199 @@
           }
         },
         "description": "对话当前模型。取对话自己选的或默认模型。"
+      },
+      "Workspace": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "name",
+          "path",
+          "source",
+          "conversationCount",
+          "runningCount"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "local",
+              "git"
+            ]
+          },
+          "conversationCount": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "该工作区下的对话数"
+          },
+          "runningCount": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "状态为 running 的对话数（recovering、resuming 算 running）"
+          }
+        },
+        "description": "侧栏工作区。"
+      },
+      "SubagentCounts": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "total",
+          "live"
+        ],
+        "properties": {
+          "total": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "live": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "description": "子 Agent 总数和正在跑的数量。没有子 Agent 时 ConversationSummary.subagents 为 null。"
+      },
+      "ConversationSummary": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "workspaceId",
+          "title",
+          "updatedAt",
+          "status",
+          "runningAgents",
+          "subagents",
+          "archived"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "workspaceId": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "integer",
+            "description": "毫秒时间戳"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "idle",
+              "running",
+              "waiting",
+              "failed"
+            ],
+            "description": "按设计 6.1 归一。recovering、resuming 算 running；paused 算 waiting；error 算 failed；stopped 算 idle"
+          },
+          "runningAgents": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "主 Agent 运行算 1，加上运行中的子 Agent 数。与旧版 conversationMeta「N 个 Agent 运行中」一致"
+          },
+          "subagents": {
+            "description": "没有子 Agent 时为 null",
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SubagentCounts"
+              }
+            ]
+          },
+          "archived": {
+            "type": "boolean"
+          }
+        },
+        "description": "侧栏对话摘要。"
+      },
+      "WorkspacesSnapshot": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "workspaces",
+          "conversations"
+        ],
+        "properties": {
+          "workspaces": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Workspace"
+            }
+          },
+          "conversations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConversationSummary"
+            },
+            "description": "每个工作区下的对话按 updatedAt 倒序，再按工作区列表顺序拼接"
+          }
+        },
+        "description": "GET /api/v2/workspaces 的响应。"
+      },
+      "CreateConversationRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "title": {
+            "type": "string"
+          }
+        },
+        "description": "新建对话。title 缺省为 New conversation。"
+      },
+      "WorkspaceRemoved": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "removed"
+        ],
+        "properties": {
+          "removed": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "description": "DELETE /api/v2/workspaces/{id} 成功。"
+      },
+      "WorkspaceBusy": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "error",
+          "code",
+          "conversations"
+        ],
+        "properties": {
+          "error": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "const": "E_WS_BUSY"
+          },
+          "conversations": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "正在运行、因此挡住移除的对话 id"
+          }
+        },
+        "description": "工作区里还有运行中的对话。"
       },
       "ConversationView": {
         "type": "object",

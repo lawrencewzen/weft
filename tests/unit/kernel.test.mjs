@@ -8,6 +8,7 @@ import assert from 'node:assert/strict';
 import { createModels } from '@earendil-works/pi-ai/models';
 import { createRegistry } from '@earendil-works/pi-durable';
 import { openKernel, registerFaux } from '../../src/kernel/index.mjs';
+import { withHarnessLock } from './_harness-lock.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const closedWorkerPath = path.join(here, 'kernel-closed-worker.mjs');
@@ -19,6 +20,7 @@ function catalog() {
 }
 
 test('open, close, and reopen the same root', async () => {
+  await withHarnessLock(async () => {
   const dir = await mkdtemp(path.join(tmpdir(), 'pi-kernel-open-'));
   const firstCatalog = catalog();
   const first = await openKernel({ dataDir: dir, models: firstCatalog.models, registry: firstCatalog.registry });
@@ -42,6 +44,7 @@ test('open, close, and reopen the same root', async () => {
   } finally {
     await first.close();
   }
+  });
 });
 
 function spawnClosedWorker(mode) {

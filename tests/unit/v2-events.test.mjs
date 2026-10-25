@@ -168,6 +168,33 @@ test('upsert value functions evaluate per connection language and cache per lang
   }
 });
 
+test('register exact topic fires onFirstSubscribe / onLastUnsubscribe', async () => {
+  const hub = createEventHub({ heartbeatMs: 60_000 });
+  try {
+    let first = 0;
+    let last = 0;
+    hub.register('workspaces', {
+      snapshot: () => [],
+      onFirstSubscribe() { first += 1; },
+      onLastUnsubscribe() { last += 1; },
+    });
+    const a = hub.connect({ topics: ['workspaces'], send: () => {} });
+    await a.ready;
+    assert.equal(hub.topicSubscriberCount('workspaces'), 1);
+    assert.equal(first, 1);
+    const b = hub.connect({ topics: ['workspaces'], send: () => {} });
+    await b.ready;
+    assert.equal(first, 1);
+    a.close();
+    assert.equal(last, 0);
+    b.close();
+    assert.equal(last, 1);
+    assert.equal(hub.topicSubscriberCount('workspaces'), 0);
+  } finally {
+    hub.dispose();
+  }
+});
+
 test('registerPattern makes prefixed topics known and counts subscribers', async () => {
   const hub = createEventHub({ heartbeatMs: 60_000 });
   try {
