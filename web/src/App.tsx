@@ -1,10 +1,22 @@
 import { useEffect, useState } from 'react';
+import type { components } from '../../src/v2/contract.gen';
 
-type ServiceInfo = {
-  protocol?: unknown;
-  protocolVersion?: unknown;
-  version?: unknown;
-  error?: unknown;
+type ServiceInfo = components['schemas']['ServiceInfo'];
+type SnapshotEvent = components['schemas']['SnapshotEvent'];
+type UpsertEvent = components['schemas']['UpsertEvent'];
+type RemoveEvent = components['schemas']['RemoveEvent'];
+type TextDeltaEvent = components['schemas']['TextDeltaEvent'];
+type HeartbeatEvent = components['schemas']['HeartbeatEvent'];
+type EntityRef = components['schemas']['EntityRef'];
+
+type StreamStatus = 'connecting' | 'connected' | 'reconnecting';
+
+type StreamEventMap = {
+  snapshot: SnapshotEvent;
+  upsert: UpsertEvent;
+  remove: RemoveEvent;
+  'text.delta': TextDeltaEvent;
+  heartbeat: HeartbeatEvent;
 };
 
 function asText(value: unknown): string {
@@ -15,7 +27,7 @@ function asText(value: unknown): string {
 
 function protocolFrom(data: unknown): string {
   if (!data || typeof data !== 'object') return '';
-  const rec = data as ServiceInfo;
+  const rec = data as ServiceInfo & { protocol?: unknown; version?: unknown; error?: unknown };
   return asText(rec.protocol) || asText(rec.protocolVersion) || asText(rec.version);
 }
 
@@ -23,7 +35,7 @@ function errorFromBody(status: number, statusText: string, text: string): string
   const trimmed = text.trim();
   if (trimmed) {
     try {
-      const json = JSON.parse(trimmed) as ServiceInfo;
+      const json = JSON.parse(trimmed) as { error?: unknown };
       const fromJson = asText(json.error);
       if (fromJson) return fromJson;
     } catch {
@@ -34,9 +46,27 @@ function errorFromBody(status: number, statusText: string, text: string): string
   return `${status} ${statusText}`.trim() || 'request failed';
 }
 
+function parseEvent<K extends keyof StreamEventMap>(raw: string): StreamEventMap[K] | null {
+  try {
+    return JSON.parse(raw) as StreamEventMap[K];
+  } catch {
+    return null;
+  }
+}
+
+function serviceFromSnapshot(data: SnapshotEvent): EntityRef | undefined {
+  return data.entities.find((item) => item.entity === 'service' && item.id === 'self');
+}
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
 export function App() {
   const [protocol, setProtocol] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [stream, setStream] = useState<StreamStatus | null>(null);
+  const [heartbeat, setHeartbeat] = useState<string | null>(null);
 
   useEffect(() => {
     const ac = new AbortController();
@@ -68,10 +98,35 @@ export function App() {
     return () => ac.abort();
   }, []);
 
+  useEffect(() => {
+    if (protocol == null) return;
+    setStream('connecting');
+    const es = new EventSource('/api/v2/events?topics=service&lang=zh');
+    es.onopen = () => setStream('connected');
+    es.onerror = () => {
+      if (es.readyState !== EventSource.CLOSED) setStream('reconnecting');
+    };
+    es.addEventListener('snapshot', (ev: MessageEvent<string>) => {
+      const data = parseEvent<'snapshot'>(ev.data);
+      if (!data || !Array.isArray(data.entities)) return;
+      const entity = serviceFromSnapshot(data);
+      if (!entity || !isObject(entity.value)) return;
+      const next = protocolFrom(entity.value);
+      if (next) setProtocol(next);
+    });
+    es.addEventListener('heartbeat', (ev: MessageEvent<string>) => {
+      parseEvent<'heartbeat'>(ev.data);
+      setHeartbeat(new Date().toLocaleString());
+    });
+    return () => es.close();
+  }, [protocol == null]);
+
   return (
     <div data-testid="next-app">
       <h1>Weft（新版，开发中）</h1>
       {protocol != null ? <p data-testid="next-protocol">{protocol}</p> : null}
+      {stream != null ? <p data-testid="next-stream">{stream}</p> : null}
+      {heartbeat != null ? <p data-testid="next-heartbeat">{heartbeat}</p> : null}
       {error != null ? <p data-testid="next-error">{error}</p> : null}
     </div>
   );

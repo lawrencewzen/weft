@@ -54,6 +54,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * SSE 推送流
+         * @description 一个客户端一条 SSE 连接，用查询参数 `topics` 订阅主题（逗号分隔），`lang` 为 zh 或 en（缺省 zh，不认识的按 zh）。
+         *     每条业务事件带全局递增序号，写成标准 SSE：`id: <序号>`、`event: <类型>`、`data: <JSON>`。
+         *     断线后带 `Last-Event-ID` 头（或查询参数 `lastEventId`）续传；环形缓冲里补不上（太旧、比当前还新、或格式不对）时先发一份新快照。
+         *     没带 Last-Event-ID 时先发快照。快照的 SSE id 是当时的最新序号。
+         *     订阅的主题和上次不同时，客户端不要带 Last-Event-ID / lastEventId，直接重新连接拿快照（续传只保证同一组主题）。
+         *     心跳每 15 秒一次，不带 id，不进缓冲。
+         *
+         *     事件名与 data 的对应关系：
+         *     - `snapshot` → SnapshotEvent
+         *     - `upsert` → UpsertEvent
+         *     - `remove` → RemoveEvent
+         *     - `text.delta` → TextDeltaEvent
+         *     - `heartbeat` → HeartbeatEvent
+         */
+        get: operations["getEvents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -106,6 +138,47 @@ export interface components {
             deviceName: string;
             platform: string;
         };
+        /** @description 快照里的一条实体。SSE event=snapshot 的 entities 项。 */
+        EntityRef: {
+            topic: string;
+            entity: string;
+            id: string;
+            /** @description 各主题的实体类型以后各自定义 */
+            value: {
+                [key: string]: unknown;
+            };
+        };
+        /** @description SSE event=snapshot 的 data。连接时或续传补不上时发送；SSE id 为当时最新序号。 */
+        SnapshotEvent: {
+            protocolVersion: string;
+            topics: string[];
+            entities: components["schemas"]["EntityRef"][];
+        };
+        /** @description SSE event=upsert 的 data。实体整个替换，客户端按 id 覆盖。 */
+        UpsertEvent: {
+            topic: string;
+            entity: string;
+            id: string;
+            /** @description 各主题的实体类型以后各自定义 */
+            value: {
+                [key: string]: unknown;
+            };
+        };
+        /** @description SSE event=remove 的 data。实体删除。 */
+        RemoveEvent: {
+            topic: string;
+            entity: string;
+            id: string;
+        };
+        /** @description SSE event=text.delta 的 data。只用于流式文字。offset 对不上时客户端丢掉本地内容，等下一次 upsert。 */
+        TextDeltaEvent: {
+            topic: string;
+            itemId: string;
+            offset: number;
+            append: string;
+        };
+        /** @description SSE event=heartbeat 的 data。不带 id，不进环形缓冲。 */
+        HeartbeatEvent: Record<string, never>;
     };
     responses: never;
     parameters: never;
@@ -260,6 +333,72 @@ export interface operations {
             };
             /** @description 请求体过大 */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 客户端错误 */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 服务端错误 */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+        };
+    };
+    getEvents: {
+        parameters: {
+            query: {
+                /** @description 逗号分隔的主题列表。空或含未注册主题时 400。 */
+                topics: string;
+                /** @description 客户端语言。先支持 zh、en；缺省或不认识的按 zh。 */
+                lang?: string;
+                /** @description 给不方便设 Last-Event-ID 头的客户端。与 Last-Event-ID 头效果相同。 */
+                lastEventId?: string;
+            };
+            header?: {
+                /** @description 上次收到的事件序号。缓冲里还有它之后的全部事件则按主题过滤补发，否则发快照。 */
+                "Last-Event-ID"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description SSE 事件流 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": string;
+                };
+            };
+            /** @description 主题列表为空或含未注册主题 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 未授权 */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };

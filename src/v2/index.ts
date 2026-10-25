@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { SECURITY_HEADERS } from '../core/auth.mjs';
+import { formatSSE } from '../core/sse.mjs';
 import {
   createV2Auth,
   generateLocalToken,
@@ -10,6 +11,13 @@ import {
 import type { components } from './contract.gen.ts';
 import { removeDiscoverySync, writeDiscoverySync } from './daemon/discovery.ts';
 import { createIdleWatcher, type IdleWatcher } from './daemon/idle.ts';
+import {
+  createEventHub,
+  normalizeLang,
+  parseTopics,
+  type EventHub,
+  type SseFrame,
+} from './stream/hub.ts';
 import { contractMismatchLog, validateResponse } from './validate.ts';
 import { PROTOCOL_VERSION } from './version.ts';
 
@@ -100,14 +108,55 @@ async function readJsonBody(req: IncomingMessage): Promise<unknown> {
   }
 }
 
+function headerOrQueryLastEventId(req: IncomingMessage, url: URL): string | null {
+  const header = req.headers['last-event-id'];
+  const fromHeader = Array.isArray(header) ? header[0] : header;
+  if (fromHeader != null && String(fromHeader).length > 0) return String(fromHeader);
+  return url.searchParams.get('lastEventId');
+}
+
+function sseHeaders(): Record<string, string> {
+  return {
+    ...SECURITY_HEADERS,
+    'content-type': 'text/event-stream',
+    'cache-control': 'no-cache',
+    'x-accel-buffering': 'no',
+    connection: 'keep-alive',
+    'Weft-Protocol': PROTOCOL_VERSION,
+  };
+}
+
+function writeSseFrame(res: ServerResponse, frame: SseFrame): void {
+  if (!res.writable || res.writableEnded) return;
+  const chunk = formatSSE(frame) as string;
+  try {
+    res.write(chunk);
+  } catch {
+    /* client gone */
+  }
+}
+
+function serviceInfo(opts: { serviceVersion: string; startedAt: number; pid: number }): ServiceInfo {
+  return {
+    protocolVersion: PROTOCOL_VERSION,
+    serviceVersion: opts.serviceVersion,
+    pid: opts.pid,
+    startedAt: opts.startedAt,
+  };
+}
+
 export function createV2Handler(opts: {
   serviceVersion: string;
   startedAt: number;
   auth: V2Auth;
+  hub: EventHub;
+  pid?: number;
   hasActiveWork?: () => boolean | Promise<boolean>;
   onRestart?: () => void;
+  trackConnection: IdleWatcher['trackConnection'];
 }): V2Handler {
-  const { serviceVersion, startedAt, auth } = opts;
+  const { serviceVersion, startedAt, auth, hub } = opts;
+  const pid = opts.pid ?? process.pid;
   const hasActiveWork = opts.hasActiveWork ?? (() => false);
   return async (req, res, url) => {
     if (url.pathname !== '/api/v2' && !url.pathname.startsWith('/api/v2/')) return false;
@@ -143,13 +192,7 @@ export function createV2Handler(opts: {
     }
 
     if (method === 'GET' && pathname === '/api/v2/service') {
-      const body = {
-        protocolVersion: PROTOCOL_VERSION,
-        serviceVersion,
-        pid: process.pid,
-        startedAt,
-      } satisfies ServiceInfo;
-      sendV2(res, pathname, method, 200, body);
+      sendV2(res, pathname, method, 200, serviceInfo({ serviceVersion, startedAt, pid }));
       return true;
     }
 
@@ -172,6 +215,41 @@ export function createV2Handler(opts: {
       });
       return true;
     }
+
+    if (method === 'GET' && pathname === '/api/v2/events') {
+      const topics = parseTopics(url.searchParams.get('topics'));
+      const unknown = topics.filter((topic) => !hub.hasTopic(topic));
+      if (!topics.length || unknown.length) {
+        sendV2(res, pathname, method, 400, {
+          error: topics.length ? `unknown topic: ${unknown.join(',')}` : 'topics required',
+          code: 'E_BAD_REQUEST',
+        } satisfies V2Error);
+        return true;
+      }
+      const lang = normalizeLang(url.searchParams.get('lang'));
+      const lastEventId = headerOrQueryLastEventId(req, url);
+      res.writeHead(200, sseHeaders());
+      if (typeof res.flushHeaders === 'function') res.flushHeaders();
+      opts.trackConnection(req);
+      const session = hub.connect({
+        topics,
+        lang,
+        lastEventId,
+        send(frame) {
+          writeSseFrame(res, frame);
+        },
+      });
+      let closed = false;
+      const onClose = () => {
+        if (closed) return;
+        closed = true;
+        session.close();
+      };
+      req.on('close', onClose);
+      res.on('close', onClose);
+      return true;
+    }
+
     sendV2(res, pathname, method, 404, { error: 'not found' } satisfies V2Error);
     return true;
   };
@@ -195,18 +273,35 @@ export function createV2Runtime(opts: {
     now: opts.now,
     webCodeTtlMs: opts.webCodeTtlMs ?? resolveWebCodeTtlMs(),
   });
-  const handleApi = createV2Handler({
-    serviceVersion: opts.serviceVersion,
-    startedAt: opts.startedAt,
-    auth,
-    hasActiveWork: opts.hasActiveWork,
-    onRestart: opts.onRestart,
+  const hub = createEventHub({ protocolVersion: PROTOCOL_VERSION });
+  hub.register('service', {
+    snapshot() {
+      return [{
+        entity: 'service',
+        id: 'self',
+        value: serviceInfo({
+          serviceVersion: opts.serviceVersion,
+          startedAt: opts.startedAt,
+          pid,
+        }),
+      }];
+    },
   });
   const idle = createIdleWatcher({
     hasActiveWork: opts.hasActiveWork ?? (() => false),
     shutdown: () => opts.onIdleExit?.(),
     env: opts.env,
     now: opts.now,
+  });
+  const handleApi = createV2Handler({
+    serviceVersion: opts.serviceVersion,
+    startedAt: opts.startedAt,
+    auth,
+    hub,
+    pid,
+    hasActiveWork: opts.hasActiveWork,
+    onRestart: opts.onRestart,
+    trackConnection: idle.trackConnection,
   });
 
   return {
@@ -231,6 +326,7 @@ export function createV2Runtime(opts: {
     trackConnection: idle.trackConnection,
     startIdleExit: idle.start,
     dispose() {
+      hub.dispose();
       idle.dispose();
       auth.dispose();
     },
