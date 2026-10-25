@@ -11,9 +11,9 @@ import {
 } from './store';
 
 export type ConversationActions = {
-  send: (text: string) => ReturnType<typeof sendMessage>;
+  send: (text: string, requestId?: string) => ReturnType<typeof sendMessage>;
   stop: () => ReturnType<typeof stopApi>;
-  continueRun: () => ReturnType<typeof continueRunApi>;
+  continueRun: (requestId?: string) => ReturnType<typeof continueRunApi>;
   loadToolOutput: (toolId: string) => ReturnType<typeof toolOutput>;
 };
 
@@ -49,9 +49,9 @@ export function useConversation(cid: string, lang: Lang = getPreferredLang()): C
   const toolsById = store.toolsById(cid);
   const missing = store.isMissing(conversationTopic(cid));
 
-  const send = useCallback((text: string) => sendMessage(cid, text), [cid]);
+  const send = useCallback((text: string, requestId?: string) => sendMessage(cid, text, requestId), [cid]);
   const stop = useCallback(() => stopApi(cid), [cid]);
-  const continueRun = useCallback(() => continueRunApi(cid), [cid]);
+  const continueRun = useCallback((requestId?: string) => continueRunApi(cid, requestId), [cid]);
   const loadToolOutput = useCallback((toolId: string) => toolOutput(cid, toolId), [cid]);
 
   const actions = useMemo(

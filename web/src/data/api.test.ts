@@ -57,6 +57,19 @@ describe('api client', () => {
     await expect(stop('c1')).rejects.toMatchObject({ message: 'boom', status: 500 });
   });
 
+  it('reuses an explicit requestId instead of generating one', async () => {
+    const uuid = vi.spyOn(crypto, 'randomUUID');
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse(202, { runId: 'run-r' }))
+      .mockResolvedValueOnce(jsonResponse(202, { runId: 'run-r' }));
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(sendMessage('c1', 'hi', 'held-id')).resolves.toEqual({ runId: 'run-r' });
+    await expect(continueRun('c1', 'held-cont')).resolves.toEqual({ runId: 'run-r' });
+    expect(uuid).not.toHaveBeenCalled();
+    expect(JSON.parse(String(fetchMock.mock.calls[0][1].body)).requestId).toBe('held-id');
+    expect(JSON.parse(String(fetchMock.mock.calls[1][1].body)).requestId).toBe('held-cont');
+  });
+
   it('sends a generated requestId with the message', async () => {
     vi.spyOn(crypto, 'randomUUID').mockReturnValue('00000000-0000-4000-8000-000000000001');
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse(202, { runId: 'run-1' }));
