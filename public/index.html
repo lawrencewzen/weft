@@ -66,12 +66,15 @@
 
       <div id="center-notice" class="center-notice"></div>
 
-      <div class="draft-hero" id="draft-hero">
-        <span data-i18n="draft_hero_pre">要在</span>
-        <button type="button" class="draft-proj" data-action="pick-draft-project" data-testid="draft-project">
-          <span id="draft-proj-name"></span><span class="caret">▾</span>
-        </button>
-        <span data-i18n="draft_hero_post">里做什么？</span>
+      <div class="draft-stage" id="draft-stage">
+        <div class="draft-hero" id="draft-hero">
+          <span data-i18n="draft_hero_pre">要在</span>
+          <button type="button" class="draft-proj" data-action="pick-draft-project" data-testid="draft-project">
+            <span id="draft-proj-name"></span><span class="caret">▾</span>
+          </button>
+          <span data-i18n="draft_hero_post">里做什么？</span>
+        </div>
+        <div class="draft-hint" id="draft-hint"></div>
       </div>
 
       <div class="center-thread" id="center-thread"></div>
@@ -105,7 +108,6 @@
               </div>
             </div>
           </div>
-          <div class="draft-hint" id="draft-hint"></div>
         </div>
       </footer>
     </main>
