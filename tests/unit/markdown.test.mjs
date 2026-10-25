@@ -146,6 +146,19 @@ test('DOMPurify keeps copy button and svg', () => {
   assert.match(html, /<svg/i);
 });
 
+test('strips forged data-action and extra data attributes from raw HTML', () => {
+  const { body } = parse(
+    '<button data-action="git-delete">x</button>\n\n'
+    + '<span data-action="delete-skill" data-foo="1">y</span>\n\n'
+    + '```js\nconsole.log(1)\n```'
+  );
+  assert.equal(body.querySelectorAll('[data-action="git-delete"]').length, 0);
+  assert.equal(body.querySelectorAll('[data-action="delete-skill"]').length, 0);
+  assert.equal(body.querySelectorAll('[data-foo]').length, 0);
+  assert.ok(body.querySelector('button.code-copy-btn[data-action="copy-code"]'));
+  assert.ok(body.querySelector('[data-copy-label]'));
+});
+
 test('strips script tags', () => {
   const { html, body } = parse('hello <script>alert(1)</script> world');
   assert.equal(body.querySelectorAll('script').length, 0);

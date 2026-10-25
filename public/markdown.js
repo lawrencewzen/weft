@@ -93,10 +93,12 @@ const marked = new Marked({
 const PURIFY_CONFIG = {
   ADD_TAGS: ['input', 'button', 'svg', 'rect'],
   ADD_ATTR: [
-    'target', 'rel', 'checked', 'disabled', 'type', 'class', 'start', 'data-action',
+    'target', 'rel', 'checked', 'disabled', 'type', 'class', 'start',
+    'data-action', 'data-copy-label',
     'viewBox', 'fill', 'stroke', 'stroke-width', 'rx', 'width', 'height', 'x', 'y',
     'aria-hidden',
   ],
+  ALLOW_DATA_ATTR: false,
   FORBID_TAGS: ['script', 'style', 'iframe', 'object', 'embed', 'form', 'link', 'meta', 'base'],
 };
 
@@ -117,6 +119,13 @@ function getPurify() {
       node.setAttribute('target', '_blank');
       node.setAttribute('rel', 'noopener noreferrer');
     }
+    if (!node.getAttribute) return;
+    const action = node.getAttribute('data-action');
+    if (action == null) return;
+    const allowed = node.tagName === 'BUTTON'
+      && action === 'copy-code'
+      && node.classList?.contains('code-copy-btn');
+    if (!allowed) node.removeAttribute('data-action');
   });
   impl.addHook('uponSanitizeElement', (node, data) => {
     if (data.tagName !== 'input') return;

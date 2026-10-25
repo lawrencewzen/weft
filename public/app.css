@@ -477,7 +477,7 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.6; backgroun
 .msg-sender { color: var(--faint); font-weight: 400; }
 .msg-chip { font-family: var(--mono); font-size: 11px; color: var(--faint); }
 .msg-sender + .msg-chip::before { content: '· '; }
-.msg-body { color: var(--ink); font-size: 15px; line-height: 1.75; min-width: 0; overflow-wrap: anywhere; text-wrap: pretty; }
+.msg-body { color: var(--ink); font-size: 15px; line-height: 1.75; min-width: 0; overflow-wrap: anywhere; text-wrap: pretty; display: flow-root; }
 .msg-body p { margin: 0 0 14px; }
 .msg-body h1, .msg-body h2, .msg-body h3, .msg-body h4, .msg-body h5, .msg-body h6 { font-weight: 600; line-height: 1.4; }
 .msg-body h1 { font-size: 20px; margin: 32px 0 10px; }
@@ -488,7 +488,7 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.6; backgroun
 .msg-body h6 { font-size: 14px; margin: 24px 0 8px; color: var(--ink3); }
 .msg-body > :first-child { margin-top: 0; }
 .msg-body > :last-child { margin-bottom: 0; }
-.msg-body ul, .msg-body ol { margin: 0 0 14px; padding-left: 1.6em; }
+.msg-body ul, .msg-body ol { margin: 0; padding-left: 1.6em; }
 .msg-body li { margin: 6px 0; }
 .msg-body ul ul, .msg-body ol ol, .msg-body ul ol, .msg-body ol ul { margin: 6px 0 0; }
 .msg-body li::marker { color: var(--faint); }
