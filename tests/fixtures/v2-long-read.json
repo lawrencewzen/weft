@@ -1,0 +1,4 @@
+{ "turns": [
+  { "text": "读完了。", "tool": "read", "args": { "path": "long.txt" } },
+  { "text": "以上是全文。" }
+] }

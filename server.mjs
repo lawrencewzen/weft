@@ -115,6 +115,20 @@ const v2 = createV2Runtime({
       window: contextWindowForConversation(settings, presented, { grokSignedIn }),
     };
   },
+  async getConversation(id) {
+    return (await store.getConversation(id)) || null;
+  },
+  async getWorkspace(id) {
+    return (await store.getWorkspace(id)) || null;
+  },
+  async postMessage(conv, text, opts) {
+    if (!kernelApi) return { status: 500, body: { error: 'kernel not ready' } };
+    return kernelApi.postMessage(conv, text, opts);
+  },
+  async stopConversation(id) {
+    if (!kernelApi) return { status: 500, body: { error: 'kernel not ready' } };
+    return kernelApi.stopConversation(id);
+  },
 });
 
 let dataLock;

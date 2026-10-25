@@ -679,7 +679,7 @@ export function toolDiffCounts(tool: ToolLike | null | undefined): { added: numb
   return { added: Number(match[1]), removed: Number(match[2]) };
 }
 
-function toolOutputText(tool: ToolLike | null | undefined, workspacePath: string): string {
+export function toolOutputText(tool: ToolLike | null | undefined, workspacePath: string): string {
   const parsed = parseToolOutput(tool?.output);
   const json = parsed.json && typeof parsed.json === 'object' ? parsed.json as JsonObject : null;
   let raw = parsed.text;
