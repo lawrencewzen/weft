@@ -467,7 +467,7 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.6; backgroun
 .msg-body h6 { font-size: 14px; margin: 24px 0 8px; color: var(--ink3); }
 .msg-body > :first-child { margin-top: 0; }
 .msg-body > :last-child { margin-bottom: 0; }
-.msg-body ul, .msg-body ol { margin: 0; padding-left: 1.6em; }
+.msg-body ul, .msg-body ol { margin: 0 0 14px; padding-left: 1.6em; }
 .msg-body li { margin: 6px 0; }
 .msg-body ul ul, .msg-body ol ol, .msg-body ul ol, .msg-body ol ul { margin: 6px 0 0; }
 .msg-body li::marker { color: var(--faint); }
@@ -478,6 +478,16 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.6; backgroun
   font-family: var(--mono); font-size: 0.86em; color: var(--ink2); background: var(--sub2);
   border: 1px solid var(--line); padding: 1px 6px; border-radius: 6px;
 }
+.msg-body code.md-path {
+  display: inline-flex; align-items: center; gap: 4px; padding: 0 6px 0 5px;
+  vertical-align: baseline; cursor: pointer;
+}
+.msg-body code.md-path svg {
+  width: 12px; height: 12px; flex-shrink: 0; display: block; color: var(--faint);
+}
+.msg-body .md-path-line { color: var(--faint); }
+.msg-body code.md-path:hover { background: var(--hover); border-color: var(--bd3); }
+.msg-body code.md-path:focus-visible { outline: 1px solid var(--faint); outline-offset: 2px; }
 .msg-body blockquote {
   border: none; border-left: 3px solid var(--bd2); padding: 2px 0 2px 16px;
   color: var(--ink3); margin: 0 0 14px; background: none; border-radius: 0;
@@ -863,6 +873,7 @@ button.file-tree-row:hover { background: var(--side); }
 .file-preview-head { padding: 8px 16px; font-family: var(--mono); font-size: 11.5px; color: var(--mute); display: flex; justify-content: space-between; gap: 8px; }
 .file-lines { font-family: var(--mono); font-size: 11.5px; line-height: 1.75; color: var(--ink2); padding-bottom: 12px; display: grid; grid-template-columns: minmax(100%, max-content); }
 .file-line { display: flex; padding-right: 16px; }
+.file-line.is-target { background: var(--sel); }
 .file-line .n { width: 40px; flex-shrink: 0; text-align: right; padding-right: 12px; color: var(--dis); user-select: none; }
 .file-line .code { white-space: pre; }
 .file-lines { align-content: start; }

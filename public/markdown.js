@@ -1,5 +1,6 @@
 import { Marked } from './vendor/marked.esm.js';
 import DOMPurify from './vendor/purify.es.mjs';
+import { parseLineSuffix } from './path-ref.js';
 
 const SHELL_LANGS = new Set(['bash', 'sh', 'shell', 'zsh', 'console']);
 
@@ -8,6 +9,31 @@ const COPY_ICON =
   '<rect x="5.5" y="5.5" width="8" height="8" rx="1.5" stroke="currentColor" stroke-width="1.25"/>' +
   '<rect x="2.5" y="2.5" width="8" height="8" rx="1.5" stroke="currentColor" stroke-width="1.25"/>' +
   '</svg>';
+
+const FILE_ICON =
+  '<svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">' +
+  '<path d="M4.2 2.4h5.1L12.6 5.8v7.8H4.2V2.4z" stroke="currentColor" stroke-width="1.25"/>' +
+  '<path d="M9.2 2.4V6h3.4" stroke="currentColor" stroke-width="1.25"/>' +
+  '</svg>';
+
+let currentResolvePath = null;
+
+function pathChipHtml(rawText, resolved) {
+  const parsed = parseLineSuffix(rawText);
+  const main = escapeHtml(parsed.path);
+  const lineHtml = parsed.suffix
+    ? `<span class="md-path-line">${escapeHtml(parsed.suffix)}</span>`
+    : '';
+  const lineAttr = Number.isFinite(resolved.line) && resolved.line >= 1
+    ? ` data-line="${resolved.line}"`
+    : '';
+  return (
+    `<code class="md-path" data-action="open-path" data-path="${escapeHtml(resolved.path)}"${lineAttr} title="${escapeHtml(`打开 ${resolved.path}`)}" tabindex="0">` +
+    FILE_ICON +
+    `${main}${lineHtml}` +
+    `</code>`
+  );
+}
 
 function escapeHtml(str) {
   return String(str ?? '')
@@ -87,16 +113,24 @@ const marked = new Marked({
       }
       return `<li>${body}</li>\n`;
     },
+    codespan({ text }) {
+      const raw = String(text ?? '');
+      if (typeof currentResolvePath === 'function') {
+        const resolved = currentResolvePath(raw);
+        if (resolved?.path) return pathChipHtml(raw, resolved);
+      }
+      return `<code>${escapeHtml(raw)}</code>`;
+    },
   },
 });
 
 const PURIFY_CONFIG = {
-  ADD_TAGS: ['input', 'button', 'svg', 'rect'],
+  ADD_TAGS: ['input', 'button', 'svg', 'rect', 'path'],
   ADD_ATTR: [
     'target', 'rel', 'checked', 'disabled', 'type', 'class', 'start',
-    'data-action', 'data-copy-label',
-    'viewBox', 'fill', 'stroke', 'stroke-width', 'rx', 'width', 'height', 'x', 'y',
-    'aria-hidden',
+    'data-action', 'data-copy-label', 'data-path', 'data-line',
+    'viewBox', 'fill', 'stroke', 'stroke-width', 'rx', 'width', 'height', 'x', 'y', 'd',
+    'aria-hidden', 'tabindex',
   ],
   ALLOW_DATA_ATTR: false,
   FORBID_TAGS: ['script', 'style', 'iframe', 'object', 'embed', 'form', 'link', 'meta', 'base'],
@@ -122,9 +156,15 @@ function getPurify() {
     if (!node.getAttribute) return;
     const action = node.getAttribute('data-action');
     if (action == null) return;
-    const allowed = node.tagName === 'BUTTON'
+    const allowed = (
+      node.tagName === 'BUTTON'
       && action === 'copy-code'
-      && node.classList?.contains('code-copy-btn');
+      && node.classList?.contains('code-copy-btn')
+    ) || (
+      node.tagName === 'CODE'
+      && action === 'open-path'
+      && node.classList?.contains('md-path')
+    );
     if (!allowed) node.removeAttribute('data-action');
   });
   impl.addHook('uponSanitizeElement', (node, data) => {
@@ -136,8 +176,13 @@ function getPurify() {
   return impl;
 }
 
-export function renderMarkdown(src = '') {
+export function renderMarkdown(src = '', opts = {}) {
   if (!src) return '';
-  const html = marked.parse(String(src), { async: false });
-  return getPurify().sanitize(html, PURIFY_CONFIG);
+  currentResolvePath = typeof opts?.resolvePath === 'function' ? opts.resolvePath : null;
+  try {
+    const html = marked.parse(String(src), { async: false });
+    return getPurify().sanitize(html, PURIFY_CONFIG);
+  } finally {
+    currentResolvePath = null;
+  }
 }
