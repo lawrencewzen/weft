@@ -43,6 +43,7 @@ function childEnv(dataDir, { token, extra = {} } = {}) {
     WEFT_GROK_AUTH: path.join(dataDir, 'auth.json'),
     WEFT_RETRY_BASE_MS: '20',
     WEFT_RETRY_MAX: '5',
+    WEFT_V2_VALIDATE: '1',
     ...(token ? { WEFT_TOKEN: token } : {}),
     ...extra,
   };

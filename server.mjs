@@ -68,6 +68,7 @@ import { resolveAllowedWorkspacePath, defaultWorkspaceRoot, listBrowsableDirs } 
 import { acquireDataDirLock } from './src/core/lock.mjs';
 import { presentConversationContext } from './src/core/usage.mjs';
 import { openConversationKernel } from './src/kernel/conversations.mjs';
+import { createV2Handler } from './src/v2/index.ts';
 import fs from 'node:fs/promises';
 
 // 内置 fetch 默认不读 HTTP(S)_PROXY；配置了代理时让模型请求也走它（遵守 NO_PROXY）
@@ -82,6 +83,11 @@ const PUBLIC = path.join(ROOT, 'public');
 const PUBLIC_NEXT = path.join(ROOT, 'public-next');
 const NEXT_NOT_BUILT = '新网页端还没构建，请运行 npm run build:web';
 const PORT = process.env.PORT !== undefined && process.env.PORT !== '' ? Number(process.env.PORT) : 3000;
+const pkg = JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
+const handleV2 = createV2Handler({
+  serviceVersion: String(pkg.version || '0.0.0'),
+  startedAt: Date.now(),
+});
 const DATA_DIR = process.env.WEFT_DATA_DIR || path.join(ROOT, 'data');
 const SKILL_DIRS = [path.join(ROOT, 'skills'), path.join(DATA_DIR, 'skills')];
 const PLUGIN_DIRS = [path.join(ROOT, 'plugins'), path.join(DATA_DIR, 'plugins')];
@@ -476,6 +482,7 @@ const server = createServer(async (req, res) => {
           return;
         }
       }
+      if (await handleV2(req, res, url)) return;
       await routeApi(req, res, url);
       return;
     }
