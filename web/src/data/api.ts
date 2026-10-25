@@ -138,3 +138,21 @@ export function removeWorkspace(workspaceId: string): Promise<WorkspaceRemoved> 
     { method: 'DELETE' },
   );
 }
+
+function subagentPath(cid: string, agentId: string, suffix = ''): string {
+  return `/api/v2/conversations/${encodeURIComponent(cid)}/subagents/${encodeURIComponent(agentId)}${suffix}`;
+}
+
+export function sendSubagentMessage(cid: string, agentId: string, text: string): Promise<{ ok: true }> {
+  return requestJson<{ ok: true }>(subagentPath(cid, agentId, '/messages'), {
+    method: 'POST',
+    body: JSON.stringify({ text }),
+  });
+}
+
+export function stopSubagent(cid: string, agentId: string): Promise<StopAccepted> {
+  return requestJson<StopAccepted>(subagentPath(cid, agentId, '/stop'), {
+    method: 'POST',
+    body: '{}',
+  });
+}

@@ -43,6 +43,14 @@ describe('layout prefs', () => {
     expect(defaultLeftOpen(1440)).toBe(true);
   });
 
+  it('defaults left width to 264 when nothing is stored', () => {
+    const mem = new MemoryStorage();
+    // @ts-expect-error test stub
+    globalThis.localStorage = mem;
+    expect(LEFT_W_DEFAULT).toBe(264);
+    expect(readLeftWidth()).toBe(264);
+  });
+
   it('clamps and persists width and open workspaces under weft_next_ keys', () => {
     const mem = new MemoryStorage();
     // @ts-expect-error test stub

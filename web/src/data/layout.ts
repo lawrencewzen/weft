@@ -38,8 +38,10 @@ export function writePref(key: string, value: boolean): void {
 }
 
 export function readLeftWidth(): number {
-  const raw = Number(storage()?.getItem(LS_LEFT_W));
-  return clampNum(Number.isFinite(raw) ? raw : LEFT_W_DEFAULT, LEFT_W_MIN, LEFT_W_MAX);
+  const raw = storage()?.getItem(LS_LEFT_W);
+  if (raw == null || raw === '') return LEFT_W_DEFAULT;
+  const n = Number(raw);
+  return clampNum(Number.isFinite(n) ? n : LEFT_W_DEFAULT, LEFT_W_MIN, LEFT_W_MAX);
 }
 
 export function writeLeftWidth(width: number): void {

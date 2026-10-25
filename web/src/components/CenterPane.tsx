@@ -5,14 +5,17 @@ import { t } from '../i18n';
 import type { components } from '../../../src/v2/contract.gen';
 import { Composer } from './Composer';
 import { StatusBar } from './StatusBar';
+import { SubagentPane } from './SubagentPane';
 import { Thread } from './Thread';
 
 type ConversationView = components['schemas']['ConversationView'];
 
 type Props = {
   cid?: string | null;
+  agentId?: string | null;
   workspaceId?: string | null;
   lang: Lang;
+  demo?: boolean;
   showOpenLeft?: boolean;
   onOpenLeft?: () => void;
 };
@@ -43,8 +46,10 @@ function draftView(workspaceId: string, lang: Lang): ConversationView {
 
 export function CenterPane({
   cid,
+  agentId,
   workspaceId,
   lang,
+  demo = false,
   showOpenLeft = false,
   onOpenLeft,
 }: Props) {
@@ -54,6 +59,19 @@ export function CenterPane({
   const [stickNonce, setStickNonce] = useState(0);
   const bumpStick = useCallback(() => setStickNonce((n) => n + 1), []);
 
+  if (cid && agentId) {
+    return (
+      <SubagentPane
+        cid={cid}
+        agentId={agentId}
+        lang={lang}
+        demo={demo}
+        showOpenLeft={showOpenLeft}
+        onOpenLeft={onOpenLeft}
+      />
+    );
+  }
+
   if (isDraft && workspaceId) {
     const draft = draftView(workspaceId, lang);
     return (
@@ -61,6 +79,7 @@ export function CenterPane({
         <StatusBar
           conversation={draft}
           lang={lang}
+          demo={demo}
           showOpenLeft={showOpenLeft}
           onOpenLeft={onOpenLeft}
         />
@@ -75,6 +94,7 @@ export function CenterPane({
         <Composer
           lang={lang}
           run={DRAFT_RUN}
+          demo={demo}
           onSend={draftActions.send}
           onStop={draftActions.stop}
           onSent={bumpStick}
@@ -141,6 +161,7 @@ export function CenterPane({
       <StatusBar
         conversation={conversation}
         lang={lang}
+        demo={demo}
         hidePending={liveTools}
         showOpenLeft={showOpenLeft}
         onOpenLeft={onOpenLeft}
@@ -152,10 +173,12 @@ export function CenterPane({
         running={conversation.run.status === 'running'}
         actions={actions}
         stickNonce={stickNonce}
+        conversationId={cid}
       />
       <Composer
         lang={lang}
         run={conversation.run}
+        demo={demo}
         onSend={actions.send}
         onStop={actions.stop}
         onSent={bumpStick}

@@ -1,0 +1,43 @@
+import { useCallback, useMemo, useSyncExternalStore } from 'react';
+import { sendSubagentMessage, stopSubagent, toolOutput } from './api';
+import { useSession } from './session';
+import {
+  subagentTopic,
+  type Subagent,
+  type ThreadItem,
+  type ToolCall,
+} from './store';
+import type { ConversationActions } from './useConversation';
+
+export type SubagentState = {
+  subagent: Subagent | undefined;
+  items: ThreadItem[];
+  toolsById: Record<string, ToolCall>;
+  missing: boolean;
+  lastAssistantText: string;
+  actions: ConversationActions;
+};
+
+const noopContinue = () => Promise.resolve({ runId: '' });
+
+export function useSubagent(cid: string, agentId: string): SubagentState {
+  const { store } = useSession();
+  useSyncExternalStore(store.subscribe, store.getVersion);
+  const topic = subagentTopic(cid, agentId);
+  const subagent = store.subagent(cid, agentId);
+  const items = store.topicItems(topic);
+  const toolsById = store.toolsByTopic(topic);
+  const missing = store.isMissing(topic);
+  const lastAssistantText = store.lastAssistantText(topic);
+
+  const send = useCallback((text: string) => sendSubagentMessage(cid, agentId, text), [cid, agentId]);
+  const stop = useCallback(() => stopSubagent(cid, agentId), [cid, agentId]);
+  const loadToolOutput = useCallback((toolId: string) => toolOutput(cid, toolId), [cid]);
+
+  const actions = useMemo<ConversationActions>(
+    () => ({ send, stop, continueRun: noopContinue, loadToolOutput }),
+    [send, stop, loadToolOutput],
+  );
+
+  return { subagent, items, toolsById, missing, lastAssistantText, actions };
+}

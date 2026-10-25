@@ -1,0 +1,226 @@
+import { useEffect, useRef, useState, type MouseEvent } from 'react';
+import type { Lang } from '../data/lang';
+import {
+  isEndedSubagentStatus,
+  isLiveSubagentStatus,
+  subagentActionText,
+  subagentDotKind,
+  subagentTreeTimeText,
+} from '../data/subagentTime';
+import type { Subagent } from '../data/store';
+import { t } from '../i18n';
+
+const CHIP_ICON = (
+  <svg
+    className="subagent-chip-icon"
+    viewBox="0 0 12 12"
+    width="11"
+    height="11"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.25"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
+    <circle cx="3" cy="2.4" r="1.35" />
+    <circle cx="3" cy="9.6" r="1.35" />
+    <circle cx="9" cy="6" r="1.35" />
+    <path d="M3 3.75v4.5M3 6h4.65" />
+  </svg>
+);
+
+export function SubagentChip({
+  convId,
+  live,
+  total,
+  collapsed,
+  lang,
+  onToggle,
+}: {
+  convId: string;
+  live: number;
+  total: number;
+  collapsed: boolean;
+  lang: Lang;
+  onToggle: (convId: string) => void;
+}) {
+  if (total <= 0) return null;
+  const label = live > 0 ? `${live}/${total}` : String(total);
+  return (
+    <button
+      type="button"
+      className={`subagent-chip${live ? ' is-live' : ''}`}
+      data-testid="next-subagent-chip"
+      data-conv-id={convId}
+      aria-expanded={collapsed ? 'false' : 'true'}
+      aria-label={t(lang, collapsed ? 'subagent_tree_expand' : 'subagent_tree_collapse')}
+      onClick={(ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        onToggle(convId);
+      }}
+    >
+      {CHIP_ICON}
+      <span className="subagent-chip-count">{label}</span>
+    </button>
+  );
+}
+
+function useEntered(ids: string[]): Set<string> {
+  const seen = useRef(new Set<string>());
+  const [entered, setEntered] = useState<Set<string>>(() => new Set());
+  useEffect(() => {
+    const newcomers = ids.filter((id) => !seen.current.has(id));
+    for (const id of ids) seen.current.add(id);
+    if (!newcomers.length) return;
+    const timer = window.setTimeout(() => {
+      setEntered((prev) => {
+        const next = new Set(prev);
+        for (const id of newcomers) next.add(id);
+        return next;
+      });
+    }, 50);
+    return () => window.clearTimeout(timer);
+  }, [ids.join('\0')]);
+  return entered;
+}
+
+function useJustEnded(agents: Subagent[]): Set<string> {
+  const prev = useRef(new Map<string, string>());
+  const [ended, setEnded] = useState<Set<string>>(() => new Set());
+  useEffect(() => {
+    const nextEnded = new Set<string>();
+    for (const agent of agents) {
+      const last = prev.current.get(agent.id);
+      if (last && isLiveSubagentStatus(last) && isEndedSubagentStatus(agent.status)) {
+        nextEnded.add(agent.id);
+      }
+      prev.current.set(agent.id, agent.status);
+    }
+    if (!nextEnded.size) return;
+    setEnded((prevSet) => {
+      const merged = new Set(prevSet);
+      for (const id of nextEnded) merged.add(id);
+      return merged;
+    });
+    const timer = window.setTimeout(() => {
+      setEnded((prevSet) => {
+        const next = new Set(prevSet);
+        for (const id of nextEnded) next.delete(id);
+        return next;
+      });
+    }, 1600);
+    return () => window.clearTimeout(timer);
+  }, [agents.map((agent) => `${agent.id}:${agent.status}`).join('|')]);
+  return ended;
+}
+
+export function SubagentTree({
+  convId,
+  agents,
+  collapsed,
+  loading,
+  activeAgentId,
+  lang,
+  now,
+  onOpen,
+  onMenu,
+}: {
+  convId: string;
+  agents: Subagent[];
+  collapsed: boolean;
+  loading?: boolean;
+  activeAgentId: string | null;
+  lang: Lang;
+  now: number;
+  onOpen: (cid: string, agentId: string) => void;
+  onMenu: (ev: MouseEvent, agent: Subagent) => void;
+}) {
+  const ids = agents.map((agent) => agent.id);
+  const entered = useEntered(ids);
+  const justEnded = useJustEnded(agents);
+  if (collapsed && !loading && !agents.length) return null;
+  return (
+    <div
+      className={`subagent-tree-wrap${collapsed ? '' : ' is-open'}`}
+      data-testid="next-subagent-tree"
+      data-conv-id={convId}
+    >
+      <div className="subagent-tree-clip">
+        <div className="subagent-tree">
+          {loading && !agents.length ? (
+            <div className="subagent-tree-loading">{t(lang, 'loading')}</div>
+          ) : agents.map((agent, index) => {
+            const last = index === agents.length - 1;
+            const dot = subagentDotKind(agent.status);
+            const time = subagentTreeTimeText(agent, lang, now);
+            const action = subagentActionText(agent);
+            const entering = !entered.has(agent.id);
+            const ended = justEnded.has(agent.id);
+            const active = activeAgentId === agent.id;
+            const fx = [
+              entering ? 'is-entering' : '',
+              ended ? 'is-just-ended' : '',
+            ].filter(Boolean).join(' ');
+            return (
+              <div key={agent.id} className={`subagent-tree-row-shell${fx ? ` ${fx}` : ''}`}>
+                <div className="subagent-tree-row-shell-inner">
+                  <div
+                    className={[
+                      'subagent-tree-row',
+                      active ? 'is-active' : '',
+                      agent.status === 'stuck' ? 'is-stuck' : '',
+                      last ? 'is-last' : '',
+                      ended ? 'is-just-ended' : '',
+                    ].filter(Boolean).join(' ')}
+                    data-testid="next-subagent-row"
+                    data-agent-id={agent.id}
+                    data-conv-id={convId}
+                    data-status={agent.status}
+                    title={agent.title || agent.name}
+                    onClick={() => onOpen(convId, agent.id)}
+                    onContextMenu={(ev) => {
+                      ev.preventDefault();
+                      ev.stopPropagation();
+                      onMenu(ev, agent);
+                    }}
+                  >
+                    <span className="conv-status-slot">
+                      {dot ? (
+                        <span
+                          className={`conv-status-dot is-${dot}`}
+                          data-kind={dot}
+                        />
+                      ) : null}
+                    </span>
+                    <div className="subagent-tree-main">
+                      <div className="subagent-tree-line">
+                        <span className="subagent-tree-summary">{agent.title || agent.name}</span>
+                        <span
+                          className={`subagent-tree-time${agent.status === 'stuck' ? ' is-idle' : ''}`}
+                          data-testid="next-subagent-time"
+                        >
+                          {time}
+                        </span>
+                      </div>
+                      <div className={`subagent-tree-action-slot${action ? ' is-open' : ''}`}>
+                        <div className="subagent-tree-action-clip">
+                          {action ? (
+                            <div className="subagent-tree-action" data-testid="next-subagent-action">
+                              {action}
+                            </div>
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}

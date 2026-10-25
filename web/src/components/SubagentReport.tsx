@@ -1,12 +1,21 @@
 import { useState } from 'react';
 import type { Lang } from '../data/lang';
 import type { components } from '../../../src/v2/contract.gen';
+import { subagentPath, navigate } from '../data/nav';
 import { t } from '../i18n';
 import { Markdown } from './Markdown';
 
 type Item = components['schemas']['ThreadItemSubagentReport'];
 
-export function SubagentReport({ item, lang }: { item: Item; lang: Lang }) {
+export function SubagentReport({
+  item,
+  lang,
+  conversationId,
+}: {
+  item: Item;
+  lang: Lang;
+  conversationId?: string | null;
+}) {
   const [open, setOpen] = useState(false);
   const failed = item.reportKind === 'failed';
   const title = failed
@@ -41,6 +50,21 @@ export function SubagentReport({ item, lang }: { item: Item; lang: Lang }) {
             <polyline points="9 6 15 12 9 18" />
           </svg>
         </button>
+        {item.subagentId && conversationId ? (
+          <button
+            type="button"
+            className="subagent-report-open"
+            data-testid="next-report-open"
+            title={t(lang, 'subagent_open_title')}
+            onClick={(ev) => {
+              ev.preventDefault();
+              ev.stopPropagation();
+              navigate(subagentPath(conversationId, item.subagentId as string));
+            }}
+          >
+            {t(lang, 'subagent_open')}
+          </button>
+        ) : null}
       </div>
       <div className="subagent-report-body msg-body" data-testid="next-subagent-report-body">
         <Markdown

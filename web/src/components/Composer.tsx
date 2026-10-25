@@ -2,6 +2,7 @@ import { useRef, useState, type KeyboardEvent } from 'react';
 import type { Lang } from '../data/lang';
 import type { components } from '../../../src/v2/contract.gen';
 import { t } from '../i18n';
+import { DemoModelBadge } from './DemoModelBadge';
 import { createSendRequest, errorMessage } from './sendRequest';
 
 type RunState = components['schemas']['RunState'];
@@ -9,6 +10,7 @@ type RunState = components['schemas']['RunState'];
 type Props = {
   lang: Lang;
   run: RunState;
+  demo?: boolean;
   onSend: (text: string, requestId: string) => Promise<unknown>;
   onStop: () => Promise<unknown>;
   onSent?: () => void;
@@ -25,7 +27,7 @@ const STOP_ICON = (
   </svg>
 );
 
-export function Composer({ lang, run, onSend, onStop, onSent }: Props) {
+export function Composer({ lang, run, demo = false, onSend, onStop, onSent }: Props) {
   const [draft, setDraft] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -95,6 +97,9 @@ export function Composer({ lang, run, onSend, onStop, onSent }: Props) {
             onKeyDown={onKeyDown}
           />
           <div className="composer-bar">
+            <div className="composer-chips">
+              {demo ? <DemoModelBadge lang={lang} testId="next-demo-model-chip" /> : null}
+            </div>
             {locked && run.lockedReason === 'no_workspace' ? (
               <span className="composer-lock">{t(lang, 'locked_no_workspace')}</span>
             ) : null}

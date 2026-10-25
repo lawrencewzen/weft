@@ -18,9 +18,10 @@ type Props = {
   running: boolean;
   actions: ConversationActions;
   stickNonce: number;
+  conversationId?: string | null;
 };
 
-export function Thread({ items, toolsById, lang, running, actions, stickNonce }: Props) {
+export function Thread({ items, toolsById, lang, running, actions, stickNonce, conversationId }: Props) {
   const scroller = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
 
@@ -70,7 +71,14 @@ export function Thread({ items, toolsById, lang, running, actions, stickNonce }:
               );
             }
             if (item.kind === 'subagent_report') {
-              return <SubagentReport key={item.id} item={item} lang={lang} />;
+              return (
+                <SubagentReport
+                  key={item.id}
+                  item={item}
+                  lang={lang}
+                  conversationId={conversationId}
+                />
+              );
             }
             if (item.kind === 'system_note') {
               return <SystemNote key={item.id} item={item} />;

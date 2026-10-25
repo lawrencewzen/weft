@@ -5,6 +5,7 @@ export type ConversationSummary = components['schemas']['ConversationSummary'];
 export type Workspace = components['schemas']['Workspace'];
 export type ThreadItem = components['schemas']['ThreadItem'];
 export type ToolCall = components['schemas']['ToolCall'];
+export type Subagent = components['schemas']['Subagent'];
 export type SnapshotEvent = components['schemas']['SnapshotEvent'];
 export type UpsertEvent = components['schemas']['UpsertEvent'];
 export type RemoveEvent = components['schemas']['RemoveEvent'];
@@ -42,10 +43,35 @@ export function conversationTopic(cid: string): string {
   return `conversation:${cid}`;
 }
 
+export function subagentTopic(cid: string, agentId: string): string {
+  return `subagent:${cid}:${agentId}`;
+}
+
 export const WORKSPACES_TOPIC = 'workspaces';
 
-export function sessionTopics(cid?: string | null): string[] {
-  return cid ? [WORKSPACES_TOPIC, conversationTopic(cid)] : [WORKSPACES_TOPIC];
+export type SessionTopicOpts = {
+  conversationId?: string | null;
+  extraConversationIds?: readonly string[];
+  subagent?: { conversationId: string; agentId: string } | null;
+};
+
+export function sessionTopics(
+  cidOrOpts?: string | null | SessionTopicOpts,
+  extra?: Omit<SessionTopicOpts, 'conversationId'>,
+): string[] {
+  const opts: SessionTopicOpts = cidOrOpts != null && typeof cidOrOpts === 'object'
+    ? cidOrOpts
+    : { conversationId: cidOrOpts, ...extra };
+  const topics = [WORKSPACES_TOPIC];
+  const current = opts.conversationId || '';
+  const extraIds = [...new Set((opts.extraConversationIds || []).filter((id) => id && id !== current))]
+    .sort((a, b) => a.localeCompare(b));
+  if (current) topics.push(conversationTopic(current));
+  for (const id of extraIds) topics.push(conversationTopic(id));
+  if (opts.subagent?.conversationId && opts.subagent.agentId) {
+    topics.push(subagentTopic(opts.subagent.conversationId, opts.subagent.agentId));
+  }
+  return topics;
 }
 
 export type EntityStore = {
@@ -60,6 +86,12 @@ export type EntityStore = {
   workspaces(): Workspace[];
   conversationSummaries(): ConversationSummary[];
   conversationsFor(workspaceId: string): ConversationSummary[];
+  subagents(cid: string): Subagent[];
+  subagent(cid: string, agentId: string): Subagent | undefined;
+  topicItems(topic: string): ThreadItem[];
+  toolsByTopic(topic: string): Record<string, ToolCall>;
+  lastAssistantText(topic: string): string;
+  retainTopics(keep: readonly string[]): void;
   hasTopic(topic: string): boolean;
   isMissing(topic: string): boolean;
   needsFullValue(itemId: string): boolean;
@@ -240,6 +272,75 @@ export function createEntityStore(): EntityStore {
       return listSummaries()
         .filter((conv) => conv.workspaceId === workspaceId)
         .sort((a, b) => (Number(b.updatedAt) || 0) - (Number(a.updatedAt) || 0) || a.id.localeCompare(b.id));
+    },
+
+    subagents(cid) {
+      const topic = conversationTopic(cid);
+      const out: Subagent[] = [];
+      for (const rec of entities.values()) {
+        if (rec.topic === topic && rec.entity === 'subagent') {
+          out.push(rec.value as unknown as Subagent);
+        }
+      }
+      return out;
+    },
+
+    subagent(cid, agentId) {
+      const dedicated = get(subagentTopic(cid, agentId), 'subagent', agentId);
+      if (dedicated) return dedicated.value as unknown as Subagent;
+      const fromConv = get(conversationTopic(cid), 'subagent', agentId);
+      if (fromConv) return fromConv.value as unknown as Subagent;
+      return byEntityId.get(entityIdKey('subagent', agentId))?.value as unknown as Subagent | undefined;
+    },
+
+    topicItems(topic) {
+      const out: ThreadItem[] = [];
+      for (const rec of entities.values()) {
+        if (rec.topic === topic && rec.entity === 'item') {
+          out.push(rec.value as unknown as ThreadItem);
+        }
+      }
+      return out;
+    },
+
+    toolsByTopic(topic) {
+      const out: Record<string, ToolCall> = {};
+      for (const rec of entities.values()) {
+        if (rec.topic === topic && rec.entity === 'tool') {
+          out[rec.id] = rec.value as unknown as ToolCall;
+        }
+      }
+      return out;
+    },
+
+    lastAssistantText(topic) {
+      const items = [] as ThreadItem[];
+      for (const rec of entities.values()) {
+        if (rec.topic === topic && rec.entity === 'item') {
+          items.push(rec.value as unknown as ThreadItem);
+        }
+      }
+      for (let i = items.length - 1; i >= 0; i -= 1) {
+        const item = items[i];
+        if (item && item.kind === 'assistant') {
+          const text = typeof item.text === 'string' ? item.text.trim() : '';
+          if (text) return item.text;
+        }
+      }
+      return '';
+    },
+
+    retainTopics(keep) {
+      const keepSet = new Set(keep);
+      let dropped = false;
+      for (const topic of [...seenTopics]) {
+        if (keepSet.has(topic)) continue;
+        dropTopic(topic);
+        seenTopics.delete(topic);
+        missing.delete(topic);
+        dropped = true;
+      }
+      if (dropped) notify();
     },
 
     hasTopic(topic) {
