@@ -1,0 +1,95 @@
+import { useEffect, useState } from 'react';
+import type { Lang } from '../data/lang';
+import type { components } from '../../../src/v2/contract.gen';
+import { formatElapsed, formatTokenCount, t } from '../i18n';
+
+type ConversationView = components['schemas']['ConversationView'];
+
+type Props = {
+  conversation: ConversationView;
+  lang: Lang;
+};
+
+export function StatusBar({ conversation, lang }: Props) {
+  const run = conversation.run;
+  const running = run.status === 'running';
+  const failed = run.status === 'failed';
+  const [seenAt, setSeenAt] = useState<number | null>(null);
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (running) setSeenAt((prev) => prev ?? Date.now());
+    else setSeenAt(null);
+  }, [running, conversation.id]);
+
+  useEffect(() => {
+    if (!running) return;
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [running]);
+
+  const origin = run.startedAt ?? seenAt;
+  const elapsed = running && origin != null ? formatElapsed(now - origin) : null;
+  const ctx = conversation.context;
+  const remain = Math.max(0, 100 - ctx.percent);
+  const circumference = 2 * Math.PI * 5;
+  const levelClass = ctx.level === 'full' ? 'is-full' : ctx.level === 'warn' ? 'is-warn' : '';
+
+  return (
+    <header className="next-status" data-testid="next-status">
+      <div className="next-status-inner">
+        <div className="pending-line">
+          {running ? <span className="run-spin" aria-hidden="true"><span /></span> : null}
+          <span className="top-title">{conversation.title}</span>
+          {running && run.pendingText ? (
+            <span className="pending-status" data-testid="next-pending">{run.pendingText}</span>
+          ) : null}
+          {elapsed ? (
+            <span className="pending-elapsed" data-testid="next-elapsed">{elapsed}</span>
+          ) : null}
+        </div>
+        <div
+          className={`chip-context ${levelClass}`.trim()}
+          data-testid="next-context"
+          data-level={ctx.level}
+          title={t(lang, 'ctx_title', {
+            used: formatTokenCount(ctx.used),
+            window: formatTokenCount(ctx.window),
+            usedPct: ctx.percent,
+            leftPct: remain,
+          })}
+        >
+          <span className="chip-context-display">
+            <svg className="ctx-ring" viewBox="0 0 14 14" width="14" height="14" aria-hidden="true">
+              <circle className="ctx-ring-track" cx="7" cy="7" r="5" fill="none" strokeWidth="2" />
+              <circle
+                className="ctx-ring-fill"
+                cx="7"
+                cy="7"
+                r="5"
+                fill="none"
+                strokeWidth="2"
+                strokeDasharray={`${(ctx.percent / 100) * circumference} ${circumference}`}
+              />
+            </svg>
+            <span>
+              {t(lang, 'ctx_used_short', { used: ctx.percent })}
+              {' · '}
+              {t(lang, 'ctx_left_short', { left: remain })}
+              {' · '}
+              {formatTokenCount(ctx.window)}
+            </span>
+          </span>
+        </div>
+      </div>
+      {failed && run.error?.message ? (
+        <div className="next-status-inner">
+          <div className="llm-error" data-testid="next-run-error" role="alert">
+            {run.error.code ? <div className="llm-error-code">{run.error.code}</div> : null}
+            <div>{run.error.message}</div>
+          </div>
+        </div>
+      ) : null}
+    </header>
+  );
+}

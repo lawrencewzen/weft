@@ -81,11 +81,11 @@ function conversationPath(cid: string, suffix = ''): string {
   return `/api/v2/conversations/${encodeURIComponent(cid)}${suffix}`;
 }
 
-export function sendMessage(cid: string, text: string): Promise<RunAccepted> {
-  const requestId = crypto.randomUUID();
+export function sendMessage(cid: string, text: string, requestId?: string): Promise<RunAccepted> {
+  const id = requestId ?? crypto.randomUUID();
   return requestJson<RunAccepted>(conversationPath(cid, '/messages'), {
     method: 'POST',
-    body: JSON.stringify({ text, requestId }),
+    body: JSON.stringify({ text, requestId: id }),
   });
 }
 
@@ -96,11 +96,11 @@ export function stop(cid: string): Promise<StopAccepted> {
   });
 }
 
-export function continueRun(cid: string): Promise<RunAccepted> {
-  const requestId = crypto.randomUUID();
+export function continueRun(cid: string, requestId?: string): Promise<RunAccepted> {
+  const id = requestId ?? crypto.randomUUID();
   return requestJson<RunAccepted>(conversationPath(cid, '/continue'), {
     method: 'POST',
-    body: JSON.stringify({ requestId }),
+    body: JSON.stringify({ requestId: id }),
   });
 }
 

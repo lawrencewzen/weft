@@ -1,23 +1,15 @@
 import { useEffect, useState } from 'react';
 import type { components } from '../../src/v2/contract.gen';
+import { CenterPane } from './components/CenterPane';
+import { getPreferredLang } from './data/lang';
+import { t } from './i18n';
+import { parseRoute } from './route';
 
 type ServiceInfo = components['schemas']['ServiceInfo'];
 type SnapshotEvent = components['schemas']['SnapshotEvent'];
-type UpsertEvent = components['schemas']['UpsertEvent'];
-type RemoveEvent = components['schemas']['RemoveEvent'];
-type TextDeltaEvent = components['schemas']['TextDeltaEvent'];
 type HeartbeatEvent = components['schemas']['HeartbeatEvent'];
 type EntityRef = components['schemas']['EntityRef'];
-
 type StreamStatus = 'connecting' | 'connected' | 'reconnecting';
-
-type StreamEventMap = {
-  snapshot: SnapshotEvent;
-  upsert: UpsertEvent;
-  remove: RemoveEvent;
-  'text.delta': TextDeltaEvent;
-  heartbeat: HeartbeatEvent;
-};
 
 function asText(value: unknown): string {
   if (typeof value === 'string') return value;
@@ -27,7 +19,7 @@ function asText(value: unknown): string {
 
 function protocolFrom(data: unknown): string {
   if (!data || typeof data !== 'object') return '';
-  const rec = data as ServiceInfo & { protocol?: unknown; version?: unknown; error?: unknown };
+  const rec = data as ServiceInfo & { protocol?: unknown; version?: unknown };
   return asText(rec.protocol) || asText(rec.protocolVersion) || asText(rec.version);
 }
 
@@ -46,9 +38,9 @@ function errorFromBody(status: number, statusText: string, text: string): string
   return `${status} ${statusText}`.trim() || 'request failed';
 }
 
-function parseEvent<K extends keyof StreamEventMap>(raw: string): StreamEventMap[K] | null {
+function parseEvent<T>(raw: string): T | null {
   try {
-    return JSON.parse(raw) as StreamEventMap[K];
+    return JSON.parse(raw) as T;
   } catch {
     return null;
   }
@@ -62,9 +54,25 @@ function isObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
+const UNAUTH = '请用 weft open 打开新版网页端';
+
+function usePathname(): string {
+  const [path, setPath] = useState(() => window.location.pathname);
+  useEffect(() => {
+    const onPop = () => setPath(window.location.pathname);
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
+  return path;
+}
+
 export function App() {
+  const pathname = usePathname();
+  const route = parseRoute(pathname);
+  const lang = getPreferredLang();
   const [protocol, setProtocol] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [unauth, setUnauth] = useState(false);
   const [stream, setStream] = useState<StreamStatus | null>(null);
   const [heartbeat, setHeartbeat] = useState<string | null>(null);
 
@@ -72,11 +80,12 @@ export function App() {
     const ac = new AbortController();
     (async () => {
       try {
-        const res = await fetch('/api/v2/service', { signal: ac.signal });
+        const res = await fetch('/api/v2/service', { signal: ac.signal, credentials: 'same-origin' });
         const text = await res.text();
         if (!res.ok) {
           if (res.status === 401) {
-            setError('请用 weft open 打开新版网页端');
+            setUnauth(true);
+            setError(UNAUTH);
             return;
           }
           setError(errorFromBody(res.status, res.statusText, text));
@@ -99,7 +108,7 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    if (protocol == null) return;
+    if (protocol == null || route.name !== 'home') return;
     setStream('connecting');
     const es = new EventSource('/api/v2/events?topics=service&lang=zh');
     es.onopen = () => setStream('connected');
@@ -107,7 +116,7 @@ export function App() {
       if (es.readyState !== EventSource.CLOSED) setStream('reconnecting');
     };
     es.addEventListener('snapshot', (ev: MessageEvent<string>) => {
-      const data = parseEvent<'snapshot'>(ev.data);
+      const data = parseEvent<SnapshotEvent>(ev.data);
       if (!data || !Array.isArray(data.entities)) return;
       const entity = serviceFromSnapshot(data);
       if (!entity || !isObject(entity.value)) return;
@@ -115,19 +124,37 @@ export function App() {
       if (next) setProtocol(next);
     });
     es.addEventListener('heartbeat', (ev: MessageEvent<string>) => {
-      parseEvent<'heartbeat'>(ev.data);
+      parseEvent<HeartbeatEvent>(ev.data);
       setHeartbeat(new Date().toLocaleString());
     });
     return () => es.close();
-  }, [protocol == null]);
+  }, [protocol == null, route.name]);
+
+  if (unauth) {
+    return (
+      <div data-testid="next-app">
+        <div className="next-home">
+          <h1>{t(lang, 'home_title')}</h1>
+          <p className="next-error" data-testid="next-error">{error || UNAUTH}</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (route.name === 'conversation' && protocol != null) {
+    return <CenterPane cid={route.id} lang={lang} />;
+  }
 
   return (
     <div data-testid="next-app">
-      <h1>Weft（新版，开发中）</h1>
-      {protocol != null ? <p data-testid="next-protocol">{protocol}</p> : null}
-      {stream != null ? <p data-testid="next-stream">{stream}</p> : null}
-      {heartbeat != null ? <p data-testid="next-heartbeat">{heartbeat}</p> : null}
-      {error != null ? <p data-testid="next-error">{error}</p> : null}
+      <div className="next-home">
+        <h1>{t(lang, 'home_title')}</h1>
+        {protocol != null ? <p data-testid="next-protocol">{protocol}</p> : null}
+        {stream != null ? <p data-testid="next-stream">{stream}</p> : null}
+        {heartbeat != null ? <p data-testid="next-heartbeat">{heartbeat}</p> : null}
+        {protocol != null ? <p data-testid="next-home-hint">{t(lang, 'home_hint')}</p> : null}
+        {error != null ? <p className="next-error" data-testid="next-error">{error}</p> : null}
+      </div>
     </div>
   );
 }
