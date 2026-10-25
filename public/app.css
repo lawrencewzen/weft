@@ -241,6 +241,7 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.6; backgroun
 .subagent-tree-wrap.is-open { grid-template-rows: 1fr; }
 .subagent-tree-clip { overflow: hidden; min-height: 0; min-width: 0; }
 .subagent-tree { position: relative; display: flex; flex-direction: column; gap: 0; min-width: 0; overflow: hidden; padding-left: 16px; }
+.subagent-tree-loading { padding: 4px 8px 4px 12px; font-size: 12px; line-height: 1.4; color: var(--faint); }
 .subagent-tree-row-shell { display: grid; grid-template-rows: 1fr; min-width: 0; }
 .subagent-tree-row-shell.is-entering { animation: subagent-row-open .6s ease; }
 .subagent-tree-row-shell-inner { overflow: hidden; min-height: 0; min-width: 0; }
