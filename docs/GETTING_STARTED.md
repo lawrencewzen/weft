@@ -31,6 +31,25 @@ LLM_API=faux npm run dev
 
 **注意：** `faux` 会执行固定工具调用脚本，不能作为真实研究、联网抓取或微信模型能力的验收。
 
+## 新版网页端（开发中）
+
+新前端挂在 `/next`。浏览器读不到数据目录里的发现文件，所以用命令行找到（或拉起）本机服务，换一次性登录码，再打开浏览器：
+
+```bash
+npm run build:web
+npm run weft -- open
+```
+
+其他命令：
+
+```bash
+npm run weft -- status          # 在跑则打印端口、pid、协议版本、服务版本、启动时间
+npm run weft -- stop            # 空闲时退出服务；有任务在跑则拒绝
+npm run weft -- open --print    # 只把登录地址打印到 stdout，不打开浏览器
+```
+
+数据目录默认与服务端相同：环境变量 `WEFT_DATA_DIR`，未设时是仓库下的 `data`。也可以加 `--data-dir <路径>`。
+
 ## B. 接入真实模型（可选）
 
 ```bash
