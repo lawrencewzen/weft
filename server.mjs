@@ -68,7 +68,7 @@ import { resolveAllowedWorkspacePath, defaultWorkspaceRoot, listBrowsableDirs } 
 import { acquireDataDirLock } from './src/core/lock.mjs';
 import { presentConversationContext } from './src/core/usage.mjs';
 import { openConversationKernel } from './src/kernel/conversations.mjs';
-import { createV2Handler } from './src/v2/index.ts';
+import { createV2Runtime } from './src/v2/index.ts';
 import fs from 'node:fs/promises';
 
 // 内置 fetch 默认不读 HTTP(S)_PROXY；配置了代理时让模型请求也走它（遵守 NO_PROXY）
@@ -84,16 +84,18 @@ const PUBLIC_NEXT = path.join(ROOT, 'public-next');
 const NEXT_NOT_BUILT = '新网页端还没构建，请运行 npm run build:web';
 const PORT = process.env.PORT !== undefined && process.env.PORT !== '' ? Number(process.env.PORT) : 3000;
 const pkg = JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
-const handleV2 = createV2Handler({
-  serviceVersion: String(pkg.version || '0.0.0'),
-  startedAt: Date.now(),
-});
+const startedAt = Date.now();
 const DATA_DIR = process.env.WEFT_DATA_DIR || path.join(ROOT, 'data');
 const SKILL_DIRS = [path.join(ROOT, 'skills'), path.join(DATA_DIR, 'skills')];
 const PLUGIN_DIRS = [path.join(ROOT, 'plugins'), path.join(DATA_DIR, 'plugins')];
 const USER_SKILLS = path.join(DATA_DIR, 'skills');
 const USER_PLUGINS = path.join(DATA_DIR, 'plugins');
 await fs.mkdir(DATA_DIR, { recursive: true });
+const v2 = createV2Runtime({
+  serviceVersion: String(pkg.version || '0.0.0'),
+  startedAt,
+  dataDir: DATA_DIR,
+});
 
 let dataLock;
 try {
@@ -368,7 +370,12 @@ async function reloadKernelPlugins() {
   }
 }
 
+let shuttingDown = false;
 function shutdown() {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  try { v2.removeDiscoveryFile(); } catch { /* ignore */ }
+  try { v2.dispose(); } catch { /* ignore */ }
   try { store.close(); } catch { /* ignore */ }
   try { dataLock?.release?.(); } catch { /* ignore */ }
   dataLock = null;
@@ -378,9 +385,20 @@ function shutdown() {
   }
   kernelApi.close().finally(() => process.exit(0));
 }
-process.on('exit', () => { try { dataLock?.release?.(); } catch { /* ignore */ } });
+process.on('exit', () => {
+  try { v2.removeDiscoveryFile(); } catch { /* ignore */ }
+  try { dataLock?.release?.(); } catch { /* ignore */ }
+});
 for (const sig of ['SIGINT', 'SIGTERM']) {
   process.on(sig, shutdown);
+}
+// Tests spawn with a pipe on stdin (Windows cannot deliver SIGTERM). Closing
+// that pipe is the portable graceful-exit path; interactive TTY is unchanged.
+if (String(process.env.WEFT_STDIN_EXIT || '').trim() === '1') {
+  process.stdin.on('end', shutdown);
+  process.stdin.on('error', () => {});
+  process.stdin.resume();
+  if (process.stdin.readableEnded) shutdown();
 }
 
 const grokAuth = createGrokAuth();
@@ -474,6 +492,7 @@ const server = createServer(async (req, res) => {
 
     if (url.pathname.startsWith('/api/')) {
       const p = url.pathname.replace(/\/$/, '') || '/';
+      if (await v2.handleApi(req, res, url)) return;
       if (AUTH_ENABLED && !requestAuthorized(req, AUTH_TOKEN)) {
         if (req.method === 'GET' && isSsePath(p) && consumeSseTicket(url.searchParams.get('ticket'))) {
           /* ticket consumed */
@@ -482,11 +501,11 @@ const server = createServer(async (req, res) => {
           return;
         }
       }
-      if (await handleV2(req, res, url)) return;
       await routeApi(req, res, url);
       return;
     }
     if (req.method === 'GET' || req.method === 'HEAD') {
+      if (v2.handleLogin(req, res, url)) return;
       if (serveNext(req, res, url)) return;
       serveStatic(req, res, url);
       return;
@@ -1421,6 +1440,12 @@ async function routeApi(req, res, url) {
 server.listen(PORT, '127.0.0.1', () => {
   const addr = server.address();
   const port = typeof addr === 'object' && addr ? addr.port : PORT;
+  try {
+    v2.writeDiscoveryFile(port);
+  } catch (err) {
+    console.error(`WEFT_ERROR discovery write failed: ${err instanceof Error ? err.message : err}`);
+    process.exit(1);
+  }
   const hostWarning = unauthenticatedHostsWarning();
   if (hostWarning) console.warn(hostWarning);
   console.log(`WEFT_READY http://127.0.0.1:${port}`);
