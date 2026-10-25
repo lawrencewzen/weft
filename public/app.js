@@ -1468,7 +1468,13 @@ function firstBriefLine(text) {
   return String(line || raw).replace(/\s+/g, ' ').trim();
 }
 
+function subagentTitle(agent) {
+  return String(agent?.title || '').replace(/\s+/g, ' ').trim();
+}
+
 function subagentSummary(agent) {
+  const titled = subagentTitle(agent);
+  if (titled) return titled;
   const fromBrief = firstBriefLine(agent?.brief);
   if (fromBrief) return fromBrief;
   const last = String(agent?.lastText || '').replace(/\s+/g, ' ').trim();
@@ -2474,7 +2480,7 @@ const DELEGATE_TOOLS = new Set(['delegate', 'subagent']);
 function realSubagentRowHtml(agent) {
   const background = isBackgroundSubagent(agent);
   const mode = agent?.mode === 'background' || agent?.mode === 'foreground' ? agent.mode : '';
-  const name = realSubagentName(agent);
+  const name = subagentTitle(agent) || realSubagentName(agent);
   const st = agent.status || 'waiting';
   const progressStr = agentProgressLabel(agent);
   const last = oneLine(agent.lastText || agent.task || '');
@@ -3182,6 +3188,8 @@ function subagentDotClass(visual) {
 }
 
 function subagentPanelSummary(agent) {
+  const titled = subagentTitle(agent);
+  if (titled) return titled;
   const fromBrief = firstBriefLine(agent?.brief);
   if (fromBrief) return fromBrief;
   return realSubagentName(agent) || t('agent_name');

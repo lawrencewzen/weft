@@ -352,10 +352,13 @@ test('child resolved agent is self-contained: empty instructions, parent model a
     assert.equal(parentAgent.tools.some((tool) => tool.name === 'skill'), true);
     const parentDelegate = parentAgent.tools.find((tool) => tool.name === 'delegate');
     const parentSubagent = parentAgent.tools.find((tool) => tool.name === 'subagent');
-    assert.deepEqual(toolPropertyKeys(parentDelegate.parameters), ['task']);
+    assert.deepEqual(toolPropertyKeys(parentDelegate.parameters), ['task', 'title']);
     assert.equal(toolPropertyKeys(parentSubagent.parameters).includes('agent'), false);
     assert.equal(toolPropertyKeys(parentSubagent.parameters).includes('name'), true);
     assert.equal(toolPropertyKeys(parentSubagent.parameters).includes('message'), true);
+    assert.equal(toolPropertyKeys(parentSubagent.parameters).includes('title'), true);
+    assert.equal((parentDelegate.parameters.required || []).includes('title'), false);
+    assert.equal((parentSubagent.parameters.required || []).includes('title'), false);
     assert.equal(parentAgent.sections.some((section) => section.key === 'subagents'), false);
 
     const records = (await readFile(record, 'utf8')).trim().split('\n').map((line) => JSON.parse(line));
@@ -885,6 +888,190 @@ test('background running agents[] uses tool:param currentAction; SSE carries the
     ));
     assert.ok(doneEvent, JSON.stringify(events.filter((ev) => ev.event === 'agent')));
     assert.equal(doneEvent.data.currentAction, undefined);
+  } finally {
+    await stopServer(proc);
+    await rm(dataDir, { recursive: true, force: true });
+  }
+});
+
+test('foreground delegate stores title on the chip and agent event', { timeout: 60000 }, async () => {
+  const dataDir = await mkdtemp(path.join(tmpdir(), 'piw-ksub-title-fg-'));
+  const task = '你在 /Users/demo/app 里检查登录逻辑并回报结果';
+  const title = '检查登录逻辑';
+  const script = await writeScript(dataDir, 'title-fg.json', [
+    { tool: 'delegate', args: { task, title } },
+    { text: 'parent-done' },
+    { when: '你在 /Users/demo/app', text: 'CHILD_TITLE_OK' },
+  ]);
+  let proc = null;
+  try {
+    const srv = await startServer({
+      token: TOKEN,
+      dataDir,
+      env: {
+        WEFT_RETRY_MAX: '2',
+        WEFT_LLM: 'faux',
+        WEFT_FAUX_SCRIPT: script,
+      },
+    });
+    proc = srv.proc;
+    const ws = await request(srv.base, 'POST', '/api/workspaces', { name: 'title-fg' });
+    const conv = await request(srv.base, 'POST', `/api/workspaces/${ws.body.id}/conversations`, { title: 'title-fg' });
+    const pendingEvents = collectSse(srv.base, conv.body.id, {
+      ready: (list) => list.some((ev) => ev.event === 'agent' && ev.data?.title === title && ev.data?.lastText?.includes('CHILD_TITLE_OK')),
+      timeout: 30000,
+    }).catch((err) => {
+      if (err?.name === 'AbortError' || err?.message === 'terminated') return [];
+      throw err;
+    });
+    assert.equal((await request(srv.base, 'POST', `/api/conversations/${conv.body.id}/messages`, { text: 'dispatch titled child' })).status, 202);
+    const done = await waitFor(srv.base, conv.body.id, (body) => (
+      body.status === 'done' && toolTexts(body).some((text) => text.includes('CHILD_TITLE_OK'))
+    ));
+    assert.equal(done.status, 'done', srv.logs());
+    const child = subagentsOf(done).find((agent) => agent.mode === 'foreground');
+    assert.ok(child, JSON.stringify(done.agents));
+    assert.equal(child.title, title);
+    assert.equal(child.name, nameFromTask(task));
+    assert.equal(child.brief, task);
+    const events = await pendingEvents;
+    const agentEvent = events.find((ev) => ev.event === 'agent' && ev.data?.title === title);
+    assert.ok(agentEvent, JSON.stringify(events.filter((ev) => ev.event === 'agent')));
+    assert.equal(agentEvent.data.name, nameFromTask(task));
+  } finally {
+    await stopServer(proc);
+    await rm(dataDir, { recursive: true, force: true });
+  }
+});
+
+test('background spawn stores title on the chip and agent event', { timeout: 60000 }, async () => {
+  const dataDir = await mkdtemp(path.join(tmpdir(), 'piw-ksub-title-bg-'));
+  const message = '你在 /Users/demo/app 里跑登录测试';
+  const title = '跑登录测试';
+  const script = await writeScript(dataDir, 'title-bg.json', [
+    { tool: 'subagent', args: { action: 'spawn', name: 'tester', message, title } },
+    { text: 'spawned' },
+    { when: '你在 /Users/demo/app', text: 'TESTS_OK' },
+  ]);
+  let proc = null;
+  try {
+    const srv = await startServer({
+      token: TOKEN,
+      dataDir,
+      env: {
+        WEFT_RETRY_MAX: '2',
+        WEFT_LLM: 'faux',
+        WEFT_FAUX_SCRIPT: script,
+      },
+    });
+    proc = srv.proc;
+    const ws = await request(srv.base, 'POST', '/api/workspaces', { name: 'title-bg' });
+    const conv = await request(srv.base, 'POST', `/api/workspaces/${ws.body.id}/conversations`, { title: 'title-bg' });
+    const pendingEvents = collectSse(srv.base, conv.body.id, {
+      ready: (list) => list.some((ev) => ev.event === 'agent' && ev.data?.title === title && ev.data?.mode === 'background'),
+      timeout: 30000,
+    });
+    assert.equal((await request(srv.base, 'POST', `/api/conversations/${conv.body.id}/messages`, { text: 'spawn titled worker' })).status, 202);
+    const done = await waitFor(srv.base, conv.body.id, (body) => {
+      const worker = subagentsOf(body).find((agent) => agent.name === 'tester');
+      return worker?.title === title && worker?.lastText?.includes('TESTS_OK');
+    }, 120);
+    const worker = subagentsOf(done).find((agent) => agent.name === 'tester');
+    assert.ok(worker, JSON.stringify(done.agents));
+    assert.equal(worker.title, title);
+    assert.equal(worker.name, 'tester');
+    assert.equal(worker.mode, 'background');
+    assert.equal(worker.brief, message);
+    const events = await pendingEvents;
+    const agentEvent = events.find((ev) => ev.event === 'agent' && ev.data?.title === title);
+    assert.ok(agentEvent, JSON.stringify(events.filter((ev) => ev.event === 'agent')));
+    assert.equal(agentEvent.data.name, 'tester');
+    assert.equal(agentEvent.data.mode, 'background');
+  } finally {
+    await stopServer(proc);
+    await rm(dataDir, { recursive: true, force: true });
+  }
+});
+
+test('omitting title leaves the chip without a title field', { timeout: 60000 }, async () => {
+  const dataDir = await mkdtemp(path.join(tmpdir(), 'piw-ksub-title-omit-'));
+  const task = 'Say UNTITLED_OK';
+  const script = await writeScript(dataDir, 'title-omit.json', [
+    { tool: 'delegate', args: { task } },
+    { text: 'parent-done' },
+    { when: 'Say UNTITLED_OK', text: 'UNTITLED_OK' },
+  ]);
+  let proc = null;
+  try {
+    const srv = await startServer({
+      token: TOKEN,
+      dataDir,
+      env: {
+        WEFT_RETRY_MAX: '2',
+        WEFT_LLM: 'faux',
+        WEFT_FAUX_SCRIPT: script,
+      },
+    });
+    proc = srv.proc;
+    const ws = await request(srv.base, 'POST', '/api/workspaces', { name: 'title-omit' });
+    const conv = await request(srv.base, 'POST', `/api/workspaces/${ws.body.id}/conversations`, { title: 'title-omit' });
+    assert.equal((await request(srv.base, 'POST', `/api/conversations/${conv.body.id}/messages`, { text: 'dispatch untitled' })).status, 202);
+    const done = await waitFor(srv.base, conv.body.id, (body) => (
+      body.status === 'done' && toolTexts(body).some((text) => text.includes('UNTITLED_OK'))
+    ));
+    assert.equal(done.status, 'done', srv.logs());
+    const child = subagentsOf(done).find((agent) => agent.mode === 'foreground');
+    assert.ok(child, JSON.stringify(done.agents));
+    assert.equal(Object.hasOwn(child, 'title'), false);
+    assert.equal(child.name, nameFromTask(task));
+    assert.equal(child.brief, task);
+  } finally {
+    await stopServer(proc);
+    await rm(dataDir, { recursive: true, force: true });
+  }
+});
+
+test('title survives a process restart', { timeout: 90000 }, async () => {
+  const dataDir = await mkdtemp(path.join(tmpdir(), 'piw-ksub-title-restart-'));
+  const message = '你在 /Users/demo/app 里审查权限';
+  const title = '审查权限边界';
+  const script = await writeScript(dataDir, 'title-restart.json', [
+    { tool: 'subagent', args: { action: 'spawn', name: 'auditor', message, title } },
+    { text: 'parent-idle' },
+    { when: '你在 /Users/demo/app', text: 'AUDIT_OK' },
+  ]);
+  const env = {
+    WEFT_RETRY_MAX: '2',
+    WEFT_LLM: 'faux',
+    WEFT_FAUX_SCRIPT: script,
+  };
+  let proc = null;
+  try {
+    const first = await startServer({ token: TOKEN, env, dataDir });
+    proc = first.proc;
+    const ws = await request(first.base, 'POST', '/api/workspaces', { name: 'title-restart' });
+    const conv = await request(first.base, 'POST', `/api/workspaces/${ws.body.id}/conversations`, { title: 'title-restart' });
+    assert.equal((await request(first.base, 'POST', `/api/conversations/${conv.body.id}/messages`, { text: 'spawn auditor' })).status, 202);
+    const idle = await waitFor(first.base, conv.body.id, (body) => {
+      const worker = subagentsOf(body).find((agent) => agent.name === 'auditor');
+      return body.status === 'done' && assistantTexts(body).includes('parent-idle') && worker?.title === title;
+    }, 120);
+    assert.equal(idle.status, 'done', first.logs());
+    assert.equal(subagentsOf(idle).find((agent) => agent.name === 'auditor')?.title, title);
+    const death = await killed(proc);
+    proc = null;
+    assert.ok(death.signal === 'SIGKILL' || death.code !== 0 || process.platform === 'win32');
+    const second = await startServer({ token: TOKEN, env, dataDir });
+    proc = second.proc;
+    const after = await waitFor(second.base, conv.body.id, (body) => {
+      const worker = subagentsOf(body).find((agent) => agent.name === 'auditor');
+      return worker?.title === title;
+    }, 80);
+    const worker = subagentsOf(after).find((agent) => agent.name === 'auditor');
+    assert.ok(worker, JSON.stringify(after?.agents));
+    assert.equal(worker.title, title);
+    assert.equal(worker.name, 'auditor');
+    assert.equal(worker.mode, 'background');
   } finally {
     await stopServer(proc);
     await rm(dataDir, { recursive: true, force: true });

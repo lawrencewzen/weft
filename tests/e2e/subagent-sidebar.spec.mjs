@@ -42,7 +42,8 @@ const RICH_AGENTS = [
     id: TESTER,
     name: '测试',
     status: 'running',
-    brief: '写登录测试\n不要跑支付',
+    title: '写登录单测',
+    brief: '你在 /Users/demo/app 里写登录测试\n不要跑支付',
     startedAt: FROZEN_NOW - 5_000,
     lastActivityAt: FROZEN_NOW - 2_000,
     currentAction: '正在读 auth.test.js',
@@ -372,8 +373,9 @@ test('brief, elapsed mm:ss, idle, and currentAction', async ({ page }) => {
     const coderRow = rowOf(page, CODER);
     const auditorRow = rowOf(page, AUDITOR);
 
-    await expect(testerRow.getByTestId('subagent-tree-summary')).toHaveText('写登录测试');
-    await expect(testerRow).toHaveAttribute('title', '写登录测试');
+    await expect(testerRow.getByTestId('subagent-tree-summary')).toHaveText('写登录单测');
+    await expect(testerRow).toHaveAttribute('title', '写登录单测');
+    await expect(testerRow.getByTestId('subagent-tree-summary')).not.toContainText('/Users/');
     await expect(testerRow.getByTestId('subagent-tree-time')).toHaveText('00:05');
     await expect(testerRow.getByTestId('subagent-tree-action')).toHaveText('正在读 auth.test.js');
     await expect(testerRow).toHaveAttribute('data-visual', 'running');

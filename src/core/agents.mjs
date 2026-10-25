@@ -75,6 +75,7 @@ export function agentEventData(agent, status = agent?.status) {
     lastText: agent.lastText || '',
   };
   copyOptional(data, agent, 'brief');
+  copyOptional(data, agent, 'title');
   copyTimestamp(data, agent, 'startedAt');
   copyTimestamp(data, agent, 'lastActivityAt');
   if (TERMINAL_STATUSES.has(resolved)) copyTimestamp(data, agent, 'endedAt');

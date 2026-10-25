@@ -196,19 +196,20 @@ JSON：`{"turns":[ {"text":"..."} | {"text":"...","stopReason":"length"} | {"too
 
 主 Agent 始终可以派子 Agent。未知对话的 `GET /api/conversations/:cid/agents/:aid/messages` 是 `404 {error:'conversation not found'}`。
 
-主 Agent 多三个工具：`skill`（按需加载技能正文，参数 `{name}`）、`delegate`（前台，参数只有 `{task}`）和 `subagent`（后台，`action` 为 `spawn` / `send` / `wait` / `stop` / `list`；spawn 参数 `{name, message}`）。写法照 Pi Durable README「Abort and Subagents」与示例 22（前台）/ 23（后台）：前台子对话由工具任务拥有，重启时 `scanConversations({ ownerTaskId })` 复用，`requestId` 为 `subagent:<taskId>`；后台子对话由 background 锚点任务拥有，答案由 reporter 以 follow-up 送回主对话。没有自写花名册、并发上限或暂停同步。两个派活工具的 `description` 都说明子 Agent 看不到本对话和主 Agent 的提示词，需要的内容全部写进 `task` / `message`。子 Agent 是自包含派活：`instructions` 为空字符串，不带角色文字、不带 Skills 清单，工具是主 Agent 的工作区工具和插件工具（没有 `delegate` / `subagent` / `skill`），模型与 `cwd` 沿用父对话。不能再派子 Agent。前台 `name` 取 `task` 第一行（压成一行，最多 30 字）；后台用 spawn 的 `name`。单独中止一个前台子对话时，调用方收到 `[subagent <name> was stopped by the user]`（不是错误），本轮继续；中止主 Agent 仍会停掉这一轮。
+主 Agent 多三个工具：`skill`（按需加载技能正文，参数 `{name}`）、`delegate`（前台，参数 `{task, title?}`）和 `subagent`（后台，`action` 为 `spawn` / `send` / `wait` / `stop` / `list`；spawn 参数 `{name, message, title?}`）。`title` 是可选的一句不超过 20 个字的摘要，用用户的语言说明这个子 Agent 要做什么，作为标题显示给用户，不要写路径；不传也能正常工作。写法照 Pi Durable README「Abort and Subagents」与示例 22（前台）/ 23（后台）：前台子对话由工具任务拥有，重启时 `scanConversations({ ownerTaskId })` 复用，`requestId` 为 `subagent:<taskId>`；后台子对话由 background 锚点任务拥有，答案由 reporter 以 follow-up 送回主对话。没有自写花名册、并发上限或暂停同步。两个派活工具的 `description` 都说明子 Agent 看不到本对话和主 Agent 的提示词，需要的内容全部写进 `task` / `message`。子 Agent 是自包含派活：`instructions` 为空字符串，不带角色文字、不带 Skills 清单，工具是主 Agent 的工作区工具和插件工具（没有 `delegate` / `subagent` / `skill`），模型与 `cwd` 沿用父对话。不能再派子 Agent。前台 `name` 取 `task` 第一行（压成一行，最多 30 字）；后台用 spawn 的 `name`。`name` 仍是 send / wait / stop 的句柄，不改语义。单独中止一个前台子对话时，调用方收到 `[subagent <name> was stopped by the user]`（不是错误），本轮继续；中止主 Agent 仍会停掉这一轮。
 
-`GET /api/conversations/:cid` 的 `agents` 第一项是主 Agent：`{id, name:'Agent', status, step, totalSteps, toolCalls, lastText}`，不带 `roleId` / `mode`。其后追加真实子 Agent 实例：`{id, name, status, step, totalSteps, toolCalls, lastText, mode}`，以及拿得到才返回的 `brief`、`startedAt`、`lastActivityAt`、`endedAt`、`currentAction`。不返回 `roleId`。名单从 Harness 读：工具调用的 `details.conversationId`、所有权索引、后台名称文档、子对话 `viewState`。`id` 形如 `<cid>:sub:<子对话 id>`。`status` 取 `waiting | running | done | stopped`。`mode` 取 `foreground | background`：前台 `delegate` 是 `foreground`，后台 `subagent` spawn 是 `background`。主 Agent 那一项没有 `mode`，也没有下面这些可选字段。没有子 Agent 时，`agents` 只有主 Agent 那一项。
+`GET /api/conversations/:cid` 的 `agents` 第一项是主 Agent：`{id, name:'Agent', status, step, totalSteps, toolCalls, lastText}`，不带 `roleId` / `mode`。其后追加真实子 Agent 实例：`{id, name, status, step, totalSteps, toolCalls, lastText, mode}`，以及拿得到才返回的 `title`、`brief`、`startedAt`、`lastActivityAt`、`endedAt`、`currentAction`。不返回 `roleId`。名单从 Harness 读：工具调用的 `details.conversationId`、所有权索引、后台名称文档、子对话 `viewState`。`id` 形如 `<cid>:sub:<子对话 id>`。`status` 取 `waiting | running | done | stopped`。`mode` 取 `foreground | background`：前台 `delegate` 是 `foreground`，后台 `subagent` spawn 是 `background`。主 Agent 那一项没有 `mode`，也没有下面这些可选字段。没有子 Agent 时，`agents` 只有主 Agent 那一项。
 
-可选字段都来自子对话 transcript，缺数据就不返回，不编造：
+可选字段缺数据就不返回，不编造：
 
+- `title`：派活时主 Agent 传入的短标题，存在工具 `details` 和后台 roster 里，重启后仍在；没传就不返回
 - `brief`：第一条 user 消息原文（主 Agent 派活时的 `task` / `message`）
 - `startedAt`：第一条消息的 `timestamp`（毫秒）
 - `lastActivityAt`：最后一条 assistant 或 tool 结果的 `timestamp`
 - `endedAt`：`status` 为 `done` / `stopped` / `failed` 时最后一条消息的 `timestamp`；运行中不返回
 - `currentAction`：仅 `running` 时返回。最后一个工具调用：有参数 `description` 就用它，否则是「工具名: 主要参数」短文本（如 `bash: npm test`），截断到 60 字；最后一条是 assistant 纯文本则不返回
 
-父对话 SSE 不混入子对话的 `message.delta` / `tool.*`。子 Agent 状态变化时，父对话收到 `agent` 事件，字段与芯片相同，包含 `mode` 和上述可选字段。主 Agent 的 `agent` 事件不带 `mode`。
+父对话 SSE 不混入子对话的 `message.delta` / `tool.*`。子 Agent 状态变化时，父对话收到 `agent` 事件，字段与芯片相同，包含 `mode` 和上述可选字段（含 `title`）。主 Agent 的 `agent` 事件不带 `mode`。
 
 | 方法 路径 | 响应 |
 |---|---|
