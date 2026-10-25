@@ -552,6 +552,35 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.6; backgroun
 }
 .tool-group-older:hover { color: var(--ink); background: var(--sub); border-radius: 7px; }
 .tool-group-older:focus-visible { outline: 1px solid var(--faint); outline-offset: 2px; border-radius: 4px; }
+
+/* Background sub-agent report: agent-side, collapsed like a tool group */
+.subagent-report { align-self: flex-start; min-width: 0; max-width: min(84%, 680px); }
+.subagent-report-head { display: flex; align-items: center; gap: 8px; min-width: 0; max-width: 100%; }
+.subagent-report-summary {
+  display: inline-flex; align-items: center; gap: 8px; min-width: 0; flex: 1 1 auto; max-width: 100%;
+  padding: 1px 0; border: none; background: none;
+  color: var(--mute); font-size: 13px; line-height: 1.5; text-align: left; cursor: pointer;
+}
+.subagent-report-summary:hover { color: var(--ink); }
+.subagent-report-summary:focus-visible { outline: 1px solid var(--faint); outline-offset: 2px; border-radius: 4px; }
+.subagent-report-icon { width: 12px; height: 12px; flex-shrink: 0; color: var(--faint); }
+.subagent-report.is-failed .subagent-report-icon { color: var(--fail); }
+.subagent-report-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.subagent-report-reason { color: var(--faint); margin-left: 6px; }
+.subagent-report-chevron { width: 11px; height: 11px; flex-shrink: 0; color: var(--faint); transition: transform .15s; }
+.subagent-report.is-open .subagent-report-chevron { transform: rotate(90deg); }
+.subagent-report-open {
+  flex-shrink: 0; border: none; background: none; padding: 0;
+  color: var(--faint); font-size: 12px; cursor: pointer;
+}
+.subagent-report-open:hover { color: var(--ink); }
+.subagent-report-open:focus-visible { outline: 1px solid var(--faint); outline-offset: 2px; border-radius: 4px; }
+.subagent-report-body {
+  display: none; margin: 4px 0 2px 5px; padding-left: 15px;
+  border-left: 1px solid var(--hover); min-width: 0;
+  color: var(--ink2); font-size: 13px; line-height: 1.6;
+}
+.subagent-report.is-open .subagent-report-body { display: block; }
 .tool-row-wrapper { display: flex; flex-direction: column; min-width: 0; }
 .tool-row {
   display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 2px 8px; min-height: 26px; padding: 0 6px;

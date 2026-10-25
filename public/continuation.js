@@ -1,4 +1,5 @@
 // Shared auto-continue prefix. The kernel, the browser, and tests all match this.
+import { isSubagentReportText } from './subagent-report.js';
 
 export const AUTO_CONTINUE_PREFIX = '[auto-continue]';
 
@@ -16,6 +17,7 @@ export function isAutoContinueText(text) {
 
 export function isPromptUserMessage(message) {
   if (!message || message.role !== 'user') return false;
-  if (message.kind === 'auto-continue') return false;
-  return !isAutoContinueText(message.text);
+  if (message.kind === 'auto-continue' || message.kind === 'subagent-report') return false;
+  if (isAutoContinueText(message.text)) return false;
+  return !isSubagentReportText(message.text);
 }
