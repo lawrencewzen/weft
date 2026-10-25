@@ -41,6 +41,8 @@ export type ConversationSnapshotInput = {
   exists?: BuildThreadOptions['exists'];
 };
 
+export type LoadConversation = (id: string) => Promise<Omit<ConversationSnapshotInput, 'lang' | 'exists'> | null>;
+
 export function conversationModelView(target: ConversationModelTarget): ConversationModel | null {
   const sourceId = typeof target?.source?.id === 'string' ? target.source.id : '';
   const modelId = typeof target?.model === 'string' ? target.model : '';

@@ -217,7 +217,7 @@
       "get": {
         "operationId": "getEvents",
         "summary": "SSE 推送流",
-        "description": "一个客户端一条 SSE 连接，用查询参数 `topics` 订阅主题（逗号分隔），`lang` 为 zh 或 en（缺省 zh，不认识的按 zh）。\n每条业务事件带全局递增序号，写成标准 SSE：`id: <序号>`、`event: <类型>`、`data: <JSON>`。\n断线后带 `Last-Event-ID` 头（或查询参数 `lastEventId`）续传；环形缓冲里补不上（太旧、比当前还新、或格式不对）时先发一份新快照。\n没带 Last-Event-ID 时先发快照。快照的 SSE id 是当时的最新序号。\n订阅的主题和上次不同时，客户端不要带 Last-Event-ID / lastEventId，直接重新连接拿快照（续传只保证同一组主题）。\n心跳每 15 秒一次，不带 id，不进缓冲。\n\n事件名与 data 的对应关系：\n- `snapshot` → SnapshotEvent\n- `upsert` → UpsertEvent\n- `remove` → RemoveEvent\n- `text.delta` → TextDeltaEvent\n- `heartbeat` → HeartbeatEvent\n",
+        "description": "一个客户端一条 SSE 连接，用查询参数 `topics` 订阅主题（逗号分隔），`lang` 为 zh 或 en（缺省 zh，不认识的按 zh）。\n每条业务事件带全局递增序号，写成标准 SSE：`id: <序号>`、`event: <类型>`、`data: <JSON>`。\n断线后带 `Last-Event-ID` 头（或查询参数 `lastEventId`）续传；环形缓冲里补不上（太旧、比当前还新、或格式不对）时先发一份新快照。\n没带 Last-Event-ID 时先发快照。快照的 SSE id 是当时的最新序号。\n订阅的主题和上次不同时，客户端不要带 Last-Event-ID / lastEventId，直接重新连接拿快照（续传只保证同一组主题）。\n心跳每 15 秒一次，不带 id，不进缓冲。\n\n主题 `conversation:<id>`（`<id>` 为对话 id）按前缀动态注册。实体：\n- `conversation`：id 为对话 id，值为 ConversationView\n- `item`：id 为 ThreadItem.id，值为 ThreadItem\n- `tool`：id 为 ToolCall.id，值为 ToolCall\n\n快照是 GET /api/v2/conversations/{id} 同一套数据拆成上述实体。模型流式输出时先 upsert 一条 `item`，id 以 `live:` 开头、`streaming` 为 true、`text` 为空；随后用 `text.delta` 追加。正式助手消息到来后 remove 这条流式项，再 upsert 正式项和 conversation。\n\n订阅不存在的对话时仍返回 200：先发 snapshot，entities 为空，并在 snapshot 数据里加 `missing: [\"conversation:<id>\"]`，连接保持。\n\n事件名与 data 的对应关系：\n- `snapshot` → SnapshotEvent\n- `upsert` → UpsertEvent\n- `remove` → RemoveEvent\n- `text.delta` → TextDeltaEvent\n- `heartbeat` → HeartbeatEvent\n",
         "security": [
           {
             "bearerAuth": []
@@ -234,7 +234,7 @@
             "schema": {
               "type": "string"
             },
-            "description": "逗号分隔的主题列表。空或含未注册主题时 400。"
+            "description": "逗号分隔的主题列表。空或含未注册主题时 400。`conversation:<id>` 按前缀视为已注册。"
           },
           {
             "name": "lang",
@@ -1083,9 +1083,16 @@
             "items": {
               "$ref": "#/components/schemas/EntityRef"
             }
+          },
+          "missing": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "已订阅但快照阶段发现不存在的主题（例如 conversation:<id> 对应的对话不存在）。空则省略。"
           }
         },
-        "description": "SSE event=snapshot 的 data。连接时或续传补不上时发送；SSE id 为当时最新序号。"
+        "description": "SSE event=snapshot 的 data。连接时或续传补不上时发送；SSE id 为当时最新序号。订阅不存在的 conversation:<id> 时 entities 为空，并列出 missing。"
       },
       "UpsertEvent": {
         "type": "object",

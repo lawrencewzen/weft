@@ -168,6 +168,93 @@ test('upsert value functions evaluate per connection language and cache per lang
   }
 });
 
+test('registerPattern makes prefixed topics known and counts subscribers', async () => {
+  const hub = createEventHub({ heartbeatMs: 60_000 });
+  try {
+    let first = 0;
+    let last = 0;
+    hub.registerPattern('conversation:', {
+      snapshot: async (topic) => ({ entities: [], missing: [topic] }),
+      onFirstSubscribe() { first += 1; },
+      onLastUnsubscribe() { last += 1; },
+    });
+    assert.equal(hub.hasTopic('conversation:abc'), true);
+    assert.equal(hub.hasTopic('conversation:'), true);
+    assert.equal(hub.hasTopic('conversations'), false);
+    assert.equal(hub.hasTopic('nope'), false);
+
+    const a = hub.connect({ topics: ['conversation:abc'], send: () => {} });
+    await a.ready;
+    assert.equal(hub.topicSubscriberCount('conversation:abc'), 1);
+    assert.equal(first, 1);
+    const b = hub.connect({ topics: ['conversation:abc'], send: () => {} });
+    await b.ready;
+    assert.equal(first, 1);
+    assert.equal(hub.topicSubscriberCount('conversation:abc'), 2);
+    a.close();
+    assert.equal(last, 0);
+    b.close();
+    assert.equal(last, 1);
+    assert.equal(hub.topicSubscriberCount('conversation:abc'), 0);
+  } finally {
+    hub.dispose();
+  }
+});
+
+test('async snapshot queues events and replays only those after the snapshot seq', async () => {
+  const hub = createEventHub({ heartbeatMs: 60_000 });
+  try {
+    let current = { n: 0 };
+    let release;
+    const gate = new Promise((resolve) => { release = resolve; });
+    hub.register('slow', {
+      snapshot: async () => {
+        await gate;
+        return [{ entity: 'x', id: '1', value: { ...current } }];
+      },
+    });
+    const frames = [];
+    const session = hub.connect({ topics: ['slow'], send: (frame) => frames.push(frame) });
+    assert.equal(frames.length, 0);
+    current = { n: 2 };
+    hub.publish('slow', { event: 'upsert', entity: 'x', id: '1', value: { n: 2 } });
+    release();
+    await session.ready;
+    assert.equal(frames[0].event, 'snapshot');
+    assert.equal(frames[0].data.entities[0].value.n, 2);
+    assert.equal(frames.some((frame) => frame.event === 'upsert'), false);
+    hub.publish('slow', { event: 'upsert', entity: 'x', id: '1', value: { n: 3 } });
+    const live = frames.filter((frame) => frame.event === 'upsert');
+    assert.equal(live.length, 1);
+    assert.equal(live[0].data.value.n, 3);
+    session.close();
+  } finally {
+    hub.dispose();
+  }
+});
+
+test('pattern snapshot can mark a topic missing', async () => {
+  const hub = createEventHub({ heartbeatMs: 60_000, protocolVersion: PROTOCOL_VERSION });
+  try {
+    hub.registerPattern('conversation:', {
+      snapshot: async (topic) => ({ entities: [], missing: [topic] }),
+    });
+    const frames = [];
+    const session = hub.connect({
+      topics: ['conversation:missing-id'],
+      send: (frame) => frames.push(frame),
+    });
+    await session.ready;
+    session.close();
+    assert.equal(frames[0].event, 'snapshot');
+    assert.deepEqual(frames[0].data.entities, []);
+    assert.deepEqual(frames[0].data.missing, ['conversation:missing-id']);
+    assertSchema('SnapshotEvent', frames[0].data);
+  } finally {
+    hub.dispose();
+  }
+});
+
 test('Last-Event-ID newer than the current seq sends a snapshot', () => {
   const hub = createEventHub({ heartbeatMs: 60_000 });
   try {

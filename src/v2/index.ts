@@ -21,12 +21,13 @@ import {
 } from './stream/hub.ts';
 import { contractMismatchLog, validateResponse } from './validate.ts';
 import { PROTOCOL_VERSION } from './version.ts';
+import { attachConversationTopic, type KernelEvent } from './stream/conversation-topic.ts';
 import { MANUAL_CONTINUE_TEXT } from './views/continuation.ts';
 import {
   conversationSnapshot,
   findPresentedTool,
   toolOutputView,
-  type ConversationSnapshotInput,
+  type LoadConversation,
 } from './views/conversation.ts';
 
 type ServiceInfo = components['schemas']['ServiceInfo'];
@@ -67,7 +68,7 @@ export type PostMessage = (
 ) => Promise<{ status: number; body?: { runId?: unknown } }>;
 export type StopConversationFn = (id: string) => Promise<{ status: number }>;
 
-export type LoadConversation = (id: string) => Promise<Omit<ConversationSnapshotInput, 'lang' | 'exists'> | null>;
+export type { LoadConversation, KernelEvent };
 
 export type V2Handler = (req: IncomingMessage, res: ServerResponse, url: URL) => Promise<boolean>;
 
@@ -519,6 +520,7 @@ export function createV2Runtime(opts: {
   getWorkspace?: GetWorkspace;
   postMessage?: PostMessage;
   stopConversation?: StopConversationFn;
+  subscribeConversation?: (cid: string, fn: (ev: KernelEvent) => void) => () => void;
 }): V2Runtime {
   const pid = opts.pid ?? process.pid;
   const auth = createV2Auth({
@@ -539,6 +541,10 @@ export function createV2Runtime(opts: {
         }),
       }];
     },
+  });
+  const conversationTopic = attachConversationTopic(hub, {
+    loadConversation: opts.loadConversation,
+    subscribe: opts.subscribeConversation,
   });
   const idle = createIdleWatcher({
     hasActiveWork: opts.hasActiveWork ?? (() => false),
@@ -584,6 +590,7 @@ export function createV2Runtime(opts: {
     trackConnection: idle.trackConnection,
     startIdleExit: idle.start,
     dispose() {
+      conversationTopic.dispose();
       hub.dispose();
       idle.dispose();
       auth.dispose();
