@@ -149,10 +149,18 @@ paths:
         - `conversation`：id 为对话 id，值为 ConversationView
         - `item`：id 为 ThreadItem.id，值为 ThreadItem
         - `tool`：id 为 ToolCall.id，值为 ToolCall
+        - `subagent`：id 为子 Agent id，值为 Subagent。卡住由服务端判定：kernel 状态为 running 且超过 stuckAfterMs（默认 60000，环境变量 WEFT_SUBAGENT_STUCK_MS）没有活动时 status 为 stuck，到点推送 upsert。
 
-        快照是 GET /api/v2/conversations/{id} 同一套数据拆成上述实体。模型流式输出时先 upsert 一条 `item`，id 以 `live:` 开头、`streaming` 为 true、`text` 为空；随后用 `text.delta` 追加。正式助手消息到来后 remove 这条流式项，再 upsert 正式项和 conversation。
+        快照是 GET /api/v2/conversations/{id} 的 conversation / items / tools，再加上该对话的 subagent 实体。模型流式输出时先 upsert 一条 `item`，id 以 `live:` 开头、`streaming` 为 true、`text` 为空；随后用 `text.delta` 追加。正式助手消息到来后 remove 这条流式项，再 upsert 正式项和 conversation。
 
-        订阅不存在的对话时仍返回 200：先发 snapshot，entities 为空，并在 snapshot 数据里加 `missing: ["conversation:<id>"]`，连接保持。
+        主题 `subagent:<cid>:<agentId>`（`<cid>` 为父对话 id，`<agentId>` 为子 Agent id）按前缀动态注册。实体：
+        - `subagent`：id 为子 Agent id，值为 Subagent
+        - `item`：id 为 ThreadItem.id，值为 ThreadItem（子 Agent 自己的消息流，没有嵌套子 Agent 汇报）
+        - `tool`：id 为 ToolCall.id，值为 ToolCall
+
+        快照是 GET /api/v2/conversations/{id}/subagents/{agentId} 同一套数据拆成上述实体。订阅父对话的内核事件（含 `agent`）后重算；子 Agent 的进展会体现在父对话事件里。
+
+        订阅不存在的对话或子 Agent 时仍返回 200：先发 snapshot，entities 为空，并在 snapshot 数据里加 `missing: ["conversation:<id>"]` 或 `missing: ["subagent:<cid>:<agentId>"]`，连接保持。
 
         事件名与 data 的对应关系：
         - `snapshot` → SnapshotEvent
@@ -169,7 +177,7 @@ paths:
           required: true
           schema:
             type: string
-          description: 逗号分隔的主题列表。空或含未注册主题时 400。`workspaces` 已注册；`conversation:<id>` 按前缀视为已注册。
+          description: 逗号分隔的主题列表。空或含未注册主题时 400。`workspaces` 已注册；`conversation:<id>` 和 `subagent:<cid>:<agentId>` 按前缀视为已注册。
         - name: lang
           in: query
           schema:
@@ -654,6 +662,191 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/V2Error"
+  /api/v2/conversations/{id}/subagents/{agentId}:
+    get:
+      operationId: getSubagent
+      summary: 子 Agent 线程快照
+      description: |
+        返回 Subagent 视图，以及用子 Agent 自己的消息组装的 ThreadItem / ToolCall。
+        子 Agent 没有嵌套的子 Agent 汇报。`lang` 为 zh 或 en（缺省 zh，不认识的按 zh）。
+        对话或子 Agent 不存在 404。
+      security:
+        - bearerAuth: []
+        - sessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: 父对话 id
+        - name: agentId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: 子 Agent id，形如 `<cid>:sub:<子对话 id>`
+        - name: lang
+          in: query
+          schema:
+            type: string
+            default: zh
+          description: 客户端语言。先支持 zh、en；缺省或不认识的按 zh。
+      responses:
+        "200":
+          description: 子 Agent 线程快照
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubagentSnapshot"
+        "401":
+          description: 未授权
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        "404":
+          description: 对话或子 Agent 不存在
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        4XX:
+          description: 客户端错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        5XX:
+          description: 服务端错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+  /api/v2/conversations/{id}/subagents/{agentId}/messages:
+    post:
+      operationId: postSubagentMessage
+      summary: 给子 Agent 发消息
+      description: |
+        调用内核 `sendToAgent`。`text` 去掉首尾空白后不能为空。
+        对话或子 Agent 不存在 404。子 Agent 不在 running 时 409。
+      security:
+        - bearerAuth: []
+        - sessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: 父对话 id
+        - name: agentId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: 子 Agent id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SendMessageRequest"
+      responses:
+        "202":
+          description: 已接受
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubagentMessageAccepted"
+        "400":
+          description: 空文字或请求体无效
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        "401":
+          description: 未授权
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        "404":
+          description: 对话或子 Agent 不存在
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        "409":
+          description: 子 Agent 不在运行
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        4XX:
+          description: 客户端错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        5XX:
+          description: 服务端错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+  /api/v2/conversations/{id}/subagents/{agentId}/stop:
+    post:
+      operationId: stopSubagent
+      summary: 停止子 Agent
+      description: 对话或子 Agent 不存在 404。不在运行也返回 202，幂等。
+      security:
+        - bearerAuth: []
+        - sessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: 父对话 id
+        - name: agentId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: 子 Agent id
+      responses:
+        "202":
+          description: 已接受停止（含本就未在运行）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StopAccepted"
+        "401":
+          description: 未授权
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        "404":
+          description: 对话或子 Agent 不存在
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        4XX:
+          description: 客户端错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        5XX:
+          description: 服务端错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
 components:
   securitySchemes:
     bearerAuth:
@@ -728,6 +921,15 @@ components:
         - stopping
       properties:
         stopping:
+          type: boolean
+          description: 始终为 true。
+    SubagentMessageAccepted:
+      type: object
+      additionalProperties: false
+      required:
+        - ok
+      properties:
+        ok:
           type: boolean
           description: 始终为 true。
     ToolOutput:
@@ -1547,3 +1749,99 @@ components:
           items:
             $ref: "#/components/schemas/ToolCall"
       description: GET /api/v2/conversations/{id} 的响应。客户端按 itemIds 画对话流，按 toolIds 取工具行。
+    Subagent:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - parentConversationId
+        - title
+        - name
+        - mode
+        - status
+        - startedAt
+        - lastActivityAt
+        - endedAt
+        - currentAction
+        - progress
+      properties:
+        id:
+          type: string
+          description: 子 Agent id，形如 `<cid>:sub:<子对话 id>`
+        parentConversationId:
+          type: string
+          description: 所属主对话 id
+        title:
+          type: string
+          description: 按 title → brief 第一行 → lastText → name 回退
+        name:
+          type: string
+        mode:
+          type: string
+          enum:
+            - foreground
+            - background
+        status:
+          type: string
+          enum:
+            - waiting
+            - running
+            - stuck
+            - done
+            - stopped
+            - failed
+          description: kernel 的 error 归为 failed。running 且超过 stuckAfterMs 没有活动则为 stuck
+        startedAt:
+          description: 开始时间（毫秒）。没有则为 null
+          oneOf:
+            - type: "null"
+            - type: integer
+        lastActivityAt:
+          description: 最近活动时间（毫秒）。没有则为 null
+          oneOf:
+            - type: "null"
+            - type: integer
+        endedAt:
+          description: 结束时间（毫秒）。未结束则为 null
+          oneOf:
+            - type: "null"
+            - type: integer
+        currentAction:
+          description: 正在做的事。非 running/stuck 或没有则为 null
+          oneOf:
+            - type: "null"
+            - type: string
+        progress:
+          description: 步数。没有 step/total 则为 null
+          oneOf:
+            - type: "null"
+            - type: object
+              additionalProperties: false
+              required:
+                - step
+                - total
+              properties:
+                step:
+                  type: number
+                total:
+                  type: number
+      description: 侧栏和子线程里的子 Agent 视图。卡住由服务端判定。
+    SubagentSnapshot:
+      type: object
+      additionalProperties: false
+      required:
+        - subagent
+        - items
+        - tools
+      properties:
+        subagent:
+          $ref: "#/components/schemas/Subagent"
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ThreadItem"
+        tools:
+          type: array
+          items:
+            $ref: "#/components/schemas/ToolCall"
+      description: GET /api/v2/conversations/{id}/subagents/{agentId} 的响应。

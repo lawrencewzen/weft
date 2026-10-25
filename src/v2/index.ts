@@ -23,6 +23,8 @@ import { contractMismatchLog, validateResponse } from './validate.ts';
 import { PROTOCOL_VERSION } from './version.ts';
 import { attachConversationTopic, type KernelEvent } from './stream/conversation-topic.ts';
 import { attachWorkspacesTopic } from './stream/workspaces-topic.ts';
+import { attachSubagentTopic, type LoadSubagent } from './stream/subagent-topic.ts';
+import { createStuckWatch } from './stream/stuck-watch.ts';
 import { MANUAL_CONTINUE_TEXT } from './views/continuation.ts';
 import {
   conversationSnapshot,
@@ -35,6 +37,7 @@ import {
   conversationSummaryView,
   type SidebarLoader,
 } from './views/sidebar.ts';
+import { subagentSnapshot } from './views/subagents.ts';
 
 type ServiceInfo = components['schemas']['ServiceInfo'];
 type V2Error = components['schemas']['V2Error'];
@@ -48,6 +51,8 @@ type WorkspacesSnapshot = components['schemas']['WorkspacesSnapshot'];
 type ConversationSummary = components['schemas']['ConversationSummary'];
 type WorkspaceRemoved = components['schemas']['WorkspaceRemoved'];
 type WorkspaceBusy = components['schemas']['WorkspaceBusy'];
+type SubagentSnapshot = components['schemas']['SubagentSnapshot'];
+type SubagentMessageAccepted = components['schemas']['SubagentMessageAccepted'];
 type V2JsonBody =
   | ServiceInfo
   | WebCode
@@ -60,7 +65,9 @@ type V2JsonBody =
   | WorkspacesSnapshot
   | ConversationSummary
   | WorkspaceRemoved
-  | WorkspaceBusy;
+  | WorkspaceBusy
+  | SubagentSnapshot
+  | SubagentMessageAccepted;
 
 export type ConversationRow = {
   id?: unknown;
@@ -94,7 +101,14 @@ export type CreateConversationFn = (
 export type RemoveWorkspaceFn = (id: string) => Promise<void>;
 export type SubscribeAllFn = (fn: (cid: string, ev: KernelEvent) => void) => () => void;
 
-export type { LoadConversation, KernelEvent };
+export type SendToAgentFn = (
+  cid: string,
+  agentId: string,
+  text: string,
+) => Promise<{ status: number; body?: { ok?: unknown; error?: unknown } }>;
+export type StopAgentFn = (cid: string, agentId: string) => Promise<{ status: number }>;
+
+export type { LoadConversation, LoadSubagent, KernelEvent };
 
 export type V2Handler = (req: IncomingMessage, res: ServerResponse, url: URL) => Promise<boolean>;
 
@@ -307,6 +321,9 @@ export function createV2Handler(opts: {
   createConversation?: CreateConversationFn;
   removeWorkspace?: RemoveWorkspaceFn;
   onSidebarChanged?: () => void;
+  loadSubagent?: LoadSubagent;
+  sendToAgent?: SendToAgentFn;
+  stopAgent?: StopAgentFn;
 }): V2Handler {
   const { serviceVersion, startedAt, auth, hub } = opts;
   const pid = opts.pid ?? process.pid;
@@ -625,6 +642,105 @@ export function createV2Handler(opts: {
       return true;
     }
 
+    const subGetMatch = /^\/api\/v2\/conversations\/([^/]+)\/subagents\/([^/]+)$/.exec(pathname);
+    if (method === 'GET' && subGetMatch) {
+      const id = decodeURIComponent(subGetMatch[1]);
+      const agentId = decodeURIComponent(subGetMatch[2]);
+      let loaded: Awaited<ReturnType<LoadSubagent>> = null;
+      try {
+        loaded = opts.loadSubagent ? await opts.loadSubagent(id, agentId) : null;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'load subagent failed';
+        sendV2(res, pathname, method, 500, { error: message, code: 'E_INTERNAL' } satisfies V2Error);
+        return true;
+      }
+      if (!loaded) {
+        sendV2(res, pathname, method, 404, { error: 'not found' } satisfies V2Error);
+        return true;
+      }
+      const lang = normalizeLang(url.searchParams.get('lang')) === 'en' ? 'en' : 'zh';
+      try {
+        const snapshot = await subagentSnapshot({ ...loaded, lang });
+        sendV2(res, pathname, method, 200, snapshot);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'snapshot failed';
+        sendV2(res, pathname, method, 500, { error: message, code: 'E_INTERNAL' } satisfies V2Error);
+      }
+      return true;
+    }
+
+    const subMsgMatch = /^\/api\/v2\/conversations\/([^/]+)\/subagents\/([^/]+)\/messages$/.exec(pathname);
+    if (method === 'POST' && subMsgMatch) {
+      const id = decodeURIComponent(subMsgMatch[1]);
+      const agentId = decodeURIComponent(subMsgMatch[2]);
+      const body = await readObjectBody(req, res, pathname, method);
+      if (!body) return true;
+      if (body.text != null && typeof body.text !== 'string') {
+        sendV2(res, pathname, method, 400, { error: 'text required', code: 'E_BAD_REQUEST' } satisfies V2Error);
+        return true;
+      }
+      const text = String(body.text ?? '').trim();
+      if (!text) {
+        sendV2(res, pathname, method, 400, { error: 'text required', code: 'E_BAD_REQUEST' } satisfies V2Error);
+        return true;
+      }
+      if (!opts.sendToAgent) {
+        sendV2(res, pathname, method, 500, { error: 'kernel not ready', code: 'E_INTERNAL' } satisfies V2Error);
+        return true;
+      }
+      try {
+        const posted = await opts.sendToAgent(id, agentId, text);
+        if (posted.status === 404) {
+          sendV2(res, pathname, method, 404, { error: 'not found' } satisfies V2Error);
+          return true;
+        }
+        if (posted.status === 400) {
+          sendV2(res, pathname, method, 400, { error: 'text required', code: 'E_BAD_REQUEST' } satisfies V2Error);
+          return true;
+        }
+        if (posted.status === 409) {
+          sendV2(res, pathname, method, 409, { error: 'agent not running' } satisfies V2Error);
+          return true;
+        }
+        if (posted.status !== 200 && posted.status !== 202) {
+          sendV2(res, pathname, method, posted.status >= 400 ? posted.status : 500, {
+            error: 'send failed',
+            code: 'E_INTERNAL',
+          } satisfies V2Error);
+          return true;
+        }
+        sendV2(res, pathname, method, 202, { ok: true } satisfies SubagentMessageAccepted);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'send failed';
+        sendV2(res, pathname, method, 500, { error: message, code: 'E_INTERNAL' } satisfies V2Error);
+      }
+      return true;
+    }
+
+    const subStopMatch = /^\/api\/v2\/conversations\/([^/]+)\/subagents\/([^/]+)\/stop$/.exec(pathname);
+    if (method === 'POST' && subStopMatch) {
+      const id = decodeURIComponent(subStopMatch[1]);
+      const agentId = decodeURIComponent(subStopMatch[2]);
+      const body = await readObjectBody(req, res, pathname, method);
+      if (!body) return true;
+      if (!opts.stopAgent) {
+        sendV2(res, pathname, method, 500, { error: 'kernel not ready', code: 'E_INTERNAL' } satisfies V2Error);
+        return true;
+      }
+      try {
+        const stopped = await opts.stopAgent(id, agentId);
+        if (stopped.status === 404) {
+          sendV2(res, pathname, method, 404, { error: 'not found' } satisfies V2Error);
+          return true;
+        }
+        sendV2(res, pathname, method, 202, { stopping: true } satisfies StopAccepted);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'stop failed';
+        sendV2(res, pathname, method, 500, { error: message, code: 'E_INTERNAL' } satisfies V2Error);
+      }
+      return true;
+    }
+
     if (method === 'GET' && pathname === '/api/v2/events') {
       const topics = parseTopics(url.searchParams.get('topics'));
       const unknown = topics.filter((topic) => !hub.hasTopic(topic));
@@ -688,6 +804,9 @@ export function createV2Runtime(opts: {
   createConversation?: CreateConversationFn;
   removeWorkspace?: RemoveWorkspaceFn;
   subscribeAll?: SubscribeAllFn;
+  loadSubagent?: LoadSubagent;
+  sendToAgent?: SendToAgentFn;
+  stopAgent?: StopAgentFn;
 }): V2Runtime {
   const pid = opts.pid ?? process.pid;
   const auth = createV2Auth({
@@ -709,9 +828,18 @@ export function createV2Runtime(opts: {
       }];
     },
   });
+  const stuck = createStuckWatch({ now: opts.now });
   const conversationTopic = attachConversationTopic(hub, {
     loadConversation: opts.loadConversation,
     subscribe: opts.subscribeConversation,
+    now: opts.now,
+    stuck,
+  });
+  const subagentTopic = attachSubagentTopic(hub, {
+    loadSubagent: opts.loadSubagent,
+    subscribe: opts.subscribeConversation,
+    now: opts.now,
+    stuck,
   });
   const workspacesTopic = attachWorkspacesTopic(hub, {
     loader: sidebarLoader(opts),
@@ -744,6 +872,9 @@ export function createV2Runtime(opts: {
     createConversation: opts.createConversation,
     removeWorkspace: opts.removeWorkspace,
     onSidebarChanged: () => workspacesTopic.notify(),
+    loadSubagent: opts.loadSubagent,
+    sendToAgent: opts.sendToAgent,
+    stopAgent: opts.stopAgent,
   });
 
   return {
@@ -773,6 +904,8 @@ export function createV2Runtime(opts: {
     dispose() {
       workspacesTopic.dispose();
       conversationTopic.dispose();
+      subagentTopic.dispose();
+      stuck.dispose();
       hub.dispose();
       idle.dispose();
       auth.dispose();

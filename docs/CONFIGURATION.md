@@ -44,6 +44,7 @@
 | `WEFT_STDIN_EXIT` | `0` | **只给测试用。** 设为 `1` 时 stdin 关闭会走和 SIGTERM 相同的 `shutdown()`（Windows 收不到 SIGTERM）。 |
 | `WEFT_V2_WEB_CODE_TTL_MS` | `60000` | **只给测试用。** 网页端一次性登录码的有效期（毫秒）。 |
 | `WEFT_V2_VALIDATE` | `0` | 设为 `1` 时按 OpenAPI 契约校验 `/api/v2` 响应；不一致则记日志并返回 500。测试默认打开。 |
+| `WEFT_SUBAGENT_STUCK_MS` | `60000` | **只给测试用。** 子 Agent 处于 running 且超过该毫秒数没有活动时，服务端把 status 改成 stuck 并推送。默认与旧前端 60000 一致。 |
 | `WEFT_EXPECT_PROTOCOL` | 空 / `3.0.0` | **只给测试用。** 覆盖 `weft` 命令行认为的协议版本（默认与 `PROTOCOL_VERSION` 相同），用来测版本不兼容时的 restart。只影响命令行，不影响服务端。 |
 | `WEFT_PROBE_TIMEOUT_MS` | `3000` | **只给测试用。** `weft` 探测 GET `/api/v2/service` 的超时（毫秒）。只影响命令行，不影响服务端。 |
 

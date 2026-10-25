@@ -166,6 +166,30 @@ const v2 = createV2Runtime({
     if (!kernelApi) return () => {};
     return kernelApi.subscribeAll(fn);
   },
+  async loadSubagent(cid, agentId) {
+    if (!kernelApi) return null;
+    const conv = await store.getConversation(cid);
+    if (!conv) return null;
+    const presented = await kernelApi.present(conv, { includeMessages: true });
+    const subagents = await kernelApi.listSubagents(presented);
+    const agent = subagents.find((item) => item.id === agentId);
+    if (!agent) return null;
+    const child = await kernelApi.childMessages(cid, agentId);
+    if (child.status !== 200) return null;
+    return {
+      presented,
+      agent,
+      messages: child.body?.messages || [],
+    };
+  },
+  async sendToAgent(cid, agentId, text) {
+    if (!kernelApi) return { status: 500, body: { error: 'kernel not ready' } };
+    return kernelApi.sendToAgent(cid, agentId, text);
+  },
+  async stopAgent(cid, agentId) {
+    if (!kernelApi) return { status: 500, body: { error: 'kernel not ready' } };
+    return kernelApi.stopAgent(cid, agentId);
+  },
 });
 
 let dataLock;

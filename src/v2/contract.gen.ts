@@ -80,10 +80,18 @@ export interface paths {
          *     - `conversation`：id 为对话 id，值为 ConversationView
          *     - `item`：id 为 ThreadItem.id，值为 ThreadItem
          *     - `tool`：id 为 ToolCall.id，值为 ToolCall
+         *     - `subagent`：id 为子 Agent id，值为 Subagent。卡住由服务端判定：kernel 状态为 running 且超过 stuckAfterMs（默认 60000，环境变量 WEFT_SUBAGENT_STUCK_MS）没有活动时 status 为 stuck，到点推送 upsert。
          *
-         *     快照是 GET /api/v2/conversations/{id} 同一套数据拆成上述实体。模型流式输出时先 upsert 一条 `item`，id 以 `live:` 开头、`streaming` 为 true、`text` 为空；随后用 `text.delta` 追加。正式助手消息到来后 remove 这条流式项，再 upsert 正式项和 conversation。
+         *     快照是 GET /api/v2/conversations/{id} 的 conversation / items / tools，再加上该对话的 subagent 实体。模型流式输出时先 upsert 一条 `item`，id 以 `live:` 开头、`streaming` 为 true、`text` 为空；随后用 `text.delta` 追加。正式助手消息到来后 remove 这条流式项，再 upsert 正式项和 conversation。
          *
-         *     订阅不存在的对话时仍返回 200：先发 snapshot，entities 为空，并在 snapshot 数据里加 `missing: ["conversation:<id>"]`，连接保持。
+         *     主题 `subagent:<cid>:<agentId>`（`<cid>` 为父对话 id，`<agentId>` 为子 Agent id）按前缀动态注册。实体：
+         *     - `subagent`：id 为子 Agent id，值为 Subagent
+         *     - `item`：id 为 ThreadItem.id，值为 ThreadItem（子 Agent 自己的消息流，没有嵌套子 Agent 汇报）
+         *     - `tool`：id 为 ToolCall.id，值为 ToolCall
+         *
+         *     快照是 GET /api/v2/conversations/{id}/subagents/{agentId} 同一套数据拆成上述实体。订阅父对话的内核事件（含 `agent`）后重算；子 Agent 的进展会体现在父对话事件里。
+         *
+         *     订阅不存在的对话或子 Agent 时仍返回 200：先发 snapshot，entities 为空，并在 snapshot 数据里加 `missing: ["conversation:<id>"]` 或 `missing: ["subagent:<cid>:<agentId>"]`，连接保持。
          *
          *     事件名与 data 的对应关系：
          *     - `snapshot` → SnapshotEvent
@@ -269,6 +277,69 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/conversations/{id}/subagents/{agentId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 子 Agent 线程快照
+         * @description 返回 Subagent 视图，以及用子 Agent 自己的消息组装的 ThreadItem / ToolCall。
+         *     子 Agent 没有嵌套的子 Agent 汇报。`lang` 为 zh 或 en（缺省 zh，不认识的按 zh）。
+         *     对话或子 Agent 不存在 404。
+         */
+        get: operations["getSubagent"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/conversations/{id}/subagents/{agentId}/messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 给子 Agent 发消息
+         * @description 调用内核 `sendToAgent`。`text` 去掉首尾空白后不能为空。
+         *     对话或子 Agent 不存在 404。子 Agent 不在 running 时 409。
+         */
+        post: operations["postSubagentMessage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/conversations/{id}/subagents/{agentId}/stop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 停止子 Agent
+         * @description 对话或子 Agent 不存在 404。不在运行也返回 202，幂等。
+         */
+        post: operations["stopSubagent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -301,6 +372,10 @@ export interface components {
         StopAccepted: {
             /** @description 始终为 true。 */
             stopping: boolean;
+        };
+        SubagentMessageAccepted: {
+            /** @description 始终为 true。 */
+            ok: boolean;
         };
         ToolOutput: {
             id: string;
@@ -647,6 +722,42 @@ export interface components {
             items: components["schemas"]["ThreadItem"][];
             tools: components["schemas"]["ToolCall"][];
         };
+        /** @description 侧栏和子线程里的子 Agent 视图。卡住由服务端判定。 */
+        Subagent: {
+            /** @description 子 Agent id，形如 `<cid>:sub:<子对话 id>` */
+            id: string;
+            /** @description 所属主对话 id */
+            parentConversationId: string;
+            /** @description 按 title → brief 第一行 → lastText → name 回退 */
+            title: string;
+            name: string;
+            /** @enum {string} */
+            mode: "foreground" | "background";
+            /**
+             * @description kernel 的 error 归为 failed。running 且超过 stuckAfterMs 没有活动则为 stuck
+             * @enum {string}
+             */
+            status: "waiting" | "running" | "stuck" | "done" | "stopped" | "failed";
+            /** @description 开始时间（毫秒）。没有则为 null */
+            startedAt: null | number;
+            /** @description 最近活动时间（毫秒）。没有则为 null */
+            lastActivityAt: null | number;
+            /** @description 结束时间（毫秒）。未结束则为 null */
+            endedAt: null | number;
+            /** @description 正在做的事。非 running/stuck 或没有则为 null */
+            currentAction: null | string;
+            /** @description 步数。没有 step/total 则为 null */
+            progress: null | {
+                step: number;
+                total: number;
+            };
+        };
+        /** @description GET /api/v2/conversations/{id}/subagents/{agentId} 的响应。 */
+        SubagentSnapshot: {
+            subagent: components["schemas"]["Subagent"];
+            items: components["schemas"]["ThreadItem"][];
+            tools: components["schemas"]["ToolCall"][];
+        };
     };
     responses: never;
     parameters: never;
@@ -831,7 +942,7 @@ export interface operations {
     getEvents: {
         parameters: {
             query: {
-                /** @description 逗号分隔的主题列表。空或含未注册主题时 400。`workspaces` 已注册；`conversation:<id>` 按前缀视为已注册。 */
+                /** @description 逗号分隔的主题列表。空或含未注册主题时 400。`workspaces` 已注册；`conversation:<id>` 和 `subagent:<cid>:<agentId>` 按前缀视为已注册。 */
                 topics: string;
                 /** @description 客户端语言。先支持 zh、en；缺省或不认识的按 zh。 */
                 lang?: string;
@@ -1397,6 +1508,214 @@ export interface operations {
                 };
             };
             /** @description 对话或工具不存在 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 客户端错误 */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 服务端错误 */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+        };
+    };
+    getSubagent: {
+        parameters: {
+            query?: {
+                /** @description 客户端语言。先支持 zh、en；缺省或不认识的按 zh。 */
+                lang?: string;
+            };
+            header?: never;
+            path: {
+                /** @description 父对话 id */
+                id: string;
+                /** @description 子 Agent id，形如 `<cid>:sub:<子对话 id>` */
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 子 Agent 线程快照 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubagentSnapshot"];
+                };
+            };
+            /** @description 未授权 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 对话或子 Agent 不存在 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 客户端错误 */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 服务端错误 */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+        };
+    };
+    postSubagentMessage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 父对话 id */
+                id: string;
+                /** @description 子 Agent id */
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SendMessageRequest"];
+            };
+        };
+        responses: {
+            /** @description 已接受 */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubagentMessageAccepted"];
+                };
+            };
+            /** @description 空文字或请求体无效 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 未授权 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 对话或子 Agent 不存在 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 子 Agent 不在运行 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 客户端错误 */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 服务端错误 */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+        };
+    };
+    stopSubagent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 父对话 id */
+                id: string;
+                /** @description 子 Agent id */
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 已接受停止（含本就未在运行） */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StopAccepted"];
+                };
+            };
+            /** @description 未授权 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 对话或子 Agent 不存在 */
             404: {
                 headers: {
                     [name: string]: unknown;
