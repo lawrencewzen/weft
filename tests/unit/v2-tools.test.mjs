@@ -286,15 +286,28 @@ test('short file-error hints and workspace-relative paths', () => {
   }), 'zh').text, 'EIO: i/o error, read');
 });
 
-test('relativizeText strips mixed Windows separators', () => {
-  const root = 'C:\\Users\\me\\proj';
-  assert.equal(relativizeText(`${root}/src/a.js\nline-02`, root), 'src/a.js\nline-02');
-  assert.equal(relativizeText(`${root}\\src\\a.js`, root), 'src\\a.js');
-  assert.equal(relativizeText('C:/Users/me/proj/src/a.js', root), 'src/a.js');
-  assert.equal(
-    relativizeText(`ENOENT: open '${root}/missing.ts'`, root),
-    "ENOENT: open 'missing.ts'",
-  );
+test('relativizeText strips mixed Windows separators without eating a longer unix prefix', () => {
+  const root = 'C:\\work\\ws';
+  const mixed = [
+    'C:\\work\\ws/src/a.js',
+    'C:\\work\\ws\\src\\a.js',
+    'C:/work/ws/src/a.js',
+    'c:\\work\\ws\\src\\a.js',
+  ];
+  for (const input of mixed) {
+    const out = relativizeText(input, root);
+    assert.equal(/c:\\work\\ws/i.test(out), false, input);
+    assert.match(out, /^src[\\/]a\.js$/);
+  }
+  assert.equal(relativizeText('C:\\work\\ws/src/a.js', root), 'src/a.js');
+  assert.equal(relativizeText('C:\\work\\ws\\src\\a.js', root), 'src\\a.js');
+  assert.equal(relativizeText('C:/work/ws/src/a.js', root), 'src/a.js');
+  assert.equal(relativizeText('c:\\work\\ws\\src\\a.js', root), 'src\\a.js');
+
+  const unix = '/home/u/ws';
+  assert.equal(relativizeText('/home/u/ws/src/a.js', unix), 'src/a.js');
+  assert.equal(relativizeText('/home/u/wsx/a.js', unix), '/home/u/wsx/a.js');
+
   const view = toolCallView(
     tool('read', {
       id: 'win-read',
