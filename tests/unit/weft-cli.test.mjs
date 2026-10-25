@@ -4,6 +4,7 @@ import { spawn } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { mkdtemp, readFile } from 'node:fs/promises';
 import http from 'node:http';
+import net from 'node:net';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
@@ -96,13 +97,53 @@ async function forceStop(dataDir) {
   } catch {
     pid = null;
   }
-  if (pid) {
+  if (pid && pid !== process.pid) {
     await killPid(pid);
     const started = Date.now();
     while (Date.now() - started < 5000 && pidIsLive(pid)) {
       await sleep(50);
     }
   }
+}
+
+function listenHangServer() {
+  return new Promise((resolve, reject) => {
+    const sockets = new Set();
+    const server = net.createServer((socket) => {
+      sockets.add(socket);
+      socket.on('error', () => {});
+      socket.on('close', () => sockets.delete(socket));
+    });
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', () => {
+      const addr = server.address();
+      if (!addr || typeof addr === 'string') {
+        server.close();
+        reject(new Error('hang server has no port'));
+        return;
+      }
+      resolve({
+        server,
+        port: addr.port,
+        close() {
+          for (const socket of sockets) {
+            try { socket.destroy(); } catch { /* ignore */ }
+          }
+          sockets.clear();
+          return new Promise((done) => {
+            server.close(() => done());
+          });
+        },
+      });
+    });
+  });
+}
+
+async function unusedPort() {
+  const hung = await listenHangServer();
+  const { port } = hung;
+  await hung.close();
+  return port;
 }
 
 function assertNoSecrets(output, secrets) {
@@ -261,6 +302,73 @@ test('open --print deletes a stale discovery file and launches a new service', {
     assert.equal(discovery.port, printed.port);
     assert.notEqual(discovery.token, 'stale-token-not-real-aaaaaaaaaaaa');
     assertNoSecrets(`${opened.stdout}\n${opened.stderr}`, [discovery.token, 'stale-token-not-real-aaaaaaaaaaaa']);
+  } finally {
+    await forceStop(dataDir);
+  }
+});
+
+test('live pid with an unresponsive port keeps service.json and does not launch', { timeout: 20000 }, async () => {
+  const dataDir = await mkdtemp(path.join(tmpdir(), 'weft-cli-hang-'));
+  const hung = await listenHangServer();
+  try {
+    writeDiscoverySync(dataDir, {
+      protocolVersion: PROTOCOL_VERSION,
+      serviceVersion: '0.1.0',
+      pid: process.pid,
+      port: hung.port,
+      startedAt: 1,
+      token: 'hang-token-not-real-bbbbbbbbbbbb',
+    });
+    const probeEnv = { WEFT_PROBE_TIMEOUT_MS: '200' };
+    const opened = await runWeft(['open', '--print', '--data-dir', dataDir], {
+      env: probeEnv,
+      timeoutMs: 10000,
+    });
+    assert.equal(opened.code, 1, `${opened.stdout}\n${opened.stderr}`);
+    assert.match(opened.stderr, /没有响应/);
+    assert.match(opened.stderr, new RegExp(`pid ${process.pid}`));
+    assert.equal(existsSync(discoveryPath(dataDir)), true);
+    const afterOpen = await readDiscoveryFile(dataDir);
+    assert.equal(afterOpen.pid, process.pid);
+    assert.equal(afterOpen.port, hung.port);
+    assert.equal(existsSync(path.join(dataDir, 'logs', 'service.log')), false);
+
+    const status = await runWeft(['status', '--data-dir', dataDir], {
+      env: probeEnv,
+      timeoutMs: 10000,
+    });
+    assert.equal(status.code, 1, `${status.stdout}\n${status.stderr}`);
+    assert.match(status.stderr, /没有响应/);
+    assert.equal(existsSync(discoveryPath(dataDir)), true);
+    assert.equal((await readDiscoveryFile(dataDir)).pid, process.pid);
+    assert.equal(existsSync(path.join(dataDir, 'logs', 'service.log')), false);
+  } finally {
+    await hung.close();
+    await forceStop(dataDir);
+  }
+});
+
+test('open --print treats ECONNREFUSED with a live pid as stale and launches', { timeout: 60000 }, async () => {
+  const dataDir = await mkdtemp(path.join(tmpdir(), 'weft-cli-refused-'));
+  try {
+    const port = await unusedPort();
+    writeDiscoverySync(dataDir, {
+      protocolVersion: PROTOCOL_VERSION,
+      serviceVersion: '0.1.0',
+      pid: process.pid,
+      port,
+      startedAt: 1,
+      token: 'refused-token-not-real-cccccccccccc',
+    });
+    const opened = await runWeft(['open', '--print', '--data-dir', dataDir]);
+    assert.equal(opened.code, 0, opened.stderr);
+    const printed = parseLoginUrl(opened.stdout);
+    const discovery = await readDiscoveryFile(dataDir);
+    assert.notEqual(discovery.pid, process.pid);
+    assert.ok(pidIsLive(discovery.pid));
+    assert.equal(discovery.port, printed.port);
+    assert.notEqual(discovery.port, port);
+    assertNoSecrets(`${opened.stdout}\n${opened.stderr}`, [discovery.token, 'refused-token-not-real-cccccccccccc']);
   } finally {
     await forceStop(dataDir);
   }

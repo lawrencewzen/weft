@@ -18,6 +18,14 @@ export const PROBE_TIMEOUT_MS = 3_000;
 export const LAUNCH_TIMEOUT_MS = 30_000;
 export const EXIT_WAIT_MS = 15_000;
 
+export function probeTimeoutMs(env: NodeJS.ProcessEnv = process.env): number {
+  const raw = String(env.WEFT_PROBE_TIMEOUT_MS || '').trim();
+  if (!raw) return PROBE_TIMEOUT_MS;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n <= 0) return PROBE_TIMEOUT_MS;
+  return n;
+}
+
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const SERVER_ENTRY = path.join(REPO_ROOT, 'server.mjs');
 const LOG_REL = path.join('logs', 'service.log');
@@ -211,9 +219,38 @@ function removeDiscoveryFile(dataDir: string): void {
   try { unlinkSync(discoveryPath(dataDir)); } catch { /* already gone */ }
 }
 
+type NetworkFailKind = 'refused' | 'unresponsive';
+
 type HttpResult =
   | { ok: true; status: number; json: unknown }
-  | { ok: false; error: string };
+  | { ok: false; kind: NetworkFailKind; error: string };
+
+type ProbeResult =
+  | { kind: 'ok'; info: ServiceInfo }
+  | { kind: 'stale' }
+  | { kind: 'unresponsive' };
+
+function collectErrorCodes(err: unknown, out: string[] = [], depth = 0): string[] {
+  if (!err || typeof err !== 'object' || depth > 8) return out;
+  const row = err as { code?: unknown; name?: unknown; cause?: unknown; errors?: unknown };
+  if (typeof row.code === 'string') out.push(row.code);
+  if (typeof row.name === 'string') out.push(row.name);
+  if (row.cause) collectErrorCodes(row.cause, out, depth + 1);
+  if (Array.isArray(row.errors)) {
+    for (const nested of row.errors) collectErrorCodes(nested, out, depth + 1);
+  }
+  return out;
+}
+
+function networkFailKind(err: unknown): NetworkFailKind {
+  const codes = collectErrorCodes(err);
+  if (codes.includes('ECONNREFUSED') || codes.includes('WSAECONNREFUSED')) return 'refused';
+  return 'unresponsive';
+}
+
+function unresponsiveError(pid: number): CliError {
+  return new CliError(`服务进程在运行但没有响应（pid ${pid}），请稍后再试`, 1);
+}
 
 async function v2Request(opts: {
   port: number;
@@ -232,7 +269,7 @@ async function v2Request(opts: {
       method: opts.method,
       headers,
       body: opts.body,
-      signal: AbortSignal.timeout(opts.timeoutMs ?? PROBE_TIMEOUT_MS),
+      signal: AbortSignal.timeout(opts.timeoutMs ?? probeTimeoutMs()),
       redirect: 'manual',
     });
     const text = await res.text();
@@ -241,23 +278,26 @@ async function v2Request(opts: {
     return { ok: true, status: res.status, json };
   } catch (err) {
     const message = err instanceof Error ? err.message : 'request failed';
-    return { ok: false, error: message };
+    return { ok: false, kind: networkFailKind(err), error: message };
   }
 }
 
-async function probeService(discovery: ServiceDiscovery): Promise<ServiceInfo | null> {
+async function probeService(discovery: ServiceDiscovery): Promise<ProbeResult> {
   const res = await v2Request({
     port: discovery.port,
     method: 'GET',
     pathname: '/api/v2/service',
     token: discovery.token,
+    timeoutMs: probeTimeoutMs(),
   });
-  if (!res.ok) return null;
-  if (res.status === 401) return null;
-  if (res.status !== 200 || !isServiceInfo(res.json)) return null;
-  if (res.json.pid !== discovery.pid) return null;
-  if (res.json.startedAt !== discovery.startedAt) return null;
-  return res.json;
+  if (!res.ok) return { kind: res.kind === 'refused' ? 'stale' : 'unresponsive' };
+  if (res.status === 401) return { kind: 'stale' };
+  if (res.status >= 500) return { kind: 'unresponsive' };
+  if (res.status !== 200 || !isServiceInfo(res.json)) return { kind: 'unresponsive' };
+  if (res.json.pid !== discovery.pid || res.json.startedAt !== discovery.startedAt) {
+    return { kind: 'stale' };
+  }
+  return { kind: 'ok', info: res.json };
 }
 
 async function resolveService(dataDir: string): Promise<LiveService | null> {
@@ -272,12 +312,13 @@ async function resolveService(dataDir: string): Promise<LiveService | null> {
     removeDiscoveryFile(dataDir);
     return null;
   }
-  const info = await probeService(discovery);
-  if (!info) {
+  const probed = await probeService(discovery);
+  if (probed.kind === 'unresponsive') throw unresponsiveError(discovery.pid);
+  if (probed.kind === 'stale') {
     removeDiscoveryFile(dataDir);
     return null;
   }
-  return { discovery, info };
+  return { discovery, info: probed.info };
 }
 
 function logPath(dataDir: string): string {
@@ -343,8 +384,8 @@ async function waitForLaunched(dataDir: string, pid: number): Promise<LiveServic
     }
     const loaded = loadDiscovery(dataDir);
     if (loaded.status === 'ok' && loaded.value.pid === pid) {
-      const info = await probeService(loaded.value);
-      if (info) return { discovery: loaded.value, info };
+      const probed = await probeService(loaded.value);
+      if (probed.kind === 'ok') return { discovery: loaded.value, info: probed.info };
     }
     await sleep(100);
   }
