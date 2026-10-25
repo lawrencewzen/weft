@@ -20,12 +20,19 @@ import {
 } from './stream/hub.ts';
 import { contractMismatchLog, validateResponse } from './validate.ts';
 import { PROTOCOL_VERSION } from './version.ts';
+import {
+  conversationSnapshot,
+  type ConversationSnapshotInput,
+} from './views/conversation.ts';
 
 type ServiceInfo = components['schemas']['ServiceInfo'];
 type V2Error = components['schemas']['V2Error'];
 type WebCode = components['schemas']['WebCode'];
 type RestartAccepted = components['schemas']['RestartAccepted'];
-type V2JsonBody = ServiceInfo | WebCode | V2Error | RestartAccepted;
+type ConversationSnapshot = components['schemas']['ConversationSnapshot'];
+type V2JsonBody = ServiceInfo | WebCode | V2Error | RestartAccepted | ConversationSnapshot;
+
+export type LoadConversation = (id: string) => Promise<Omit<ConversationSnapshotInput, 'lang' | 'exists'> | null>;
 
 export type V2Handler = (req: IncomingMessage, res: ServerResponse, url: URL) => Promise<boolean>;
 
@@ -154,6 +161,7 @@ export function createV2Handler(opts: {
   hasActiveWork?: () => boolean | Promise<boolean>;
   onRestart?: () => void;
   trackConnection: IdleWatcher['trackConnection'];
+  loadConversation?: LoadConversation;
 }): V2Handler {
   const { serviceVersion, startedAt, auth, hub } = opts;
   const pid = opts.pid ?? process.pid;
@@ -216,6 +224,32 @@ export function createV2Handler(opts: {
       return true;
     }
 
+    const convMatch = /^\/api\/v2\/conversations\/([^/]+)$/.exec(pathname);
+    if (method === 'GET' && convMatch) {
+      const id = decodeURIComponent(convMatch[1]);
+      let loaded: Awaited<ReturnType<LoadConversation>> = null;
+      try {
+        loaded = opts.loadConversation ? await opts.loadConversation(id) : null;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'load conversation failed';
+        sendV2(res, pathname, method, 500, { error: message, code: 'E_INTERNAL' } satisfies V2Error);
+        return true;
+      }
+      if (!loaded) {
+        sendV2(res, pathname, method, 404, { error: 'not found' } satisfies V2Error);
+        return true;
+      }
+      const lang = normalizeLang(url.searchParams.get('lang')) === 'en' ? 'en' : 'zh';
+      try {
+        const snapshot = await conversationSnapshot({ ...loaded, lang });
+        sendV2(res, pathname, method, 200, snapshot);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'snapshot failed';
+        sendV2(res, pathname, method, 500, { error: message, code: 'E_INTERNAL' } satisfies V2Error);
+      }
+      return true;
+    }
+
     if (method === 'GET' && pathname === '/api/v2/events') {
       const topics = parseTopics(url.searchParams.get('topics'));
       const unknown = topics.filter((topic) => !hub.hasTopic(topic));
@@ -266,6 +300,7 @@ export function createV2Runtime(opts: {
   hasActiveWork?: () => boolean | Promise<boolean>;
   onIdleExit?: () => void;
   onRestart?: () => void;
+  loadConversation?: LoadConversation;
 }): V2Runtime {
   const pid = opts.pid ?? process.pid;
   const auth = createV2Auth({
@@ -302,6 +337,7 @@ export function createV2Runtime(opts: {
     hasActiveWork: opts.hasActiveWork,
     onRestart: opts.onRestart,
     trackConnection: idle.trackConnection,
+    loadConversation: opts.loadConversation,
   });
 
   return {

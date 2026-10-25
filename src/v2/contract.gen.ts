@@ -86,6 +86,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/conversations/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 对话完整快照
+         * @description 一次返回 ConversationView、对话流 ThreadItem 列表和工具行 ToolCall。
+         *     组装在服务端完成。`lang` 为 zh 或 en（缺省 zh，不认识的按 zh）。
+         */
+        get: operations["getConversation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -246,6 +267,138 @@ export interface components {
              * @enum {string}
              */
             level: "ok" | "warn" | "full";
+        };
+        /** @description 用户消息。 */
+        ThreadItemUser: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "user";
+            id: string;
+            /** @description Markdown 原文 */
+            text: string;
+            pathRefs: components["schemas"]["PathRef"][];
+        };
+        /** @description 助手回复。空文字的助手消息不进入对话流。 */
+        ThreadItemAssistant: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "assistant";
+            id: string;
+            /** @description Markdown 原文 */
+            text: string;
+            pathRefs: components["schemas"]["PathRef"][];
+            /** @description 这条回复用的模型 id。没有则省略 */
+            model?: string;
+            streaming: boolean;
+            /** @description 最后一条可见回复且 stopReason 为 length 时为 true，客户端显示继续 */
+            truncated: boolean;
+        };
+        /** @description 连续工具调用合成的一组。 */
+        ThreadItemToolGroup: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "tool_group";
+            /** @description 工具组 id，等于 toolGroupKey */
+            id: string;
+            /** @description 组内 ToolCall id，按出现顺序 */
+            toolIds: string[];
+            summary: components["schemas"]["ToolGroupSummary"];
+            /** @description 它是对话流最后一项且对话正在运行时为 true */
+            live: boolean;
+        };
+        /** @description 子 Agent 汇报。存成用户输入，界面不画成用户气泡。 */
+        ThreadItemSubagentReport: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "subagent_report";
+            id: string;
+            /** @description 按 name 找到的子 Agent id；找不到为 null */
+            subagentId: null | string;
+            name: string;
+            /** @enum {string} */
+            reportKind: "answered" | "failed";
+            body: string;
+        };
+        /** @description 系统提示。auto_continue 的 text 是服务端出成的句子。 */
+        ThreadItemSystemNote: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "system_note";
+            id: string;
+            /** @enum {string} */
+            noteKind: "auto_continue" | "correction" | "note";
+            text: string;
+        };
+        /** @description 对话流里的一项。按 kind 区分。 */
+        ThreadItem: components["schemas"]["ThreadItemUser"] | components["schemas"]["ThreadItemAssistant"] | components["schemas"]["ThreadItemToolGroup"] | components["schemas"]["ThreadItemSubagentReport"] | components["schemas"]["ThreadItemSystemNote"];
+        /** @description 当前运行状态。供输入框、停止按钮和等待提示使用。 */
+        RunState: {
+            /**
+             * @description present() 状态归一。recovering、resuming 算 running；paused 算 waiting；error 算 failed；done 算 idle
+             * @enum {string}
+             */
+            status: "idle" | "running" | "waiting" | "failed" | "stopped";
+            /** @description 这次运行的开始时间（毫秒）。Harness 提交记录没有该字段时为 null */
+            startedAt: null | number;
+            /** @description running 时的等待句子，其它状态为 null */
+            pendingText: null | string;
+            /** @description 有工作区时为 true。运行中也能发，会作为插话 */
+            canSend: boolean;
+            /** @description running 时为 true */
+            canStop: boolean;
+            /** @description 没有工作区时为 no_workspace，否则 null */
+            lockedReason: null | "no_workspace";
+            /** @description status 为 failed 时带上，否则 null */
+            error: null | {
+                code: string;
+                message: string;
+                retry?: {
+                    attempt: number;
+                    delayMs: number;
+                };
+            };
+        };
+        /** @description 对话当前模型。取对话自己选的或默认模型。 */
+        ConversationModel: {
+            sourceId: string;
+            modelId: string;
+            /** @description 先用 modelId */
+            label: string;
+        };
+        /** @description 一个对话的视图。摘要字段加上模型、运行状态、上下文和对话流顺序。 */
+        ConversationView: {
+            id: string;
+            workspaceId: string;
+            title: string;
+            /** @description 毫秒时间戳 */
+            updatedAt: number;
+            /**
+             * @description 按设计 6.1 归一。stopped 算 idle
+             * @enum {string}
+             */
+            status: "idle" | "running" | "waiting" | "failed";
+            /** @description 解析不到时为 null */
+            model: null | components["schemas"]["ConversationModel"];
+            run: components["schemas"]["RunState"];
+            context: components["schemas"]["ContextUsage"];
+            /** @description 对话流 ThreadItem id 的顺序 */
+            itemIds: string[];
+        };
+        /** @description GET /api/v2/conversations/{id} 的响应。客户端按 itemIds 画对话流，按 toolIds 取工具行。 */
+        ConversationSnapshot: {
+            conversation: components["schemas"]["ConversationView"];
+            items: components["schemas"]["ThreadItem"][];
+            tools: components["schemas"]["ToolCall"][];
         };
     };
     responses: never;
@@ -467,6 +620,68 @@ export interface operations {
             };
             /** @description 未授权 */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 客户端错误 */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 服务端错误 */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+        };
+    };
+    getConversation: {
+        parameters: {
+            query?: {
+                /** @description 客户端语言。先支持 zh、en；缺省或不认识的按 zh。 */
+                lang?: string;
+            };
+            header?: never;
+            path: {
+                /** @description 对话 id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 对话快照 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConversationSnapshot"];
+                };
+            };
+            /** @description 未授权 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 对话不存在 */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

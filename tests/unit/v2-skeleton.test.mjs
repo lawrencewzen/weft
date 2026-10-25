@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { PROTOCOL_VERSION } from '../../src/v2/version.ts';
-import { compileSchema, validateResponse } from '../../src/v2/validate.ts';
+import { compileSchema, matchContractPath, validateResponse } from '../../src/v2/validate.ts';
 import { ROOT } from './_root.mjs';
 import { readDiscovery, startServer, stopServer } from './_server.mjs';
 
@@ -73,6 +73,46 @@ test('GET /api/v2/service returns ServiceInfo with Weft-Protocol', async () => {
   } finally {
     await stopServer(srv);
   }
+});
+
+function sampleSnapshot() {
+  return {
+    conversation: {
+      id: 'c1',
+      workspaceId: 'w1',
+      title: 't',
+      updatedAt: 1,
+      status: 'idle',
+      model: null,
+      run: {
+        status: 'idle',
+        startedAt: null,
+        pendingText: null,
+        canSend: true,
+        canStop: false,
+        lockedReason: null,
+        error: null,
+      },
+      context: { used: 0, window: 128000, percent: 0, level: 'ok' },
+      itemIds: [],
+    },
+    items: [],
+    tools: [],
+  };
+}
+
+test('validateResponse matches OpenAPI path templates like /conversations/{id}', () => {
+  assert.equal(matchContractPath('/api/v2/conversations/abc-123'), '/api/v2/conversations/{id}');
+  assert.equal(matchContractPath('/api/v2/conversations/abc/extra'), undefined);
+  assert.equal(matchContractPath('/api/v2/service'), '/api/v2/service');
+  const ok = validateResponse('/api/v2/conversations/abc-123', 'GET', 200, sampleSnapshot());
+  assert.equal(ok.ok, true, JSON.stringify(ok.errors));
+  const missing = validateResponse('/api/v2/conversations/nope', 'GET', 404, { error: 'not found' });
+  assert.equal(missing.ok, true, JSON.stringify(missing.errors));
+  const unauth = validateResponse('/api/v2/conversations/abc-123', 'GET', 401, { error: 'unauthorized', code: 'E_UNAUTHORIZED' });
+  assert.equal(unauth.ok, true, JSON.stringify(unauth.errors));
+  const extra = validateResponse('/api/v2/conversations/abc/extra', 'GET', 200, sampleSnapshot());
+  assert.equal(extra.ok, false);
 });
 
 test('GET /api/v2/nope returns 404 V2Error', async () => {
