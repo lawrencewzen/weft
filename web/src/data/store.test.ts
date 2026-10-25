@@ -442,4 +442,16 @@ describe('workspace selectors', () => {
     expect(store.conversationsFor('w2')).toEqual([]);
     expect(store.conversationSummaries()).toEqual([]);
   });
+
+  it('lists change entities for a conversation sorted by path', () => {
+    const store = createEntityStore();
+    store.applySnapshot(snapshot([
+      ref('conversation', CID, conv(CID, [])),
+      ref('change', 'z.md', { path: 'z.md', added: 1, removed: 0, error: null }),
+      ref('change', 'a.md', { path: 'a.md', added: 2, removed: 1, error: null }),
+    ]));
+    expect(store.changes(CID).map((item) => item.path)).toEqual(['a.md', 'z.md']);
+    store.applyRemove({ topic: TOPIC, entity: 'change', id: 'a.md' });
+    expect(store.changes(CID).map((item) => item.path)).toEqual(['z.md']);
+  });
 });

@@ -4,6 +4,7 @@ import { useConversation, useDraftSend } from '../data/useConversation';
 import { t } from '../i18n';
 import type { components } from '../../../src/v2/contract.gen';
 import { Composer } from './Composer';
+import { RightToggle } from './RightToggle';
 import { StatusBar } from './StatusBar';
 import { SubagentPane } from './SubagentPane';
 import { Thread } from './Thread';
@@ -120,6 +121,7 @@ export function CenterPane({
               </button>
             ) : null}
             <h1 className="top-title">{t(lang, 'home_title')}</h1>
+            <div className="top-right"><RightToggle lang={lang} /></div>
           </div>
         </header>
         <div className="thread-empty">
@@ -146,6 +148,7 @@ export function CenterPane({
               </button>
             ) : null}
             <p>{t(lang, 'loading')}</p>
+            <div className="top-right"><RightToggle lang={lang} /></div>
           </div>
         </header>
       </main>

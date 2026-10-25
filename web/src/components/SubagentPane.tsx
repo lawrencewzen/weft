@@ -6,6 +6,7 @@ import { useSubagent } from '../data/useSubagent';
 import { t } from '../i18n';
 import { Composer } from './Composer';
 import { DemoModelBadge } from './DemoModelBadge';
+import { RightToggle } from './RightToggle';
 import { Thread } from './Thread';
 
 type Props = {
@@ -55,6 +56,7 @@ export function SubagentPane({
               </button>
             ) : null}
             <h1 className="top-title">{t(lang, 'home_title')}</h1>
+            <div className="top-right"><RightToggle lang={lang} /></div>
           </div>
         </header>
         <div className="thread-empty">
@@ -81,6 +83,7 @@ export function SubagentPane({
               </button>
             ) : null}
             <p>{t(lang, 'loading')}</p>
+            <div className="top-right"><RightToggle lang={lang} /></div>
           </div>
         </header>
       </main>
@@ -140,6 +143,9 @@ export function SubagentPane({
             {time ? (
               <span className="pending-elapsed" data-testid="next-subagent-time">{time}</span>
             ) : null}
+          </div>
+          <div className="top-right">
+            <RightToggle lang={lang} />
           </div>
         </div>
       </header>

@@ -6,6 +6,7 @@ export type Workspace = components['schemas']['Workspace'];
 export type ThreadItem = components['schemas']['ThreadItem'];
 export type ToolCall = components['schemas']['ToolCall'];
 export type Subagent = components['schemas']['Subagent'];
+export type Change = components['schemas']['Change'];
 export type SnapshotEvent = components['schemas']['SnapshotEvent'];
 export type UpsertEvent = components['schemas']['UpsertEvent'];
 export type RemoveEvent = components['schemas']['RemoveEvent'];
@@ -83,6 +84,7 @@ export type EntityStore = {
   items(cid: string): ThreadItem[];
   tool(toolId: string): ToolCall | undefined;
   toolsById(cid: string): Record<string, ToolCall>;
+  changes(cid: string): Change[];
   workspaces(): Workspace[];
   conversationSummaries(): ConversationSummary[];
   conversationsFor(workspaceId: string): ConversationSummary[];
@@ -257,6 +259,18 @@ export function createEntityStore(): EntityStore {
           out[rec.id] = rec.value as unknown as ToolCall;
         }
       }
+      return out;
+    },
+
+    changes(cid) {
+      const topic = conversationTopic(cid);
+      const out: Change[] = [];
+      for (const rec of entities.values()) {
+        if (rec.topic === topic && rec.entity === 'change') {
+          out.push(rec.value as unknown as Change);
+        }
+      }
+      out.sort((a, b) => a.path.localeCompare(b.path));
       return out;
     },
 

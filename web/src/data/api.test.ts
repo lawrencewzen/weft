@@ -1,17 +1,24 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   ApiError,
+  ConflictError,
   continueRun,
   createConversation,
+  getConversationDiff,
   getSnapshot,
+  getWorkspaceFile,
+  getWorkspaceTree,
+  isConflictError,
   isUnauthenticatedError,
   removeWorkspace,
+  saveWorkspaceFile,
   sendMessage,
   sendSubagentMessage,
   stop,
   stopSubagent,
   toolOutput,
   UnauthenticatedError,
+  workspaceFileUrl,
 } from './api';
 
 function jsonResponse(status: number, body: unknown, statusText = 'Error'): Response {
@@ -165,5 +172,56 @@ describe('api client', () => {
       expect((err as ApiError).code).toBe('E_WS_BUSY');
       return true;
     });
+  });
+
+  it('loads tree, file, and diff through v2 endpoints and encodes the path query', async () => {
+    const file = {
+      path: 'notes/today.md',
+      size: 12,
+      binary: false,
+      tooLarge: false,
+      text: 'hi',
+      version: 'v1',
+    };
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse(200, { entries: [{ path: 'notes', type: 'dir' }], truncated: false }))
+      .mockResolvedValueOnce(jsonResponse(200, file))
+      .mockResolvedValueOnce(jsonResponse(200, {
+        path: 'notes/today.md', added: 1, removed: 0, hunks: [], tooLarge: false,
+      }))
+      .mockResolvedValueOnce(jsonResponse(200, { path: 'notes/today.md', version: 'v2', added: 1, removed: 0 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(getWorkspaceTree('w/1')).resolves.toMatchObject({ truncated: false });
+    await expect(getWorkspaceFile('w/1', 'notes/today.md')).resolves.toEqual(file);
+    await expect(getConversationDiff('c/1', 'notes/today.md')).resolves.toMatchObject({ path: 'notes/today.md' });
+    await expect(saveWorkspaceFile('w/1', { path: 'notes/today.md', text: 'hi', baseVersion: 'v1' }))
+      .resolves.toMatchObject({ version: 'v2' });
+
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/v2/workspaces/w%2F1/tree');
+    expect(fetchMock.mock.calls[1][0]).toBe('/api/v2/workspaces/w%2F1/files?path=notes%2Ftoday.md');
+    expect(fetchMock.mock.calls[2][0]).toBe('/api/v2/conversations/c%2F1/diff?path=notes%2Ftoday.md');
+    expect(JSON.parse(String(fetchMock.mock.calls[3][1].body))).toEqual({
+      path: 'notes/today.md', text: 'hi', baseVersion: 'v1',
+    });
+  });
+
+  it('turns 409 E_CONFLICT with current into a ConflictError', async () => {
+    const current = {
+      path: 'a.md', size: 3, binary: false, tooLarge: false, text: 'new', version: 'v9',
+    };
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
+      jsonResponse(409, { error: 'conflict', code: 'E_CONFLICT', current }, 'Conflict'),
+    ));
+    await expect(saveWorkspaceFile('w1', { path: 'a.md', text: 'mine', baseVersion: 'v1' }))
+      .rejects.toSatisfy((err: unknown) => {
+        expect(err).toBeInstanceOf(ConflictError);
+        expect(isConflictError(err)).toBe(true);
+        expect((err as ConflictError).current).toEqual(current);
+        return true;
+      });
+    expect(workspaceFileUrl('w1', '../../etc/passwd')).toBe(
+      '/api/v2/workspaces/w1/files?path=..%2F..%2Fetc%2Fpasswd',
+    );
   });
 });
