@@ -179,6 +179,51 @@ export interface components {
         };
         /** @description SSE event=heartbeat 的 data。不带 id，不进环形缓冲。 */
         HeartbeatEvent: Record<string, never>;
+        /** @description 单条工具调用的视图模型。全文按需拉 GET /api/v2/tools/<id>/output。 */
+        ToolCall: {
+            id: string;
+            /** @description 所属工具组 id，由组内第一条调用算出 */
+            groupId: string;
+            /** @enum {string} */
+            kind: "read" | "write" | "edit" | "ls" | "grep" | "bash" | "other";
+            /** @enum {string} */
+            status: "running" | "failed" | "interrupted" | "done";
+            heading: {
+                title: string;
+                detail: string;
+                /** @description title 是否来自 input.description */
+                fromIntent: boolean;
+            };
+            /** @description 相对工作区路径。没有则省略 */
+            path?: string;
+            hint: {
+                text: string;
+                failed: boolean;
+            };
+            /** @enum {string} */
+            failure: "none" | "probe" | "real";
+            /** @description 没有增删行数时为 null */
+            diff: null | {
+                added: number | null;
+                removed: number | null;
+            };
+            /** @description bash 有退出码时带上，否则省略 */
+            exitCode?: number;
+            output: {
+                /** @description 成功取前 20 行，失败取 TOOL_ERROR_PREVIEW_LINES 行 */
+                preview: string;
+                truncated: boolean;
+                totalLines: number;
+            };
+        };
+        /** @description 工具组摘要。对应 ThreadItem.tool_group.summary。 */
+        ToolGroupSummary: {
+            /** @description 按客户端语言出成的摘要句子 */
+            text: string;
+            /** @description 组内真实失败（不含试探失败）的条数 */
+            failed: number;
+            running: boolean;
+        };
     };
     responses: never;
     parameters: never;
