@@ -16,7 +16,9 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run check
+      - run: npm run typecheck
       - run: npm run typecheck:web
+      - run: npm run check:contract
       - run: npm test
   e2e:
     runs-on: ubuntu-latest

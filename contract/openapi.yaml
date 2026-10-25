@@ -1,0 +1,58 @@
+openapi: 3.1.0
+info:
+  title: Weft v2
+  version: "2.0.0"
+  description: Weft v2 HTTP 契约。本文件是协议的唯一依据。
+paths:
+  /api/v2/service:
+    get:
+      operationId: getService
+      summary: 查询服务信息
+      responses:
+        "200":
+          description: 当前进程的服务信息
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServiceInfo"
+        4XX:
+          description: 客户端错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        5XX:
+          description: 服务端错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+components:
+  schemas:
+    ServiceInfo:
+      type: object
+      additionalProperties: false
+      required:
+        - protocolVersion
+        - serviceVersion
+        - pid
+        - startedAt
+      properties:
+        protocolVersion:
+          type: string
+        serviceVersion:
+          type: string
+        pid:
+          type: integer
+        startedAt:
+          type: integer
+          description: 进程启动时间（毫秒时间戳）
+    V2Error:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+        code:
+          type: string
