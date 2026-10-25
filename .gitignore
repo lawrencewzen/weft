@@ -1,5 +1,6 @@
 node_modules/
 public/vendor/
+/public-next/
 # Playwright / CI e2e outputs at repo root (also keep tests/ copies ignored)
 /test-results/
 /playwright-report/
