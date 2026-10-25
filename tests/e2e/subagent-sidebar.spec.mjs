@@ -453,15 +453,12 @@ test('brief, elapsed mm:ss, idle, and currentAction', async ({ page }) => {
     await expect.poll(async () => {
       const stuckArc = await auditorRow.locator('.sa-arc').evaluate((el) => {
         const s = getComputedStyle(el);
-        return { duration: s.animationDuration, transition: s.transition };
+        return { duration: Number.parseFloat(s.animationDuration), transition: s.transition };
       });
-      return Number.parseFloat(stuckArc.duration);
-    }, { timeout: 2500 }).toBeGreaterThan(2);
-    const stuckArc = await auditorRow.locator('.sa-arc').evaluate((el) => {
-      const s = getComputedStyle(el);
-      return { duration: s.animationDuration, transition: s.transition };
-    });
-    expect(stuckArc.transition).toMatch(/stroke|opacity/);
+      expect(stuckArc.duration).toBeGreaterThan(2);
+      expect(stuckArc.transition).toMatch(/stroke|opacity/);
+      return stuckArc;
+    }, { timeout: 2500 }).toBeTruthy();
 
     await expect(page.getByTestId('subagent-chip')).toHaveText('2/3');
     await expect(page.getByTestId('subagent-chip')).toHaveClass(/is-live/);
