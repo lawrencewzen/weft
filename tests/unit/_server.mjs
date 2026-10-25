@@ -35,6 +35,7 @@ const STRIP = [
   'WEFT_ALLOWED_HOSTS',
   'WEFT_LAUNCHED_BY',
   'WEFT_IDLE_EXIT_MINUTES',
+  'WEFT_SUBAGENT_STUCK_MS',
 ];
 
 function childEnv(dataDir, { token, extra = {} } = {}) {

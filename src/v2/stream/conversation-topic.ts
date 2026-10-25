@@ -8,11 +8,18 @@ import {
 } from '../views/conversation.ts';
 import { fileExistsInWorkspace } from '../views/path-refs.ts';
 import {
+  resolveStuckAfterMs,
+  subagentViews,
+  type Subagent,
+  type SubagentLike,
+} from '../views/subagents.ts';
+import {
   normalizeLang,
   type Entity,
   type EventHub,
   type SnapshotPayload,
 } from './hub.ts';
+import type { StuckWatch } from './stuck-watch.ts';
 
 export const CONVERSATION_PREFIX = 'conversation:';
 export const COALESCE_MS = 50;
@@ -29,8 +36,12 @@ export type ConversationTopicOpts = {
   coalesceMs?: number;
   pathCacheMs?: number;
   now?: () => number;
+  stuckAfterMs?: number;
+  stuck?: StuckWatch;
   log?: (line: string) => void;
 };
+
+type TopicSnapshot = ConversationSnapshot & { subagents: Subagent[] };
 
 type ThreadItem = components['schemas']['ThreadItem'];
 type ToolCall = components['schemas']['ToolCall'];
@@ -47,6 +58,7 @@ type TopicState = {
   pending: KernelEvent[];
   timer: ReturnType<typeof setTimeout> | null;
   tail: Promise<void>;
+  rawAgents: SubagentLike[];
 };
 
 export type ConversationTopic = {
@@ -98,7 +110,7 @@ function liveAssistant(id: string, text: string): AssistantItem {
   };
 }
 
-export function entitiesFromSnapshot(snap: ConversationSnapshot): Entity[] {
+export function entitiesFromSnapshot(snap: TopicSnapshot | ConversationSnapshot): Entity[] {
   const out: Entity[] = [
     { entity: 'conversation', id: snap.conversation.id, value: snap.conversation },
   ];
@@ -108,10 +120,13 @@ export function entitiesFromSnapshot(snap: ConversationSnapshot): Entity[] {
   for (const tool of snap.tools) {
     out.push({ entity: 'tool', id: tool.id, value: tool });
   }
+  for (const agent of 'subagents' in snap ? snap.subagents : []) {
+    out.push({ entity: 'subagent', id: agent.id, value: agent });
+  }
   return out;
 }
 
-function overlayLive(snap: ConversationSnapshot, lives: Map<string, { text: string }>): ConversationSnapshot {
+function overlayLive(snap: TopicSnapshot, lives: Map<string, { text: string }>): TopicSnapshot {
   if (!lives.size) return snap;
   const itemIds = [...snap.conversation.itemIds];
   const items = [...snap.items];
@@ -134,18 +149,20 @@ function overlayLive(snap: ConversationSnapshot, lives: Map<string, { text: stri
   };
 }
 
-function mapsFromSnapshot(snap: ConversationSnapshot): Map<EntityKey, object> {
+function mapsFromSnapshot(snap: TopicSnapshot): Map<EntityKey, object> {
   const map = new Map<EntityKey, object>();
   map.set(entityKey('conversation', snap.conversation.id), snap.conversation);
   for (const item of snap.items) map.set(entityKey('item', item.id), item);
   for (const tool of snap.tools) map.set(entityKey('tool', tool.id), tool);
+  for (const agent of snap.subagents) map.set(entityKey('subagent', agent.id), agent);
   return map;
 }
 
-function orderedUpsertKeys(snap: ConversationSnapshot): EntityKey[] {
+function orderedUpsertKeys(snap: TopicSnapshot): EntityKey[] {
   const keys: EntityKey[] = [];
   for (const id of snap.conversation.itemIds) keys.push(entityKey('item', id));
   for (const tool of snap.tools) keys.push(entityKey('tool', tool.id));
+  for (const agent of snap.subagents) keys.push(entityKey('subagent', agent.id));
   keys.push(entityKey('conversation', snap.conversation.id));
   return keys;
 }
@@ -154,12 +171,16 @@ export function attachConversationTopic(hub: EventHub, opts: ConversationTopicOp
   const coalesceMs = opts.coalesceMs ?? COALESCE_MS;
   const pathCacheMs = opts.pathCacheMs ?? PATH_CACHE_MS;
   const now = opts.now ?? Date.now;
+  const stuckAfterMs = opts.stuckAfterMs ?? resolveStuckAfterMs();
   const log = opts.log ?? ((line: string) => {
     console.log(line);
   });
   const states = new Map<string, TopicState>();
   const kernelUnsubs = new Map<string, () => void>();
   let disposed = false;
+  const unlisten = opts.stuck?.listen((cid) => {
+    enqueue(cid, () => recompute(cid));
+  });
 
   function stateOf(cid: string): TopicState {
     let state = states.get(cid);
@@ -172,6 +193,7 @@ export function attachConversationTopic(hub: EventHub, opts: ConversationTopicOp
         pending: [],
         timer: null,
         tail: Promise.resolve(),
+        rawAgents: [],
       };
       states.set(cid, state);
     }
@@ -203,17 +225,32 @@ export function attachConversationTopic(hub: EventHub, opts: ConversationTopicOp
     };
   }
 
-  async function snapshotFor(cid: string, lang: 'zh' | 'en', state: TopicState): Promise<ConversationSnapshot | null> {
+  async function snapshotFor(cid: string, lang: 'zh' | 'en', state: TopicState): Promise<TopicSnapshot | null> {
     if (!opts.loadConversation) return null;
     const loaded = await opts.loadConversation(cid);
-    if (!loaded) return null;
+    if (!loaded) {
+      state.rawAgents = [];
+      opts.stuck?.sync(cid, []);
+      return null;
+    }
+    const rawAgents = Array.isArray(loaded.subagents) ? loaded.subagents : [];
+    state.rawAgents = rawAgents;
+    opts.stuck?.sync(cid, rawAgents);
     const workspacePath = loaded.presented?.workspacePath == null ? '' : String(loaded.presented.workspacePath);
     const snap = await conversationSnapshot({
       ...loaded,
       lang,
       exists: existsFor(cid, workspacePath),
     });
-    return overlayLive(snap, state.lives);
+    const t = now();
+    return overlayLive({
+      ...snap,
+      subagents: subagentViews(rawAgents, {
+        parentConversationId: cid,
+        now: t,
+        stuckAfterMs,
+      }),
+    }, state.lives);
   }
 
   async function snapshotEntities(topic: string, lang: string): Promise<SnapshotPayload> {
@@ -250,7 +287,7 @@ export function attachConversationTopic(hub: EventHub, opts: ConversationTopicOp
     state.lives.clear();
   }
 
-  function diffAndPublish(cid: string, state: TopicState, zh: ConversationSnapshot, en: ConversationSnapshot): void {
+  function diffAndPublish(cid: string, state: TopicState, zh: TopicSnapshot, en: TopicSnapshot): void {
     const nextZh = mapsFromSnapshot(zh);
     const nextEn = mapsFromSnapshot(en);
     const prevKeys = new Set<EntityKey>([...state.lastZh.keys(), ...state.lastEn.keys()]);
@@ -277,8 +314,8 @@ export function attachConversationTopic(hub: EventHub, opts: ConversationTopicOp
   async function recompute(cid: string): Promise<void> {
     if (disposed || !kernelUnsubs.has(cid)) return;
     const state = stateOf(cid);
-    let zh: ConversationSnapshot | null = null;
-    let en: ConversationSnapshot | null = null;
+    let zh: TopicSnapshot | null = null;
+    let en: TopicSnapshot | null = null;
     try {
       zh = await snapshotFor(cid, 'zh', state);
       en = await snapshotFor(cid, 'en', state);
@@ -401,6 +438,7 @@ export function attachConversationTopic(hub: EventHub, opts: ConversationTopicOp
       enqueue(cid, () => onKernelEvent(cid, ev));
     }) : () => {};
     kernelUnsubs.set(cid, unsub);
+    opts.stuck?.retain(cid);
     log(`WEFT_V2_CONV_SUB ${cid}`);
   }
 
@@ -414,6 +452,7 @@ export function attachConversationTopic(hub: EventHub, opts: ConversationTopicOp
     } catch (err) {
       console.error(`WEFT_V2_CONV_UNSUB ${cid}`, err);
     }
+    opts.stuck?.release(cid);
     dropState(cid);
     if (unsub) log(`WEFT_V2_CONV_UNSUB ${cid}`);
   }
@@ -430,9 +469,11 @@ export function attachConversationTopic(hub: EventHub, opts: ConversationTopicOp
     },
     dispose() {
       disposed = true;
+      unlisten?.();
       for (const [cid, unsub] of kernelUnsubs) {
         kernelUnsubs.delete(cid);
         try { unsub(); } catch { /* ignore */ }
+        opts.stuck?.release(cid);
         dropState(cid);
         log(`WEFT_V2_CONV_UNSUB ${cid}`);
       }

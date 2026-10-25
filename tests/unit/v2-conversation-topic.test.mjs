@@ -53,6 +53,7 @@ function assertEntityValue(entity, value) {
   if (entity === 'conversation') assertSchema('ConversationView', value);
   else if (entity === 'item') assertSchema('ThreadItem', value);
   else if (entity === 'tool') assertSchema('ToolCall', value);
+  else if (entity === 'subagent') assertSchema('Subagent', value);
   else assert.fail(`unexpected entity ${entity}`);
 }
 
