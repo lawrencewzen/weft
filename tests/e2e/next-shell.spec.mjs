@@ -25,7 +25,7 @@ test('GET /next/ without a session prompts to use weft open', async ({ page }) =
 });
 
 test('GET /next/login?code= exchanges a web-code for a session and shows protocol 2.0.0', async ({ page }) => {
-  const srv = await startServer();
+  const srv = await startServer({ extraEnv: { WEFT_V2_HEARTBEAT_MS: '500' } });
   const csp = attachCspLog(page);
   try {
     const discovery = await readDiscovery(srv.dataDir);
@@ -45,6 +45,8 @@ test('GET /next/login?code= exchanges a web-code for a session and shows protoco
     await expect(page).toHaveURL(/\/next\/$/);
     await expect(page.getByTestId('next-app')).toBeVisible();
     await expect(page.getByTestId('next-protocol')).toHaveText('2.0.0');
+    await expect(page.getByTestId('next-stream')).toHaveText('connected');
+    await expect(page.getByTestId('next-heartbeat')).toBeVisible();
     expect(csp, 'page console has no CSP errors').toEqual([]);
   } finally {
     await srv.kill();
