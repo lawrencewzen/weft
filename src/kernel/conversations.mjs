@@ -336,6 +336,14 @@ export async function openConversationKernel({
   return {
     harness,
     context,
+    async hasActiveWork() {
+      const graph = await harness.taskGraph(context);
+      try {
+        return Object.keys(graph.value?.tasks || {}).length > 0;
+      } finally {
+        graph.dispose();
+      }
+    },
     async close() {
       for (const watch of watches.values()) {
         try { await watch.stream.stop(); } catch { /* already stopped */ }

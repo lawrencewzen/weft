@@ -9,12 +9,15 @@ import {
 } from './auth.ts';
 import type { components } from './contract.gen.ts';
 import { removeDiscoverySync, writeDiscoverySync } from './daemon/discovery.ts';
+import { createIdleWatcher, type IdleWatcher } from './daemon/idle.ts';
 import { contractMismatchLog, validateResponse } from './validate.ts';
 import { PROTOCOL_VERSION } from './version.ts';
 
 type ServiceInfo = components['schemas']['ServiceInfo'];
 type V2Error = components['schemas']['V2Error'];
 type WebCode = components['schemas']['WebCode'];
+type RestartAccepted = components['schemas']['RestartAccepted'];
+type V2JsonBody = ServiceInfo | WebCode | V2Error | RestartAccepted;
 
 export type V2Handler = (req: IncomingMessage, res: ServerResponse, url: URL) => Promise<boolean>;
 
@@ -23,6 +26,9 @@ export type V2Runtime = {
   handleLogin: (req: IncomingMessage, res: ServerResponse, url: URL) => boolean;
   writeDiscoveryFile: (port: number) => void;
   removeDiscoveryFile: () => void;
+  touch: IdleWatcher['touch'];
+  trackConnection: IdleWatcher['trackConnection'];
+  startIdleExit: IdleWatcher['start'];
   dispose: () => void;
 };
 
@@ -40,9 +46,11 @@ function v2Headers(): Record<string, string> {
   };
 }
 
-function writeJson(res: ServerResponse, status: number, body: unknown): void {
+function writeJson(res: ServerResponse, status: number, body: unknown, onSent?: () => void): void {
   res.writeHead(status, v2Headers());
-  res.end(JSON.stringify(body));
+  res.end(JSON.stringify(body), () => {
+    onSent?.();
+  });
 }
 
 function sendV2(
@@ -50,7 +58,8 @@ function sendV2(
   requestPath: string,
   method: string,
   status: number,
-  body: ServiceInfo | WebCode | V2Error,
+  body: V2JsonBody,
+  onSent?: () => void,
 ): void {
   if (process.env.WEFT_V2_VALIDATE === '1') {
     const result = validateResponse(requestPath, method, status, body);
@@ -61,7 +70,7 @@ function sendV2(
       return;
     }
   }
-  writeJson(res, status, body);
+  writeJson(res, status, body, onSent);
 }
 
 function unauthorized(res: ServerResponse, requestPath: string, method: string): void {
@@ -95,8 +104,11 @@ export function createV2Handler(opts: {
   serviceVersion: string;
   startedAt: number;
   auth: V2Auth;
+  hasActiveWork?: () => boolean | Promise<boolean>;
+  onRestart?: () => void;
 }): V2Handler {
   const { serviceVersion, startedAt, auth } = opts;
+  const hasActiveWork = opts.hasActiveWork ?? (() => false);
   return async (req, res, url) => {
     if (url.pathname !== '/api/v2' && !url.pathname.startsWith('/api/v2/')) return false;
     const pathname = normalizePath(url.pathname);
@@ -140,6 +152,26 @@ export function createV2Handler(opts: {
       sendV2(res, pathname, method, 200, body);
       return true;
     }
+
+    if (method === 'POST' && pathname === '/api/v2/service/restart') {
+      let busy = false;
+      try {
+        busy = Boolean(await hasActiveWork());
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'active work check failed';
+        sendV2(res, pathname, method, 500, { error: message, code: 'E_INTERNAL' } satisfies V2Error);
+        return true;
+      }
+      if (busy) {
+        sendV2(res, pathname, method, 409, { error: 'busy', code: 'E_BUSY' } satisfies V2Error);
+        return true;
+      }
+      sendV2(res, pathname, method, 202, { exiting: true } satisfies RestartAccepted, () => {
+        console.log('WEFT_SERVICE_RESTART');
+        opts.onRestart?.();
+      });
+      return true;
+    }
     sendV2(res, pathname, method, 404, { error: 'not found' } satisfies V2Error);
     return true;
   };
@@ -152,6 +184,10 @@ export function createV2Runtime(opts: {
   pid?: number;
   now?: () => number;
   webCodeTtlMs?: number;
+  env?: NodeJS.ProcessEnv;
+  hasActiveWork?: () => boolean | Promise<boolean>;
+  onIdleExit?: () => void;
+  onRestart?: () => void;
 }): V2Runtime {
   const pid = opts.pid ?? process.pid;
   const auth = createV2Auth({
@@ -163,6 +199,14 @@ export function createV2Runtime(opts: {
     serviceVersion: opts.serviceVersion,
     startedAt: opts.startedAt,
     auth,
+    hasActiveWork: opts.hasActiveWork,
+    onRestart: opts.onRestart,
+  });
+  const idle = createIdleWatcher({
+    hasActiveWork: opts.hasActiveWork ?? (() => false),
+    shutdown: () => opts.onIdleExit?.(),
+    env: opts.env,
+    now: opts.now,
   });
 
   return {
@@ -183,7 +227,11 @@ export function createV2Runtime(opts: {
     removeDiscoveryFile() {
       removeDiscoverySync(opts.dataDir, pid);
     },
+    touch: idle.touch,
+    trackConnection: idle.trackConnection,
+    startIdleExit: idle.start,
     dispose() {
+      idle.dispose();
       auth.dispose();
     },
   };
