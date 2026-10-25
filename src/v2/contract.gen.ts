@@ -224,6 +224,29 @@ export interface components {
             failed: number;
             running: boolean;
         };
+        /** @description 行内代码里在工作区中真实存在的文件路径。各端渲染 Markdown 时把这些变成可点的标签。 */
+        PathRef: {
+            /** @description 行内代码的原文 */
+            text: string;
+            /** @description 相对工作区的路径（统一用 /） */
+            path: string;
+            /** @description 来自行内代码里的 :行号 后缀 */
+            line?: number;
+        };
+        /** @description 上下文用量视图。窗口由调用方传入（手动覆盖 → Provider 默认 → 模型目录 → 环境变量）；缺省 128000。 */
+        ContextUsage: {
+            /** @description 已占用的上下文 token 数。没有用量时为 0 */
+            used: number;
+            /** @description 上下文窗口大小 */
+            window: number;
+            /** @description 已用百分比，四舍五入，上限 100 */
+            percent: number;
+            /**
+             * @description percent < 80 为 ok，80 到 94 为 warn，≥ 95 为 full
+             * @enum {string}
+             */
+            level: "ok" | "warn" | "full";
+        };
     };
     responses: never;
     parameters: never;
