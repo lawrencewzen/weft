@@ -94,6 +94,21 @@ export function relativizePath(pathLike: unknown, workspacePath: unknown): strin
   return raw;
 }
 
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/** Drive-letter paths and UNC/backslash roots: Windows, case-insensitive. */
+function windowsPathRoot(root: string): boolean {
+  return /^[A-Za-z]:/.test(root) || root.includes('\\');
+}
+
+function driveCaseVariants(root: string): string[] {
+  const match = /^([A-Za-z])(:[\s\S]*)$/.exec(root);
+  if (!match) return [root];
+  return [root, `${match[1].toLowerCase()}${match[2]}`, `${match[1].toUpperCase()}${match[2]}`];
+}
+
 function rootVariants(workspacePath: unknown): string[] {
   const rootRaw = String(workspacePath ?? '');
   if (!rootRaw) return [];
@@ -103,9 +118,12 @@ function rootVariants(workspacePath: unknown): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
   for (const item of [trimmed, forward, backward]) {
-    if (!item || seen.has(item)) continue;
-    seen.add(item);
-    out.push(item);
+    if (!item) continue;
+    for (const variant of driveCaseVariants(item)) {
+      if (seen.has(variant)) continue;
+      seen.add(variant);
+      out.push(variant);
+    }
   }
   out.sort((a, b) => b.length - a.length);
   return out;
@@ -117,9 +135,11 @@ export function relativizeText(text: unknown, workspacePath: unknown): string {
   if (!raw) return raw;
   let out = raw;
   for (const root of rootVariants(workspacePath)) {
-    const sep = root.includes('\\') ? '\\' : '/';
-    out = out.split(root + sep).join('');
-    const quoted = new RegExp(`(['"])${root.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\1`, 'g');
+    const escaped = escapeRegExp(root);
+    // Mixed separators (`C:\\ws` + `/src/a.js`) and Windows drive-letter case.
+    const flags = windowsPathRoot(root) ? 'gi' : 'g';
+    out = out.replace(new RegExp(`${escaped}[\\\\/]`, flags), '');
+    const quoted = new RegExp(`(['"])${escaped}\\1`, 'g');
     out = out.replace(quoted, '$1.$1');
   }
   return out;
@@ -679,7 +699,7 @@ export function toolDiffCounts(tool: ToolLike | null | undefined): { added: numb
   return { added: Number(match[1]), removed: Number(match[2]) };
 }
 
-function toolOutputText(tool: ToolLike | null | undefined, workspacePath: string): string {
+export function toolOutputText(tool: ToolLike | null | undefined, workspacePath: string): string {
   const parsed = parseToolOutput(tool?.output);
   const json = parsed.json && typeof parsed.json === 'object' ? parsed.json as JsonObject : null;
   let raw = parsed.text;

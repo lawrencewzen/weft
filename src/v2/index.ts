@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { SECURITY_HEADERS } from '../core/auth.mjs';
 import { formatSSE } from '../core/sse.mjs';
@@ -20,8 +21,11 @@ import {
 } from './stream/hub.ts';
 import { contractMismatchLog, validateResponse } from './validate.ts';
 import { PROTOCOL_VERSION } from './version.ts';
+import { MANUAL_CONTINUE_TEXT } from './views/continuation.ts';
 import {
   conversationSnapshot,
+  findPresentedTool,
+  toolOutputView,
   type ConversationSnapshotInput,
 } from './views/conversation.ts';
 
@@ -30,7 +34,38 @@ type V2Error = components['schemas']['V2Error'];
 type WebCode = components['schemas']['WebCode'];
 type RestartAccepted = components['schemas']['RestartAccepted'];
 type ConversationSnapshot = components['schemas']['ConversationSnapshot'];
-type V2JsonBody = ServiceInfo | WebCode | V2Error | RestartAccepted | ConversationSnapshot;
+type RunAccepted = components['schemas']['RunAccepted'];
+type StopAccepted = components['schemas']['StopAccepted'];
+type ToolOutput = components['schemas']['ToolOutput'];
+type V2JsonBody =
+  | ServiceInfo
+  | WebCode
+  | V2Error
+  | RestartAccepted
+  | ConversationSnapshot
+  | RunAccepted
+  | StopAccepted
+  | ToolOutput;
+
+export type ConversationRow = {
+  id?: unknown;
+  workspaceId?: unknown;
+  [key: string]: unknown;
+};
+
+export type WorkspaceRow = {
+  removedAt?: unknown;
+  [key: string]: unknown;
+};
+
+export type GetConversation = (id: string) => Promise<ConversationRow | null | undefined>;
+export type GetWorkspace = (id: string) => Promise<WorkspaceRow | null | undefined>;
+export type PostMessage = (
+  conv: ConversationRow,
+  text: string,
+  opts?: { requestId?: string },
+) => Promise<{ status: number; body?: { runId?: unknown } }>;
+export type StopConversationFn = (id: string) => Promise<{ status: number }>;
 
 export type LoadConversation = (id: string) => Promise<Omit<ConversationSnapshotInput, 'lang' | 'exists'> | null>;
 
@@ -90,6 +125,55 @@ function sendV2(
 
 function unauthorized(res: ServerResponse, requestPath: string, method: string): void {
   sendV2(res, requestPath, method, 401, { error: 'unauthorized', code: 'E_UNAUTHORIZED' } satisfies V2Error);
+}
+
+async function readObjectBody(
+  req: IncomingMessage,
+  res: ServerResponse,
+  pathname: string,
+  method: string,
+): Promise<Record<string, unknown> | null> {
+  let raw: unknown;
+  try {
+    raw = await readJsonBody(req);
+  } catch (err) {
+    const status = Number((err as { status?: number })?.status) || 400;
+    const message = status === 413 ? 'payload too large' : 'invalid JSON';
+    const code = status === 413 ? 'E_PAYLOAD' : 'E_BAD_REQUEST';
+    sendV2(res, pathname, method, status, { error: message, code } satisfies V2Error);
+    return null;
+  }
+  if (raw == null || typeof raw !== 'object' || Array.isArray(raw)) {
+    sendV2(res, pathname, method, 400, { error: 'invalid body', code: 'E_BAD_REQUEST' } satisfies V2Error);
+    return null;
+  }
+  return raw as Record<string, unknown>;
+}
+
+function requestIdFrom(body: Record<string, unknown>): { ok: true; value?: string } | { ok: false } {
+  if (!Object.prototype.hasOwnProperty.call(body, 'requestId') || body.requestId == null) {
+    return { ok: true };
+  }
+  if (typeof body.requestId !== 'string') return { ok: false };
+  const value = body.requestId.trim();
+  return value ? { ok: true, value } : { ok: true };
+}
+
+function workspaceIdOf(conv: { workspaceId?: unknown } | null | undefined): string {
+  if (conv?.workspaceId == null) return '';
+  return String(conv.workspaceId);
+}
+
+async function workspaceReady(
+  conv: { workspaceId?: unknown } | null | undefined,
+  getWorkspace?: GetWorkspace,
+): Promise<boolean> {
+  const wid = workspaceIdOf(conv);
+  if (!wid) return false;
+  if (!getWorkspace) return true;
+  const ws = await getWorkspace(wid);
+  if (!ws) return false;
+  return ws.removedAt == null;
 }
 
 async function readJsonBody(req: IncomingMessage): Promise<unknown> {
@@ -162,6 +246,10 @@ export function createV2Handler(opts: {
   onRestart?: () => void;
   trackConnection: IdleWatcher['trackConnection'];
   loadConversation?: LoadConversation;
+  getConversation?: GetConversation;
+  getWorkspace?: GetWorkspace;
+  postMessage?: PostMessage;
+  stopConversation?: StopConversationFn;
 }): V2Handler {
   const { serviceVersion, startedAt, auth, hub } = opts;
   const pid = opts.pid ?? process.pid;
@@ -250,6 +338,132 @@ export function createV2Handler(opts: {
       return true;
     }
 
+    const messagesMatch = /^\/api\/v2\/conversations\/([^/]+)\/messages$/.exec(pathname);
+    const continueMatch = /^\/api\/v2\/conversations\/([^/]+)\/continue$/.exec(pathname);
+    if (method === 'POST' && (messagesMatch || continueMatch)) {
+      const id = decodeURIComponent((messagesMatch || continueMatch)![1]);
+      const body = await readObjectBody(req, res, pathname, method);
+      if (!body) return true;
+      const parsedId = requestIdFrom(body);
+      if (!parsedId.ok) {
+        sendV2(res, pathname, method, 400, { error: 'invalid requestId', code: 'E_BAD_REQUEST' } satisfies V2Error);
+        return true;
+      }
+      let text: string;
+      if (continueMatch) {
+        text = MANUAL_CONTINUE_TEXT;
+      } else {
+        if (body.text != null && typeof body.text !== 'string') {
+          sendV2(res, pathname, method, 400, { error: 'text required', code: 'E_BAD_REQUEST' } satisfies V2Error);
+          return true;
+        }
+        text = String(body.text ?? '').trim();
+        if (!text) {
+          sendV2(res, pathname, method, 400, { error: 'text required', code: 'E_BAD_REQUEST' } satisfies V2Error);
+          return true;
+        }
+      }
+      let conv: ConversationRow | null | undefined = null;
+      try {
+        conv = opts.getConversation ? await opts.getConversation(id) : null;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'load conversation failed';
+        sendV2(res, pathname, method, 500, { error: message, code: 'E_INTERNAL' } satisfies V2Error);
+        return true;
+      }
+      if (!conv) {
+        sendV2(res, pathname, method, 404, { error: 'not found' } satisfies V2Error);
+        return true;
+      }
+      let ready = false;
+      try {
+        ready = await workspaceReady(conv, opts.getWorkspace);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'workspace check failed';
+        sendV2(res, pathname, method, 500, { error: message, code: 'E_INTERNAL' } satisfies V2Error);
+        return true;
+      }
+      if (!ready) {
+        sendV2(res, pathname, method, 409, { error: 'no workspace', code: 'E_NO_WORKSPACE' } satisfies V2Error);
+        return true;
+      }
+      const requestId = parsedId.value || randomUUID();
+      if (!opts.postMessage) {
+        sendV2(res, pathname, method, 500, { error: 'kernel not ready', code: 'E_INTERNAL' } satisfies V2Error);
+        return true;
+      }
+      try {
+        const posted = await opts.postMessage(conv, text, { requestId });
+        if (posted.status === 404) {
+          sendV2(res, pathname, method, 404, { error: 'not found' } satisfies V2Error);
+          return true;
+        }
+        const runId = posted.body?.runId;
+        if (posted.status !== 202 || runId == null || String(runId) === '') {
+          const message = posted.status >= 400 ? 'send failed' : 'missing runId';
+          sendV2(res, pathname, method, posted.status >= 400 ? posted.status : 500, {
+            error: message,
+            code: posted.status === 409 ? 'E_NO_WORKSPACE' : 'E_INTERNAL',
+          } satisfies V2Error);
+          return true;
+        }
+        sendV2(res, pathname, method, 202, { runId: String(runId) } satisfies RunAccepted);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'send failed';
+        sendV2(res, pathname, method, 500, { error: message, code: 'E_INTERNAL' } satisfies V2Error);
+      }
+      return true;
+    }
+
+    const stopMatch = /^\/api\/v2\/conversations\/([^/]+)\/stop$/.exec(pathname);
+    if (method === 'POST' && stopMatch) {
+      const id = decodeURIComponent(stopMatch[1]);
+      const body = await readObjectBody(req, res, pathname, method);
+      if (!body) return true;
+      if (!opts.stopConversation) {
+        sendV2(res, pathname, method, 500, { error: 'kernel not ready', code: 'E_INTERNAL' } satisfies V2Error);
+        return true;
+      }
+      try {
+        const stopped = await opts.stopConversation(id);
+        if (stopped.status === 404) {
+          sendV2(res, pathname, method, 404, { error: 'not found' } satisfies V2Error);
+          return true;
+        }
+        sendV2(res, pathname, method, 202, { stopping: true } satisfies StopAccepted);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'stop failed';
+        sendV2(res, pathname, method, 500, { error: message, code: 'E_INTERNAL' } satisfies V2Error);
+      }
+      return true;
+    }
+
+    const toolOutMatch = /^\/api\/v2\/conversations\/([^/]+)\/tools\/([^/]+)\/output$/.exec(pathname);
+    if (method === 'GET' && toolOutMatch) {
+      const id = decodeURIComponent(toolOutMatch[1]);
+      const toolId = decodeURIComponent(toolOutMatch[2]);
+      let loaded: Awaited<ReturnType<LoadConversation>> = null;
+      try {
+        loaded = opts.loadConversation ? await opts.loadConversation(id) : null;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'load conversation failed';
+        sendV2(res, pathname, method, 500, { error: message, code: 'E_INTERNAL' } satisfies V2Error);
+        return true;
+      }
+      if (!loaded) {
+        sendV2(res, pathname, method, 404, { error: 'not found' } satisfies V2Error);
+        return true;
+      }
+      const tool = findPresentedTool(loaded.presented, toolId);
+      if (!tool) {
+        sendV2(res, pathname, method, 404, { error: 'not found' } satisfies V2Error);
+        return true;
+      }
+      const output: ToolOutput = toolOutputView(tool, loaded.presented?.workspacePath);
+      sendV2(res, pathname, method, 200, output);
+      return true;
+    }
+
     if (method === 'GET' && pathname === '/api/v2/events') {
       const topics = parseTopics(url.searchParams.get('topics'));
       const unknown = topics.filter((topic) => !hub.hasTopic(topic));
@@ -301,6 +515,10 @@ export function createV2Runtime(opts: {
   onIdleExit?: () => void;
   onRestart?: () => void;
   loadConversation?: LoadConversation;
+  getConversation?: GetConversation;
+  getWorkspace?: GetWorkspace;
+  postMessage?: PostMessage;
+  stopConversation?: StopConversationFn;
 }): V2Runtime {
   const pid = opts.pid ?? process.pid;
   const auth = createV2Auth({
@@ -338,6 +556,10 @@ export function createV2Runtime(opts: {
     onRestart: opts.onRestart,
     trackConnection: idle.trackConnection,
     loadConversation: opts.loadConversation,
+    getConversation: opts.getConversation,
+    getWorkspace: opts.getWorkspace,
+    postMessage: opts.postMessage,
+    stopConversation: opts.stopConversation,
   });
 
   return {

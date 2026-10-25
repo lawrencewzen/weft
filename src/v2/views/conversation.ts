@@ -5,10 +5,12 @@ import type { components } from '../contract.gen.ts';
 import { contextUsageView } from './context.ts';
 import { conversationStatus, runStateView } from './run.ts';
 import { buildThread, type BuildThreadOptions, type ThreadMessage, type ThreadSubagent } from './thread.ts';
+import { outputLineCount, toolOutputText, type ToolLike } from './tools.ts';
 
 export type ConversationView = components['schemas']['ConversationView'];
 export type ConversationSnapshot = components['schemas']['ConversationSnapshot'];
 export type ConversationModel = components['schemas']['ConversationModel'];
+export type ToolOutput = components['schemas']['ToolOutput'];
 
 export type PresentedConversation = {
   id?: unknown;
@@ -92,4 +94,30 @@ export async function conversationSnapshot({
     itemIds: thread.items.map((item) => item.id),
   };
   return { conversation, items: thread.items, tools: thread.tools };
+}
+
+/** Raw tool payload from present() messages, or null when the id is missing. */
+export function findPresentedTool(
+  presented: PresentedConversation | null | undefined,
+  toolId: string,
+): ToolLike | null {
+  if (!toolId) return null;
+  for (const message of presented?.messages || []) {
+    const tool = message?.tool;
+    if (message?.role === 'tool' && tool && String(tool.id) === toolId) return tool;
+  }
+  return null;
+}
+
+/** Full tool output for GET .../tools/{toolId}/output. Paths are workspace-relative. */
+export function toolOutputView(
+  tool: ToolLike,
+  workspacePath: unknown,
+): ToolOutput {
+  const text = toolOutputText(tool, workspacePath == null ? '' : String(workspacePath));
+  return {
+    id: String(tool?.id ?? ''),
+    text,
+    totalLines: outputLineCount(text),
+  };
 }

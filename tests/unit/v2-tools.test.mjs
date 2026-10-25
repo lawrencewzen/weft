@@ -286,6 +286,43 @@ test('short file-error hints and workspace-relative paths', () => {
   }), 'zh').text, 'EIO: i/o error, read');
 });
 
+test('relativizeText strips mixed Windows separators without eating a longer unix prefix', () => {
+  const root = 'C:\\work\\ws';
+  const mixed = [
+    'C:\\work\\ws/src/a.js',
+    'C:\\work\\ws\\src\\a.js',
+    'C:/work/ws/src/a.js',
+    'c:\\work\\ws\\src\\a.js',
+  ];
+  for (const input of mixed) {
+    const out = relativizeText(input, root);
+    assert.equal(/c:\\work\\ws/i.test(out), false, input);
+    assert.match(out, /^src[\\/]a\.js$/);
+  }
+  assert.equal(relativizeText('C:\\work\\ws/src/a.js', root), 'src/a.js');
+  assert.equal(relativizeText('C:\\work\\ws\\src\\a.js', root), 'src\\a.js');
+  assert.equal(relativizeText('C:/work/ws/src/a.js', root), 'src/a.js');
+  assert.equal(relativizeText('c:\\work\\ws\\src\\a.js', root), 'src\\a.js');
+
+  const unix = '/home/u/ws';
+  assert.equal(relativizeText('/home/u/ws/src/a.js', unix), 'src/a.js');
+  assert.equal(relativizeText('/home/u/wsx/a.js', unix), '/home/u/wsx/a.js');
+
+  const view = toolCallView(
+    tool('read', {
+      id: 'win-read',
+      path: `${root}\\src\\a.js`,
+      output: `${root}/src/a.js\n${Array.from({ length: 24 }, (_, i) => `L${i + 2}`).join('\n')}`,
+    }),
+    [],
+    { lang: 'zh', workspacePath: root },
+  );
+  assert.equal(view.path, 'src/a.js');
+  assert.equal(view.output.truncated, true);
+  assert.equal(view.output.preview.includes(root), false);
+  assert.equal(view.output.preview.startsWith('src/a.js\n'), true);
+});
+
 test('english summary capitalizes the first clause', () => {
   const summary = summarizeToolGroup([
     tool('read', { id: 'r1', path: 'a.js' }),

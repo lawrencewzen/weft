@@ -459,7 +459,7 @@ export async function openConversationKernel({
       }
       return out;
     },
-    async postMessage(conv, text) {
+    async postMessage(conv, text, options = {}) {
       const conversation = await conversationFor(conv);
       if (!conversation) return { status: 404, body: { error: 'conversation not found' } };
       const prepared = agentHost ? await agentHost.prepareSend(conv, text) : null;
@@ -468,10 +468,11 @@ export async function openConversationKernel({
         const model = await routes.modelFor(current);
         await conversation.configure({ model: model ?? null }, context);
       }
+      const given = typeof options.requestId === 'string' ? options.requestId.trim() : '';
       const submission = await conversation.submit({
         type: 'input',
         content: text,
-        requestId: prepared?.requestId || randomUUID(),
+        requestId: given || prepared?.requestId || randomUUID(),
         whenBusy: 'steer',
       }, context);
       await store.updateConversation(current.id, { lastSubmissionId: submission.id });
