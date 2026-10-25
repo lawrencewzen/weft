@@ -1,0 +1,4557 @@
+{
+  "source": {
+    "package": "@lobehub/icons",
+    "version": "5.23.0",
+    "license": "MIT",
+    "notice": "Brand metadata extracted from @lobehub/icons@5.23.0 (MIT). SVG files copied from @lobehub/icons-static-svg@1.95.1 (MIT). https://github.com/lobehub/lobe-icons"
+  },
+  "brands": [
+    {
+      "id": "Ace",
+      "title": "ace",
+      "color": "#000",
+      "group": "model",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "Adobe",
+      "title": "Adobe",
+      "color": "#EB1000",
+      "group": "application",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "AdobeFirefly",
+      "title": "AdobeFirefly",
+      "color": "#EB1000",
+      "group": "application",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "AgentVoice",
+      "title": "AgentVoice",
+      "color": "#0f6fff",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "AgnesAI",
+      "title": "Agnes AI",
+      "color": "#000",
+      "group": "application",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "Agui",
+      "title": "AG-UI",
+      "color": "#fff",
+      "group": "application",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "Ai2",
+      "title": "Ai2",
+      "color": "#f0529c",
+      "group": "model",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Ai21",
+      "title": "AI21",
+      "color": "#E91E63",
+      "group": "model",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "Ai302",
+      "title": "302.AI",
+      "color": "#8E47FF",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Ai360",
+      "title": "AI360",
+      "color": "#006ffb",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "AiHubMix",
+      "title": "AiHubMix",
+      "color": "#006FFB",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "AiMass",
+      "title": "AiMass",
+      "color": "#fff",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "AionLabs",
+      "title": "AionLabs",
+      "color": "#0f172a",
+      "group": "model",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "AirJelly",
+      "title": "AirJelly",
+      "color": "#00C8FF",
+      "group": "application",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "AiStudio",
+      "title": "Google AI Studio",
+      "color": "#000",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "AkashChat",
+      "title": "AkashChat",
+      "color": "#000",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "AlephAlpha",
+      "title": "AlephAlpha",
+      "color": "#fff",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "Alibaba",
+      "title": "Alibaba",
+      "color": "#FF6003",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "AlibabaCloud",
+      "title": "AlibabaCloud",
+      "color": "#FF6A00",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "AMDRadeonCloud",
+      "title": "AMD Radeon Cloud",
+      "color": "#ED1C24",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Amp",
+      "title": "Amp",
+      "color": "#F34E3F",
+      "group": "application",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Anspire",
+      "title": "Anspire",
+      "color": "#514BFD",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "AntGroup",
+      "title": "AntGroup",
+      "color": "#1677ff",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Anthropic",
+      "title": "Anthropic",
+      "color": "#F1F0E8",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "Antigravity",
+      "title": "Antigravity",
+      "color": "#fff",
+      "group": "application",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Anyscale",
+      "title": "Anyscale",
+      "color": "#0163FB",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Apertis",
+      "title": "Apertis",
+      "color": "#0d9488",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Apple",
+      "title": "Apple",
+      "color": "#fff",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "Arcee",
+      "title": "Arcee",
+      "color": "#008C8C",
+      "group": "model",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "AskVerdict",
+      "title": "AskVerdict",
+      "color": "#E8A317",
+      "group": "application",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "AssemblyAI",
+      "title": "AssemblyAI",
+      "color": "#2545D3",
+      "group": "model",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "AtlasCloud",
+      "title": "Atlas Cloud",
+      "color": "#7036F0",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "Automatic",
+      "title": "Automatic",
+      "color": "#E00054",
+      "group": "application",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Aws",
+      "title": "AWS",
+      "color": "#222F3E",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Aya",
+      "title": "Aya",
+      "color": "#416FDC",
+      "group": "model",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Azure",
+      "title": "Azure",
+      "color": "#fff",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "AzureAI",
+      "title": "AzureAI",
+      "color": "#000",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "BAAI",
+      "title": "BAAI",
+      "color": "#000",
+      "group": "model",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "Baichuan",
+      "title": "Baichuan",
+      "color": "#FF6933",
+      "group": "model",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Baidu",
+      "title": "Baidu",
+      "color": "#2932E1",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "BaiduCloud",
+      "title": "BaiduCloud",
+      "color": "#2468f2",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Bailian",
+      "title": "BaiLian",
+      "color": "#615ced",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Baseten",
+      "title": "Baseten",
+      "color": "#19E76E",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "Bedrock",
+      "title": "Bedrock",
+      "color": "#222F3E",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Bfl",
+      "title": "Black Forest Labs",
+      "color": "#fff",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "Bilibili",
+      "title": "bilibili",
+      "color": "#FB7299",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "BilibiliIndex",
+      "title": "bilibili index",
+      "color": "#5E19B7",
+      "group": "model",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "Bing",
+      "title": "Bing",
+      "color": "#174ae4",
+      "group": "application",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Bocha",
+      "title": "Bocha",
+      "color": "#006EFF",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Brave",
+      "title": "Brave",
+      "color": "#FF4000",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "BriaAI",
+      "title": "BRIA AI",
+      "color": "#671ECC",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Browserless",
+      "title": "Browserless",
+      "color": "#fff",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "BurnCloud",
+      "title": "BurnCloud",
+      "color": "#E95513",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "ByteDance",
+      "title": "ByteDance",
+      "color": "#325AB4",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "CapCut",
+      "title": "CapCut",
+      "color": "#fff",
+      "group": "application",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "CelestoAI",
+      "title": "CelestoAI",
+      "color": "#000",
+      "group": "application",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "CentML",
+      "title": "CentML",
+      "color": "#004331",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Cerebras",
+      "title": "Cerebras",
+      "color": "#F15A29",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "ChatGLM",
+      "title": "ChatGLM",
+      "color": "#4268FA",
+      "group": "model",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "CherryStudio",
+      "title": "CherryStudio",
+      "color": "#EA5E5D",
+      "group": "application",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Chutes",
+      "title": "Chutes",
+      "color": "#0D0D0D",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "Civitai",
+      "title": "Civitai",
+      "color": "#fff",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Claude",
+      "title": "Claude",
+      "color": "#D97757",
+      "group": "model",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "ClaudeCode",
+      "title": "Claude Code",
+      "color": "#D97757",
+      "group": "application",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Cline",
+      "title": "Cline",
+      "color": "#323B43",
+      "group": "application",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "Clipdrop",
+      "title": "Clipdrop",
+      "color": "#000",
+      "group": "application",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "Cloudflare",
+      "title": "Cloudflare",
+      "color": "#F38020",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "CodeBuddy",
+      "title": "CodeBuddy",
+      "color": "#6c4dff",
+      "group": "application",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "CodeFlicker",
+      "title": "CodeFlicker",
+      "color": "#32EDDA",
+      "group": "application",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "CodeGeeX",
+      "title": "CodeGeeX",
+      "color": "#00e7e7",
+      "group": "model",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Codex",
+      "title": "Codex",
+      "color": "#fff",
+      "group": "model",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "CogVideo",
+      "title": "CogVideo",
+      "color": "#000",
+      "group": "model",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "CogView",
+      "title": "CogView",
+      "color": "#000",
+      "group": "model",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Cohere",
+      "title": "Cohere",
+      "color": "#39594D",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Colab",
+      "title": "Colab",
+      "color": "#F9AB00",
+      "group": "application",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "CometAPI",
+      "title": "CometAPI",
+      "color": "#00ACE2",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "ComfyUI",
+      "title": "ComfyUI",
+      "color": "#F0FF41",
+      "group": "application",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "CommandA",
+      "title": "CommandA",
+      "color": "#39594D",
+      "group": "model",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "CommandCode",
+      "title": "Command Code",
+      "color": "#000",
+      "group": "application",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "Copilot",
+      "title": "Copilot",
+      "color": "#fff",
+      "group": "application",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "CopilotKit",
+      "title": "CopilotKit",
+      "color": "#fff",
+      "group": "application",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Coqui",
+      "title": "Coqui",
+      "color": "#03363D",
+      "group": "application",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Coze",
+      "title": "Coze",
+      "color": "#4D53E8",
+      "group": "application",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "CrewAI",
+      "title": "CrewAI",
+      "color": "#fff",
+      "group": "application",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Crusoe",
+      "title": "Crusoe",
+      "color": "#fff",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Cursor",
+      "title": "Cursor",
+      "color": "#000",
+      "group": "application",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "CyberCut",
+      "title": "CyberCut",
+      "color": "#000",
+      "group": "application",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "Dalle",
+      "title": "DALL-E",
+      "color": "#000",
+      "group": "model",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Dbrx",
+      "title": "DBRX",
+      "color": "#EE3D2C",
+      "group": "model",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Decart",
+      "title": "Decart",
+      "color": "#2548F6",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "DeepAI",
+      "title": "DeepAI",
+      "color": "#fff",
+      "group": "application",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "DeepCogito",
+      "title": "Deep Cogito",
+      "color": "#4e81ee",
+      "group": "model",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "DeepInfra",
+      "title": "DeepInfra",
+      "color": "#fff",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "DeepL",
+      "title": "DeepL",
+      "color": "#0F2B46",
+      "group": "application",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "DeepMind",
+      "title": "DeepMind",
+      "color": "#4285F4",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "DeepSeek",
+      "title": "DeepSeek",
+      "color": "#4D6BFE",
+      "group": "model",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Devin",
+      "title": "Devin",
+      "color": "#fff",
+      "group": "application",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Dify",
+      "title": "Dify",
+      "color": "#03F",
+      "group": "application",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "DigitalOcean",
+      "title": "DigitalOcean",
+      "color": "#000",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "Doc2X",
+      "title": "Doc2X",
+      "color": "#fff",
+      "group": "application",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "DocSearch",
+      "title": "DocSearch",
+      "color": "#fff",
+      "group": "application",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Dolphin",
+      "title": "Dolphin",
+      "color": "#6186db",
+      "group": "model",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "DotsStudio",
+      "title": "Dots Studio",
+      "color": "#a3e6d9",
+      "group": "model",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "Doubao",
+      "title": "Doubao",
+      "color": "#FFF",
+      "group": "model",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "DreamMachine",
+      "title": "DreamMachine",
+      "color": "#000",
+      "group": "application",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "ElevenLabs",
+      "title": "ElevenLabs",
+      "color": "#fff",
+      "group": "model",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "ElevenX",
+      "title": "11x",
+      "color": "#fff",
+      "group": "application",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "EssentialAI",
+      "title": "Essential AI",
+      "color": "#111322",
+      "group": "model",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Exa",
+      "title": "Exa",
+      "color": "#1f40ed",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Fal",
+      "title": "Fal",
+      "color": "#EC0648",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "FastGPT",
+      "title": "FastGPT",
+      "color": "#fff",
+      "group": "application",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Featherless",
+      "title": "featherless.ai",
+      "color": "#FFE184",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Figma",
+      "title": "Figma",
+      "color": "#000",
+      "group": "application",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Firecrawl",
+      "title": "Firecrawl",
+      "color": "#ff4d00",
+      "group": "application",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Fireworks",
+      "title": "Fireworks",
+      "color": "#5019C5",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "FishAudio",
+      "title": "FishAudio",
+      "color": "#fff",
+      "group": "model",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "Flora",
+      "title": "Flora",
+      "color": "#000",
+      "group": "application",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "Flowith",
+      "title": "Flowith",
+      "color": "#fff",
+      "group": "application",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "Flux",
+      "title": "Flux",
+      "color": "#fff",
+      "group": "model",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "Friendli",
+      "title": "Friendli",
+      "color": "#101723",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "Gemini",
+      "title": "Gemini",
+      "color": "#fff",
+      "group": "model",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "GeminiCLI",
+      "title": "Gemini CLI",
+      "color": "#1E1E2E",
+      "group": "application",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Gemma",
+      "title": "Gemma",
+      "color": "#2E96FF",
+      "group": "model",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "GiteeAI",
+      "title": "GiteeAI",
+      "color": "#000",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "Github",
+      "title": "Github",
+      "color": "#000",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "GithubCopilot",
+      "title": "GithubCopilot",
+      "color": "#000",
+      "group": "application",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "Glama",
+      "title": "Glama",
+      "color": "#000",
+      "group": "application",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "Glif",
+      "title": "Glif",
+      "color": "#000",
+      "group": "application",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "GLMV",
+      "title": "GLM-V",
+      "color": "#0039C6",
+      "group": "model",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "GmiCloud",
+      "title": "GmiCloud",
+      "color": "#0A0A0A",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "Google",
+      "title": "Google",
+      "color": "#fff",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color"
+      ]
+    },
+    {
+      "id": "GoogleCloud",
+      "title": "GoogleCloud",
+      "color": "#fff",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color"
+      ]
+    },
+    {
+      "id": "Goose",
+      "title": "Goose",
+      "color": "#fff",
+      "group": "application",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "Gradio",
+      "title": "Gradio",
+      "color": "#fff",
+      "group": "application",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Greptile",
+      "title": "Greptile",
+      "color": "#44A775",
+      "group": "application",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Grok",
+      "title": "Grok",
+      "color": "#000",
+      "group": "model",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "Groq",
+      "title": "Groq",
+      "color": "#F55036",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "Hailuo",
+      "title": "Hailuo",
+      "color": "#fff",
+      "group": "application",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Haiper",
+      "title": "Haiper",
+      "color": "#9581ff",
+      "group": "application",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "HappyHorse",
+      "title": "Hedra",
+      "color": "#000",
+      "group": "model",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "Hedra",
+      "title": "Hedra",
+      "color": "#000",
+      "group": "application",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "HermesAgent",
+      "title": "Hermes Agent",
+      "color": "#fff",
+      "group": "application",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "Higress",
+      "title": "Higress",
+      "color": "#3E5CF4",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Huawei",
+      "title": "Huawei",
+      "color": "#C7000B",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "HuaweiCloud",
+      "title": "HuaweiCloud",
+      "color": "#C7000B",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "HuggingFace",
+      "title": "HuggingFace",
+      "color": "#fff",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Hunyuan",
+      "title": "Hunyuan",
+      "color": "#0053e0",
+      "group": "model",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Hyperbolic",
+      "title": "Hyperbolic",
+      "color": "#594CE9",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "IBM",
+      "title": "IBM",
+      "color": "#0F62FE",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "Ideogram",
+      "title": "Ideogram",
+      "color": "#fff",
+      "group": "application",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "IFlyTekCloud",
+      "title": "iFlyTekCloud",
+      "color": "#2A80E2",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Inception",
+      "title": "Inception",
+      "color": "#fff",
+      "group": "model",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "Inceptron",
+      "title": "Inceptron",
+      "color": "#fff",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Inference",
+      "title": "Inference",
+      "color": "#000",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "Infermatic",
+      "title": "Infermatic",
+      "color": "#4334F5",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Infinigence",
+      "title": "Infinigence",
+      "color": "#7952ea",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Inflection",
+      "title": "Inflection",
+      "color": "#038247",
+      "group": "model",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "InternLM",
+      "title": "InternLM",
+      "color": "#1B3882",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "IoNet",
+      "title": "IoNet",
+      "color": "#000",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "Jimeng",
+      "title": "Jimeng",
+      "color": "#000",
+      "group": "application",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Jina",
+      "title": "Jina",
+      "color": "#000",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "Junie",
+      "title": "Junie",
+      "color": "#47E054",
+      "group": "application",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Kagi",
+      "title": "Kagi",
+      "color": "#FEB219",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "KiloCode",
+      "title": "Kilo Code",
+      "color": "#F8F676",
+      "group": "application",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "Kimi",
+      "title": "Kimi",
+      "color": "#000",
+      "group": "application",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Kiro",
+      "title": "Kiro",
+      "color": "#9046ff",
+      "group": "application",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Kling",
+      "title": "Kling",
+      "color": "#000",
+      "group": "application",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Kluster",
+      "title": "Kluster",
+      "color": "#6525F7",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Kolors",
+      "title": "Kolors",
+      "color": "#83FF63",
+      "group": "model",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Krea",
+      "title": "Krea",
+      "color": "#000",
+      "group": "application",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "KwaiKAT",
+      "title": "KwaiKAT",
+      "color": "#0A67FF",
+      "group": "model",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "Kwaipilot",
+      "title": "Kwaipilot",
+      "color": "#000",
+      "group": "model",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Lambda",
+      "title": "Lambda",
+      "color": "#000",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "LangChain",
+      "title": "LangChain",
+      "color": "#7FC8FF",
+      "group": "application",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Langfuse",
+      "title": "Langfuse",
+      "color": "#1B1917",
+      "group": "application",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "LangGraph",
+      "title": "LangGraph",
+      "color": "#1C3C3C",
+      "group": "application",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "LangSmith",
+      "title": "LangSmith",
+      "color": "#1C3C3C",
+      "group": "application",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "LeptonAI",
+      "title": "LeptonAI",
+      "color": "#2F80ED",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "LG",
+      "title": "LG AI",
+      "color": "#C00C3F",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Lightricks",
+      "title": "Lightricks",
+      "color": "#000",
+      "group": "application",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "Liquid",
+      "title": "Liquid",
+      "color": "#fff",
+      "group": "model",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "LiveKit",
+      "title": "LiveKit",
+      "color": "#000",
+      "group": "application",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "LlamaIndex",
+      "title": "LlamaIndex",
+      "color": "#000",
+      "group": "application",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "LLaVA",
+      "title": "LLaVA",
+      "color": "#CB2D30",
+      "group": "model",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "LlmApi",
+      "title": "LLM API",
+      "color": "#3F35FF",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "LmStudio",
+      "title": "LM Studio",
+      "color": "#4338CA",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "LobeHub",
+      "title": "LobeHub",
+      "color": "#fff",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "LongCat",
+      "title": "LongCat",
+      "color": "#fff",
+      "group": "model",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Lovable",
+      "title": "Lovable",
+      "color": "#000",
+      "group": "application",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Lovart",
+      "title": "Lovart",
+      "color": "#000",
+      "group": "application",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "Luma",
+      "title": "Luma",
+      "color": "#000",
+      "group": "application",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Magic",
+      "title": "Magic",
+      "color": "#fff",
+      "group": "model",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "Make",
+      "title": "Make",
+      "color": "#ff009a",
+      "group": "application",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Manus",
+      "title": "Manus",
+      "color": "#fff",
+      "group": "application",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "Mastra",
+      "title": "Mastra",
+      "color": "#000",
+      "group": "application",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "MCP",
+      "title": "ModelContextProtocol",
+      "color": "#FFF",
+      "group": "application",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "McpSo",
+      "title": "MCP.so",
+      "color": "#1C3F6B",
+      "group": "application",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Menlo",
+      "title": "MENLO",
+      "color": "#FF5C00",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Meshy",
+      "title": "Meshy",
+      "color": "#000",
+      "group": "model",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Meta",
+      "title": "Meta",
+      "color": "#1d65c1",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "MetaAI",
+      "title": "MetaAI",
+      "color": "#000",
+      "group": "application",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "MetaGPT",
+      "title": "MetaGPT",
+      "color": "#000",
+      "group": "application",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "Microsoft",
+      "title": "Azure",
+      "color": "#00A4EF",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Midjourney",
+      "title": "Midjourney",
+      "color": "#fff",
+      "group": "application",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "Minimax",
+      "title": "Minimax",
+      "color": "#F23F5D",
+      "group": "model",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Mistral",
+      "title": "Mistral",
+      "color": "#FA520F",
+      "group": "model",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "ModelScope",
+      "title": "ModelScope",
+      "color": "#624AFF",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Monica",
+      "title": "Monica",
+      "color": "#6841ea",
+      "group": "application",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Moonshot",
+      "title": "MoonshotAI",
+      "color": "#16191E",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "Morph",
+      "title": "Morph",
+      "color": "#000",
+      "group": "model",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Moxt",
+      "title": "Moxt",
+      "color": "#29C16A",
+      "group": "application",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "MyShell",
+      "title": "MyShell",
+      "color": "#fff",
+      "group": "application",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "N8n",
+      "title": "n8n",
+      "color": "#EA4B71",
+      "group": "application",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "NanoBanana",
+      "title": "NanoBanana",
+      "color": "#FCD53F",
+      "group": "model",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Nebius",
+      "title": "Nebius",
+      "color": "#DAFF33",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "NewAPI",
+      "title": "New API",
+      "color": "#dd2e57",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Nextbit",
+      "title": "Nextbit",
+      "color": "#04D98B",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "NotebookLM",
+      "title": "NotebookLM",
+      "color": "#fff",
+      "group": "application",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "Notion",
+      "title": "Notion",
+      "color": "#fff",
+      "group": "application",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "NousResearch",
+      "title": "NousResearch",
+      "color": "#fff",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "Nova",
+      "title": "Nova",
+      "color": "#222F3E",
+      "group": "model",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "NovelAI",
+      "title": "NovelAI",
+      "color": "#E1E4FF",
+      "group": "application",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "Novita",
+      "title": "Novita AI",
+      "color": "#23D57C",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "NPLCloud",
+      "title": "NPLCloud",
+      "color": "#00D1B2",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Nvidia",
+      "title": "Nvidia",
+      "color": "#74B71B",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Obsidian",
+      "title": "Obsidian",
+      "color": "#A88BFA",
+      "group": "application",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Ollama",
+      "title": "Ollama",
+      "color": "#fff",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "OpenAI",
+      "title": "OpenAI",
+      "color": "#000",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "OpenChat",
+      "title": "OpenChat",
+      "color": "#4A7FE3",
+      "group": "model",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "OpenClaw",
+      "title": "OpenClaw",
+      "color": "#ff4d4d",
+      "group": "application",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "OpenCode",
+      "title": "opencode",
+      "color": "#000",
+      "group": "application",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "OpenHands",
+      "title": "OpenHands",
+      "color": "#fff",
+      "group": "application",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "OpenHuman",
+      "title": "OpenHuman",
+      "color": "#000",
+      "group": "application",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "OpenRouter",
+      "title": "OpenRouter",
+      "color": "#C8FF00",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "OpenWebUI",
+      "title": "OpenWebUI",
+      "color": "#fff",
+      "group": "application",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "PaLM",
+      "title": "PaLM",
+      "color": "#FFF",
+      "group": "model",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Parasail",
+      "title": "Parasail",
+      "color": "#000",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "Perceptron",
+      "title": "Perceptron",
+      "color": "#F8F4EB",
+      "group": "model",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "Perplexity",
+      "title": "Perplexity",
+      "color": "#22B8CD",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Phala",
+      "title": "Phala",
+      "color": "#CDFA50",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Phidata",
+      "title": "Phidata",
+      "color": "#FF4017",
+      "group": "application",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Phind",
+      "title": "phind",
+      "color": "#000",
+      "group": "model",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "Pi",
+      "title": "Pi",
+      "color": "#000",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "Pika",
+      "title": "Pika",
+      "color": "#FDF7EF",
+      "group": "application",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "PixVerse",
+      "title": "PixVerse",
+      "color": "#000",
+      "group": "application",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Player2",
+      "title": "Player2",
+      "color": "#A8A6FF",
+      "group": "application",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Poe",
+      "title": "Poe",
+      "color": "#000",
+      "group": "application",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Pollinations",
+      "title": "Pollinations",
+      "color": "#000",
+      "group": "application",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "Poolside",
+      "title": "Poolside",
+      "color": "#4137FF",
+      "group": "model",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "PPIO",
+      "title": "PPIO",
+      "color": "#2874ff",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "PrunaAI",
+      "title": "PrunaAI",
+      "color": "#AC51FF",
+      "group": "model",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "PydanticAI",
+      "title": "PydanticAI",
+      "color": "#E92063",
+      "group": "application",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Qingyan",
+      "title": "Qingyan",
+      "color": "#1041F3",
+      "group": "application",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Qiniu",
+      "title": "Qiniu",
+      "color": "#06AEEF",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Qoder",
+      "title": "Qoder",
+      "color": "#fff",
+      "group": "application",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Qwen",
+      "title": "Qwen",
+      "color": "#615ced",
+      "group": "model",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Railway",
+      "title": "Railway",
+      "color": "#853bce",
+      "group": "application",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "Recraft",
+      "title": "Recraft",
+      "color": "#000",
+      "group": "application",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "Reka",
+      "title": "Reka",
+      "color": "#fff",
+      "group": "model",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "Relace",
+      "title": "Relace",
+      "color": "#000",
+      "group": "model",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "Replicate",
+      "title": "Replicate",
+      "color": "#EA2805",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "Replit",
+      "title": "Replit",
+      "color": "#FD5402",
+      "group": "application",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Reve",
+      "title": "Reve",
+      "color": "#000",
+      "group": "model",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "RooCode",
+      "title": "RooCode",
+      "color": "#000",
+      "group": "application",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "RSSHub",
+      "title": "RSSHub",
+      "color": "#fff",
+      "group": "application",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Runway",
+      "title": "Runway",
+      "color": "#fff",
+      "group": "application",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "Rwkv",
+      "title": "RWKV",
+      "color": "#3431C3",
+      "group": "model",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Sakana",
+      "title": "sakana.ai",
+      "color": "#E10600",
+      "group": "model",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "SambaNova",
+      "title": "SambaNova",
+      "color": "#EE7624",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Search1API",
+      "title": "Search1API",
+      "color": "#0066FF",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "SearchApi",
+      "title": "SearchApi",
+      "color": "#4f46e5",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "SearXNG",
+      "title": "SearXNG",
+      "color": "#3050FF",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "SenseNova",
+      "title": "SenseNova",
+      "color": "#5B2AD8",
+      "group": "model",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "SiliconCloud",
+      "title": "SiliconCloud",
+      "color": "#6E29F6",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "SillyTavern",
+      "title": "SillyTavern",
+      "color": "#333",
+      "group": "application",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Skywork",
+      "title": "Skywork",
+      "color": "#fff",
+      "group": "model",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Slock",
+      "title": "Slock",
+      "color": "#ffd440",
+      "group": "application",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "Smithery",
+      "title": "Smithery",
+      "color": "#EA580C",
+      "group": "application",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Snowflake",
+      "title": "Snowflake",
+      "color": "#249EDC",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "SophNet",
+      "title": "SophNet",
+      "color": "#6200ee",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Sora",
+      "title": "Sora",
+      "color": "#0968DA",
+      "group": "model",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Spark",
+      "title": "Spark",
+      "color": "#0070f0",
+      "group": "model",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "SpeedAI",
+      "title": "SpeedAI",
+      "color": "#6366F1",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Stability",
+      "title": "Stability",
+      "color": "#330066",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "StateCloud",
+      "title": "StateCloud",
+      "color": "#DF0428",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Stepfun",
+      "title": "StepFun",
+      "color": "#000",
+      "group": "model",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Straico",
+      "title": "Straico",
+      "color": "#464bba",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "StreamLake",
+      "title": "StreamLake",
+      "color": "#1D70FF",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "SubModel",
+      "title": "SubModel",
+      "color": "#fff",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Suno",
+      "title": "Suno",
+      "color": "#000",
+      "group": "application",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "Sync",
+      "title": "Sync",
+      "color": "#0000FF",
+      "group": "application",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "Targon",
+      "title": "Targon",
+      "color": "#68C3FF",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Tavily",
+      "title": "Tavily",
+      "color": "#fff",
+      "group": "application",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Tencent",
+      "title": "Tencent",
+      "color": "#0052D9",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "TencentCloud",
+      "title": "TencentCloud",
+      "color": "#2151d1",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Tiangong",
+      "title": "Tiangong",
+      "color": "#0057ff",
+      "group": "application",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "TII",
+      "title": "Technology Innovation Institute",
+      "color": "#6400FF",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Together",
+      "title": "together.ai",
+      "color": "#fff",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "TopazLabs",
+      "title": "TopazLabs",
+      "color": "#000",
+      "group": "application",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "Trae",
+      "title": "TRAE",
+      "color": "#32F08C",
+      "group": "application",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Tripo",
+      "title": "Tripo",
+      "color": "#000",
+      "group": "application",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "TuriX",
+      "title": "TuriX",
+      "color": "#F7AD8A",
+      "group": "application",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "Udio",
+      "title": "Udio",
+      "color": "#e30a5d",
+      "group": "application",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "UnionAlpha",
+      "title": "UnionAlpha",
+      "color": "#1A1A1A",
+      "group": "model",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Unsloth",
+      "title": "Unsloth",
+      "color": "#16B88A",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Unstructured",
+      "title": "Unstructured",
+      "color": "#0ADDF8",
+      "group": "application",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Upstage",
+      "title": "Upsate",
+      "color": "#908AF9",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "V0",
+      "title": "V0",
+      "color": "#000",
+      "group": "application",
+      "variants": [
+        "mono"
+      ]
+    },
+    {
+      "id": "VectorizerAI",
+      "title": "Vectorizer.AI",
+      "color": "#3659FF",
+      "group": "application",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "Venice",
+      "title": "Venice",
+      "color": "#E05A2D",
+      "group": "application",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Vercel",
+      "title": "Vercel",
+      "color": "#000",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "VertexAI",
+      "title": "VertexAI",
+      "color": "#4285F4",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Vidu",
+      "title": "Vidu",
+      "color": "#22D5FF",
+      "group": "application",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Viggle",
+      "title": "Viggle",
+      "color": "#000",
+      "group": "application",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "Vllm",
+      "title": "vLLM",
+      "color": "#fff",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Volcengine",
+      "title": "Volcengine",
+      "color": "#fff",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Voyage",
+      "title": "Voyage",
+      "color": "#012E33",
+      "group": "model",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Wafer",
+      "title": "Wafer",
+      "color": "#000",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "Wandb",
+      "title": "Weights & Biases",
+      "color": "#FFCC33",
+      "group": "application",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "WaveSpeed",
+      "title": "WaveSpeed",
+      "color": "#000",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "Wenxin",
+      "title": "Wenxin",
+      "color": "#167ADF",
+      "group": "model",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Windsurf",
+      "title": "Windsurf",
+      "color": "#fff",
+      "group": "application",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "WorkersAI",
+      "title": "WorkersAI",
+      "color": "#F38020",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "WorldRouter",
+      "title": "WorldRouter",
+      "color": "#000",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "XAI",
+      "title": "Grok",
+      "color": "#fff",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "XiaomiMiMo",
+      "title": "XiaomiMiMo",
+      "color": "#000",
+      "group": "model",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "Xinference",
+      "title": "Xinference",
+      "color": "#781ff5",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Xpay",
+      "title": "xpay",
+      "color": "#0F1C4D",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Xuanyuan",
+      "title": "轩辕",
+      "color": "#fff",
+      "group": "model",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Yandex",
+      "title": "Yandex",
+      "color": "#FB3E1C",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "Yi",
+      "title": "Yi",
+      "color": "#003425",
+      "group": "model",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "YouMind",
+      "title": "YouMind",
+      "color": "#000",
+      "group": "application",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "Yuanbao",
+      "title": "Yuanbao",
+      "color": "#fff",
+      "group": "application",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "ZAI",
+      "title": "Z.ai",
+      "color": "#000",
+      "group": "application",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "Zapier",
+      "title": "Zapier",
+      "color": "#FF4F00",
+      "group": "application",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Zeabur",
+      "title": "Zeabur",
+      "color": "#6300FF",
+      "group": "application",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Zencoder",
+      "title": "Zencoder",
+      "color": "#E65C2C",
+      "group": "application",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "ZenMux",
+      "title": "ZenMux",
+      "color": "#000",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "text"
+      ]
+    },
+    {
+      "id": "ZeroOne",
+      "title": "01.AI",
+      "color": "#003425",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    },
+    {
+      "id": "Zhipu",
+      "title": "Zhipu",
+      "color": "#3859FF",
+      "group": "provider",
+      "variants": [
+        "mono",
+        "color",
+        "text"
+      ]
+    }
+  ],
+  "models": [
+    {
+      "keywords": [
+        "gpt-3"
+      ],
+      "brand": "OpenAI"
+    },
+    {
+      "keywords": [
+        "gpt-4"
+      ],
+      "brand": "OpenAI"
+    },
+    {
+      "keywords": [
+        "gpt-5"
+      ],
+      "brand": "OpenAI"
+    },
+    {
+      "keywords": [
+        "sora"
+      ],
+      "brand": "Sora"
+    },
+    {
+      "keywords": [
+        "gpt-oss"
+      ],
+      "brand": "OpenAI"
+    },
+    {
+      "keywords": [
+        "o1-",
+        "^o1",
+        "/o1",
+        "o3-",
+        "^o3",
+        "/o3",
+        "o4-",
+        "^o4",
+        "/o4"
+      ],
+      "brand": "OpenAI"
+    },
+    {
+      "keywords": [
+        "dalle",
+        "dall-e"
+      ],
+      "brand": "Dalle"
+    },
+    {
+      "keywords": [
+        "text-embedding-",
+        "tts-",
+        "whisper-",
+        "codex",
+        "davinci",
+        "babbage",
+        "omni-moderation",
+        "text-moderation",
+        "text-adb",
+        "text-ada",
+        "computer-use"
+      ],
+      "brand": "OpenAI"
+    },
+    {
+      "keywords": [
+        "^gpt-",
+        "/gpt-",
+        "openai"
+      ],
+      "brand": "OpenAI"
+    },
+    {
+      "keywords": [
+        "^glm-(.*)v",
+        "/glm-(.*)v",
+        "-glm-(.*)v"
+      ],
+      "brand": "GLMV"
+    },
+    {
+      "keywords": [
+        "^glm-5",
+        "/glm-5",
+        "/glm5",
+        "-glm-4",
+        "^glm-4",
+        "/glm-4",
+        "/glm4",
+        "-glm-5"
+      ],
+      "brand": "ZAI"
+    },
+    {
+      "keywords": [
+        "^glm-",
+        "/glm-",
+        "chatglm",
+        "-glm-"
+      ],
+      "brand": "ChatGLM"
+    },
+    {
+      "keywords": [
+        "^codegeex",
+        "/codegeex"
+      ],
+      "brand": "CodeGeeX"
+    },
+    {
+      "keywords": [
+        "claude"
+      ],
+      "brand": "Claude"
+    },
+    {
+      "keywords": [
+        "anthropic"
+      ],
+      "brand": "Anthropic"
+    },
+    {
+      "keywords": [
+        "titan"
+      ],
+      "brand": "Aws"
+    },
+    {
+      "keywords": [
+        "accounts/fireworks/models/fire"
+      ],
+      "brand": "Fireworks"
+    },
+    {
+      "keywords": [
+        "internlm",
+        "internvl"
+      ],
+      "brand": "InternLM"
+    },
+    {
+      "keywords": [
+        "deephermes",
+        "hermes",
+        "genstruct",
+        "minos"
+      ],
+      "brand": "NousResearch"
+    },
+    {
+      "keywords": [
+        "nemotron",
+        "openreasoning",
+        "nemoretriever",
+        "neva-",
+        "nv-"
+      ],
+      "brand": "Nvidia"
+    },
+    {
+      "keywords": [
+        "llama",
+        "/l3"
+      ],
+      "brand": "Meta"
+    },
+    {
+      "keywords": [
+        "llava"
+      ],
+      "brand": "LLaVA"
+    },
+    {
+      "keywords": [
+        "gemini-3.1-flash-image-preview",
+        "gemini-3-pro-image-preview",
+        "gemini-\\d+(?:\\.\\d+)?-(?:flash(?:-lite)?|pro)-image(?:-preview)?(?::|$)",
+        "nanobanana",
+        "nano-banana"
+      ],
+      "brand": "NanoBanana"
+    },
+    {
+      "keywords": [
+        "gemini"
+      ],
+      "brand": "Gemini"
+    },
+    {
+      "keywords": [
+        "^imagen-",
+        "/imagen-",
+        "^imagen\\d/",
+        "/imagen\\d"
+      ],
+      "brand": "DeepMind"
+    },
+    {
+      "keywords": [
+        "gemma"
+      ],
+      "brand": "Gemma"
+    },
+    {
+      "keywords": [
+        "kimi",
+        "moonshot"
+      ],
+      "brand": "Moonshot"
+    },
+    {
+      "keywords": [
+        "qiniu"
+      ],
+      "brand": "Qiniu"
+    },
+    {
+      "keywords": [
+        "qwen",
+        "qwq",
+        "qvq",
+        "wanx",
+        "wan\\d/",
+        "wan\\d\\.\\d-",
+        "tongyi",
+        "gte-rerank"
+      ],
+      "brand": "Qwen"
+    },
+    {
+      "keywords": [
+        "minimax",
+        "abab",
+        "^image-"
+      ],
+      "brand": "Minimax"
+    },
+    {
+      "keywords": [
+        "mistral",
+        "mixtral",
+        "codestral",
+        "mathstral",
+        "/mn-",
+        "pixtral",
+        "ministral",
+        "magistral",
+        "devstral",
+        "voxtral"
+      ],
+      "brand": "Mistral"
+    },
+    {
+      "keywords": [
+        "pplx",
+        "sonar"
+      ],
+      "brand": "Perplexity"
+    },
+    {
+      "keywords": [
+        "^yi-",
+        "/yi-",
+        "-yi-"
+      ],
+      "brand": "Yi"
+    },
+    {
+      "keywords": [
+        "^openrouter"
+      ],
+      "brand": "OpenRouter"
+    },
+    {
+      "keywords": [
+        "^relace-",
+        "/relace-"
+      ],
+      "brand": "Relace"
+    },
+    {
+      "keywords": [
+        "^trinity-",
+        "/trinity-",
+        "afm-4.5b",
+        "caller-large",
+        "spotlight",
+        "maestro-reasoning",
+        "virtuoso-medium-v2",
+        "virtuoso-large",
+        "coder-large",
+        "arcee-blitz"
+      ],
+      "brand": "Arcee"
+    },
+    {
+      "keywords": [
+        "^rnj-",
+        "/rnj-"
+      ],
+      "brand": "EssentialAI"
+    },
+    {
+      "keywords": [
+        "^deepcogito-",
+        "/deepcogito-",
+        "^cogito-",
+        "/cogito-"
+      ],
+      "brand": "DeepCogito"
+    },
+    {
+      "keywords": [
+        "^morph-",
+        "/morph-"
+      ],
+      "brand": "Morph"
+    },
+    {
+      "keywords": [
+        "^olmo-",
+        "/olmo-"
+      ],
+      "brand": "Ai2"
+    },
+    {
+      "keywords": [
+        "^mercury",
+        "/mercury"
+      ],
+      "brand": "Inception"
+    },
+    {
+      "keywords": [
+        "^openchat"
+      ],
+      "brand": "OpenChat"
+    },
+    {
+      "keywords": [
+        "aya"
+      ],
+      "brand": "Aya"
+    },
+    {
+      "keywords": [
+        "command"
+      ],
+      "brand": "Cohere"
+    },
+    {
+      "keywords": [
+        "dbrx"
+      ],
+      "brand": "Dbrx"
+    },
+    {
+      "keywords": [
+        "step"
+      ],
+      "brand": "Stepfun"
+    },
+    {
+      "keywords": [
+        "taichu"
+      ],
+      "brand": "AiMass"
+    },
+    {
+      "keywords": [
+        "360gpt",
+        "360zhinao"
+      ],
+      "brand": "Ai360"
+    },
+    {
+      "keywords": [
+        "baichuan"
+      ],
+      "brand": "Baichuan"
+    },
+    {
+      "keywords": [
+        "rwkv",
+        "/eagle-"
+      ],
+      "brand": "Rwkv"
+    },
+    {
+      "keywords": [
+        "ernie",
+        "irag"
+      ],
+      "brand": "Wenxin"
+    },
+    {
+      "keywords": [
+        "^jina",
+        "/jina"
+      ],
+      "brand": "Jina"
+    },
+    {
+      "keywords": [
+        "^jimeng-",
+        "/jimeng-",
+        "seedream",
+        "seededit",
+        "seedance-"
+      ],
+      "brand": "Jimeng"
+    },
+    {
+      "keywords": [
+        "^ep-",
+        "doubao-"
+      ],
+      "brand": "Doubao"
+    },
+    {
+      "keywords": [
+        "^kling",
+        "kling-",
+        "klingai"
+      ],
+      "brand": "Kling"
+    },
+    {
+      "keywords": [
+        "hunyuan",
+        "hy3"
+      ],
+      "brand": "Hunyuan"
+    },
+    {
+      "keywords": [
+        "^d_",
+        "^g_",
+        "^wd_"
+      ],
+      "brand": "FishAudio"
+    },
+    {
+      "keywords": [
+        "skylark",
+        "seed-",
+        "bytedance"
+      ],
+      "brand": "ByteDance"
+    },
+    {
+      "keywords": [
+        "burncloud"
+      ],
+      "brand": "BurnCloud"
+    },
+    {
+      "keywords": [
+        "stable-diffusion",
+        "stable-video",
+        "stable-cascade",
+        "sdxl",
+        "stablelm",
+        "^stable-",
+        "^sd3",
+        "^sd2",
+        "^sd1"
+      ],
+      "brand": "Stability"
+    },
+    {
+      "keywords": [
+        "flux"
+      ],
+      "brand": "Flux"
+    },
+    {
+      "keywords": [
+        "suno"
+      ],
+      "brand": "Suno"
+    },
+    {
+      "keywords": [
+        "wizardlm",
+        "/phi-",
+        "^phi-",
+        "-phi-",
+        "mai-",
+        "microsoft"
+      ],
+      "brand": "Microsoft"
+    },
+    {
+      "keywords": [
+        "firefly"
+      ],
+      "brand": "Adobe"
+    },
+    {
+      "keywords": [
+        "jamba",
+        "^j2-",
+        "ai21"
+      ],
+      "brand": "Ai21"
+    },
+    {
+      "keywords": [
+        "^solar-",
+        "/solar"
+      ],
+      "brand": "Upstage"
+    },
+    {
+      "keywords": [
+        "palm"
+      ],
+      "brand": "PaLM"
+    },
+    {
+      "keywords": [
+        "SenseChat",
+        "SenseNova"
+      ],
+      "brand": "SenseNova"
+    },
+    {
+      "keywords": [
+        "^grok-",
+        "/grok-"
+      ],
+      "brand": "Grok"
+    },
+    {
+      "keywords": [
+        "ideogram",
+        "^v_1",
+        "^v_2",
+        "^v3$",
+        "^upscale$",
+        "^describe$"
+      ],
+      "brand": "Ideogram"
+    },
+    {
+      "keywords": [
+        "(^|/)muse-spark($|-)"
+      ],
+      "brand": "Meta"
+    },
+    {
+      "keywords": [
+        "spark",
+        "general$",
+        "generalv3$",
+        "generalv3.5$",
+        "4.0ultra$",
+        "pro-128k$",
+        "^max-32k$",
+        "^lite$",
+        "^x1$"
+      ],
+      "brand": "Spark"
+    },
+    {
+      "keywords": [
+        "udio"
+      ],
+      "brand": "Udio"
+    },
+    {
+      "keywords": [
+        "union-alpha",
+        "unionalpha",
+        "pareto"
+      ],
+      "brand": "UnionAlpha"
+    },
+    {
+      "keywords": [
+        "deepseek"
+      ],
+      "brand": "DeepSeek"
+    },
+    {
+      "keywords": [
+        "voyage"
+      ],
+      "brand": "Voyage"
+    },
+    {
+      "keywords": [
+        "assemblyai"
+      ],
+      "brand": "AssemblyAI"
+    },
+    {
+      "keywords": [
+        "liquid",
+        "lfm"
+      ],
+      "brand": "Liquid"
+    },
+    {
+      "keywords": [
+        "inflection-"
+      ],
+      "brand": "Inflection"
+    },
+    {
+      "keywords": [
+        "aion-"
+      ],
+      "brand": "AionLabs"
+    },
+    {
+      "keywords": [
+        "aihubmix"
+      ],
+      "brand": "AiHubMix"
+    },
+    {
+      "keywords": [
+        "^v0-"
+      ],
+      "brand": "V0"
+    },
+    {
+      "keywords": [
+        "^veo-",
+        "/veo-",
+        "^veo3"
+      ],
+      "brand": "VertexAI"
+    },
+    {
+      "keywords": [
+        "google",
+        "learnlm",
+        "nano-banana"
+      ],
+      "brand": "Google"
+    },
+    {
+      "keywords": [
+        "cogview"
+      ],
+      "brand": "CogView"
+    },
+    {
+      "keywords": [
+        "kolors"
+      ],
+      "brand": "Kolors"
+    },
+    {
+      "keywords": [
+        "baidu",
+        "qianfan"
+      ],
+      "brand": "BaiduCloud"
+    },
+    {
+      "keywords": [
+        "phind"
+      ],
+      "brand": "Phind"
+    },
+    {
+      "keywords": [
+        "dolphin"
+      ],
+      "brand": "Dolphin"
+    },
+    {
+      "keywords": [
+        "ibm",
+        "granite"
+      ],
+      "brand": "IBM"
+    },
+    {
+      "keywords": [
+        "skywork"
+      ],
+      "brand": "Skywork"
+    },
+    {
+      "keywords": [
+        "bilibili-index",
+        "index-tts"
+      ],
+      "brand": "BilibiliIndex"
+    },
+    {
+      "keywords": [
+        "bilibili"
+      ],
+      "brand": "Bilibili"
+    },
+    {
+      "keywords": [
+        "kmmlu",
+        "exaone",
+        "lgai"
+      ],
+      "brand": "LG"
+    },
+    {
+      "keywords": [
+        "falcon"
+      ],
+      "brand": "TII"
+    },
+    {
+      "keywords": [
+        "menlo",
+        "lucy",
+        "jan-nano"
+      ],
+      "brand": "Menlo"
+    },
+    {
+      "keywords": [
+        "longcat"
+      ],
+      "brand": "LongCat"
+    },
+    {
+      "keywords": [
+        "kat-"
+      ],
+      "brand": "Kwaipilot"
+    },
+    {
+      "keywords": [
+        "^nova-",
+        "/nova-"
+      ],
+      "brand": "Nova"
+    },
+    {
+      "keywords": [
+        "^mimo-",
+        "/mimo-"
+      ],
+      "brand": "XiaomiMiMo"
+    },
+    {
+      "keywords": [
+        "^baai",
+        "^bge-",
+        "/beg-",
+        "touchd",
+        "robobrain"
+      ],
+      "brand": "BAAI"
+    },
+    {
+      "keywords": [
+        "ace-step"
+      ],
+      "brand": "Ace"
+    },
+    {
+      "keywords": [
+        "^composer",
+        "/composer",
+        "-composer"
+      ],
+      "brand": "Cursor"
+    }
+  ],
+  "providers": {
+    "alibaba": "Alibaba",
+    "alephalpha": "AlephAlpha",
+    "antgroup": "AntGroup",
+    "anyscale": "Anyscale",
+    "apple": "Apple",
+    "baidu": "Baidu",
+    "bailian": "Bailian",
+    "bailiancodingplan": "Bailian",
+    "baseten": "Baseten",
+    "bilibili": "Bilibili",
+    "bytedance": "ByteDance",
+    "centml": "CentML",
+    "civitai": "Civitai",
+    "crusoe": "Crusoe",
+    "deepinfra": "DeepInfra",
+    "deepmind": "DeepMind",
+    "exa": "Exa",
+    "featherless": "Featherless",
+    "friendli": "Friendli",
+    "googlecloud": "GoogleCloud",
+    "huawei": "Huawei",
+    "huaweicloud": "HuaweiCloud",
+    "hyperbolic": "Hyperbolic",
+    "ibm": "IBM",
+    "iflytekcloud": "IFlyTekCloud",
+    "inference": "Inference",
+    "infermatic": "Infermatic",
+    "kluster": "Kluster",
+    "lambda": "Lambda",
+    "leptonai": "LeptonAI",
+    "llmapi": "LlmApi",
+    "lg": "LG",
+    "menlo": "Menlo",
+    "meta": "Meta",
+    "microsoft": "Microsoft",
+    "nplcloud": "NPLCloud",
+    "nousresearch": "NousResearch",
+    "parasail": "Parasail",
+    "searchapi": "SearchApi",
+    "snowflake": "Snowflake",
+    "stability": "Stability",
+    "statecloud": "StateCloud",
+    "streamlake": "StreamLake",
+    "submodel": "SubModel",
+    "targon": "Targon",
+    "tencent": "Tencent",
+    "tii": "TII",
+    "yandex": "Yandex",
+    "aimass": "AiMass",
+    "aistudio": "AiStudio",
+    "lobehub": "LobeHub",
+    "zhipu": "Zhipu",
+    "glmcodingplan": "Zhipu",
+    "bedrock": "Bedrock",
+    "deepseek": "DeepSeek",
+    "google": "Google",
+    "azure": "Azure",
+    "moonshot": "Moonshot",
+    "kimicodingplan": "Moonshot",
+    "novita": "Novita",
+    "chatgpt": "OpenAI",
+    "openai": "OpenAI",
+    "opencode": "OpenCode",
+    "opencodecodingplan": "OpenCode",
+    "opencodego": "OpenCode",
+    "opencodezen": "OpenCode",
+    "ollama": "Ollama",
+    "perplexity": "Perplexity",
+    "minimax": "Minimax",
+    "minimaxcodingplan": "Minimax",
+    "mistral": "Mistral",
+    "anthropic": "Anthropic",
+    "groq": "Groq",
+    "openrouter": "OpenRouter",
+    "zeroone": "ZeroOne",
+    "togetherai": "Together",
+    "qiniu": "Qiniu",
+    "qwen": "Qwen",
+    "stepfun": "Stepfun",
+    "stepfuncodingplan": "Stepfun",
+    "spark": "Spark",
+    "fireworksai": "Fireworks",
+    "baichuan": "Baichuan",
+    "burncloud": "BurnCloud",
+    "taichu": "AiMass",
+    "ai360": "Ai360",
+    "siliconcloud": "SiliconCloud",
+    "upstage": "Upstage",
+    "ai21": "Ai21",
+    "player2": "Player2",
+    "github": "Github",
+    "githubcopilot": "GithubCopilot",
+    "github-copilot": "GithubCopilot",
+    "copilot": "Copilot",
+    "doubao": "Doubao",
+    "hunyuan": "Hunyuan",
+    "nvidia": "Nvidia",
+    "tencentcloud": "TencentCloud",
+    "wenxin": "Wenxin",
+    "sensenova": "SenseNova",
+    "huggingface": "HuggingFace",
+    "lmstudio": "LmStudio",
+    "xai": "XAI",
+    "supergrok": "Grok",
+    "cloudflare": "Cloudflare",
+    "internlm": "InternLM",
+    "higress": "Higress",
+    "vllm": "Vllm",
+    "giteeai": "GiteeAI",
+    "modelscope": "ModelScope",
+    "vertexai": "VertexAI",
+    "ppio": "PPIO",
+    "jina": "Jina",
+    "azureai": "AzureAI",
+    "volcengine": "Volcengine",
+    "volcenginecodingplan": "Volcengine",
+    "sambanova": "SambaNova",
+    "cohere": "Cohere",
+    "comfyui": "ComfyUI",
+    "search1api": "Search1API",
+    "infiniai": "Infinigence",
+    "xinference": "Xinference",
+    "xpay": "Xpay",
+    "fal": "Fal",
+    "ai302": "Ai302",
+    "aihubmix": "AiHubMix",
+    "cometapi": "CometAPI",
+    "v0": "V0",
+    "vercel": "Vercel",
+    "vercelaigateway": "Vercel",
+    "bfl": "Bfl",
+    "replicate": "Replicate",
+    "nebius": "Nebius",
+    "newapi": "NewAPI",
+    "akashchat": "AkashChat",
+    "atlascloud": "AtlasCloud",
+    "sophnet": "SophNet",
+    "ollamacloud": "Ollama",
+    "longcat": "LongCat",
+    "cerebras": "Cerebras",
+    "straico": "Straico",
+    "zenmux": "ZenMux",
+    "xiaomimimo": "XiaomiMiMo",
+    "wavespeed": "WaveSpeed"
+  }
+}
