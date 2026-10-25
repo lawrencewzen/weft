@@ -306,7 +306,7 @@ test('hub event payloads match contract schemas', () => {
       snapshot: () => [{
         entity: 'service',
         id: 'self',
-        value: { protocolVersion: PROTOCOL_VERSION, serviceVersion: '0.1.0', pid: 1, startedAt: 1 },
+        value: { protocolVersion: PROTOCOL_VERSION, serviceVersion: '0.1.0', pid: 1, startedAt: 1, demo: false },
       }],
     });
     hub.register('chat', { snapshot: () => [] });
@@ -468,6 +468,27 @@ test('GET /api/v2/events with Bearer first sends a service snapshot whose id is 
     assert.equal(entity.topic, 'service');
     assert.equal(entity.value.protocolVersion, PROTOCOL_VERSION);
     assert.equal(entity.value.pid, srv.proc.pid);
+    assert.equal(entity.value.demo, false);
+    const serviceChecked = compileNamed('ServiceInfo');
+    assert.equal(serviceChecked(entity.value), true, JSON.stringify(serviceChecked.errors));
+  } finally {
+    await stopServer(srv);
+  }
+});
+
+test('service topic snapshot sets demo true when the process asked for the faux runtime', async () => {
+  const srv = await startServer({ env: { WEFT_LLM: 'faux' } });
+  try {
+    const discovery = await readDiscovery(srv.dataDir);
+    const res = await rawEvents({
+      port: srv.port,
+      path: '/api/v2/events?topics=service&lang=zh',
+      headers: { authorization: `Bearer ${discovery.token}` },
+      until: (events) => events.some((ev) => ev.event === 'snapshot'),
+    });
+    const snapshot = res.events.find((ev) => ev.event === 'snapshot');
+    const entity = snapshot.data.entities.find((item) => item.entity === 'service' && item.id === 'self');
+    assert.equal(entity.value.demo, true);
     const serviceChecked = compileNamed('ServiceInfo');
     assert.equal(serviceChecked(entity.value), true, JSON.stringify(serviceChecked.errors));
   } finally {

@@ -2,12 +2,14 @@ import { useEffect, useState } from 'react';
 import type { Lang } from '../data/lang';
 import type { components } from '../../../src/v2/contract.gen';
 import { formatElapsed, formatTokenCount, t } from '../i18n';
+import { DemoModelBadge } from './DemoModelBadge';
 
 type ConversationView = components['schemas']['ConversationView'];
 
 type Props = {
   conversation: ConversationView;
   lang: Lang;
+  demo?: boolean;
   hidePending?: boolean;
   showOpenLeft?: boolean;
   onOpenLeft?: () => void;
@@ -16,6 +18,7 @@ type Props = {
 export function StatusBar({
   conversation,
   lang,
+  demo = false,
   hidePending = false,
   showOpenLeft = false,
   onOpenLeft,
@@ -68,6 +71,7 @@ export function StatusBar({
           ) : null}
           {running && !hidePending ? <span className="run-spin" aria-hidden="true"><span /></span> : null}
           <span className="top-title">{conversation.title}</span>
+          {demo ? <DemoModelBadge lang={lang} testId="next-demo-model-badge" /> : null}
           <span className="status-pill" data-testid="next-run-status" data-status={run.status}>
             {t(lang, statusKey)}
           </span>

@@ -24,6 +24,7 @@ export function App() {
   const [ready, setReady] = useState(false);
   const [unauth, setUnauth] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [demo, setDemo] = useState(false);
 
   useEffect(() => {
     const ac = new AbortController();
@@ -38,6 +39,12 @@ export function App() {
         if (!res.ok) {
           setError(`${res.status} ${res.statusText}`.trim());
           return;
+        }
+        try {
+          const body = await res.json() as { demo?: unknown };
+          setDemo(body.demo === true);
+        } catch {
+          setDemo(false);
         }
         setReady(true);
       } catch (err) {
@@ -70,11 +77,18 @@ export function App() {
     );
   }
 
-  const conversationId = route.name === 'conversation' ? route.id : null;
+  const conversationId = route.name === 'conversation'
+    ? route.id
+    : route.name === 'subagent'
+      ? route.conversationId
+      : null;
+  const subagent = route.name === 'subagent'
+    ? { conversationId: route.conversationId, agentId: route.agentId }
+    : null;
 
   return (
-    <SessionProvider conversationId={conversationId} lang={lang}>
-      <AppShell route={route} lang={lang} />
+    <SessionProvider conversationId={conversationId} subagent={subagent} lang={lang}>
+      <AppShell route={route} lang={lang} demo={demo} />
     </SessionProvider>
   );
 }

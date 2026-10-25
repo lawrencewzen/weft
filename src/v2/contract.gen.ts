@@ -350,6 +350,8 @@ export interface components {
             pid: number;
             /** @description 进程启动时间（毫秒时间戳） */
             startedAt: number;
+            /** @description 走本地剧本（WEFT_LLM=faux / LLM_API=faux / WEFT_FAUX_SCRIPT）时为 true，界面要标出「演示模型」 */
+            demo: boolean;
         };
         RestartAccepted: {
             /** @description 始终为 true。服务即将退出，由客户端重新拉起。 */

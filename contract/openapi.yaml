@@ -867,6 +867,7 @@ components:
         - serviceVersion
         - pid
         - startedAt
+        - demo
       properties:
         protocolVersion:
           type: string
@@ -877,6 +878,9 @@ components:
         startedAt:
           type: integer
           description: 进程启动时间（毫秒时间戳）
+        demo:
+          type: boolean
+          description: 走本地剧本（WEFT_LLM=faux / LLM_API=faux / WEFT_FAUX_SCRIPT）时为 true，界面要标出「演示模型」
     RestartAccepted:
       type: object
       additionalProperties: false

@@ -7,7 +7,9 @@ import {
   isUnauthenticatedError,
   removeWorkspace,
   sendMessage,
+  sendSubagentMessage,
   stop,
+  stopSubagent,
   toolOutput,
   UnauthenticatedError,
 } from './api';
@@ -111,6 +113,21 @@ describe('api client', () => {
     expect(fetchMock.mock.calls[1][0]).toBe('/api/v2/conversations/c1/stop');
     expect(fetchMock.mock.calls[2][0]).toBe('/api/v2/conversations/c1/tools/t%2F1/output');
     expect(fetchMock.mock.calls[3][0]).toBe('/api/v2/conversations/c1?lang=en');
+  });
+
+  it('posts subagent messages and stop', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse(202, { ok: true }))
+      .mockResolvedValueOnce(jsonResponse(202, { stopping: true }));
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(sendSubagentMessage('c/1', 'c/1:sub:a', 'hello')).resolves.toEqual({ ok: true });
+    await expect(stopSubagent('c/1', 'c/1:sub:a')).resolves.toEqual({ stopping: true });
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/v2/conversations/c%2F1/subagents/c%2F1%3Asub%3Aa/messages');
+    expect(fetchMock.mock.calls[0][1]).toMatchObject({
+      method: 'POST',
+      body: JSON.stringify({ text: 'hello' }),
+    });
+    expect(fetchMock.mock.calls[1][0]).toBe('/api/v2/conversations/c%2F1/subagents/c%2F1%3Asub%3Aa/stop');
   });
 
   it('creates a conversation and removes a workspace', async () => {

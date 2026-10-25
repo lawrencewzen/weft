@@ -3,11 +3,13 @@ import {
   conversationTopic,
   createEntityStore,
   sessionTopics,
+  subagentTopic,
   WORKSPACES_TOPIC,
   type ConversationSummary,
   type ConversationView,
   type EntityRef,
   type SnapshotEvent,
+  type Subagent,
   type ThreadItem,
   type ToolCall,
   type Workspace,
@@ -324,6 +326,71 @@ describe('workspace selectors', () => {
   it('builds session topics with workspaces first', () => {
     expect(sessionTopics(null)).toEqual([WORKSPACES_TOPIC]);
     expect(sessionTopics('c1')).toEqual([WORKSPACES_TOPIC, conversationTopic('c1')]);
+  });
+
+  it('adds extra conversation topics when expanding another chat and drops them when collapsing', () => {
+    expect(sessionTopics({ conversationId: 'a' })).toEqual([WORKSPACES_TOPIC, conversationTopic('a')]);
+    expect(sessionTopics({
+      conversationId: 'a',
+      extraConversationIds: ['b'],
+    })).toEqual([WORKSPACES_TOPIC, conversationTopic('a'), conversationTopic('b')]);
+    expect(sessionTopics({
+      conversationId: 'a',
+      extraConversationIds: ['b', 'a', 'c'],
+    })).toEqual([
+      WORKSPACES_TOPIC,
+      conversationTopic('a'),
+      conversationTopic('b'),
+      conversationTopic('c'),
+    ]);
+    expect(sessionTopics({
+      conversationId: 'a',
+      extraConversationIds: [],
+    })).toEqual([WORKSPACES_TOPIC, conversationTopic('a')]);
+    expect(sessionTopics({
+      conversationId: 'a',
+      extraConversationIds: ['b'],
+      subagent: { conversationId: 'a', agentId: 'a:sub:1' },
+    })).toEqual([
+      WORKSPACES_TOPIC,
+      conversationTopic('a'),
+      conversationTopic('b'),
+      subagentTopic('a', 'a:sub:1'),
+    ]);
+  });
+
+  it('lists subagents on a conversation topic and drops unsubscribed topics', () => {
+    const store = createEntityStore();
+    const other = conversationTopic('c2');
+    const agent: Subagent = {
+      id: 'c1:sub:t',
+      parentConversationId: 'c1',
+      title: 'tester',
+      name: '测试',
+      mode: 'foreground',
+      status: 'running',
+      startedAt: 1,
+      lastActivityAt: 1,
+      endedAt: null,
+      currentAction: 'reading',
+      progress: { step: 1, total: 2 },
+    };
+    store.applySnapshot(snapshot([
+      ref('conversation', CID, conv(CID, ['u1'])),
+      ref('item', 'u1', user('u1', 'hi')),
+      ref('subagent', agent.id, agent),
+      ref('conversation', 'c2', conv('c2', ['u2']), other),
+      ref('item', 'u2', user('u2', 'other'), other),
+      ref('item', 'a2', assistant('a2', 'child out'), other),
+    ], { topics: [TOPIC, other] }));
+    expect(store.subagents(CID).map((item) => item.id)).toEqual([agent.id]);
+    expect(store.subagent(CID, agent.id)?.title).toBe('tester');
+    expect(store.lastAssistantText(other)).toBe('child out');
+
+    store.retainTopics([TOPIC]);
+    expect(store.hasTopic(other)).toBe(false);
+    expect(store.items('c2')).toEqual([]);
+    expect(store.subagents(CID)).toHaveLength(1);
   });
 
   it('keeps workspace order from the snapshot and on in-place upsert', () => {

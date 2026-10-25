@@ -2,6 +2,10 @@ export function conversationPath(id: string): string {
   return `/next/c/${encodeURIComponent(id)}`;
 }
 
+export function subagentPath(cid: string, agentId: string): string {
+  return `/next/c/${encodeURIComponent(cid)}/a/${encodeURIComponent(agentId)}`;
+}
+
 export function draftPath(workspaceId: string): string {
   return `/next/w/${encodeURIComponent(workspaceId)}/new`;
 }

@@ -24,14 +24,16 @@ import { t } from '../i18n';
 import type { AppRoute } from '../route';
 import { CenterPane } from './CenterPane';
 import { ConfirmDialog, type ConfirmOpts } from './ConfirmDialog';
+import { DemoModelBadge } from './DemoModelBadge';
 import { Sidebar } from './Sidebar';
 
 type Props = {
   route: AppRoute;
   lang: Lang;
+  demo?: boolean;
 };
 
-export function AppShell({ route, lang }: Props) {
+export function AppShell({ route, lang, demo = false }: Props) {
   const { workspaces, conversations, groups, latest, ready } = useWorkspaces();
   const [leftOpen, setLeftOpen] = useState(() => defaultLeftOpen(window.innerWidth));
   const [leftW, setLeftW] = useState(() => readLeftWidth());
@@ -47,7 +49,12 @@ export function AppShell({ route, lang }: Props) {
   const lastWidth = useRef(window.innerWidth);
   const toastTimer = useRef<number | null>(null);
 
-  const activeConversationId = route.name === 'conversation' ? route.id : null;
+  const activeConversationId = route.name === 'conversation'
+    ? route.id
+    : route.name === 'subagent'
+      ? route.conversationId
+      : null;
+  const activeAgentId = route.name === 'subagent' ? route.agentId : null;
   const draftWorkspaceId = route.name === 'draft' ? route.workspaceId : null;
 
   const visibleWorkspaces = workspaces.filter((ws) => !removedIds.includes(ws.id));
@@ -176,6 +183,7 @@ export function AppShell({ route, lang }: Props) {
       <Sidebar
         lang={lang}
         activeConversationId={activeConversationId}
+        activeAgentId={activeAgentId}
         draftWorkspaceId={draftWorkspaceId}
         onCollapse={() => setOpen(false)}
         onToast={showToast}
@@ -209,6 +217,7 @@ export function AppShell({ route, lang }: Props) {
                 </button>
               ) : null}
               <h1 className="top-title">{t(lang, 'home_title')}</h1>
+              {demo ? <DemoModelBadge lang={lang} testId="next-demo-model-badge" /> : null}
             </div>
           </header>
           <div className="thread-empty">
@@ -218,8 +227,10 @@ export function AppShell({ route, lang }: Props) {
       ) : (
         <CenterPane
           cid={activeConversationId}
+          agentId={activeAgentId}
           workspaceId={draftWorkspaceId}
           lang={lang}
+          demo={demo}
           showOpenLeft={!leftOpen}
           onOpenLeft={() => setOpen(true)}
         />

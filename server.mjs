@@ -96,6 +96,7 @@ const v2 = createV2Runtime({
   serviceVersion: String(pkg.version || '0.0.0'),
   startedAt,
   dataDir: DATA_DIR,
+  demo: envRequestsFaux(),
   hasActiveWork: () => kernelApi?.hasActiveWork?.() ?? false,
   onIdleExit: () => shutdown(),
   onRestart: () => shutdown(),

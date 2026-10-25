@@ -291,12 +291,13 @@ function sidebarLoader(opts: {
   };
 }
 
-function serviceInfo(opts: { serviceVersion: string; startedAt: number; pid: number }): ServiceInfo {
+function serviceInfo(opts: { serviceVersion: string; startedAt: number; pid: number; demo: boolean }): ServiceInfo {
   return {
     protocolVersion: PROTOCOL_VERSION,
     serviceVersion: opts.serviceVersion,
     pid: opts.pid,
     startedAt: opts.startedAt,
+    demo: opts.demo,
   };
 }
 
@@ -324,9 +325,11 @@ export function createV2Handler(opts: {
   loadSubagent?: LoadSubagent;
   sendToAgent?: SendToAgentFn;
   stopAgent?: StopAgentFn;
+  demo?: boolean;
 }): V2Handler {
   const { serviceVersion, startedAt, auth, hub } = opts;
   const pid = opts.pid ?? process.pid;
+  const demo = Boolean(opts.demo);
   const hasActiveWork = opts.hasActiveWork ?? (() => false);
   return async (req, res, url) => {
     if (url.pathname !== '/api/v2' && !url.pathname.startsWith('/api/v2/')) return false;
@@ -362,7 +365,7 @@ export function createV2Handler(opts: {
     }
 
     if (method === 'GET' && pathname === '/api/v2/service') {
-      sendV2(res, pathname, method, 200, serviceInfo({ serviceVersion, startedAt, pid }));
+      sendV2(res, pathname, method, 200, serviceInfo({ serviceVersion, startedAt, pid, demo }));
       return true;
     }
 
@@ -807,6 +810,7 @@ export function createV2Runtime(opts: {
   loadSubagent?: LoadSubagent;
   sendToAgent?: SendToAgentFn;
   stopAgent?: StopAgentFn;
+  demo?: boolean;
 }): V2Runtime {
   const pid = opts.pid ?? process.pid;
   const auth = createV2Auth({
@@ -824,6 +828,7 @@ export function createV2Runtime(opts: {
           serviceVersion: opts.serviceVersion,
           startedAt: opts.startedAt,
           pid,
+          demo: Boolean(opts.demo),
         }),
       }];
     },
@@ -875,6 +880,7 @@ export function createV2Runtime(opts: {
     loadSubagent: opts.loadSubagent,
     sendToAgent: opts.sendToAgent,
     stopAgent: opts.stopAgent,
+    demo: opts.demo,
   });
 
   return {

@@ -37,8 +37,35 @@ test('validateResponse accepts a conforming service body', () => {
     serviceVersion: '0.1.0',
     pid: 1,
     startedAt: 1,
+    demo: false,
   });
   assert.equal(result.ok, true);
+});
+
+test('ServiceInfo requires demo and accepts true or false', () => {
+  const missing = validateResponse('/api/v2/service', 'GET', 200, {
+    protocolVersion: '2.0.0',
+    serviceVersion: '0.1.0',
+    pid: 1,
+    startedAt: 1,
+  });
+  assert.equal(missing.ok, false);
+  const asTrue = validateResponse('/api/v2/service', 'GET', 200, {
+    protocolVersion: '2.0.0',
+    serviceVersion: '0.1.0',
+    pid: 1,
+    startedAt: 1,
+    demo: true,
+  });
+  assert.equal(asTrue.ok, true);
+  const asFalse = validateResponse('/api/v2/service', 'GET', 200, {
+    protocolVersion: '2.0.0',
+    serviceVersion: '0.1.0',
+    pid: 1,
+    startedAt: 1,
+    demo: false,
+  });
+  assert.equal(asFalse.ok, true);
 });
 
 test('Ajv2020 enforces JSON Schema 2020-12 unevaluatedProperties', () => {
@@ -70,6 +97,23 @@ test('GET /api/v2/service returns ServiceInfo with Weft-Protocol', async () => {
       res.body.serviceVersion,
       JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8')).version,
     );
+    assert.equal(res.body.demo, false);
+  } finally {
+    await stopServer(srv);
+  }
+});
+
+test('GET /api/v2/service demo is true when the process asked for the faux runtime', async () => {
+  const srv = await startServer({ env: { WEFT_LLM: 'faux' } });
+  try {
+    const discovery = await readDiscovery(srv.dataDir);
+    const res = await getJson(srv.base, '/api/v2/service', {
+      authorization: `Bearer ${discovery.token}`,
+    });
+    assert.equal(res.status, 200);
+    const checked = validateResponse('/api/v2/service', 'GET', 200, res.body);
+    assert.equal(checked.ok, true, JSON.stringify(checked.errors));
+    assert.equal(res.body.demo, true);
   } finally {
     await stopServer(srv);
   }
