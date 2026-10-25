@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
+import { setTimeout as sleep } from 'node:timers/promises';
 import { parseSSE } from '../../src/core/sse.mjs';
 import { compileSchema, validateResponse } from '../../src/v2/validate.ts';
 import { PROTOCOL_VERSION } from '../../src/v2/version.ts';
@@ -108,6 +109,60 @@ test('buffer overflow with a stale Last-Event-ID sends a snapshot', () => {
     assert.equal(frames[0].event, 'snapshot');
     assert.equal(frames[0].id, 3);
     assert.equal(frames[0].data.entities[0].value.n, 0);
+  } finally {
+    hub.dispose();
+  }
+});
+
+test('upsert value functions evaluate per connection language and cache per lang', () => {
+  const hub = createEventHub({ heartbeatMs: 60_000 });
+  try {
+    hub.register('greet', { snapshot: () => [] });
+    let calls = 0;
+    const zhLive = [];
+    const zhLive2 = [];
+    const enLive = [];
+    hub.connect({ topics: ['greet'], lang: 'zh', send: (frame) => zhLive.push(frame) });
+    hub.connect({ topics: ['greet'], lang: 'zh', send: (frame) => zhLive2.push(frame) });
+    hub.connect({ topics: ['greet'], lang: 'en', send: (frame) => enLive.push(frame) });
+    const seq = hub.publish('greet', {
+      event: 'upsert',
+      entity: 'msg',
+      id: '1',
+      value: (lang) => {
+        calls += 1;
+        return { text: lang === 'en' ? 'hello' : '你好' };
+      },
+    });
+    assert.equal(seq, 1);
+    assert.equal(calls, 2);
+    const zhEvent = zhLive.find((frame) => frame.event === 'upsert');
+    const enEvent = enLive.find((frame) => frame.event === 'upsert');
+    assert.equal(zhEvent?.id, seq);
+    assert.equal(enEvent?.id, seq);
+    assert.equal(zhEvent?.data.value.text, '你好');
+    assert.equal(zhLive2.find((frame) => frame.event === 'upsert')?.data.value.text, '你好');
+    assert.equal(enEvent?.data.value.text, 'hello');
+
+    const zhReplay = [];
+    const enReplay = [];
+    hub.connect({
+      topics: ['greet'],
+      lang: 'zh',
+      lastEventId: '0',
+      send: (frame) => zhReplay.push(frame),
+    }).close();
+    hub.connect({
+      topics: ['greet'],
+      lang: 'en',
+      lastEventId: '0',
+      send: (frame) => enReplay.push(frame),
+    }).close();
+    assert.equal(zhReplay[0].event, 'upsert');
+    assert.equal(zhReplay[0].data.value.text, '你好');
+    assert.equal(enReplay[0].event, 'upsert');
+    assert.equal(enReplay[0].data.value.text, 'hello');
+    assert.equal(calls, 2);
   } finally {
     hub.dispose();
   }
@@ -379,6 +434,67 @@ test('query lastEventId and Last-Event-ID header resume the same way', async () 
     assert.equal(badHeader.events[0]?.event, 'snapshot');
     assert.equal(badQuery.events[0]?.event, 'snapshot');
   } finally {
+    await stopServer(srv);
+  }
+});
+
+const IDLE_MINUTES = '0.02';
+const IDLE_MS = Number(IDLE_MINUTES) * 60_000;
+
+async function waitExit(proc, timeoutMs, logs = () => '') {
+  if (proc.exitCode != null || proc.signalCode != null) {
+    return { code: proc.exitCode, signal: proc.signalCode };
+  }
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      proc.off('exit', onExit);
+      reject(new Error(`process still running after ${timeoutMs}ms:\n${logs()}`));
+    }, timeoutMs);
+    const onExit = (code, signal) => {
+      clearTimeout(timer);
+      resolve({ code, signal });
+    };
+    proc.once('exit', onExit);
+  });
+}
+
+test('v2 events SSE keeps a launcher-started idle service alive until the connection closes', { timeout: 45000 }, async () => {
+  const srv = await startServer({
+    env: {
+      WEFT_LAUNCHED_BY: 'weft-open',
+      WEFT_IDLE_EXIT_MINUTES: IDLE_MINUTES,
+      WEFT_LLM: 'faux',
+    },
+  });
+  let req;
+  try {
+    const discovery = await readDiscovery(srv.dataDir);
+    const opened = await new Promise((resolve, reject) => {
+      const request = http.request({
+        host: '127.0.0.1',
+        port: srv.port,
+        path: '/api/v2/events?topics=service',
+        headers: {
+          authorization: `Bearer ${discovery.token}`,
+          accept: 'text/event-stream',
+        },
+      }, (res) => {
+        res.on('data', () => {});
+        resolve({ req: request, res });
+      });
+      request.on('error', reject);
+      request.end();
+    });
+    req = opened.req;
+    assert.equal(opened.res.statusCode, 200);
+    await sleep(IDLE_MS * 2.5);
+    assert.equal(srv.proc.exitCode, null, srv.logs());
+    req.destroy();
+    req = null;
+    const ended = await waitExit(srv.proc, IDLE_MS * 8, srv.logs);
+    assert.equal(ended.code, 0, srv.logs());
+  } finally {
+    try { req?.destroy(); } catch { /* ignore */ }
     await stopServer(srv);
   }
 });

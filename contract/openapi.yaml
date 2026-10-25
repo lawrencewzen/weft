@@ -136,6 +136,7 @@ paths:
         每条业务事件带全局递增序号，写成标准 SSE：`id: <序号>`、`event: <类型>`、`data: <JSON>`。
         断线后带 `Last-Event-ID` 头（或查询参数 `lastEventId`）续传；环形缓冲里补不上（太旧、比当前还新、或格式不对）时先发一份新快照。
         没带 Last-Event-ID 时先发快照。快照的 SSE id 是当时的最新序号。
+        订阅的主题和上次不同时，客户端不要带 Last-Event-ID / lastEventId，直接重新连接拿快照（续传只保证同一组主题）。
         心跳每 15 秒一次，不带 id，不进缓冲。
 
         事件名与 data 的对应关系：

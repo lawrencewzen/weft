@@ -9,8 +9,10 @@ export type Entity = {
   value: object;
 };
 
+export type UpsertValue = object | ((lang: string) => object);
+
 export type PublishEvent =
-  | { event: 'upsert'; entity: string; id: string; value: object }
+  | { event: 'upsert'; entity: string; id: string; value: UpsertValue }
   | { event: 'remove'; entity: string; id: string }
   | { event: 'text.delta'; itemId: string; offset: number; append: string };
 
@@ -35,15 +37,26 @@ export type HubSession = {
   close: () => void;
 };
 
-type BufferedEvent = {
-  seq: number;
-  topic: string;
-  event: string;
-  data: object;
-};
+type BufferedEvent =
+  | {
+    seq: number;
+    topic: string;
+    event: 'upsert';
+    entity: string;
+    id: string;
+    value: UpsertValue;
+    langCache: Map<string, object>;
+  }
+  | {
+    seq: number;
+    topic: string;
+    event: 'remove' | 'text.delta';
+    data: object;
+  };
 
 type Connection = {
   topics: Set<string>;
+  lang: string;
   send: (frame: SseFrame) => void;
 };
 
@@ -94,6 +107,30 @@ export function parseLastEventId(raw: string | null | undefined): number | null 
   const n = Number(s);
   if (!Number.isSafeInteger(n)) return false;
   return n;
+}
+
+function resolveUpsertValue(entry: Extract<BufferedEvent, { event: 'upsert' }>, lang: string): object {
+  const cached = entry.langCache.get(lang);
+  if (cached) return cached;
+  const value = typeof entry.value === 'function' ? entry.value(lang) : entry.value;
+  entry.langCache.set(lang, value);
+  return value;
+}
+
+function frameFor(entry: BufferedEvent, lang: string): SseFrame {
+  if (entry.event === 'upsert') {
+    return {
+      id: entry.seq,
+      event: 'upsert',
+      data: {
+        topic: entry.topic,
+        entity: entry.entity,
+        id: entry.id,
+        value: resolveUpsertValue(entry, lang),
+      },
+    };
+  }
+  return { id: entry.seq, event: entry.event, data: entry.data };
 }
 
 export function createEventHub(opts: {
@@ -147,14 +184,32 @@ export function createEventHub(opts: {
     };
   }
 
-  function payload(topic: string, event: PublishEvent): object {
+  function toBuffered(topic: string, event: PublishEvent, nextSeq: number): BufferedEvent {
     if (event.event === 'upsert') {
-      return { topic, entity: event.entity, id: event.id, value: event.value };
+      return {
+        seq: nextSeq,
+        topic,
+        event: 'upsert',
+        entity: event.entity,
+        id: event.id,
+        value: event.value,
+        langCache: new Map(),
+      };
     }
     if (event.event === 'remove') {
-      return { topic, entity: event.entity, id: event.id };
+      return {
+        seq: nextSeq,
+        topic,
+        event: 'remove',
+        data: { topic, entity: event.entity, id: event.id },
+      };
     }
-    return { topic, itemId: event.itemId, offset: event.offset, append: event.append };
+    return {
+      seq: nextSeq,
+      topic,
+      event: 'text.delta',
+      data: { topic, itemId: event.itemId, offset: event.offset, append: event.append },
+    };
   }
 
   function heartbeat(): void {
@@ -174,13 +229,11 @@ export function createEventHub(opts: {
     },
     publish(topic, event) {
       seq += 1;
-      const data = payload(topic, event);
-      const entry: BufferedEvent = { seq, topic, event: event.event, data };
+      const entry = toBuffered(topic, event, seq);
       buffer.push(entry);
       while (buffer.length > bufferSize) buffer.shift();
-      const frame: SseFrame = { id: seq, event: event.event, data };
       for (const conn of connections) {
-        if (conn.topics.has(topic)) conn.send(frame);
+        if (conn.topics.has(topic)) conn.send(frameFor(entry, conn.lang));
       }
       return seq;
     },
@@ -193,6 +246,7 @@ export function createEventHub(opts: {
       const lang = normalizeLang(opts.lang);
       const conn: Connection = {
         topics: new Set(topicList),
+        lang,
         send: opts.send,
       };
       connections.add(conn);
@@ -203,7 +257,7 @@ export function createEventHub(opts: {
       } else {
         for (const entry of buffer) {
           if (entry.seq > parsed && conn.topics.has(entry.topic)) {
-            conn.send({ id: entry.seq, event: entry.event, data: entry.data });
+            conn.send(frameFor(entry, lang));
           }
         }
       }
