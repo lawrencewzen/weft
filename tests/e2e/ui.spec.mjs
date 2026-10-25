@@ -29,6 +29,16 @@ test('create workspace & conversation, markdown rendered', async ({ page }) => {
   await expect(body.locator('hr')).toHaveCount(1);
   await expect(body.locator('blockquote')).toContainText('引用块');
   await expect(body.locator('.code-block-bar')).toContainText('js');
+  await expect(body).toHaveCSS('font-size', '15px');
+  await expect(body.locator('pre.code-block-pre')).toHaveCSS('white-space', 'pre');
+  const copyBtn = body.locator('[data-action="copy-code"]').first();
+  await expect(copyBtn).toContainText('复制');
+  await page.evaluate(() => {
+    const clip = navigator.clipboard || (navigator.clipboard = {});
+    clip.writeText = async () => {};
+  });
+  await copyBtn.click();
+  await expect(copyBtn).toContainText('已复制');
   await expect(body.locator('script')).toHaveCount(0);
   await expect(body.locator('[onerror]')).toHaveCount(0);
   await expect(body.locator('a[href^="javascript"]')).toHaveCount(0);

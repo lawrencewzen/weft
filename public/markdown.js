@@ -1,6 +1,14 @@
 import { Marked } from './vendor/marked.esm.js';
 import DOMPurify from './vendor/purify.es.mjs';
 
+const SHELL_LANGS = new Set(['bash', 'sh', 'shell', 'zsh', 'console']);
+
+const COPY_ICON =
+  '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">' +
+  '<rect x="5.5" y="5.5" width="8" height="8" rx="1.5" stroke="currentColor" stroke-width="1.25"/>' +
+  '<rect x="2.5" y="2.5" width="8" height="8" rx="1.5" stroke="currentColor" stroke-width="1.25"/>' +
+  '</svg>';
+
 function escapeHtml(str) {
   return String(str ?? '')
     .replaceAll('&', '&amp;')
@@ -10,6 +18,20 @@ function escapeHtml(str) {
     .replaceAll("'", '&#39;');
 }
 
+function copyCodeLabel() {
+  return typeof globalThis.t === 'function' ? globalThis.t('copy_code') : '复制';
+}
+
+function renderFencedBody(text, lang) {
+  const body = String(text ?? '').replace(/\n$/, '');
+  if (!SHELL_LANGS.has(lang.toLowerCase())) return escapeHtml(body);
+  return body.split('\n').map((line) => {
+    const prompt = line.trim() !== '' && !line.startsWith('$ ');
+    const cls = prompt ? 'code-line has-prompt' : 'code-line';
+    return `<span class="${cls}">${escapeHtml(line)}</span>`;
+  }).join('\n');
+}
+
 const marked = new Marked({
   gfm: true,
   breaks: true,
@@ -17,12 +39,34 @@ const marked = new Marked({
   renderer: {
     code({ text, lang }) {
       const language = String(lang || '').trim().split(/\s+/)[0] || 'text';
-      const body = String(text ?? '').replace(/\n$/, '');
+      const label = escapeHtml(copyCodeLabel());
       return (
         `<div class="code-block-card">` +
-        `<div class="code-block-bar"><span>${escapeHtml(language)}</span></div>` +
-        `<pre class="code-block-pre"><code>${escapeHtml(body)}</code></pre>` +
+        `<div class="code-block-bar">` +
+        `<span>${escapeHtml(language)}</span>` +
+        `<button type="button" class="code-copy-btn" data-action="copy-code">` +
+        COPY_ICON +
+        `<span data-copy-label>${label}</span>` +
+        `</button>` +
+        `</div>` +
+        `<pre class="code-block-pre"><code>${renderFencedBody(text, language)}</code></pre>` +
         `</div>\n`
+      );
+    },
+    table(token) {
+      let header = '';
+      for (const cell of token.header) header += this.tablecell(cell);
+      let body = '';
+      for (const row of token.rows) {
+        let cells = '';
+        for (const cell of row) cells += this.tablecell(cell);
+        body += this.tablerow({ text: cells });
+      }
+      return (
+        `<div class="md-table"><table>\n` +
+        `<thead>${this.tablerow({ text: header })}</thead>\n` +
+        (body ? `<tbody>${body}</tbody>` : '') +
+        `</table></div>\n`
       );
     },
     list(token) {
@@ -37,15 +81,22 @@ const marked = new Marked({
     },
     listitem(item) {
       const body = this.parser.parse(item.tokens);
-      if (item.task) return `<li class="task-list-item">${body}</li>\n`;
+      if (item.task) {
+        const done = item.checked ? ' is-done' : '';
+        return `<li class="task-list-item${done}">${body}</li>\n`;
+      }
       return `<li>${body}</li>\n`;
     },
   },
 });
 
 const PURIFY_CONFIG = {
-  ADD_TAGS: ['input'],
-  ADD_ATTR: ['target', 'rel', 'checked', 'disabled', 'type', 'class', 'start'],
+  ADD_TAGS: ['input', 'button', 'svg', 'rect'],
+  ADD_ATTR: [
+    'target', 'rel', 'checked', 'disabled', 'type', 'class', 'start', 'data-action',
+    'viewBox', 'fill', 'stroke', 'stroke-width', 'rx', 'width', 'height', 'x', 'y',
+    'aria-hidden',
+  ],
   FORBID_TAGS: ['script', 'style', 'iframe', 'object', 'embed', 'form', 'link', 'meta', 'base'],
 };
 
