@@ -102,13 +102,30 @@ function agentMessages(aid, extras = {}, agents = AGENTS) {
   };
 }
 
+async function fetchRouted(route, attempts = 5) {
+  let lastErr;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await route.fetch();
+    } catch (err) {
+      lastErr = err;
+      const msg = String(err?.message || err);
+      if (!/ECONNRESET|ECONNREFUSED|socket hang up|net::ERR_/i.test(msg) || i === attempts - 1) {
+        throw err;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 40 * (i + 1)));
+    }
+  }
+  throw lastErr;
+}
+
 async function mockSubagentApi(page, bag) {
   await page.route(/\/api\/workspaces\/[^/]+\/conversations(?:\?.*)?$/, async (route) => {
     if (route.request().method() !== 'GET') {
       await route.continue();
       return;
     }
-    const res = await route.fetch();
+    const res = await fetchRouted(route);
     const list = await res.json();
     if (!Array.isArray(list)) {
       await route.fulfill({ json: list });
@@ -433,11 +450,17 @@ test('brief, elapsed mm:ss, idle, and currentAction', async ({ page }) => {
     await expect(auditorRow.getByTestId('subagent-tree-time')).toHaveClass(/is-idle/);
     await expect(auditorRow).toHaveAttribute('data-visual', 'stuck');
     await expect(auditorRow.getByTestId('subagent-tree-action')).toHaveText('等待模型返回');
+    await expect.poll(async () => {
+      const stuckArc = await auditorRow.locator('.sa-arc').evaluate((el) => {
+        const s = getComputedStyle(el);
+        return { duration: s.animationDuration, transition: s.transition };
+      });
+      return Number.parseFloat(stuckArc.duration);
+    }, { timeout: 2500 }).toBeGreaterThan(2);
     const stuckArc = await auditorRow.locator('.sa-arc').evaluate((el) => {
       const s = getComputedStyle(el);
       return { duration: s.animationDuration, transition: s.transition };
     });
-    expect(Number.parseFloat(stuckArc.duration)).toBeGreaterThan(2);
     expect(stuckArc.transition).toMatch(/stroke|opacity/);
 
     await expect(page.getByTestId('subagent-chip')).toHaveText('2/3');
@@ -630,7 +653,7 @@ async function mockOtherSubagentApi(page, bag) {
     if (method === 'POST') {
       let res;
       try {
-        res = await route.fetch();
+        res = await fetchRouted(route);
       } catch {
         await route.abort();
         return;
@@ -654,7 +677,7 @@ async function mockOtherSubagentApi(page, bag) {
     }
     let res;
     try {
-      res = await route.fetch();
+      res = await fetchRouted(route);
     } catch {
       await route.fulfill({ json: [] });
       return;
