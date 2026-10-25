@@ -22,8 +22,9 @@ import {
   SUBAGENTS_DOC_KIND,
 } from './ids.mjs';
 
-export const DELEGATE_DESCRIPTION = 'Run a self-contained task on a subagent and return its answer. The subagent cannot see this conversation, or your instructions; put everything it needs in task: what to do, where, when it is done, and what to report back.';
-export const SUBAGENT_DESCRIPTION = `${DELEGATE_DESCRIPTION} On spawn, pass that text as message. \`name\` is used later with send, wait, and stop.`;
+export const TITLE_DESCRIPTION = 'A one-line summary of at most 20 characters, in the user\'s language, saying what this subagent will do. Shown as the heading to the user. Do not include a file path.';
+export const DELEGATE_DESCRIPTION = 'Run a self-contained task on a subagent and return its answer. The subagent cannot see this conversation, or your instructions; put everything it needs in task: what to do, where, when it is done, and what to report back. Pass title: a short heading (at most 20 characters, user\'s language, no file path) shown to the user.';
+export const SUBAGENT_DESCRIPTION = `${DELEGATE_DESCRIPTION} On spawn, pass that text as message. \`name\` is used later with send, wait, and stop. Also pass title on spawn.`;
 const DISPATCH_TOOLS = new Set(['delegate', 'subagent', 'skill']);
 const NAME_CAP = 30;
 
@@ -125,6 +126,20 @@ export function nameFromTask(task) {
   return String(task || '').split(/\r?\n/, 1)[0].replace(/\s+/g, ' ').trim().slice(0, NAME_CAP);
 }
 
+/** Display title from the optional spawn argument. Empty or whitespace is omitted. */
+export function cleanTitle(value) {
+  if (typeof value !== 'string') return undefined;
+  const title = value.replace(/\s+/g, ' ').trim();
+  return title || undefined;
+}
+
+function childDetails(conversationId, name, title) {
+  const details = { conversationId, name };
+  const cleaned = cleanTitle(title);
+  if (cleaned) details.title = cleaned;
+  return details;
+}
+
 function childTools(parentAgent) {
   return (parentAgent?.tools || []).filter((tool) => tool?.name && !DISPATCH_TOOLS.has(tool.name));
 }
@@ -166,6 +181,7 @@ export function createSubagentExtension({
     description: DELEGATE_DESCRIPTION,
     parameters: Type.Object({
       task: Type.String(),
+      title: Type.Optional(Type.String({ description: TITLE_DESCRIPTION })),
     }),
     replay: 'safe',
     execute: async (args, api, context) => {
@@ -173,6 +189,7 @@ export function createSubagentExtension({
       const prepared = await prepareChild(parent);
       if (prepared?.error) return reply(prepared.error, { isError: true });
       const name = nameFromTask(args.task);
+      const title = cleanTitle(args.title);
       const child = await api.commit(async (tx) => {
         const existing = (await tx.scanConversations({ ownerTaskId: api.taskId }, 1)).items[0];
         if (existing) return existing.id;
@@ -183,7 +200,7 @@ export function createSubagentExtension({
         });
         return created.id;
       }, context);
-      const details = { conversationId: child, name };
+      const details = childDetails(child, name, title);
       await api.details(details, context);
       if (typeof onChild === 'function') onChild(api.conversationId, child);
       const handle = await api.conversation(child, context);
@@ -200,14 +217,14 @@ export function createSubagentExtension({
       }
       if (settled.reason === 'aborted') {
         return reply(`[subagent ${name} was stopped by the user]`, {
-          details: { conversationId: child, name },
+          details: childDetails(child, name, title),
         });
       }
       if (settled.status !== 'done' || settled.type !== 'input') {
         return reply(`subagent ${settled.status} ${settled.reason || ''}`, { isError: true });
       }
       const text = await assistantText(api, settled.answer, context);
-      return reply(text, { details: { conversationId: child, name } });
+      return reply(text, { details: childDetails(child, name, title) });
     },
   });
 
@@ -225,10 +242,12 @@ export function createSubagentExtension({
       name: Type.Optional(Type.String()),
       message: Type.Optional(Type.String()),
       followUp: Type.Optional(Type.Boolean()),
+      title: Type.Optional(Type.String({ description: TITLE_DESCRIPTION })),
     }),
     replay: 'unsafe',
     execute: async (args, api, context) => {
       const { action, name, message, followUp } = args;
+      const title = cleanTitle(args.title);
       const snapshot = await api.snapshot(Subagents, api.conversationId, context);
       const registry = snapshot ?? { agents: {}, reporters: {} };
 
@@ -251,14 +270,18 @@ export function createSubagentExtension({
         const handle = await api.conversation(agent.conversationId, context);
         if (!handle) return reply(`No conversation for ${name}.`, { isError: true });
         await handle.abort(context);
-        return reply(`Stopped ${name}.`, { details: { name, conversationId: agent.conversationId } });
+        return reply(`Stopped ${name}.`, {
+          details: childDetails(agent.conversationId, name, agent.title),
+        });
       }
       if (action === 'wait') {
         const handle = await api.conversation(agent.conversationId, context);
         if (!handle) return reply(`No conversation for ${name}.`, { isError: true });
         await handle.waitForIdle(context);
         const text = await latestAssistantText(api, agent.conversationId, context);
-        return reply(text || '(no answer)', { details: { name, conversationId: agent.conversationId } });
+        return reply(text || '(no answer)', {
+          details: childDetails(agent.conversationId, name, agent.title),
+        });
       }
       if (message === undefined) return reply(`${action} needs a message.`, { isError: true });
 
@@ -276,18 +299,20 @@ export function createSubagentExtension({
             ...prepared.change,
             extensions: { remove: blocked },
           });
-          state.agents[name] = { conversationId: child.id, reported: [] };
+          state.agents[name] = {
+            conversationId: child.id,
+            reported: [],
+            ...(title ? { title } : {}),
+          };
           const input = { name, conversationId: child.id, message, followUp: false };
           state.reporters[api.taskId] = await tx.createTask(Reporter, input, background);
           return { conversationId: child.id, text: `Started ${name}.` };
         }, context);
         if (result.error) return reply(result.error, { isError: true });
-        await api.details({
-          name,
-          conversationId: result.conversationId,
-        }, context);
+        const spawned = childDetails(result.conversationId, name, title);
+        await api.details(spawned, context);
         if (typeof onChild === 'function') onChild(api.conversationId, result.conversationId);
-        return reply(result.text, { details: { name, conversationId: result.conversationId } });
+        return reply(result.text, { details: spawned });
       }
 
       const result = await api.commit(async (tx) => {
@@ -302,11 +327,16 @@ export function createSubagentExtension({
           followUp: followUp === true,
         };
         state.reporters[api.taskId] = await tx.createTask(Reporter, input, background);
-        return { conversationId: current.conversationId, text: `Sent to ${name}.` };
+        return {
+          conversationId: current.conversationId,
+          title: current.title,
+          text: `Sent to ${name}.`,
+        };
       }, context);
       if (result.error) return reply(result.error, { isError: true });
-      await api.details({ name, conversationId: result.conversationId }, context);
-      return reply(result.text, { details: { name, conversationId: result.conversationId } });
+      const sent = childDetails(result.conversationId, name, result.title);
+      await api.details(sent, context);
+      return reply(result.text, { details: sent });
     },
   });
 
@@ -492,12 +522,18 @@ function takeChild(meta, order, id, patch) {
     conversationId: id,
     mode: patch.mode || prev.mode || 'foreground',
     name: patch.name || prev.name || '',
+    title: cleanTitle(patch.title) || prev.title || '',
   });
 }
 
 function toolChild(details, mode) {
   if (details?.conversationId == null || !mode) return null;
-  return { conversationId: details.conversationId, mode, name: details.name };
+  return {
+    conversationId: details.conversationId,
+    mode,
+    name: details.name,
+    title: details.title,
+  };
 }
 
 /** Read subagents from tool details, the background name document, ownership, and child viewState. */
@@ -542,7 +578,13 @@ export function createSubagentHost({
     }
     const roster = await harness.snapshot(Subagents, conv.harnessId, context);
     for (const [name, entry] of Object.entries(roster?.agents || {})) {
-      if (entry?.conversationId) takeChild(meta, order, entry.conversationId, { mode: 'background', name });
+      if (entry?.conversationId) {
+        takeChild(meta, order, entry.conversationId, {
+          mode: 'background',
+          name,
+          title: entry.title,
+        });
+      }
     }
     const graph = await harness.taskGraph(context);
     try {
@@ -572,6 +614,7 @@ export function createSubagentHost({
       const aborted = generations.get(key)?.state?.outcome?.status === 'aborted';
       const name = entry.name || String(entry.conversationId);
       const status = childStatus(Boolean(childLive?.run), aborted, stats.lastText);
+      const title = cleanTitle(entry.title);
       out.push({
         id: `${conv.id}:sub:${entry.conversationId}`,
         name,
@@ -582,6 +625,7 @@ export function createSubagentHost({
         lastText: stats.lastText,
         mode: entry.mode === 'background' ? 'background' : 'foreground',
         harnessId: entry.conversationId,
+        ...(title ? { title } : {}),
         ...activityFields(transcript, status),
       });
     }

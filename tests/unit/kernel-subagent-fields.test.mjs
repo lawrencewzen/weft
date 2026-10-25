@@ -3,11 +3,13 @@ import assert from 'node:assert/strict';
 import { agentEventData } from '../../src/core/agents.mjs';
 import {
   activityFields,
+  cleanTitle,
   createSubagentExtension,
   currentActionText,
   DELEGATE_DESCRIPTION,
   nameFromTask,
   SUBAGENT_DESCRIPTION,
+  TITLE_DESCRIPTION,
 } from '../../src/kernel/subagents.mjs';
 
 function userEntry(content, timestamp) {
@@ -62,6 +64,16 @@ test('nameFromTask uses the first line, flattened, capped at 30 characters', () 
   assert.equal(nameFromTask(long).length, 30);
 });
 
+test('cleanTitle flattens whitespace and omits empty values', () => {
+  assert.equal(cleanTitle('写登录测试'), '写登录测试');
+  assert.equal(cleanTitle('  写登录\t测试  '), '写登录 测试');
+  assert.equal(cleanTitle(''), undefined);
+  assert.equal(cleanTitle('   '), undefined);
+  assert.equal(cleanTitle(undefined), undefined);
+  assert.equal(cleanTitle(null), undefined);
+  assert.equal(cleanTitle(12), undefined);
+});
+
 test('delegate and subagent tool schemas are self-contained', () => {
   const extension = createSubagentExtension({
     prepareChild: async () => ({ change: { instructions: '' } }),
@@ -70,11 +82,17 @@ test('delegate and subagent tool schemas are self-contained', () => {
   const subagent = extension.tools.find((tool) => tool.name === 'subagent');
   assert.ok(delegate);
   assert.ok(subagent);
-  assert.deepEqual(schemaKeys(delegate.parameters), ['task']);
+  assert.deepEqual(schemaKeys(delegate.parameters), ['task', 'title']);
   assert.deepEqual(delegate.parameters.required, ['task']);
   assert.equal(schemaKeys(subagent.parameters).includes('agent'), false);
   assert.equal(schemaKeys(subagent.parameters).includes('name'), true);
   assert.equal(schemaKeys(subagent.parameters).includes('message'), true);
+  assert.equal(schemaKeys(subagent.parameters).includes('title'), true);
+  assert.equal((subagent.parameters.required || []).includes('title'), false);
+  assert.equal(delegate.parameters.properties.title.description, TITLE_DESCRIPTION);
+  assert.equal(subagent.parameters.properties.title.description, TITLE_DESCRIPTION);
+  assert.match(TITLE_DESCRIPTION, /20/);
+  assert.match(TITLE_DESCRIPTION, /path/i);
   assert.equal(delegate.description, DELEGATE_DESCRIPTION);
   assert.equal(subagent.description, SUBAGENT_DESCRIPTION);
   assert.match(delegate.description, /self-contained/);
@@ -197,12 +215,14 @@ test('agentEventData passes optional fields for sub-agents and strips currentAct
     step: 2,
     totalSteps: 2,
     lastText: '',
+    title: '检查登录',
     brief: 'Inspect auth.ts',
     startedAt: 1000,
     lastActivityAt: 3000,
     currentAction: '看登录逻辑',
     endedAt: 3000,
   });
+  assert.equal(running.title, '检查登录');
   assert.equal(running.brief, 'Inspect auth.ts');
   assert.equal(running.startedAt, 1000);
   assert.equal(running.lastActivityAt, 3000);
@@ -236,6 +256,7 @@ test('agentEventData passes optional fields for sub-agents and strips currentAct
     lastText: '',
   });
   assert.equal(Object.hasOwn(chip, 'brief'), false);
+  assert.equal(Object.hasOwn(chip, 'title'), false);
   assert.equal(Object.hasOwn(chip, 'startedAt'), false);
   assert.equal(Object.hasOwn(chip, 'currentAction'), false);
   assert.equal(Object.hasOwn(chip, 'endedAt'), false);

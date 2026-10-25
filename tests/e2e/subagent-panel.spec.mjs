@@ -20,6 +20,7 @@ const AGENTS = [
     totalSteps: 5,
     lastText: '正在写登录测试',
     mode: 'foreground',
+    title: '写登录单测',
     brief: '给登录页写测试\n第二行不应出现在卡片摘要',
     startedAt: NOW - 125000,
     lastActivityAt: NOW - 4000,
@@ -187,7 +188,8 @@ test('right panel tabs, overview, breadcrumb, interrupt box, and narrow overflow
     const coderCard = page.locator(`[data-testid=subagent-card][data-agent-id="${CODER}"]`);
     const auditorCard = page.locator(`[data-testid=subagent-card][data-agent-id="${AUDITOR}"]`);
     const bareCard = page.locator(`[data-testid=subagent-card][data-agent-id="${BARE}"]`);
-    await expect(testerCard).toContainText('给登录页写测试');
+    await expect(testerCard).toContainText('写登录单测');
+    await expect(testerCard).not.toContainText('给登录页写测试');
     await expect(testerCard).not.toContainText('第二行不应出现在卡片摘要');
     await expect(testerCard).toContainText('此刻：正在写 login.spec.ts');
     await expect(coderCard).toContainText('编码');
@@ -203,7 +205,7 @@ test('right panel tabs, overview, breadcrumb, interrupt box, and narrow overflow
     await testerCard.click();
     await expect(page.getByTestId('subagent-pane')).toBeVisible();
     await expect(page.getByTestId('subagent-overview')).toHaveCount(0);
-    await expect(page.getByTestId('subagent-banner-text')).toContainText('给登录页写测试');
+    await expect(page.getByTestId('subagent-banner-text')).toContainText('写登录单测');
     await expect(page.getByTestId('subagent-brief')).toContainText('主 Agent 分派的任务');
     await expect(page.getByTestId('subagent-brief')).toContainText('第二行不应出现在卡片摘要');
     const testerPane = await page.getByTestId('subagent-pane').innerText();
