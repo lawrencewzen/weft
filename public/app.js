@@ -68,6 +68,7 @@ import {
 import { isPromptUserMessage, MANUAL_CONTINUE_TEXT } from './continuation.js';
 import { parseSubagentReport } from './subagent-report.js';
 import { renderMarkdown } from './markdown.js';
+import { resolvePathRef } from './path-ref.js';
 
 // Application State
 const state = {
@@ -83,6 +84,7 @@ const state = {
   activeFilePath: null,
   activeDiff: null,
   activeFileContent: null,
+  fileTargetLine: null,
   userPickedFile: false,
   settings: {},
   plugins: [],
@@ -622,6 +624,7 @@ function resetRightPanelAndStatus() {
   state.activeFilePath = null;
   state.activeDiff = null;
   state.activeFileContent = null;
+  state.fileTargetLine = null;
   state.userPickedFile = false;
   renderStatusBar();
   renderRightPanel();
@@ -725,12 +728,18 @@ function paintWorkspaceTree() {
   tree.scrollTop = top;
 }
 
+function onWorkspaceTreeChanged() {
+  paintWorkspaceTree();
+  renderChatThread();
+  if (state.activeRightTab === 'agent') renderRightPanel();
+}
+
 function ensureWorkspaceTree() {
   const wid = state.activeWorkspaceId;
   if (!wid) return;
   if (state.workspaceTreeFor === wid || state.treeLoadingFor === wid) return;
   loadWorkspaceTree().then((changed) => {
-    if (changed) paintWorkspaceTree();
+    if (changed) onWorkspaceTreeChanged();
   });
 }
 
@@ -748,7 +757,7 @@ function scheduleWorkspaceTreeRefresh() {
     workspaceTreeRefreshTimer = null;
     if (state.activeWorkspaceId !== wid) return;
     loadWorkspaceTree().then((changed) => {
-      if (changed) paintWorkspaceTree();
+      if (changed) onWorkspaceTreeChanged();
     });
   }, 120);
 }
@@ -1230,7 +1239,13 @@ export async function createNewConversation(opts = {}) {
   }
 }
 
-export async function loadFileOrDiff(filePath) {
+export async function loadFileOrDiff(filePath, opts = {}) {
+  if (Object.prototype.hasOwnProperty.call(opts, 'targetLine')) {
+    const n = Number(opts.targetLine);
+    state.fileTargetLine = Number.isFinite(n) && n >= 1 ? n : null;
+  } else if (filePath !== state.activeFilePath) {
+    state.fileTargetLine = null;
+  }
   state.activeFilePath = filePath;
   localStorage.setItem('weft_active_file', filePath);
   const tab = state.activeRightTab;
@@ -2740,6 +2755,19 @@ function findAgentForReport(name) {
     .find((agent) => String(agent.name || '') === key) || null;
 }
 
+function markdownOpts() {
+  ensureWorkspaceTree();
+  const ws = (state.workspaces || []).find((w) => w.id === state.activeWorkspaceId);
+  const tree = state.workspaceTreeFor === state.activeWorkspaceId ? state.workspaceTree : [];
+  return {
+    resolvePath: (text) => resolvePathRef(text, { tree, workspacePath: ws?.path || '' }),
+  };
+}
+
+function renderMessageMarkdown(src) {
+  return renderMarkdown(src, markdownOpts());
+}
+
 function subagentReportHtml(message, report) {
   const agent = findAgentForReport(report?.name);
   const displayName = agent ? subagentSummary(agent) : String(report?.name || '');
@@ -2769,7 +2797,7 @@ function subagentReportHtml(message, report) {
     `</button>` +
     openBtn +
     `</div>` +
-    `<div class="subagent-report-body msg-body" data-testid="subagent-report-body">${renderMarkdown(report?.body || '')}</div>` +
+    `<div class="subagent-report-body msg-body" data-testid="subagent-report-body">${renderMessageMarkdown(report?.body || '')}</div>` +
     `</div>`
   );
 }
@@ -2853,7 +2881,7 @@ function threadBlocksHtml(msgs, { afterToolRun, senderName, streamSpin, liveTail
       }
       rendered.push(
         `<div class="msg-group msg-side-user" data-testid="message" data-role="user">` +
-        `<div class="msg-body" data-testid="message-body">${renderMarkdown(m.text || '')}</div>` +
+        `<div class="msg-body" data-testid="message-body">${renderMessageMarkdown(m.text || '')}</div>` +
         `</div>`
       );
       continue;
@@ -2871,7 +2899,7 @@ function threadBlocksHtml(msgs, { afterToolRun, senderName, streamSpin, liveTail
     rendered.push(
       `<div class="msg-group msg-side-agent" data-testid="message" data-role="assistant">` +
       header +
-      `<div class="msg-body" data-testid="message-body">${renderMarkdown(m.text || '')}${spin}</div>` +
+      `<div class="msg-body" data-testid="message-body">${renderMessageMarkdown(m.text || '')}${spin}</div>` +
       (m === truncated ? truncationFooterHtml(m, showTruncationContinue) : '') +
       `</div>`
     );
@@ -2928,8 +2956,16 @@ export function renderChatThread() {
   if (errHtml) rendered.push(errHtml);
 
   thread.innerHTML = `<div class="thread-inner">${rendered.join('')}</div>`;
-  if (stick || state.forceThreadBottom) thread.scrollTop = thread.scrollHeight;
-  else thread.scrollTop = prevTop;
+  if (stick || state.forceThreadBottom) {
+    const inner = thread.querySelector('.thread-inner');
+    const padBottom = inner ? parseFloat(getComputedStyle(inner).paddingBottom) || 0 : 0;
+    const maxScroll = Math.max(0, thread.scrollHeight - thread.clientHeight);
+    // Bottom padding is a spacer above the composer. If that is the only
+    // overflow, stay at the top so the first message is not clipped.
+    thread.scrollTop = maxScroll <= padBottom + 1 ? 0 : maxScroll;
+  } else {
+    thread.scrollTop = prevTop;
+  }
   state.forceThreadBottom = false;
 }
 
@@ -3615,7 +3651,7 @@ function viewingAgentInfo() {
 function pendingNudgeHtml(item) {
   return (
     `<div class="msg-group msg-side-user subagent-nudge-pending" data-testid="subagent-nudge-pending">` +
-    `<div class="msg-body" data-testid="message-body">${renderMarkdown(item.text || '')}</div>` +
+    `<div class="msg-body" data-testid="message-body">${renderMessageMarkdown(item.text || '')}</div>` +
     `<div class="subagent-nudge-note">${escapeHtml(t('subagent_interrupt_pending'))}</div>` +
     `</div>`
   );
@@ -3666,7 +3702,7 @@ function renderAgentPaneHtml() {
   const resultHtml = done && lastAssistant
     ? `<div class="agent-pane-result msg-group" data-testid="subagent-handed-back">` +
       `<span class="k">${escapeHtml(t('subagent_handed_back'))}</span>` +
-      `<div class="msg-body" data-testid="message" data-role="assistant"><span class="msg-sender" data-testid="message-sender">${escapeHtml(name)}</span><div data-testid="message-body">${renderMarkdown(lastAssistant.text)}</div></div>` +
+      `<div class="msg-body" data-testid="message" data-role="assistant"><span class="msg-sender" data-testid="message-sender">${escapeHtml(name)}</span><div data-testid="message-body">${renderMessageMarkdown(lastAssistant.text)}</div></div>` +
       `</div>`
     : '';
   return (
@@ -3755,6 +3791,7 @@ export function renderRightPanel() {
   if (state.activeRightTab === 'file') {
     ensureWorkspaceTree();
     viewport.innerHTML = renderFileBrowserHtml();
+    viewport.querySelector('.file-line.is-target')?.scrollIntoView({ block: 'center', inline: 'nearest' });
     return;
   }
   const pane = viewport.querySelector('.changes-pane');
@@ -3777,7 +3814,7 @@ function renderFileBrowserHtml() {
     const changed = changesWithDiff(state.changes).some((c) => c.path === state.activeFilePath);
     preview =
       `<div class="file-preview-head"><span>${escapeHtml(state.activeFilePath)}</span><span>${escapeHtml(changed ? t('file_modified_note') : t('file_lines', { n: lines.length }))}</span></div>` +
-      `<div class="file-lines file-view-content">${lines.map((line, i) => `<div class="file-line"><span class="n">${i + 1}</span><span class="code">${escapeHtml(line)}</span></div>`).join('')}</div>`;
+      `<div class="file-lines file-view-content">${lines.map((line, i) => `<div class="file-line${state.fileTargetLine === i + 1 ? ' is-target' : ''}"><span class="n">${i + 1}</span><span class="code">${escapeHtml(line)}</span></div>`).join('')}</div>`;
   } else if (state.activeFilePath && looksBinary(state.activeFileContent)) {
     preview = `<div class="file-preview-empty">${escapeHtml(state.activeFilePath)} — ${escapeHtml(t('file_binary'))}</div>`;
   } else {
@@ -4924,7 +4961,7 @@ function closeOverlaysFrom(target) {
   if (!target?.closest?.('#col-center')) return;
   const vw = window.innerWidth;
   if (vw < LEFT_OVERLAY_BELOW && state.leftOpen) setLeftOpen(false);
-  if (vw < RIGHT_OVERLAY_BELOW && state.rightOpen && !target.closest('[data-action="toggle-right"],[data-action="open-subagent"],[data-action="open-file-in-editor"]')) setRightOpen(false);
+  if (vw < RIGHT_OVERLAY_BELOW && state.rightOpen && !target.closest('[data-action="toggle-right"],[data-action="open-subagent"],[data-action="open-file-in-editor"],[data-action="open-path"]')) setRightOpen(false);
 }
 
 function startDividerDrag(e, side) {
@@ -5383,6 +5420,25 @@ document.addEventListener('click', (e) => {
       const card = actionEl.closest('.code-block-card');
       const raw = (card?.querySelector('pre code')?.textContent || '').replace(/\n$/, '');
       copyCodeBlock(actionEl, raw);
+      break;
+    }
+    case 'open-path': {
+      const ws = (state.workspaces || []).find((w) => w.id === state.activeWorkspaceId);
+      const tree = state.workspaceTreeFor === state.activeWorkspaceId ? state.workspaceTree : [];
+      const resolved = resolvePathRef(actionEl.getAttribute('data-path') || '', {
+        tree,
+        workspacePath: ws?.path || '',
+      });
+      if (!resolved) break;
+      const line = Number(actionEl.getAttribute('data-line'));
+      state.userPickedFile = true;
+      state.activeRightTab = 'file';
+      localStorage.setItem('weft_active_right_tab', 'file');
+      setRightOpen(true);
+      syncRightTabActive();
+      loadFileOrDiff(resolved.path, {
+        targetLine: Number.isFinite(line) && line >= 1 ? line : null,
+      });
       break;
     }
     case 'load-workspace-file':

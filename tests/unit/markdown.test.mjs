@@ -6,11 +6,23 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { JSDOM } from 'jsdom';
 import { ROOT } from './_root.mjs';
+import { resolvePathRef } from '../../public/path-ref.js';
 
 const dom = new JSDOM('<!doctype html><html><body></body></html>', { url: 'http://127.0.0.1/' });
 globalThis.window = dom.window;
 
 const { renderMarkdown } = await import('../../public/markdown.js');
+
+const PATH_TREE = [
+  { path: 'public/app.css', type: 'file' },
+  { path: 'src/x.mjs', type: 'file' },
+  { path: 'package.json', type: 'file' },
+  { path: 'secret.txt', type: 'file' },
+];
+const resolvePath = (text) => resolvePathRef(text, {
+  tree: PATH_TREE,
+  workspacePath: '/home/me/proj',
+});
 
 function parse(md) {
   const html = renderMarkdown(md);
@@ -157,6 +169,77 @@ test('strips forged data-action and extra data attributes from raw HTML', () => 
   assert.equal(body.querySelectorAll('[data-foo]').length, 0);
   assert.ok(body.querySelector('button.code-copy-btn[data-action="copy-code"]'));
   assert.ok(body.querySelector('[data-copy-label]'));
+});
+
+test('without resolvePath, inline code matches the previous renderer', () => {
+  assert.equal(
+    renderMarkdown('see `package.json` and `a&b` and `x<y`'),
+    '<p>see <code>package.json</code> and <code>a&amp;b</code> and <code>x&lt;y</code></p>\n',
+  );
+  const { body } = parse('see `public/app.css:446`');
+  assert.equal(body.querySelectorAll('code.md-path').length, 0);
+  assert.equal(body.querySelector('code')?.textContent, 'public/app.css:446');
+});
+
+test('resolvePath turns existing files into path chips and leaves others as code', () => {
+  const html = renderMarkdown(
+    'see `public/app.css` `public/app.css:446` `./src/x.mjs` `nope.missing` `https://ex.com/x.js` `has space.css` `npm`',
+    { resolvePath },
+  );
+  const body = new JSDOM(`<!doctype html><body>${html}</body>`).window.document.body;
+  const chips = [...body.querySelectorAll('code.md-path')];
+  assert.equal(chips.length, 3);
+  assert.equal(chips[0].getAttribute('data-action'), 'open-path');
+  assert.equal(chips[0].getAttribute('data-path'), 'public/app.css');
+  assert.equal(chips[0].getAttribute('data-line'), null);
+  assert.equal(chips[1].getAttribute('data-path'), 'public/app.css');
+  assert.equal(chips[1].getAttribute('data-line'), '446');
+  assert.equal(chips[1].querySelector('.md-path-line')?.textContent, ':446');
+  assert.equal(chips[2].getAttribute('data-path'), 'src/x.mjs');
+  assert.match(chips[2].textContent, /\.\/src\/x\.mjs/);
+  const plain = [...body.querySelectorAll('code:not(.md-path)')].map((el) => el.textContent);
+  assert.deepEqual(plain, ['nope.missing', 'https://ex.com/x.js', 'has space.css', 'npm']);
+});
+
+test('fenced code is not turned into path chips', () => {
+  const html = renderMarkdown('```\npublic/app.css:1\n```', { resolvePath });
+  const body = new JSDOM(`<!doctype html><body>${html}</body>`).window.document.body;
+  assert.equal(body.querySelectorAll('code.md-path').length, 0);
+  assert.equal(body.querySelector('pre.code-block-pre code')?.textContent, 'public/app.css:1');
+});
+
+test('DOMPurify keeps open-path on code.md-path and strips other data-action', () => {
+  const html = renderMarkdown(
+    '<code class="md-path" data-action="open-path" data-path="public/app.css">ok</code>\n\n'
+    + '<code class="md-path" data-action="git-delete" data-path="public/app.css">nope</code>\n\n'
+    + '<button data-action="open-path">x</button>\n\n'
+    + '<span data-action="open-path">y</span>\n\n'
+    + '```js\nconsole.log(1)\n```',
+    { resolvePath },
+  );
+  const body = new JSDOM(`<!doctype html><body>${html}</body>`).window.document.body;
+  const kept = body.querySelector('code.md-path[data-action="open-path"]');
+  assert.ok(kept);
+  assert.equal(kept.getAttribute('data-path'), 'public/app.css');
+  assert.equal(body.querySelectorAll('[data-action="git-delete"]').length, 0);
+  assert.equal(body.querySelectorAll('button[data-action="open-path"]').length, 0);
+  assert.equal(body.querySelectorAll('span[data-action="open-path"]').length, 0);
+  assert.ok(body.querySelector('button.code-copy-btn[data-action="copy-code"]'));
+});
+
+test('forged open-path data-path outside the workspace does not resolve', () => {
+  const html = renderMarkdown(
+    '<code class="md-path" data-action="open-path" data-path="../secret.txt">x</code>',
+    { resolvePath },
+  );
+  const body = new JSDOM(`<!doctype html><body>${html}</body>`).window.document.body;
+  const chip = body.querySelector('code.md-path');
+  assert.equal(chip?.getAttribute('data-action'), 'open-path');
+  assert.equal(chip?.getAttribute('data-path'), '../secret.txt');
+  assert.equal(resolvePathRef(chip.getAttribute('data-path'), {
+    tree: PATH_TREE,
+    workspacePath: '/home/me/proj',
+  }), null);
 });
 
 test('strips script tags', () => {
