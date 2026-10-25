@@ -52,6 +52,8 @@ export async function startServer({ script = 'basic.json', dataDir, port = 0, ex
     WEFT_STDIN_EXIT: '1',
     ...extraEnv,
   };
+  if (!Object.prototype.hasOwnProperty.call(extraEnv, 'WEFT_LAUNCHED_BY')) delete env.WEFT_LAUNCHED_BY;
+  if (!Object.prototype.hasOwnProperty.call(extraEnv, 'WEFT_IDLE_EXIT_MINUTES')) delete env.WEFT_IDLE_EXIT_MINUTES;
   if (!Object.prototype.hasOwnProperty.call(extraEnv, 'WEFT_TOKEN')) delete env.WEFT_TOKEN;
   const proc = spawn(process.execPath, ['server.mjs'], {
     cwd: ROOT,

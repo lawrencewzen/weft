@@ -35,6 +35,16 @@
 
 另外，`PORT`（本地默认 `3000`）和 `DATA_DIR`（本地默认 `./data`、Docker 默认 `/data`）在代码中读取，可用于开发或容器环境；它们不是当前示例 `.env.example` 的主要部署配置。
 
+## v2 服务进程
+
+| 变量 | 默认 / 示例 | 说明 |
+| --- | --- | --- |
+| `WEFT_LAUNCHED_BY` | 空 / `weft-open` | 启动器拉起服务时设为 `weft-open`，这时才启用空闲退出。手动 `npm start` 不要设。 |
+| `WEFT_IDLE_EXIT_MINUTES` | `30` | 空闲多久后自行退出。可以是小数方便测试；`0` 表示不退出。只在 `WEFT_LAUNCHED_BY=weft-open` 时生效。 |
+| `WEFT_STDIN_EXIT` | `0` | **只给测试用。** 设为 `1` 时 stdin 关闭会走和 SIGTERM 相同的 `shutdown()`（Windows 收不到 SIGTERM）。 |
+| `WEFT_V2_WEB_CODE_TTL_MS` | `60000` | **只给测试用。** 网页端一次性登录码的有效期（毫秒）。 |
+| `WEFT_V2_VALIDATE` | `0` | 设为 `1` 时按 OpenAPI 契约校验 `/api/v2` 响应；不一致则记日志并返回 500。测试默认打开。 |
+
 ### 最小可运行配置
 
 **无模型的本地演示：**

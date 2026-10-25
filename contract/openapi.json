@@ -62,6 +62,73 @@
         }
       }
     },
+    "/api/v2/service/restart": {
+      "post": {
+        "operationId": "restartService",
+        "summary": "请求服务退出，由客户端重新拉起",
+        "description": "服务只负责退出当前进程，不负责再拉起。客户端在收到 202 后自行启动新进程。\n任务图里还有活着的任务（含后台子 Agent）时返回 409，避免打断正在跑的工作。\n",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "已接受，服务即将退出。重新拉起由客户端完成。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RestartAccepted"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "未授权",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "有活着的任务，此时不能退出",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "客户端错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "服务端错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v2/auth/web-code": {
       "post": {
         "operationId": "createWebCode",
@@ -93,8 +160,28 @@
               }
             }
           },
+          "400": {
+            "description": "请求体不是 JSON 对象",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
           "401": {
             "description": "未授权（仅接受 Bearer 本机令牌）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "请求体过大",
             "content": {
               "application/json": {
                 "schema": {
@@ -164,6 +251,19 @@
           "startedAt": {
             "type": "integer",
             "description": "进程启动时间（毫秒时间戳）"
+          }
+        }
+      },
+      "RestartAccepted": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "exiting"
+        ],
+        "properties": {
+          "exiting": {
+            "type": "boolean",
+            "description": "始终为 true。服务即将退出，由客户端重新拉起。"
           }
         }
       },

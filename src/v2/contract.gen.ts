@@ -16,6 +16,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/service/restart": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 请求服务退出，由客户端重新拉起
+         * @description 服务只负责退出当前进程，不负责再拉起。客户端在收到 202 后自行启动新进程。
+         *     任务图里还有活着的任务（含后台子 Agent）时返回 409，避免打断正在跑的工作。
+         */
+        post: operations["restartService"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/auth/web-code": {
         parameters: {
             query?: never;
@@ -43,6 +64,10 @@ export interface components {
             pid: number;
             /** @description 进程启动时间（毫秒时间戳） */
             startedAt: number;
+        };
+        RestartAccepted: {
+            /** @description 始终为 true。服务即将退出，由客户端重新拉起。 */
+            exiting: boolean;
         };
         /** @description 数据目录里的发现文件 `<dataDir>/service.json`，不对应 HTTP 接口。 */
         ServiceDiscovery: {
@@ -137,6 +162,62 @@ export interface operations {
             };
         };
     };
+    restartService: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 已接受，服务即将退出。重新拉起由客户端完成。 */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RestartAccepted"];
+                };
+            };
+            /** @description 未授权 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 有活着的任务，此时不能退出 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 客户端错误 */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 服务端错误 */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+        };
+    };
     createWebCode: {
         parameters: {
             query?: never;
@@ -159,8 +240,26 @@ export interface operations {
                     "application/json": components["schemas"]["WebCode"];
                 };
             };
+            /** @description 请求体不是 JSON 对象 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
             /** @description 未授权（仅接受 Bearer 本机令牌） */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 请求体过大 */
+            413: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -33,6 +33,8 @@ const STRIP = [
   'WEFT_TEST_GROK_TOKEN_URL',
   'WEFT_TOKEN',
   'WEFT_ALLOWED_HOSTS',
+  'WEFT_LAUNCHED_BY',
+  'WEFT_IDLE_EXIT_MINUTES',
 ];
 
 function childEnv(dataDir, { token, extra = {} } = {}) {
