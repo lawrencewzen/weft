@@ -953,8 +953,16 @@ async function routeApi(req, res, url) {
     const wid = decodeURIComponent(match[1]);
     const q = url.searchParams.get('q') || undefined;
     const list = await store.listConversations(wid, { q });
+    const digests = await kernelApi.subagentDigests(list);
     const presented = [];
-    for (const item of list) presented.push(publicConversation(await kernelApi.present(item)));
+    for (const item of list) {
+      const row = publicConversation(await kernelApi.present(item));
+      const digest = digests.get(item.id);
+      if (digest?.total > 0) {
+        row.subagents = { total: digest.total, live: digest.live };
+      }
+      presented.push(row);
+    }
     sendJson(res, 200, presented);
     return;
   }
@@ -1009,6 +1017,15 @@ async function routeApi(req, res, url) {
       if (err.code === 'E_SANDBOX') { sendJson(res, 403, { error: 'E_SANDBOX' }); return; }
       throw err;
     }
+    return;
+  }
+
+  match = p.match(/^\/api\/conversations\/([^/]+)\/agents$/);
+  if (match && m === 'GET') {
+    const cid = decodeURIComponent(match[1]);
+    const conv = await store.getConversation(cid);
+    if (!conv) { sendJson(res, 404, { error: 'conversation not found' }); return; }
+    sendJson(res, 200, { agents: await kernelApi.listSubagents(conv) });
     return;
   }
 
