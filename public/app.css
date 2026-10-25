@@ -397,6 +397,18 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.6; backgroun
    CENTER
    ========================================================================== */
 .col-center { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--bg); position: relative; }
+/* Fallback when cqw is missing (Chrome/Edge < 105): 16px gutters, cap 920px so the pane does not go full-bleed. */
+.center-notice-row, .thread-inner, .composer-stack {
+  width: min(100% - 32px, 920px); max-width: none; margin-left: auto; margin-right: auto;
+}
+/* W follows the center pane: 48px gutters, floor 560px, cap 100vw-800px, never closer than 16px to the pane edges. Defined on descendants so 100cqw resolves against .col-center. */
+@supports (width: 1cqw) {
+  .col-center { container-type: inline-size; }
+  .center-notice-row, .thread-inner, .composer-stack {
+    --chat-w: min(100cqw - 32px, max(560px, min(100cqw - 96px, 100vw - 800px)));
+    width: var(--chat-w);
+  }
+}
 .center-top-bar { height: 52px; flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 12px; }
 .top-left { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1; }
 .top-left-open { display: none; }
@@ -425,15 +437,21 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.6; backgroun
 .center-notice:empty { display: none; }
 .center-notice { flex-shrink: 0; }
 .center-notice-row {
-  max-width: 700px; margin: 0 auto 6px; display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 10px;
-  background: var(--panel); border: 1px solid var(--line); font-size: 13px; color: var(--ink3); width: calc(100% - 48px);
+  margin-bottom: 6px; display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 10px;
+  background: var(--panel); border: 1px solid var(--line); font-size: 13px; color: var(--ink3);
 }
 .center-notice-text { flex: 1; min-width: 0; }
 
-/* Draft (new conversation) and the no-project start screen */
+/* Draft (new conversation) and the no-project start screen.
+   Composer stays at the bottom (same as a filled thread). Title + hint fill the leftover space and center there. */
+.draft-stage {
+  display: none; flex: 1; min-height: 0; flex-direction: column; align-items: center; justify-content: center;
+  gap: 12px; padding: 0 24px; text-align: center;
+}
+.col-center.is-draft .draft-stage, .col-center.is-empty .draft-stage { display: flex; }
 .draft-hero {
   display: none; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap; font-size: 24px; font-weight: 600;
-  margin-top: auto; padding: 0 24px 22px; text-align: center;
+  text-align: center;
 }
 .col-center.is-draft .draft-hero, .col-center.is-empty .draft-hero { display: flex; }
 .draft-proj {
@@ -443,15 +461,13 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.6; backgroun
 .draft-proj:hover { background: var(--line); }
 .draft-proj .caret { font-size: 11px; color: var(--mute); }
 .col-center.is-draft .center-thread, .col-center.is-empty .center-thread { display: none; }
-.col-center.is-draft .center-composer, .col-center.is-empty .center-composer { margin-bottom: auto; padding-bottom: 72px; }
-.col-center.is-draft .composer-stack, .col-center.is-empty .composer-stack { max-width: 680px; width: 100%; }
 .col-center.is-draft .composer-textarea, .col-center.is-empty .composer-textarea { height: 64px; font-size: 14px; }
 .draft-hint { display: none; }
-.col-center.is-draft .draft-hint:not(:empty), .col-center.is-empty .draft-hint:not(:empty) { display: block; font-size: 12px; color: var(--mute); text-align: center; margin-top: 12px; line-height: 1.6; }
+.col-center.is-draft .draft-hint:not(:empty), .col-center.is-empty .draft-hint:not(:empty) { display: block; font-size: 12px; color: var(--mute); text-align: center; line-height: 1.6; }
 
 /* Thread */
-.center-thread { flex: 1; min-height: 0; overflow: auto; }
-.thread-inner { max-width: 700px; margin: 0 auto; padding: 20px 24px 96px; display: flex; flex-direction: column; gap: 18px; }
+.center-thread { flex: 1; min-height: 0; overflow: auto; scrollbar-gutter: stable both-edges; }
+.thread-inner { padding: 20px 0 96px; display: flex; flex-direction: column; gap: 18px; }
 .thread-inner > * { flex-shrink: 0; }
 .msg-group { display: flex; flex-direction: column; gap: 6px; min-width: 0; max-width: 100%; }
 .msg-side-user { align-self: flex-end; max-width: 80%; }
@@ -608,8 +624,8 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.6; backgroun
 }
 
 /* Composer */
-.center-composer { flex-shrink: 0; padding: 0 20px 18px; }
-.composer-stack { max-width: 700px; margin: 0 auto; display: flex; flex-direction: column; }
+.center-composer { flex-shrink: 0; padding: 0 0 18px; }
+.composer-stack { display: flex; flex-direction: column; }
 .composer-box {
   background: var(--panel); border: 1px solid var(--line); border-radius: 18px; box-shadow: 0 6px 24px rgba(0, 0, 0, .05);
   padding: 12px 14px 10px; display: flex; flex-direction: column; gap: 10px;
@@ -637,7 +653,6 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.6; backgroun
   display: none; position: absolute; bottom: calc(100% + 6px); left: 0; z-index: 60; min-width: 240px; max-width: 360px; max-height: 320px; overflow: auto;
   background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow-pop); padding: 6px;
 }
-.col-center.is-draft .chip-menu { bottom: auto; top: calc(100% + 6px); }
 .chip-menu.is-open { display: block; }
 .chip-menu-label { padding: 6px 8px 2px; font-size: 11px; color: var(--faint); }
 .chip-menu-item {
@@ -980,8 +995,9 @@ button.agent-pane-tag:hover { color: var(--ink); }
 .ctx-menu-sep { height: 1px; background: var(--line3); margin: 4px 2px; }
 
 @media (max-width: 860px) {
-  .center-composer { padding: 0 12px 12px; }
-  .thread-inner { padding: 16px 16px 88px; }
+  .center-composer { padding: 0 0 12px; }
+  .thread-inner { padding: 16px 0 88px; }
+  .draft-stage { padding: 0 16px; }
 }
 
 /* ==========================================================================
