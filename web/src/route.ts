@@ -1,18 +1,27 @@
 export type AppRoute =
   | { name: 'home' }
-  | { name: 'conversation'; id: string };
+  | { name: 'conversation'; id: string }
+  | { name: 'draft'; workspaceId: string };
+
+function decodePart(raw: string): string {
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return raw;
+  }
+}
 
 export function parseRoute(pathname: string): AppRoute {
   const raw = String(pathname || '');
   const stripped = raw.replace(/^\/next(?=\/|$)/, '') || '/';
   const trimmed = stripped.replace(/\/+$/, '') || '/';
-  const match = /^\/c\/([^/]+)$/.exec(trimmed);
-  if (match) {
-    try {
-      return { name: 'conversation', id: decodeURIComponent(match[1]) };
-    } catch {
-      return { name: 'conversation', id: match[1] };
-    }
+  const conv = /^\/c\/([^/]+)$/.exec(trimmed);
+  if (conv) {
+    return { name: 'conversation', id: decodePart(conv[1]) };
+  }
+  const draft = /^\/w\/([^/]+)\/new$/.exec(trimmed);
+  if (draft) {
+    return { name: 'draft', workspaceId: decodePart(draft[1]) };
   }
   return { name: 'home' };
 }

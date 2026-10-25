@@ -14,4 +14,9 @@ describe('parseRoute', () => {
     expect(parseRoute('/next/c/abc/')).toEqual({ name: 'conversation', id: 'abc' });
     expect(parseRoute('/next/c/cid%2F1')).toEqual({ name: 'conversation', id: 'cid/1' });
   });
+
+  it('reads /next/w/<workspace id>/new as a draft', () => {
+    expect(parseRoute('/next/w/ws1/new')).toEqual({ name: 'draft', workspaceId: 'ws1' });
+    expect(parseRoute('/next/w/ws%2F1/new/')).toEqual({ name: 'draft', workspaceId: 'ws/1' });
+  });
 });

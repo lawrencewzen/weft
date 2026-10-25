@@ -2,8 +2,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   ApiError,
   continueRun,
+  createConversation,
   getSnapshot,
   isUnauthenticatedError,
+  removeWorkspace,
   sendMessage,
   stop,
   toolOutput,
@@ -109,5 +111,42 @@ describe('api client', () => {
     expect(fetchMock.mock.calls[1][0]).toBe('/api/v2/conversations/c1/stop');
     expect(fetchMock.mock.calls[2][0]).toBe('/api/v2/conversations/c1/tools/t%2F1/output');
     expect(fetchMock.mock.calls[3][0]).toBe('/api/v2/conversations/c1?lang=en');
+  });
+
+  it('creates a conversation and removes a workspace', async () => {
+    const created = {
+      id: 'c-new',
+      workspaceId: 'w1',
+      title: 'New conversation',
+      updatedAt: 1,
+      status: 'idle',
+      runningAgents: 0,
+      subagents: null,
+      archived: false,
+    };
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse(201, created))
+      .mockResolvedValueOnce(jsonResponse(200, { removed: true }))
+      .mockResolvedValueOnce(jsonResponse(409, { error: 'busy', code: 'E_WS_BUSY', conversations: ['c1'] }, 'Conflict'));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(createConversation('w/1')).resolves.toEqual(created);
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/v2/workspaces/w%2F1/conversations');
+    expect(fetchMock.mock.calls[0][1]).toMatchObject({
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
+
+    await expect(removeWorkspace('w/1')).resolves.toEqual({ removed: true });
+    expect(fetchMock.mock.calls[1][0]).toBe('/api/v2/workspaces/w%2F1');
+    expect(fetchMock.mock.calls[1][1]).toMatchObject({ method: 'DELETE' });
+    expect(new Headers(fetchMock.mock.calls[1][1].headers).get('content-type')).toMatch(/application\/json/);
+
+    await expect(removeWorkspace('w1')).rejects.toSatisfy((err: unknown) => {
+      expect(err).toBeInstanceOf(ApiError);
+      expect((err as ApiError).status).toBe(409);
+      expect((err as ApiError).code).toBe('E_WS_BUSY');
+      return true;
+    });
   });
 });

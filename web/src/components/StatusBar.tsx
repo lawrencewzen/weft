@@ -9,9 +9,17 @@ type Props = {
   conversation: ConversationView;
   lang: Lang;
   hidePending?: boolean;
+  showOpenLeft?: boolean;
+  onOpenLeft?: () => void;
 };
 
-export function StatusBar({ conversation, lang, hidePending = false }: Props) {
+export function StatusBar({
+  conversation,
+  lang,
+  hidePending = false,
+  showOpenLeft = false,
+  onOpenLeft,
+}: Props) {
   const run = conversation.run;
   const running = run.status === 'running';
   const failed = run.status === 'failed';
@@ -46,6 +54,18 @@ export function StatusBar({ conversation, lang, hidePending = false }: Props) {
     <header className="next-status" data-testid="next-status">
       <div className="next-status-inner">
         <div className="pending-line">
+          {showOpenLeft ? (
+            <button
+              type="button"
+              className="icon-btn top-left-open"
+              data-testid="next-left-open"
+              title={t(lang, 'expand_sidebar')}
+              aria-label={t(lang, 'expand_sidebar')}
+              onClick={onOpenLeft}
+            >
+              <span className="ico-panel ico-panel-left" aria-hidden="true" />
+            </button>
+          ) : null}
           {running && !hidePending ? <span className="run-spin" aria-hidden="true"><span /></span> : null}
           <span className="top-title">{conversation.title}</span>
           <span className="status-pill" data-testid="next-run-status" data-status={run.status}>
