@@ -44,9 +44,8 @@ test('GET /next/login?code= exchanges a web-code for a session and shows protoco
     await page.goto(`${srv.url}/next/login?code=${encodeURIComponent(body.code)}`);
     await expect(page).toHaveURL(/\/next\/$/);
     await expect(page.getByTestId('next-app')).toBeVisible();
-    await expect(page.getByTestId('next-protocol')).toHaveText('2.0.0');
-    await expect(page.getByTestId('next-stream')).toHaveText('connected');
-    await expect(page.getByTestId('next-heartbeat')).toBeVisible();
+    await expect(page.getByTestId('next-sidebar')).toBeVisible();
+    await expect(page.getByTestId('next-home-hint')).toHaveText(/先在旧版里添加工作区|Add a workspace in the old UI first/);
     expect(csp, 'page console has no CSP errors').toEqual([]);
   } finally {
     await srv.kill();

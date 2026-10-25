@@ -1,10 +1,12 @@
 import type { components } from '../../../src/v2/contract.gen';
 
 export type ConversationSnapshot = components['schemas']['ConversationSnapshot'];
+export type ConversationSummary = components['schemas']['ConversationSummary'];
 export type RunAccepted = components['schemas']['RunAccepted'];
 export type StopAccepted = components['schemas']['StopAccepted'];
 export type ToolOutput = components['schemas']['ToolOutput'];
 export type V2Error = components['schemas']['V2Error'];
+export type WorkspaceRemoved = components['schemas']['WorkspaceRemoved'];
 
 export class ApiError extends Error {
   readonly status: number;
@@ -51,9 +53,15 @@ function parseErrorBody(status: number, statusText: string, text: string): { err
   return { error: `${status} ${statusText}`.trim() || 'request failed' };
 }
 
+function isMutating(method: string): boolean {
+  const m = method.toUpperCase();
+  return m === 'POST' || m === 'PUT' || m === 'PATCH' || m === 'DELETE';
+}
+
 async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers);
-  if (init?.body != null && !headers.has('content-type')) {
+  const method = String(init?.method || 'GET');
+  if (isMutating(method) && !headers.has('content-type')) {
     headers.set('content-type', 'application/json');
   }
   const res = await fetch(url, {
@@ -113,4 +121,20 @@ export function toolOutput(cid: string, toolId: string): Promise<ToolOutput> {
 export function getSnapshot(cid: string, lang: string): Promise<ConversationSnapshot> {
   const params = new URLSearchParams({ lang });
   return requestJson<ConversationSnapshot>(`${conversationPath(cid)}?${params.toString()}`);
+}
+
+export function createConversation(workspaceId: string, title?: string): Promise<ConversationSummary> {
+  const body: { title?: string } = {};
+  if (title != null && title !== '') body.title = title;
+  return requestJson<ConversationSummary>(
+    `/api/v2/workspaces/${encodeURIComponent(workspaceId)}/conversations`,
+    { method: 'POST', body: JSON.stringify(body) },
+  );
+}
+
+export function removeWorkspace(workspaceId: string): Promise<WorkspaceRemoved> {
+  return requestJson<WorkspaceRemoved>(
+    `/api/v2/workspaces/${encodeURIComponent(workspaceId)}`,
+    { method: 'DELETE' },
+  );
 }

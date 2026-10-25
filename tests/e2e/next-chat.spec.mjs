@@ -22,8 +22,9 @@ async function loginNext(page, srv) {
   });
   expect(issued.status).toBe(200);
   const body = await issued.json();
-  await page.goto(`${srv.url}/next/login?code=${encodeURIComponent(body.code)}`);
-  await expect(page).toHaveURL(/\/next\/$/);
+    await page.goto(`${srv.url}/next/login?code=${encodeURIComponent(body.code)}`);
+  await expect(page).toHaveURL(/\/next\//);
+  await expect(page.getByTestId('next-app')).toBeVisible();
 }
 
 async function openWorkspaceConversation(srv, name, wsPath, title = 'chat') {

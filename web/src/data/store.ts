@@ -1,6 +1,8 @@
 import type { components } from '../../../src/v2/contract.gen';
 
 export type ConversationView = components['schemas']['ConversationView'];
+export type ConversationSummary = components['schemas']['ConversationSummary'];
+export type Workspace = components['schemas']['Workspace'];
 export type ThreadItem = components['schemas']['ThreadItem'];
 export type ToolCall = components['schemas']['ToolCall'];
 export type SnapshotEvent = components['schemas']['SnapshotEvent'];
@@ -40,6 +42,12 @@ export function conversationTopic(cid: string): string {
   return `conversation:${cid}`;
 }
 
+export const WORKSPACES_TOPIC = 'workspaces';
+
+export function sessionTopics(cid?: string | null): string[] {
+  return cid ? [WORKSPACES_TOPIC, conversationTopic(cid)] : [WORKSPACES_TOPIC];
+}
+
 export type EntityStore = {
   applySnapshot(event: SnapshotEvent): void;
   applyUpsert(event: UpsertEvent): void;
@@ -49,6 +57,10 @@ export type EntityStore = {
   items(cid: string): ThreadItem[];
   tool(toolId: string): ToolCall | undefined;
   toolsById(cid: string): Record<string, ToolCall>;
+  workspaces(): Workspace[];
+  conversationSummaries(): ConversationSummary[];
+  conversationsFor(workspaceId: string): ConversationSummary[];
+  hasTopic(topic: string): boolean;
   isMissing(topic: string): boolean;
   needsFullValue(itemId: string): boolean;
   subscribe(listener: Listener): () => void;
@@ -59,6 +71,7 @@ export function createEntityStore(): EntityStore {
   const entities = new Map<string, StoredEntity>();
   const byEntityId = new Map<string, StoredEntity>();
   const missing = new Set<string>();
+  const seenTopics = new Set<string>();
   const staleItems = new Set<string>();
   const listeners = new Set<Listener>();
   let version = 0;
@@ -78,10 +91,14 @@ export function createEntityStore(): EntityStore {
   function put(rec: StoredEntity): void {
     const key = entityKey(rec.topic, rec.entity, rec.id);
     const prev = entities.get(key);
-    if (prev) forget(prev);
+    if (prev) {
+      prev.value = rec.value;
+      byEntityId.set(entityIdKey(rec.entity, rec.id), prev);
+      if (rec.entity === 'item') staleItems.delete(rec.id);
+      return;
+    }
     entities.set(key, rec);
     byEntityId.set(entityIdKey(rec.entity, rec.id), rec);
-    if (rec.entity === 'item') staleItems.delete(rec.id);
   }
 
   function dropTopic(topic: string): void {
@@ -92,6 +109,26 @@ export function createEntityStore(): EntityStore {
 
   function get(topic: string, entity: string, id: string): StoredEntity | undefined {
     return entities.get(entityKey(topic, entity, id));
+  }
+
+  function listWorkspaces(): Workspace[] {
+    const out: Workspace[] = [];
+    for (const rec of entities.values()) {
+      if (rec.topic === WORKSPACES_TOPIC && rec.entity === 'workspace') {
+        out.push(rec.value as unknown as Workspace);
+      }
+    }
+    return out;
+  }
+
+  function listSummaries(): ConversationSummary[] {
+    const out: ConversationSummary[] = [];
+    for (const rec of entities.values()) {
+      if (rec.topic === WORKSPACES_TOPIC && rec.entity === 'conversation_summary') {
+        out.push(rec.value as unknown as ConversationSummary);
+      }
+    }
+    return out;
   }
 
   function findItem(topic: string | undefined, itemId: string): StoredEntity | undefined {
@@ -105,7 +142,10 @@ export function createEntityStore(): EntityStore {
   return {
     applySnapshot(event) {
       const topics = Array.isArray(event.topics) ? event.topics : [];
-      for (const topic of topics) dropTopic(topic);
+      for (const topic of topics) {
+        dropTopic(topic);
+        seenTopics.add(topic);
+      }
       const listedMissing = new Set(event.missing || []);
       for (const topic of topics) {
         if (listedMissing.has(topic)) missing.add(topic);
@@ -186,6 +226,24 @@ export function createEntityStore(): EntityStore {
         }
       }
       return out;
+    },
+
+    workspaces() {
+      return listWorkspaces();
+    },
+
+    conversationSummaries() {
+      return listSummaries();
+    },
+
+    conversationsFor(workspaceId) {
+      return listSummaries()
+        .filter((conv) => conv.workspaceId === workspaceId)
+        .sort((a, b) => (Number(b.updatedAt) || 0) - (Number(a.updatedAt) || 0) || a.id.localeCompare(b.id));
+    },
+
+    hasTopic(topic) {
+      return seenTopics.has(topic);
     },
 
     isMissing(topic) {

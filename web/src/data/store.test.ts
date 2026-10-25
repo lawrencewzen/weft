@@ -2,11 +2,15 @@ import { describe, expect, it } from 'vitest';
 import {
   conversationTopic,
   createEntityStore,
+  sessionTopics,
+  WORKSPACES_TOPIC,
+  type ConversationSummary,
   type ConversationView,
   type EntityRef,
   type SnapshotEvent,
   type ThreadItem,
   type ToolCall,
+  type Workspace,
 } from './store';
 
 const CID = 'c1';
@@ -274,5 +278,101 @@ describe('entity store', () => {
     ], { topics: [gone] }));
     expect(store.isMissing(gone)).toBe(false);
     expect(store.conversation('gone')?.id).toBe('gone');
+  });
+});
+
+function workspace(id: string, extra?: Partial<Workspace>): Workspace {
+  return {
+    id,
+    name: `ws-${id}`,
+    path: `/tmp/${id}`,
+    source: 'local',
+    conversationCount: 0,
+    runningCount: 0,
+    ...extra,
+  };
+}
+
+function summary(id: string, workspaceId: string, extra?: Partial<ConversationSummary>): ConversationSummary {
+  return {
+    id,
+    workspaceId,
+    title: `title-${id}`,
+    updatedAt: 1,
+    status: 'idle',
+    runningAgents: 0,
+    subagents: null,
+    archived: false,
+    ...extra,
+  };
+}
+
+function wsRef(id: string, extra?: Partial<Workspace>): EntityRef {
+  return { topic: WORKSPACES_TOPIC, entity: 'workspace', id, value: workspace(id, extra) as EntityRef['value'] };
+}
+
+function sumRef(id: string, workspaceId: string, extra?: Partial<ConversationSummary>): EntityRef {
+  return {
+    topic: WORKSPACES_TOPIC,
+    entity: 'conversation_summary',
+    id,
+    value: summary(id, workspaceId, extra) as EntityRef['value'],
+  };
+}
+
+describe('workspace selectors', () => {
+  it('builds session topics with workspaces first', () => {
+    expect(sessionTopics(null)).toEqual([WORKSPACES_TOPIC]);
+    expect(sessionTopics('c1')).toEqual([WORKSPACES_TOPIC, conversationTopic('c1')]);
+  });
+
+  it('keeps workspace order from the snapshot and on in-place upsert', () => {
+    const store = createEntityStore();
+    store.applySnapshot(snapshot([
+      wsRef('w1'),
+      wsRef('w2'),
+      sumRef('c-old', 'w1', { updatedAt: 10, title: 'old' }),
+      sumRef('c-new', 'w1', { updatedAt: 20, title: 'new' }),
+      sumRef('c-b', 'w2', { updatedAt: 15, title: 'b' }),
+    ], { topics: [WORKSPACES_TOPIC] }));
+
+    expect(store.hasTopic(WORKSPACES_TOPIC)).toBe(true);
+    expect(store.workspaces().map((item) => item.id)).toEqual(['w1', 'w2']);
+    expect(store.conversationsFor('w1').map((item) => item.id)).toEqual(['c-new', 'c-old']);
+    expect(store.conversationsFor('w2').map((item) => item.id)).toEqual(['c-b']);
+
+    store.applyUpsert({
+      topic: WORKSPACES_TOPIC,
+      entity: 'workspace',
+      id: 'w1',
+      value: workspace('w1', { name: 'renamed' }) as EntityRef['value'],
+    });
+    expect(store.workspaces().map((item) => item.id)).toEqual(['w1', 'w2']);
+    expect(store.workspaces()[0].name).toBe('renamed');
+  });
+
+  it('appends a new workspace at the end and removes entities', () => {
+    const store = createEntityStore();
+    store.applySnapshot(snapshot([wsRef('w1')], { topics: [WORKSPACES_TOPIC] }));
+    store.applyUpsert({
+      topic: WORKSPACES_TOPIC,
+      entity: 'workspace',
+      id: 'w2',
+      value: workspace('w2') as EntityRef['value'],
+    });
+    store.applyUpsert({
+      topic: WORKSPACES_TOPIC,
+      entity: 'conversation_summary',
+      id: 'c1',
+      value: summary('c1', 'w2', { updatedAt: 5 }) as EntityRef['value'],
+    });
+    expect(store.workspaces().map((item) => item.id)).toEqual(['w1', 'w2']);
+    expect(store.conversationsFor('w2').map((item) => item.id)).toEqual(['c1']);
+
+    store.applyRemove({ topic: WORKSPACES_TOPIC, entity: 'conversation_summary', id: 'c1' });
+    store.applyRemove({ topic: WORKSPACES_TOPIC, entity: 'workspace', id: 'w1' });
+    expect(store.workspaces().map((item) => item.id)).toEqual(['w2']);
+    expect(store.conversationsFor('w2')).toEqual([]);
+    expect(store.conversationSummaries()).toEqual([]);
   });
 });
