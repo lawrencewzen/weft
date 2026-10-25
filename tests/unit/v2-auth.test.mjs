@@ -86,6 +86,10 @@ test('written service.json matches ServiceDiscovery and is removed on SIGTERM', 
   } finally {
     await stopServer(srv);
   }
+  // child_process.kill('SIGTERM') is TerminateProcess on Windows, so the
+  // SIGTERM/exit handlers never run. Deletion is still covered in-process
+  // by removeDiscoverySync below, and by SIGTERM on Unix CI.
+  if (process.platform === 'win32') return;
   assert.equal(existsSync(discoveryPath(srv.dataDir)), false);
 });
 
