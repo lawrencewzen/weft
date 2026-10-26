@@ -73,10 +73,10 @@
 
 | 事件 | 数据 | 说明 |
 |---|---|---|
-| `snapshot` | 订阅主题下的全部实体 | 连接时、补不上时发 |
+| `snapshot` | 订阅主题下的全部实体 | 连接时、补不上时发。SSE id 是开始计算快照时的序号；计算期间到达的事件在快照后按序补发 |
 | `upsert` | `{ entity, id, value }` | 实体整个替换，客户端按 id 覆盖 |
 | `remove` | `{ entity, id }` | 实体删除 |
-| `text.delta` | `{ itemId, offset, append }` | 只用于流式文字。`offset` 对不上时客户端丢掉本地内容，等下一次 upsert |
+| `text.delta` | `{ itemId, offset, append }` | 只用于流式文字。`offset` 是追加前的长度；已应用过的 delta 忽略，对不上时等下一次 upsert |
 | `heartbeat` | `{}` | 心跳 |
 
 流式输出结束时，再对这个 item 发一次完整的 `upsert`。

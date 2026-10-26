@@ -208,6 +208,65 @@ describe('entity store', () => {
     expect((store.items(CID)[0] as { text: string }).text).toBe('Hello world!');
   });
 
+  it('ignores a text.delta that is already present in the current text', () => {
+    const store = createEntityStore();
+    store.applyUpsert({
+      topic: TOPIC,
+      entity: 'item',
+      id: 'live:1',
+      value: assistant('live:1', 'Hello', true) as EntityRef['value'],
+    });
+    store.applyUpsert({
+      topic: TOPIC,
+      entity: 'conversation',
+      id: CID,
+      value: conv(CID, ['live:1']) as EntityRef['value'],
+    });
+    const version = store.getVersion();
+    store.applyTextDelta({ topic: TOPIC, itemId: 'live:1', offset: 0, append: 'Hel' });
+    store.applyTextDelta({ topic: TOPIC, itemId: 'live:1', offset: 3, append: 'lo' });
+    expect((store.items(CID)[0] as { text: string }).text).toBe('Hello');
+    expect(store.needsFullValue('live:1')).toBe(false);
+    expect(store.getVersion()).toBe(version);
+
+    store.applyTextDelta({ topic: TOPIC, itemId: 'live:1', offset: 5, append: '!' });
+    expect((store.items(CID)[0] as { text: string }).text).toBe('Hello!');
+    expect(store.needsFullValue('live:1')).toBe(false);
+  });
+
+  it('replays deltas after a snapshot that already contains a prefix of the stream', () => {
+    const store = createEntityStore();
+    store.applySnapshot(snapshot([
+      ref('conversation', CID, conv(CID, ['live:1'])),
+      ref('item', 'live:1', assistant('live:1', 'Hel', true)),
+    ]));
+    store.applyTextDelta({ topic: TOPIC, itemId: 'live:1', offset: 0, append: 'Hel' });
+    expect((store.items(CID)[0] as { text: string }).text).toBe('Hel');
+    expect(store.needsFullValue('live:1')).toBe(false);
+    store.applyTextDelta({ topic: TOPIC, itemId: 'live:1', offset: 3, append: 'lo' });
+    expect((store.items(CID)[0] as { text: string }).text).toBe('Hello');
+    expect(store.needsFullValue('live:1')).toBe(false);
+  });
+
+  it('marks stale when a replayed delta overlaps but does not match', () => {
+    const store = createEntityStore();
+    store.applyUpsert({
+      topic: TOPIC,
+      entity: 'item',
+      id: 'live:1',
+      value: assistant('live:1', 'Hello', true) as EntityRef['value'],
+    });
+    store.applyUpsert({
+      topic: TOPIC,
+      entity: 'conversation',
+      id: CID,
+      value: conv(CID, ['live:1']) as EntityRef['value'],
+    });
+    store.applyTextDelta({ topic: TOPIC, itemId: 'live:1', offset: 0, append: 'XYZ' });
+    expect(store.needsFullValue('live:1')).toBe(true);
+    expect((store.items(CID)[0] as { text: string }).text).toBe('Hello');
+  });
+
   it('replaces a live streaming item with the official message', () => {
     const store = createEntityStore();
     const liveId = 'live:m1';
@@ -328,24 +387,29 @@ function sumRef(id: string, workspaceId: string, extra?: Partial<ConversationSum
 
 describe('workspace selectors', () => {
   it('builds session topics with workspaces first', () => {
-    expect(sessionTopics(null)).toEqual([WORKSPACES_TOPIC, PROVIDERS_TOPIC]);
-    expect(sessionTopics('c1')).toEqual([WORKSPACES_TOPIC, PROVIDERS_TOPIC, conversationTopic('c1')]);
+    expect(sessionTopics(null)).toEqual([WORKSPACES_TOPIC, PROVIDERS_TOPIC, EXTENSIONS_TOPIC]);
+    expect(sessionTopics('c1')).toEqual([
+      WORKSPACES_TOPIC, PROVIDERS_TOPIC, EXTENSIONS_TOPIC, conversationTopic('c1'),
+    ]);
   });
 
   it('adds extra conversation topics when expanding another chat and drops them when collapsing', () => {
     expect(sessionTopics({ conversationId: 'a' })).toEqual([
-      WORKSPACES_TOPIC, PROVIDERS_TOPIC, conversationTopic('a'),
+      WORKSPACES_TOPIC, PROVIDERS_TOPIC, EXTENSIONS_TOPIC, conversationTopic('a'),
     ]);
     expect(sessionTopics({
       conversationId: 'a',
       extraConversationIds: ['b'],
-    })).toEqual([WORKSPACES_TOPIC, PROVIDERS_TOPIC, conversationTopic('a'), conversationTopic('b')]);
+    })).toEqual([
+      WORKSPACES_TOPIC, PROVIDERS_TOPIC, EXTENSIONS_TOPIC, conversationTopic('a'), conversationTopic('b'),
+    ]);
     expect(sessionTopics({
       conversationId: 'a',
       extraConversationIds: ['b', 'a', 'c'],
     })).toEqual([
       WORKSPACES_TOPIC,
       PROVIDERS_TOPIC,
+      EXTENSIONS_TOPIC,
       conversationTopic('a'),
       conversationTopic('b'),
       conversationTopic('c'),
@@ -353,7 +417,7 @@ describe('workspace selectors', () => {
     expect(sessionTopics({
       conversationId: 'a',
       extraConversationIds: [],
-    })).toEqual([WORKSPACES_TOPIC, PROVIDERS_TOPIC, conversationTopic('a')]);
+    })).toEqual([WORKSPACES_TOPIC, PROVIDERS_TOPIC, EXTENSIONS_TOPIC, conversationTopic('a')]);
     expect(sessionTopics({
       conversationId: 'a',
       extraConversationIds: ['b'],
@@ -361,6 +425,7 @@ describe('workspace selectors', () => {
     })).toEqual([
       WORKSPACES_TOPIC,
       PROVIDERS_TOPIC,
+      EXTENSIONS_TOPIC,
       conversationTopic('a'),
       conversationTopic('b'),
       subagentTopic('a', 'a:sub:1'),
@@ -370,6 +435,9 @@ describe('workspace selectors', () => {
   it('puts extra topics after providers and before conversation topics', () => {
     expect(sessionTopics({ extraTopics: [EXTENSIONS_TOPIC] })).toEqual([
       WORKSPACES_TOPIC, PROVIDERS_TOPIC, EXTENSIONS_TOPIC,
+    ]);
+    expect(sessionTopics({ extraTopics: ['other'] })).toEqual([
+      WORKSPACES_TOPIC, PROVIDERS_TOPIC, EXTENSIONS_TOPIC, 'other',
     ]);
     expect(sessionTopics({
       conversationId: 'a',

@@ -75,9 +75,12 @@ export function sessionTopics(
   const opts: SessionTopicOpts = cidOrOpts != null && typeof cidOrOpts === 'object'
     ? cidOrOpts
     : { conversationId: cidOrOpts, ...extra };
-  const topics = [WORKSPACES_TOPIC, PROVIDERS_TOPIC];
+  const topics = [WORKSPACES_TOPIC, PROVIDERS_TOPIC, EXTENSIONS_TOPIC];
   const extraTopics = [...new Set((opts.extraTopics || []).filter((topic) => (
-    topic && topic !== WORKSPACES_TOPIC && topic !== PROVIDERS_TOPIC
+    topic
+    && topic !== WORKSPACES_TOPIC
+    && topic !== PROVIDERS_TOPIC
+    && topic !== EXTENSIONS_TOPIC
   )))].sort((a, b) => a.localeCompare(b));
   for (const topic of extraTopics) topics.push(topic);
   const current = opts.conversationId || '';
@@ -242,9 +245,17 @@ export function createEntityStore(): EntityStore {
       if (staleItems.has(rec.id)) return;
       const current = itemText(rec.value);
       if (current == null) return;
-      if (event.offset === current.length) {
-        rec.value = { ...rec.value, text: current + event.append };
+      const append = typeof event.append === 'string' ? event.append : '';
+      const offset = event.offset;
+      if (offset === current.length) {
+        rec.value = { ...rec.value, text: current + append };
         notify();
+        return;
+      }
+      if (
+        offset + append.length <= current.length
+        && current.slice(offset, offset + append.length) === append
+      ) {
         return;
       }
       staleItems.add(rec.id);

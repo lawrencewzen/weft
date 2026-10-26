@@ -135,7 +135,7 @@ paths:
         一个客户端一条 SSE 连接，用查询参数 `topics` 订阅主题（逗号分隔），`lang` 为 zh 或 en（缺省 zh，不认识的按 zh）。
         每条业务事件带全局递增序号，写成标准 SSE：`id: <序号>`、`event: <类型>`、`data: <JSON>`。
         断线后带 `Last-Event-ID` 头（或查询参数 `lastEventId`）续传；环形缓冲里补不上（太旧、比当前还新、或格式不对）时先发一份新快照。
-        没带 Last-Event-ID 时先发快照。快照的 SSE id 是当时的最新序号。
+        没带 Last-Event-ID 时先发快照。快照的 SSE id 是开始计算快照时的最新序号；计算期间该连接订阅主题上到达的事件在快照之后按序补发（seq 大于该 id）。upsert / remove 是整实体替换，重复应用结果一样。
         订阅的主题和上次不同时，客户端不要带 Last-Event-ID / lastEventId，直接重新连接拿快照（续传只保证同一组主题）。
         心跳每 15 秒一次，不带 id，不进缓冲。
 
@@ -3026,7 +3026,7 @@ components:
           items:
             type: string
           description: 已订阅但快照阶段发现不存在的主题（例如 conversation:<id> 对应的对话不存在）。空则省略。
-      description: SSE event=snapshot 的 data。连接时或续传补不上时发送；SSE id 为当时最新序号。订阅不存在的 conversation:<id> 时 entities 为空，并列出 missing。
+      description: SSE event=snapshot 的 data。连接时或续传补不上时发送；SSE id 为开始计算快照时的最新序号，计算期间到达的事件在快照之后按序补发。订阅不存在的 conversation:<id> 时 entities 为空，并列出 missing。
     UpsertEvent:
       type: object
       additionalProperties: false
@@ -3079,7 +3079,7 @@ components:
           type: integer
         append:
           type: string
-      description: SSE event=text.delta 的 data。只用于流式文字。offset 对不上时客户端丢掉本地内容，等下一次 upsert。
+      description: SSE event=text.delta 的 data。只用于流式文字。offset 是追加前的长度。offset 等于当前长度时追加；现有文字从 offset 起已等于 append 时视为已应用、忽略；其他对不上的情况客户端丢掉本地内容，等下一次 upsert。
     HeartbeatEvent:
       type: object
       additionalProperties: false
