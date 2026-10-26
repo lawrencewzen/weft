@@ -40,6 +40,7 @@ test('lists models by provider and switches the conversation model', async ({ pa
     await expect(page.getByTestId('next-context-chip')).toHaveText('0%');
 
     await openModelMenu(page);
+    await expect(page.getByTestId('next-model-menu')).toContainText('只对这个对话生效 · 管理模型');
     await expect(page.getByTestId('next-model-menu')).toContainText('Chip');
     await expect(page.getByTestId('next-model-menu')).toContainText('Grok 4.6');
     await expect(page.getByTestId('next-model-menu')).toContainText('grok-4.6');

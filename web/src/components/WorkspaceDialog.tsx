@@ -275,7 +275,7 @@ export function WorkspaceDialog({ lang, onClose, onToast, onCreated }: Props) {
               </div>
               <div className="ns-dir-browser">
                 <div className="ns-dir-bar">
-                  <span className="mono ns-dir-now">{dirs?.path || root}</span>
+                  <span className="mono ns-dir-now" title={dirs?.path || root}>{dirs?.path || root}</span>
                   {dirs?.parent ? (
                     <button
                       type="button"
@@ -286,45 +286,48 @@ export function WorkspaceDialog({ lang, onClose, onToast, onCreated }: Props) {
                       {t(lang, 'ws_dir_up')}
                     </button>
                   ) : null}
+                  {dirs?.selectable ? (
+                    <button
+                      type="button"
+                      className="ns-btn ns-btn-sm"
+                      data-testid="next-dir-choose-current"
+                      onClick={() => chooseDir({ path: dirs.path, name: dirBasename(dirs.path) })}
+                    >
+                      {t(lang, 'ws_dir_choose_current')}
+                    </button>
+                  ) : null}
                 </div>
                 {dirError ? <div className="ns-inline-err">{dirError}</div> : null}
                 <div className="ns-dir-list">
                   {(dirs?.entries || []).map((entry) => (
-                    <button
+                    <div
                       key={entry.path}
-                      type="button"
                       className={`ns-dir-row${path === entry.path ? ' is-on' : ''}`}
                       data-testid="next-dir-row"
                       data-path={entry.path}
-                      onClick={() => { void enterDir(entry.path); }}
-                      onDoubleClick={() => chooseDir(entry)}
                     >
-                      <span>{entry.name}</span>
-                      <span
+                      <button
+                        type="button"
+                        className="ns-dir-name"
+                        onClick={() => { void enterDir(entry.path); }}
+                        onDoubleClick={() => chooseDir(entry)}
+                      >
+                        {entry.name}
+                      </button>
+                      <button
+                        type="button"
                         className="ns-dir-pick"
                         data-testid="next-dir-choose"
-                        onClick={(ev) => {
-                          ev.stopPropagation();
-                          chooseDir(entry);
-                        }}
+                        onClick={() => chooseDir(entry)}
                       >
-                        {t(lang, 'ws_dir_choose_here')}
-                      </span>
-                    </button>
+                        {t(lang, 'ws_dir_choose')}
+                      </button>
+                    </div>
                   ))}
                   {dirs && dirs.entries.length === 0 ? (
                     <div className="ns-dir-empty">{t(lang, 'ws_dir_empty')}</div>
                   ) : null}
                 </div>
-                {dirs?.selectable ? (
-                  <button
-                    type="button"
-                    className="ns-btn ns-btn-sm"
-                    onClick={() => chooseDir({ path: dirs.path, name: dirBasename(dirs.path) })}
-                  >
-                    {t(lang, 'ws_dir_choose_here')}
-                  </button>
-                ) : null}
                 {dirs?.truncated ? <p className="ns-field-hint">{t(lang, 'ws_dir_truncated')}</p> : null}
               </div>
             </>
@@ -412,7 +415,7 @@ export function WorkspaceDialog({ lang, onClose, onToast, onCreated }: Props) {
                             <button
                               key={item.id}
                               type="button"
-                              className={item.id === conn.id ? 'is-on' : ''}
+                              className={`ns-pop-item${item.id === conn.id ? ' is-on' : ''}`}
                               onClick={() => {
                                 setConnId(item.id);
                                 setConnOpen(false);
@@ -486,7 +489,7 @@ export function WorkspaceDialog({ lang, onClose, onToast, onCreated }: Props) {
                                 <button
                                   key={item.name}
                                   type="button"
-                                  className={item.name === branch ? 'is-on' : ''}
+                                  className={`ns-pop-item${item.name === branch ? ' is-on' : ''}`}
                                   onClick={() => {
                                     setBranch(item.name);
                                     setBranchOpen(false);

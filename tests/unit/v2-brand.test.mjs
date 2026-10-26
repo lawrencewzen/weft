@@ -58,8 +58,30 @@ test('brandForProvider covers Weft presets and matches public', () => {
   assert.equal(icons.brandForProvider('grok')?.id, 'Grok');
 });
 
-test('displayName matches public/brand-icons.js', () => {
+test('displayName matches public/brand-icons.js when the leaf does not already start with the brand', () => {
   for (const id of ['deepseek-flash', 'gpt-4o', 'grok-build', 'unknown-local', '']) {
     assert.equal(icons.displayName(id), publicIcons.displayName(id), id);
   }
+});
+
+test('displayName does not repeat the brand when the leaf already starts with it', () => {
+  const expected = {
+    'qwen/qwen3-coder': 'Qwen3 Coder',
+    'qwen3-coder': 'Qwen3 Coder',
+    'anthropic/claude-sonnet-4': 'Claude Sonnet 4',
+    'claude-sonnet-4': 'Claude Sonnet 4',
+    'deepseek-chat': 'DeepSeek Chat',
+    'grok-4.6': 'Grok 4.6',
+    'gpt-5': 'OpenAI GPT 5',
+  };
+  for (const [id, name] of Object.entries(expected)) {
+    assert.equal(icons.displayName(id), name, id);
+  }
+  // public/brand-icons.js still prefixes Qwen onto qwen3-coder; v2 drops the duplicate.
+  assert.equal(publicIcons.displayName('qwen/qwen3-coder'), 'Qwen Qwen3 Coder');
+  assert.equal(icons.displayName('qwen/qwen3-coder'), 'Qwen3 Coder');
+  assert.equal(publicIcons.displayName('anthropic/claude-sonnet-4'), 'Claude Sonnet 4');
+  assert.equal(publicIcons.displayName('deepseek-chat'), 'DeepSeek Chat');
+  assert.equal(publicIcons.displayName('grok-4.6'), 'Grok 4.6');
+  assert.equal(publicIcons.displayName('gpt-5'), 'OpenAI GPT 5');
 });
