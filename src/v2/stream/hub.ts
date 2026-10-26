@@ -75,6 +75,8 @@ type Connection = {
   lang: string;
   send: (frame: SseFrame) => void;
   catchingUp: boolean;
+  /** Global seq recorded immediately before snapshot computation. */
+  startSeq: number;
   pending: BufferedEvent[];
   closed: boolean;
 };
@@ -364,13 +366,19 @@ export function createEventHub(opts: {
     for (const topic of conn.topics) removeSubscriber(topic);
   }
 
+  function beginSnapshot(conn: Connection): void {
+    conn.startSeq = seq;
+    conn.catchingUp = true;
+    conn.pending = [];
+  }
+
   function sendSnapshot(
     conn: Connection,
     topicList: string[],
     parts: Array<{ topic: string; entities: Entity[]; missing: string[] }>,
   ): void {
     if (conn.closed) return;
-    const snapSeq = seq;
+    const snapSeq = conn.startSeq;
     conn.send({
       id: snapSeq,
       event: 'snapshot',
@@ -435,6 +443,7 @@ export function createEventHub(opts: {
         lang,
         send: opts.send,
         catchingUp: false,
+        startSeq: seq,
         pending: [],
         closed: false,
       };
@@ -470,29 +479,22 @@ export function createEventHub(opts: {
         }
         finish();
       } else {
+        beginSnapshot(conn);
         const collected = collectSnapshots(topicList, lang);
         if (collected.sync) {
           sendSnapshot(conn, topicList, collected.value as Array<{ topic: string; entities: Entity[]; missing: string[] }>);
           finish();
         } else {
-          conn.catchingUp = true;
           void Promise.resolve(collected.value).then((parts) => {
             sendSnapshot(conn, topicList, parts);
             finish();
           }).catch((err) => {
             console.error('WEFT_V2_SNAPSHOT', err);
-            if (!conn.closed) {
-              conn.catchingUp = false;
-              conn.send({
-                id: seq,
-                event: 'snapshot',
-                data: snapshotData(topicList, topicList.map((topic) => ({
-                  topic,
-                  entities: [],
-                  missing: resolveTopic(topic)?.kind === 'pattern' ? [topic] : [],
-                }))),
-              });
-            }
+            sendSnapshot(conn, topicList, topicList.map((topic) => ({
+              topic,
+              entities: [],
+              missing: resolveTopic(topic)?.kind === 'pattern' ? [topic] : [],
+            })));
             finish();
           });
         }

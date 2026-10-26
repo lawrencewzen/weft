@@ -205,14 +205,38 @@ test('removing a workspace with a running conversation is rejected', async ({ pa
   }
 });
 
+function collectEventTopicSets(page) {
+  const sets = [];
+  page.on('request', (req) => {
+    const url = req.url();
+    if (!url.includes('/api/v2/events')) return;
+    let topics = '';
+    try {
+      topics = new URL(url).searchParams.get('topics') || '';
+    } catch {
+      return;
+    }
+    sets.push(new Set(topics.split(',').map((part) => part.trim()).filter(Boolean)));
+  });
+  return sets;
+}
+
+function hasDefaultSessionTopics(sets) {
+  return sets.some((topics) => (
+    topics.has('workspaces') && topics.has('providers') && topics.has('extensions')
+  ));
+}
+
 test('a conversation created through the old API appears in /next without a refresh', async ({ page }) => {
   const prepared = await prepareWorkspaces(['live']);
   const srv = await startServer({ extraEnv: { WEFT_WORKSPACE_ROOT: prepared.root } });
   try {
     const ws = await createWorkspace(srv, 'live', prepared.dirs[0]);
     const first = await createConversation(srv, ws.id, 'first');
+    const eventTopics = collectEventTopicSets(page);
     await loginNext(page, srv);
     await waitSidebar(page);
+    await expect.poll(() => hasDefaultSessionTopics(eventTopics)).toBe(true);
     await expect(convRow(page, first.id)).toHaveCount(1);
 
     const created = await createConversation(srv, ws.id, 'from-old-api');

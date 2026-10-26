@@ -837,3 +837,106 @@ test('v2 POST /messages while subscribed matches old-API push sequence; v2 POST 
   }
 });
 
+test('new subscriber while a conversation is streaming matches GET and does not drop items', { timeout: 45_000 }, async () => {
+  const srv = await startScriptServer([{ text: STREAM_TEXT }], { WEFT_FAUX_TPS: '4' });
+  try {
+    const discovery = await readDiscovery(srv.dataDir);
+    const { conv } = await openConversation(srv.base);
+    const first = await openEvents({
+      port: srv.port,
+      token: discovery.token,
+      topics: `conversation:${conv.id}`,
+      lang: 'zh',
+    });
+    await waitEvents(first, (list) => list.some((ev) => ev.event === 'snapshot'));
+    const sent = await request(srv.base, 'POST', `/api/conversations/${conv.id}/messages`, { text: 'go' }, TOKEN);
+    assert.equal(sent.status, 202, JSON.stringify(sent.body));
+    await waitEvents(first, (list) => {
+      const liveId = liveIdFromEvents(list);
+      if (!liveId) return false;
+      return list.some((ev) => ev.event === 'text.delta' && ev.data.itemId === liveId);
+    }, 40000);
+
+    const second = await openEvents({
+      port: srv.port,
+      token: discovery.token,
+      topics: `conversation:${conv.id}`,
+      lang: 'zh',
+    });
+    const events = await waitEvents(second, (list) => runSettled(list, conv.id), 40000, 300);
+    second.close();
+    first.close();
+
+    const snapshot = events.find((ev) => ev.event === 'snapshot');
+    assert.ok(snapshot);
+    const reconstructed = snapshotFromStore(applyEvents(events), conv.id);
+    const got = await getV2(srv.base, `/api/v2/conversations/${conv.id}`, discovery.token);
+    assert.equal(got.status, 200, got.text);
+    assert.deepEqual(reconstructed, got.body);
+    assert.equal(reconstructed.items.some((item) => item.kind === 'user'), true);
+    assert.equal(reconstructed.items.some((item) => item.kind === 'assistant' && item.streaming === false), true);
+    assertPushedEntities(events.filter((ev) => ev.event !== 'heartbeat'));
+  } finally {
+    await stopServer(srv);
+  }
+});
+
+test('new subscriber during a held run keeps GET items', { timeout: 45_000 }, async () => {
+  const dataDir = await mkdtemp(path.join(tmpdir(), 'weft-v2-topic-midsub-'));
+  const ready = path.join(dataDir, 'hold-ready');
+  const srv = await startServer({
+    token: TOKEN,
+    dataDir,
+    env: {
+      WEFT_LLM: 'faux',
+      WEFT_FAUX_HOLD: '1',
+      WEFT_FAUX_HOLD_READY: ready,
+    },
+  });
+  try {
+    const discovery = await readDiscovery(srv.dataDir);
+    const { conv } = await openConversation(srv.base);
+    const first = await openEvents({
+      port: srv.port,
+      token: discovery.token,
+      topics: `conversation:${conv.id}`,
+      lang: 'zh',
+    });
+    await waitEvents(first, (list) => list.some((ev) => ev.event === 'snapshot'));
+    const sent = await request(srv.base, 'POST', `/api/conversations/${conv.id}/messages`, { text: 'hold-mid' }, TOKEN);
+    assert.equal(sent.status, 202, JSON.stringify(sent.body));
+    await waitForFile(ready);
+    await waitEvents(first, (list) => list.some((ev) => (
+      ev.event === 'upsert'
+      && ev.data.entity === 'conversation'
+      && (ev.data.value?.run?.status === 'running' || ev.data.value?.status === 'running')
+    )));
+
+    const second = await openEvents({
+      port: srv.port,
+      token: discovery.token,
+      topics: `conversation:${conv.id}`,
+      lang: 'zh',
+    });
+    await waitEvents(second, (list) => list.some((ev) => ev.event === 'snapshot'));
+    const got = await getV2(srv.base, `/api/v2/conversations/${conv.id}`, discovery.token);
+    assert.equal(got.status, 200, got.text);
+    const snapshot = second.events.find((ev) => ev.event === 'snapshot');
+    assert.ok(snapshot);
+    for (const item of got.body.items || []) {
+      const inSnap = (snapshot.data.entities || []).some((row) => row.entity === 'item' && row.id === item.id);
+      const inUpsert = second.events.some((ev) => (
+        ev.event === 'upsert' && ev.data.entity === 'item' && ev.data.id === item.id
+      ));
+      assert.equal(inSnap || inUpsert, true, `missing item ${item.id}`);
+    }
+    const convRef = (snapshot.data.entities || []).find((row) => row.entity === 'conversation' && row.id === conv.id)
+      || second.events.find((ev) => ev.event === 'upsert' && ev.data.entity === 'conversation' && ev.data.id === conv.id)?.data;
+    assert.ok(convRef, 'missing conversation entity');
+    second.close();
+    first.close();
+  } finally {
+    await stopServer(srv);
+  }
+});
+

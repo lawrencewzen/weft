@@ -228,32 +228,109 @@ test('registerPattern makes prefixed topics known and counts subscribers', async
   }
 });
 
-test('async snapshot queues events and replays only those after the snapshot seq', async () => {
+function applyUpsertFrames(frames) {
+  const entities = new Map();
+  for (const frame of frames) {
+    if (frame.event === 'snapshot') {
+      entities.clear();
+      for (const ref of frame.data.entities || []) {
+        entities.set(`${ref.entity}\t${ref.id}`, structuredClone(ref.value));
+      }
+    } else if (frame.event === 'upsert') {
+      entities.set(`${frame.data.entity}\t${frame.data.id}`, structuredClone(frame.data.value));
+    } else if (frame.event === 'remove') {
+      entities.delete(`${frame.data.entity}\t${frame.data.id}`);
+    }
+  }
+  return entities;
+}
+
+test('async snapshot replays events published after startSeq even when snapshot is delayed 200ms', async () => {
   const hub = createEventHub({ heartbeatMs: 60_000 });
   try {
-    let current = { n: 0 };
-    let release;
-    const gate = new Promise((resolve) => { release = resolve; });
     hub.register('slow', {
       snapshot: async () => {
-        await gate;
-        return [{ entity: 'x', id: '1', value: { ...current } }];
+        await sleep(200);
+        return [{ entity: 'x', id: '1', value: { n: 0 } }];
       },
     });
+    const startSeq = hub.currentSeq();
     const frames = [];
     const session = hub.connect({ topics: ['slow'], send: (frame) => frames.push(frame) });
     assert.equal(frames.length, 0);
-    current = { n: 2 };
-    hub.publish('slow', { event: 'upsert', entity: 'x', id: '1', value: { n: 2 } });
-    release();
+    const pubSeq = hub.publish('slow', { event: 'upsert', entity: 'x', id: '1', value: { n: 9 } });
     await session.ready;
     assert.equal(frames[0].event, 'snapshot');
-    assert.equal(frames[0].data.entities[0].value.n, 2);
-    assert.equal(frames.some((frame) => frame.event === 'upsert'), false);
+    assert.equal(frames[0].id, startSeq);
+    assert.equal(frames[0].data.entities[0].value.n, 0);
+    const upsert = frames.find((frame) => frame.event === 'upsert');
+    assert.ok(upsert, JSON.stringify(frames.map((frame) => ({ event: frame.event, id: frame.id }))));
+    assert.equal(upsert.id, pubSeq);
+    assert.equal(upsert.data.value.n, 9);
+    assert.equal(applyUpsertFrames(frames).get('x\t1').n, 9);
+    session.close();
+  } finally {
+    hub.dispose();
+  }
+});
+
+test('duplicate upsert after a late snapshot read is harmless', async () => {
+  const hub = createEventHub({ heartbeatMs: 60_000 });
+  try {
+    let current = { n: 0 };
+    hub.register('slow', {
+      snapshot: async () => {
+        await sleep(200);
+        return [{ entity: 'x', id: '1', value: { ...current } }];
+      },
+    });
+    const startSeq = hub.currentSeq();
+    const frames = [];
+    const session = hub.connect({ topics: ['slow'], send: (frame) => frames.push(frame) });
+    current = { n: 7 };
+    hub.publish('slow', { event: 'upsert', entity: 'x', id: '1', value: { n: 7 } });
+    await session.ready;
+    assert.equal(frames[0].event, 'snapshot');
+    assert.equal(frames[0].id, startSeq);
+    assert.equal(frames[0].data.entities[0].value.n, 7);
+    const upserts = frames.filter((frame) => frame.event === 'upsert');
+    assert.equal(upserts.length, 1);
+    assert.equal(upserts[0].data.value.n, 7);
+    assert.equal(applyUpsertFrames(frames).get('x\t1').n, 7);
+    session.close();
+  } finally {
+    hub.dispose();
+  }
+});
+
+test('stale Last-Event-ID async snapshot still replays events published during catch-up', async () => {
+  const hub = createEventHub({ bufferSize: 2, heartbeatMs: 60_000 });
+  try {
+    hub.register('slow', {
+      snapshot: async () => {
+        await sleep(200);
+        return [{ entity: 'x', id: '1', value: { n: 0 } }];
+      },
+    });
+    hub.publish('slow', { event: 'upsert', entity: 'x', id: '1', value: { n: 1 } });
+    hub.publish('slow', { event: 'upsert', entity: 'x', id: '1', value: { n: 2 } });
     hub.publish('slow', { event: 'upsert', entity: 'x', id: '1', value: { n: 3 } });
-    const live = frames.filter((frame) => frame.event === 'upsert');
-    assert.equal(live.length, 1);
-    assert.equal(live[0].data.value.n, 3);
+    const startSeq = hub.currentSeq();
+    const frames = [];
+    const session = hub.connect({
+      topics: ['slow'],
+      lastEventId: '0',
+      send: (frame) => frames.push(frame),
+    });
+    const pubSeq = hub.publish('slow', { event: 'upsert', entity: 'x', id: '1', value: { n: 4 } });
+    await session.ready;
+    assert.equal(frames[0].event, 'snapshot');
+    assert.equal(frames[0].id, startSeq);
+    const upsert = frames.find((frame) => frame.event === 'upsert');
+    assert.ok(upsert, JSON.stringify(frames.map((frame) => ({ event: frame.event, id: frame.id }))));
+    assert.equal(upsert.id, pubSeq);
+    assert.equal(upsert.data.value.n, 4);
+    assert.equal(applyUpsertFrames(frames).get('x\t1').n, 4);
     session.close();
   } finally {
     hub.dispose();

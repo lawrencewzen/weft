@@ -33,9 +33,13 @@ test('create workspace & conversation, markdown rendered', async ({ page }) => {
   await expect(body.locator('pre.code-block-pre')).toHaveCSS('white-space', 'pre');
   const copyBtn = body.locator('[data-action="copy-code"]').first();
   await expect(copyBtn).toContainText('复制');
+  await expect(statusText(page)).toContainText(/done|完成/i, { timeout: 20000 });
   await page.evaluate(() => {
-    const clip = navigator.clipboard || (navigator.clipboard = {});
-    clip.writeText = async () => {};
+    const stub = { writeText: async () => {} };
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: stub,
+    });
   });
   await copyBtn.click();
   await expect(copyBtn).toContainText('已复制');
