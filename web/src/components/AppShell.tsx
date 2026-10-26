@@ -36,12 +36,14 @@ import { DemoModelBadge } from './DemoModelBadge';
 import { RightPane } from './RightPane';
 import { RightToggle } from './RightToggle';
 import { SettingsOverlay } from './settings/SettingsOverlay';
+import type { AboutService } from './settings/AboutPage';
 import { Sidebar } from './Sidebar';
 
 type Props = {
   route: AppRoute;
   lang: Lang;
   demo?: boolean;
+  service: AboutService;
   settingsPage?: SettingsPage | null;
 };
 
@@ -51,7 +53,7 @@ function overlayKeepOpen(target: HTMLElement): boolean {
   );
 }
 
-export function AppShell({ route, lang, demo = false, settingsPage = null }: Props) {
+export function AppShell({ route, lang, demo = false, service, settingsPage = null }: Props) {
   const { workspaces, conversations, groups, latest, ready } = useWorkspaces();
   const [toast, setToast] = useState<string | null>(null);
   const toastTimer = useRef<number | null>(null);
@@ -124,6 +126,7 @@ export function AppShell({ route, lang, demo = false, settingsPage = null }: Pro
         route={viewRoute}
         lang={lang}
         demo={demo}
+        service={service}
         settingsPage={settingsPage}
         toast={toast}
         onToast={showToast}
@@ -140,6 +143,7 @@ type LayoutProps = {
   route: AppRoute;
   lang: Lang;
   demo: boolean;
+  service: AboutService;
   settingsPage: SettingsPage | null;
   toast: string | null;
   onToast: (message: string) => void;
@@ -153,6 +157,7 @@ function AppShellLayout({
   route,
   lang,
   demo,
+  service,
   settingsPage,
   toast,
   onToast,
@@ -395,6 +400,7 @@ function AppShellLayout({
         <SettingsOverlay
           page={settingsPage}
           lang={lang}
+          service={service}
           onToast={onToast}
           onConfirm={askConfirm}
         />

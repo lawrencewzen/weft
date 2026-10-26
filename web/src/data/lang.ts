@@ -1,3 +1,5 @@
+import { applyDocumentPrefs, notifyPrefs, readStoredLang, writeStoredLang } from './prefs';
+
 export type Lang = 'zh' | 'en';
 
 let override: Lang | null = null;
@@ -9,15 +11,24 @@ export function resolveLang(input?: string | null): Lang {
   return 'zh';
 }
 
-/** Browser language, overridable by settings later via `setPreferredLang`. */
-export function getPreferredLang(): Lang {
-  if (override) return override;
+function browserLang(): Lang {
   if (typeof navigator !== 'undefined' && navigator.language) {
     return resolveLang(navigator.language);
   }
   return 'zh';
 }
 
+/** weft_lang when set (same key as the old UI); otherwise follow the browser. */
+export function getPreferredLang(): Lang {
+  if (override) return override;
+  return readStoredLang() ?? browserLang();
+}
+
 export function setPreferredLang(lang: Lang | null): void {
   override = lang;
+  if (lang) {
+    writeStoredLang(lang);
+    applyDocumentPrefs({ lang });
+    notifyPrefs();
+  }
 }

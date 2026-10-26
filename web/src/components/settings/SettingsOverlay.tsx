@@ -4,6 +4,8 @@ import { closeSettings, navigate, settingsPath } from '../../data/nav';
 import { SETTINGS_PAGES, type SettingsPage } from '../../data/providerWizard';
 import { t, type I18nKey } from '../../i18n';
 import type { ConfirmOpts } from '../ConfirmDialog';
+import { AboutPage, type AboutService } from './AboutPage';
+import { GeneralPage } from './GeneralPage';
 import { ProviderPage } from './ProviderPage';
 
 const NAV: { id: SettingsPage; key: I18nKey }[] = [
@@ -18,11 +20,12 @@ const NAV: { id: SettingsPage; key: I18nKey }[] = [
 type Props = {
   page: SettingsPage;
   lang: Lang;
+  service: AboutService;
   onToast: (message: string) => void;
   onConfirm: (opts: ConfirmOpts) => Promise<boolean>;
 };
 
-export function SettingsOverlay({ page, lang, onToast, onConfirm }: Props) {
+export function SettingsOverlay({ page, lang, service, onToast, onConfirm }: Props) {
   useEffect(() => {
     const onKey = (ev: KeyboardEvent) => {
       if (ev.key === 'Escape') {
@@ -70,6 +73,10 @@ export function SettingsOverlay({ page, lang, onToast, onConfirm }: Props) {
           </button>
           {current === 'providers' ? (
             <ProviderPage lang={lang} onToast={onToast} onConfirm={onConfirm} />
+          ) : current === 'general' ? (
+            <GeneralPage lang={lang} />
+          ) : current === 'about' ? (
+            <AboutPage lang={lang} service={service} />
           ) : (
             <div className="next-settings-content">
               <div className="next-settings-head">
