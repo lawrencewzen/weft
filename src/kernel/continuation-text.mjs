@@ -1,5 +1,5 @@
-// Shared auto-continue prefix. The kernel, the browser, and tests all match this.
-import { isSubagentReportText } from './subagent-report.js';
+// Shared auto-continue prefix. The kernel and the v2 views match this.
+import { isSubagentReportText } from './subagent-report-text.mjs';
 
 export const AUTO_CONTINUE_PREFIX = '[auto-continue]';
 

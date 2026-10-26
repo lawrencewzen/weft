@@ -1,4 +1,4 @@
-/** Same keys as public/app.js and public/i18n.js so / and /legacy stay in sync. */
+/** Stored in localStorage so the choice survives a reload. */
 export const LS_LANG = 'weft_lang';
 export const LS_APPEARANCE = 'weft_appearance';
 export const LS_THEME = 'weft_theme';

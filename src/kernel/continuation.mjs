@@ -6,7 +6,7 @@ import {
   CONTINUE_TEXT,
   MAX_AUTO_CONTINUES,
   isAutoContinueText,
-} from '../../public/continuation.js';
+} from './continuation-text.mjs';
 
 export {
   AUTO_CONTINUE_PREFIX,
@@ -15,7 +15,7 @@ export {
   MAX_AUTO_CONTINUES,
   isAutoContinueText,
   isPromptUserMessage,
-} from '../../public/continuation.js';
+} from './continuation-text.mjs';
 
 function messageText(message) {
   if (!message) return '';

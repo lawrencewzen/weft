@@ -1,5 +1,5 @@
 import { contextUsed } from '../../core/usage.mjs';
-import { contextPercents, DEFAULT_CONTEXT_WINDOW } from '../../../public/usage.js';
+import { contextPercents, DEFAULT_CONTEXT_WINDOW } from '../../core/usage-math.mjs';
 import type { components } from '../contract.gen.ts';
 
 export type ContextUsage = components['schemas']['ContextUsage'];
@@ -22,7 +22,7 @@ function usageLevel(percent: number): ContextUsage['level'] {
 
 /**
  * Context chip numbers for a conversation view.
- * `used` / `percent` match `contextUsed` / `contextPercents` in public/usage.js.
+ * `used` / `percent` match `contextUsed` / `contextPercents` in core/usage-math.mjs.
  * Missing usage counts as 0; missing window uses DEFAULT_CONTEXT_WINDOW (128000).
  */
 export function contextUsageView({ usage, window }: ContextUsageInput = {}): ContextUsage {

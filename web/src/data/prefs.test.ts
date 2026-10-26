@@ -53,7 +53,7 @@ describe('prefs keys and values match the old UI', () => {
     globalThis.localStorage = undefined;
   });
 
-  it('uses the same localStorage key names as public/app.js', () => {
+  it('uses stable localStorage key names', () => {
     expect(LS_LANG).toBe('weft_lang');
     expect(LS_APPEARANCE).toBe('weft_appearance');
     expect(LS_THEME).toBe('weft_theme');
