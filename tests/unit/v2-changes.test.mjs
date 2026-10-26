@@ -262,6 +262,105 @@ test('in-process: change entities upsert and remove with notify', async () => {
   }
 });
 
+test('in-process: write/edit does not push a stale +0 change before disk catches up', async () => {
+  const hub = createEventHub({ heartbeatMs: 60_000, protocolVersion: PROTOCOL_VERSION });
+  const listeners = new Set();
+  let rows = [];
+  const presented = {
+    id: 'c1',
+    workspaceId: 'w1',
+    workspacePath: '',
+    title: 't',
+    updatedAt: 1,
+    status: 'idle',
+    messages: [],
+    usage: null,
+  };
+  const topic = attachConversationTopic(hub, {
+    loadConversation: async (id) => (id === 'c1' ? {
+      presented,
+      subagents: [],
+      modelTarget: null,
+      window: 128000,
+    } : null),
+    loadChanges: async () => rows,
+    subscribe: (_cid, fn) => {
+      listeners.add(fn);
+      return () => listeners.delete(fn);
+    },
+    coalesceMs: 10,
+    log() {},
+  });
+  const emit = (ev) => {
+    for (const fn of listeners) fn(ev);
+  };
+  const changeUpserts = (frames) => frames.filter((frame) => (
+    frame.event === 'upsert' && frame.data.entity === 'change' && frame.data.id === 'note.txt'
+  ));
+  async function waitFor(frames, ready, timeoutMs = 2000) {
+    const started = Date.now();
+    while (Date.now() - started < timeoutMs) {
+      if (ready(frames)) return;
+      await sleep(15);
+    }
+    throw new Error(`did not match: ${JSON.stringify(frames.filter((frame) => frame.data?.entity === 'change' || frame.event === 'snapshot'))}`);
+  }
+  try {
+    const frames = [];
+    const session = hub.connect({
+      topics: ['conversation:c1'],
+      send: (frame) => frames.push(frame),
+    });
+    await session.ready;
+
+    rows = [{ path: 'note.txt', added: 0, removed: 0 }];
+    emit({
+      event: 'tool.start',
+      data: { tool: { id: 'w1', name: 'write', status: 'running', input: { path: 'note.txt' }, path: 'note.txt' } },
+    });
+    await sleep(50);
+    assert.equal(changeUpserts(frames).length, 0, 'write start must not publish +0');
+
+    emit({
+      event: 'tool.end',
+      data: { tool: { id: 'w1', name: 'write', status: 'completed', input: { path: 'note.txt' }, path: 'note.txt', added: 1, removed: 0 } },
+    });
+    await sleep(40);
+    assert.equal(
+      changeUpserts(frames).some((frame) => frame.data.value?.added === 0),
+      false,
+      'stale empty disk after write must not be the first change',
+    );
+
+    rows = [{ path: 'note.txt', added: 1, removed: 0 }];
+    await waitFor(frames, (list) => changeUpserts(list).some((frame) => frame.data.value?.added === 1));
+    assert.equal(changeUpserts(frames)[0].data.value.added, 1);
+
+    rows = [{ path: 'note.txt', added: 0, removed: 0 }];
+    emit({
+      event: 'tool.start',
+      data: { tool: { id: 'e1', name: 'edit', status: 'running', input: { path: 'note.txt' }, path: 'note.txt' } },
+    });
+    await sleep(50);
+    const afterEditStart = [...changeUpserts(frames)].pop();
+    assert.equal(afterEditStart.data.value.added, 1, 'in-flight edit must keep the last real change');
+
+    emit({
+      event: 'tool.end',
+      data: { tool: { id: 'e1', name: 'edit', status: 'completed', input: { path: 'note.txt' }, path: 'note.txt', added: 1, removed: 0 } },
+    });
+    rows = [{ path: 'note.txt', added: 2, removed: 0 }];
+    await waitFor(frames, (list) => changeUpserts(list).some((frame) => frame.data.value?.added === 2));
+    assert.equal(
+      changeUpserts(frames).some((frame) => frame.data.value?.added === 0),
+      false,
+    );
+  } finally {
+    topic.dispose();
+    hub.dispose();
+  }
+});
+
 test('tool-edit snapshot has relative change; save back matches old changes', { timeout: 60_000 }, async () => {
   const srv = await startServer({
     token: TOKEN,

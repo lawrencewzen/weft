@@ -1,7 +1,7 @@
 /** Live `conversation:<id>` topic: snapshot entities + kernel-driven upserts. */
 
 import type { components } from '../contract.gen.ts';
-import { changeViews, type Change, type KernelChange } from '../views/changes.ts';
+import { changeViews, posixPath, type Change, type KernelChange } from '../views/changes.ts';
 import {
   conversationSnapshot,
   type ConversationSnapshot,
@@ -25,6 +25,10 @@ import type { StuckWatch } from './stuck-watch.ts';
 export const CONVERSATION_PREFIX = 'conversation:';
 export const COALESCE_MS = 50;
 export const PATH_CACHE_MS = 2000;
+/** After write/edit ends, suppress a first +0 −0 change until disk catches up. */
+export const FRESH_WRITE_MS = 400;
+export const CHANGE_RETRY_MS = 40;
+const FILE_CHANGE_TOOLS = new Set(['write', 'edit']);
 
 export type KernelEvent = {
   event?: unknown;
@@ -61,6 +65,10 @@ type TopicState = {
   pathCache: Map<string, { value: boolean; at: number }>;
   pending: KernelEvent[];
   timer: ReturnType<typeof setTimeout> | null;
+  changeRetry: ReturnType<typeof setTimeout> | null;
+  changeRetryNeeded: boolean;
+  inflightPaths: Set<string>;
+  freshWrites: Map<string, number>;
   tail: Promise<void>;
   rawAgents: SubagentLike[];
 };
@@ -102,6 +110,20 @@ function jsonEq(a: unknown, b: unknown): boolean {
 function asRecord(value: unknown): Record<string, unknown> {
   if (value && typeof value === 'object' && !Array.isArray(value)) return value as Record<string, unknown>;
   return {};
+}
+
+function fileToolPath(ev: KernelEvent): string | null {
+  const event = String(ev?.event || '');
+  if (event !== 'tool.start' && event !== 'tool.end') return null;
+  const tool = asRecord(asRecord(ev?.data).tool);
+  if (!FILE_CHANGE_TOOLS.has(String(tool.name || ''))) return null;
+  const raw = tool.path ?? asRecord(tool.input).path;
+  if (typeof raw !== 'string' || !raw) return null;
+  return posixPath(raw);
+}
+
+function isZeroChange(row: Change | undefined): boolean {
+  return row != null && row.added === 0 && row.removed === 0 && row.error == null;
 }
 
 function liveAssistant(id: string, text: string): AssistantItem {
@@ -202,6 +224,10 @@ export function attachConversationTopic(hub: EventHub, opts: ConversationTopicOp
         pathCache: new Map(),
         pending: [],
         timer: null,
+        changeRetry: null,
+        changeRetryNeeded: false,
+        inflightPaths: new Set(),
+        freshWrites: new Map(),
         tail: Promise.resolve(),
         rawAgents: [],
       };
@@ -217,10 +243,73 @@ export function attachConversationTopic(hub: EventHub, opts: ConversationTopicOp
     }
   }
 
+  function clearChangeRetry(state: TopicState): void {
+    if (state.changeRetry) {
+      clearTimeout(state.changeRetry);
+      state.changeRetry = null;
+    }
+  }
+
   function dropState(cid: string): void {
     const state = states.get(cid);
-    if (state) clearTimer(state);
+    if (state) {
+      clearTimer(state);
+      clearChangeRetry(state);
+    }
     states.delete(cid);
+  }
+
+  function previousChange(state: TopicState, lang: 'zh' | 'en', rel: string): Change | undefined {
+    const map = lang === 'en' ? state.lastEn : state.lastZh;
+    return map.get(entityKey('change', rel)) as Change | undefined;
+  }
+
+  function overlayLiveChanges(state: TopicState, lang: 'zh' | 'en', rows: Change[]): Change[] {
+    const t = now();
+    const byPath = new Map(rows.map((row) => [row.path, row]));
+    for (const [rel, at] of state.freshWrites) {
+      if (t - at > FRESH_WRITE_MS) state.freshWrites.delete(rel);
+    }
+    for (const rel of state.inflightPaths) {
+      const prev = previousChange(state, lang, rel);
+      if (prev) byPath.set(rel, prev);
+      else byPath.delete(rel);
+    }
+    for (const rel of state.freshWrites.keys()) {
+      if (state.inflightPaths.has(rel)) continue;
+      const row = byPath.get(rel);
+      if (!isZeroChange(row)) {
+        if (row && (row.added !== 0 || row.removed !== 0)) state.freshWrites.delete(rel);
+        continue;
+      }
+      const prev = previousChange(state, lang, rel);
+      if (prev && !isZeroChange(prev)) byPath.set(rel, prev);
+      else byPath.delete(rel);
+      state.changeRetryNeeded = true;
+    }
+    return [...byPath.values()];
+  }
+
+  function scheduleChangeRetry(cid: string): void {
+    const state = states.get(cid);
+    if (!state || state.changeRetry || disposed || !kernelUnsubs.has(cid)) return;
+    state.changeRetry = setTimeout(() => {
+      state.changeRetry = null;
+      enqueue(cid, () => recompute(cid));
+    }, CHANGE_RETRY_MS);
+    state.changeRetry.unref?.();
+  }
+
+  function noteFileTool(state: TopicState, ev: KernelEvent): void {
+    const event = String(ev?.event || '');
+    const rel = fileToolPath(ev);
+    if (!rel) return;
+    if (event === 'tool.start') {
+      state.inflightPaths.add(rel);
+      return;
+    }
+    state.inflightPaths.delete(rel);
+    state.freshWrites.set(rel, now());
   }
 
   function existsFor(cid: string, workspacePath: string) {
@@ -255,7 +344,7 @@ export function attachConversationTopic(hub: EventHub, opts: ConversationTopicOp
     let changes: Change[] = [];
     if (opts.loadChanges) {
       try {
-        changes = changeViews(await opts.loadChanges(cid));
+        changes = overlayLiveChanges(state, lang, changeViews(await opts.loadChanges(cid)));
       } catch (err) {
         console.error(`WEFT_V2_CONV_CHANGES ${cid}`, err);
         changes = [];
@@ -334,6 +423,7 @@ export function attachConversationTopic(hub: EventHub, opts: ConversationTopicOp
   async function recompute(cid: string): Promise<void> {
     if (disposed || !kernelUnsubs.has(cid)) return;
     const state = stateOf(cid);
+    state.changeRetryNeeded = false;
     let zh: TopicSnapshot | null = null;
     let en: TopicSnapshot | null = null;
     try {
@@ -349,6 +439,10 @@ export function attachConversationTopic(hub: EventHub, opts: ConversationTopicOp
       return;
     }
     diffAndPublish(cid, state, zh, en);
+    if (state.changeRetryNeeded) {
+      state.changeRetryNeeded = false;
+      scheduleChangeRetry(cid);
+    }
   }
 
   function rememberLiveItem(state: TopicState, cid: string, item: AssistantItem): void {
@@ -425,6 +519,7 @@ export function attachConversationTopic(hub: EventHub, opts: ConversationTopicOp
     if (disposed || !kernelUnsubs.has(cid)) return;
     const event = String(ev?.event || '');
     const data = asRecord(ev?.data);
+    noteFileTool(stateOf(cid), ev);
     if (event === 'message.delta') {
       await flushPending(cid);
       const messageId = typeof data.messageId === 'string' ? data.messageId : '';
