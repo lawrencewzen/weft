@@ -157,6 +157,8 @@ test('add provider: failed 401, then pass, pick two models, default, rename, del
   await page.getByRole('button', { name: '下一步' }).click();
 
   const rows = page.getByTestId('next-model-row');
+  await expect(page.getByTestId('next-provider-crumb')).toBeVisible();
+  await expect(page.locator('.next-settings-crumb')).toContainText('自定义');
   await expect(rows).toHaveCount(2, { timeout: 15000 });
   await expect(page.getByTestId('next-model-filter').first()).toBeVisible();
   await expect(page.getByPlaceholder('搜索模型名或 ID')).toBeVisible();
@@ -225,4 +227,45 @@ test('Grok device-code login uses the test double and reaches the model step', a
   const grokRow = page.getByTestId('next-provider-row').filter({ hasText: /Grok|账号/ });
   await expect(grokRow).toBeVisible();
   await expect(grokRow.getByTestId('next-provider-delete')).toHaveCount(0);
+});
+
+test('wizard back: breadcrumb, header arrow, left nav, and sticky footer', async ({ page }) => {
+  await boot(page);
+  await openProviders(page);
+
+  await page.getByTestId('next-provider-add').click();
+  await expect(page.getByTestId('next-vendor-card').first()).toBeVisible();
+  await expect(page.getByTestId('next-provider-crumb')).toBeVisible();
+  await expect(page.getByTestId('next-provider-add')).toHaveCount(0);
+
+  await page.getByTestId('next-provider-crumb').click();
+  await expect(page.getByTestId('next-provider-add')).toBeVisible();
+
+  await page.getByTestId('next-provider-add').click();
+  await page.getByTestId('next-provider-crumb').focus();
+  await expect(page.getByTestId('next-provider-crumb')).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('next-provider-add')).toBeVisible();
+
+  await page.getByTestId('next-provider-add').click();
+  await page.locator('[data-testid=next-vendor-card][data-vendor=custom]').click();
+  await page.getByRole('button', { name: '下一步' }).click();
+  await expect(page.getByTestId('next-way-custom_endpoint')).toBeVisible();
+  await expect(page.getByTestId('next-provider-crumb')).toBeVisible();
+  await page.getByRole('button', { name: '返回' }).click();
+  await expect(page.getByTestId('next-vendor-card').first()).toBeVisible();
+  await expect(page.getByTestId('next-way-custom_endpoint')).toHaveCount(0);
+
+  await page.locator('[data-testid=next-vendor-card][data-vendor=custom]').click();
+  await page.getByRole('button', { name: '下一步' }).click();
+  await expect(page.getByTestId('next-way-custom_endpoint')).toBeVisible();
+  await page.getByTestId('next-settings-nav-providers').click();
+  await expect(page.getByTestId('next-provider-add')).toBeVisible();
+  await expect(page.getByTestId('next-way-custom_endpoint')).toHaveCount(0);
+
+  await page.setViewportSize({ width: 1280, height: 600 });
+  await page.getByTestId('next-provider-add').click();
+  await expect(page.getByTestId('next-wizard-foot')).toBeInViewport();
+  await expect(page.getByRole('button', { name: '取消' })).toBeInViewport();
+  await expect(page.getByRole('button', { name: '下一步' })).toBeInViewport();
 });

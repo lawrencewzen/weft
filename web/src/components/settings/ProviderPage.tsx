@@ -21,12 +21,13 @@ import {
 import { useProviders } from '../../data/useProviders';
 import { t } from '../../i18n';
 import { BrandIcon } from '../BrandIcon';
-import { ProviderWizard } from './ProviderWizard';
+import { cancelProviderWizard, ProviderWizard } from './ProviderWizard';
 
 type Props = {
   lang: Lang;
   onToast: (message: string) => void;
   onConfirm: (opts: ConfirmOpts) => Promise<boolean>;
+  providersNavSeq?: number;
 };
 
 type View = { kind: 'list' } | { kind: 'wizard'; state: WizardState };
@@ -57,11 +58,23 @@ function statusLabel(provider: Provider, lang: Lang): string {
   return t(lang, 'provider_status_untested');
 }
 
-export function ProviderPage({ lang, onToast, onConfirm }: Props) {
+export function ProviderPage({ lang, onToast, onConfirm, providersNavSeq = 0 }: Props) {
   const { providers, defaultModel, vendors } = useProviders();
   const [view, setView] = useState<View>({ kind: 'list' });
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const viewRef = useRef(view);
+  viewRef.current = view;
+
+  useEffect(() => {
+    if (!providersNavSeq) return;
+    const current = viewRef.current;
+    if (current.kind !== 'wizard') return;
+    void (async () => {
+      await cancelProviderWizard(current.state);
+      setView({ kind: 'list' });
+    })();
+  }, [providersNavSeq]);
 
   useEffect(() => {
     if (!menuOpen) return;

@@ -144,6 +144,26 @@
 }
 .next-settings-crumb-sep { color: var(--dis); font-weight: 400; }
 .next-settings-crumb strong { color: var(--ns-ink); font-weight: 600; }
+.next-settings-crumb-link {
+  border: none;
+  background: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  text-decoration: none;
+  border-radius: 2px;
+}
+.next-settings-crumb-link:hover,
+.next-settings-crumb-link:focus-visible {
+  color: var(--ns-ink);
+  text-decoration: underline;
+}
+.next-settings-crumb-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
 .ns-wizard-head {
   display: flex;
   align-items: flex-start;
@@ -151,6 +171,31 @@
   gap: 16px;
   padding: 26px 56px 12px 36px;
   flex-shrink: 0;
+}
+.ns-wizard-title {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+}
+.ns-wizard-back {
+  width: 28px;
+  height: 28px;
+  margin-top: 2px;
+  border: none;
+  background: transparent;
+  border-radius: 7px;
+  color: var(--ns-mute);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.ns-wizard-back:hover { background: var(--ns-bg); color: var(--ns-ink); }
+.ns-wizard-back:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 .ns-wizard-head h2 {
   margin: 0;
@@ -192,6 +237,9 @@
 .ns-step.is-done .ns-step-num { background: var(--bd2); color: var(--ns-mute2); }
 .ns-foot {
   flex-shrink: 0;
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -497,6 +545,7 @@
   flex-direction: column;
   flex: 1;
   min-height: 0;
+  overflow: hidden;
 }
 .ns-grok {
   display: flex;

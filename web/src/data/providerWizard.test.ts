@@ -12,8 +12,10 @@ import {
   filterVendors,
   formatContextWindow,
   GROK_VENDOR,
+  GROK_VENDOR_ID,
   hostOf,
   isMaskedApiKey,
+  shouldDiscardDraftOnCancel,
   waysForVendor,
   withGrokVendor,
   wizardFromProvider,
@@ -207,5 +209,12 @@ describe('provider wizard', () => {
     expect(state.apiKeyEdited).toBe(false);
     expect(canAdvance(state, deepseek)).toBe(true);
     expect(buildPatchBody(state).apiKey).toBeUndefined();
+  });
+
+  it('discards add-mode drafts on cancel, except Grok account login', () => {
+    expect(shouldDiscardDraftOnCancel({ mode: 'add', createdId: 'prov_1' })).toBe(true);
+    expect(shouldDiscardDraftOnCancel({ mode: 'add', createdId: GROK_VENDOR_ID })).toBe(false);
+    expect(shouldDiscardDraftOnCancel({ mode: 'add', createdId: null })).toBe(false);
+    expect(shouldDiscardDraftOnCancel({ mode: 'edit', createdId: 'prov_1' })).toBe(false);
   });
 });
