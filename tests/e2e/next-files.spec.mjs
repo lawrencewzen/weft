@@ -413,7 +413,7 @@ test('below 1180px the right pane starts collapsed without horizontal scroll', a
     await page.setViewportSize({ width: 1179, height: 800 });
     const { conv } = await openWorkspaceConversation(srv, 'demo', prepared.dirs[0]);
     await loginNext(page, srv);
-    await page.goto(`${srv.url}/next/c/${encodeURIComponent(conv.id)}`);
+    await page.goto(`${srv.url}/c/${encodeURIComponent(conv.id)}`);
     await expect(page.getByTestId('next-thread')).toBeVisible();
     await expect(page.getByTestId('next-right')).toBeHidden();
     await expect(page.getByTestId('next-right-toggle')).toBeVisible();

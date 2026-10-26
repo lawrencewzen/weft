@@ -14,7 +14,7 @@
 
 ```
 ┌──────────── 客户端（只负责显示）────────────┐
-│ Web（React，/next）  mac  Windows  iOS(以后) │
+│ Web（React，/）  mac  Windows  iOS(以后)     │
 └───────────────┬──────────────────────────────┘
                 │ HTTP 发命令 + SSE 收推送（OpenAPI 3.1 契约）
 ┌───────────────┴─────── Weft 服务（Node 22，常驻）───────┐
@@ -48,7 +48,7 @@
 按"以后可以从网络连进来"来设计，现在只实现本机部分。
 
 - **本机原生客户端**：读发现文件里的本机令牌，放在 `Authorization: Bearer` 里发。令牌每次服务启动时轮换。
-- **网页端**：浏览器读不到发现文件，所以要由启动器打开。启动器是原生端的"在浏览器打开"，或者命令行 `weft open`。启动器用本机令牌请求一个 60 秒有效的一次性码，再打开 `http://127.0.0.1:<port>/next/?code=…`，页面用这个码换成 HttpOnly、SameSite=Strict 的 cookie。
+- **网页端**：浏览器读不到发现文件，所以要用一次性码换成 cookie。`npm start` 在 `WEFT_READY` 之后打印 `http://127.0.0.1:<port>/auth?code=…`（10 分钟、一次性）。命令行 `weft open` 或原生端的「在浏览器打开」用本机令牌再申请一枚 60 秒码，打开同一路径。成功后种 HttpOnly、SameSite=Strict 的 `weft_session`，并 302 到 `/`。旧书签 `/next/login?code=` 会 302 到 `/auth?code=`。不做本机免登录。
 - **SSE**：先用 cookie 或 Bearer，沿用现在的 ticket 机制。
 - **设备令牌、配对、吊销**：契约里先定义好（`/api/v2/devices`、`/api/v2/pairing`），实现放到做远程连接时。
 - 保留现有的 Host、Origin、Content-Type 校验和安全响应头。
@@ -160,12 +160,12 @@ Provider {
 - 目录：
   - `contract/openapi.yaml`：契约
   - `src/v2/`：http、stream、views、phrases、providers、daemon
-  - `web/`：新网页端（React + Vite）。发布时构建到 `public-next/`，由服务挂在 `/next`。内网部署时不需要再构建，构建产物怎么分发待定（见第 11 节）。
+  - `web/`：新网页端（React + Vite）。`npm install` 时构建到 `public-next/`，由服务挂在 `/`。缺少开发依赖时安装不失败，访问 `/` 会提示运行 `npm run build:web`。
 - `src/kernel/`、`src/core/` 被 v2 复用。需要改的部分，在原位置演进。
 
 ## 10. 迁移阶段
 
-旧接口（`/api/*`）和旧前端（`/`）在迁移期间保持可用；新网页端在 `/next`，功能齐了再把默认切过去。
+旧接口（`/api/*`）在迁移期间保持可用。**阶段 5 第一步已完成（T44-3a）**：默认入口是新网页端（`/`），旧前端挪到 `/legacy` 过渡期保留；`/next/...` 书签 302 到去掉前缀的同一路径。删除旧接口和旧前端是阶段 5 的后续步骤。
 
 | 阶段 | 内容 | 做完能看到什么 |
 |---|---|---|
@@ -174,14 +174,14 @@ Provider {
 | 2 侧栏 | Workspace、ConversationSummary、Subagent，卡住判定，新建和归档对话 | `/next` 可以切换对话、查看子 Agent |
 | 3 右栏 | Change、Diff、FileNode、FileContent，编辑保存 | `/next` 看 diff、浏览和编辑文件 |
 | 4 设置 | Provider（钥匙串，按原型做新界面）、插件、技能、Git 连接、外观 | `/next` 功能和旧端齐平 |
-| 5 收尾 | 默认切到新端；删除旧接口、旧前端和前端推导模块；重写 ARCHITECTURE、DEPLOYMENT 等文档 | 只剩 v2 |
+| 5 收尾 | 默认切到新端；删除旧接口、旧前端和前端推导模块；重写 ARCHITECTURE、DEPLOYMENT 等文档 | 只剩 v2。**第一步已完成**：`/` 是新端，旧端在 `/legacy`，`npm install` 构建新端，`npm start` 打印登录链接；DEPLOYMENT 已改成本地/内网 Windows |
 
-每个阶段拆成若干个小 PR，每个 PR 带单测；e2e 用 Playwright 跑 `/next`。
+每个阶段拆成若干个小 PR，每个 PR 带单测；e2e 用 Playwright 跑新网页端（`/`）。
 
 ## 11. 待定事项
 
-- `web/` 的构建产物怎么分发：是提交进仓库，还是由 CI 打成发布包（影响内网部署方式）。
+- `web/` 的构建产物：内网部署走 `npm install` 当场构建（T44-3a），不提交 `public-next/`。发布包是否另打待定。
 - `@napi-rs/keyring` 在内网镜像和 Windows 上能不能装；装不了时用什么回退。
 - 服务端文案先支持哪几种语言（暂定 zh、en）。
 - 开机自启的设置放在服务端还是客户端（倾向客户端，因为注册系统启动项是平台相关的）。
-- `docs/DEPLOYMENT.md` 还是 fork 时的 Docker/VPS 内容，和"本地服务"的定位不符，阶段 5 重写。
+- `docs/DEPLOYMENT.md` 已在阶段 5 第一步改成本地/内网 Windows 部署。

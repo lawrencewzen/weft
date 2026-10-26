@@ -6,6 +6,7 @@ import {
   createV2Auth,
   generateLocalToken,
   handleNextLogin,
+  resolveStartupCodeTtlMs,
   resolveWebCodeTtlMs,
   type V2Auth,
 } from './auth.ts';
@@ -193,6 +194,7 @@ export type V2Handler = (req: IncomingMessage, res: ServerResponse, url: URL) =>
 export type V2Runtime = {
   handleApi: V2Handler;
   handleLogin: (req: IncomingMessage, res: ServerResponse, url: URL) => boolean;
+  issueStartupLoginUrl: (port: number) => string;
   writeDiscoveryFile: (port: number) => void;
   removeDiscoveryFile: () => void;
   touch: IdleWatcher['touch'];
@@ -1337,6 +1339,10 @@ export function createV2Runtime(opts: {
     handleApi,
     handleLogin(req, res, url) {
       return handleNextLogin(req, res, url, auth);
+    },
+    issueStartupLoginUrl(port: number) {
+      const issued = auth.issueWebCode(resolveStartupCodeTtlMs(opts.env));
+      return `http://127.0.0.1:${port}/auth?code=${encodeURIComponent(issued.code)}`;
     },
     writeDiscoveryFile(port: number) {
       writeDiscoverySync(opts.dataDir, {

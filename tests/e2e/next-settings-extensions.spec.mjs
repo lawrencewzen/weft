@@ -138,7 +138,7 @@ test('git connection tests, imports a project, and never echoes the token', asyn
   await page.getByTestId('next-ws-create').click();
   await expect(wsNode(page, 'widget')).toBeVisible({ timeout: 60_000 });
   await expect(page.getByTestId('next-draft-row')).toBeVisible();
-  await expect(page).toHaveURL(/\/next\/w\/[^/]+\/new/);
+  await expect(page).toHaveURL(/\/w\/[^/]+\/new/);
   await expect(page.getByTestId('next-ws-dialog')).toHaveCount(0);
 
   await openSettingsNav(page, 'git');
@@ -190,7 +190,7 @@ test('local folder browser creates a workspace and refuses out-of-range paths', 
   await page.getByTestId('next-ws-create').click();
   await expect(wsNode(page, '本地样本')).toBeVisible();
   await expect(page.getByTestId('next-draft-row')).toBeVisible();
-  await expect(page).toHaveURL(/\/next\/w\/[^/]+\/new/);
+  await expect(page).toHaveURL(/\/w\/[^/]+\/new/);
 
   await page.getByTestId('next-ws-new').click();
   await page.getByTestId('next-ws-tab-git').click();

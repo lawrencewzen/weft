@@ -166,13 +166,13 @@ test('other conversation chip expands by subscribing and collapses by unsubscrib
     const bId = b.body.id;
 
     await loginNext(page, srv);
-    await page.goto(`${srv.url}/next/c/${encodeURIComponent(bId)}`);
+    await page.goto(`${srv.url}/c/${encodeURIComponent(bId)}`);
     await expect(page.getByTestId('next-thread')).toBeVisible();
     await sendNext(page, '请派子代理');
     await waitSubagentRow(page, bId);
 
     await convRow(page, aId).click();
-    await expect(page).toHaveURL(new RegExp(`/next/c/${aId}$`));
+    await expect(page).toHaveURL(new RegExp(`/c/${aId}$`));
     const chipB = convRow(page, bId).getByTestId('next-subagent-chip');
     await expect(chipB).toBeVisible();
     await expect(chipB).toHaveAttribute('aria-expanded', 'false');
@@ -214,7 +214,7 @@ test('clicking a row opens the sub-agent view; send and stop work; refresh keeps
     const agentId = await row.getAttribute('data-agent-id');
     expect(agentId).toBeTruthy();
     await row.click();
-    await expect(page).toHaveURL(new RegExp(`/next/c/${conv.id}/a/`));
+    await expect(page).toHaveURL(new RegExp(`/c/${conv.id}/a/`));
     await expect(page.getByTestId('next-subagent-view')).toBeVisible();
     await expect(page.getByTestId('next-subagent-back')).toHaveText('返回主对话');
     await expect(page.locator(`[data-testid=next-subagent-row][data-agent-id="${agentId}"]`)).toHaveClass(/is-active/);
@@ -245,7 +245,7 @@ test('clicking a row opens the sub-agent view; send and stop work; refresh keeps
     await expect(page.getByTestId('next-run-status')).toHaveText(/已停止|Stopped|完成|Done/i);
 
     await page.getByTestId('next-subagent-back').click();
-    await expect(page).toHaveURL(new RegExp(`/next/c/${conv.id}$`));
+    await expect(page).toHaveURL(new RegExp(`/c/${conv.id}$`));
     await expect(page.getByTestId('next-subagent-view')).toHaveCount(0);
   } finally {
     await srv.kill();
@@ -272,12 +272,12 @@ test('report open jumps to the matching sub-agent; missing sub-agent shows an er
     const openBtn = card.getByTestId('next-report-open');
     await expect(openBtn).toBeVisible();
     await openBtn.click();
-    await expect(page).toHaveURL(new RegExp(`/next/c/${conv.id}/a/`));
+    await expect(page).toHaveURL(new RegExp(`/c/${conv.id}/a/`));
     await expect(page.getByTestId('next-subagent-view')).toBeVisible();
     await expect(page.getByTestId('next-status')).toContainText(new RegExp(`${REPORT_NAME}|${REPORT_MSG}`));
     await expect(page.getByTestId('next-thread')).toContainText(REPORT_TEXT, { timeout: 15000 });
 
-    await page.goto(`${srv.url}/next/c/${encodeURIComponent(conv.id)}/a/does-not-exist`);
+    await page.goto(`${srv.url}/c/${encodeURIComponent(conv.id)}/a/does-not-exist`);
     await expect(page.getByTestId('next-subagent-view')).toBeVisible();
     await expect(page.getByTestId('next-error')).toHaveText('子 Agent 不存在');
   } finally {

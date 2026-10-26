@@ -18,7 +18,7 @@ Weft 是基于 Pi Durable（`@earendil-works/pi-durable`，作为库嵌入）的
 ## 文档
 - 计划与设计：`docs/PLAN.md`、`docs/ARCHITECTURE.md`、`design/`。接口契约以测试仓库的 `docs/API_CONTRACT.md` 为准。
 - Pi API 以 `node_modules/@earendil-works/*/dist/**/*.d.ts` 和 `node_modules/@earendil-works/pi-durable/README.md` 为准，不凭记忆编 API。
-- v2 目标架构：`docs/ARCHITECTURE_V2.md`（迁移中）。迁移期间旧接口 `/api/*` 和旧前端 `/`（`public/`）保持可用，但不在旧前端上开新功能；新功能做在 `/api/v2` 和 `/next`。
+- v2 目标架构：`docs/ARCHITECTURE_V2.md`（迁移中）。迁移期间旧接口 `/api/*` 保持可用；默认网页端是 `/`（`web/` 构建到 `public-next/`），旧前端在 `/legacy`（`public/`）。新功能做在 `/api/v2` 和新网页端。
 
 ## 分工
 - **编排者（总指挥）**：拆分任务、合并分支、最终亲手验收（默认用测试结果证明，确实需要看画面时另行说明），只有编排者往 `main` 合并。

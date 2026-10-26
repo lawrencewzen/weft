@@ -76,6 +76,13 @@ export function AboutPage({ lang, service }: Props) {
           {t(lang, 'about_runtime_connected')}
         </span>
       </div>
+      <div className="ns-pref-row">
+        <div className="ns-pref-copy">
+          <b>{t(lang, 'about_legacy')}</b>
+          <span>{t(lang, 'about_legacy_note')}</span>
+        </div>
+        <a href="/legacy/" data-testid="next-about-legacy">/legacy</a>
+      </div>
     </div>
   );
 }

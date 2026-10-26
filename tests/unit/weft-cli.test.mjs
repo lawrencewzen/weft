@@ -158,7 +158,7 @@ function parseLoginUrl(stdout) {
   const url = new URL(line);
   assert.equal(url.protocol, 'http:');
   assert.equal(url.hostname, '127.0.0.1');
-  assert.equal(url.pathname, '/next/login');
+  assert.equal(url.pathname, '/auth');
   const code = url.searchParams.get('code');
   assert.ok(code && code.length > 8);
   return { url: line, port: Number(url.port), code };
@@ -258,11 +258,11 @@ test('open --print starts a service, login URL works, and a second open reuses t
 
     const login = await raw({
       port: printed.port,
-      path: `/next/login?code=${encodeURIComponent(printed.code)}`,
+      path: `/auth?code=${encodeURIComponent(printed.code)}`,
       redirect: false,
     });
     assert.equal(login.status, 302, login.text);
-    assert.equal(login.headers.location, '/next/');
+    assert.equal(login.headers.location, '/');
     const setCookie = login.headers['set-cookie'];
     const cookieHeader = Array.isArray(setCookie) ? setCookie[0] : setCookie;
     assert.match(String(cookieHeader), /weft_session=/);
@@ -388,7 +388,7 @@ test('open restarts once when protocol is incompatible then exits 3', { timeout:
     assert.equal(bumped.code, 3, `${bumped.stdout}\n${bumped.stderr}`);
     assert.match(bumped.stderr, /3\.0\.0/);
     assert.match(bumped.stderr, /2\.0\.0|大版本/);
-    assert.equal(bumped.stdout.includes('/next/login'), false);
+    assert.equal(bumped.stdout.includes('/auth?code='), false);
     assertNoSecrets(`${bumped.stdout}\n${bumped.stderr}`, [old.token]);
 
     const startedAt = Date.now();

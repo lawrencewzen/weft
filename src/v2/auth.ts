@@ -4,8 +4,10 @@ import { isSecureRequest, SECURITY_HEADERS, tokensMatch } from '../core/auth.mjs
 
 export const SESSION_COOKIE = 'weft_session';
 export const DEFAULT_WEB_CODE_TTL_MS = 60_000;
+export const DEFAULT_STARTUP_CODE_TTL_MS = 600_000;
 export const MAX_WEB_CODES = 256;
 export const LOGIN_INVALID_MESSAGE = '登录链接无效或已过期，请重新运行 weft open';
+export const NOT_BUILT_HINT = '新版界面未构建，请安装开发依赖后运行 npm run build:web';
 
 const BEARER_PREFIX = 'Bearer ';
 
@@ -19,7 +21,7 @@ export type V2Auth = {
   hasBearer(req: IncomingMessage): boolean;
   hasSession(req: IncomingMessage): boolean;
   isAuthorized(req: IncomingMessage): boolean;
-  issueWebCode(): WebCodeIssue;
+  issueWebCode(ttlMs?: number): WebCodeIssue;
   consumeWebCode(code: string): boolean;
   issueSession(): string;
   dispose(): void;
@@ -29,12 +31,20 @@ export function generateLocalToken(): string {
   return randomBytes(32).toString('base64url');
 }
 
-export function resolveWebCodeTtlMs(env: NodeJS.ProcessEnv = process.env): number {
-  const raw = String(env.WEFT_V2_WEB_CODE_TTL_MS || '').trim();
-  if (!raw) return DEFAULT_WEB_CODE_TTL_MS;
-  const n = Number(raw);
-  if (!Number.isFinite(n) || n < 0) return DEFAULT_WEB_CODE_TTL_MS;
+function resolveTtlMs(raw: string, fallback: number): number {
+  const text = String(raw || '').trim();
+  if (!text) return fallback;
+  const n = Number(text);
+  if (!Number.isFinite(n) || n < 0) return fallback;
   return n;
+}
+
+export function resolveWebCodeTtlMs(env: NodeJS.ProcessEnv = process.env): number {
+  return resolveTtlMs(String(env.WEFT_V2_WEB_CODE_TTL_MS || ''), DEFAULT_WEB_CODE_TTL_MS);
+}
+
+export function resolveStartupCodeTtlMs(env: NodeJS.ProcessEnv = process.env): number {
+  return resolveTtlMs(String(env.WEFT_V2_STARTUP_CODE_TTL_MS || ''), DEFAULT_STARTUP_CODE_TTL_MS);
 }
 
 function cookieValue(req: IncomingMessage, name: string): string {
@@ -120,10 +130,10 @@ export function createV2Auth(opts: {
     isAuthorized(req: IncomingMessage): boolean {
       return hasBearer(req) || hasSession(req);
     },
-    issueWebCode(): WebCodeIssue {
+    issueWebCode(ttlMs?: number): WebCodeIssue {
       pruneWebCodes();
       const code = randomBytes(24).toString('base64url');
-      const expiresAt = now() + ttl;
+      const expiresAt = now() + (ttlMs ?? ttl);
       webCodes.set(code, expiresAt);
       return { code, expiresAt };
     },
@@ -153,7 +163,7 @@ function normalizePath(pathname: string): string {
   return pathname || '/';
 }
 
-/** GET /next/login?code=… — consume a one-time code and set weft_session. */
+/** GET /auth?code=… — consume a one-time code and set weft_session. */
 export function handleNextLogin(
   req: IncomingMessage,
   res: ServerResponse,
@@ -161,7 +171,17 @@ export function handleNextLogin(
   auth: V2Auth,
 ): boolean {
   if ((req.method || 'GET') !== 'GET') return false;
-  if (normalizePath(url.pathname) !== '/next/login') return false;
+  const pathname = normalizePath(url.pathname);
+  if (pathname === '/next/login') {
+    res.writeHead(302, {
+      ...SECURITY_HEADERS,
+      'cache-control': 'no-store',
+      Location: `/auth${url.search || ''}`,
+    });
+    res.end();
+    return true;
+  }
+  if (pathname !== '/auth') return false;
   const code = url.searchParams.get('code') || '';
   if (!auth.consumeWebCode(code)) {
     res.writeHead(401, {
@@ -177,7 +197,7 @@ export function handleNextLogin(
     ...SECURITY_HEADERS,
     'cache-control': 'no-store',
     'Set-Cookie': sessionCookieHeader(sessionId, { secure: isSecureRequest(req) }),
-    Location: '/next/',
+    Location: '/',
   });
   res.end();
   return true;

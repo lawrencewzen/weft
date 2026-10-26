@@ -62,7 +62,7 @@ test('switching language updates UI and server phrases, persists, and old UI fol
     await fs.writeFile(path.join(ws, name), `${name}\n`);
   }
   const { conv } = await openWorkspaceConversation(srv, 'repo', ws);
-  await page.goto(new URL(`/next/c/${encodeURIComponent(conv.id)}`, page.url()).href);
+  await page.goto(new URL(`/c/${encodeURIComponent(conv.id)}`, page.url()).href);
   await expect(page.getByTestId('next-composer-input')).toBeVisible();
   await page.getByTestId('next-composer-input').fill('看看');
   await page.getByTestId('next-send').click();
@@ -91,20 +91,20 @@ test('switching language updates UI and server phrases, persists, and old UI fol
   const stored = await page.evaluate(() => localStorage.getItem('weft_lang'));
   expect(stored).toBe('en');
 
-  await page.goto(new URL('/', page.url()).href);
+  await page.goto(new URL('/legacy/', page.url()).href);
   await expect(page.locator('[data-action=open-settings]')).toHaveText('Settings');
 });
 
 test('dark appearance darkens panes without horizontal scroll; old UI appearance is shared', async ({ page }) => {
   await boot(page);
-  await page.goto(new URL('/', page.url()).href);
+  await page.goto(new URL('/legacy/', page.url()).href);
   await page.locator('[data-action=open-settings]').click();
   await expect(page.locator('.sm')).toBeVisible();
   await page.locator('[data-action=switch-appearance][data-mode=dark]').click();
   await expect(page.locator('html')).toHaveAttribute('data-theme', /dark$/);
   expect(await page.evaluate(() => localStorage.getItem('weft_appearance'))).toBe('dark');
 
-  await page.goto(new URL('/next/', page.url()).href);
+  await page.goto(new URL('/', page.url()).href);
   await expect(page.getByTestId('next-sidebar')).toBeVisible();
   await expect(page.locator('html')).toHaveAttribute('data-theme', /dark$/);
   await expectDark(page.getByTestId('next-sidebar'), 'sidebar');
@@ -139,4 +139,5 @@ test('about page shows the service version, protocol version, and demo flag', as
   await expect(page.getByTestId('next-about-version')).toHaveText(info.serviceVersion);
   await expect(page.getByTestId('next-about-protocol')).toHaveText(info.protocolVersion);
   await expect(page.getByTestId('next-about-demo')).toHaveText('已开启');
+  await expect(page.getByTestId('next-about-legacy')).toHaveAttribute('href', '/legacy/');
 });

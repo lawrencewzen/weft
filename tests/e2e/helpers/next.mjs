@@ -13,8 +13,8 @@ export async function loginNext(page, srv) {
   });
   expect(issued.status).toBe(200);
   const body = await issued.json();
-  await page.goto(`${srv.url}/next/login?code=${encodeURIComponent(body.code)}`);
-  await expect(page).toHaveURL(/\/next\//);
+  await page.goto(`${srv.url}/auth?code=${encodeURIComponent(body.code)}`);
+  await expect(page).not.toHaveURL(/\/auth(?:\?|$)/);
   await expect(page.getByTestId('next-app')).toBeVisible();
   await expect(page.getByTestId('next-sidebar')).toHaveCount(1);
   return discovery;
@@ -30,7 +30,7 @@ export async function openWorkspaceConversation(srv, name, wsPath, title = 'chat
 
 export async function openNextChat(page, srv, convId) {
   await loginNext(page, srv);
-  await page.goto(`${srv.url}/next/c/${encodeURIComponent(convId)}`);
+  await page.goto(`${srv.url}/c/${encodeURIComponent(convId)}`);
   await expect(page.getByTestId('next-thread')).toBeVisible();
   await expect(page.getByTestId('next-composer-input')).toBeVisible();
 }

@@ -70,6 +70,7 @@ import { acquireDataDirLock } from './src/core/lock.mjs';
 import { presentConversationContext } from './src/core/usage.mjs';
 import { openConversationKernel } from './src/kernel/conversations.mjs';
 import { createV2Runtime } from './src/v2/index.ts';
+import { NOT_BUILT_HINT } from './src/v2/auth.ts';
 import { loadSubagentFromStore } from './src/v2/load-subagent.ts';
 import fs from 'node:fs/promises';
 
@@ -83,7 +84,6 @@ if (PROXY_ENV && process.env.NODE_USE_ENV_PROXY !== '1') {
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC = path.join(ROOT, 'public');
 const PUBLIC_NEXT = path.join(ROOT, 'public-next');
-const NEXT_NOT_BUILT = '新网页端还没构建，请运行 npm run build:web';
 const PORT = process.env.PORT !== undefined && process.env.PORT !== '' ? Number(process.env.PORT) : 3000;
 const pkg = JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
 const startedAt = Date.now();
@@ -423,86 +423,102 @@ function sendStaticFile(req, res, fp, type) {
   createReadStream(fp).pipe(res);
 }
 
-function serveStatic(req, res, url) {
+function sendNotBuilt(res) {
+  res.writeHead(404, {
+    ...SECURITY_HEADERS,
+    'content-type': 'text/plain; charset=utf-8',
+    'cache-control': 'no-store',
+  });
+  res.end(NOT_BUILT_HINT);
+}
+
+/** Old bookmarks /next and /next/<path> redirect to the same path without the prefix. */
+function serveNextRedirect(req, res, url) {
+  const pathname = url.pathname;
+  if (pathname !== '/next' && !pathname.startsWith('/next/')) return false;
+  const rest = pathname === '/next' ? '/' : pathname.slice('/next'.length) || '/';
+  const dest = rest.startsWith('/') ? rest : `/${rest}`;
+  res.writeHead(302, {
+    ...SECURITY_HEADERS,
+    'cache-control': 'no-store',
+    Location: `${dest}${url.search || ''}`,
+  });
+  res.end();
+  return true;
+}
+
+/** Old UI at /legacy. Returns true when the request was handled. */
+function serveLegacy(req, res, url) {
+  const pathname = url.pathname;
+  if (pathname === '/legacy') {
+    res.writeHead(302, {
+      ...SECURITY_HEADERS,
+      'cache-control': 'no-store',
+      Location: `/legacy/${url.search || ''}`,
+    });
+    res.end();
+    return true;
+  }
+  if (!pathname.startsWith('/legacy/')) return false;
   if (!existsSync(PUBLIC)) {
     res.writeHead(404, { ...SECURITY_HEADERS });
     res.end('Not found');
-    return;
+    return true;
   }
-  let rel = decodeURIComponent(url.pathname);
+  let rel = decodeURIComponent(pathname.slice('/legacy'.length));
   if (rel === '/') rel = '/index.html';
   const fp = path.resolve(PUBLIC, `.${rel}`);
   if (!fp.startsWith(PUBLIC + path.sep) && fp !== PUBLIC) {
     res.writeHead(403, { ...SECURITY_HEADERS });
     res.end('Forbidden');
-    return;
+    return true;
   }
   if (!existsSync(fp) || !statSync(fp).isFile()) {
     const fallback = path.join(PUBLIC, 'index.html');
     if (rel !== '/index.html' && existsSync(fallback)) {
-      res.writeHead(200, { ...SECURITY_HEADERS, 'content-type': 'text/html; charset=utf-8' });
-      createReadStream(fallback).pipe(res);
-      return;
+      sendStaticFile(req, res, fallback, 'text/html; charset=utf-8');
+      return true;
     }
     res.writeHead(404, { ...SECURITY_HEADERS });
     res.end('Not found');
-    return;
+    return true;
   }
   const type = MIME[path.extname(fp)] || 'application/octet-stream';
-  res.writeHead(200, { ...SECURITY_HEADERS, 'content-type': type });
-  createReadStream(fp).pipe(res);
+  sendStaticFile(req, res, fp, type);
+  return true;
 }
 
-/** New React app at /next. Returns true when the request was handled. */
-function serveNext(req, res, url) {
-  const pathname = url.pathname;
-  if (pathname === '/next') {
-    res.writeHead(302, {
-      ...SECURITY_HEADERS,
-      'cache-control': 'no-store',
-      Location: `/next/${url.search || ''}`,
-    });
-    res.end();
-    return true;
-  }
-  if (!pathname.startsWith('/next/')) return false;
-
+/** New React app at /. */
+function serveNew(req, res, url) {
   if (!existsSync(PUBLIC_NEXT)) {
-    res.writeHead(404, {
-      ...SECURITY_HEADERS,
-      'content-type': 'text/plain; charset=utf-8',
-      'cache-control': 'no-store',
-    });
-    res.end(NEXT_NOT_BUILT);
-    return true;
+    sendNotBuilt(res);
+    return;
   }
 
-  let rel = decodeURIComponent(pathname.slice('/next'.length));
+  let rel = decodeURIComponent(url.pathname);
   if (rel === '/') rel = '/index.html';
   const fp = path.resolve(PUBLIC_NEXT, `.${rel}`);
   if (!fp.startsWith(PUBLIC_NEXT + path.sep) && fp !== PUBLIC_NEXT) {
     res.writeHead(403, { ...SECURITY_HEADERS });
     res.end('Forbidden');
-    return true;
+    return;
   }
   if (existsSync(fp) && statSync(fp).isFile()) {
     const type = MIME[path.extname(fp)] || 'application/octet-stream';
     sendStaticFile(req, res, fp, type);
-    return true;
+    return;
   }
   if (path.extname(rel)) {
     res.writeHead(404, { ...SECURITY_HEADERS });
     res.end('Not found');
-    return true;
+    return;
   }
   const fallback = path.join(PUBLIC_NEXT, 'index.html');
   if (existsSync(fallback) && statSync(fallback).isFile()) {
     sendStaticFile(req, res, fallback, 'text/html; charset=utf-8');
-    return true;
+    return;
   }
-  res.writeHead(404, { ...SECURITY_HEADERS });
-  res.end('Not found');
-  return true;
+  sendNotBuilt(res);
 }
 
 function isSsePath(p) {
@@ -658,8 +674,9 @@ const server = createServer(async (req, res) => {
     }
     if (req.method === 'GET' || req.method === 'HEAD') {
       if (v2.handleLogin(req, res, url)) return;
-      if (serveNext(req, res, url)) return;
-      serveStatic(req, res, url);
+      if (serveNextRedirect(req, res, url)) return;
+      if (serveLegacy(req, res, url)) return;
+      serveNew(req, res, url);
       return;
     }
     sendJson(res, 404, { error: 'not found' });
@@ -1573,5 +1590,6 @@ server.listen(PORT, '127.0.0.1', () => {
   v2.startIdleExit();
   const hostWarning = unauthenticatedHostsWarning();
   if (hostWarning) console.warn(hostWarning);
-  console.log(`WEFT_READY http://127.0.0.1:${port}`);
+  const loginUrl = v2.issueStartupLoginUrl(port);
+  process.stdout.write(`WEFT_READY http://127.0.0.1:${port}\n打开新版界面：${loginUrl}\n`);
 });

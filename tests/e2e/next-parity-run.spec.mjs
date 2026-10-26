@@ -168,7 +168,7 @@ test('interrupt while running, then stop', async ({ page }) => {
 
     const second = await api(srv.url, 'POST', `/workspaces/${workspace.id}/conversations`, { title: 'stop' });
     expect(second.status).toBe(201);
-    await page.goto(`${srv.url}/next/c/${encodeURIComponent(second.body.id)}`);
+    await page.goto(`${srv.url}/c/${encodeURIComponent(second.body.id)}`);
     await expect(page.getByTestId('next-composer-input')).toBeVisible();
     await sendNext(page, 'run again');
     await expect(runStatus(page)).toHaveText(/运行中|Running/i);
@@ -272,7 +272,7 @@ test('kill -9 server mid-task, restart -> resumes to done without duplicate writ
 
     srv = await startServer({ script: 'crash.json', dataDir, port, extraEnv: { WEFT_WORKSPACE_ROOT: root } });
     await loginNext(page, srv);
-    await page.goto(`${srv.url}/next/c/${encodeURIComponent(conv.id)}`);
+    await page.goto(`${srv.url}/c/${encodeURIComponent(conv.id)}`);
     await expect(page.getByTestId('next-thread')).toBeVisible();
     await expect(runStatus(page)).toHaveText(/运行中|完成|Running|Done/i, { timeout: 10000 });
     await waitRunDone(page, 30000);

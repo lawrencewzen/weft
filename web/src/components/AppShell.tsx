@@ -260,7 +260,7 @@ function AppShellLayout({
       return;
     }
     writeActiveWorkspace(null);
-    navigate('/next/', { replace: true });
+    navigate('/', { replace: true });
   }, [activeConversationId, conversations, draftWorkspaceId, groups, workspaces]);
 
   function onDividerDown(ev: MouseEvent<HTMLDivElement>, side: 'left' | 'right') {

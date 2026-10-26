@@ -2,7 +2,7 @@ import type { Lang } from './data/lang';
 
 const zh = {
   home_title: 'Weft（新版，开发中）',
-  home_hint: '从旧版打开一个对话，或访问 /next/c/<对话 id>',
+  home_hint: '从侧栏打开一个对话，或访问 /c/<对话 id>',
   no_workspaces: '点左栏「项目」旁的 + 新建工作区',
   missing_conversation: '对话不存在',
   unauthenticated: '请用 weft open 打开新版网页端',
@@ -269,6 +269,8 @@ const zh = {
   about_upstream: '上游项目',
   about_runtime: '运行时',
   about_runtime_connected: 'Pi Durable Runtime 已连接',
+  about_legacy: '旧版界面',
+  about_legacy_note: '/legacy（过渡期保留）',
   git_title: 'Git',
   git_aside: '用于导入仓库',
   git_lead: '连接后，新建工作区可以从项目列表里选，不用手贴地址。',
@@ -409,7 +411,7 @@ const zh = {
 
 const en: Record<keyof typeof zh, string> = {
   home_title: 'Weft（新版，开发中）',
-  home_hint: 'Open a conversation from the old UI, or visit /next/c/<conversation id>',
+  home_hint: 'Open a conversation from the sidebar, or visit /c/<conversation id>',
   no_workspaces: 'Use + next to Projects to add a workspace',
   missing_conversation: 'Conversation not found',
   unauthenticated: '请用 weft open 打开新版网页端',
@@ -676,6 +678,8 @@ const en: Record<keyof typeof zh, string> = {
   about_upstream: 'Upstream project',
   about_runtime: 'Runtime',
   about_runtime_connected: 'Pi Durable Runtime connected',
+  about_legacy: 'Legacy UI',
+  about_legacy_note: '/legacy (kept during the transition)',
   git_title: 'Git',
   git_aside: 'For importing repositories',
   git_lead: 'After you connect, a new workspace can pick a project from the list instead of pasting a URL.',

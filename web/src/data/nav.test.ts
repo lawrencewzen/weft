@@ -6,20 +6,20 @@ import { closeSettings, rememberSettingsBehind } from './nav';
 describe('closeSettings', () => {
   afterEach(() => {
     rememberSettingsBehind(null);
-    window.history.replaceState(null, '', '/next/');
+    window.history.replaceState(null, '', '/');
     vi.restoreAllMocks();
   });
 
-  it('returns to the remembered page when /next/settings was opened directly', () => {
-    window.history.replaceState(null, '', '/next/settings/providers');
-    rememberSettingsBehind('/next/w/ws1/new');
+  it('returns to the remembered page when /settings was opened directly', () => {
+    window.history.replaceState(null, '', '/settings/providers');
+    rememberSettingsBehind('/w/ws1/new');
     closeSettings();
-    expect(window.location.pathname).toBe('/next/w/ws1/new');
+    expect(window.location.pathname).toBe('/w/ws1/new');
   });
 
   it('uses history.back when settings was opened from the app', () => {
     const back = vi.spyOn(window.history, 'back').mockImplementation(() => {});
-    window.history.replaceState({ weftSettings: true }, '', '/next/settings/general');
+    window.history.replaceState({ weftSettings: true }, '', '/settings/general');
     closeSettings();
     expect(back).toHaveBeenCalledTimes(1);
   });

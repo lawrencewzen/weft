@@ -74,7 +74,7 @@ test('draft model choice is saved on the conversation', async ({ page }) => {
     const { ws } = await openWorkspaceConversation(srv, 'draft-model', prepared.dirs[0], 'existing');
     const { id: sourceId } = await createProviderModels(srv);
     await loginNext(page, srv);
-    await page.goto(`${srv.url}/next/w/${encodeURIComponent(ws.id)}/new`);
+    await page.goto(`${srv.url}/w/${encodeURIComponent(ws.id)}/new`);
     await expect(page.getByTestId('next-composer-input')).toBeVisible();
     await expect(page.getByTestId('next-model-chip')).toContainText('Grok 4.6');
 
@@ -83,11 +83,11 @@ test('draft model choice is saved on the conversation', async ({ page }) => {
     await expect(page.getByTestId('next-model-chip')).toContainText('Grok 4');
 
     await sendNext(page, 'hello');
-    await expect(page).toHaveURL(/\/next\/c\/[^/]+$/, { timeout: 20000 });
+    await expect(page).toHaveURL(/\/c\/[^/]+$/, { timeout: 20000 });
     await waitRunDone(page);
     await expect(page.getByTestId('next-model-chip')).toContainText('Grok 4');
 
-    const cid = page.url().split('/next/c/')[1];
+    const cid = page.url().split('/c/')[1];
     const created = await apiV2(srv, 'GET', `/api/v2/conversations/${decodeURIComponent(cid)}`);
     expect(created.status).toBe(200);
     expect(created.body.conversation.model.sourceId).toBe(sourceId);
@@ -301,7 +301,7 @@ test('manage models opens the Provider settings overlay', async ({ page }) => {
     await expect(page.getByTestId('next-model-menu')).toBeHidden();
     await expect(page.getByTestId('next-settings')).toBeVisible();
     await expect(page.getByTestId('next-settings-nav-providers')).toHaveClass(/is-on/);
-    await expect(page).toHaveURL(/\/next\/settings\/providers$/);
+    await expect(page).toHaveURL(/\/settings\/providers$/);
   } finally {
     await srv.kill();
   }

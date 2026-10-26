@@ -7,6 +7,12 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { PROTOCOL_VERSION } from '../../src/v2/version.ts';
+import {
+  createV2Auth,
+  generateLocalToken,
+  DEFAULT_STARTUP_CODE_TTL_MS,
+  LOGIN_INVALID_MESSAGE,
+} from '../../src/v2/auth.ts';
 import { compileSchema, validateResponse } from '../../src/v2/validate.ts';
 import {
   discoveryPath,
@@ -195,10 +201,10 @@ test('web-code is bearer-only, one-shot, and exchanges for a session cookie', as
 
     const login = await raw({
       port: srv.port,
-      path: `/next/login?code=${encodeURIComponent(issued.json.code)}`,
+      path: `/auth?code=${encodeURIComponent(issued.json.code)}`,
     });
     assert.equal(login.status, 302);
-    assert.equal(login.headers.location, '/next/');
+    assert.equal(login.headers.location, '/');
     const setCookie = login.headers['set-cookie'];
     const cookie = parseSetCookie(Array.isArray(setCookie) ? setCookie[0] : setCookie);
     assert.equal(cookie.name, 'weft_session');
@@ -224,7 +230,7 @@ test('web-code is bearer-only, one-shot, and exchanges for a session cookie', as
 
     const reused = await raw({
       port: srv.port,
-      path: `/next/login?code=${encodeURIComponent(issued.json.code)}`,
+      path: `/auth?code=${encodeURIComponent(issued.json.code)}`,
     });
     assert.equal(reused.status, 401);
     assert.match(reused.headers['content-type'] || '', /text\/plain/);
@@ -250,12 +256,132 @@ test('expired web-code cannot be exchanged for a cookie', async () => {
     await sleep(50);
     const login = await raw({
       port: srv.port,
-      path: `/next/login?code=${encodeURIComponent(issued.json.code)}`,
+      path: `/auth?code=${encodeURIComponent(issued.json.code)}`,
     });
     assert.equal(login.status, 401);
     assert.equal(login.text, '登录链接无效或已过期，请重新运行 weft open');
   } finally {
     await stopServer(srv);
+  }
+});
+
+async function waitStartupLogin(srv, timeoutMs = 2000) {
+  const started = Date.now();
+  while (Date.now() - started < timeoutMs) {
+    const match = srv.logs().match(/打开新版界面：(http:\/\/127\.0\.0\.1:\d+\/auth\?code=\S+)/);
+    if (match) {
+      const url = new URL(match[1]);
+      const code = url.searchParams.get('code');
+      assert.ok(code);
+      return { href: match[1], port: Number(url.port), code };
+    }
+    await sleep(20);
+  }
+  assert.fail(`missing startup login line:\n${srv.logs()}`);
+}
+
+test('startup login line is printed once after WEFT_READY and the code logs in', async () => {
+  const srv = await startServer();
+  try {
+    const printed = await waitStartupLogin(srv);
+    const log = srv.logs();
+    assert.match(log, /WEFT_READY http:\/\/127\.0\.0\.1:\d+/);
+    const readyIdx = log.indexOf('WEFT_READY ');
+    const loginIdx = log.indexOf('打开新版界面：');
+    assert.ok(readyIdx >= 0 && loginIdx > readyIdx);
+    assert.equal(log.split('打开新版界面：').length - 1, 1);
+
+    const login = await raw({
+      port: srv.port,
+      path: `/auth?code=${encodeURIComponent(printed.code)}`,
+    });
+    assert.equal(login.status, 302);
+    assert.equal(login.headers.location, '/');
+    const setCookie = login.headers['set-cookie'];
+    const cookie = parseSetCookie(Array.isArray(setCookie) ? setCookie[0] : setCookie);
+    assert.equal(cookie.name, 'weft_session');
+    assert.ok(cookie.value);
+
+    const withCookie = await getService(srv.port, { cookie: `weft_session=${cookie.value}` });
+    assert.equal(withCookie.status, 200);
+
+    const reused = await raw({
+      port: srv.port,
+      path: `/auth?code=${encodeURIComponent(printed.code)}`,
+    });
+    assert.equal(reused.status, 401);
+    assert.equal(reused.text, LOGIN_INVALID_MESSAGE);
+  } finally {
+    await stopServer(srv);
+  }
+});
+
+test('startup login code expires on its own ttl, not the 60s weft-open ttl', async () => {
+  const srv = await startServer({
+    env: { WEFT_V2_STARTUP_CODE_TTL_MS: '20', WEFT_V2_WEB_CODE_TTL_MS: '60000' },
+  });
+  try {
+    const printed = await waitStartupLogin(srv);
+    await sleep(50);
+    const login = await raw({
+      port: srv.port,
+      path: `/auth?code=${encodeURIComponent(printed.code)}`,
+    });
+    assert.equal(login.status, 401);
+    assert.equal(login.text, LOGIN_INVALID_MESSAGE);
+  } finally {
+    await stopServer(srv);
+  }
+});
+
+test('GET /next/login?code= redirects to /auth without consuming the code', async () => {
+  const srv = await startServer();
+  try {
+    const discovery = await readDiscovery(srv.dataDir);
+    const issued = await raw({
+      port: srv.port,
+      method: 'POST',
+      path: '/api/v2/auth/web-code',
+      headers: { authorization: `Bearer ${discovery.token}`, 'content-type': 'application/json' },
+      body: '{}',
+    });
+    assert.equal(issued.status, 200);
+    const bounce = await raw({
+      port: srv.port,
+      path: `/next/login?code=${encodeURIComponent(issued.json.code)}`,
+    });
+    assert.equal(bounce.status, 302);
+    assert.equal(bounce.headers.location, `/auth?code=${encodeURIComponent(issued.json.code)}`);
+    assert.equal(bounce.headers['set-cookie'], undefined);
+    const login = await raw({
+      port: srv.port,
+      path: bounce.headers.location,
+    });
+    assert.equal(login.status, 302);
+    assert.equal(login.headers.location, '/');
+  } finally {
+    await stopServer(srv);
+  }
+});
+
+test('issueWebCode ttl override is independent of the default 60s weft-open ttl', () => {
+  let now = 1_000_000;
+  const auth = createV2Auth({
+    localToken: generateLocalToken(),
+    now: () => now,
+    webCodeTtlMs: 60_000,
+  });
+  try {
+    const startup = auth.issueWebCode(DEFAULT_STARTUP_CODE_TTL_MS);
+    const short = auth.issueWebCode();
+    now += 60_001;
+    assert.equal(auth.consumeWebCode(short.code), false);
+    assert.equal(auth.consumeWebCode(startup.code), true);
+    const late = auth.issueWebCode(DEFAULT_STARTUP_CODE_TTL_MS);
+    now += DEFAULT_STARTUP_CODE_TTL_MS + 1;
+    assert.equal(auth.consumeWebCode(late.code), false);
+  } finally {
+    auth.dispose();
   }
 });
 
