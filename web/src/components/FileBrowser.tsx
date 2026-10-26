@@ -109,7 +109,12 @@ function FileEditor({ lang }: { lang: Lang }) {
               {t(lang, 'btn_preview')}
             </button>
           ) : (
-            <button type="button" className="btn btn-sm" onClick={() => setEditorMode('edit')}>
+            <button
+              type="button"
+              className="btn btn-sm"
+              data-testid="next-file-open-editor"
+              onClick={() => setEditorMode('edit')}
+            >
               {t(lang, 'btn_edit')}
             </button>
           )}

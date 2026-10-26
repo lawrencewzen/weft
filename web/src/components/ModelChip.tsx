@@ -95,7 +95,7 @@ export function ModelChip({ lang, selected, groups, onPick, onManage }: Props) {
           ))}
           <div className="model-menu-foot">
             <span>{t(lang, 'model_only_this_chat')}</span>
-            <span className="model-menu-dot"> · </span>
+            <span className="model-menu-dot" aria-hidden="true">{' · '}</span>
             <button
               type="button"
               className="model-menu-manage"

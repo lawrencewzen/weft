@@ -178,9 +178,10 @@ test('local folder browser creates a workspace and refuses out-of-range paths', 
   await alpha.getByTestId('next-dir-choose').click();
   await expect(page.getByTestId('next-ws-path')).toHaveValue(prepared.dirs[0]);
   await expect(page.getByTestId('next-ws-name')).toHaveValue('alpha');
+  await expect(alpha).toHaveClass(/is-on/);
   await page.getByTestId('next-ws-name').fill('本地样本');
 
-  await alpha.click();
+  await alpha.locator('.ns-dir-name').click();
   await expect(page.getByTestId('next-dir-up')).toBeVisible();
   await page.getByTestId('next-dir-up').click();
   await expect(page.getByTestId('next-dir-up')).toHaveCount(0);

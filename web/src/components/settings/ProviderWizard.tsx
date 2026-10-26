@@ -418,7 +418,6 @@ export function ProviderWizard({
                         </div>
                       </details>
                     </div>
-                    <div className="ns-form-split" />
                     <div className="ns-test-col">
                       <TestPanel
                         lang={lang}

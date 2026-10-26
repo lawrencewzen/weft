@@ -91,6 +91,8 @@ test('FL-2 files tab opens the written markdown', async ({ page }) => {
     await expect(page.locator('[data-testid=next-file-node][data-path="notes"]')).toBeVisible({ timeout: 15000 });
     await (await revealFile(page, 'notes/today.md')).click();
     await expect(page.getByTestId('next-file-view')).toContainText('QA-FILE-1');
+    await expect(page.getByTestId('next-file-open-editor')).toHaveCount(1);
+    await expect(page.locator('.tabs-actions')).not.toContainText(/编辑|Edit/);
   } finally {
     await srv.kill();
   }
@@ -169,6 +171,90 @@ test('FL-4 tool results refresh the file tree while still running', async ({ pag
     await expect(page.locator('[data-testid=next-file-node][data-path="live/qa-file-bash.txt"]')).toBeVisible();
     await expect(await fs.readFile(path.join(wsDir, 'live/qa-file-live.txt'), 'utf8')).toContain('QA-LIVE-1');
     await expect(await fs.readFile(path.join(wsDir, 'live/qa-file-bash.txt'), 'utf8')).toContain('QA-LIVE-BASH');
+  } finally {
+    await srv.kill();
+  }
+});
+
+test('FL-5 reverting a new file to the empty baseline drops it from the changes list', async ({ page }) => {
+  const { srv } = await boot(page, {}, [
+    { tool: 'write', args: { path: 'notes/today.md', content: '今日\nQA-FILE-1\n' } },
+    { text: '写好了。' },
+  ]);
+  try {
+    await sendNext(page, '写 notes/today.md');
+    await waitRunDone(page);
+    await page.getByTestId('next-right-tab-changes').click();
+    const row = page.locator('[data-testid=next-change-row][data-path="notes/today.md"]');
+    await expect(row).toBeVisible({ timeout: 15000 });
+    await expect(row.locator('.stat-add')).not.toHaveText('+0');
+
+    await page.getByTestId('next-right-tab-files').click();
+    await (await revealFile(page, 'notes/today.md')).click();
+    await page.getByTestId('next-file-open-editor').click();
+    const editor = page.getByTestId('next-file-editor').locator('textarea');
+    await expect(editor).toBeVisible();
+    await editor.fill('');
+    await page.getByTestId('next-file-save').click();
+    await expect(page.getByTestId('next-toast')).toContainText(/已保存|Saved/);
+
+    await page.getByTestId('next-right-tab-changes').click();
+    await expect(row).toHaveCount(0, { timeout: 15000 });
+    await expect(page.getByTestId('next-right-tab-changes').locator('.tab-stat')).toHaveCount(0);
+    await expect(page.getByTestId('next-right')).toContainText(/暂无变更|No changes yet|无变更|No changes/);
+  } finally {
+    await srv.kill();
+  }
+});
+
+async function ellipsisBox(locator) {
+  return locator.evaluate((el) => {
+    const style = getComputedStyle(el);
+    return {
+      textOverflow: style.textOverflow,
+      overflow: style.overflow,
+      whiteSpace: style.whiteSpace,
+      scrollWidth: el.scrollWidth,
+      clientWidth: el.clientWidth,
+    };
+  });
+}
+
+test('FL-6 long filenames truncate with a full-path title in changes and the file tree', async ({ page }) => {
+  const longName = 'test_long_filename_confirmation.py';
+  const { srv } = await boot(page, {}, [
+    { tool: 'write', args: { path: longName, content: 'print("ok")\n' } },
+    { text: '写好了。' },
+  ]);
+  try {
+    await sendNext(page, `写 ${longName}`);
+    await waitRunDone(page);
+    await page.locator('.col-right').evaluate((el) => { el.style.width = '240px'; });
+
+    await page.getByTestId('next-right-tab-changes').click();
+    const changeRow = page.locator(`[data-testid=next-change-row][data-path="${longName}"]`);
+    await expect(changeRow).toBeVisible({ timeout: 15000 });
+    await expect(changeRow.locator('.changed-file-pill')).toHaveAttribute('title', longName);
+    const changeName = changeRow.locator('.changed-file-path');
+    const changeBox = await ellipsisBox(changeName);
+    expect(changeBox.textOverflow).toBe('ellipsis');
+    expect(changeBox.whiteSpace).toBe('nowrap');
+    expect(changeBox.scrollWidth).toBeGreaterThan(changeBox.clientWidth);
+
+    await page.getByTestId('next-right-tab-files').click();
+    const fileNode = await revealFile(page, longName);
+    await expect(fileNode).toHaveAttribute('title', longName);
+    const treeName = fileNode.locator('.file-tree-name');
+    const treeBox = await ellipsisBox(treeName);
+    expect(treeBox.textOverflow).toBe('ellipsis');
+    expect(treeBox.whiteSpace).toBe('nowrap');
+    expect(treeBox.scrollWidth).toBeGreaterThan(treeBox.clientWidth);
+
+    const treeScroll = await page.getByTestId('next-file-tree').evaluate((el) => ({
+      scrollWidth: el.scrollWidth,
+      clientWidth: el.clientWidth,
+    }));
+    expect(treeScroll.scrollWidth).toBeLessThanOrEqual(treeScroll.clientWidth + 1);
   } finally {
     await srv.kill();
   }

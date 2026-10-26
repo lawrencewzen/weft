@@ -81,6 +81,21 @@ function modelLeaf(modelId: unknown): string {
   return parts[parts.length - 1] || text;
 }
 
+/**
+ * True when pretty-printed remainder already begins with the brand id or title
+ * (e.g. "Qwen3" starts with "Qwen"). Exact brand tokens are stripped earlier
+ * and still get the official title prepended ("DeepSeek Chat").
+ */
+function restStartsWithBrand(rest: string, brand: BrandRecord): boolean {
+  const first = (rest.split(/\s+/)[0] || '').toLowerCase();
+  if (!first) return false;
+  for (const value of [brand.id, brand.title]) {
+    const key = String(value || '').trim().toLowerCase();
+    if (key.length > 1 && first.startsWith(key)) return true;
+  }
+  return false;
+}
+
 /** Same matching rules as public/brand-icons.js `createBrandIcons`. */
 export function createBrandIcons(data: BrandData | null | undefined): BrandIcons {
   const brands = Array.isArray(data?.brands) ? data.brands : [];
@@ -145,7 +160,9 @@ export function createBrandIcons(data: BrandData | null | undefined): BrandIcons
       .map(prettyToken)
       .join(' ');
     const name = brand.title || brand.id;
-    return rest ? `${name} ${rest}` : name;
+    if (!rest) return name;
+    if (restStartsWithBrand(rest, brand)) return rest;
+    return `${name} ${rest}`;
   }
 
   return { brandForModel, brandForProvider, iconUrl, displayName };

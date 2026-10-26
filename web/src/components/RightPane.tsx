@@ -1,5 +1,5 @@
 import type { Lang } from '../data/lang';
-import { isMarkdownFile, useRightPane } from '../data/rightPaneContext';
+import { useRightPane } from '../data/rightPaneContext';
 import { t } from '../i18n';
 import { ChangesPane } from './ChangesPane';
 import { FileBrowser } from './FileBrowser';
@@ -16,12 +16,7 @@ export function RightPane({ lang, workspaceLabel }: Props) {
     setOpen,
     totals,
     hasChanges,
-    activeFilePath,
-    editorMode,
-    setEditorMode,
   } = useRightPane();
-  const md = isMarkdownFile(activeFilePath) && tab === 'files';
-  const showEdit = md && editorMode !== 'edit';
 
   return (
     <aside className="col-right" data-testid="next-right">
@@ -53,17 +48,6 @@ export function RightPane({ lang, workspaceLabel }: Props) {
           </button>
         </nav>
         <div className="tabs-actions">
-          {showEdit ? (
-            <button
-              type="button"
-              className="tab-action-icon"
-              data-testid="next-file-open-editor"
-              title={t(lang, 'btn_edit')}
-              onClick={() => setEditorMode('edit')}
-            >
-              {t(lang, 'btn_edit')}
-            </button>
-          ) : null}
           <button
             type="button"
             className="icon-btn"

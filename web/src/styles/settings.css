@@ -8,7 +8,7 @@
   justify-content: center;
   padding: 24px;
 }
-.next-settings {
+.next-settings, .ns-ws-dialog {
   --ns-ink: var(--ink);
   --ns-mute: var(--mute);
   --ns-mute2: var(--ink3);
@@ -32,6 +32,8 @@
   --ns-tag-key-bg: var(--sub2);
   --ns-tag-key: var(--ink3);
   --ns-icon-bd: var(--line);
+}
+.next-settings {
   width: min(1140px, 96vw);
   height: min(800px, 92vh);
   background: var(--panel);
@@ -337,7 +339,7 @@
   background: var(--panel);
   border: 1px solid var(--ns-line);
   border-radius: 10px;
-  box-shadow: 0 8px 28px rgba(0, 0, 0, .12);
+  box-shadow: var(--shadow-raise);
   padding: 6px;
 }
 .ns-pop-item {
@@ -437,15 +439,21 @@
 }
 .ns-form-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.15fr) 1px minmax(220px, .85fr);
-  column-gap: 22px;
+  grid-template-columns: 1fr 1fr;
+  column-gap: 36px;
   width: 100%;
   flex: 1;
   align-items: start;
 }
-.ns-form-main { min-width: 0; }
-.ns-form-split { background: var(--ns-icon-bd); }
-.ns-test-col { min-width: 0; }
+.ns-form-main { min-width: 0; width: 100%; }
+.ns-form-main .ns-key-wrap,
+.ns-form-main .ns-input,
+.ns-form-main .ns-key { width: 100%; }
+.ns-test-col {
+  min-width: 0;
+  border-left: 1px solid var(--line2);
+  padding-left: 36px;
+}
 .ns-test-panel h3 {
   margin: 0 0 10px;
   font-size: 13px;
@@ -721,7 +729,8 @@
   overflow: auto; min-height: 0; flex: 1 1 auto; display: flex; flex-direction: column; gap: 12px;
 }
 .ns-dir-browser {
-  border: 1px solid var(--ns-line2); border-radius: 8px; overflow: hidden; display: flex; flex-direction: column;
+  border: 1px solid var(--ns-line); border-radius: 8px; overflow: hidden; display: flex; flex-direction: column;
+  background: var(--panel);
 }
 .ns-dir-bar {
   display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-bottom: 1px solid var(--ns-line2);
@@ -731,18 +740,29 @@
 .ns-dir-list { max-height: 220px; overflow: auto; }
 .ns-dir-row {
   width: 100%; text-align: left; border: 0; border-top: 1px solid var(--ns-line2); background: transparent;
-  padding: 8px 12px; display: flex; align-items: center; gap: 8px; cursor: pointer;
+  padding: 6px 10px 6px 12px; display: flex; align-items: center; gap: 8px;
 }
 .ns-dir-row:first-child { border-top: 0; }
-.ns-dir-row:hover, .ns-dir-row.is-on { background: var(--ns-bg); }
-.ns-dir-row span:first-child { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.ns-dir-pick { font-size: 11px; color: var(--ns-mute2); }
+.ns-dir-row:hover { background: var(--ns-bg); }
+.ns-dir-row.is-on { background: var(--ns-nav-on); }
+.ns-dir-name {
+  flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  border: 0; background: transparent; text-align: left; cursor: pointer; color: inherit;
+  font: inherit; padding: 2px 0;
+}
+.ns-dir-pick {
+  flex-shrink: 0; height: 24px; padding: 0 8px; border: 1px solid var(--ns-line); border-radius: 6px;
+  background: var(--panel); font-size: 12px; color: var(--ns-ink); cursor: pointer;
+}
+.ns-dir-pick:hover { background: var(--ns-bg); }
 .ns-dir-empty { padding: 22px 16px; text-align: center; color: var(--ns-mute2); line-height: 1.6; }
 .ns-pick { position: relative; }
 .ns-pick-btn {
-  width: 100%; height: 32px; padding: 0 10px; border-radius: 6px; border: 1px solid var(--ns-line);
-  background: var(--ns-bg); display: flex; align-items: center; gap: 8px; text-align: left; cursor: pointer;
+  width: 100%; height: 34px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--ns-line);
+  background: var(--panel); display: flex; align-items: center; gap: 8px; text-align: left; cursor: pointer;
+  color: var(--ns-ink); font-size: 13px;
 }
+.ns-pick-btn:hover { background: var(--ns-bg); }
 .ns-pick-main { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ns-pick-from { color: var(--ns-mute); font-size: 12px; }
 .ns-pop-in {
@@ -768,7 +788,11 @@
     display: flex; flex-direction: column;
   }
   .ns-form { padding-left: 0; padding-top: 12px; }
-  .ns-connect-split, .ns-form-split { height: 1px; width: 100%; }
+  .ns-connect-split { height: 1px; width: 100%; }
+  .ns-test-col {
+    border-left: none; padding-left: 0;
+    border-top: 1px solid var(--line2); padding-top: 36px;
+  }
   .ns-card-grid { grid-template-columns: 1fr; }
   .ns-git-row { grid-template-columns: 16px minmax(0, 1fr); }
   .ns-git-acts { grid-column: 1 / -1; justify-content: flex-end; }
