@@ -20,10 +20,3 @@ jobs:
       - name: Unit tests
         shell: bash
         run: node --test tests/unit/*.test.mjs
-      - name: Repeat v2-changes (T43-1 flake probe)
-        shell: bash
-        run: |
-          for i in 1 2 3 4 5; do
-            echo "v2-changes probe $i"
-            node --test tests/unit/v2-changes.test.mjs
-          done
