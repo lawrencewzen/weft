@@ -44,6 +44,7 @@ type Props = {
   onToast: (message: string) => void;
   onConfirm: (opts: ConfirmOpts) => Promise<boolean>;
   onRemoveWorkspace: (workspaceId: string) => Promise<void>;
+  onNewWorkspace: () => void;
 };
 
 const CHEV = (
@@ -70,6 +71,7 @@ export function Sidebar({
   onToast,
   onConfirm,
   onRemoveWorkspace,
+  onNewWorkspace,
 }: Props) {
   const { groups } = useWorkspaces();
   const { store, setExtraConversationIds } = useSession();
@@ -103,6 +105,17 @@ export function Sidebar({
     setOpenIds(next);
     writeOpenWorkspaces(next);
   }, []);
+
+  useEffect(() => {
+    if (!draftWorkspaceId) return;
+    setOpenIds((prev) => {
+      if (prev.has(draftWorkspaceId)) return prev;
+      const next = new Set(prev);
+      next.add(draftWorkspaceId);
+      writeOpenWorkspaces(next);
+      return next;
+    });
+  }, [draftWorkspaceId]);
 
   const treeCollapsed = useCallback((cid: string) => {
     if (cid === activeConversationId) return collapsedTrees.has(cid);
@@ -187,6 +200,7 @@ export function Sidebar({
   }, [lang, onConfirm, onRemoveWorkspace, onToast, openIds, persistOpen]);
 
   const projectItems = useCallback((ws: Workspace): CtxMenuItem[] => [
+    { label: t(lang, 'new_workspace'), action: 'new-workspace', run: () => onNewWorkspace() },
     { label: t(lang, 'new_conversation'), action: 'new-conversation', run: () => startDraft(ws.id) },
     { label: t(lang, 'copy_path'), action: 'copy-path', run: () => { void copy(ws.path || ''); } },
     {
@@ -209,7 +223,7 @@ export function Sidebar({
       danger: true,
       run: () => { void removeWorkspace(ws); },
     },
-  ], [activeWorkspaceId, copy, groups, lang, removeWorkspace, showFiles, startDraft]);
+  ], [activeWorkspaceId, copy, groups, lang, onNewWorkspace, removeWorkspace, showFiles, startDraft]);
 
   const conversationItems = useCallback((wsId: string, conv: ConversationSummary): CtxMenuItem[] => {
     const items: CtxMenuItem[] = [];
@@ -292,6 +306,16 @@ export function Sidebar({
       <div className="left-body">
         <div className="left-section-label">
           <span>{t(lang, 'projects_label')}</span>
+          <button
+            type="button"
+            className="btn-icon-xs"
+            data-testid="next-ws-new"
+            title={t(lang, 'new_workspace')}
+            aria-label={t(lang, 'new_workspace')}
+            onClick={onNewWorkspace}
+          >
+            +
+          </button>
         </div>
         <div className="tree-root">
           {groups.map((group) => {

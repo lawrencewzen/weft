@@ -32,6 +32,24 @@ export type GrokLoginStart = components['schemas']['GrokLoginStart'];
 export type GrokLoginPollResult = components['schemas']['GrokLoginPollResult'];
 export type GrokLoginPollRequest = components['schemas']['GrokLoginPollRequest'];
 export type GrokLoginCancelRequest = components['schemas']['GrokLoginCancelRequest'];
+export type CreateWorkspaceRequest = components['schemas']['CreateWorkspaceRequest'];
+export type Workspace = components['schemas']['Workspace'];
+export type WorkspaceRoot = components['schemas']['WorkspaceRoot'];
+export type WorkspaceDirs = components['schemas']['WorkspaceDirs'];
+export type Plugin = components['schemas']['Plugin'];
+export type PluginList = components['schemas']['PluginList'];
+export type InstallPluginRequest = components['schemas']['InstallPluginRequest'];
+export type PatchPluginRequest = components['schemas']['PatchPluginRequest'];
+export type Skill = components['schemas']['Skill'];
+export type SkillList = components['schemas']['SkillList'];
+export type SkillWriteRequest = components['schemas']['SkillWriteRequest'];
+export type GitConnection = components['schemas']['GitConnection'];
+export type GitConnectionList = components['schemas']['GitConnectionList'];
+export type GitConnectionWrite = components['schemas']['GitConnectionWrite'];
+export type GitTestResult = components['schemas']['GitTestResult'];
+export type GitProjectList = components['schemas']['GitProjectList'];
+export type GitBranchList = components['schemas']['GitBranchList'];
+export type OkId = components['schemas']['OkId'];
 
 export class ApiError extends Error {
   readonly status: number;
@@ -361,6 +379,126 @@ export function cancelGrokLogin(loginId?: string): Promise<GrokSession> {
 export function logoutGrok(): Promise<GrokSession> {
   return requestJson<GrokSession>('/api/v2/providers/grok/logout', {
     method: 'POST',
+    body: '{}',
+  });
+}
+
+export function createWorkspace(body: CreateWorkspaceRequest, lang?: string): Promise<Workspace> {
+  return requestJson<Workspace>(withLang('/api/v2/workspaces', lang), {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+export function getWorkspaceRoot(lang?: string): Promise<WorkspaceRoot> {
+  return requestJson<WorkspaceRoot>(withLang('/api/v2/workspace-root', lang));
+}
+
+export function listWorkspaceDirs(dirPath?: string, lang?: string): Promise<WorkspaceDirs> {
+  const params = new URLSearchParams();
+  if (dirPath) params.set('path', dirPath);
+  if (lang) params.set('lang', lang);
+  const query = params.toString();
+  return requestJson<WorkspaceDirs>(`/api/v2/workspace-root/dirs${query ? `?${query}` : ''}`);
+}
+
+function gitPath(id?: string, suffix = ''): string {
+  if (!id) return `/api/v2/git/connections${suffix}`;
+  return `/api/v2/git/connections/${encodeURIComponent(id)}${suffix}`;
+}
+
+export function listGitConnections(lang?: string): Promise<GitConnectionList> {
+  return requestJson<GitConnectionList>(withLang(gitPath(), lang));
+}
+
+export function createGitConnection(body: GitConnectionWrite, lang?: string): Promise<GitConnection> {
+  return requestJson<GitConnection>(withLang(gitPath(), lang), {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+export function patchGitConnection(id: string, body: GitConnectionWrite, lang?: string): Promise<GitConnection> {
+  return requestJson<GitConnection>(withLang(gitPath(id), lang), {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  });
+}
+
+export function deleteGitConnection(id: string): Promise<OkId> {
+  return requestJson<OkId>(gitPath(id), {
+    method: 'DELETE',
+    body: '{}',
+  });
+}
+
+export function testGitConnectionDraft(body: GitConnectionWrite, lang?: string): Promise<GitTestResult> {
+  return requestJson<GitTestResult>(withLang('/api/v2/git/connections/test', lang), {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+export function testGitConnection(id: string, lang?: string): Promise<GitTestResult> {
+  return requestJson<GitTestResult>(withLang(gitPath(id, '/test'), lang), {
+    method: 'POST',
+    body: '{}',
+  });
+}
+
+export function listGitProjects(connectionId: string, search?: string, lang?: string): Promise<GitProjectList> {
+  const params = new URLSearchParams();
+  if (search) params.set('search', search);
+  if (lang) params.set('lang', lang);
+  const query = params.toString();
+  return requestJson<GitProjectList>(`${gitPath(connectionId, '/projects')}${query ? `?${query}` : ''}`);
+}
+
+export function listGitBranches(connectionId: string, projectId: string | number, lang?: string): Promise<GitBranchList> {
+  return requestJson<GitBranchList>(
+    withLang(`${gitPath(connectionId, `/projects/${encodeURIComponent(String(projectId))}/branches`)}`, lang),
+  );
+}
+
+export function listPlugins(lang?: string): Promise<PluginList> {
+  return requestJson<PluginList>(withLang('/api/v2/plugins', lang));
+}
+
+export function installPlugin(body: InstallPluginRequest, lang?: string): Promise<Plugin> {
+  return requestJson<Plugin>(withLang('/api/v2/plugins', lang), {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+export function patchPlugin(id: string, body: PatchPluginRequest, lang?: string): Promise<Plugin> {
+  return requestJson<Plugin>(withLang(`/api/v2/plugins/${encodeURIComponent(id)}`, lang), {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  });
+}
+
+export function listSkills(lang?: string): Promise<SkillList> {
+  return requestJson<SkillList>(withLang('/api/v2/skills', lang));
+}
+
+export function createSkill(body: SkillWriteRequest, lang?: string): Promise<Skill> {
+  return requestJson<Skill>(withLang('/api/v2/skills', lang), {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+export function patchSkill(id: string, body: SkillWriteRequest, lang?: string): Promise<Skill> {
+  return requestJson<Skill>(withLang(`/api/v2/skills/${encodeURIComponent(id)}`, lang), {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  });
+}
+
+export function deleteSkill(id: string): Promise<OkId> {
+  return requestJson<OkId>(`/api/v2/skills/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
     body: '{}',
   });
 }

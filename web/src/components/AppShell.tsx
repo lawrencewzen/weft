@@ -38,6 +38,7 @@ import { RightToggle } from './RightToggle';
 import { SettingsOverlay } from './settings/SettingsOverlay';
 import type { AboutService } from './settings/AboutPage';
 import { Sidebar } from './Sidebar';
+import { WorkspaceDialog } from './WorkspaceDialog';
 
 type Props = {
   route: AppRoute;
@@ -175,6 +176,7 @@ function AppShellLayout({
     resolve: (ok: boolean) => void;
   } | null>(null);
   const [removedIds, setRemovedIds] = useState<string[]>([]);
+  const [wsDialog, setWsDialog] = useState(false);
   const leftWRef = useRef(leftW);
   leftWRef.current = leftW;
   const rightWRef = useRef(right.width);
@@ -326,6 +328,7 @@ function AppShellLayout({
         onToast={onToast}
         onConfirm={askConfirm}
         onRemoveWorkspace={onRemoveWorkspace}
+        onNewWorkspace={() => setWsDialog(true)}
       />
       <div
         className="col-divider"
@@ -403,6 +406,13 @@ function AppShellLayout({
           service={service}
           onToast={onToast}
           onConfirm={askConfirm}
+        />
+      ) : null}
+      {wsDialog ? (
+        <WorkspaceDialog
+          lang={lang}
+          onClose={() => setWsDialog(false)}
+          onToast={onToast}
         />
       ) : null}
     </div>

@@ -45,7 +45,7 @@ test('GET /next/login?code= exchanges a web-code for a session and shows protoco
     await expect(page).toHaveURL(/\/next\/$/);
     await expect(page.getByTestId('next-app')).toBeVisible();
     await expect(page.getByTestId('next-sidebar')).toBeVisible();
-    await expect(page.getByTestId('next-home-hint')).toHaveText(/先在旧版里添加工作区|Add a workspace in the old UI first/);
+    await expect(page.getByTestId('next-home-hint')).toHaveText(/点左栏「项目」旁的 \+ 新建工作区|Use \+ next to Projects to add a workspace/);
     expect(csp, 'page console has no CSP errors').toEqual([]);
   } finally {
     await srv.kill();

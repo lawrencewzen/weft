@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   conversationTopic,
   createEntityStore,
+  EXTENSIONS_TOPIC,
   PROVIDERS_TOPIC,
   sessionTopics,
   subagentTopic,
@@ -327,24 +328,25 @@ function sumRef(id: string, workspaceId: string, extra?: Partial<ConversationSum
 
 describe('workspace selectors', () => {
   it('builds session topics with workspaces first', () => {
-    expect(sessionTopics(null)).toEqual([WORKSPACES_TOPIC, PROVIDERS_TOPIC]);
-    expect(sessionTopics('c1')).toEqual([WORKSPACES_TOPIC, PROVIDERS_TOPIC, conversationTopic('c1')]);
+    expect(sessionTopics(null)).toEqual([WORKSPACES_TOPIC, PROVIDERS_TOPIC, EXTENSIONS_TOPIC]);
+    expect(sessionTopics('c1')).toEqual([WORKSPACES_TOPIC, PROVIDERS_TOPIC, EXTENSIONS_TOPIC, conversationTopic('c1')]);
   });
 
   it('adds extra conversation topics when expanding another chat and drops them when collapsing', () => {
     expect(sessionTopics({ conversationId: 'a' })).toEqual([
-      WORKSPACES_TOPIC, PROVIDERS_TOPIC, conversationTopic('a'),
+      WORKSPACES_TOPIC, PROVIDERS_TOPIC, EXTENSIONS_TOPIC, conversationTopic('a'),
     ]);
     expect(sessionTopics({
       conversationId: 'a',
       extraConversationIds: ['b'],
-    })).toEqual([WORKSPACES_TOPIC, PROVIDERS_TOPIC, conversationTopic('a'), conversationTopic('b')]);
+    })).toEqual([WORKSPACES_TOPIC, PROVIDERS_TOPIC, EXTENSIONS_TOPIC, conversationTopic('a'), conversationTopic('b')]);
     expect(sessionTopics({
       conversationId: 'a',
       extraConversationIds: ['b', 'a', 'c'],
     })).toEqual([
       WORKSPACES_TOPIC,
       PROVIDERS_TOPIC,
+      EXTENSIONS_TOPIC,
       conversationTopic('a'),
       conversationTopic('b'),
       conversationTopic('c'),
@@ -352,7 +354,7 @@ describe('workspace selectors', () => {
     expect(sessionTopics({
       conversationId: 'a',
       extraConversationIds: [],
-    })).toEqual([WORKSPACES_TOPIC, PROVIDERS_TOPIC, conversationTopic('a')]);
+    })).toEqual([WORKSPACES_TOPIC, PROVIDERS_TOPIC, EXTENSIONS_TOPIC, conversationTopic('a')]);
     expect(sessionTopics({
       conversationId: 'a',
       extraConversationIds: ['b'],
@@ -360,6 +362,7 @@ describe('workspace selectors', () => {
     })).toEqual([
       WORKSPACES_TOPIC,
       PROVIDERS_TOPIC,
+      EXTENSIONS_TOPIC,
       conversationTopic('a'),
       conversationTopic('b'),
       subagentTopic('a', 'a:sub:1'),
@@ -508,5 +511,48 @@ describe('workspace selectors', () => {
     expect(store.defaultModel()).toEqual({ providerId: 'p1', modelId: 'deepseek-chat' });
     store.applyRemove({ topic: PROVIDERS_TOPIC, entity: 'provider', id: 'p1' });
     expect(store.providers()).toEqual([]);
+  });
+
+  it('reads plugins, skills, and git connections from the extensions topic', () => {
+    const store = createEntityStore();
+    store.applySnapshot({
+      protocolVersion: '2.0.0',
+      topics: [EXTENSIONS_TOPIC],
+      entities: [
+        {
+          topic: EXTENSIONS_TOPIC,
+          entity: 'plugin',
+          id: 'echo',
+          value: {
+            id: 'echo', name: 'Echo', description: 'd', version: '0.1.0', source: 'bundled',
+            enabled: true, loaded: true, error: null, errorCode: null, tools: [],
+          } as EntityRef['value'],
+        },
+        {
+          topic: EXTENSIONS_TOPIC,
+          entity: 'skill',
+          id: 's1',
+          value: {
+            id: 's1', name: '口令', description: 'd', version: '1.0.0', source: 'local',
+            enabled: true, deletable: true,
+          } as EntityRef['value'],
+        },
+        {
+          topic: EXTENSIONS_TOPIC,
+          entity: 'git_connection',
+          id: 'g1',
+          value: {
+            id: 'g1', name: 'Corp', kind: 'gitlab-self', baseUrl: 'https://gitlab.example',
+            token: '••••9k3q', hasToken: true, allowHttp: true, caFile: '', lastTest: null,
+          } as EntityRef['value'],
+        },
+      ],
+    });
+    expect(store.hasTopic(EXTENSIONS_TOPIC)).toBe(true);
+    expect(store.plugins().map((item) => item.id)).toEqual(['echo']);
+    expect(store.skills().map((item) => item.name)).toEqual(['口令']);
+    expect(store.gitConnections().map((item) => item.id)).toEqual(['g1']);
+    store.applyRemove({ topic: EXTENSIONS_TOPIC, entity: 'git_connection', id: 'g1' });
+    expect(store.gitConnections()).toEqual([]);
   });
 });
