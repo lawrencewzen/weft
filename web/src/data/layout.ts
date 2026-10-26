@@ -3,10 +3,18 @@ export const LEFT_W_MIN = 200;
 export const LEFT_W_MAX = 420;
 export const LEFT_W_DEFAULT = 264;
 
+export const RIGHT_OVERLAY_MAX = 1180;
+export const RIGHT_W_MIN = 320;
+export const RIGHT_W_MAX = 900;
+export const RIGHT_W_DEFAULT = 440;
+
 export const LS_LEFT_OPEN = 'weft_next_left_open';
 export const LS_LEFT_W = 'weft_next_left_w';
 export const LS_OPEN_WORKSPACES = 'weft_next_open_workspaces';
 export const LS_ACTIVE_WS = 'weft_next_active_ws';
+export const LS_RIGHT_OPEN = 'weft_next_right_open';
+export const LS_RIGHT_W = 'weft_next_right_w';
+export const LS_RIGHT_TAB = 'weft_next_right_tab';
 
 function storage(): Storage | null {
   try {
@@ -56,6 +64,10 @@ export function isOverlayWidth(width: number): boolean {
   return width <= LEFT_OVERLAY_MAX;
 }
 
+export function isRightOverlayWidth(width: number): boolean {
+  return width < RIGHT_OVERLAY_MAX;
+}
+
 export function defaultLeftOpen(viewportWidth: number): boolean {
   if (isOverlayWidth(viewportWidth)) return false;
   return readPref(LS_LEFT_OPEN, true);
@@ -63,6 +75,45 @@ export function defaultLeftOpen(viewportWidth: number): boolean {
 
 export function persistLeftOpen(open: boolean, viewportWidth: number): void {
   if (!isOverlayWidth(viewportWidth)) writePref(LS_LEFT_OPEN, open);
+}
+
+export function readRightWidth(): number {
+  const raw = storage()?.getItem(LS_RIGHT_W);
+  if (raw == null || raw === '') return RIGHT_W_DEFAULT;
+  const n = Number(raw);
+  return clampNum(Number.isFinite(n) ? n : RIGHT_W_DEFAULT, RIGHT_W_MIN, RIGHT_W_MAX);
+}
+
+export function writeRightWidth(width: number): void {
+  try {
+    storage()?.setItem(LS_RIGHT_W, String(clampNum(width, RIGHT_W_MIN, RIGHT_W_MAX)));
+  } catch {
+    /* ignore quota */
+  }
+}
+
+export function defaultRightOpen(viewportWidth: number): boolean {
+  if (isRightOverlayWidth(viewportWidth)) return false;
+  return readPref(LS_RIGHT_OPEN, true);
+}
+
+export function persistRightOpen(open: boolean, viewportWidth: number): void {
+  if (!isRightOverlayWidth(viewportWidth)) writePref(LS_RIGHT_OPEN, open);
+}
+
+export type RightTab = 'changes' | 'files';
+
+export function readRightTab(): RightTab {
+  const raw = storage()?.getItem(LS_RIGHT_TAB);
+  return raw === 'files' ? 'files' : 'changes';
+}
+
+export function writeRightTab(tab: RightTab): void {
+  try {
+    storage()?.setItem(LS_RIGHT_TAB, tab);
+  } catch {
+    /* ignore quota */
+  }
 }
 
 export function readOpenWorkspaces(): string[] {

@@ -4,7 +4,9 @@ import type { Lang } from '../data/lang';
 import {
   clampNum,
   defaultLeftOpen,
+  defaultRightOpen,
   isOverlayWidth,
+  isRightOverlayWidth,
   LEFT_OVERLAY_MAX,
   LEFT_W_DEFAULT,
   LEFT_W_MAX,
@@ -14,9 +16,14 @@ import {
   readActiveWorkspace,
   readLeftWidth,
   readPref,
+  RIGHT_OVERLAY_MAX,
+  RIGHT_W_DEFAULT,
+  RIGHT_W_MAX,
+  RIGHT_W_MIN,
   writeActiveWorkspace,
   writeLeftWidth,
 } from '../data/layout';
+import { RightPaneProvider, useRightPane } from '../data/rightPaneContext';
 import { conversationPath, draftPath, navigate } from '../data/nav';
 import { latestConversation, pickDraftWorkspace } from '../data/sidebarModel';
 import { useWorkspaces } from '../data/useWorkspaces';
@@ -25,6 +32,8 @@ import type { AppRoute } from '../route';
 import { CenterPane } from './CenterPane';
 import { ConfirmDialog, type ConfirmOpts } from './ConfirmDialog';
 import { DemoModelBadge } from './DemoModelBadge';
+import { RightPane } from './RightPane';
+import { RightToggle } from './RightToggle';
 import { Sidebar } from './Sidebar';
 
 type Props = {
@@ -33,12 +42,85 @@ type Props = {
   demo?: boolean;
 };
 
+function overlayKeepOpen(target: HTMLElement): boolean {
+  return Boolean(
+    target.closest?.('.md-path, [data-testid=next-right-toggle], [data-testid=next-right], [data-testid=next-tool-row][data-tool=edit], [data-testid=next-tool-row][data-tool=write]'),
+  );
+}
+
 export function AppShell({ route, lang, demo = false }: Props) {
   const { workspaces, conversations, groups, latest, ready } = useWorkspaces();
+  const [toast, setToast] = useState<string | null>(null);
+  const toastTimer = useRef<number | null>(null);
+
+  const activeConversationId = route.name === 'conversation'
+    ? route.id
+    : route.name === 'subagent'
+      ? route.conversationId
+      : null;
+  const draftWorkspaceId = route.name === 'draft' ? route.workspaceId : null;
+  const workspaceId = draftWorkspaceId
+    || groups.find((group) => group.conversations.some((conv) => conv.id === activeConversationId))?.workspace.id
+    || null;
+
+  const showToast = useCallback((message: string) => {
+    setToast(message);
+    if (toastTimer.current) window.clearTimeout(toastTimer.current);
+    toastTimer.current = window.setTimeout(() => setToast(null), 2200);
+  }, []);
+
+  return (
+    <RightPaneProvider
+      conversationId={activeConversationId}
+      workspaceId={workspaceId}
+      lang={lang}
+      onToast={showToast}
+    >
+      <AppShellLayout
+        route={route}
+        lang={lang}
+        demo={demo}
+        toast={toast}
+        onToast={showToast}
+        workspaces={workspaces}
+        conversations={conversations}
+        groups={groups}
+        latest={latest}
+        ready={ready}
+      />
+    </RightPaneProvider>
+  );
+}
+
+type LayoutProps = {
+  route: AppRoute;
+  lang: Lang;
+  demo: boolean;
+  toast: string | null;
+  onToast: (message: string) => void;
+  workspaces: ReturnType<typeof useWorkspaces>['workspaces'];
+  conversations: ReturnType<typeof useWorkspaces>['conversations'];
+  groups: ReturnType<typeof useWorkspaces>['groups'];
+  latest: ReturnType<typeof useWorkspaces>['latest'];
+  ready: boolean;
+};
+
+function AppShellLayout({
+  route,
+  lang,
+  demo,
+  toast,
+  onToast,
+  workspaces,
+  conversations,
+  groups,
+  latest,
+  ready,
+}: LayoutProps) {
+  const right = useRightPane();
   const [leftOpen, setLeftOpen] = useState(() => defaultLeftOpen(window.innerWidth));
   const [leftW, setLeftW] = useState(() => readLeftWidth());
   const [dragging, setDragging] = useState(false);
-  const [toast, setToast] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<{
     opts: ConfirmOpts;
     resolve: (ok: boolean) => void;
@@ -46,8 +128,11 @@ export function AppShell({ route, lang, demo = false }: Props) {
   const [removedIds, setRemovedIds] = useState<string[]>([]);
   const leftWRef = useRef(leftW);
   leftWRef.current = leftW;
+  const rightWRef = useRef(right.width);
+  rightWRef.current = right.width;
+  const leftOpenRef = useRef(leftOpen);
+  leftOpenRef.current = leftOpen;
   const lastWidth = useRef(window.innerWidth);
-  const toastTimer = useRef<number | null>(null);
 
   const activeConversationId = route.name === 'conversation'
     ? route.id
@@ -62,6 +147,11 @@ export function AppShell({ route, lang, demo = false }: Props) {
   const visibleLatest = latest && !removedIds.includes(latest.workspaceId)
     ? latest
     : latestConversation(visibleConversations);
+
+  const workspace = draftWorkspaceId
+    ? workspaces.find((item) => item.id === draftWorkspaceId)
+    : groups.find((group) => group.conversations.some((conv) => conv.id === activeConversationId))?.workspace;
+  const workspaceLabel = workspace?.path || workspace?.name || '';
 
   useEffect(() => {
     if (route.name !== 'home' || !ready) return;
@@ -86,21 +176,21 @@ export function AppShell({ route, lang, demo = false }: Props) {
       if (lastWidth.current <= LEFT_OVERLAY_MAX && vw > LEFT_OVERLAY_MAX) {
         setLeftOpen(readPref(LS_LEFT_OPEN, true));
       }
+      if (lastWidth.current >= RIGHT_OVERLAY_MAX && vw < RIGHT_OVERLAY_MAX) {
+        right.setOpen(false);
+      }
+      if (lastWidth.current < RIGHT_OVERLAY_MAX && vw >= RIGHT_OVERLAY_MAX) {
+        right.setOpen(defaultRightOpen(vw));
+      }
       lastWidth.current = vw;
     };
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
-  }, []);
+  }, [right]);
 
   const setOpen = useCallback((open: boolean) => {
     setLeftOpen(open);
     persistLeftOpen(open, window.innerWidth);
-  }, []);
-
-  const showToast = useCallback((message: string) => {
-    setToast(message);
-    if (toastTimer.current) window.clearTimeout(toastTimer.current);
-    toastTimer.current = window.setTimeout(() => setToast(null), 2200);
   }, []);
 
   const askConfirm = useCallback((opts: ConfirmOpts) => {
@@ -140,20 +230,30 @@ export function AppShell({ route, lang, demo = false }: Props) {
     navigate('/next/', { replace: true });
   }, [activeConversationId, conversations, draftWorkspaceId, groups, workspaces]);
 
-  function onDividerDown(ev: MouseEvent<HTMLDivElement>) {
+  function onDividerDown(ev: MouseEvent<HTMLDivElement>, side: 'left' | 'right') {
     if (ev.button !== 0) return;
     ev.preventDefault();
     const startX = ev.clientX;
-    const startW = leftWRef.current;
+    const startLeft = leftWRef.current;
+    const startRight = rightWRef.current;
     setDragging(true);
     const move = (e: globalThis.MouseEvent) => {
-      setLeftW(clampNum(startW + (e.clientX - startX), LEFT_W_MIN, LEFT_W_MAX));
+      if (side === 'left') {
+        setLeftW(clampNum(startLeft + (e.clientX - startX), LEFT_W_MIN, LEFT_W_MAX));
+        return;
+      }
+      const max = Math.min(
+        RIGHT_W_MAX,
+        Math.max(RIGHT_W_MIN, window.innerWidth - (leftOpenRef.current ? leftWRef.current : 0) - 420),
+      );
+      right.setWidth(clampNum(startRight - (e.clientX - startX), RIGHT_W_MIN, max));
     };
     const up = () => {
       window.removeEventListener('mousemove', move);
       window.removeEventListener('mouseup', up);
       setDragging(false);
-      writeLeftWidth(leftWRef.current);
+      if (side === 'left') writeLeftWidth(leftWRef.current);
+      else right.persistWidth(rightWRef.current);
     };
     window.addEventListener('mousemove', move);
     window.addEventListener('mouseup', up);
@@ -162,12 +262,15 @@ export function AppShell({ route, lang, demo = false }: Props) {
   function onShellPointerDown(ev: PointerEvent<HTMLDivElement>) {
     const target = ev.target as HTMLElement;
     if (!target.closest?.('.col-center')) return;
+    if (overlayKeepOpen(target)) return;
     if (isOverlayWidth(window.innerWidth) && leftOpen) setOpen(false);
+    if (isRightOverlayWidth(window.innerWidth) && right.open) right.setOpen(false);
   }
 
   const classes = [
     'next-shell',
     !leftOpen ? 'left-closed' : '',
+    !right.open ? 'right-closed' : '',
     dragging ? 'is-dragging' : '',
   ].filter(Boolean).join(' ');
 
@@ -177,7 +280,10 @@ export function AppShell({ route, lang, demo = false }: Props) {
     <div
       className={classes}
       data-testid="next-app"
-      style={{ ['--left-w' as string]: `${leftW}px` }}
+      style={{
+        ['--left-w' as string]: `${leftW}px`,
+        ['--right-w' as string]: `${right.width}px`,
+      }}
       onPointerDown={onShellPointerDown}
     >
       <Sidebar
@@ -186,7 +292,7 @@ export function AppShell({ route, lang, demo = false }: Props) {
         activeAgentId={activeAgentId}
         draftWorkspaceId={draftWorkspaceId}
         onCollapse={() => setOpen(false)}
-        onToast={showToast}
+        onToast={onToast}
         onConfirm={askConfirm}
         onRemoveWorkspace={onRemoveWorkspace}
       />
@@ -195,7 +301,7 @@ export function AppShell({ route, lang, demo = false }: Props) {
         data-testid="next-left-divider"
         data-side="left"
         title={t(lang, 'drag_resize')}
-        onMouseDown={onDividerDown}
+        onMouseDown={(ev) => onDividerDown(ev, 'left')}
         onDoubleClick={() => {
           setLeftW(LEFT_W_DEFAULT);
           writeLeftWidth(LEFT_W_DEFAULT);
@@ -218,6 +324,9 @@ export function AppShell({ route, lang, demo = false }: Props) {
               ) : null}
               <h1 className="top-title">{t(lang, 'home_title')}</h1>
               {demo ? <DemoModelBadge lang={lang} testId="next-demo-model-badge" /> : null}
+              <div className="top-right">
+                <RightToggle lang={lang} />
+              </div>
             </div>
           </header>
           <div className="thread-empty">
@@ -235,6 +344,18 @@ export function AppShell({ route, lang, demo = false }: Props) {
           onOpenLeft={() => setOpen(true)}
         />
       )}
+      <div
+        className="col-divider"
+        data-testid="next-right-divider"
+        data-side="right"
+        title={t(lang, 'drag_resize')}
+        onMouseDown={(ev) => onDividerDown(ev, 'right')}
+        onDoubleClick={() => {
+          right.setWidth(RIGHT_W_DEFAULT);
+          right.persistWidth(RIGHT_W_DEFAULT);
+        }}
+      />
+      <RightPane lang={lang} workspaceLabel={workspaceLabel} />
       {toast ? <div className="toast-msg" data-testid="next-toast">{toast}</div> : null}
       {confirm ? (
         <ConfirmDialog

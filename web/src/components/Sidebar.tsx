@@ -21,6 +21,7 @@ import {
   type Subagent,
   type Workspace,
 } from '../data/store';
+import { useRightPane } from '../data/rightPaneContext';
 import { useWorkspaces } from '../data/useWorkspaces';
 import { t } from '../i18n';
 import { CtxMenu, type CtxMenuItem } from './CtxMenu';
@@ -72,6 +73,7 @@ export function Sidebar({
 }: Props) {
   const { groups } = useWorkspaces();
   const { store, setExtraConversationIds } = useSession();
+  const { showFiles } = useRightPane();
   const now = useNow(1_000);
   const [openIds, setOpenIds] = useState<Set<string>>(() => new Set(readOpenWorkspaces()));
   const [collapsedTrees, setCollapsedTrees] = useState<Set<string>>(() => new Set());
@@ -187,6 +189,19 @@ export function Sidebar({
   const projectItems = useCallback((ws: Workspace): CtxMenuItem[] => [
     { label: t(lang, 'new_conversation'), action: 'new-conversation', run: () => startDraft(ws.id) },
     { label: t(lang, 'copy_path'), action: 'copy-path', run: () => { void copy(ws.path || ''); } },
+    {
+      label: t(lang, 'show_files'),
+      action: 'show-files',
+      run: () => {
+        writeActiveWorkspace(ws.id);
+        if (ws.id !== activeWorkspaceId) {
+          const latest = groups.find((group) => group.workspace.id === ws.id)?.conversations[0];
+          if (latest) navigate(conversationPath(latest.id));
+          else navigate(draftPath(ws.id));
+        }
+        showFiles();
+      },
+    },
     { sep: true },
     {
       label: t(lang, 'ws_remove'),
@@ -194,7 +209,7 @@ export function Sidebar({
       danger: true,
       run: () => { void removeWorkspace(ws); },
     },
-  ], [copy, lang, removeWorkspace, startDraft]);
+  ], [activeWorkspaceId, copy, groups, lang, removeWorkspace, showFiles, startDraft]);
 
   const conversationItems = useCallback((wsId: string, conv: ConversationSummary): CtxMenuItem[] => {
     const items: CtxMenuItem[] = [];

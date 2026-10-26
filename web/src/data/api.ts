@@ -7,17 +7,42 @@ export type StopAccepted = components['schemas']['StopAccepted'];
 export type ToolOutput = components['schemas']['ToolOutput'];
 export type V2Error = components['schemas']['V2Error'];
 export type WorkspaceRemoved = components['schemas']['WorkspaceRemoved'];
+export type Change = components['schemas']['Change'];
+export type Diff = components['schemas']['Diff'];
+export type DiffHunk = components['schemas']['DiffHunk'];
+export type DiffLine = components['schemas']['DiffLine'];
+export type FileNode = components['schemas']['FileNode'];
+export type FileTree = components['schemas']['FileTree'];
+export type FileContent = components['schemas']['FileContent'];
+export type SaveResult = components['schemas']['SaveResult'];
+export type SaveFileRequest = components['schemas']['SaveFileRequest'];
 
 export class ApiError extends Error {
   readonly status: number;
   readonly code: string | undefined;
+  readonly current: FileContent | undefined;
 
-  constructor(message: string, opts: { status: number; code?: string }) {
+  constructor(message: string, opts: { status: number; code?: string; current?: FileContent }) {
     super(message);
     this.name = 'ApiError';
     this.status = opts.status;
     this.code = opts.code;
+    this.current = opts.current;
   }
+}
+
+export class ConflictError extends ApiError {
+  declare readonly current: FileContent;
+
+  constructor(message: string, current: FileContent) {
+    super(message, { status: 409, code: 'E_CONFLICT', current });
+    this.name = 'ConflictError';
+  }
+}
+
+export function isConflictError(err: unknown): err is ConflictError {
+  return err instanceof ConflictError
+    || (err instanceof ApiError && err.status === 409 && err.code === 'E_CONFLICT' && err.current != null);
 }
 
 export class UnauthenticatedError extends ApiError {
@@ -37,14 +62,37 @@ function asText(value: unknown): string {
   return '';
 }
 
-function parseErrorBody(status: number, statusText: string, text: string): { error: string; code?: string } {
+function asFileContent(value: unknown): FileContent | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const rec = value as Record<string, unknown>;
+  if (typeof rec.path !== 'string' || typeof rec.version !== 'string') return undefined;
+  if (typeof rec.size !== 'number' || typeof rec.binary !== 'boolean' || typeof rec.tooLarge !== 'boolean') {
+    return undefined;
+  }
+  if (rec.text != null && typeof rec.text !== 'string') return undefined;
+  return {
+    path: rec.path,
+    size: rec.size,
+    binary: rec.binary,
+    tooLarge: rec.tooLarge,
+    text: rec.text == null ? null : rec.text,
+    version: rec.version,
+  };
+}
+
+function parseErrorBody(
+  status: number,
+  statusText: string,
+  text: string,
+): { error: string; code?: string; current?: FileContent } {
   const trimmed = text.trim();
   if (trimmed) {
     try {
-      const json = JSON.parse(trimmed) as { error?: unknown; code?: unknown };
+      const json = JSON.parse(trimmed) as { error?: unknown; code?: unknown; current?: unknown };
       const error = asText(json.error);
       const code = asText(json.code) || undefined;
-      if (error) return { error, code };
+      const current = asFileContent(json.current);
+      if (error) return { error, code, current };
     } catch {
       return { error: trimmed };
     }
@@ -73,7 +121,10 @@ async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
   if (res.status === 401) throw new UnauthenticatedError();
   if (!res.ok) {
     const parsed = parseErrorBody(res.status, res.statusText, text);
-    throw new ApiError(parsed.error, { status: res.status, code: parsed.code });
+    if (res.status === 409 && parsed.code === 'E_CONFLICT' && parsed.current) {
+      throw new ConflictError(parsed.error, parsed.current);
+    }
+    throw new ApiError(parsed.error, { status: res.status, code: parsed.code, current: parsed.current });
   }
   if (!text) {
     throw new ApiError('empty response', { status: res.status });
@@ -155,4 +206,40 @@ export function stopSubagent(cid: string, agentId: string): Promise<StopAccepted
     method: 'POST',
     body: '{}',
   });
+}
+
+export function conversationDiffUrl(cid: string, filePath: string): string {
+  const params = new URLSearchParams({ path: filePath });
+  return `/api/v2/conversations/${encodeURIComponent(cid)}/diff?${params.toString()}`;
+}
+
+export function workspaceTreeUrl(workspaceId: string): string {
+  return `/api/v2/workspaces/${encodeURIComponent(workspaceId)}/tree`;
+}
+
+export function workspaceFileUrl(workspaceId: string, filePath: string): string {
+  const params = new URLSearchParams({ path: filePath });
+  return `/api/v2/workspaces/${encodeURIComponent(workspaceId)}/files?${params.toString()}`;
+}
+
+export function getConversationDiff(cid: string, filePath: string): Promise<Diff> {
+  return requestJson<Diff>(conversationDiffUrl(cid, filePath));
+}
+
+export function getWorkspaceTree(workspaceId: string): Promise<FileTree> {
+  return requestJson<FileTree>(workspaceTreeUrl(workspaceId));
+}
+
+export function getWorkspaceFile(workspaceId: string, filePath: string): Promise<FileContent> {
+  return requestJson<FileContent>(workspaceFileUrl(workspaceId, filePath));
+}
+
+export function saveWorkspaceFile(
+  workspaceId: string,
+  body: SaveFileRequest,
+): Promise<SaveResult> {
+  return requestJson<SaveResult>(
+    `/api/v2/workspaces/${encodeURIComponent(workspaceId)}/files`,
+    { method: 'PUT', body: JSON.stringify(body) },
+  );
 }
