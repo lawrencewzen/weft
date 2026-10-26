@@ -12,6 +12,10 @@ export type UpsertEvent = components['schemas']['UpsertEvent'];
 export type RemoveEvent = components['schemas']['RemoveEvent'];
 export type TextDeltaEvent = components['schemas']['TextDeltaEvent'];
 export type EntityRef = components['schemas']['EntityRef'];
+export type Provider = components['schemas']['Provider'];
+export type ProviderDefaults = components['schemas']['ProviderDefaults'];
+export type ResolvedModel = components['schemas']['ResolvedModel'];
+export type Vendor = components['schemas']['Vendor'];
 
 type StoredEntity = {
   topic: string;
@@ -49,6 +53,8 @@ export function subagentTopic(cid: string, agentId: string): string {
 }
 
 export const WORKSPACES_TOPIC = 'workspaces';
+export const PROVIDERS_TOPIC = 'providers';
+export const PROVIDERS_DEFAULTS_ID = 'self';
 
 export type SessionTopicOpts = {
   conversationId?: string | null;
@@ -63,7 +69,7 @@ export function sessionTopics(
   const opts: SessionTopicOpts = cidOrOpts != null && typeof cidOrOpts === 'object'
     ? cidOrOpts
     : { conversationId: cidOrOpts, ...extra };
-  const topics = [WORKSPACES_TOPIC];
+  const topics = [WORKSPACES_TOPIC, PROVIDERS_TOPIC];
   const current = opts.conversationId || '';
   const extraIds = [...new Set((opts.extraConversationIds || []).filter((id) => id && id !== current))]
     .sort((a, b) => a.localeCompare(b));
@@ -88,6 +94,9 @@ export type EntityStore = {
   workspaces(): Workspace[];
   conversationSummaries(): ConversationSummary[];
   conversationsFor(workspaceId: string): ConversationSummary[];
+  providers(): Provider[];
+  provider(id: string): Provider | undefined;
+  defaultModel(): ResolvedModel | null;
   subagents(cid: string): Subagent[];
   subagent(cid: string, agentId: string): Subagent | undefined;
   topicItems(topic: string): ThreadItem[];
@@ -286,6 +295,28 @@ export function createEntityStore(): EntityStore {
       return listSummaries()
         .filter((conv) => conv.workspaceId === workspaceId)
         .sort((a, b) => (Number(b.updatedAt) || 0) - (Number(a.updatedAt) || 0) || a.id.localeCompare(b.id));
+    },
+
+    providers() {
+      const out: Provider[] = [];
+      for (const rec of entities.values()) {
+        if (rec.topic === PROVIDERS_TOPIC && rec.entity === 'provider') {
+          out.push(rec.value as unknown as Provider);
+        }
+      }
+      return out;
+    },
+
+    provider(id) {
+      const rec = get(PROVIDERS_TOPIC, 'provider', id)
+        ?? byEntityId.get(entityIdKey('provider', id));
+      return rec?.value as Provider | undefined;
+    },
+
+    defaultModel() {
+      const rec = get(PROVIDERS_TOPIC, 'defaults', PROVIDERS_DEFAULTS_ID);
+      const value = rec?.value as ProviderDefaults | undefined;
+      return value?.model ?? null;
     },
 
     subagents(cid) {

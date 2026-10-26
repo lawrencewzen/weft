@@ -28,18 +28,21 @@ import { conversationPath, draftPath, navigate } from '../data/nav';
 import { latestConversation, pickDraftWorkspace } from '../data/sidebarModel';
 import { useWorkspaces } from '../data/useWorkspaces';
 import { t } from '../i18n';
+import type { SettingsPage } from '../data/providerWizard';
 import type { AppRoute } from '../route';
 import { CenterPane } from './CenterPane';
 import { ConfirmDialog, type ConfirmOpts } from './ConfirmDialog';
 import { DemoModelBadge } from './DemoModelBadge';
 import { RightPane } from './RightPane';
 import { RightToggle } from './RightToggle';
+import { SettingsOverlay } from './settings/SettingsOverlay';
 import { Sidebar } from './Sidebar';
 
 type Props = {
   route: AppRoute;
   lang: Lang;
   demo?: boolean;
+  settingsPage?: SettingsPage | null;
 };
 
 function overlayKeepOpen(target: HTMLElement): boolean {
@@ -48,7 +51,7 @@ function overlayKeepOpen(target: HTMLElement): boolean {
   );
 }
 
-export function AppShell({ route, lang, demo = false }: Props) {
+export function AppShell({ route, lang, demo = false, settingsPage = null }: Props) {
   const { workspaces, conversations, groups, latest, ready } = useWorkspaces();
   const [toast, setToast] = useState<string | null>(null);
   const toastTimer = useRef<number | null>(null);
@@ -80,6 +83,7 @@ export function AppShell({ route, lang, demo = false }: Props) {
         route={route}
         lang={lang}
         demo={demo}
+        settingsPage={settingsPage}
         toast={toast}
         onToast={showToast}
         workspaces={workspaces}
@@ -96,6 +100,7 @@ type LayoutProps = {
   route: AppRoute;
   lang: Lang;
   demo: boolean;
+  settingsPage: SettingsPage | null;
   toast: string | null;
   onToast: (message: string) => void;
   workspaces: ReturnType<typeof useWorkspaces>['workspaces'];
@@ -109,6 +114,7 @@ function AppShellLayout({
   route,
   lang,
   demo,
+  settingsPage,
   toast,
   onToast,
   workspaces,
@@ -363,6 +369,14 @@ function AppShellLayout({
           opts={confirm.opts}
           onCancel={() => finishConfirm(false)}
           onConfirm={() => finishConfirm(true)}
+        />
+      ) : null}
+      {settingsPage ? (
+        <SettingsOverlay
+          page={settingsPage}
+          lang={lang}
+          onToast={onToast}
+          onConfirm={askConfirm}
         />
       ) : null}
     </div>

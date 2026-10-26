@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { getPreferredLang } from './data/lang';
 import { SessionProvider } from './data/session';
 import { t } from './i18n';
-import { parseRoute } from './route';
+import { parseRoute, type AppRoute } from './route';
 import { AppShell } from './components/AppShell';
 
 const UNAUTH = '请用 weft open 打开新版网页端';
@@ -19,7 +19,14 @@ function usePathname(): string {
 
 export function App() {
   const pathname = usePathname();
-  const route = parseRoute(pathname);
+  const parsed = parseRoute(pathname);
+  const [background, setBackground] = useState<AppRoute>({ name: 'home' });
+  useEffect(() => {
+    const next = parseRoute(pathname);
+    if (next.name !== 'settings') setBackground(next);
+  }, [pathname]);
+  const route = parsed.name === 'settings' ? background : parsed;
+  const settingsPage = parsed.name === 'settings' ? parsed.page : null;
   const lang = getPreferredLang();
   const [ready, setReady] = useState(false);
   const [unauth, setUnauth] = useState(false);
@@ -88,7 +95,7 @@ export function App() {
 
   return (
     <SessionProvider conversationId={conversationId} subagent={subagent} lang={lang}>
-      <AppShell route={route} lang={lang} demo={demo} />
+      <AppShell route={route} lang={lang} demo={demo} settingsPage={settingsPage} />
     </SessionProvider>
   );
 }

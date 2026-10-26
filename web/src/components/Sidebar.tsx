@@ -7,7 +7,7 @@ import {
   writeActiveWorkspace,
   writeOpenWorkspaces,
 } from '../data/layout';
-import { conversationPath, draftPath, navigate, subagentPath } from '../data/nav';
+import { conversationPath, draftPath, navigate, openSettings, subagentPath } from '../data/nav';
 import { useSession } from '../data/session';
 import {
   conversationMeta,
@@ -436,6 +436,17 @@ export function Sidebar({
             );
           })}
         </div>
+      </div>
+      <div className="left-footer">
+        <button
+          type="button"
+          className="foot-link"
+          data-testid="next-open-settings"
+          title={t(lang, 'settings_title')}
+          onClick={() => openSettings('general')}
+        >
+          {t(lang, 'settings_short')}
+        </button>
       </div>
       {menu ? (
         <CtxMenu

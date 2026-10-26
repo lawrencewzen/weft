@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   conversationTopic,
   createEntityStore,
+  PROVIDERS_TOPIC,
   sessionTopics,
   subagentTopic,
   WORKSPACES_TOPIC,
@@ -326,21 +327,24 @@ function sumRef(id: string, workspaceId: string, extra?: Partial<ConversationSum
 
 describe('workspace selectors', () => {
   it('builds session topics with workspaces first', () => {
-    expect(sessionTopics(null)).toEqual([WORKSPACES_TOPIC]);
-    expect(sessionTopics('c1')).toEqual([WORKSPACES_TOPIC, conversationTopic('c1')]);
+    expect(sessionTopics(null)).toEqual([WORKSPACES_TOPIC, PROVIDERS_TOPIC]);
+    expect(sessionTopics('c1')).toEqual([WORKSPACES_TOPIC, PROVIDERS_TOPIC, conversationTopic('c1')]);
   });
 
   it('adds extra conversation topics when expanding another chat and drops them when collapsing', () => {
-    expect(sessionTopics({ conversationId: 'a' })).toEqual([WORKSPACES_TOPIC, conversationTopic('a')]);
+    expect(sessionTopics({ conversationId: 'a' })).toEqual([
+      WORKSPACES_TOPIC, PROVIDERS_TOPIC, conversationTopic('a'),
+    ]);
     expect(sessionTopics({
       conversationId: 'a',
       extraConversationIds: ['b'],
-    })).toEqual([WORKSPACES_TOPIC, conversationTopic('a'), conversationTopic('b')]);
+    })).toEqual([WORKSPACES_TOPIC, PROVIDERS_TOPIC, conversationTopic('a'), conversationTopic('b')]);
     expect(sessionTopics({
       conversationId: 'a',
       extraConversationIds: ['b', 'a', 'c'],
     })).toEqual([
       WORKSPACES_TOPIC,
+      PROVIDERS_TOPIC,
       conversationTopic('a'),
       conversationTopic('b'),
       conversationTopic('c'),
@@ -348,13 +352,14 @@ describe('workspace selectors', () => {
     expect(sessionTopics({
       conversationId: 'a',
       extraConversationIds: [],
-    })).toEqual([WORKSPACES_TOPIC, conversationTopic('a')]);
+    })).toEqual([WORKSPACES_TOPIC, PROVIDERS_TOPIC, conversationTopic('a')]);
     expect(sessionTopics({
       conversationId: 'a',
       extraConversationIds: ['b'],
       subagent: { conversationId: 'a', agentId: 'a:sub:1' },
     })).toEqual([
       WORKSPACES_TOPIC,
+      PROVIDERS_TOPIC,
       conversationTopic('a'),
       conversationTopic('b'),
       subagentTopic('a', 'a:sub:1'),
@@ -455,5 +460,53 @@ describe('workspace selectors', () => {
     expect(store.changes(CID).map((item) => item.path)).toEqual(['a.md', 'z.md']);
     store.applyRemove({ topic: TOPIC, entity: 'change', id: 'a.md' });
     expect(store.changes(CID).map((item) => item.path)).toEqual(['z.md']);
+  });
+
+  it('reads providers and default model from the providers topic', () => {
+    const store = createEntityStore();
+    store.applySnapshot({
+      protocolVersion: '2.0.0',
+      topics: [PROVIDERS_TOPIC],
+      entities: [
+        {
+          topic: PROVIDERS_TOPIC,
+          entity: 'provider',
+          id: 'p1',
+          value: {
+            id: 'p1',
+            vendor: 'DeepSeek',
+            name: 'Work',
+            access: 'api_key',
+            runtime: 'model',
+            baseUrl: 'https://api.deepseek.com/v1',
+            keyMasked: '••••3f9c',
+            hasKey: true,
+            status: 'ok',
+            statusText: '',
+            lastTestedAt: 1,
+            models: [{
+              id: 'deepseek-chat',
+              displayName: 'DeepSeek Chat',
+              brand: 'DeepSeek',
+              contextWindow: 128000,
+              contextWindowCustom: false,
+            }],
+            isDefault: true,
+          } as EntityRef['value'],
+        },
+        {
+          topic: PROVIDERS_TOPIC,
+          entity: 'defaults',
+          id: 'self',
+          value: { model: { providerId: 'p1', modelId: 'deepseek-chat' } } as EntityRef['value'],
+        },
+      ],
+    });
+    expect(store.hasTopic(PROVIDERS_TOPIC)).toBe(true);
+    expect(store.providers().map((item) => item.id)).toEqual(['p1']);
+    expect(store.provider('p1')?.name).toBe('Work');
+    expect(store.defaultModel()).toEqual({ providerId: 'p1', modelId: 'deepseek-chat' });
+    store.applyRemove({ topic: PROVIDERS_TOPIC, entity: 'provider', id: 'p1' });
+    expect(store.providers()).toEqual([]);
   });
 });

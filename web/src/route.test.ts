@@ -32,4 +32,15 @@ describe('parseRoute', () => {
     expect(parseRoute('/next/w/ws1/new')).toEqual({ name: 'draft', workspaceId: 'ws1' });
     expect(parseRoute('/next/w/ws%2F1/new/')).toEqual({ name: 'draft', workspaceId: 'ws/1' });
   });
+
+  it('reads /next/settings/<page>', () => {
+    expect(parseRoute('/next/settings')).toEqual({ name: 'settings', page: 'general' });
+    expect(parseRoute('/next/settings/')).toEqual({ name: 'settings', page: 'general' });
+    expect(parseRoute('/next/settings/providers')).toEqual({ name: 'settings', page: 'providers' });
+    expect(parseRoute('/next/settings/git/')).toEqual({ name: 'settings', page: 'git' });
+    expect(parseRoute('/next/settings/plugins')).toEqual({ name: 'settings', page: 'plugins' });
+    expect(parseRoute('/next/settings/skills')).toEqual({ name: 'settings', page: 'skills' });
+    expect(parseRoute('/next/settings/about')).toEqual({ name: 'settings', page: 'about' });
+    expect(parseRoute('/next/settings/nope')).toEqual({ name: 'settings', page: 'general' });
+  });
 });

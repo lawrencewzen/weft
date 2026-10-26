@@ -4,7 +4,9 @@ import {
   ConflictError,
   continueRun,
   createConversation,
+  createProvider,
   getConversationDiff,
+  patchProvider,
   getSnapshot,
   getWorkspaceFile,
   getWorkspaceTree,
@@ -223,5 +225,26 @@ describe('api client', () => {
     expect(workspaceFileUrl('w1', '../../etc/passwd')).toBe(
       '/api/v2/workspaces/w1/files?path=..%2F..%2Fetc%2Fpasswd',
     );
+  });
+
+  it('creates and patches providers through v2 endpoints', async () => {
+    const created = {
+      id: 'p1', vendor: 'DeepSeek', name: 'Work', access: 'api_key', runtime: 'model',
+      baseUrl: 'https://api.deepseek.com/v1', keyMasked: '••••3f9c', hasKey: true,
+      status: 'untested', statusText: '', lastTestedAt: null, models: [], isDefault: false,
+    };
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse(201, created))
+      .mockResolvedValueOnce(jsonResponse(200, { ...created, name: 'Home' }));
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(createProvider({
+      vendor: 'deepseek', name: 'Work', apiKey: 'sk-secret',
+    }, 'zh')).resolves.toMatchObject({ id: 'p1', keyMasked: '••••3f9c' });
+    await expect(patchProvider('p1', { name: 'Home' }, 'zh')).resolves.toMatchObject({ name: 'Home' });
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/v2/providers?lang=zh');
+    expect(JSON.parse(String(fetchMock.mock.calls[0][1].body))).toEqual({
+      vendor: 'deepseek', name: 'Work', apiKey: 'sk-secret',
+    });
+    expect(JSON.parse(String(fetchMock.mock.calls[1][1].body))).toEqual({ name: 'Home' });
   });
 });
