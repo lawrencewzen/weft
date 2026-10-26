@@ -9,6 +9,8 @@ import {
   LS_LEFT_OPEN,
   LS_LEFT_W,
   LS_OPEN_WORKSPACES,
+  LS_SUBAGENT_TREES,
+  LS_WORKSPACE_OPEN,
   LS_RIGHT_OPEN,
   LS_RIGHT_TAB,
   LS_RIGHT_W,
@@ -17,10 +19,14 @@ import {
   readOpenWorkspaces,
   readRightTab,
   readRightWidth,
+  readSubagentTrees,
+  readWorkspaceOpen,
   writeLeftWidth,
   writeOpenWorkspaces,
   writeRightTab,
   writeRightWidth,
+  writeSubagentTrees,
+  writeWorkspaceOpen,
 } from './layout';
 
 class MemoryStorage {
@@ -100,5 +106,23 @@ describe('layout prefs', () => {
     expect(readRightTab()).toBe('files');
     expect(mem.getItem(LS_RIGHT_TAB)).toBe('files');
     expect(mem.getItem(LS_RIGHT_OPEN)).toBeNull();
+  });
+
+  it('persists explicit workspace and sub-agent tree open flags under weft_next_ keys', () => {
+    const mem = new MemoryStorage();
+    // @ts-expect-error test stub
+    globalThis.localStorage = mem;
+    expect(readWorkspaceOpen()).toEqual({});
+    expect(readSubagentTrees()).toEqual({});
+    writeWorkspaceOpen({ w1: false, w2: true });
+    expect(readWorkspaceOpen()).toEqual({ w1: false, w2: true });
+    expect(mem.getItem(LS_WORKSPACE_OPEN)).toContain('w1');
+    writeSubagentTrees({ c1: true, c2: false });
+    expect(readSubagentTrees()).toEqual({ c1: true, c2: false });
+    expect(mem.getItem(LS_SUBAGENT_TREES)).toContain('c1');
+    mem.setItem(LS_WORKSPACE_OPEN, '["w1"]');
+    expect(readWorkspaceOpen()).toEqual({});
+    mem.setItem(LS_SUBAGENT_TREES, '{not json');
+    expect(readSubagentTrees()).toEqual({});
   });
 });

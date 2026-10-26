@@ -11,10 +11,14 @@ export const RIGHT_W_DEFAULT = 440;
 export const LS_LEFT_OPEN = 'weft_next_left_open';
 export const LS_LEFT_W = 'weft_next_left_w';
 export const LS_OPEN_WORKSPACES = 'weft_next_open_workspaces';
+export const LS_WORKSPACE_OPEN = 'weft_next_workspace_open';
+export const LS_SUBAGENT_TREES = 'weft_next_subagent_trees';
 export const LS_ACTIVE_WS = 'weft_next_active_ws';
 export const LS_RIGHT_OPEN = 'weft_next_right_open';
 export const LS_RIGHT_W = 'weft_next_right_w';
 export const LS_RIGHT_TAB = 'weft_next_right_tab';
+
+export type OpenRecord = Record<string, boolean>;
 
 function storage(): Storage | null {
   try {
@@ -132,6 +136,46 @@ export function writeOpenWorkspaces(ids: Iterable<string>): void {
   } catch {
     /* ignore quota */
   }
+}
+
+export function readBoolRecord(key: string): OpenRecord {
+  try {
+    const raw = storage()?.getItem(key);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+    const out: OpenRecord = {};
+    for (const [id, value] of Object.entries(parsed)) {
+      if (typeof value === 'boolean') out[id] = value;
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+export function writeBoolRecord(key: string, record: OpenRecord): void {
+  try {
+    storage()?.setItem(key, JSON.stringify(record));
+  } catch {
+    /* ignore quota */
+  }
+}
+
+export function readWorkspaceOpen(): OpenRecord {
+  return readBoolRecord(LS_WORKSPACE_OPEN);
+}
+
+export function writeWorkspaceOpen(record: OpenRecord): void {
+  writeBoolRecord(LS_WORKSPACE_OPEN, record);
+}
+
+export function readSubagentTrees(): OpenRecord {
+  return readBoolRecord(LS_SUBAGENT_TREES);
+}
+
+export function writeSubagentTrees(record: OpenRecord): void {
+  writeBoolRecord(LS_SUBAGENT_TREES, record);
 }
 
 export function readActiveWorkspace(): string | null {

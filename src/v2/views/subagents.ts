@@ -64,18 +64,27 @@ export function subagentTitle(agent: SubagentLike | null | undefined): string {
   return String(agent?.title || '').replace(/\s+/g, ' ').trim();
 }
 
+/** Default spawn names with no information, e.g. agent-1 / subagent 2 / 子 agent. */
+export const GENERIC_SUBAGENT_NAME = /^(agent|sub-?agent|子\s*agent)[\s_-]*\d*$/i;
+
+export function usableSubagentName(name: unknown): string {
+  const value = String(name || '').trim();
+  if (!value) return '';
+  if (GENERIC_SUBAGENT_NAME.test(value)) return '';
+  return value;
+}
+
 /**
- * Title fallback, same order as public/app.js subagentSummary:
- * title → brief first line → lastText → name.
+ * Title fallback: title → name (skip empty / generic defaults) → brief first line → lastText.
  */
 export function subagentSummary(agent: SubagentLike | null | undefined): string {
   const titled = subagentTitle(agent);
   if (titled) return titled;
+  const named = usableSubagentName(agent?.name);
+  if (named) return named;
   const fromBrief = firstBriefLine(agent?.brief);
   if (fromBrief) return fromBrief;
-  const last = String(agent?.lastText || '').replace(/\s+/g, ' ').trim();
-  if (last) return last;
-  return String(agent?.name || '').trim();
+  return String(agent?.lastText || '').replace(/\s+/g, ' ').trim();
 }
 
 function kernelStatus(status: unknown): string {

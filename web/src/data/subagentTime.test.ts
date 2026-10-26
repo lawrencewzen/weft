@@ -5,6 +5,7 @@ import {
   subagentActionText,
   subagentTimeText,
   subagentTreeTimeText,
+  subagentTreeVisual,
 } from './subagentTime';
 import type { Subagent } from './store';
 
@@ -53,6 +54,15 @@ describe('subagent time text', () => {
     expect(subagentTimeText(agent({ status: 'stopped' }), 'zh', NOW)).toBe('已停止');
     expect(subagentTimeText(agent({ status: 'failed' }), 'zh', NOW)).toBe('失败');
     expect(subagentTreeTimeText(agent({ status: 'failed' }), 'zh', NOW)).toBe('失败');
+  });
+
+  it('maps tree visuals: waiting uses the running spinner, failed keeps the x', () => {
+    expect(subagentTreeVisual('running')).toBe('running');
+    expect(subagentTreeVisual('waiting')).toBe('running');
+    expect(subagentTreeVisual('stuck')).toBe('stuck');
+    expect(subagentTreeVisual('done')).toBe('done');
+    expect(subagentTreeVisual('stopped')).toBe('stopped');
+    expect(subagentTreeVisual('failed')).toBe('failed');
   });
 
   it('joins currentAction and progress while running', () => {

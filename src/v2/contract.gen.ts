@@ -1464,7 +1464,7 @@ export interface components {
             id: string;
             /** @description 所属主对话 id */
             parentConversationId: string;
-            /** @description 按 title → brief 第一行 → lastText → name 回退 */
+            /** @description 按 title → name（空或默认名如 agent-1 则跳过）→ brief 第一行 → lastText 回退 */
             title: string;
             name: string;
             /** @enum {string} */

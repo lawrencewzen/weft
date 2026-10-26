@@ -175,10 +175,6 @@ test('other conversation chip expands by subscribing and collapses by unsubscrib
     await expect(page).toHaveURL(new RegExp(`/c/${aId}$`));
     const chipB = convRow(page, bId).getByTestId('next-subagent-chip');
     await expect(chipB).toBeVisible();
-    await expect(chipB).toHaveAttribute('aria-expanded', 'false');
-    await expect(treeOf(page, bId).getByTestId('next-subagent-row')).toHaveCount(0);
-
-    await chipB.click();
     await expect(chipB).toHaveAttribute('aria-expanded', 'true');
     await expect(treeOf(page, bId).getByTestId('next-subagent-row')).toHaveCount(1, { timeout: 15000 });
     await expect.poll(async () => lastTopics(page), { timeout: 10000 }).toEqual(
@@ -189,6 +185,13 @@ test('other conversation chip expands by subscribing and collapses by unsubscrib
     await expect(chipB).toHaveAttribute('aria-expanded', 'false');
     await expect.poll(async () => lastTopics(page), { timeout: 10000 }).not.toContain(`conversation:${bId}`);
     await expect.poll(async () => lastTopics(page)).toContain(`conversation:${aId}`);
+
+    await chipB.click();
+    await expect(chipB).toHaveAttribute('aria-expanded', 'true');
+    await expect(treeOf(page, bId).getByTestId('next-subagent-row')).toHaveCount(1, { timeout: 15000 });
+    await expect.poll(async () => lastTopics(page), { timeout: 10000 }).toEqual(
+      expect.arrayContaining([`conversation:${aId}`, `conversation:${bId}`]),
+    );
   } finally {
     await srv.kill();
   }
@@ -280,6 +283,97 @@ test('report open jumps to the matching sub-agent; missing sub-agent shows an er
     await page.goto(`${srv.url}/c/${encodeURIComponent(conv.id)}/a/does-not-exist`);
     await expect(page.getByTestId('next-subagent-view')).toBeVisible();
     await expect(page.getByTestId('next-error')).toHaveText('子 Agent 不存在');
+  } finally {
+    await srv.kill();
+  }
+});
+
+test('expanding conversation A then opening B leaves A expanded', async ({ page }) => {
+  const prepared = await prepareWorkspaces(['repo']);
+  const script = await writeScript(prepared.root, 'spawn-keep.json', [
+    { tool: 'subagent', args: { action: 'spawn', name: 'worker', message: HOLD } },
+    { text: 'parent-idle' },
+    { when: HOLD, delayMs: 20000, text: 'child-done' },
+  ]);
+  const srv = await startServer({
+    extraEnv: { WEFT_FAUX_SCRIPT: script, WEFT_WORKSPACE_ROOT: prepared.root },
+  });
+  try {
+    const { ws, conv: aConv } = await openWorkspaceConversation(srv, 'demo', prepared.dirs[0], 'chat-a');
+    const b = await api(srv.url, 'POST', `/workspaces/${ws.id}/conversations`, { title: 'chat-b' });
+    expect(b.status).toBe(201);
+    const aId = aConv.id;
+    const bId = b.body.id;
+
+    await openNextChat(page, srv, aId);
+    await sendNext(page, '请派子代理');
+    await waitSubagentRow(page, aId);
+    const chipA = convRow(page, aId).getByTestId('next-subagent-chip');
+    await expect(chipA).toHaveAttribute('aria-expanded', 'true');
+    await chipA.click();
+    await expect(chipA).toHaveAttribute('aria-expanded', 'false');
+    await chipA.click();
+    await expect(chipA).toHaveAttribute('aria-expanded', 'true');
+
+    await convRow(page, bId).click();
+    await expect(page).toHaveURL(new RegExp(`/c/${bId}$`));
+    await expect(convRow(page, aId).getByTestId('next-subagent-chip')).toHaveAttribute('aria-expanded', 'true');
+    await expect(treeOf(page, aId).getByTestId('next-subagent-row')).toHaveCount(1, { timeout: 15000 });
+  } finally {
+    await srv.kill();
+  }
+});
+
+test('with no saved tree state a running sub-agent tree starts open', async ({ page }) => {
+  const prepared = await prepareWorkspaces(['repo']);
+  const script = await writeScript(prepared.root, 'spawn-live-default.json', [
+    { tool: 'subagent', args: { action: 'spawn', name: 'worker', message: HOLD } },
+    { text: 'parent-idle' },
+    { when: HOLD, delayMs: 20000, text: 'child-done' },
+  ]);
+  const srv = await startServer({
+    extraEnv: { WEFT_FAUX_SCRIPT: script, WEFT_WORKSPACE_ROOT: prepared.root },
+  });
+  try {
+    const { conv } = await openWorkspaceConversation(srv, 'demo', prepared.dirs[0]);
+    await openNextChat(page, srv, conv.id);
+    await sendNext(page, '请派子代理');
+    await waitSubagentRow(page, conv.id);
+    await expect(convRow(page, conv.id).getByTestId('next-subagent-chip')).toHaveAttribute('aria-expanded', 'true');
+    await expect(treeOf(page, conv.id)).toHaveClass(/is-open/);
+  } finally {
+    await srv.kill();
+  }
+});
+
+test('finished sub-agent trees start closed, show a check, and use the name when there is no title', async ({ page }) => {
+  const prepared = await prepareWorkspaces(['repo']);
+  const script = await writeScript(prepared.root, 'spawn-done-default.json', [
+    { tool: 'subagent', args: { action: 'spawn', name: 'worker', message: 'quick-task' } },
+    { text: 'parent-idle' },
+    { when: 'quick-task', text: 'child-done' },
+  ]);
+  const srv = await startServer({
+    extraEnv: { WEFT_FAUX_SCRIPT: script, WEFT_WORKSPACE_ROOT: prepared.root },
+  });
+  try {
+    const { conv } = await openWorkspaceConversation(srv, 'demo', prepared.dirs[0]);
+    await openNextChat(page, srv, conv.id);
+    await sendNext(page, '请派子代理');
+    const chip = convRow(page, conv.id).getByTestId('next-subagent-chip');
+    await expect(chip).toBeVisible({ timeout: 45000 });
+    await expect(chip).not.toHaveClass(/is-live/, { timeout: 45000 });
+    await expect(chip).toHaveAttribute('aria-expanded', 'false');
+    await expect(treeOf(page, conv.id)).not.toHaveClass(/is-open/);
+
+    await chip.click();
+    await expect(chip).toHaveAttribute('aria-expanded', 'true');
+    const doneRow = treeOf(page, conv.id).getByTestId('next-subagent-row').first();
+    await expect(doneRow).toBeVisible();
+    await expect(doneRow).toHaveAttribute('data-status', 'done');
+    await expect(doneRow).toHaveAttribute('data-visual', 'done');
+    await expect(doneRow.getByTestId('next-subagent-summary')).toHaveText('worker');
+    await expect(doneRow.locator('.sa-check')).toHaveCSS('opacity', '1');
   } finally {
     await srv.kill();
   }

@@ -71,6 +71,55 @@ export function runningCount(conversations: ConversationSummary[]): number {
   return conversations.filter((conv) => conv.status === 'running').length;
 }
 
+export type OpenRecord = Record<string, boolean>;
+
+const LIVE_TREE_STATUSES = new Set(['running', 'stuck', 'waiting']);
+
+export function recordedFlag(record: OpenRecord, id: string): boolean | undefined {
+  if (!Object.prototype.hasOwnProperty.call(record, id)) return undefined;
+  return record[id];
+}
+
+/** No record: current workspace expanded, others collapsed. */
+export function workspaceIsOpen(wsId: string, isActive: boolean, record: OpenRecord): boolean {
+  const explicit = recordedFlag(record, wsId);
+  if (explicit !== undefined) return explicit;
+  return isActive;
+}
+
+export function toggleOpenRecord(record: OpenRecord, id: string, currentlyOpen: boolean): OpenRecord {
+  return { ...record, [id]: !currentlyOpen };
+}
+
+export function setOpenRecord(record: OpenRecord, id: string, open: boolean): OpenRecord {
+  if (record[id] === open) return record;
+  return { ...record, [id]: open };
+}
+
+export function deleteOpenRecord(record: OpenRecord, id: string): OpenRecord {
+  if (!Object.prototype.hasOwnProperty.call(record, id)) return record;
+  const next = { ...record };
+  delete next[id];
+  return next;
+}
+
+export function hasLiveSubagents(
+  counts: { live?: number; total?: number } | null | undefined,
+  agents: Array<{ status: string }> = [],
+): boolean {
+  if (agents.length) {
+    return agents.some((agent) => LIVE_TREE_STATUSES.has(agent.status));
+  }
+  return (Number(counts?.live) || 0) > 0;
+}
+
+/** No record: expand when any sub-agent is live, collapse when all have ended. */
+export function subagentTreeIsOpen(convId: string, record: OpenRecord, live: boolean): boolean {
+  const explicit = recordedFlag(record, convId);
+  if (explicit !== undefined) return explicit;
+  return live;
+}
+
 export function pickDraftWorkspace(
   workspaces: Workspace[],
   savedId: string | null,

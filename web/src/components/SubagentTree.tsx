@@ -4,11 +4,26 @@ import {
   isEndedSubagentStatus,
   isLiveSubagentStatus,
   subagentActionText,
-  subagentDotKind,
   subagentTreeTimeText,
+  subagentTreeVisual,
 } from '../data/subagentTime';
 import type { Subagent } from '../data/store';
 import { t } from '../i18n';
+
+const STATUS_ICON = (
+  <svg
+    className="subagent-status-icon"
+    viewBox="0 0 12 12"
+    aria-hidden="true"
+    data-testid="next-subagent-status-icon"
+  >
+    <circle className="sa-ring" cx="6" cy="6" r="5" fill="none" />
+    <circle className="sa-arc" cx="6" cy="6" r="5" fill="none" />
+    <path className="sa-check" d="M3.2 6.2l2 2 3.6-4" fill="none" />
+    <rect className="sa-stop" x="4.35" y="4.35" width="3.3" height="3.3" rx="0.45" />
+    <path className="sa-fail" d="M4 4l4 4M8 4l-4 4" fill="none" />
+  </svg>
+);
 
 const CHIP_ICON = (
   <svg
@@ -153,7 +168,7 @@ export function SubagentTree({
             <div className="subagent-tree-loading">{t(lang, 'loading')}</div>
           ) : agents.map((agent, index) => {
             const last = index === agents.length - 1;
-            const dot = subagentDotKind(agent.status);
+            const visual = subagentTreeVisual(agent.status);
             const time = subagentTreeTimeText(agent, lang, now);
             const action = subagentActionText(agent);
             const entering = !entered.has(agent.id);
@@ -170,7 +185,7 @@ export function SubagentTree({
                     className={[
                       'subagent-tree-row',
                       active ? 'is-active' : '',
-                      agent.status === 'stuck' ? 'is-stuck' : '',
+                      visual === 'stuck' ? 'is-stuck' : '',
                       last ? 'is-last' : '',
                       ended ? 'is-just-ended' : '',
                     ].filter(Boolean).join(' ')}
@@ -178,6 +193,7 @@ export function SubagentTree({
                     data-agent-id={agent.id}
                     data-conv-id={convId}
                     data-status={agent.status}
+                    data-visual={visual}
                     title={agent.title || agent.name}
                     onClick={() => onOpen(convId, agent.id)}
                     onContextMenu={(ev) => {
@@ -186,17 +202,12 @@ export function SubagentTree({
                       onMenu(ev, agent);
                     }}
                   >
-                    <span className="conv-status-slot">
-                      {dot ? (
-                        <span
-                          className={`conv-status-dot is-${dot}`}
-                          data-kind={dot}
-                        />
-                      ) : null}
-                    </span>
+                    {STATUS_ICON}
                     <div className="subagent-tree-main">
                       <div className="subagent-tree-line">
-                        <span className="subagent-tree-summary">{agent.title || agent.name}</span>
+                        <span className="subagent-tree-summary" data-testid="next-subagent-summary">
+                          {agent.title || agent.name}
+                        </span>
                         <span
                           className={`subagent-tree-time${agent.status === 'stuck' ? ' is-idle' : ''}`}
                           data-testid="next-subagent-time"

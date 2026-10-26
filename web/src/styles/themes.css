@@ -43,6 +43,7 @@
 /* Shared: status colours, fonts, and the legacy variable names older styles still use. */
 :root{
 --run:oklch(0.64 0.13 150);--run-ink:oklch(0.5 0.1 150);--wait:oklch(0.76 0.13 75);--wait-ink:oklch(0.55 0.12 70);--fail:oklch(0.55 0.15 25);
+--sa-check:#8fae9b;--sa-run:#2e8c5a;--sa-stuck:#c98a16;
 --add-ink:oklch(0.55 0.13 150);--del-ink:oklch(0.55 0.15 25);
 --font:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei","Helvetica Neue",Helvetica,"Segoe UI",sans-serif;
 --mono:ui-monospace,"SF Mono",Menlo,Consolas,"JetBrains Mono",monospace;
@@ -57,4 +58,9 @@
 --diff-num-col:var(--dis);--diff-hunk-bg:var(--sub);--diff-hunk-text:var(--faint);
 --syn-kw:var(--ink);--syn-fn:var(--ink3);--syn-str:var(--mute);--syn-type:var(--ink3);--syn-comment:var(--faint);--syn-num:var(--ink3);
 --code-block-bg:var(--sub2);--code-block-border:var(--line);
+}
+[data-theme="white-dark"], [data-theme="claude-dark"] {
+  --sa-check: color-mix(in oklch, var(--ok) 70%, var(--bd3));
+  --sa-run: var(--run);
+  --sa-stuck: var(--wait);
 }

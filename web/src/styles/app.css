@@ -89,6 +89,7 @@ a:hover { text-decoration: underline; }
   from { opacity: 0; transform: translateY(4px); }
   to { opacity: 1; transform: none; }
 }
+@keyframes sa-arc-spin { to { transform: rotate(360deg); } }
 
 body { font-family: var(--font); font-size: inherit; line-height: 1.6; background: var(--bg); color: var(--ink); }
 .is-hidden { display: none !important; }
@@ -222,8 +223,9 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.6; backgroun
 .subagent-tree-row {
   position: relative; display: flex; align-items: flex-start; gap: 7px; min-width: 0; max-width: 100%; overflow: hidden;
   min-height: 26px; padding: 4px 8px 4px 12px; border-radius: 7px; font-size: 12.5px; line-height: 1.4;
-  color: var(--mute); cursor: pointer; transition: background-color .45s ease;
+  color: var(--ink3); cursor: pointer; transition: background-color .45s ease;
 }
+.subagent-tree-row[data-visual="done"] { color: var(--mute); }
 .subagent-tree-row::before {
   content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 1px; background: var(--bd2); pointer-events: none;
 }
@@ -235,6 +237,43 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.6; backgroun
 .subagent-tree-row.is-just-ended { animation: subagent-row-ended 1.6s ease; }
 .subagent-tree-row:hover { background: var(--hover); }
 .subagent-tree-row.is-active { background: var(--sel); }
+.subagent-status-icon {
+  width: 12px; height: 12px; flex-shrink: 0; margin-top: 3px; display: block; overflow: visible;
+}
+.sa-ring {
+  stroke: var(--bd2); stroke-width: 1.25; opacity: 0;
+  transition: opacity .5s ease, stroke .65s ease;
+}
+.sa-arc {
+  stroke: var(--sa-run, #2e8c5a); stroke-width: 1.35; stroke-linecap: round; opacity: 0;
+  stroke-dasharray: 9.6 21.8; transform-origin: 6px 6px; transform-box: fill-box;
+  animation: sa-arc-spin .9s linear infinite;
+  transition: stroke .65s ease, opacity .55s ease;
+}
+.subagent-tree-row[data-visual="running"] .sa-ring,
+.subagent-tree-row[data-visual="stuck"] .sa-ring,
+.subagent-tree-row[data-visual="running"] .sa-arc,
+.subagent-tree-row[data-visual="stuck"] .sa-arc { opacity: 1; }
+.subagent-tree-row[data-visual="stuck"] .sa-arc {
+  stroke: var(--sa-stuck, #c98a16); animation-duration: 2.8s;
+}
+.sa-check {
+  stroke: var(--sa-check, #8fae9b);
+  stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round;
+  opacity: 0; transition: opacity .35s ease;
+}
+.subagent-tree-row[data-visual="done"] .sa-check { opacity: 1; }
+.sa-stop {
+  fill: var(--bd3); opacity: 0;
+  transform-origin: 6px 6px; transform-box: fill-box; transform: translateY(1.5px) scale(.75);
+  transition: opacity .5s ease, transform .55s ease;
+}
+.subagent-tree-row[data-visual="stopped"] .sa-stop { opacity: 1; transform: none; }
+.sa-fail {
+  stroke: var(--fail); stroke-width: 1.35; stroke-linecap: round;
+  opacity: 0; transition: opacity .35s ease;
+}
+.subagent-tree-row[data-visual="failed"] .sa-fail { opacity: 1; }
 .subagent-tree-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0; }
 .subagent-tree-line { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
 .subagent-tree-summary {
@@ -385,6 +424,7 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.6; backgroun
 
 @media (prefers-reduced-motion: reduce) {
   .conv-status-dot.is-running,
+  .sa-arc,
   .subagent-tree-row-shell.is-entering,
   .subagent-tree-row-shell.is-entering .subagent-tree-row,
   .subagent-tree-row.is-just-ended,
@@ -392,7 +432,10 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.6; backgroun
     animation: none !important;
   }
   .subagent-tree-wrap,
-  .subagent-tree-action-slot {
+  .subagent-tree-action-slot,
+  .sa-check,
+  .sa-stop,
+  .sa-fail {
     transition: color .65s ease, background-color .65s ease, opacity .65s ease !important;
   }
 }
