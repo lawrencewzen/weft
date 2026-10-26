@@ -396,13 +396,18 @@ export function Sidebar({
                     const chipTotal = counts?.total ?? agents.length;
                     const loadingOther = !isCurrent && openTree && !store.hasTopic(conversationTopic(conv.id));
                     const showTree = hasChip && (openTree || isCurrent || agents.length > 0);
+                    const viewingChild = Boolean(isCurrent && activeAgentId);
                     return (
                       <div
                         key={conv.id}
-                        className={`conv-tree-node${isCurrent ? ' conv-active' : ''}`}
+                        className={[
+                          'conv-tree-node',
+                          isCurrent && !viewingChild ? 'conv-active' : '',
+                          viewingChild ? 'conv-child-active' : '',
+                        ].filter(Boolean).join(' ')}
                       >
                         <div
-                          className="conv-node-header"
+                          className={`conv-node-header${viewingChild ? ' is-child-active' : ''}`}
                           data-testid="next-conv-row"
                           data-id={conv.id}
                           data-status={conv.status}

@@ -227,7 +227,8 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.6; backgroun
 .draft-row { padding: 6px 8px 6px 24px; }
 .conv-node-header:hover, .draft-row:hover { background: var(--hover); }
 .conv-tree-node.conv-active > .conv-node-header, .draft-row.is-active { background: var(--sel); }
-.conv-tree-node.conv-active .conv-node-title { font-weight: 500; }
+.conv-tree-node.conv-active .conv-node-title,
+.conv-tree-node.conv-child-active .conv-node-title { font-weight: 500; }
 .conv-status-slot {
   width: 12px; height: 12px; flex-shrink: 0;
   display: inline-flex; align-items: center; justify-content: center;
@@ -260,28 +261,56 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.6; backgroun
 }
 .subagent-tree-wrap.is-open { grid-template-rows: 1fr; }
 .subagent-tree-clip { overflow: hidden; min-height: 0; min-width: 0; }
-.subagent-tree { position: relative; display: flex; flex-direction: column; gap: 0; min-width: 0; overflow: hidden; padding-left: 16px; }
+.subagent-tree {
+  --subagent-tree-line: var(--bd2);
+  --subagent-tree-gutter: 9px;
+  --subagent-tree-mid: 13px;
+  position: relative; display: flex; flex-direction: column; gap: 0; min-width: 0;
+  overflow: visible; padding: 2px 0 0 16px;
+}
 .subagent-tree-loading { padding: 4px 8px 4px 12px; font-size: 12px; line-height: 1.4; color: var(--faint); }
-.subagent-tree-row-shell { display: grid; grid-template-rows: 1fr; min-width: 0; }
-.subagent-tree-row-shell.is-entering { animation: subagent-row-open .6s ease; }
+.subagent-tree-row-shell {
+  position: relative; min-width: 0; overflow: visible; border-radius: 0;
+}
+.subagent-tree-row-grow {
+  display: grid; grid-template-rows: 1fr; min-width: 0;
+}
+.subagent-tree-row-shell.is-entering .subagent-tree-row-grow { animation: subagent-row-open .6s ease; }
 .subagent-tree-row-shell-inner { overflow: hidden; min-height: 0; min-width: 0; }
+.subagent-tree-stem, .subagent-tree-v, .subagent-tree-h {
+  display: block; pointer-events: none;
+  background: var(--subagent-tree-line); overflow: visible; border-radius: 0;
+}
+.subagent-tree-stem {
+  position: absolute; left: 16px; top: 0; width: 1px; height: 2px;
+}
+.subagent-tree-v, .subagent-tree-h {
+  position: absolute; left: 0;
+}
+.subagent-tree-v {
+  top: 0; bottom: 0; width: 1px;
+}
+.subagent-tree-row-shell.is-last .subagent-tree-v {
+  bottom: auto; height: var(--subagent-tree-mid); max-height: 100%;
+}
+.subagent-tree-h {
+  top: var(--subagent-tree-mid); width: var(--subagent-tree-gutter); height: 1px;
+}
 .subagent-tree-row {
   position: relative; display: flex; align-items: flex-start; gap: 7px; min-width: 0; max-width: 100%; overflow: hidden;
-  min-height: 26px; padding: 4px 8px 4px 12px; border-radius: 7px; font-size: 12.5px; line-height: 1.4;
-  color: var(--ink3); cursor: pointer; transition: background-color .45s ease;
+  min-height: 26px; padding: 4px 8px 4px 12px; border-radius: 0; font-size: 12.5px; line-height: 1.4;
+  color: var(--ink3); cursor: pointer; background: transparent;
 }
 .subagent-tree-row[data-visual="done"] { color: var(--mute); }
 .subagent-tree-row::before {
-  content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 1px; background: var(--bd2); pointer-events: none;
+  content: ''; position: absolute; inset: 0 0 0 var(--subagent-tree-gutter);
+  border-radius: 7px; background: transparent; pointer-events: none;
+  transition: background-color .45s ease;
 }
-.subagent-tree-row::after {
-  content: ''; position: absolute; left: 0; top: 13px; width: 9px; height: 1px; background: var(--bd2); pointer-events: none;
-}
-.subagent-tree-row.is-last::before { bottom: auto; height: 13px; }
 .subagent-tree-row-shell.is-entering .subagent-tree-row { animation: subagent-row-enter .6s ease; }
-.subagent-tree-row.is-just-ended { animation: subagent-row-ended 1.6s ease; }
-.subagent-tree-row:hover { background: var(--hover); }
-.subagent-tree-row.is-active { background: var(--sel); }
+.subagent-tree-row.is-just-ended::before { animation: subagent-row-ended 1.6s ease; }
+.subagent-tree-row:hover::before { background: var(--hover); }
+.subagent-tree-row.is-active::before { background: var(--sel); }
 .subagent-status-icon {
   width: 12px; height: 12px; flex-shrink: 0; margin-top: 3px; display: block; overflow: visible;
 }
@@ -496,9 +525,10 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.6; backgroun
 @media (prefers-reduced-motion: reduce) {
   .conv-status-dot.is-running,
   .sa-arc,
-  .subagent-tree-row-shell.is-entering,
+  .subagent-tree-row-shell.is-entering .subagent-tree-row-grow,
   .subagent-tree-row-shell.is-entering .subagent-tree-row,
   .subagent-tree-row.is-just-ended,
+  .subagent-tree-row.is-just-ended::before,
   .subagent-tree-action {
     animation: none !important;
   }
