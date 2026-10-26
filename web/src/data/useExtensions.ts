@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react';
+import { useEffect, useSyncExternalStore } from 'react';
 import { useSession } from './session';
 import {
   EXTENSIONS_TOPIC,
@@ -16,8 +16,12 @@ export type ExtensionsState = {
 };
 
 export function useExtensions(): ExtensionsState {
-  const { store, status } = useSession();
+  const { store, status, retainTopic, releaseTopic } = useSession();
   useSyncExternalStore(store.subscribe, store.getVersion);
+  useEffect(() => {
+    retainTopic(EXTENSIONS_TOPIC);
+    return () => releaseTopic(EXTENSIONS_TOPIC);
+  }, [retainTopic, releaseTopic]);
   return {
     plugins: store.plugins(),
     skills: store.skills(),

@@ -63,6 +63,8 @@ export const PROVIDERS_DEFAULTS_ID = 'self';
 export type SessionTopicOpts = {
   conversationId?: string | null;
   extraConversationIds?: readonly string[];
+  /** Topics such as `extensions`, retained only while a surface needs them. */
+  extraTopics?: readonly string[];
   subagent?: { conversationId: string; agentId: string } | null;
 };
 
@@ -73,7 +75,11 @@ export function sessionTopics(
   const opts: SessionTopicOpts = cidOrOpts != null && typeof cidOrOpts === 'object'
     ? cidOrOpts
     : { conversationId: cidOrOpts, ...extra };
-  const topics = [WORKSPACES_TOPIC, PROVIDERS_TOPIC, EXTENSIONS_TOPIC];
+  const topics = [WORKSPACES_TOPIC, PROVIDERS_TOPIC];
+  const extraTopics = [...new Set((opts.extraTopics || []).filter((topic) => (
+    topic && topic !== WORKSPACES_TOPIC && topic !== PROVIDERS_TOPIC
+  )))].sort((a, b) => a.localeCompare(b));
+  for (const topic of extraTopics) topics.push(topic);
   const current = opts.conversationId || '';
   const extraIds = [...new Set((opts.extraConversationIds || []).filter((id) => id && id !== current))]
     .sort((a, b) => a.localeCompare(b));

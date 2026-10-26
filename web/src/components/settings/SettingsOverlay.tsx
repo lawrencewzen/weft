@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import type { Lang } from '../../data/lang';
 import { closeSettings, navigate, settingsPath } from '../../data/nav';
 import { SETTINGS_PAGES, type SettingsPage } from '../../data/providerWizard';
+import { useExtensions } from '../../data/useExtensions';
 import { t, type I18nKey } from '../../i18n';
 import type { ConfirmOpts } from '../ConfirmDialog';
 import { AboutPage, type AboutService } from './AboutPage';
@@ -29,6 +30,7 @@ type Props = {
 };
 
 export function SettingsOverlay({ page, lang, service, onToast, onConfirm }: Props) {
+  useExtensions();
   useEffect(() => {
     const onKey = (ev: KeyboardEvent) => {
       if (ev.key === 'Escape') {

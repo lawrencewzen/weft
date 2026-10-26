@@ -328,25 +328,24 @@ function sumRef(id: string, workspaceId: string, extra?: Partial<ConversationSum
 
 describe('workspace selectors', () => {
   it('builds session topics with workspaces first', () => {
-    expect(sessionTopics(null)).toEqual([WORKSPACES_TOPIC, PROVIDERS_TOPIC, EXTENSIONS_TOPIC]);
-    expect(sessionTopics('c1')).toEqual([WORKSPACES_TOPIC, PROVIDERS_TOPIC, EXTENSIONS_TOPIC, conversationTopic('c1')]);
+    expect(sessionTopics(null)).toEqual([WORKSPACES_TOPIC, PROVIDERS_TOPIC]);
+    expect(sessionTopics('c1')).toEqual([WORKSPACES_TOPIC, PROVIDERS_TOPIC, conversationTopic('c1')]);
   });
 
   it('adds extra conversation topics when expanding another chat and drops them when collapsing', () => {
     expect(sessionTopics({ conversationId: 'a' })).toEqual([
-      WORKSPACES_TOPIC, PROVIDERS_TOPIC, EXTENSIONS_TOPIC, conversationTopic('a'),
+      WORKSPACES_TOPIC, PROVIDERS_TOPIC, conversationTopic('a'),
     ]);
     expect(sessionTopics({
       conversationId: 'a',
       extraConversationIds: ['b'],
-    })).toEqual([WORKSPACES_TOPIC, PROVIDERS_TOPIC, EXTENSIONS_TOPIC, conversationTopic('a'), conversationTopic('b')]);
+    })).toEqual([WORKSPACES_TOPIC, PROVIDERS_TOPIC, conversationTopic('a'), conversationTopic('b')]);
     expect(sessionTopics({
       conversationId: 'a',
       extraConversationIds: ['b', 'a', 'c'],
     })).toEqual([
       WORKSPACES_TOPIC,
       PROVIDERS_TOPIC,
-      EXTENSIONS_TOPIC,
       conversationTopic('a'),
       conversationTopic('b'),
       conversationTopic('c'),
@@ -354,7 +353,7 @@ describe('workspace selectors', () => {
     expect(sessionTopics({
       conversationId: 'a',
       extraConversationIds: [],
-    })).toEqual([WORKSPACES_TOPIC, PROVIDERS_TOPIC, EXTENSIONS_TOPIC, conversationTopic('a')]);
+    })).toEqual([WORKSPACES_TOPIC, PROVIDERS_TOPIC, conversationTopic('a')]);
     expect(sessionTopics({
       conversationId: 'a',
       extraConversationIds: ['b'],
@@ -362,10 +361,22 @@ describe('workspace selectors', () => {
     })).toEqual([
       WORKSPACES_TOPIC,
       PROVIDERS_TOPIC,
-      EXTENSIONS_TOPIC,
       conversationTopic('a'),
       conversationTopic('b'),
       subagentTopic('a', 'a:sub:1'),
+    ]);
+  });
+
+  it('puts extra topics after providers and before conversation topics', () => {
+    expect(sessionTopics({ extraTopics: [EXTENSIONS_TOPIC] })).toEqual([
+      WORKSPACES_TOPIC, PROVIDERS_TOPIC, EXTENSIONS_TOPIC,
+    ]);
+    expect(sessionTopics({
+      conversationId: 'a',
+      extraTopics: [EXTENSIONS_TOPIC, WORKSPACES_TOPIC],
+      extraConversationIds: ['b'],
+    })).toEqual([
+      WORKSPACES_TOPIC, PROVIDERS_TOPIC, EXTENSIONS_TOPIC, conversationTopic('a'), conversationTopic('b'),
     ]);
   });
 

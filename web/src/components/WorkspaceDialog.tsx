@@ -33,7 +33,7 @@ function failText(err: unknown): string {
 }
 
 export function WorkspaceDialog({ lang, onClose, onToast, onCreated }: Props) {
-  const { gitConnections } = useExtensions();
+  const { gitConnections, ready } = useExtensions();
   const [tab, setTab] = useState<Tab>('local');
   const [name, setName] = useState('');
   const [nameTouched, setNameTouched] = useState(false);
@@ -387,6 +387,8 @@ export function WorkspaceDialog({ lang, onClose, onToast, onCreated }: Props) {
                     {t(lang, 'git_addr_hint_after')}
                   </p>
                 </>
+              ) : !ready ? (
+                <div className="ns-dir-empty">{t(lang, 'loading')}</div>
               ) : !conn ? (
                 <div className="ns-dir-empty">{t(lang, 'git_no_conn')}</div>
               ) : (

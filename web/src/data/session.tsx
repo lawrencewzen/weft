@@ -4,6 +4,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
@@ -24,6 +25,8 @@ export type SessionValue = {
   lang: Lang;
   extraConversationIds: string[];
   setExtraConversationIds: (ids: string[] | ((prev: string[]) => string[])) => void;
+  retainTopic: (topic: string) => void;
+  releaseTopic: (topic: string) => void;
   topics: string[];
 };
 
@@ -45,6 +48,8 @@ export function SessionProvider({
   const store = useMemo(() => createEntityStore(), []);
   const [status, setStatus] = useState<StreamStatus>('connecting');
   const [extraConversationIds, setExtraConversationIdsState] = useState<string[]>([]);
+  const extraTopicCounts = useRef(new Map<string, number>());
+  const [extraTopics, setExtraTopics] = useState<string[]>([]);
   const stream = useMemo(() => createStream({
     onStatus: setStatus,
     onSnapshot: (event) => store.applySnapshot(event),
@@ -57,9 +62,28 @@ export function SessionProvider({
     setExtraConversationIdsState((prev) => (typeof ids === 'function' ? ids(prev) : ids));
   }, []);
 
+  const retainTopic = useCallback((topic: string) => {
+    if (!topic) return;
+    const next = (extraTopicCounts.current.get(topic) || 0) + 1;
+    extraTopicCounts.current.set(topic, next);
+    if (next === 1) {
+      setExtraTopics((prev) => (prev.includes(topic) ? prev : [...prev, topic].sort()));
+    }
+  }, []);
+
+  const releaseTopic = useCallback((topic: string) => {
+    const current = extraTopicCounts.current.get(topic) || 0;
+    if (current <= 1) {
+      extraTopicCounts.current.delete(topic);
+      setExtraTopics((prev) => prev.filter((item) => item !== topic));
+      return;
+    }
+    extraTopicCounts.current.set(topic, current - 1);
+  }, []);
+
   const topics = useMemo(
-    () => sessionTopics({ conversationId, extraConversationIds, subagent }),
-    [conversationId, extraConversationIds, subagent],
+    () => sessionTopics({ conversationId, extraConversationIds, extraTopics, subagent }),
+    [conversationId, extraConversationIds, extraTopics, subagent],
   );
 
   useEffect(() => {
@@ -77,9 +101,11 @@ export function SessionProvider({
       lang,
       extraConversationIds,
       setExtraConversationIds,
+      retainTopic,
+      releaseTopic,
       topics,
     }),
-    [store, status, conversationId, lang, extraConversationIds, setExtraConversationIds, topics],
+    [store, status, conversationId, lang, extraConversationIds, setExtraConversationIds, retainTopic, releaseTopic, topics],
   );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
