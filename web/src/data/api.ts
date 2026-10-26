@@ -16,6 +16,21 @@ export type FileTree = components['schemas']['FileTree'];
 export type FileContent = components['schemas']['FileContent'];
 export type SaveResult = components['schemas']['SaveResult'];
 export type SaveFileRequest = components['schemas']['SaveFileRequest'];
+export type Provider = components['schemas']['Provider'];
+export type ProviderModel = components['schemas']['ProviderModel'];
+export type Vendor = components['schemas']['Vendor'];
+export type ProvidersSnapshot = components['schemas']['ProvidersSnapshot'];
+export type ProviderProbeResult = components['schemas']['ProviderProbeResult'];
+export type ResolvedModel = components['schemas']['ResolvedModel'];
+export type CreateProviderRequest = components['schemas']['CreateProviderRequest'];
+export type PatchProviderRequest = components['schemas']['PatchProviderRequest'];
+export type TestProviderRequest = components['schemas']['TestProviderRequest'];
+export type ProviderRemoved = components['schemas']['ProviderRemoved'];
+export type GrokSession = components['schemas']['GrokSession'];
+export type GrokLoginStart = components['schemas']['GrokLoginStart'];
+export type GrokLoginPollResult = components['schemas']['GrokLoginPollResult'];
+export type GrokLoginPollRequest = components['schemas']['GrokLoginPollRequest'];
+export type GrokLoginCancelRequest = components['schemas']['GrokLoginCancelRequest'];
 
 export class ApiError extends Error {
   readonly status: number;
@@ -242,4 +257,99 @@ export function saveWorkspaceFile(
     `/api/v2/workspaces/${encodeURIComponent(workspaceId)}/files`,
     { method: 'PUT', body: JSON.stringify(body) },
   );
+}
+
+function withLang(url: string, lang?: string): string {
+  if (!lang) return url;
+  const join = url.includes('?') ? '&' : '?';
+  return `${url}${join}lang=${encodeURIComponent(lang)}`;
+}
+
+function providerPath(id: string, suffix = ''): string {
+  return `/api/v2/providers/${encodeURIComponent(id)}${suffix}`;
+}
+
+export function getProviders(lang?: string): Promise<ProvidersSnapshot> {
+  return requestJson<ProvidersSnapshot>(withLang('/api/v2/providers', lang));
+}
+
+export function createProvider(body: CreateProviderRequest, lang?: string): Promise<Provider> {
+  return requestJson<Provider>(withLang('/api/v2/providers', lang), {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+export function patchProvider(id: string, body: PatchProviderRequest, lang?: string): Promise<Provider> {
+  return requestJson<Provider>(withLang(providerPath(id), lang), {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  });
+}
+
+export function deleteProvider(id: string): Promise<ProviderRemoved> {
+  return requestJson<ProviderRemoved>(providerPath(id), {
+    method: 'DELETE',
+    body: '{}',
+  });
+}
+
+export function testProviderDraft(body: TestProviderRequest, lang?: string): Promise<ProviderProbeResult> {
+  return requestJson<ProviderProbeResult>(withLang('/api/v2/providers/test', lang), {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+export function testProvider(id: string, lang?: string): Promise<Provider> {
+  return requestJson<Provider>(withLang(providerPath(id, '/test'), lang), {
+    method: 'POST',
+    body: '{}',
+  });
+}
+
+export function putModelContextWindow(
+  providerId: string,
+  modelId: string,
+  window: number | null,
+  lang?: string,
+): Promise<Provider> {
+  return requestJson<Provider>(
+    withLang(`${providerPath(providerId)}/models/${encodeURIComponent(modelId)}/context-window`, lang),
+    { method: 'PUT', body: JSON.stringify({ window }) },
+  );
+}
+
+export function getGrokSession(): Promise<GrokSession> {
+  return requestJson<GrokSession>('/api/v2/providers/grok/session');
+}
+
+export function startGrokLogin(): Promise<GrokLoginStart> {
+  return requestJson<GrokLoginStart>('/api/v2/providers/grok/login', {
+    method: 'POST',
+    body: '{}',
+  });
+}
+
+export function pollGrokLogin(loginId: string): Promise<GrokLoginPollResult> {
+  return requestJson<GrokLoginPollResult>('/api/v2/providers/grok/login/poll', {
+    method: 'POST',
+    body: JSON.stringify({ loginId } satisfies GrokLoginPollRequest),
+  });
+}
+
+export function cancelGrokLogin(loginId?: string): Promise<GrokSession> {
+  const body: GrokLoginCancelRequest = {};
+  if (loginId) body.loginId = loginId;
+  return requestJson<GrokSession>('/api/v2/providers/grok/login/cancel', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+export function logoutGrok(): Promise<GrokSession> {
+  return requestJson<GrokSession>('/api/v2/providers/grok/logout', {
+    method: 'POST',
+    body: '{}',
+  });
 }

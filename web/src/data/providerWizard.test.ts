@@ -1,0 +1,211 @@
+import { describe, expect, it } from 'vitest';
+import type { Vendor } from './providerWizard';
+import {
+  blankWizard,
+  brandFilters,
+  buildCreateBody,
+  buildPatchBody,
+  buildTestDraftBody,
+  canAdvance,
+  canFinish,
+  defaultWay,
+  filterVendors,
+  formatContextWindow,
+  GROK_VENDOR,
+  hostOf,
+  isMaskedApiKey,
+  waysForVendor,
+  withGrokVendor,
+  wizardFromProvider,
+} from './providerWizard';
+
+const deepseek: Vendor = {
+  id: 'deepseek',
+  name: 'DeepSeek',
+  access: 'api_key',
+  needsKey: true,
+  baseUrl: 'https://api.deepseek.com/v1',
+  brand: 'DeepSeek',
+};
+
+const custom: Vendor = {
+  id: 'custom',
+  name: '自定义 API',
+  access: 'custom_endpoint',
+  needsKey: true,
+  baseUrl: '',
+  brand: null,
+};
+
+const ollama: Vendor = {
+  id: 'ollama',
+  name: '本地 Ollama',
+  access: 'local',
+  needsKey: false,
+  baseUrl: 'http://127.0.0.1:11434/v1',
+  brand: 'Ollama',
+};
+
+describe('provider wizard', () => {
+  it('adds Grok Build in front of server vendors', () => {
+    const list = withGrokVendor([deepseek, custom]);
+    expect(list[0]).toEqual(GROK_VENDOR);
+    expect(list.map((item) => item.id)).toEqual(['grok', 'deepseek', 'custom']);
+    expect(withGrokVendor([GROK_VENDOR, deepseek])[0].id).toBe('grok');
+  });
+
+  it('offers account login only for Grok, and ACP as disabled', () => {
+    expect(waysForVendor(GROK_VENDOR)).toEqual([
+      { id: 'account', enabled: true },
+      { id: 'agent', enabled: false },
+    ]);
+    expect(defaultWay(GROK_VENDOR)).toBe('account');
+    expect(waysForVendor(deepseek).map((item) => item.id)).toEqual(['api_key', 'custom_endpoint', 'agent']);
+    expect(waysForVendor(deepseek).find((item) => item.id === 'agent')?.enabled).toBe(false);
+    expect(waysForVendor(custom)[0]).toEqual({ id: 'custom_endpoint', enabled: true });
+    expect(defaultWay(ollama)).toBe('api_key');
+  });
+
+  it('blocks next until the current step is satisfied', () => {
+    let state = blankWizard('add');
+    expect(canAdvance(state, null)).toBe(false);
+    state = { ...state, vendorId: 'deepseek' };
+    expect(canAdvance(state, deepseek)).toBe(true);
+
+    state = { ...state, step: 2, way: 'api_key', probeOk: false };
+    expect(canAdvance(state, deepseek)).toBe(false);
+    state = { ...state, probeOk: true };
+    expect(canAdvance(state, deepseek)).toBe(true);
+
+    state = { ...state, way: 'agent', probeOk: true };
+    expect(canAdvance(state, deepseek)).toBe(false);
+
+    state = { ...state, way: 'account', probeOk: false };
+    expect(canAdvance(state, GROK_VENDOR, false)).toBe(false);
+    expect(canAdvance(state, GROK_VENDOR, true)).toBe(true);
+
+    state = { ...blankWizard('edit'), step: 2, way: 'api_key', createdId: 'p1', probeOk: false };
+    expect(canAdvance(state, deepseek)).toBe(true);
+    state = { ...state, apiKeyEdited: true };
+    expect(canAdvance(state, deepseek)).toBe(false);
+    state = { ...state, probeOk: true };
+    expect(canAdvance(state, deepseek)).toBe(true);
+
+    state = { ...state, step: 3, selectedModelIds: [] };
+    expect(canAdvance(state, deepseek)).toBe(false);
+    expect(canFinish(state)).toBe(false);
+    state = { ...state, selectedModelIds: ['a', 'b'] };
+    expect(canFinish(state)).toBe(true);
+  });
+
+  it('omits apiKey from patch when the key was not edited', () => {
+    const state = {
+      ...blankWizard('edit'),
+      step: 3 as const,
+      createdId: 'p1',
+      name: 'Work',
+      originalName: 'Work',
+      apiKey: '••••3f9c',
+      originalKeyMasked: '••••3f9c',
+      apiKeyEdited: false,
+      selectedModelIds: ['deepseek-chat'],
+    };
+    expect(buildPatchBody(state)).toEqual({ models: ['deepseek-chat'] });
+  });
+
+  it('omits apiKey when the field still looks masked', () => {
+    const state = {
+      ...blankWizard('edit'),
+      name: 'Work',
+      originalName: 'Home',
+      apiKey: '••••3f9c',
+      originalKeyMasked: '••••3f9c',
+      apiKeyEdited: true,
+      selectedModelIds: ['m1'],
+    };
+    expect(buildPatchBody(state)).toEqual({ name: 'Work', models: ['m1'] });
+    expect(isMaskedApiKey('••••3f9c', '••••3f9c')).toBe(true);
+    expect(isMaskedApiKey('sk-real-secret', '••••3f9c')).toBe(false);
+  });
+
+  it('includes a new key only after it is typed', () => {
+    const state = {
+      ...blankWizard('edit'),
+      name: 'Work',
+      originalName: 'Work',
+      apiKey: 'sk-new-secret',
+      originalKeyMasked: '••••3f9c',
+      apiKeyEdited: true,
+      selectedModelIds: ['m1'],
+    };
+    expect(buildPatchBody(state)).toEqual({
+      apiKey: 'sk-new-secret',
+      models: ['m1'],
+    });
+  });
+
+  it('builds create and draft-test bodies without a masked key', () => {
+    const state = {
+      ...blankWizard('add'),
+      vendorId: 'custom',
+      way: 'custom_endpoint' as const,
+      name: 'Lab',
+      apiKey: 'sk-lab-key',
+      apiKeyEdited: true,
+      baseUrl: 'http://127.0.0.1:9/v1',
+      selectedModelIds: ['alpha', 'beta'],
+    };
+    expect(buildCreateBody(state, custom)).toEqual({
+      vendor: 'custom',
+      name: 'Lab',
+      baseUrl: 'http://127.0.0.1:9/v1',
+      apiKey: 'sk-lab-key',
+      models: ['alpha', 'beta'],
+    });
+    expect(buildTestDraftBody(state, custom)).toEqual({
+      vendor: 'custom',
+      baseUrl: 'http://127.0.0.1:9/v1',
+      apiKey: 'sk-lab-key',
+    });
+    const masked = { ...state, apiKey: '••••abcd', originalKeyMasked: '••••abcd' };
+    expect(buildTestDraftBody(masked, custom).apiKey).toBeUndefined();
+  });
+
+  it('filters vendors and formats helpers', () => {
+    expect(filterVendors([deepseek, GROK_VENDOR], 'grok').map((item) => item.id)).toEqual(['grok']);
+    expect(filterVendors([deepseek], 'claude')).toEqual([]);
+    expect(hostOf('https://api.deepseek.com/v1')).toBe('api.deepseek.com');
+    expect(formatContextWindow(200_000)).toBe('200K');
+    expect(formatContextWindow(1_000_000)).toBe('1M');
+    expect(brandFilters([
+      { id: 'a', displayName: 'A', brand: 'Claude', contextWindow: 1, contextWindowCustom: false },
+      { id: 'b', displayName: 'B', brand: 'Claude', contextWindow: 1, contextWindowCustom: false },
+      { id: 'c', displayName: 'C', brand: 'Grok', contextWindow: 1, contextWindowCustom: false },
+      { id: 'd', displayName: 'D', brand: null, contextWindow: 1, contextWindowCustom: false },
+    ]).map((item) => item.id)).toEqual(['Claude', 'Grok']);
+  });
+
+  it('starts an edit wizard on step 2 with the masked key', () => {
+    const state = wizardFromProvider({
+      id: 'p1',
+      vendor: 'DeepSeek',
+      name: 'Work',
+      access: 'api_key',
+      runtime: 'model',
+      baseUrl: 'https://api.deepseek.com/v1',
+      keyMasked: '••••3f9c',
+      hasKey: true,
+      status: 'ok',
+      statusText: '',
+      lastTestedAt: 1,
+      models: [{ id: 'deepseek-chat', displayName: 'DeepSeek Chat', brand: 'DeepSeek', contextWindow: 128000, contextWindowCustom: false }],
+      isDefault: false,
+    });
+    expect(state.mode).toBe('edit');
+    expect(state.step).toBe(2);
+    expect(state.apiKey).toBe('••••3f9c');
+    expect(state.apiKeyEdited).toBe(false);
+    expect(canAdvance(state, deepseek)).toBe(true);
+    expect(buildPatchBody(state).apiKey).toBeUndefined();
+  });
+});

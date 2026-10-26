@@ -24,22 +24,25 @@ import {
   writeLeftWidth,
 } from '../data/layout';
 import { RightPaneProvider, useRightPane } from '../data/rightPaneContext';
-import { conversationPath, draftPath, navigate } from '../data/nav';
+import { conversationPath, draftPath, navigate, rememberSettingsBehind } from '../data/nav';
 import { latestConversation, pickDraftWorkspace } from '../data/sidebarModel';
 import { useWorkspaces } from '../data/useWorkspaces';
 import { t } from '../i18n';
+import type { SettingsPage } from '../data/providerWizard';
 import type { AppRoute } from '../route';
 import { CenterPane } from './CenterPane';
 import { ConfirmDialog, type ConfirmOpts } from './ConfirmDialog';
 import { DemoModelBadge } from './DemoModelBadge';
 import { RightPane } from './RightPane';
 import { RightToggle } from './RightToggle';
+import { SettingsOverlay } from './settings/SettingsOverlay';
 import { Sidebar } from './Sidebar';
 
 type Props = {
   route: AppRoute;
   lang: Lang;
   demo?: boolean;
+  settingsPage?: SettingsPage | null;
 };
 
 function overlayKeepOpen(target: HTMLElement): boolean {
@@ -48,17 +51,58 @@ function overlayKeepOpen(target: HTMLElement): boolean {
   );
 }
 
-export function AppShell({ route, lang, demo = false }: Props) {
+export function AppShell({ route, lang, demo = false, settingsPage = null }: Props) {
   const { workspaces, conversations, groups, latest, ready } = useWorkspaces();
   const [toast, setToast] = useState<string | null>(null);
   const toastTimer = useRef<number | null>(null);
+  const [homeStandIn, setHomeStandIn] = useState<AppRoute | null>(null);
 
-  const activeConversationId = route.name === 'conversation'
-    ? route.id
-    : route.name === 'subagent'
-      ? route.conversationId
+  useEffect(() => {
+    if (route.name !== 'home') {
+      setHomeStandIn((current) => (current ? null : current));
+      return;
+    }
+    if (!ready) return;
+    if (latest) {
+      writeActiveWorkspace(latest.workspaceId);
+      const path = conversationPath(latest.id);
+      if (settingsPage) {
+        rememberSettingsBehind(path);
+        setHomeStandIn((current) => (
+          current?.name === 'conversation' && current.id === latest.id
+            ? current
+            : { name: 'conversation', id: latest.id }
+        ));
+        return;
+      }
+      navigate(path, { replace: true });
+      return;
+    }
+    const ws = pickDraftWorkspace(workspaces, readActiveWorkspace());
+    if (ws) {
+      writeActiveWorkspace(ws.id);
+      const path = draftPath(ws.id);
+      if (settingsPage) {
+        rememberSettingsBehind(path);
+        setHomeStandIn((current) => (
+          current?.name === 'draft' && current.workspaceId === ws.id
+            ? current
+            : { name: 'draft', workspaceId: ws.id }
+        ));
+        return;
+      }
+      navigate(path, { replace: true });
+    }
+  }, [route.name, ready, latest, workspaces, settingsPage]);
+
+  const viewRoute = route.name === 'home' && homeStandIn ? homeStandIn : route;
+
+  const activeConversationId = viewRoute.name === 'conversation'
+    ? viewRoute.id
+    : viewRoute.name === 'subagent'
+      ? viewRoute.conversationId
       : null;
-  const draftWorkspaceId = route.name === 'draft' ? route.workspaceId : null;
+  const draftWorkspaceId = viewRoute.name === 'draft' ? viewRoute.workspaceId : null;
   const workspaceId = draftWorkspaceId
     || groups.find((group) => group.conversations.some((conv) => conv.id === activeConversationId))?.workspace.id
     || null;
@@ -77,15 +121,15 @@ export function AppShell({ route, lang, demo = false }: Props) {
       onToast={showToast}
     >
       <AppShellLayout
-        route={route}
+        route={viewRoute}
         lang={lang}
         demo={demo}
+        settingsPage={settingsPage}
         toast={toast}
         onToast={showToast}
         workspaces={workspaces}
         conversations={conversations}
         groups={groups}
-        latest={latest}
         ready={ready}
       />
     </RightPaneProvider>
@@ -96,12 +140,12 @@ type LayoutProps = {
   route: AppRoute;
   lang: Lang;
   demo: boolean;
+  settingsPage: SettingsPage | null;
   toast: string | null;
   onToast: (message: string) => void;
   workspaces: ReturnType<typeof useWorkspaces>['workspaces'];
   conversations: ReturnType<typeof useWorkspaces>['conversations'];
   groups: ReturnType<typeof useWorkspaces>['groups'];
-  latest: ReturnType<typeof useWorkspaces>['latest'];
   ready: boolean;
 };
 
@@ -109,12 +153,12 @@ function AppShellLayout({
   route,
   lang,
   demo,
+  settingsPage,
   toast,
   onToast,
   workspaces,
   conversations,
   groups,
-  latest,
   ready,
 }: LayoutProps) {
   const right = useRightPane();
@@ -143,29 +187,11 @@ function AppShellLayout({
   const draftWorkspaceId = route.name === 'draft' ? route.workspaceId : null;
 
   const visibleWorkspaces = workspaces.filter((ws) => !removedIds.includes(ws.id));
-  const visibleConversations = conversations.filter((conv) => !removedIds.includes(conv.workspaceId));
-  const visibleLatest = latest && !removedIds.includes(latest.workspaceId)
-    ? latest
-    : latestConversation(visibleConversations);
 
   const workspace = draftWorkspaceId
     ? workspaces.find((item) => item.id === draftWorkspaceId)
     : groups.find((group) => group.conversations.some((conv) => conv.id === activeConversationId))?.workspace;
   const workspaceLabel = workspace?.path || workspace?.name || '';
-
-  useEffect(() => {
-    if (route.name !== 'home' || !ready) return;
-    if (visibleLatest) {
-      writeActiveWorkspace(visibleLatest.workspaceId);
-      navigate(conversationPath(visibleLatest.id), { replace: true });
-      return;
-    }
-    const ws = pickDraftWorkspace(visibleWorkspaces, readActiveWorkspace());
-    if (ws) {
-      writeActiveWorkspace(ws.id);
-      navigate(draftPath(ws.id), { replace: true });
-    }
-  }, [route.name, ready, visibleLatest, visibleWorkspaces]);
 
   useEffect(() => {
     const onResize = () => {
@@ -363,6 +389,14 @@ function AppShellLayout({
           opts={confirm.opts}
           onCancel={() => finishConfirm(false)}
           onConfirm={() => finishConfirm(true)}
+        />
+      ) : null}
+      {settingsPage ? (
+        <SettingsOverlay
+          page={settingsPage}
+          lang={lang}
+          onToast={onToast}
+          onConfirm={askConfirm}
         />
       ) : null}
     </div>
