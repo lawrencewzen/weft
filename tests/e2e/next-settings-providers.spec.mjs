@@ -96,34 +96,34 @@ async function openProviders(page) {
 
 test('settings overlay opens from the sidebar, Esc returns, and other tabs are placeholders', async ({ page }) => {
   await boot(page);
-  await expect(page).toHaveURL(/\/next\//);
+  await expect(page).toHaveURL(/http:\/\/127\.0\.0\.1:\d+\/$/);
   await page.getByTestId('next-open-settings').click();
   await expect(page.getByTestId('next-settings')).toBeVisible();
-  await expect(page).toHaveURL(/\/next\/settings\/general/);
+  await expect(page).toHaveURL(/\/settings\/general/);
   await expect(page.getByTestId('next-settings-general')).toBeVisible();
   await expect(page.getByTestId('next-pref-lang')).toBeVisible();
   await page.getByTestId('next-settings-nav-git').click();
-  await expect(page).toHaveURL(/\/next\/settings\/git/);
+  await expect(page).toHaveURL(/\/settings\/git/);
   await expect(page.getByTestId('next-settings-git')).toBeVisible();
   await expect(page.getByTestId('next-git-add')).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(page.getByTestId('next-settings')).toHaveCount(0);
-  await expect(page).toHaveURL(/\/next\//);
+  await expect(page).toHaveURL(/http:\/\/127\.0\.0\.1:\d+\/$/);
 });
 
-test('opening /next/settings/providers keeps the overlay on the Provider page', async ({ page }) => {
+test('opening /settings/providers keeps the overlay on the Provider page', async ({ page }) => {
   const { prepared } = await boot(page);
   await openWorkspaceConversation(srv, 'repo', prepared.dirs[0]);
   await expect(page.getByTestId('next-new-chat')).toBeEnabled();
-  await page.goto(new URL('/next/settings/providers', page.url()).href);
+  await page.goto(new URL('/settings/providers', page.url()).href);
   await expect(page.getByTestId('next-settings')).toBeVisible();
   await expect(page.getByTestId('next-settings-nav-providers')).toHaveClass(/is-on/);
   await expect(page.getByTestId('next-provider-add')).toBeVisible();
   await expect(page.getByTestId('next-provider-add')).not.toHaveClass(/ns-btn-primary/);
-  await expect(page).toHaveURL(/\/next\/settings\/providers$/);
+  await expect(page).toHaveURL(/\/settings\/providers$/);
   await page.keyboard.press('Escape');
   await expect(page.getByTestId('next-settings')).toHaveCount(0);
-  await expect(page).toHaveURL(/\/next\/(c|w)\//);
+  await expect(page).toHaveURL(/\/(c|w)\//);
 });
 
 test('add provider: failed 401, then pass, pick two models, default, rename, delete; key never leaks', async ({ page }) => {

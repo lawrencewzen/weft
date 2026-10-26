@@ -5,6 +5,7 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { startServer, stopServer } from './_server.mjs';
 import { ROOT } from './_root.mjs';
+import { NOT_BUILT_HINT } from '../../src/v2/auth.ts';
 
 function raw({ port, method = 'GET', path: reqPath = '/' }) {
   return new Promise((resolve, reject) => {
@@ -29,52 +30,67 @@ function raw({ port, method = 'GET', path: reqPath = '/' }) {
   });
 }
 
-test('GET /next redirects to /next/', async () => {
+test('GET /next redirects to / and keeps the query string', async () => {
   const srv = await startServer();
   try {
-    const res = await raw({ port: srv.port, path: '/next' });
+    const res = await raw({ port: srv.port, path: '/next?x=1' });
     assert.equal(res.status, 302);
-    assert.equal(res.headers.location, '/next/');
+    assert.equal(res.headers.location, '/?x=1');
   } finally {
     await stopServer(srv);
   }
 });
 
-test('GET /next/assets/not-exist.js is 404', async () => {
+test('GET /next/<path> redirects to the same path without the prefix', async () => {
   const srv = await startServer();
   try {
-    const res = await raw({ port: srv.port, path: '/next/assets/not-exist.js' });
+    const res = await raw({ port: srv.port, path: '/next/c/abc?y=2' });
+    assert.equal(res.status, 302);
+    assert.equal(res.headers.location, '/c/abc?y=2');
+  } finally {
+    await stopServer(srv);
+  }
+});
+
+test('GET /assets/not-exist.js is 404', async () => {
+  const srv = await startServer();
+  try {
+    const res = await raw({ port: srv.port, path: '/assets/not-exist.js' });
     assert.equal(res.status, 404);
   } finally {
     await stopServer(srv);
   }
 });
 
-test('GET /next/ is SPA html when built, or the not-built message', async () => {
+test('GET / is SPA html when built, or the not-built message', async () => {
   const srv = await startServer();
   try {
-    const res = await raw({ port: srv.port, path: '/next/' });
+    const res = await raw({ port: srv.port, path: '/' });
     const built = existsSync(path.join(ROOT, 'public-next', 'index.html'));
     if (built) {
       assert.equal(res.status, 200);
       assert.match(res.headers['content-type'] || '', /text\/html/);
-      assert.match(res.text, /next-app|Weft|\/next\/assets\//);
+      assert.match(res.text, /next-app|Weft|\/assets\//);
     } else {
       assert.equal(res.status, 404);
-      assert.match(res.text, /npm run build:web/);
+      assert.equal(res.text, NOT_BUILT_HINT);
     }
   } finally {
     await stopServer(srv);
   }
 });
 
-test('GET / still serves the old frontend', async () => {
+test('GET /legacy serves the old frontend', async () => {
   const srv = await startServer();
   try {
-    const res = await raw({ port: srv.port, path: '/' });
+    const bounce = await raw({ port: srv.port, path: '/legacy' });
+    assert.equal(bounce.status, 302);
+    assert.equal(bounce.headers.location, '/legacy/');
+    const res = await raw({ port: srv.port, path: '/legacy/' });
     assert.equal(res.status, 200);
     assert.match(res.text, /data-testid="new-chat-top"/);
     assert.doesNotMatch(res.text, /data-testid="next-app"/);
+    assert.match(res.text, /href="\/legacy\/themes\.css"/);
   } finally {
     await stopServer(srv);
   }

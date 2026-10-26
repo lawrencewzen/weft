@@ -11,7 +11,7 @@ const INLINE_SCRIPT_RE = /<script\b(?![^>]*\bsrc\s*=)[^>]*>/i;
 
 export default defineConfig({
   root: webRoot,
-  base: '/next/',
+  base: '/',
   plugins: [
     react(),
     {

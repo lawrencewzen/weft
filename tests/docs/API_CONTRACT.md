@@ -20,7 +20,7 @@
 | `WEFT_GIT_BIN` | git 可执行文件。缺省 `git`。Windows 上可设为 `git.exe` 的完整路径 | 不设 |
 | `WEFT_GIT_HTTP_HOSTS` | 允许用 `http://` 克隆的主机名，逗号分隔，大小写不敏感，不含端口。其它 `http://` 拒绝 | 不设 |
 | `WEFT_GIT_CA_FILE` | 设置后克隆命令增加 `-c http.sslCAInfo=<路径>`，用于自签或内网 CA | 不设 |
-启动完成后 stdout 打印一行 `WEFT_READY http://127.0.0.1:<port>`。未设置 `WEFT_TOKEN` 时不再打印 `WEFT_LOGIN` 或 `WEFT_TOKEN`。`GET /api/health` → `{ok:true}`。服务只监听 `127.0.0.1`。`Host` 不在白名单为 400；写请求带非同源 `Origin` 为 403；写请求的 `Content-Type` 不是 `application/json` 为 415。这三项与是否设置 `WEFT_TOKEN` 无关。
+启动完成后 stdout 打印一行 `WEFT_READY http://127.0.0.1:<port>`，紧接着一行 `打开新版界面：http://127.0.0.1:<port>/auth?code=…`。未设置 `WEFT_TOKEN` 时不打印 `WEFT_LOGIN` 或 `WEFT_TOKEN`。`GET /api/health` → `{ok:true}`。服务只监听 `127.0.0.1`。`Host` 不在白名单为 400；写请求带非同源 `Origin` 为 403；写请求的 `Content-Type` 不是 `application/json` 为 415。这三项与是否设置 `WEFT_TOKEN` 无关。
 
 未设置 `WEFT_LLM=faux`、`LLM_API=faux`、`WEFT_FAUX_SCRIPT` 时，没有已登录的 Grok 来源，也没有可用的 API 来源，就**不能**回落到 faux。此时发消息的运行以 `failed` 结束，不写助手回复。SSE `error` 与 `GET /conversations/:cid` 的 `llmError` 为 `{code:'E_NO_MODEL', message:'err_no_model'}`。`GET /api/settings` 增加 `runtime`：`faux` | `openai` | `none`。`runtime==='faux'` 时界面显示「演示模型」。模型来源与默认绑定见 §8。
 

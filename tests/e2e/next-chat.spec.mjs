@@ -22,8 +22,8 @@ async function loginNext(page, srv) {
   });
   expect(issued.status).toBe(200);
   const body = await issued.json();
-    await page.goto(`${srv.url}/next/login?code=${encodeURIComponent(body.code)}`);
-  await expect(page).toHaveURL(/\/next\//);
+    await page.goto(`${srv.url}/auth?code=${encodeURIComponent(body.code)}`);
+  await expect(page).not.toHaveURL(/\/auth(?:\?|$)/);
   await expect(page.getByTestId('next-app')).toBeVisible();
 }
 
@@ -45,7 +45,7 @@ test('sends a message and the live assistant item becomes the final one', async 
   try {
     const { conv } = await openWorkspaceConversation(srv, 'demo', prepared.dirs[0]);
     await loginNext(page, srv);
-    await page.goto(`${srv.url}/next/c/${encodeURIComponent(conv.id)}`);
+    await page.goto(`${srv.url}/c/${encodeURIComponent(conv.id)}`);
     await expect(page.getByTestId('next-thread')).toBeVisible();
     await page.getByTestId('next-composer-input').fill('写个 README');
     await page.getByTestId('next-send').click();
@@ -80,7 +80,7 @@ test('a tool-script conversation shows the group summary and rows when expanded'
   try {
     const { conv } = await openWorkspaceConversation(srv, 'tools', ws);
     await loginNext(page, srv);
-    await page.goto(`${srv.url}/next/c/${encodeURIComponent(conv.id)}`);
+    await page.goto(`${srv.url}/c/${encodeURIComponent(conv.id)}`);
     await page.getByTestId('next-composer-input').fill('看看');
     await page.getByTestId('next-send').click();
     await expect(page.getByTestId('next-tool-group-text')).toBeVisible({ timeout: 20000 });
@@ -105,7 +105,7 @@ test('the send button becomes stop while WEFT_FAUX_HOLD=1 and stop ends the run'
   try {
     const { conv } = await openWorkspaceConversation(srv, 'hold', prepared.dirs[0]);
     await loginNext(page, srv);
-    await page.goto(`${srv.url}/next/c/${encodeURIComponent(conv.id)}`);
+    await page.goto(`${srv.url}/c/${encodeURIComponent(conv.id)}`);
     await page.getByTestId('next-composer-input').fill('run');
     await page.getByTestId('next-send').click();
     await expect(page.getByTestId('next-item-user')).toContainText('run');

@@ -333,28 +333,28 @@ test('vendor ESM files are served locally and node_modules is not exposed', asyn
     });
     proc.removeAllListeners('exit');
 
-    const markedRes = await fetch(`${base}/vendor/marked.esm.js`);
+    const markedRes = await fetch(`${base}/legacy/vendor/marked.esm.js`);
     assert.equal(markedRes.status, 200);
     assert.match(markedRes.headers.get('content-type') || '', /javascript/);
     const markedText = await markedRes.text();
     assert.match(markedText, /marked v18/);
     assert.doesNotMatch(markedText, /cdn\.jsdelivr|unpkg\.com|cdnjs/i);
 
-    const purifyRes = await fetch(`${base}/vendor/purify.es.mjs`);
+    const purifyRes = await fetch(`${base}/legacy/vendor/purify.es.mjs`);
     assert.equal(purifyRes.status, 200);
     assert.match(purifyRes.headers.get('content-type') || '', /javascript/);
     const purifyText = await purifyRes.text();
     assert.match(purifyText, /DOMPurify 3\.4\.17/);
     assert.doesNotMatch(purifyText, /cdn\.jsdelivr|unpkg\.com|cdnjs/i);
 
-    const missing = await fetch(`${base}/vendor/not-allowed.js`);
+    const missing = await fetch(`${base}/legacy/vendor/not-allowed.js`);
     const missingText = await missing.text();
     assert.doesNotMatch(missingText, /marked v18|DOMPurify/);
 
     const leaked = await fetch(`${base}/node_modules/marked/lib/marked.esm.js`);
     const leakedText = await leaked.text();
+    assert.equal(leaked.status, 404);
     assert.doesNotMatch(leakedText, /a markdown parser built for speed/i);
-    assert.match(leakedText, /<html/i);
   } finally {
     await stopProcess(proc);
     await rm(dataDir, { recursive: true, force: true });

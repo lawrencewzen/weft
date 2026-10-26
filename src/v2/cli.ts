@@ -32,7 +32,7 @@ const LOG_REL = path.join('logs', 'service.log');
 
 const USAGE = `用法: weft [--data-dir <路径>] <open|status|stop> [--print]
 
-  open    找到或拉起服务，打开浏览器登录 /next
+  open    找到或拉起服务，打开浏览器登录新版界面
   status  显示服务是否在运行
   stop    请求空闲的服务退出`;
 
@@ -444,7 +444,7 @@ async function issueLoginUrl(service: LiveService): Promise<string> {
   if (typeof code !== 'string' || !code) {
     throw new CliError('申请登录码失败：响应无效', 1);
   }
-  return `http://127.0.0.1:${service.discovery.port}/next/login?code=${encodeURIComponent(code)}`;
+  return `http://127.0.0.1:${service.discovery.port}/auth?code=${encodeURIComponent(code)}`;
 }
 
 function browserCommand(url: string): { command: string; args: string[] } {

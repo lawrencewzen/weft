@@ -1,102 +1,81 @@
-# Docker / VPS 部署与数据保护
+# 本地 / 内网 Windows 部署
 
-面向已经完成 [本机演示](GETTING_STARTED.md)、准备在自己的 VPS 上长期运行的用户。当前是单用户 Agent，部署默认以 **Docker Compose + SQLite 命名卷 + HTTPS 反向代理** 为基础。请勿把一次模拟进程恢复测试等同于灾难恢复。
+Weft 是单用户本机服务，只监听 `127.0.0.1`。目标环境是内网 Windows + Node 22，用 `npm install` 和 `npm start` 即可，不使用 Docker。
 
-## 1. 前置检查
+先按 [快速开始](GETTING_STARTED.md) 在本机跑通，再按本文做成常驻服务。
 
-- Docker Engine 和 Docker Compose v2（命令是 `docker compose`，不是旧版 `docker-compose`）。
-- 服务器可拉取 Node 镜像。
-- HTTPS 域名、Nginx/Caddy/其他反向代理，以及不与其他服务冲突的宿主机端口。
-- 已在模型服务商设置 API 预算和额度限制；本项目不会替你阻止高额调用。
+## 1. 环境
 
-```bash
-git clone https://github.com/xiaomoBoy/pi-durable-assistant.git
-cd pi-durable-assistant
-cp .env.example .env
+- **Node.js >= 22.19**（`package.json` 的 `engines.node`）。Windows 安装官方安装包，把 `node` 和 `npm` 加进 PATH。
+- Git。导入仓库还需要本机 Git for Windows，或把 `WEFT_GIT_BIN` 设成 `git.exe` 的完整路径。
+- npm 镜像必须能装 **开发依赖**。新版网页端在 `npm install` / `npm ci` 时用 Vite 构建；`--omit=dev` 或镜像缺 `vite` 时安装不会失败，但访问 `/` 会提示运行 `npm run build:web`。
+
+```bat
+git clone https://github.com/lawrencewzen/weft.git
+cd weft
+node --version
+npm ci
 ```
 
-编辑 `.env`，至少设置 `DEMO_PASSWORD`、`LLM_API`、`LLM_BASE_URL`、`LLM_API_KEY` 和 `LLM_MODEL`。详见 [全部配置项](CONFIGURATION.md)。**生产模式不允许空密码。**
+## 2. 数据目录
 
-## 2. 部署核心服务
+默认是仓库下的 `data/`（对话索引 `weft.sqlite`、Harness 的 `harness/session.sqlite`、插件和技能、发现文件 `service.json`）。
 
-```bash
-docker compose config --quiet
-docker compose up -d --build
-docker compose ps
-docker compose logs --tail=100 pi-durable-assistant
+生产建议把数据放到仓库以外，避免升级时被覆盖：
+
+```bat
+set WEFT_DATA_DIR=D:\weft-data
+npm start
 ```
 
-默认 `HOST_PORT=3300`，Compose 只发布 `127.0.0.1:3300:3000`。从服务器上验证（例：已经设置了口令）：
+备份时复制整个数据目录（含 `-wal` / `-shm`）。先停服务再拷，一致性最好。不要把备份提交进 Git。
 
-```bash
-curl -u demo:YOUR_PASSWORD http://127.0.0.1:3300/api/info
+## 3. 启动与登录
+
+```bat
+npm start
 ```
 
-示例 `YOUR_PASSWORD` 必须换成自己的密码；避免在共享机器的 Shell 历史里保留明文凭据。可直接使用 `curl -u demo` 交互输入密码。
+进程只绑定 `127.0.0.1`。默认端口 `3000`，可用 `PORT` 改。启动成功后 stdout 两行：
 
-`NODE_ENV=production` 的网页入口使用 HTTP Basic Auth；**不要开放 3000 或 3300 给公网访问**。
-
-### Nginx 反向代理示例
-
-先由现有 TLS 配置提供 `https://assistant.example.com`（证书、域名均为占位符），再在其 HTTPS server 内配置：
-
-```nginx
-location / {
-    proxy_pass http://127.0.0.1:3300;
-    proxy_http_version 1.1;
-    proxy_set_header Host $host;
-    proxy_set_header X-Forwarded-Proto $scheme;
-    proxy_buffering off;      # SSE / streaming
-    proxy_read_timeout 1h;
-}
+```
+WEFT_READY http://127.0.0.1:<端口>
+打开新版界面：http://127.0.0.1:<端口>/auth?code=<码>
 ```
 
-反向代理应保留 `Authorization` 请求头。Basic Auth 必须配合 TLS，不能让公网明文传输口令。某些 CDN、企业代理有连接超时或缓存策略，SSE 断线自动重连可用，但不能代替真正的请求稳定性。
+第一行格式固定，测试和工具依赖它。第二行的码 10 分钟有效、只能用一次；过期后用 `weft open` 重新生成。码只出现在这一次控制台（以及若把 stdout 重定向到日志文件，则在该文件里），不会写入发现文件。
 
-## 3. 安全升级与备份
+`weft open` 仍然可用：找到或拉起服务，申请一枚 60 秒码并打开浏览器。这和启动时打印的 10 分钟码是两套，互不影响。不做本机免登录。
 
-**禁止以 `docker compose down -v` 升级。** `-v` 会删除项目命名卷，可能永久丢失 SQLite 和已完成任务。
-
-项目现阶段没有内置自动化、已演练的 SQLite 在线备份任务。建议：
-
-1. 停止写入后再备份（最简单的一致性策略）。执行 `docker compose stop`。
-2. 备份前检查 `docker volume ls` 和 `docker compose ps -a`，识别本项目数据卷，并保证外部备份介质有剩余空间。
-3. 以下命令演示**在服务停止后备份主应用数据**；它使用现有应用容器已挂载的数据卷，避免猜测 Compose 自动生成的卷名称：
-
-```bash
-mkdir -p backups
-docker compose stop pi-durable-assistant
-docker run --rm --volumes-from pi-durable-assistant \
-  -v "$PWD/backups:/backup" alpine:3.21 \
-  sh -c 'cd /data && tar -czf /backup/pi-durable-data.tar.gz .'
-ls -lh backups/pi-durable-data.tar.gz
-docker compose up -d pi-durable-assistant
+```bat
+npm run weft -- open
+npm run weft -- status
+npm run weft -- stop
 ```
 
-`backups/` 在执行本例时位于仓库内，**切勿将备份压缩包提交到 Git**；应尽快安全地移到仓库以外（最好离开这台 VPS），并限制访问权限。恢复演练应在**单独的测试环境和新数据卷**进行，不能直接覆盖现有生产数据。
+旧版界面在 `/legacy`。旧接口 `/api/*` 不变。可选的旧登录 `GET /login?token=`（`WEFT_TOKEN`）行为不变。
 
-这些备份和任何包含对话内容的 SQLite 文件都属于敏感数据。
+## 4. 常驻和空闲退出
 
-完成备份后再升级：
+- 手动 `npm start` **不会**因空闲而退出，适合当成本机常驻。
+- `weft open` 拉起的进程会带 `WEFT_LAUNCHED_BY=weft-open`，空闲超过 `WEFT_IDLE_EXIT_MINUTES`（默认 30）且没有运行中的任务、也没有客户端连接时自行退出。`0` 表示不退出。
+- Windows 上可用「任务计划程序」或启动文件夹在登录时执行 `npm start`（先 `cd` 到安装目录并设置 `WEFT_DATA_DIR`）。不需要管理员权限。
+- 停止：有任务在跑时 `weft stop` 会拒绝；空闲时退出。任务管理器结束进程也可以，下次启动会按检查点恢复对话。
 
-```bash
-git pull --ff-only
-docker compose up -d --build
-docker compose ps
-```
+## 5. 升级
 
-涉及功能分支合并、数据库格式或外部通道变化时，必须核对本次版本说明与 GitHub CI，再升级。**F6 自动备份与灾难恢复尚未在主分支实现**，当前只能采取上述运营流程。
+1. 停服务（`npm run weft -- stop`，或结束 `node server.mjs`）。
+2. `git pull --ff-only`（或换到要部署的 tag / 提交）。
+3. `npm ci`（会再次构建新版网页端）。
+4. 用原来的 `WEFT_DATA_DIR` 重新 `npm start`。
 
-## 4. 运行验收
+不要删除数据目录。涉及数据库格式变化时先看该版本说明和 CI。
 
-部署完至少执行：
+## 6. 验收
 
-- `docker compose ps` 中服务为运行状态，`/api/info` 在提供凭据后可以返回信息。
-- 浏览器创建一轮真实模型对话，确认 SSE 流、工具调用、任务中心正常。
-- 创建 1 个提醒、1 个后台任务，重启主服务后查看它们的持久状态；**不要通过 `down -v` 验证恢复**。
-- 需要手机推送时用真实目标检查 `NOTIFY_MODE=all`；主分支普通 Webhook 没有持久重试保障。
-- 至少在隔离环境验证一次备份可以恢复。没有这一步，不能把它视为生产级数据可靠性。
+- 控制台有 `WEFT_READY` 和登录链接；点链接能进新版界面。
+- `npm run weft -- status` 能读到端口和 pid。
+- 发一条消息（演示模型或真实模型），刷新页面后对话还在。
+- `/legacy` 仍能打开旧界面（过渡期）。
 
-## 5. 故障与限制
-
-配置、模型、SSE、权限和附件问题见 [故障排查](TROUBLESHOOTING.md)。此项目不包含多用户账户、细粒度权限、自动升级回滚或统一成本上限。公网使用前需自行评估隐私和供应商 API 账单风险。
+配置项见 [CONFIGURATION.md](CONFIGURATION.md)，排障见 [TROUBLESHOOTING.md](TROUBLESHOOTING.md)。

@@ -2,8 +2,10 @@ import { expect } from '@playwright/test';
 
 /** Open the workbench. Pass token only when the server was started with WEFT_TOKEN. */
 export async function login(page, url, token) {
-  const target = token ? `${url}/login?token=${encodeURIComponent(token)}` : `${url}/`;
-  await page.goto(target);
+  if (token) {
+    await page.goto(`${url}/login?token=${encodeURIComponent(token)}`);
+  }
+  await page.goto(`${url}/legacy`);
   await expect(page.getByTestId('composer-agent')).toBeVisible();
 }
 

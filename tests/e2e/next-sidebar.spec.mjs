@@ -59,7 +59,7 @@ test('two workspaces group and sort conversations; switching updates the url and
 
     await loginNext(page, srv);
     await waitSidebar(page);
-    await expect(page).toHaveURL(new RegExp(`/next/c/${b2.id}$`));
+    await expect(page).toHaveURL(new RegExp(`/c/${b2.id}$`));
 
     const nodes = page.getByTestId('next-ws-node');
     await expect(nodes).toHaveCount(2);
@@ -73,7 +73,7 @@ test('two workspaces group and sort conversations; switching updates the url and
 
     await wsNode(page, 'alpha').getByTestId('next-ws-toggle').click();
     await convRow(page, a2.id).click();
-    await expect(page).toHaveURL(new RegExp(`/next/c/${a2.id}$`));
+    await expect(page).toHaveURL(new RegExp(`/c/${a2.id}$`));
     await expect(page.getByTestId('next-thread')).toBeVisible();
     await expect(page.getByTestId('next-status')).toContainText('alpha-new');
     expect(csp, 'page console has no CSP errors').toEqual([]);
@@ -94,7 +94,7 @@ test('running status appears from the stream and disappears after stop, without 
     const ws = await createWorkspace(srv, 'hold', prepared.dirs[0]);
     const conv = await createConversation(srv, ws.id, 'held');
     await loginNext(page, srv);
-    await page.goto(`${srv.url}/next/c/${encodeURIComponent(conv.id)}`);
+    await page.goto(`${srv.url}/c/${encodeURIComponent(conv.id)}`);
     await waitSidebar(page);
     await expect(page.getByTestId('next-composer-input')).toBeVisible();
     await page.getByTestId('next-composer-input').fill('run');
@@ -130,12 +130,12 @@ test('new-conversation draft posts on first send then jumps to the new chat', as
     await loginNext(page, srv);
     await waitSidebar(page);
     await wsNode(page, 'draft').getByTestId('next-ws-add').click();
-    await expect(page).toHaveURL(new RegExp(`/next/w/${ws.id}/new$`));
+    await expect(page).toHaveURL(new RegExp(`/w/${ws.id}/new$`));
     await expect(page.getByTestId('next-draft-row')).toBeVisible();
     await expect(page.getByTestId('next-composer-input')).toBeVisible();
     await page.getByTestId('next-composer-input').fill('写个 README');
     await page.getByTestId('next-send').click();
-    await expect(page).toHaveURL(/\/next\/c\/[^/]+$/, { timeout: 20000 });
+    await expect(page).toHaveURL(/\/c\/[^/]+$/, { timeout: 20000 });
     await expect(page.getByTestId('next-draft-row')).toHaveCount(0);
     const top = wsNode(page, 'draft').getByTestId('next-conv-row').first();
     await expect(top).not.toHaveAttribute('data-id', existing.id);
@@ -189,7 +189,7 @@ test('removing a workspace with a running conversation is rejected', async ({ pa
     const ws = await createWorkspace(srv, 'busy', prepared.dirs[0]);
     const conv = await createConversation(srv, ws.id, 'busy-chat');
     await loginNext(page, srv);
-    await page.goto(`${srv.url}/next/c/${encodeURIComponent(conv.id)}`);
+    await page.goto(`${srv.url}/c/${encodeURIComponent(conv.id)}`);
     await waitSidebar(page);
     await page.getByTestId('next-composer-input').fill('run');
     await page.getByTestId('next-send').click();
@@ -227,7 +227,7 @@ function hasDefaultSessionTopics(sets) {
   ));
 }
 
-test('a conversation created through the old API appears in /next without a refresh', async ({ page }) => {
+test('a conversation created through the old API appears in the new UI without a refresh', async ({ page }) => {
   const prepared = await prepareWorkspaces(['live']);
   const srv = await startServer({ extraEnv: { WEFT_WORKSPACE_ROOT: prepared.root } });
   try {

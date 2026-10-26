@@ -22,8 +22,7 @@ function asSettingsPage(raw: string | undefined): SettingsPage {
 
 export function parseRoute(pathname: string): AppRoute {
   const raw = String(pathname || '');
-  const stripped = raw.replace(/^\/next(?=\/|$)/, '') || '/';
-  const trimmed = stripped.replace(/\/+$/, '') || '/';
+  const trimmed = raw.replace(/\/+$/, '') || '/';
   const settings = /^\/settings(?:\/([^/]+))?$/.exec(trimmed);
   if (settings) {
     return { name: 'settings', page: asSettingsPage(settings[1]) };

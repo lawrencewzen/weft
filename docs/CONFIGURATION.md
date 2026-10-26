@@ -1,6 +1,6 @@
 # 配置参考（当前 main）
 
-本页基于 `.env.example` 和 `compose.yaml` 的当前主分支实现。请先按 [快速开始](GETTING_STARTED.md) 使用 `faux` 确认项目可正常启动，再填写真实凭据。
+本页列出当前主分支会读的环境变量。部署方式见 [本地/内网 Windows 部署](DEPLOYMENT.md)，不要再用 Docker Compose。请先按 [快速开始](GETTING_STARTED.md) 确认项目可启动，再填写真实凭据。
 
 ## 对话运行（Pi Durable）
 
@@ -42,7 +42,8 @@
 | `WEFT_LAUNCHED_BY` | 空 / `weft-open` | 启动器拉起服务时设为 `weft-open`，这时才启用空闲退出。手动 `npm start` 不要设。 |
 | `WEFT_IDLE_EXIT_MINUTES` | `30` | 空闲多久后自行退出。可以是小数方便测试；`0` 表示不退出。只在 `WEFT_LAUNCHED_BY=weft-open` 时生效。 |
 | `WEFT_STDIN_EXIT` | `0` | **只给测试用。** 设为 `1` 时 stdin 关闭会走和 SIGTERM 相同的 `shutdown()`（Windows 收不到 SIGTERM）。 |
-| `WEFT_V2_WEB_CODE_TTL_MS` | `60000` | **只给测试用。** 网页端一次性登录码的有效期（毫秒）。 |
+| `WEFT_V2_WEB_CODE_TTL_MS` | `60000` | **只给测试用。** `weft open` 申请的网页端一次性登录码有效期（毫秒）。不影响启动时打印的那枚码。 |
+| `WEFT_V2_STARTUP_CODE_TTL_MS` | `600000` | **只给测试用。** `npm start` 在 `WEFT_READY` 之后打印的那枚登录码有效期（毫秒）。默认 10 分钟，只能用一次。 |
 | `WEFT_V2_VALIDATE` | `0` | 设为 `1` 时按 OpenAPI 契约校验 `/api/v2` 响应；不一致则记日志并返回 500。测试默认打开。 |
 | `WEFT_SUBAGENT_STUCK_MS` | `60000` | **只给测试用。** 子 Agent 处于 running 且超过该毫秒数没有活动时，服务端把 status 改成 stuck 并推送。默认与旧前端 60000 一致。 |
 | `WEFT_EXPECT_PROTOCOL` | 空 / `3.0.0` | **只给测试用。** 覆盖 `weft` 命令行认为的协议版本（默认与 `PROTOCOL_VERSION` 相同），用来测版本不兼容时的 restart。只影响命令行，不影响服务端。 |
@@ -78,7 +79,7 @@ LLM_MODEL=your-model-id
 ENABLE_CRASH_DEMO=0
 ```
 
-使用 `docker compose up -d --build`。生产未配置 `DEMO_PASSWORD` 会拒绝启动，不能通过移除鉴权来解决。默认容器映射只绑定到 `127.0.0.1`，需要远程访问时应另外部署 TLS 反向代理。
+本地/内网按 [DEPLOYMENT.md](DEPLOYMENT.md) 用 `npm ci` 和 `npm start` 部署，不要再用 Docker Compose。服务只绑定 `127.0.0.1`。
 
 ## 运行模式与可选通道
 
