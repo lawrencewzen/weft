@@ -165,6 +165,11 @@ export function canFinish(state: WizardState): boolean {
   return state.step === 3 && state.selectedModelIds.length > 0;
 }
 
+/** Add-mode drafts created on step 2 (tested save) are deleted on cancel. Grok account login is kept. */
+export function shouldDiscardDraftOnCancel(state: Pick<WizardState, 'mode' | 'createdId'>): boolean {
+  return state.mode === 'add' && Boolean(state.createdId) && state.createdId !== GROK_VENDOR_ID;
+}
+
 export function effectiveBaseUrl(state: WizardState, vendor: Vendor | null): string {
   const typed = state.baseUrl.trim();
   if (typed) return typed;

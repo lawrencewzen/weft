@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import type { Lang } from '../../data/lang';
 import { closeSettings, navigate, settingsPath } from '../../data/nav';
 import { SETTINGS_PAGES, type SettingsPage } from '../../data/providerWizard';
@@ -30,6 +30,7 @@ type Props = {
 };
 
 export function SettingsOverlay({ page, lang, service, onToast, onConfirm }: Props) {
+  const [providersNavSeq, setProvidersNavSeq] = useState(0);
   useExtensions();
   useEffect(() => {
     const onKey = (ev: KeyboardEvent) => {
@@ -43,6 +44,13 @@ export function SettingsOverlay({ page, lang, service, onToast, onConfirm }: Pro
   }, []);
 
   const current = SETTINGS_PAGES.includes(page) ? page : 'general';
+
+  function onNav(id: SettingsPage) {
+    if (id === 'providers' && current === 'providers') {
+      setProvidersNavSeq((n) => n + 1);
+    }
+    navigate(settingsPath(id), { replace: true });
+  }
 
   return (
     <div
@@ -61,7 +69,7 @@ export function SettingsOverlay({ page, lang, service, onToast, onConfirm }: Pro
               type="button"
               className={`next-settings-nav-item${current === item.id ? ' is-on' : ''}`}
               data-testid={`next-settings-nav-${item.id}`}
-              onClick={() => navigate(settingsPath(item.id), { replace: true })}
+              onClick={() => onNav(item.id)}
             >
               {t(lang, item.key)}
             </button>
@@ -77,7 +85,7 @@ export function SettingsOverlay({ page, lang, service, onToast, onConfirm }: Pro
             ×
           </button>
           {current === 'providers' ? (
-            <ProviderPage lang={lang} onToast={onToast} onConfirm={onConfirm} />
+            <ProviderPage lang={lang} onToast={onToast} onConfirm={onConfirm} providersNavSeq={providersNavSeq} />
           ) : current === 'general' ? (
             <GeneralPage lang={lang} />
           ) : current === 'about' ? (

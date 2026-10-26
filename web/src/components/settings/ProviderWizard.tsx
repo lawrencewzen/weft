@@ -24,6 +24,7 @@ import {
   formatContextWindow,
   hostOf,
   modelsFromIds,
+  shouldDiscardDraftOnCancel,
   vendorDocsUrl,
   waysForVendor,
   GROK_VENDOR_ID,
@@ -44,6 +45,26 @@ type Props = {
   onCancel: () => void;
   onToast: (message: string) => void;
 };
+
+export async function cancelProviderWizard(state: WizardState): Promise<void> {
+  if (!shouldDiscardDraftOnCancel(state) || !state.createdId) return;
+  try { await deleteProvider(state.createdId); } catch { /* keep going */ }
+}
+
+function BackArrow() {
+  return (
+    <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+      <path
+        d="M10.5 3.5 6 8l4.5 4.5"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
 
 function accessWayDesc(lang: Lang, way: ConnectWay, vendor: Vendor): string {
   if (way === 'api_key') return t(lang, 'provider_way_api_key_desc', { name: vendor.name });
@@ -210,11 +231,25 @@ export function ProviderWizard({
   }
 
   async function cancel() {
-    if (state.mode === 'add' && state.createdId && state.createdId !== GROK_VENDOR_ID) {
-      try { await deleteProvider(state.createdId); } catch { /* keep going */ }
-    }
+    await cancelProviderWizard(state);
     onCancel();
   }
+
+  function goBackStep() {
+    patch({ step: (state.step - 1) as 1 | 2 });
+  }
+
+  function headerBack() {
+    if (state.step === 1) {
+      void cancel();
+      return;
+    }
+    goBackStep();
+  }
+
+  const crumbLeaf = state.step === 3 && vendor
+    ? vendor.name
+    : t(lang, state.mode === 'edit' ? 'provider_edit' : 'provider_add_leaf');
 
   function toggleModel(id: string) {
     const has = state.selectedModelIds.includes(id);
@@ -244,24 +279,41 @@ export function ProviderWizard({
   return (
     <div className="ns-wizard">
       <div className="ns-wizard-head">
-        <div>
-          {state.step === 3 && vendor ? (
-            <>
-              <div className="ns-grok-head">
-                <span className="ns-icon-box is-lg"><BrandIcon brand={vendor.brand} size={20} /></span>
-                <h2>{vendor.name}</h2>
-              </div>
-              <p className="next-settings-sub">
-                {state.mode === 'edit' ? t(lang, 'provider_models_edit_sub') : t(lang, 'provider_models_sub')}
-              </p>
-            </>
-          ) : (
+        <div className="ns-wizard-title">
+          <button
+            type="button"
+            className="ns-wizard-back"
+            data-testid="next-wizard-back"
+            aria-label={t(lang, 'provider_wizard_back')}
+            onClick={headerBack}
+          >
+            <BackArrow />
+          </button>
+          <div>
             <div className="next-settings-crumb">
-              <span>{t(lang, 'provider_title')}</span>
+              <button
+                type="button"
+                className="next-settings-crumb-link"
+                data-testid="next-provider-crumb"
+                onClick={() => { void cancel(); }}
+              >
+                {t(lang, 'provider_title')}
+              </button>
               <span className="next-settings-crumb-sep">/</span>
-              <strong>{t(lang, state.mode === 'edit' ? 'provider_edit' : 'provider_add_leaf')}</strong>
+              <strong>{crumbLeaf}</strong>
             </div>
-          )}
+            {state.step === 3 && vendor ? (
+              <>
+                <div className="ns-grok-head">
+                  <span className="ns-icon-box is-lg"><BrandIcon brand={vendor.brand} size={20} /></span>
+                  <h2>{vendor.name}</h2>
+                </div>
+                <p className="next-settings-sub">
+                  {state.mode === 'edit' ? t(lang, 'provider_models_edit_sub') : t(lang, 'provider_models_sub')}
+                </p>
+              </>
+            ) : null}
+          </div>
         </div>
         <div className="ns-steps" aria-hidden="true">
           {([
@@ -509,7 +561,7 @@ export function ProviderWizard({
         {error ? <div className="ns-test-card is-bad" style={{ marginTop: 12 }}>{error}</div> : null}
       </div>
 
-      <div className="ns-foot">
+      <div className="ns-foot" data-testid="next-wizard-foot">
         <div className="ns-foot-hint">
           {state.step === 1 && vendor ? t(lang, 'provider_selected_vendor', { name: vendor.name }) : null}
           {state.step === 2 && state.way !== 'account' ? t(lang, 'provider_test_required') : null}
@@ -534,7 +586,7 @@ export function ProviderWizard({
             <button
               type="button"
               className="ns-btn"
-              onClick={() => patch({ step: (state.step - 1) as 1 | 2 })}
+              onClick={goBackStep}
             >
               {t(lang, 'provider_back')}
             </button>
