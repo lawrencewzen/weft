@@ -4,6 +4,7 @@
 // back out of tool-result entries.
 import { randomUUID } from 'node:crypto';
 import { readFile, stat } from 'node:fs/promises';
+import { setTimeout as sleep } from 'node:timers/promises';
 import { createModels } from '@earendil-works/pi-ai/models';
 import { createRegistry, watchEvents } from '@earendil-works/pi-durable';
 import { liveDiff } from '../core/diff.mjs';
@@ -298,7 +299,7 @@ export async function openConversationKernel({
     return conv?.workspacePath || '';
   }
 
-  async function diskText(workspacePath, filePath) {
+  async function readWorkspaceText(workspacePath, filePath) {
     const abs = await resolveInWorkspace(workspacePath, filePath);
     try {
       const info = await stat(abs);
@@ -307,11 +308,37 @@ export async function openConversationKernel({
         err.code = 'E_TOO_LARGE';
         throw err;
       }
-      return await readFile(abs, 'utf8');
+      return { missing: false, text: await readFile(abs, 'utf8') };
     } catch (err) {
-      if (err.code === 'ENOENT') return '';
+      if (err.code === 'ENOENT') return { missing: true, text: '' };
       throw err;
     }
+  }
+
+  function storedSnapshotDiffers(baseline) {
+    const stored = liveDiff({
+      path: baseline.path,
+      before: baseline.before ?? '',
+      storedAfter: baseline.after ?? '',
+      diskText: undefined,
+    });
+    return stored.added !== 0 || stored.removed !== 0;
+  }
+
+  async function diskText(workspacePath, filePath, baseline) {
+    let read = await readWorkspaceText(workspacePath, filePath);
+    if (!read.missing || !baseline || !storedSnapshotDiffers(baseline)) return read.text;
+    // Windows (and AV) can briefly report ENOENT after write/edit returns.
+    // Retry only for a missing file whose tool snapshot still has a diff; an
+    // existing empty file is a real revert and must stay +0 −0.
+    const retries = process.platform === 'win32' ? 8 : 3;
+    const delayMs = process.platform === 'win32' ? 25 : 10;
+    for (let i = 0; i < retries; i++) {
+      await sleep(delayMs);
+      read = await readWorkspaceText(workspacePath, filePath);
+      if (!read.missing) return read.text;
+    }
+    return read.text;
   }
 
   async function baselinesFor(cid) {
@@ -400,7 +427,7 @@ export async function openConversationKernel({
         }
         let disk;
         try {
-          disk = await diskText(workspacePath, baseline.path);
+          disk = await diskText(workspacePath, baseline.path, baseline);
         } catch (err) {
           if (err.code === 'E_TOO_LARGE') {
             rows.push({
@@ -435,7 +462,7 @@ export async function openConversationKernel({
       if (baseline.oversized) return { status: 200, body: { path: filePath, error: '文件过大' } };
       const workspacePath = await workspacePathFor(cid);
       try {
-        const disk = await diskText(workspacePath, filePath);
+        const disk = await diskText(workspacePath, filePath, baseline);
         return {
           status: 200,
           body: liveDiff({
