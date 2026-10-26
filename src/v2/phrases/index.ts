@@ -23,6 +23,11 @@ export function lookupPhrase(lang: Lang, key: string): string {
   return lookupPhraseFrom(lang === 'en' ? en : zh, zh, key);
 }
 
+export function hasPhrase(lang: Lang, key: string): boolean {
+  const primary = lang === 'en' ? en : zh;
+  return Object.hasOwn(primary, key) || Object.hasOwn(zh, key);
+}
+
 export function interpolate(template: string, params?: Record<string, unknown>): string {
   if (!params) return template;
   let text = template;

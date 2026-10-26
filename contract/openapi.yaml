@@ -151,6 +151,13 @@ paths:
 
         快照是 GET /api/v2/providers 的 providers 与 defaultModel 拆成上述实体（vendors 是静态预设，不进推送）。任何 Provider 增删改、连通性测试、Grok 登录状态变化、上下文上限或默认模型修改后 upsert（新旧接口改动都要触发）；实体删除时 remove。
 
+        主题 `extensions` 注册为精确主题。实体：
+        - `plugin`：id 为插件 id，值为 Plugin
+        - `skill`：id 为技能 id，值为 Skill
+        - `git_connection`：id 为 Git 连接 id，值为 GitConnection
+
+        快照是 GET /api/v2/plugins、GET /api/v2/skills、GET /api/v2/git/connections 同一套数据拆成上述实体。插件、技能、Git 连接增删改（含旧接口）后 upsert；实体删除时 remove。失败原因、Git 测试结果按订阅的 `lang` 出成句。
+
         主题 `conversation:<id>`（`<id>` 为对话 id）按前缀动态注册。实体：
         - `conversation`：id 为对话 id，值为 ConversationView
         - `item`：id 为 ThreadItem.id，值为 ThreadItem
@@ -184,7 +191,7 @@ paths:
           required: true
           schema:
             type: string
-          description: 逗号分隔的主题列表。空或含未注册主题时 400。`workspaces`、`providers` 已注册；`conversation:<id>` 和 `subagent:<cid>:<agentId>` 按前缀视为已注册。
+          description: 逗号分隔的主题列表。空或含未注册主题时 400。`workspaces`、`providers`、`extensions` 已注册；`conversation:<id>` 和 `subagent:<cid>:<agentId>` 按前缀视为已注册。
         - name: lang
           in: query
           schema:
@@ -257,6 +264,1000 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/V2Error"
+        4XX:
+          description: 客户端错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        5XX:
+          description: 服务端错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+    post:
+      operationId: createWorkspace
+      summary: 新建工作区
+      description: |
+        请求体带 `source`：`local` 用本机目录（`path` 缺省时在数据目录下建空目录），`git` 克隆仓库。
+        本地路径校验与旧接口相同（resolveAllowedWorkspacePath）。Git 只允许 https / ssh / git@；存储的 URL 去掉凭据。
+        `connectionId` / `projectId` 走已保存的 Git 连接。成功后 `workspaces` 主题更新。失败原因按 `lang` 出成句，并带结构化 `code`。
+      security:
+        - bearerAuth: []
+        - sessionCookie: []
+      parameters:
+        - name: lang
+          in: query
+          schema:
+            type: string
+            default: zh
+          description: 失败文案语言。zh 或 en；缺省或不认识的按 zh。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateWorkspaceRequest"
+      responses:
+        "201":
+          description: 已创建
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Workspace"
+        "400":
+          description: 名称、路径或 Git 地址无效
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceCreateError"
+        "401":
+          description: 未授权
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        "404":
+          description: Git 连接不存在
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        4XX:
+          description: 客户端错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        5XX:
+          description: 服务端错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+  /api/v2/workspace-root:
+    get:
+      operationId: getWorkspaceRoot
+      summary: 可浏览的工作区根目录
+      description: 与旧 GET /api/workspace-root 相同，返回 defaultWorkspaceRoot()。
+      security:
+        - bearerAuth: []
+        - sessionCookie: []
+      responses:
+        "200":
+          description: 根目录
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceRoot"
+        "401":
+          description: 未授权
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        4XX:
+          description: 客户端错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        5XX:
+          description: 服务端错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+  /api/v2/workspace-root/dirs:
+    get:
+      operationId: listWorkspaceRootDirs
+      summary: 列出可浏览的子目录
+      description: |
+        与旧 GET /api/workspace-root/dirs 相同，复用 listBrowsableDirs。
+        只列出允许根目录以内的文件夹；越界 400 E_PATH，文案按 lang 出成句。
+      security:
+        - bearerAuth: []
+        - sessionCookie: []
+      parameters:
+        - name: path
+          in: query
+          schema:
+            type: string
+          description: 要列出的目录。缺省为工作区根目录。
+        - name: lang
+          in: query
+          schema:
+            type: string
+            default: zh
+      responses:
+        "200":
+          description: 当前目录和子文件夹
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceDirs"
+        "400":
+          description: 路径不允许
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PathNotAllowed"
+        "401":
+          description: 未授权
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        "404":
+          description: 路径不存在
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PathNotAllowed"
+        4XX:
+          description: 客户端错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        5XX:
+          description: 服务端错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+  /api/v2/git/connections:
+    get:
+      operationId: listGitConnections
+      summary: Git 连接列表
+      description: 令牌只返回打码值。lastTest.errorText 按 lang 出成句。
+      security:
+        - bearerAuth: []
+        - sessionCookie: []
+      parameters:
+        - name: lang
+          in: query
+          schema:
+            type: string
+            default: zh
+      responses:
+        "200":
+          description: 连接列表
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GitConnectionList"
+        "401":
+          description: 未授权
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        4XX:
+          description: 客户端错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        5XX:
+          description: 服务端错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+    post:
+      operationId: createGitConnection
+      summary: 新建 Git 连接
+      description: 令牌只返回打码值。成功后 extensions 主题更新。
+      security:
+        - bearerAuth: []
+        - sessionCookie: []
+      parameters:
+        - name: lang
+          in: query
+          schema:
+            type: string
+            default: zh
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GitConnectionWrite"
+      responses:
+        "201":
+          description: 已创建
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GitConnection"
+        "400":
+          description: 连接字段无效
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GitConnectionInvalid"
+        "401":
+          description: 未授权
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        4XX:
+          description: 客户端错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        5XX:
+          description: 服务端错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+  /api/v2/git/connections/test:
+    post:
+      operationId: testGitConnectionUnsaved
+      summary: 测试尚未保存或正在编辑的 Git 连接
+      description: |
+        与旧 POST /api/git/connections/test 相同。校验失败也返回 200 `{ ok: false, code }`，
+        由服务端按 lang 出成句（statusText）。令牌不出现在响应里。
+      security:
+        - bearerAuth: []
+        - sessionCookie: []
+      parameters:
+        - name: lang
+          in: query
+          schema:
+            type: string
+            default: zh
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GitConnectionWrite"
+      responses:
+        "200":
+          description: 测试结果
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GitTestResult"
+        "401":
+          description: 未授权
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        "404":
+          description: 带了 id 但连接不存在
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        4XX:
+          description: 客户端错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        5XX:
+          description: 服务端错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+  /api/v2/git/connections/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: lang
+        in: query
+        schema:
+          type: string
+          default: zh
+    patch:
+      operationId: updateGitConnection
+      summary: 更新 Git 连接
+      description: 打码令牌视为未改。成功后 extensions 主题更新。
+      security:
+        - bearerAuth: []
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GitConnectionWrite"
+      responses:
+        "200":
+          description: 更新后的连接
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GitConnection"
+        "400":
+          description: 连接字段无效
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GitConnectionInvalid"
+        "401":
+          description: 未授权
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        "404":
+          description: 连接不存在
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        4XX:
+          description: 客户端错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        5XX:
+          description: 服务端错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+    delete:
+      operationId: deleteGitConnection
+      summary: 删除 Git 连接
+      security:
+        - bearerAuth: []
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+      responses:
+        "200":
+          description: 已删除
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkId"
+        "401":
+          description: 未授权
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        "404":
+          description: 连接不存在
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        4XX:
+          description: 客户端错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        5XX:
+          description: 服务端错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+  /api/v2/git/connections/{id}/test:
+    post:
+      operationId: testGitConnection
+      summary: 测试已保存的 Git 连接并记下结果
+      description: 成功或失败都会写 lastTest。响应带打码后的 connection。extensions 主题更新。
+      security:
+        - bearerAuth: []
+        - sessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: lang
+          in: query
+          schema:
+            type: string
+            default: zh
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+      responses:
+        "200":
+          description: 测试结果
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GitTestResult"
+        "401":
+          description: 未授权
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        "404":
+          description: 连接不存在
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        4XX:
+          description: 客户端错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        5XX:
+          description: 服务端错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+  /api/v2/git/connections/{id}/projects:
+    get:
+      operationId: listGitConnectionProjects
+      summary: 列出连接下的 GitLab 项目
+      security:
+        - bearerAuth: []
+        - sessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: lang
+          in: query
+          schema:
+            type: string
+            default: zh
+      responses:
+        "200":
+          description: 项目列表
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GitProjectList"
+        "400":
+          description: 连接不可用
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GitCloneFailure"
+        "401":
+          description: 未授权
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        "404":
+          description: 连接不存在
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        4XX:
+          description: 客户端错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        5XX:
+          description: 服务端错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+  /api/v2/git/connections/{id}/projects/{pid}/branches:
+    get:
+      operationId: listGitConnectionProjectBranches
+      summary: 列出项目分支
+      security:
+        - bearerAuth: []
+        - sessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: pid
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: lang
+          in: query
+          schema:
+            type: string
+            default: zh
+      responses:
+        "200":
+          description: 分支列表
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GitBranchList"
+        "400":
+          description: 连接不可用
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GitCloneFailure"
+        "401":
+          description: 未授权
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        "404":
+          description: 连接不存在
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        4XX:
+          description: 客户端错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        5XX:
+          description: 服务端错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+  /api/v2/plugins:
+    get:
+      operationId: listPlugins
+      summary: 插件列表
+      description: 失败原因由服务端按 lang 出成句，同时保留 errorCode。
+      security:
+        - bearerAuth: []
+        - sessionCookie: []
+      parameters:
+        - name: lang
+          in: query
+          schema:
+            type: string
+            default: zh
+      responses:
+        "200":
+          description: 插件列表
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PluginList"
+        "401":
+          description: 未授权
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        4XX:
+          description: 客户端错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        5XX:
+          description: 服务端错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+    post:
+      operationId: installPlugin
+      summary: 从本机目录导入插件
+      description: 与旧 POST /api/plugins 相同。成功后 extensions 主题更新。
+      security:
+        - bearerAuth: []
+        - sessionCookie: []
+      parameters:
+        - name: lang
+          in: query
+          schema:
+            type: string
+            default: zh
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InstallPluginRequest"
+      responses:
+        "201":
+          description: 已导入
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Plugin"
+        "400":
+          description: 路径或清单无效
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CatalogError"
+        "401":
+          description: 未授权
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        "409":
+          description: 同名插件已存在
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CatalogError"
+        4XX:
+          description: 客户端错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        5XX:
+          description: 服务端错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+  /api/v2/plugins/{id}:
+    patch:
+      operationId: patchPlugin
+      summary: 启用或停用插件
+      security:
+        - bearerAuth: []
+        - sessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: lang
+          in: query
+          schema:
+            type: string
+            default: zh
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PatchPluginRequest"
+      responses:
+        "200":
+          description: 更新后的插件
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Plugin"
+        "400":
+          description: 插件 id 无效
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CatalogError"
+        "401":
+          description: 未授权
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        "404":
+          description: 插件不存在
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CatalogError"
+        4XX:
+          description: 客户端错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        5XX:
+          description: 服务端错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+  /api/v2/skills:
+    get:
+      operationId: listSkills
+      summary: 技能列表
+      security:
+        - bearerAuth: []
+        - sessionCookie: []
+      parameters:
+        - name: lang
+          in: query
+          schema:
+            type: string
+            default: zh
+      responses:
+        "200":
+          description: 技能列表
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SkillList"
+        "401":
+          description: 未授权
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        4XX:
+          description: 客户端错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        5XX:
+          description: 服务端错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+    post:
+      operationId: createSkill
+      summary: 新建技能
+      description: 成功后 extensions 主题更新。
+      security:
+        - bearerAuth: []
+        - sessionCookie: []
+      parameters:
+        - name: lang
+          in: query
+          schema:
+            type: string
+            default: zh
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SkillWriteRequest"
+      responses:
+        "201":
+          description: 已创建
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Skill"
+        "400":
+          description: 内容无效
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CatalogError"
+        "401":
+          description: 未授权
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        "409":
+          description: 同名技能已存在
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CatalogError"
+        4XX:
+          description: 客户端错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        5XX:
+          description: 服务端错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+  /api/v2/skills/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: lang
+        in: query
+        schema:
+          type: string
+          default: zh
+    put:
+      operationId: putSkill
+      summary: 更新技能内容或开关
+      description: 与旧 PUT /api/skills/{id} 相同。成功后 extensions 主题更新。
+      security:
+        - bearerAuth: []
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SkillWriteRequest"
+      responses:
+        "200":
+          description: 更新后的技能
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Skill"
+        "400":
+          description: 内容无效
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CatalogError"
+        "401":
+          description: 未授权
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        "404":
+          description: 技能不存在
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CatalogError"
+        4XX:
+          description: 客户端错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        5XX:
+          description: 服务端错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+    patch:
+      operationId: patchSkill
+      summary: 部分更新技能
+      description: 与 PUT 相同，对应旧 PATCH /api/skills/{id}。
+      security:
+        - bearerAuth: []
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SkillWriteRequest"
+      responses:
+        "200":
+          description: 更新后的技能
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Skill"
+        "400":
+          description: 内容无效
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CatalogError"
+        "401":
+          description: 未授权
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        "404":
+          description: 技能不存在
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CatalogError"
+        4XX:
+          description: 客户端错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        5XX:
+          description: 服务端错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+    delete:
+      operationId: deleteSkill
+      summary: 删除技能
+      description: 内置技能 403。成功后 extensions 主题更新。
+      security:
+        - bearerAuth: []
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+      responses:
+        "200":
+          description: 已删除
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkId"
+        "400":
+          description: id 无效
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CatalogError"
+        "401":
+          description: 未授权
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        "403":
+          description: 内置技能不能删除
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CatalogError"
+        "404":
+          description: 技能不存在
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CatalogError"
         4XX:
           description: 客户端错误
           content:
@@ -2900,6 +3901,8 @@ components:
         - name
         - path
         - source
+        - gitUrl
+        - branch
         - conversationCount
         - runningCount
       properties:
@@ -2914,6 +3917,16 @@ components:
           enum:
             - local
             - git
+        gitUrl:
+          description: Git 导入时去掉凭据后的仓库地址。本地工作区为 null
+          oneOf:
+            - type: "null"
+            - type: string
+        branch:
+          description: Git 导入时的分支。本地工作区或未指定分支为 null
+          oneOf:
+            - type: "null"
+            - type: string
         conversationCount:
           type: integer
           minimum: 0
@@ -3400,3 +4413,485 @@ components:
         current:
           $ref: "#/components/schemas/FileContent"
       description: 保存时 baseVersion 过期。
+    CreateWorkspaceRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - name
+        - source
+      properties:
+        name:
+          type: string
+        source:
+          type: string
+          enum:
+            - local
+            - git
+        path:
+          type: string
+          description: source=local 时的本机目录。缺省则在数据目录下建空目录
+        gitUrl:
+          type: string
+          description: source=git 时的仓库地址
+        branch:
+          type: string
+        connectionId:
+          type: string
+        projectId:
+          description: GitLab 项目 id，需同时带 connectionId
+          oneOf:
+            - type: string
+            - type: integer
+      description: POST /api/v2/workspaces 的请求体。
+    WorkspaceCreateError:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          description: 按 lang 出成句
+        code:
+          type: string
+        allowedRoot:
+          type: string
+        detail:
+          type: string
+        via:
+          type: string
+      description: 新建工作区失败。路径越界带 allowedRoot；Git 失败带 code / via。
+    GitCloneFailure:
+      type: object
+      additionalProperties: false
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          description: 按 lang 出成句
+        code:
+          type: string
+          description: git_not_found、auth_failed、cert_failed 等，与旧接口相同
+        detail:
+          type: string
+        via:
+          type: string
+      description: Git 克隆或 GitLab API 失败。
+    WorkspaceRoot:
+      type: object
+      additionalProperties: false
+      required:
+        - root
+      properties:
+        root:
+          type: string
+      description: GET /api/v2/workspace-root。
+    WorkspaceDirs:
+      type: object
+      additionalProperties: false
+      required:
+        - root
+        - path
+        - parent
+        - selectable
+        - git
+        - entries
+        - truncated
+      properties:
+        root:
+          type: string
+        path:
+          type: string
+        parent:
+          description: 已在根目录时为 null
+          oneOf:
+            - type: "null"
+            - type: string
+        selectable:
+          type: boolean
+        git:
+          type: boolean
+        entries:
+          type: array
+          items:
+            $ref: "#/components/schemas/WorkspaceDirEntry"
+        truncated:
+          type: boolean
+      description: GET /api/v2/workspace-root/dirs。
+    WorkspaceDirEntry:
+      type: object
+      additionalProperties: false
+      required:
+        - name
+        - path
+        - git
+      properties:
+        name:
+          type: string
+        path:
+          type: string
+        git:
+          type: boolean
+    PathNotAllowed:
+      type: object
+      additionalProperties: false
+      required:
+        - error
+        - code
+        - allowedRoot
+      properties:
+        error:
+          type: string
+          description: 按 lang 出成句
+        code:
+          type: string
+          const: E_PATH
+        allowedRoot:
+          type: string
+      description: 本地路径不在允许范围内。
+    Plugin:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - name
+        - description
+        - version
+        - source
+        - enabled
+        - loaded
+        - error
+        - errorCode
+        - tools
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        version:
+          type: string
+        source:
+          type: string
+        enabled:
+          type: boolean
+        loaded:
+          type: boolean
+        error:
+          description: 失败原因成句。正常为 null
+          oneOf:
+            - type: "null"
+            - type: string
+        errorCode:
+          description: 结构化失败码。正常为 null
+          oneOf:
+            - type: "null"
+            - type: string
+        tools:
+          type: array
+          items:
+            $ref: "#/components/schemas/PluginTool"
+      description: 插件。失败原因由服务端按 lang 出成句。
+    PluginTool:
+      type: object
+      additionalProperties: false
+      required:
+        - name
+        - description
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+    PluginList:
+      type: object
+      additionalProperties: false
+      required:
+        - plugins
+      properties:
+        plugins:
+          type: array
+          items:
+            $ref: "#/components/schemas/Plugin"
+    InstallPluginRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        path:
+          type: string
+      description: 本机插件目录。
+    PatchPluginRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        enabled:
+          type: boolean
+    Skill:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - name
+        - description
+        - version
+        - source
+        - enabled
+        - deletable
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        version:
+          type: string
+        source:
+          type: string
+        enabled:
+          type: boolean
+        deletable:
+          type: boolean
+      description: 技能。写失败时的原因在 CatalogError 里按 lang 出成句。
+    SkillList:
+      type: object
+      additionalProperties: false
+      required:
+        - skills
+      properties:
+        skills:
+          type: array
+          items:
+            $ref: "#/components/schemas/Skill"
+    SkillWriteRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        body:
+          type: string
+        enabled:
+          type: boolean
+    CatalogError:
+      type: object
+      additionalProperties: false
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          description: 按 lang 出成句
+        code:
+          type: string
+          description: err_plugin_* / err_skill_*，与旧接口相同
+      description: 插件或技能写操作失败。
+    GitConnection:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - name
+        - kind
+        - baseUrl
+        - token
+        - hasToken
+        - allowHttp
+        - caFile
+        - lastTest
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        kind:
+          type: string
+          enum:
+            - gitlab-self
+            - gitlab-com
+            - other
+        baseUrl:
+          type: string
+        token:
+          type: string
+          description: 打码后的令牌，不含明文
+        hasToken:
+          type: boolean
+        allowHttp:
+          type: boolean
+        caFile:
+          type: string
+        lastTest:
+          description: 尚未测试时为 null
+          oneOf:
+            - type: "null"
+            - $ref: "#/components/schemas/GitConnectionLastTest"
+      description: Git 连接。令牌只返回打码值。
+    GitConnectionLastTest:
+      type: object
+      additionalProperties: false
+      required:
+        - ok
+        - username
+        - error
+        - errorText
+        - at
+      properties:
+        ok:
+          type: boolean
+        username:
+          type: string
+        error:
+          type: string
+          description: 失败码。成功时为空字符串
+        errorText:
+          type: string
+          description: 按 lang 出成句
+        at:
+          type: string
+    GitConnectionList:
+      type: object
+      additionalProperties: false
+      required:
+        - connections
+      properties:
+        connections:
+          type: array
+          items:
+            $ref: "#/components/schemas/GitConnection"
+    GitConnectionWrite:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+        kind:
+          type: string
+        name:
+          type: string
+        baseUrl:
+          type: string
+        token:
+          type: string
+        allowHttp:
+          type: boolean
+        caFile:
+          type: string
+    GitConnectionInvalid:
+      type: object
+      additionalProperties: false
+      required:
+        - error
+        - errors
+      properties:
+        error:
+          type: string
+          description: 按 lang 出成句
+        code:
+          type: string
+        errors:
+          type: array
+          items:
+            type: string
+          description: 与旧接口相同的字段级错误（name required 等）
+    GitTestResult:
+      type: object
+      additionalProperties: false
+      required:
+        - ok
+        - username
+        - code
+        - statusText
+      properties:
+        ok:
+          type: boolean
+        username:
+          type: string
+        code:
+          type: string
+          description: 失败码。成功时为空字符串
+        statusText:
+          type: string
+          description: 按 lang 出成句
+        connection:
+          $ref: "#/components/schemas/GitConnection"
+      description: Git 连接测试结果。
+    GitProject:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - path
+        - description
+        - defaultBranch
+        - lastActivityAt
+        - httpUrl
+      properties:
+        id:
+          description: GitLab 项目 id
+          oneOf:
+            - type: string
+            - type: integer
+        path:
+          type: string
+        description:
+          type: string
+        defaultBranch:
+          type: string
+        lastActivityAt:
+          type: string
+        httpUrl:
+          type: string
+          description: 去掉凭据后的 http 克隆地址
+    GitProjectList:
+      type: object
+      additionalProperties: false
+      required:
+        - projects
+      properties:
+        projects:
+          type: array
+          items:
+            $ref: "#/components/schemas/GitProject"
+    GitBranch:
+      type: object
+      additionalProperties: false
+      required:
+        - name
+        - default
+      properties:
+        name:
+          type: string
+        default:
+          type: boolean
+    GitBranchList:
+      type: object
+      additionalProperties: false
+      required:
+        - branches
+        - defaultBranch
+      properties:
+        branches:
+          type: array
+          items:
+            $ref: "#/components/schemas/GitBranch"
+        defaultBranch:
+          type: string
+    OkId:
+      type: object
+      additionalProperties: false
+      required:
+        - ok
+        - id
+      properties:
+        ok:
+          type: boolean
+          const: true
+        id:
+          type: string
+      description: 删除成功。

@@ -1,10 +1,15 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { realpathSync } from 'node:fs';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { load, ROOT } from './_root.mjs';
-const { listBrowsableDirs } = await load('src/core/workspace-guard.mjs');
+const { listBrowsableDirs, resolveAllowedWorkspacePath } = await load('src/core/workspace-guard.mjs');
+
+function nativeReal(p) {
+  return realpathSync.native(p);
+}
 
 // macOS keeps the temp dir under /private/var, which the guard treats as a system path.
 async function tmpBase() {
@@ -65,5 +70,52 @@ test('refuses paths outside the root and ones that do not exist', async () => {
     await assert.rejects(listBrowsableDirs(path.join(root, 'escape')), /not under an allowed workspace root/);
     await assert.rejects(listBrowsableDirs(path.join(root, '..')), /not under an allowed workspace root/);
     await assert.rejects(listBrowsableDirs(path.join(root, 'missing')), (err) => err.status === 404);
+  });
+});
+
+async function aliasedRoot() {
+  const base = await tmpBase();
+  made.push(base);
+  const outside = nativeReal(await fs.mkdtemp(path.join(base, 'out-')));
+  let alias;
+  let canonical;
+  if (process.platform === 'win32') {
+    const fromTmp = await fs.mkdtemp(path.join(os.tmpdir(), 'weft-short-'));
+    made.push(fromTmp);
+    canonical = nativeReal(fromTmp);
+    if (fromTmp !== canonical) alias = fromTmp;
+  }
+  if (!alias) {
+    canonical = nativeReal(await fs.mkdtemp(path.join(base, 'real-')));
+    alias = path.join(base, 'ws-alias');
+    await fs.symlink(canonical, alias, process.platform === 'win32' ? 'junction' : undefined);
+  }
+  await fs.mkdir(path.join(canonical, 'inside'));
+  assert.notEqual(alias, canonical);
+  return { base, alias, canonical, outside };
+}
+
+test('alias root (8.3 or symlink) allows children and rejects outside', async () => {
+  const { base, alias, canonical, outside } = await aliasedRoot();
+  await withRoot(alias, async () => {
+    const childViaAlias = path.join(alias, 'inside');
+    const allowed = await resolveAllowedWorkspacePath(childViaAlias, { dataDir: base });
+    assert.equal(allowed, nativeReal(childViaAlias));
+    assert.equal(allowed, nativeReal(path.join(canonical, 'inside')));
+
+    const allowedCanonical = await resolveAllowedWorkspacePath(path.join(canonical, 'inside'), { dataDir: base });
+    assert.equal(allowedCanonical, nativeReal(path.join(canonical, 'inside')));
+
+    await assert.rejects(
+      () => resolveAllowedWorkspacePath(outside, { dataDir: base }),
+      (err) => err.code === 'E_PATH' && /not under an allowed workspace root/.test(err.message),
+    );
+
+    const listed = await listBrowsableDirs('');
+    assert.equal(listed.root, canonical);
+    assert.deepEqual(listed.entries.map((entry) => entry.name), ['inside']);
+    assert.equal(listed.entries[0].path, path.join(canonical, 'inside'));
+
+    await assert.rejects(listBrowsableDirs(outside), /not under an allowed workspace root/);
   });
 });

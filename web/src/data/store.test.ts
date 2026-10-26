@@ -289,6 +289,8 @@ function workspace(id: string, extra?: Partial<Workspace>): Workspace {
     name: `ws-${id}`,
     path: `/tmp/${id}`,
     source: 'local',
+    gitUrl: null,
+    branch: null,
     conversationCount: 0,
     runningCount: 0,
     ...extra,

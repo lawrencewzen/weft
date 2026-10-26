@@ -27,6 +27,8 @@ export type SidebarWorkspace = {
   name?: unknown;
   path?: unknown;
   source?: unknown;
+  gitUrl?: unknown;
+  branch?: unknown;
   [key: string]: unknown;
 };
 
@@ -89,6 +91,8 @@ export function workspaceView(input: {
     name: input.workspace.name == null ? '' : String(input.workspace.name),
     path: input.workspace.path == null ? '' : String(input.workspace.path),
     source: workspaceSource(input.workspace.source),
+    gitUrl: input.workspace.gitUrl == null ? null : String(input.workspace.gitUrl),
+    branch: input.workspace.branch == null ? null : String(input.workspace.branch),
     conversationCount: conversations.length,
     runningCount: conversations.filter((row) => row.status === 'running').length,
   };
