@@ -13,13 +13,20 @@ export function RightPane({ lang, workspaceLabel }: Props) {
   const {
     tab,
     setTab,
+    open,
     setOpen,
     totals,
     hasChanges,
   } = useRightPane();
 
   return (
-    <aside className="col-right" data-testid="next-right">
+    <aside
+      className="col-right"
+      data-testid="next-right"
+      inert={!open || undefined}
+      aria-hidden={!open || undefined}
+    >
+      <div className="col-panel-inner">
       <header className="right-tabs-bar">
         <nav className="tabs-nav">
           <button
@@ -66,6 +73,7 @@ export function RightPane({ lang, workspaceLabel }: Props) {
         ) : (
           <ChangesPane lang={lang} />
         )}
+      </div>
       </div>
     </aside>
   );

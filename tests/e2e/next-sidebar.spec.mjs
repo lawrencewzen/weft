@@ -256,6 +256,7 @@ test('860px width collapses the sidebar and does not scroll horizontally', async
     const ws = await createWorkspace(srv, 'narrow', prepared.dirs[0]);
     await createConversation(srv, ws.id, 'chat');
     await loginNext(page, srv);
+    // Closed overlay panels stay in the tree (no display:none); assert they are not visible.
     await expect(page.getByTestId('next-sidebar')).toBeHidden();
     const box = await page.evaluate(() => ({
       scrollWidth: document.documentElement.scrollWidth,
@@ -302,6 +303,123 @@ test('a single workspace title click collapses, expands, and keeps the state aft
     await waitSidebar(page);
     await expect(wsNode(page, 'solo')).toHaveClass(/is-open/);
     await expect(convRow(page, conv.id)).toBeVisible();
+  } finally {
+    await srv.kill();
+  }
+});
+
+function maxTransitionSeconds(value) {
+  return Math.max(0, ...String(value).split(',').map((part) => {
+    const raw = part.trim();
+    const n = parseFloat(raw);
+    if (!Number.isFinite(n)) return 0;
+    return /ms$/i.test(raw) ? n / 1000 : n;
+  }));
+}
+
+async function panelTransitionSeconds(page, testId) {
+  const duration = await page.getByTestId(testId).evaluate((el) => getComputedStyle(el).transitionDuration);
+  return maxTransitionSeconds(duration);
+}
+
+async function waitPanelReady(page) {
+  await expect(page.getByTestId('next-app')).toHaveAttribute('data-panel-ready', '1');
+}
+
+test('clicking the left collapse button slides the sidebar away and the expand button restores it', async ({ page }) => {
+  const prepared = await prepareWorkspaces(['slide-left']);
+  const srv = await startServer({ extraEnv: { WEFT_WORKSPACE_ROOT: prepared.root } });
+  try {
+    const ws = await createWorkspace(srv, 'slide-left', prepared.dirs[0]);
+    await createConversation(srv, ws.id, 'chat');
+    await loginNext(page, srv);
+    await waitSidebar(page);
+    await waitPanelReady(page);
+    await expect(page.getByTestId('next-sidebar')).toBeVisible();
+    await expect(page.getByTestId('next-left-open')).toBeHidden();
+    expect(await panelTransitionSeconds(page, 'next-sidebar')).toBeGreaterThan(0);
+
+    await page.getByTestId('next-left-collapse').click();
+    await expect(page.getByTestId('next-left-open')).toBeHidden();
+    await expect(page.getByTestId('next-sidebar')).toBeHidden();
+    await expect(page.getByTestId('next-left-open')).toBeVisible();
+    await expect(page.getByTestId('next-left-divider')).toBeHidden();
+    await expect(page.getByTestId('next-sidebar')).toHaveAttribute('inert');
+    await expect(page.getByTestId('next-sidebar')).toHaveAttribute('aria-hidden', 'true');
+
+    await page.getByTestId('next-left-open').click();
+    await expect(page.getByTestId('next-left-open')).toBeHidden();
+    await expect(page.getByTestId('next-sidebar')).toBeVisible();
+    await expect(page.getByTestId('next-left-collapse')).toBeVisible();
+    await expect(page.getByTestId('next-sidebar')).not.toHaveAttribute('inert');
+  } finally {
+    await srv.kill();
+  }
+});
+
+test('clicking the right collapse button slides the panel away and the expand button restores it', async ({ page }) => {
+  const prepared = await prepareWorkspaces(['slide-right']);
+  const srv = await startServer({ extraEnv: { WEFT_WORKSPACE_ROOT: prepared.root } });
+  try {
+    const ws = await createWorkspace(srv, 'slide-right', prepared.dirs[0]);
+    await createConversation(srv, ws.id, 'chat');
+    await loginNext(page, srv);
+    await waitSidebar(page);
+    await waitPanelReady(page);
+    await expect(page.getByTestId('next-right')).toBeVisible();
+    await expect(page.getByTestId('next-right-toggle')).toBeHidden();
+    expect(await panelTransitionSeconds(page, 'next-right')).toBeGreaterThan(0);
+
+    await page.getByTestId('next-right-collapse').click();
+    await expect(page.getByTestId('next-right-toggle')).toBeHidden();
+    await expect(page.getByTestId('next-right')).toBeHidden();
+    await expect(page.getByTestId('next-right-toggle')).toBeVisible();
+    await expect(page.getByTestId('next-right-divider')).toBeHidden();
+    await expect(page.getByTestId('next-right')).toHaveAttribute('inert');
+    await expect(page.getByTestId('next-right')).toHaveAttribute('aria-hidden', 'true');
+
+    await page.getByTestId('next-right-toggle').click();
+    await expect(page.getByTestId('next-right-toggle')).toBeHidden();
+    await expect(page.getByTestId('next-right')).toBeVisible();
+    await expect(page.getByTestId('next-right-collapse')).toBeVisible();
+    await expect(page.getByTestId('next-right')).not.toHaveAttribute('inert');
+  } finally {
+    await srv.kill();
+  }
+});
+
+test('panel slide transitions are off until is-ready and when reduced motion is requested', async ({ page }) => {
+  const prepared = await prepareWorkspaces(['slide-motion']);
+  const srv = await startServer({ extraEnv: { WEFT_WORKSPACE_ROOT: prepared.root } });
+  try {
+    const ws = await createWorkspace(srv, 'slide-motion', prepared.dirs[0]);
+    await createConversation(srv, ws.id, 'chat');
+    await loginNext(page, srv);
+    await waitSidebar(page);
+    await waitPanelReady(page);
+
+    expect(await panelTransitionSeconds(page, 'next-sidebar')).toBeGreaterThan(0);
+    expect(await panelTransitionSeconds(page, 'next-right')).toBeGreaterThan(0);
+    // First paint omits `.is-ready`, so transitions stay off until the class is added.
+    const gated = await page.evaluate(() => {
+      const shell = document.querySelector('[data-testid="next-app"]');
+      const left = shell.querySelector('.col-left');
+      const right = shell.querySelector('.col-right');
+      shell.classList.remove('is-ready');
+      const duration = {
+        left: getComputedStyle(left).transitionDuration,
+        right: getComputedStyle(right).transitionDuration,
+        readyAttr: shell.getAttribute('data-panel-ready'),
+      };
+      shell.classList.add('is-ready');
+      return duration;
+    });
+    expect(maxTransitionSeconds(gated.left)).toBe(0);
+    expect(maxTransitionSeconds(gated.right)).toBe(0);
+
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    expect(await panelTransitionSeconds(page, 'next-sidebar')).toBe(0);
+    expect(await panelTransitionSeconds(page, 'next-right')).toBe(0);
   } finally {
     await srv.kill();
   }

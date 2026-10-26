@@ -229,7 +229,10 @@ test('FL-6 long filenames truncate with a full-path title in changes and the fil
   try {
     await sendNext(page, `写 ${longName}`);
     await waitRunDone(page);
-    await page.locator('.col-right').evaluate((el) => { el.style.width = '240px'; });
+    await page.locator('.col-right').evaluate((el) => {
+      el.style.width = '240px';
+      el.style.setProperty('--panel-w', '240px');
+    });
 
     await page.getByTestId('next-right-tab-changes').click();
     const changeRow = page.locator(`[data-testid=next-change-row][data-path="${longName}"]`);
@@ -415,6 +418,7 @@ test('below 1180px the right pane starts collapsed without horizontal scroll', a
     await loginNext(page, srv);
     await page.goto(`${srv.url}/c/${encodeURIComponent(conv.id)}`);
     await expect(page.getByTestId('next-thread')).toBeVisible();
+    // Closed overlay panels stay in the tree (no display:none); assert they are not visible.
     await expect(page.getByTestId('next-right')).toBeHidden();
     await expect(page.getByTestId('next-right-toggle')).toBeVisible();
     const box = await page.evaluate(() => ({

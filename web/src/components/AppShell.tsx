@@ -23,6 +23,7 @@ import {
   writeActiveWorkspace,
   writeLeftWidth,
 } from '../data/layout';
+import { useClosedSettled, usePanelMotionReady } from '../data/panelMotion';
 import { RightPaneProvider, useRightPane } from '../data/rightPaneContext';
 import { conversationPath, draftPath, navigate, rememberSettingsBehind } from '../data/nav';
 import { latestConversation, pickDraftWorkspace } from '../data/sidebarModel';
@@ -34,7 +35,7 @@ import { CenterPane } from './CenterPane';
 import { ConfirmDialog, type ConfirmOpts } from './ConfirmDialog';
 import { DemoModelBadge } from './DemoModelBadge';
 import { RightPane } from './RightPane';
-import { RightToggle } from './RightToggle';
+import { LeftOpenButton, RightToggle } from './RightToggle';
 import { SettingsOverlay } from './settings/SettingsOverlay';
 import type { AboutService } from './settings/AboutPage';
 import { Sidebar } from './Sidebar';
@@ -171,6 +172,9 @@ function AppShellLayout({
   const [leftOpen, setLeftOpen] = useState(() => defaultLeftOpen(window.innerWidth));
   const [leftW, setLeftW] = useState(() => readLeftWidth());
   const [dragging, setDragging] = useState(false);
+  const motionReady = usePanelMotionReady();
+  const leftClosedSettled = useClosedSettled(leftOpen, motionReady);
+  const rightClosedSettled = useClosedSettled(right.open, motionReady);
   const [confirm, setConfirm] = useState<{
     opts: ConfirmOpts;
     resolve: (ok: boolean) => void;
@@ -302,8 +306,11 @@ function AppShellLayout({
 
   const classes = [
     'next-shell',
+    motionReady ? 'is-ready' : '',
     !leftOpen ? 'left-closed' : '',
+    leftClosedSettled ? 'left-closed-settled' : '',
     !right.open ? 'right-closed' : '',
+    rightClosedSettled ? 'right-closed-settled' : '',
     dragging ? 'is-dragging' : '',
   ].filter(Boolean).join(' ');
 
@@ -313,6 +320,7 @@ function AppShellLayout({
     <div
       className={classes}
       data-testid="next-app"
+      data-panel-ready={motionReady ? '1' : '0'}
       style={{
         ['--left-w' as string]: `${leftW}px`,
         ['--right-w' as string]: `${right.width}px`,
@@ -321,6 +329,7 @@ function AppShellLayout({
     >
       <Sidebar
         lang={lang}
+        collapsed={!leftOpen}
         activeConversationId={activeConversationId}
         activeAgentId={activeAgentId}
         draftWorkspaceId={draftWorkspaceId}
@@ -345,17 +354,7 @@ function AppShellLayout({
         <main className="col-center" data-testid="next-center">
           <header className="next-status">
             <div className="next-status-inner">
-              {!leftOpen ? (
-                <button
-                  type="button"
-                  className="icon-btn top-left-open"
-                  data-testid="next-left-open"
-                  title={t(lang, 'expand_sidebar')}
-                  onClick={() => setOpen(true)}
-                >
-                  <span className="ico-panel ico-panel-left" aria-hidden="true" />
-                </button>
-              ) : null}
+              <LeftOpenButton lang={lang} onOpen={() => setOpen(true)} />
               <h1 className="top-title">{t(lang, 'home_title')}</h1>
               {demo ? <DemoModelBadge lang={lang} testId="next-demo-model-badge" /> : null}
               <div className="top-right">
@@ -375,7 +374,6 @@ function AppShellLayout({
           workspace={workspace || null}
           lang={lang}
           demo={demo}
-          showOpenLeft={!leftOpen}
           onOpenLeft={() => setOpen(true)}
           onNewWorkspace={() => setWsDialog(true)}
         />
