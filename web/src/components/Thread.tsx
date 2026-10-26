@@ -1,6 +1,8 @@
 import { useLayoutEffect, useRef } from 'react';
+import { modelAttribution, type ConversationModel } from '../data/composerModel';
 import type { Lang } from '../data/lang';
 import type { ConversationActions } from '../data/useConversation';
+import { useProviders } from '../data/useProviders';
 import type { ThreadItem, ToolCall } from '../data/store';
 import { t } from '../i18n';
 import { AssistantMessage } from './AssistantMessage';
@@ -19,9 +21,20 @@ type Props = {
   actions: ConversationActions;
   stickNonce: number;
   conversationId?: string | null;
+  conversationModel?: ConversationModel | null;
 };
 
-export function Thread({ items, toolsById, lang, running, actions, stickNonce, conversationId }: Props) {
+export function Thread({
+  items,
+  toolsById,
+  lang,
+  running,
+  actions,
+  stickNonce,
+  conversationId,
+  conversationModel = null,
+}: Props) {
+  const { providers } = useProviders();
   const scroller = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
 
@@ -56,6 +69,7 @@ export function Thread({ items, toolsById, lang, running, actions, stickNonce, c
                   lang={lang}
                   canContinue={item.truncated && !running}
                   onContinue={(requestId) => actions.continueRun(requestId)}
+                  attribution={modelAttribution(item.model, providers, conversationModel)}
                 />
               );
             }

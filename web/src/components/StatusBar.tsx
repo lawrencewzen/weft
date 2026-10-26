@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { Lang } from '../data/lang';
 import type { components } from '../../../src/v2/contract.gen';
-import { formatElapsed, formatTokenCount, t } from '../i18n';
+import { formatElapsed, t } from '../i18n';
 import { DemoModelBadge } from './DemoModelBadge';
 import { RightToggle } from './RightToggle';
 
@@ -43,10 +43,6 @@ export function StatusBar({
 
   const origin = run.startedAt ?? seenAt;
   const elapsed = running && origin != null ? formatElapsed(now - origin) : null;
-  const ctx = conversation.context;
-  const remain = Math.max(0, 100 - ctx.percent);
-  const circumference = 2 * Math.PI * 5;
-  const levelClass = ctx.level === 'full' ? 'is-full' : ctx.level === 'warn' ? 'is-warn' : '';
   const itemCount = Array.isArray(conversation.itemIds) ? conversation.itemIds.length : 0;
   const statusKey = run.status === 'running' ? 'status_running'
     : run.status === 'stopped' ? 'status_stopped'
@@ -84,39 +80,6 @@ export function StatusBar({
           ) : null}
         </div>
         <div className="top-right">
-          <div
-            className={`chip-context ${levelClass}`.trim()}
-            data-testid="next-context"
-            data-level={ctx.level}
-            title={t(lang, 'ctx_title', {
-              used: formatTokenCount(ctx.used),
-              window: formatTokenCount(ctx.window),
-              usedPct: ctx.percent,
-              leftPct: remain,
-            })}
-          >
-            <span className="chip-context-display">
-              <svg className="ctx-ring" viewBox="0 0 14 14" width="14" height="14" aria-hidden="true">
-                <circle className="ctx-ring-track" cx="7" cy="7" r="5" fill="none" strokeWidth="2" />
-                <circle
-                  className="ctx-ring-fill"
-                  cx="7"
-                  cy="7"
-                  r="5"
-                  fill="none"
-                  strokeWidth="2"
-                  strokeDasharray={`${(ctx.percent / 100) * circumference} ${circumference}`}
-                />
-              </svg>
-              <span>
-                {t(lang, 'ctx_used_short', { used: ctx.percent })}
-                {' · '}
-                {t(lang, 'ctx_left_short', { left: remain })}
-                {' · '}
-                {formatTokenCount(ctx.window)}
-              </span>
-            </span>
-          </div>
           <RightToggle lang={lang} />
         </div>
       </div>

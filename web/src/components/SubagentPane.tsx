@@ -162,6 +162,8 @@ export function SubagentPane({
         lang={lang}
         run={run}
         demo={demo}
+        conversationId={cid}
+        showModelControls={false}
         onSend={actions.send}
         onStop={actions.stop}
         onSent={bumpStick}
