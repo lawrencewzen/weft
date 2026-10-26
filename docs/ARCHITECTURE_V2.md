@@ -165,7 +165,7 @@ Provider {
 
 ## 10. 迁移阶段
 
-旧接口（`/api/*`）在迁移期间保持可用。**阶段 5 第一步已完成（T44-3a）**：默认入口是新网页端（`/`），旧前端挪到 `/legacy` 过渡期保留；`/next/...` 书签 302 到去掉前缀的同一路径。删除旧接口和旧前端是阶段 5 的后续步骤。
+旧接口（`/api/*`）在迁移期间保持可用。**阶段 5 第一步已完成（T44-3a）**：默认入口是新网页端（`/`）；`/next/...` 书签 302 到去掉前缀的同一路径。**第二步已完成（T47-1）**：旧前端 `public/*.js`、`public/index.html`、旧 e2e 用例和 `/legacy` 静态服务已删除，`/legacy` 302 回 `/`；旧前端里被服务端复用的共享模块搬到 `src/core/usage-math.mjs`、`src/kernel/continuation-text.mjs`、`src/kernel/subagent-report-text.mjs`。剩下的是删旧接口 `/api/*` 和重写文档。
 
 | 阶段 | 内容 | 做完能看到什么 |
 |---|---|---|
@@ -174,7 +174,7 @@ Provider {
 | 2 侧栏 | Workspace、ConversationSummary、Subagent，卡住判定，新建和归档对话 | `/next` 可以切换对话、查看子 Agent |
 | 3 右栏 | Change、Diff、FileNode、FileContent，编辑保存 | `/next` 看 diff、浏览和编辑文件 |
 | 4 设置 | Provider（钥匙串，按原型做新界面）、插件、技能、Git 连接、外观 | `/next` 功能和旧端齐平 |
-| 5 收尾 | 默认切到新端；删除旧接口、旧前端和前端推导模块；重写 ARCHITECTURE、DEPLOYMENT 等文档 | 只剩 v2。**第一步已完成**：`/` 是新端，旧端在 `/legacy`，`npm install` 构建新端，`npm start` 打印登录链接；DEPLOYMENT 已改成本地/内网 Windows |
+| 5 收尾 | 默认切到新端；删除旧接口、旧前端和前端推导模块；重写 ARCHITECTURE、DEPLOYMENT 等文档 | **第一步已完成**（T44-3a）：`/` 是新端，`npm install` 构建新端，`npm start` 打印登录链接。**第二步已完成**（T47-1）：旧前端、旧 e2e 和 `/legacy` 已删除。剩余：旧接口 `/api/*` 和文档重写 |
 
 每个阶段拆成若干个小 PR，每个 PR 带单测；e2e 用 Playwright 跑新网页端（`/`）。
 

@@ -4,7 +4,7 @@
 
 对话运行时是 **Pi Durable Harness**（`src/kernel/`，`@earendil-works/pi-durable`）。工作区、设置和对话索引在应用库 `src/store/sqlite.mjs`。耐久性设计见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)，安全修复见 [SECURITY.md](SECURITY.md)。
 
-启动：`npm ci` 后 `npm start`（Node >= 22.19）。`npm install` 会构建新版网页端。进程只监听 `127.0.0.1`。控制台在 `WEFT_READY http://127.0.0.1:<端口>` 之后再打印一行带一次性码的登录链接（10 分钟、用一次）；点它打开新版界面。也可以 `npm run weft -- open`。旧版界面在 `/legacy`。旧接口的可选登录仍是设置 `WEFT_TOKEN` 后用 `/login?token=` 或 `Authorization: Bearer`。不设令牌时，`Host` 白名单、跨域 `Origin` 和写请求必须是 JSON 这几项仍然生效；若同时设置了 `WEFT_ALLOWED_HOSTS`，启动会警告服务对这些主机开放且没有鉴权。
+启动：`npm ci` 后 `npm start`（Node >= 22.19）。`npm install` 会构建新版网页端。进程只监听 `127.0.0.1`。控制台在 `WEFT_READY http://127.0.0.1:<端口>` 之后再打印一行带一次性码的登录链接（10 分钟、用一次）；点它打开新版界面。也可以 `npm run weft -- open`。旧版界面已删除（`/legacy` 现在 302 回 `/`）。旧接口的可选登录仍是设置 `WEFT_TOKEN` 后用 `/login?token=` 或 `Authorization: Bearer`。不设令牌时，`Host` 白名单、跨域 `Origin` 和写请求必须是 JSON 这几项仍然生效；若同时设置了 `WEFT_ALLOWED_HOSTS`，启动会警告服务对这些主机开放且没有鉴权。
 
 演示模型只在显式设置 `WEFT_LLM=faux`、`LLM_API=faux` 或 `WEFT_FAUX_SCRIPT` 时使用。没有可用模型时发消息以 `E_NO_MODEL` 失败，不会自动改走演示剧本。
 
