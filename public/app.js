@@ -1417,6 +1417,31 @@ function sidebarRenderSignature() {
   return parts.join('\x1f');
 }
 
+function subagentStatusIconKey(row) {
+  return `${row.getAttribute('data-conv-id') || ''}\0${row.getAttribute('data-agent-id') || ''}`;
+}
+
+function takeSubagentStatusIcons(root) {
+  const prev = new Map();
+  for (const icon of root.querySelectorAll('[data-testid="subagent-status-icon"]')) {
+    const row = icon.closest('[data-testid="subagent-tree-row"]');
+    if (!row?.getAttribute('data-agent-id')) continue;
+    prev.set(subagentStatusIconKey(row), icon);
+    icon.remove();
+  }
+  return prev;
+}
+
+function restoreSubagentStatusIcons(root, prev) {
+  if (!prev.size) return;
+  for (const icon of root.querySelectorAll('[data-testid="subagent-status-icon"]')) {
+    const row = icon.closest('[data-testid="subagent-tree-row"]');
+    if (!row) continue;
+    const old = prev.get(subagentStatusIconKey(row));
+    if (old && old !== icon) icon.replaceWith(old);
+  }
+}
+
 export function renderSidebarWorkspaces() {
   const container = document.getElementById('ws-tree-container');
   if (!container) return;
@@ -1429,6 +1454,7 @@ export function renderSidebarWorkspaces() {
     return;
   }
 
+  const prevIcons = takeSubagentStatusIcons(container);
   container.innerHTML = state.workspaces
     .map((ws) => {
       const isActive = ws.id === state.activeWorkspaceId;
@@ -1458,6 +1484,7 @@ export function renderSidebarWorkspaces() {
       );
     })
     .join('');
+  restoreSubagentStatusIcons(container, prevIcons);
   lastSidebarSig = sig;
   pruneSubagentRowFx();
   markSubagentRowsEntered();
