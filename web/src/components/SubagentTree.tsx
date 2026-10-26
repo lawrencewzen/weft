@@ -166,7 +166,12 @@ export function SubagentTree({
         <div className="subagent-tree">
           {loading && !agents.length ? (
             <div className="subagent-tree-loading">{t(lang, 'loading')}</div>
-          ) : agents.map((agent, index) => {
+          ) : (
+            <>
+              {agents.length ? (
+                <span className="subagent-tree-stem" data-testid="next-subagent-tree-stem" aria-hidden="true" />
+              ) : null}
+              {agents.map((agent, index) => {
             const last = index === agents.length - 1;
             const visual = subagentTreeVisual(agent.status);
             const time = subagentTreeTimeText(agent, lang, now);
@@ -179,57 +184,70 @@ export function SubagentTree({
               ended ? 'is-just-ended' : '',
             ].filter(Boolean).join(' ');
             return (
-              <div key={agent.id} className={`subagent-tree-row-shell${fx ? ` ${fx}` : ''}`}>
-                <div className="subagent-tree-row-shell-inner">
-                  <div
-                    className={[
-                      'subagent-tree-row',
-                      active ? 'is-active' : '',
-                      visual === 'stuck' ? 'is-stuck' : '',
-                      last ? 'is-last' : '',
-                      ended ? 'is-just-ended' : '',
-                    ].filter(Boolean).join(' ')}
-                    data-testid="next-subagent-row"
-                    data-agent-id={agent.id}
-                    data-conv-id={convId}
-                    data-status={agent.status}
-                    data-visual={visual}
-                    title={agent.title || agent.name}
-                    onClick={() => onOpen(convId, agent.id)}
-                    onContextMenu={(ev) => {
-                      ev.preventDefault();
-                      ev.stopPropagation();
-                      onMenu(ev, agent);
-                    }}
-                  >
-                    {STATUS_ICON}
-                    <div className="subagent-tree-main">
-                      <div className="subagent-tree-line">
-                        <span className="subagent-tree-summary" data-testid="next-subagent-summary">
-                          {agent.title || agent.name}
-                        </span>
-                        <span
-                          className={`subagent-tree-time${agent.status === 'stuck' ? ' is-idle' : ''}`}
-                          data-testid="next-subagent-time"
-                        >
-                          {time}
-                        </span>
-                      </div>
-                      <div className={`subagent-tree-action-slot${action ? ' is-open' : ''}`}>
-                        <div className="subagent-tree-action-clip">
-                          {action ? (
-                            <div className="subagent-tree-action" data-testid="next-subagent-action">
-                              {action}
-                            </div>
-                          ) : null}
+              <div
+                key={agent.id}
+                className={[
+                  'subagent-tree-row-shell',
+                  last ? 'is-last' : '',
+                  fx,
+                ].filter(Boolean).join(' ')}
+                data-testid="next-subagent-tree-shell"
+              >
+                <div className="subagent-tree-row-grow">
+                  <div className="subagent-tree-row-shell-inner">
+                    <div
+                      className={[
+                        'subagent-tree-row',
+                        active ? 'is-active' : '',
+                        visual === 'stuck' ? 'is-stuck' : '',
+                        ended ? 'is-just-ended' : '',
+                      ].filter(Boolean).join(' ')}
+                      data-testid="next-subagent-row"
+                      data-agent-id={agent.id}
+                      data-conv-id={convId}
+                      data-status={agent.status}
+                      data-visual={visual}
+                      title={agent.title || agent.name}
+                      onClick={() => onOpen(convId, agent.id)}
+                      onContextMenu={(ev) => {
+                        ev.preventDefault();
+                        ev.stopPropagation();
+                        onMenu(ev, agent);
+                      }}
+                    >
+                      {STATUS_ICON}
+                      <div className="subagent-tree-main">
+                        <div className="subagent-tree-line">
+                          <span className="subagent-tree-summary" data-testid="next-subagent-summary">
+                            {agent.title || agent.name}
+                          </span>
+                          <span
+                            className={`subagent-tree-time${agent.status === 'stuck' ? ' is-idle' : ''}`}
+                            data-testid="next-subagent-time"
+                          >
+                            {time}
+                          </span>
+                        </div>
+                        <div className={`subagent-tree-action-slot${action ? ' is-open' : ''}`}>
+                          <div className="subagent-tree-action-clip">
+                            {action ? (
+                              <div className="subagent-tree-action" data-testid="next-subagent-action">
+                                {action}
+                              </div>
+                            ) : null}
+                          </div>
                         </div>
                       </div>
                     </div>
                   </div>
                 </div>
+                <span className="subagent-tree-v" data-testid="next-subagent-tree-v" aria-hidden="true" />
+                <span className="subagent-tree-h" data-testid="next-subagent-tree-h" aria-hidden="true" />
               </div>
             );
-          })}
+              })}
+            </>
+          )}
         </div>
       </div>
     </div>

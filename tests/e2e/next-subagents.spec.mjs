@@ -58,8 +58,24 @@ function convRow(page, id) {
   return page.locator(`[data-testid=next-conv-row][data-id="${id}"]`);
 }
 
+function convNode(page, id) {
+  return page.locator('.conv-tree-node').filter({ has: convRow(page, id) });
+}
+
 function treeOf(page, convId) {
   return page.locator(`[data-testid=next-subagent-tree][data-conv-id="${convId}"]`);
+}
+
+async function clipStyle(locator) {
+  return locator.evaluate((el) => {
+    const s = getComputedStyle(el);
+    return {
+      overflow: s.overflow,
+      overflowX: s.overflowX,
+      overflowY: s.overflowY,
+      radius: s.borderRadius,
+    };
+  });
 }
 
 async function waitSubagentRow(page, convId, timeout = 45000) {
@@ -374,6 +390,96 @@ test('finished sub-agent trees start closed, show a check, and use the name when
     await expect(doneRow).toHaveAttribute('data-visual', 'done');
     await expect(doneRow.getByTestId('next-subagent-summary')).toHaveText('worker');
     await expect(doneRow.locator('.sa-check')).toHaveCSS('opacity', '1');
+  } finally {
+    await srv.kill();
+  }
+});
+
+test('opening a sub-agent keeps the parent lightweight; tree rails are unclipped and continuous', async ({ page }) => {
+  const prepared = await prepareWorkspaces(['repo']);
+  const script = await writeScript(prepared.root, 'spawn-two-hold.json', [
+    {
+      tools: [
+        { tool: 'subagent', args: { action: 'spawn', name: 'alpha', message: 'hold-a' } },
+        { tool: 'subagent', args: { action: 'spawn', name: 'beta', message: 'hold-b' } },
+      ],
+    },
+    { text: 'parent-idle' },
+    { when: 'hold-a', delayMs: 20000, text: 'a-done' },
+    { when: 'hold-b', delayMs: 20000, text: 'b-done' },
+  ]);
+  const srv = await startServer({
+    extraEnv: { WEFT_FAUX_SCRIPT: script, WEFT_WORKSPACE_ROOT: prepared.root },
+  });
+  try {
+    const { conv } = await openWorkspaceConversation(srv, 'demo', prepared.dirs[0]);
+    await openNextChat(page, srv, conv.id);
+    await sendNext(page, '请派子代理');
+    const tree = treeOf(page, conv.id);
+    const rows = tree.getByTestId('next-subagent-row');
+    await expect(rows).toHaveCount(2, { timeout: 45000 });
+    await expect(rows.nth(1)).toBeVisible();
+    await expect.poll(async () => rows.first().evaluate((el) => getComputedStyle(el).transform)).toBe('none');
+
+    const node = convNode(page, conv.id);
+    await expect(node).toHaveClass(/conv-active/);
+    await expect(node).not.toHaveClass(/conv-child-active/);
+    await expect(convRow(page, conv.id)).not.toHaveClass(/is-child-active/);
+
+    const shells = tree.getByTestId('next-subagent-tree-shell');
+    const stem = tree.getByTestId('next-subagent-tree-stem');
+    const rails = tree.getByTestId('next-subagent-tree-v');
+    const elbows = tree.getByTestId('next-subagent-tree-h');
+    await expect(shells).toHaveCount(2);
+    await expect(stem).toBeVisible();
+    await expect(rails).toHaveCount(2);
+    await expect(elbows).toHaveCount(2);
+
+    for (const loc of [stem, shells.first(), shells.last(), rails.first(), rails.last(), elbows.first()]) {
+      const css = await clipStyle(loc);
+      expect(css.overflow, 'tree rail host must not clip').toBe('visible');
+      expect(css.overflowX).toBe('visible');
+      expect(css.overflowY).toBe('visible');
+      expect(css.radius === '0px' || css.radius === '0px 0px 0px 0px').toBeTruthy();
+    }
+
+    const firstRow = await rows.first().boundingBox();
+    const lastRow = await rows.last().boundingBox();
+    const stemBox = await stem.boundingBox();
+    const firstV = await rails.first().boundingBox();
+    const lastV = await rails.last().boundingBox();
+    const firstH = await elbows.first().boundingBox();
+    expect(firstRow).toBeTruthy();
+    expect(lastRow).toBeTruthy();
+    expect(stemBox).toBeTruthy();
+    expect(firstV).toBeTruthy();
+    expect(lastV).toBeTruthy();
+    expect(firstH).toBeTruthy();
+    expect(stemBox.y).toBeLessThanOrEqual(firstRow.y + 0.5);
+    expect(firstV.y).toBeLessThanOrEqual(firstRow.y + 2);
+    expect(Math.abs((stemBox.y + stemBox.height) - firstV.y)).toBeLessThanOrEqual(1.5);
+    expect(lastV.y + lastV.height).toBeGreaterThanOrEqual(lastRow.y + 11);
+    expect(lastV.y + lastV.height).toBeLessThan(lastRow.y + lastRow.height);
+    expect(Math.abs((firstV.y + firstV.height) - lastV.y)).toBeLessThanOrEqual(1.5);
+    expect(firstH.width).toBeGreaterThanOrEqual(8);
+    expect(firstH.width).toBeLessThanOrEqual(10);
+
+    await rows.nth(1).click();
+    await expect(page).toHaveURL(new RegExp(`/c/${conv.id}/a/`));
+    await expect(page.getByTestId('next-subagent-view')).toBeVisible();
+    await expect(node).not.toHaveClass(/conv-active/);
+    await expect(node).toHaveClass(/conv-child-active/);
+    await expect(convRow(page, conv.id)).toHaveClass(/is-child-active/);
+    await expect(rows.nth(1)).toHaveClass(/is-active/);
+    await expect(rows.first()).not.toHaveClass(/is-active/);
+
+    await convRow(page, conv.id).click();
+    await expect(page).toHaveURL(new RegExp(`/c/${conv.id}$`));
+    await expect(page.getByTestId('next-subagent-view')).toHaveCount(0);
+    await expect(node).toHaveClass(/conv-active/);
+    await expect(node).not.toHaveClass(/conv-child-active/);
+    await expect(convRow(page, conv.id)).not.toHaveClass(/is-child-active/);
+    await expect(tree.locator('[data-testid=next-subagent-row].is-active')).toHaveCount(0);
   } finally {
     await srv.kill();
   }
