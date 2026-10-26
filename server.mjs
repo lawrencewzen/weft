@@ -70,6 +70,7 @@ import { acquireDataDirLock } from './src/core/lock.mjs';
 import { presentConversationContext } from './src/core/usage.mjs';
 import { openConversationKernel } from './src/kernel/conversations.mjs';
 import { createV2Runtime } from './src/v2/index.ts';
+import { loadSubagentFromStore } from './src/v2/load-subagent.ts';
 import fs from 'node:fs/promises';
 
 // 内置 fetch 默认不读 HTTP(S)_PROXY；配置了代理时让模型请求也走它（遵守 NO_PROXY）
@@ -169,19 +170,11 @@ const v2 = createV2Runtime({
   },
   async loadSubagent(cid, agentId) {
     if (!kernelApi) return null;
-    const conv = await store.getConversation(cid);
-    if (!conv) return null;
-    const presented = await kernelApi.present(conv, { includeMessages: true });
-    const subagents = await kernelApi.listSubagents(presented);
-    const agent = subagents.find((item) => item.id === agentId);
-    if (!agent) return null;
-    const child = await kernelApi.childMessages(cid, agentId);
-    if (child.status !== 200) return null;
-    return {
-      presented,
-      agent,
-      messages: child.body?.messages || [],
-    };
+    return loadSubagentFromStore({
+      getConversation: (id) => store.getConversation(id),
+      listSubagents: (conv) => kernelApi.listSubagents(conv),
+      childMessages: (id, aid) => kernelApi.childMessages(id, aid),
+    }, cid, agentId);
   },
   async sendToAgent(cid, agentId, text) {
     if (!kernelApi) return { status: 500, body: { error: 'kernel not ready' } };

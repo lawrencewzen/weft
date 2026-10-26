@@ -12,6 +12,7 @@ import { PROTOCOL_VERSION } from '../../src/v2/version.ts';
 import { createEventHub } from '../../src/v2/stream/hub.ts';
 import { attachConversationTopic } from '../../src/v2/stream/conversation-topic.ts';
 import { attachSubagentTopic } from '../../src/v2/stream/subagent-topic.ts';
+import { loadSubagentFromStore } from '../../src/v2/load-subagent.ts';
 import { createStuckWatch } from '../../src/v2/stream/stuck-watch.ts';
 import { ROOT } from './_root.mjs';
 import { readDiscovery, request, startServer, stopServer } from './_server.mjs';
@@ -585,3 +586,40 @@ test('HTTP conversation topic snapshot includes subagent; child item arrives on 
     await stopServer(srv);
   }
 });
+
+test('loadSubagentFromStore uses the store row and listSubagents, not present', async () => {
+  const conv = { id: 'c1', workspacePath: '/ws/demo', harnessId: 7 };
+  const agent = { id: 'c1:sub:1', name: '巡查', status: 'done' };
+  let presentCalls = 0;
+  const deps = {
+    getConversation: async (id) => (id === 'c1' ? conv : null),
+    listSubagents: async (row) => {
+      assert.equal(row, conv);
+      assert.equal(row.workspacePath, '/ws/demo');
+      return [agent];
+    },
+    childMessages: async (cid, agentId) => {
+      assert.equal(cid, 'c1');
+      assert.equal(agentId, agent.id);
+      return {
+        status: 200,
+        body: { messages: [{ id: 'u1', role: 'user', text: '请查看' }] },
+      };
+    },
+    present: async () => {
+      presentCalls += 1;
+      throw new Error('present should not be called');
+    },
+  };
+  const loaded = await loadSubagentFromStore(deps, 'c1', agent.id);
+  assert.equal(presentCalls, 0);
+  assert.ok(loaded);
+  assert.equal(loaded.presented.id, 'c1');
+  assert.equal(loaded.presented.workspacePath, '/ws/demo');
+  assert.equal(loaded.agent, agent);
+  assert.equal(loaded.messages.length, 1);
+  assert.equal(loaded.messages[0].id, 'u1');
+  assert.equal(Object.hasOwn(loaded.presented, 'messages'), false);
+  assert.equal(Object.hasOwn(loaded.presented, 'status'), false);
+});
+

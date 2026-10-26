@@ -20,6 +20,7 @@ import {
   messagesFromEntries,
   statusFromSubmission,
 } from './events.mjs';
+import { latestCallUsage } from './usage.mjs';
 import { createScriptFloorExtension, installDemo } from './faux-script.mjs';
 import { FAUX_MODEL, openKernel } from './index.mjs';
 import { createKernelModels, explicitDemo } from './models.mjs';
@@ -479,15 +480,24 @@ export async function openConversationKernel({
     },
     async present(conv, { includeMessages = false } = {}) {
       if (!conv?.harnessId) return { ...conv, status: 'idle', messages: includeMessages ? [] : undefined };
-      const transcript = await readTranscript(conv.harnessId);
       const view = await submissionView(conv);
       const status = view.status;
-      const usage = presentContext(transcript.usage).usage;
+      let usage = null;
+      let messages;
+      if (includeMessages) {
+        const transcript = await readTranscript(conv.harnessId);
+        usage = presentContext(transcript.usage).usage;
+        messages = transcript.messages;
+      } else {
+        // Newest assistant that reported tokens, not blindly the last message.
+        // viewState is still required: a fixed-size descending scan can miss an
+        // older reported call and would change the old list API.
+        const harnessView = await readView(conv.harnessId);
+        usage = presentContext(latestCallUsage(harnessView?.entries)).usage;
+      }
       const out = { ...conv, status, usage };
       if (view.llmError) out.llmError = view.llmError;
-      if (includeMessages) {
-        out.messages = transcript.messages;
-      }
+      if (includeMessages) out.messages = messages;
       return out;
     },
     async postMessage(conv, text, options = {}) {
