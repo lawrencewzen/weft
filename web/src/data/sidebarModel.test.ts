@@ -15,6 +15,8 @@ function ws(id: string, name = id): Workspace {
     name,
     path: `/tmp/${id}`,
     source: 'local',
+    gitUrl: null,
+    branch: null,
     conversationCount: 0,
     runningCount: 0,
   };

@@ -27,6 +27,8 @@ import { attachProvidersTopic } from './stream/providers-topic.ts';
 import { attachWorkspacesTopic } from './stream/workspaces-topic.ts';
 import { attachSubagentTopic, type LoadSubagent } from './stream/subagent-topic.ts';
 import { createStuckWatch } from './stream/stuck-watch.ts';
+import { attachExtensionsTopic } from './stream/extensions-topic.ts';
+import { handleExtensionsApi, loadExtensionsSnapshot, type ExtensionsHost } from './http/extensions.ts';
 import {
   diffView,
   findKernelChange,
@@ -63,6 +65,7 @@ type RunAccepted = components['schemas']['RunAccepted'];
 type StopAccepted = components['schemas']['StopAccepted'];
 type ToolOutput = components['schemas']['ToolOutput'];
 type WorkspacesSnapshot = components['schemas']['WorkspacesSnapshot'];
+type Workspace = components['schemas']['Workspace'];
 type ConversationSummary = components['schemas']['ConversationSummary'];
 type WorkspaceRemoved = components['schemas']['WorkspaceRemoved'];
 type WorkspaceBusy = components['schemas']['WorkspaceBusy'];
@@ -74,6 +77,23 @@ type FileContent = components['schemas']['FileContent'];
 type SaveResult = components['schemas']['SaveResult'];
 type FileConflict = components['schemas']['FileConflict'];
 type ConversationView = components['schemas']['ConversationView'];
+type WorkspaceRoot = components['schemas']['WorkspaceRoot'];
+type WorkspaceDirs = components['schemas']['WorkspaceDirs'];
+type PathNotAllowed = components['schemas']['PathNotAllowed'];
+type WorkspaceCreateError = components['schemas']['WorkspaceCreateError'];
+type GitCloneFailure = components['schemas']['GitCloneFailure'];
+type Plugin = components['schemas']['Plugin'];
+type PluginList = components['schemas']['PluginList'];
+type Skill = components['schemas']['Skill'];
+type SkillList = components['schemas']['SkillList'];
+type CatalogError = components['schemas']['CatalogError'];
+type GitConnection = components['schemas']['GitConnection'];
+type GitConnectionList = components['schemas']['GitConnectionList'];
+type GitConnectionInvalid = components['schemas']['GitConnectionInvalid'];
+type GitTestResult = components['schemas']['GitTestResult'];
+type GitProjectList = components['schemas']['GitProjectList'];
+type GitBranchList = components['schemas']['GitBranchList'];
+type OkId = components['schemas']['OkId'];
 type V2JsonBody =
   | ServiceInfo
   | WebCode
@@ -85,6 +105,7 @@ type V2JsonBody =
   | StopAccepted
   | ToolOutput
   | WorkspacesSnapshot
+  | Workspace
   | ConversationSummary
   | WorkspaceRemoved
   | WorkspaceBusy
@@ -95,7 +116,24 @@ type V2JsonBody =
   | FileContent
   | SaveResult
   | FileConflict
-  | ProvidersJsonBody;
+  | ProvidersJsonBody
+  | WorkspaceRoot
+  | WorkspaceDirs
+  | PathNotAllowed
+  | WorkspaceCreateError
+  | GitCloneFailure
+  | Plugin
+  | PluginList
+  | Skill
+  | SkillList
+  | CatalogError
+  | GitConnection
+  | GitConnectionList
+  | GitConnectionInvalid
+  | GitTestResult
+  | GitProjectList
+  | GitBranchList
+  | OkId;
 
 export type ConversationRow = {
   id?: unknown;
@@ -163,6 +201,7 @@ export type V2Runtime = {
   notifySidebarChanged: () => void;
   notifyProvidersChanged: () => void;
   notifyConversation: NotifyConversationFn;
+  notifyExtensionsChanged: () => void;
   dispose: () => void;
 };
 
@@ -418,6 +457,8 @@ export function createV2Handler(opts: {
   notifyConversation?: NotifyConversationFn;
   patchConversation?: PatchConversationFn;
   providers?: ProvidersHttpOpts;
+  extensions?: ExtensionsHost;
+  onExtensionsChanged?: () => void;
 }): V2Handler {
   const { serviceVersion, startedAt, auth, hub } = opts;
   const pid = opts.pid ?? process.pid;
@@ -1070,6 +1111,21 @@ export function createV2Handler(opts: {
       return true;
     }
 
+    if (await handleExtensionsApi({
+      req,
+      res,
+      url,
+      pathname,
+      method,
+      sendV2: (response, requestPath, requestMethod, status, body) => {
+        sendV2(response, requestPath, requestMethod, status, body as V2JsonBody);
+      },
+      readObjectBody,
+      host: opts.extensions,
+      onSidebarChanged: opts.onSidebarChanged,
+      onExtensionsChanged: opts.onExtensionsChanged,
+    })) return true;
+
     if (method === 'GET' && pathname === '/api/v2/events') {
       const topics = parseTopics(url.searchParams.get('topics'));
       const unknown = topics.filter((topic) => !hub.hasTopic(topic));
@@ -1150,6 +1206,7 @@ export function createV2Runtime(opts: {
   ensureGrokSource?: ProvidersHttpOpts['ensureGrokSource'];
   probeFetch?: ProvidersHttpOpts['probeFetch'];
   probeTimeoutMs?: ProvidersHttpOpts['probeTimeoutMs'];
+  extensions?: ExtensionsHost;
 }): V2Runtime {
   const pid = opts.pid ?? process.pid;
   const auth = createV2Auth({
@@ -1220,6 +1277,9 @@ export function createV2Runtime(opts: {
     providersTopic.notify();
     void notifyAllConversations();
   }
+  const extensionsTopic = attachExtensionsTopic(hub, {
+    load: opts.extensions ? () => loadExtensionsSnapshot(opts.extensions as ExtensionsHost) : undefined,
+  });
   const idle = createIdleWatcher({
     hasActiveWork: opts.hasActiveWork ?? (() => false),
     shutdown: () => opts.onIdleExit?.(),
@@ -1269,6 +1329,8 @@ export function createV2Runtime(opts: {
       now: opts.now,
       onProvidersChanged: notifyProvidersChanged,
     },
+    extensions: opts.extensions,
+    onExtensionsChanged: () => extensionsTopic.notify(),
   });
 
   return {
@@ -1299,9 +1361,13 @@ export function createV2Runtime(opts: {
     notifyConversation(cid) {
       conversationTopic.notify(cid);
     },
+    notifyExtensionsChanged() {
+      extensionsTopic.notify();
+    },
     dispose() {
       workspacesTopic.dispose();
       providersTopic.dispose();
+      extensionsTopic.dispose();
       conversationTopic.dispose();
       subagentTopic.dispose();
       stuck.dispose();

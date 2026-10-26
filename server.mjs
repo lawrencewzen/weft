@@ -31,14 +31,14 @@ import {
   GROK_SOURCE_ID,
 } from './src/core/model-sources.mjs';
 import { cloneGitRepo, stripGitUrlCredentials } from './src/core/git-import.mjs';
+import { gitFailureBody, planWorkspaceGit as planGitImport, usesConnectionClone } from './src/core/workspace-git.mjs';
 import {
   createGitConnection,
-  matchConnectionByUrl,
   publicGitConnection,
   recordGitTest,
   updateGitConnection,
 } from './src/core/git-connections.mjs';
-import { cloneUrlForProject, getGitlabProject, listGitlabBranches, listGitlabProjects, testGitlabConnection } from './src/core/gitlab-api.mjs';
+import { listGitlabBranches, listGitlabProjects, testGitlabConnection } from './src/core/gitlab-api.mjs';
 import { createExtensionHost } from './src/core/extensions.mjs';
 import { describePlugins, installPlugin, PLUGIN_ID } from './src/core/plugins.mjs';
 import { listSkills, listSkillRecords, createSkill, updateSkill, deleteSkill, SKILL_ID } from './src/core/skills.mjs';
@@ -226,6 +226,32 @@ const v2 = createV2Runtime({
   },
   ensureGrokSource() {
     return ensureGrokSource();
+  },
+  extensions: {
+    dataDir: DATA_DIR,
+    rootDir: ROOT,
+    pluginDirs: PLUGIN_DIRS,
+    userPlugins: USER_PLUGINS,
+    skillDirs: SKILL_DIRS,
+    userSkills: USER_SKILLS,
+    createWorkspace(fields) {
+      return store.createWorkspace(fields);
+    },
+    restoreWorkspaceByPath(wsPath, name) {
+      return store.restoreWorkspaceByPath(wsPath, name);
+    },
+    getSettings() {
+      return store.getSettings();
+    },
+    putSettings(patch) {
+      return store.putSettings(patch);
+    },
+    async reloadPlugins() {
+      await reloadKernelPlugins();
+    },
+    planWorkspaceGit(body) {
+      return planGitImport(body, { loadConnections: loadGitConnections });
+    },
   },
 });
 
@@ -810,67 +836,8 @@ async function saveGitConnections(list) {
   return loadGitConnections();
 }
 
-function gitFailureBody(err) {
-  const failure = { error: err?.message || 'git clone failed' };
-  if (err?.gitCode) failure.code = err.gitCode;
-  if (err?.gitCode === 'unknown' && err.detail) failure.detail = String(err.detail).slice(0, 800);
-  if (err?.via) failure.via = err.via;
-  return failure;
-}
-
-function connectionCloneError(code, via = 'connection') {
-  const err = new Error(code === 'http_not_allowed' ? 'http not allowed' : 'git clone failed');
-  err.status = 400;
-  err.gitCode = code || 'unknown';
-  err.via = via;
-  return err;
-}
-
-function usesConnectionClone(connection, gitUrl) {
-  if (!connection || !/^https?:\/\//i.test(gitUrl)) return false;
-  if (connection.token) return true;
-  if (connection.caFile) return true;
-  return /^http:\/\//i.test(gitUrl);
-}
-
-async function planWorkspaceGit(body) {
-  const connections = await loadGitConnections();
-  let connection = null;
-  if (body.connectionId) {
-    connection = connections.find((item) => item.id === String(body.connectionId)) || null;
-    if (!connection) {
-      const err = new Error('not found');
-      err.status = 404;
-      throw err;
-    }
-  }
-  let gitUrl = String(body.gitUrl || '').trim();
-  let branch = body.branch || '';
-  const projectId = body.projectId != null ? String(body.projectId).trim() : '';
-  if (projectId) {
-    if (!connection) {
-      const err = new Error('connection required');
-      err.status = 400;
-      throw err;
-    }
-    const found = await getGitlabProject(connection, projectId);
-    if (!found.ok) throw connectionCloneError(found.code || 'unknown');
-    try {
-      gitUrl = cloneUrlForProject(connection, found.project);
-    } catch (err) {
-      if (!err.via) err.via = 'connection';
-      throw err;
-    }
-    if (!branch) branch = found.project.defaultBranch || '';
-  } else if (!connection && gitUrl) {
-    connection = matchConnectionByUrl(connections, gitUrl);
-  }
-  if (!gitUrl) {
-    const err = new Error('invalid gitUrl');
-    err.status = 400;
-    throw err;
-  }
-  return { connection, gitUrl, branch };
+async function planGit(body) {
+  return planGitImport(body, { loadConnections: loadGitConnections });
 }
 
 async function testConnectionRecord(connection) {
@@ -899,6 +866,7 @@ async function handleGitConnections(req, res, p, m) {
     }
     list.push(built.value);
     await saveGitConnections(list);
+    v2.notifyExtensionsChanged();
     sendJson(res, 201, publicGitConnection(built.value));
     return true;
   }
@@ -974,6 +942,7 @@ async function handleGitConnections(req, res, p, m) {
     const result = await testConnectionRecord(list[index]);
     list[index] = recordGitTest(list[index], result);
     await saveGitConnections(list);
+    v2.notifyExtensionsChanged();
     sendJson(res, 200, result.ok
       ? { ok: true, username: result.username, connection: publicGitConnection(list[index]) }
       : { ok: false, code: result.code, connection: publicGitConnection(list[index]) });
@@ -996,6 +965,7 @@ async function handleGitConnections(req, res, p, m) {
     }
     list[index] = updated.value;
     await saveGitConnections(list);
+    v2.notifyExtensionsChanged();
     sendJson(res, 200, publicGitConnection(updated.value));
     return true;
   }
@@ -1007,6 +977,7 @@ async function handleGitConnections(req, res, p, m) {
       return true;
     }
     await saveGitConnections(list.filter((item) => item.id !== id));
+    v2.notifyExtensionsChanged();
     sendJson(res, 200, { ok: true, id });
     return true;
   }
@@ -1062,7 +1033,7 @@ async function routeApi(req, res, url) {
       const id = randomUUID();
       const dest = path.join(DATA_DIR, 'workspaces', id, 'repo');
       try {
-        const planned = await planWorkspaceGit(body);
+        const planned = await planGit(body);
         let gitUrl = planned.gitUrl;
         let branch = planned.branch || '';
         const connection = usesConnectionClone(planned.connection, gitUrl) ? planned.connection : null;
@@ -1499,6 +1470,7 @@ async function routeApi(req, res, url) {
       });
       await store.putSettings({ plugins: { [installed.id]: true } });
       await reloadKernelPlugins();
+      v2.notifyExtensionsChanged();
       sendJson(res, 201, installed);
     } catch (err) {
       sendCatalogError(res, err);
@@ -1523,6 +1495,7 @@ async function routeApi(req, res, url) {
     await store.putSettings({ plugins: { [id]: enabled } });
     await reloadKernelPlugins();
     const next = await describePlugins(PLUGIN_DIRS, (await store.getSettings()).plugins || {});
+    v2.notifyExtensionsChanged();
     sendJson(res, 200, next.find((plugin) => plugin.id === id) || { id, enabled });
     return;
   }
@@ -1539,6 +1512,7 @@ async function routeApi(req, res, url) {
       const created = await createSkill(USER_SKILLS, body || {}, new Set(existing.map((skill) => skill.id)));
       await store.putSettings({ skills: { [created.id]: true } });
       const list = await listSkills(SKILL_DIRS, (await store.getSettings()).skills || {}, USER_SKILLS);
+      v2.notifyExtensionsChanged();
       sendJson(res, 201, list.find((skill) => skill.id === created.id));
     } catch (err) {
       sendCatalogError(res, err);
@@ -1550,6 +1524,7 @@ async function routeApi(req, res, url) {
     const id = decodeURIComponent(match[1]);
     try {
       await deleteSkill(SKILL_DIRS, USER_SKILLS, id);
+      v2.notifyExtensionsChanged();
       sendJson(res, 200, { ok: true, id });
     } catch (err) {
       sendCatalogError(res, err);
@@ -1582,6 +1557,7 @@ async function routeApi(req, res, url) {
         sendJson(res, 404, { error: 'skill not found', code: 'err_skill_not_found' });
         return;
       }
+      v2.notifyExtensionsChanged();
       sendJson(res, 200, skill);
     } catch (err) {
       sendCatalogError(res, err);
