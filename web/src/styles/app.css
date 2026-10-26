@@ -20,6 +20,10 @@
   padding: 0;
 }
 
+html {
+  font-size: 13px;
+}
+
 html, body, #root {
   width: 100%;
   height: 100%;
@@ -27,11 +31,12 @@ html, body, #root {
   background-color: var(--bg-app);
   color: var(--text-primary);
   font-family: var(--font-sans);
-  font-size: 13px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
+
+body, #root { font-size: inherit; }
 
 button, input, textarea, select {
   font-family: inherit;
@@ -646,7 +651,7 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.6; backgroun
 .center-composer { flex-shrink: 0; padding: 0 0 18px; }
 .composer-stack { display: flex; flex-direction: column; }
 .composer-box {
-  background: var(--panel); border: 1px solid var(--line); border-radius: 18px; box-shadow: 0 6px 24px rgba(0, 0, 0, .05);
+  background: var(--panel); border: 1px solid var(--line); border-radius: 18px; box-shadow: var(--shadow-pop);
   padding: 12px 14px 10px; display: flex; flex-direction: column; gap: 10px;
 }
 .composer-textarea { border: none; outline: none; resize: none; font: inherit; height: 44px; background: transparent; color: var(--ink); padding: 2px; }
@@ -673,6 +678,7 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.6; backgroun
 
 .brand-icon {
   display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+  color: currentColor;
 }
 .brand-icon img { width: 100%; height: 100%; object-fit: contain; display: block; }
 .brand-icon-cube { width: 100%; height: 100%; fill: none; stroke: currentColor; stroke-width: 1.2; }
@@ -737,7 +743,7 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.6; backgroun
 .context-custom { display: flex; gap: 6px; padding: 6px 8px; }
 .context-custom-input {
   flex: 1; min-width: 0; border: 1px solid var(--bd2); border-radius: 8px; padding: 5px 8px;
-  background: var(--panel); font-family: var(--mono); font-size: 12px;
+  background: var(--panel); color: var(--ink); font-family: var(--mono); font-size: 12px;
 }
 .context-custom-apply {
   border: none; background: var(--accent); color: var(--on-accent); border-radius: 8px;
