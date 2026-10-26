@@ -10,7 +10,7 @@ import {
   contextPercents,
   DEFAULT_CONTEXT_WINDOW,
   composerContextChip,
-} from '../../public/usage.js';
+} from '../../src/core/usage-math.mjs';
 
 const spec = JSON.parse(readFileSync(path.join(ROOT, 'contract/openapi.json'), 'utf8'));
 const validateContextUsage = compileSchema(structuredClone(spec.components.schemas.ContextUsage));

@@ -90,17 +90,13 @@ test('switching language updates UI and server phrases, persists, and old UI fol
   await expect(page.locator('html')).toHaveAttribute('lang', 'en');
   const stored = await page.evaluate(() => localStorage.getItem('weft_lang'));
   expect(stored).toBe('en');
-
-  await page.goto(new URL('/legacy/', page.url()).href);
-  await expect(page.locator('[data-action=open-settings]')).toHaveText('Settings');
 });
 
-test('dark appearance darkens panes without horizontal scroll; old UI appearance is shared', async ({ page }) => {
+test('dark appearance darkens panes without horizontal scroll', async ({ page }) => {
   await boot(page);
-  await page.goto(new URL('/legacy/', page.url()).href);
-  await page.locator('[data-action=open-settings]').click();
-  await expect(page.locator('.sm')).toBeVisible();
-  await page.locator('[data-action=switch-appearance][data-mode=dark]').click();
+  await page.getByTestId('next-open-settings').click();
+  await expect(page.getByTestId('next-settings')).toBeVisible();
+  await page.getByTestId('next-pref-appearance').locator('[data-mode=dark]').click();
   await expect(page.locator('html')).toHaveAttribute('data-theme', /dark$/);
   expect(await page.evaluate(() => localStorage.getItem('weft_appearance'))).toBe('dark');
 
@@ -139,5 +135,4 @@ test('about page shows the service version, protocol version, and demo flag', as
   await expect(page.getByTestId('next-about-version')).toHaveText(info.serviceVersion);
   await expect(page.getByTestId('next-about-protocol')).toHaveText(info.protocolVersion);
   await expect(page.getByTestId('next-about-demo')).toHaveText('已开启');
-  await expect(page.getByTestId('next-about-legacy')).toHaveAttribute('href', '/legacy/');
 });

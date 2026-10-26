@@ -10,9 +10,8 @@ import {
   formatSubagentReport as formatFromPublic,
   parseSubagentReport as parseFromPublic,
   isSubagentReportText as isReportFromPublic,
-} from '../../public/subagent-report.js';
-import { isPromptUserMessage } from '../../public/continuation.js';
-import { applyMessageDone } from '../../public/stream.js';
+} from '../../src/kernel/subagent-report-text.mjs';
+import { isPromptUserMessage } from '../../src/kernel/continuation-text.mjs';
 
 test('format and parse round-trip answered, failed, spaced names, and multiline bodies', () => {
   const answered = formatSubagentReport({
@@ -138,22 +137,4 @@ test('transcript snapshots tag subagent-report kind', () => {
   assert.equal(Object.hasOwn(messages.find((message) => message.id === '1'), 'kind'), false);
   assert.equal(messages.find((message) => message.id === '2').kind, 'subagent-report');
   assert.equal(messages.find((message) => message.id === '3').kind, 'subagent-report');
-});
-
-test('message.done inserts a subagent-report user row for the live thread', () => {
-  const report = formatSubagentReport({ name: 'a', kind: 'answered', body: 'SCOUT_PONG' });
-  const msgs = [
-    { id: '1', role: 'user', text: 'run background' },
-    { id: '2', role: 'assistant', text: 'spawned', done: true },
-  ];
-  applyMessageDone(msgs, {
-    messageId: '3',
-    role: 'user',
-    text: report,
-    kind: 'subagent-report',
-  });
-  assert.equal(msgs.length, 3);
-  assert.equal(msgs[2].kind, 'subagent-report');
-  assert.equal(msgs[2].text, report);
-  assert.equal(isPromptUserMessage(msgs[2]), false);
 });

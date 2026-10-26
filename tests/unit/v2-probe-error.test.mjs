@@ -1,6 +1,5 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { load } from './_root.mjs';
 import {
   classifyProbeFailure,
   formatProbeFailure,
@@ -9,15 +8,6 @@ import {
   sourceProbeStatusForLang,
   phraseTranslate,
 } from '../../src/v2/views/probe-error.ts';
-
-globalThis.localStorage = {
-  getItem() { return null; },
-  setItem() {},
-};
-globalThis.document = { documentElement: { lang: 'zh-CN' } };
-
-const publicProbe = await load('public/probe-error.js');
-const { t, setLocale } = await load('public/i18n.js');
 
 function say(lang, input) {
   return formatProbeFailureForLang(input, lang);
@@ -39,24 +29,6 @@ test('classifies probe failures from code first, then from the error text', () =
   assert.equal(classifyProbeFailure({ code: 'auth', error: 'Incorrect API key provided' }).detail, 'Incorrect API key provided');
 });
 
-test('v2 classification matches public/probe-error.js', () => {
-  const cases = [
-    { code: 'timeout', error: 'fetch failed' },
-    { error: 'fetch failed' },
-    { error: 'connect ECONNREFUSED 127.0.0.1:9' },
-    { error: 'timeout' },
-    { error: 'invalid JSON' },
-    { error: 'HTTP 401' },
-    { error: 'HTTP 404' },
-    { code: 'http', status: 502, error: 'overloaded' },
-    { error: 'model is warming up' },
-    { code: 'auth', error: 'Incorrect API key provided' },
-  ];
-  for (const input of cases) {
-    assert.deepEqual(classifyProbeFailure(input), publicProbe.classifyProbeFailure(input), JSON.stringify(input));
-  }
-});
-
 test('localizes the five probe failures in Chinese and English', () => {
   const cases = [
     [{ code: 'network', error: 'fetch failed' }, '连不上', 'Unreachable'],
@@ -69,10 +41,6 @@ test('localizes the five probe failures in Chinese and English', () => {
   for (const [input, zh, en] of cases) {
     assert.equal(say('zh', input), zh);
     assert.equal(say('en', input), en);
-    setLocale('zh');
-    assert.equal(say('zh', input), publicProbe.formatProbeFailure(input, t));
-    setLocale('en');
-    assert.equal(say('en', input), publicProbe.formatProbeFailure(input, t));
   }
 });
 
@@ -109,15 +77,16 @@ test('source rows use the same mapping, and Ollama keeps its network status', ()
   assert.equal(sourceProbeStatusForLang({ ...offline, vendor: 'openai' }, 'offline', 'en'), 'Unreachable');
   assert.equal(sourceProbeStatusForLang({ ...offline, vendor: 'ollama' }, 'offline', 'en'), 'Ollama is not running');
 
-  setLocale('zh');
   assert.equal(
     sourceProbeStatus({ ...offline, vendor: 'ollama' }, 'offline', phraseTranslate('zh')),
-    publicProbe.sourceProbeStatus({ ...offline, vendor: 'ollama' }, 'offline', t),
+    'Ollama 没启动',
   );
 });
 
-test('formatProbeFailure with phrase translate matches public i18n', () => {
-  setLocale('en');
+test('formatProbeFailure accepts a phrase translate', () => {
   const input = { code: 'auth', status: 401, error: 'Incorrect API key provided' };
-  assert.equal(formatProbeFailure(input, phraseTranslate('en')), publicProbe.formatProbeFailure(input, t));
+  assert.equal(
+    formatProbeFailure(input, phraseTranslate('en')),
+    'Authentication failed: Incorrect API key provided',
+  );
 });

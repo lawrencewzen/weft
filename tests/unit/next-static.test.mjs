@@ -80,18 +80,16 @@ test('GET / is SPA html when built, or the not-built message', async () => {
   }
 });
 
-test('GET /legacy serves the old frontend', async () => {
+test('GET /legacy and /legacy/<path> 302 to /', async () => {
   const srv = await startServer();
   try {
-    const bounce = await raw({ port: srv.port, path: '/legacy' });
-    assert.equal(bounce.status, 302);
-    assert.equal(bounce.headers.location, '/legacy/');
-    const res = await raw({ port: srv.port, path: '/legacy/' });
-    assert.equal(res.status, 200);
-    assert.match(res.text, /data-testid="new-chat-top"/);
-    assert.doesNotMatch(res.text, /data-testid="next-app"/);
-    assert.match(res.text, /href="\/legacy\/themes\.css"/);
+    for (const path of ['/legacy', '/legacy/', '/legacy/themes.css']) {
+      const res = await raw({ port: srv.port, path });
+      assert.equal(res.status, 302);
+      assert.equal(res.headers.location, '/');
+    }
   } finally {
     await stopServer(srv);
   }
 });
+

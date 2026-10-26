@@ -1,6 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { readDiscovery, startServer, prepareWorkspaces } from './helpers/server.mjs';
-import { createWorkspace, newConversation, send, statusText, openApp } from './helpers/ui.mjs';
+import { readDiscovery, startServer } from './helpers/server.mjs';
 import { loginNext } from './helpers/next.mjs';
 
 test('GET / is the new UI', async ({ page }) => {
@@ -70,21 +69,16 @@ test('GET /auth?code= logs into the new UI', async ({ page }) => {
   }
 });
 
-test('GET /legacy is the old UI and can chat', async ({ page }) => {
-  const prepared = await prepareWorkspaces(['ws']);
-  const srv = await startServer({
-    script: 'basic.json',
-    extraEnv: { WEFT_WORKSPACE_ROOT: prepared.root },
-  });
+test('GET /legacy and /legacy/<path> 302 to the new UI', async ({ page }) => {
+  const srv = await startServer();
   try {
-    await openApp(page, srv);
-    await expect(page.getByTestId('new-chat-top')).toBeVisible();
-    await expect(page.getByTestId('next-app')).toHaveCount(0);
-    await createWorkspace(page, 'demo', prepared.dirs[0]);
-    await newConversation(page);
-    await send(page, '写个 README');
-    await expect(page.getByTestId('message').filter({ hasText: '写个 README' })).toBeVisible();
-    await expect(statusText(page)).toContainText(/done|完成/i, { timeout: 20000 });
+    for (const path of ['/legacy', '/legacy/', '/legacy/settings/about']) {
+      const res = await fetch(`${srv.url}${path}`, { redirect: 'manual' });
+      expect(res.status).toBe(302);
+      expect(res.headers.get('location')).toBe('/');
+    }
+    await page.goto(`${srv.url}/legacy`);
+    await expect(page.getByTestId('next-app')).toBeVisible();
   } finally {
     await srv.kill();
   }
@@ -107,8 +101,7 @@ test('GET /login?token= still sets the old cookie when WEFT_TOKEN is set', async
     expect(setCookie).toContain(`weft_token=${token}`);
 
     await page.goto(`${srv.url}/login?token=${encodeURIComponent(token)}`);
-    await page.goto(`${srv.url}/legacy`);
-    await expect(page.getByTestId('composer-agent')).toBeVisible();
+    await expect(page.getByTestId('next-app')).toBeVisible();
   } finally {
     await srv.kill();
   }

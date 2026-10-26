@@ -23,7 +23,7 @@ const {
   contextWindowPresetOptions,
   CONTEXT_WINDOW_PRESETS,
   DEFAULT_CONTEXT_WINDOW,
-} = await load('public/usage.js');
+} = await load('src/core/usage-math.mjs');
 const { createSqliteStore } = await load('src/store/sqlite.mjs');
 
 test('token formatting matches the composer mockup scale', () => {
