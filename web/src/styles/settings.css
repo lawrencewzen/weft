@@ -717,14 +717,6 @@
 .ns-ws-dialog.is-busy .ns-pick-btn,
 .ns-ws-dialog.is-busy .ns-proj,
 .ns-ws-dialog.is-busy .ns-seg button { pointer-events: none; opacity: .7; }
-.ns-seg {
-  display: flex; border: 1px solid var(--ns-line2); border-radius: 7px; overflow: hidden; flex-shrink: 0;
-}
-.ns-seg button {
-  flex: 1; border: 0; background: transparent; color: var(--ns-mute2); padding: 6px 12px; font-size: 12px; cursor: pointer;
-}
-.ns-seg button:hover { background: var(--ns-bg); color: var(--ns-ink); }
-.ns-seg button.is-on { background: var(--ns-ink); color: var(--on-accent); }
 .ns-ws-body {
   overflow: auto; min-height: 0; flex: 1 1 auto; display: flex; flex-direction: column; gap: 12px;
 }
@@ -813,6 +805,9 @@
   background: var(--accent);
   color: var(--on-accent);
 }
+.ns-ws-dialog .ns-seg { width: 100%; }
+.ns-ws-dialog .ns-seg button { flex: 1; }
+.ns-ws-dialog .ns-seg button:hover { background: var(--ns-bg); color: var(--ns-ink); }
 .ns-theme-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
