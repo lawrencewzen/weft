@@ -1,4 +1,5 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
+import type { ResolvedModel } from '../data/composerModel';
 import type { Lang } from '../data/lang';
 import { useConversation, useDraftSend } from '../data/useConversation';
 import { t } from '../i18n';
@@ -56,7 +57,11 @@ export function CenterPane({
 }: Props) {
   const isDraft = !cid && Boolean(workspaceId);
   const { conversation, items, toolsById, missing, actions } = useConversation(cid);
-  const draftActions = useDraftSend(workspaceId);
+  const [draftModel, setDraftModel] = useState<ResolvedModel | null>(null);
+  const draftModelRef = useRef<ResolvedModel | null>(null);
+  draftModelRef.current = draftModel;
+  const modelForCreate = useCallback(() => draftModelRef.current, []);
+  const draftActions = useDraftSend(workspaceId, modelForCreate);
   const [stickNonce, setStickNonce] = useState(0);
   const bumpStick = useCallback(() => setStickNonce((n) => n + 1), []);
 
@@ -96,6 +101,12 @@ export function CenterPane({
           lang={lang}
           run={DRAFT_RUN}
           demo={demo}
+          workspaceId={workspaceId}
+          model={null}
+          context={draft.context}
+          isDraft
+          draftModel={draftModel}
+          onDraftModel={setDraftModel}
           onSend={draftActions.send}
           onStop={draftActions.stop}
           onSent={bumpStick}
@@ -169,23 +180,28 @@ export function CenterPane({
         showOpenLeft={showOpenLeft}
         onOpenLeft={onOpenLeft}
       />
-      <Thread
-        items={items}
-        toolsById={toolsById}
-        lang={lang}
-        running={conversation.run.status === 'running'}
-        actions={actions}
-        stickNonce={stickNonce}
-        conversationId={cid}
-      />
-      <Composer
-        lang={lang}
-        run={conversation.run}
-        demo={demo}
-        onSend={actions.send}
-        onStop={actions.stop}
-        onSent={bumpStick}
-      />
+        <Thread
+          items={items}
+          toolsById={toolsById}
+          lang={lang}
+          running={conversation.run.status === 'running'}
+          actions={actions}
+          stickNonce={stickNonce}
+          conversationId={cid}
+          conversationModel={conversation.model}
+        />
+        <Composer
+          lang={lang}
+          run={conversation.run}
+          demo={demo}
+          conversationId={cid}
+          workspaceId={conversation.workspaceId || workspaceId}
+          model={conversation.model}
+          context={conversation.context}
+          onSend={actions.send}
+          onStop={actions.stop}
+          onSent={bumpStick}
+        />
     </main>
   );
 }

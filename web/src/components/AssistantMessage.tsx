@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import type { Lang } from '../data/lang';
 import type { components } from '../../../src/v2/contract.gen';
 import { t } from '../i18n';
+import { BrandIcon } from './BrandIcon';
 import { createSendRequest, errorMessage } from './sendRequest';
 import { Markdown } from './Markdown';
 
@@ -12,9 +13,10 @@ type Props = {
   lang: Lang;
   canContinue: boolean;
   onContinue: (requestId: string) => Promise<unknown>;
+  attribution?: { brand: string | null; displayName: string } | null;
 };
 
-export function AssistantMessage({ item, lang, canContinue, onContinue }: Props) {
+export function AssistantMessage({ item, lang, canContinue, onContinue, attribution = null }: Props) {
   const req = useRef(createSendRequest());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -44,7 +46,10 @@ export function AssistantMessage({ item, lang, canContinue, onContinue }: Props)
     >
       {item.model ? (
         <div className="msg-header">
-          <span className="msg-chip" data-testid="next-message-chip">{item.model}</span>
+          <span className="msg-chip" data-testid="next-message-chip">
+            <BrandIcon brand={attribution?.brand} size={14} />
+            <span>{attribution?.displayName || item.model}</span>
+          </span>
         </div>
       ) : null}
       <div>

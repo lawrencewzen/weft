@@ -16,6 +16,7 @@ export type FileTree = components['schemas']['FileTree'];
 export type FileContent = components['schemas']['FileContent'];
 export type SaveResult = components['schemas']['SaveResult'];
 export type SaveFileRequest = components['schemas']['SaveFileRequest'];
+export type ConversationView = components['schemas']['ConversationView'];
 export type Provider = components['schemas']['Provider'];
 export type ProviderModel = components['schemas']['ProviderModel'];
 export type Vendor = components['schemas']['Vendor'];
@@ -187,6 +188,16 @@ export function toolOutput(cid: string, toolId: string): Promise<ToolOutput> {
 export function getSnapshot(cid: string, lang: string): Promise<ConversationSnapshot> {
   const params = new URLSearchParams({ lang });
   return requestJson<ConversationSnapshot>(`${conversationPath(cid)}?${params.toString()}`);
+}
+
+export function patchConversationModel(
+  cid: string,
+  model: ResolvedModel | null,
+): Promise<ConversationView> {
+  return requestJson<ConversationView>(conversationPath(cid), {
+    method: 'PATCH',
+    body: JSON.stringify({ model }),
+  });
 }
 
 export function createConversation(workspaceId: string, title?: string): Promise<ConversationSummary> {

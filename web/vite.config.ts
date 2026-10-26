@@ -1,3 +1,4 @@
+import { cpSync, existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import react from '@vitejs/plugin-react';
@@ -26,6 +27,16 @@ export default defineConfig({
         },
       },
     },
+    {
+      name: 'copy-brand-icons',
+      apply: 'build',
+      closeBundle() {
+        const src = path.resolve(repoRoot, 'public/vendor/brand-icons');
+        const dest = path.resolve(repoRoot, 'public-next/vendor/brand-icons');
+        if (!existsSync(src)) return;
+        cpSync(src, dest, { recursive: true });
+      },
+    },
   ],
   build: {
     outDir: path.resolve(repoRoot, 'public-next'),
@@ -35,6 +46,7 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': process.env.WEFT_URL || 'http://127.0.0.1:3000',
+      '/vendor': process.env.WEFT_URL || 'http://127.0.0.1:3000',
     },
   },
 });

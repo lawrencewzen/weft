@@ -1,8 +1,22 @@
-import { useRef, useState, type KeyboardEvent } from 'react';
+import { useCallback, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { patchConversationModel, putModelContextWindow } from '../data/api';
+import {
+  groupComposerModels,
+  hasAvailableModels,
+  resolveComposerSelection,
+  type ComposerModelOption,
+  type ConversationModel,
+  type ContextUsage,
+  type ResolvedModel,
+} from '../data/composerModel';
 import type { Lang } from '../data/lang';
+import { draftPath, navigate, openSettings } from '../data/nav';
+import { useProviders } from '../data/useProviders';
 import type { components } from '../../../src/v2/contract.gen';
 import { t } from '../i18n';
+import { ContextBanner, ContextChip } from './ContextChip';
 import { DemoModelBadge } from './DemoModelBadge';
+import { ModelChip } from './ModelChip';
 import { createSendRequest, errorMessage } from './sendRequest';
 
 type RunState = components['schemas']['RunState'];
@@ -11,10 +25,20 @@ type Props = {
   lang: Lang;
   run: RunState;
   demo?: boolean;
+  conversationId?: string | null;
+  workspaceId?: string | null;
+  model?: ConversationModel | null;
+  context?: ContextUsage;
+  isDraft?: boolean;
+  draftModel?: ResolvedModel | null;
+  onDraftModel?: (model: ResolvedModel) => void;
+  showModelControls?: boolean;
   onSend: (text: string, requestId: string) => Promise<unknown>;
   onStop: () => Promise<unknown>;
   onSent?: () => void;
 };
+
+const FALLBACK_CONTEXT: ContextUsage = { used: 0, window: 128000, percent: 0, level: 'ok' };
 
 const SEND_ICON = (
   <svg viewBox="0 0 14 14" aria-hidden="true">
@@ -27,18 +51,46 @@ const STOP_ICON = (
   </svg>
 );
 
-export function Composer({ lang, run, demo = false, onSend, onStop, onSent }: Props) {
+export function Composer({
+  lang,
+  run,
+  demo = false,
+  conversationId = null,
+  workspaceId = null,
+  model = null,
+  context = FALLBACK_CONTEXT,
+  isDraft = false,
+  draftModel = null,
+  onDraftModel,
+  showModelControls = true,
+  onSend,
+  onStop,
+  onSent,
+}: Props) {
   const [draft, setDraft] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const req = useRef(createSendRequest());
   const area = useRef<HTMLTextAreaElement>(null);
-  const locked = !run.canSend;
+  const { providers, defaultModel, ready: providersReady } = useProviders();
+  const groups = useMemo(() => groupComposerModels(providers, defaultModel), [providers, defaultModel]);
+  const available = hasAvailableModels(providers);
+  const selected = useMemo(() => resolveComposerSelection({
+    providers,
+    conversationModel: model,
+    defaultModel,
+    draft: draftModel,
+    isDraft,
+  }), [providers, model, defaultModel, draftModel, isDraft]);
+  const noModel = showModelControls && !demo && providersReady && !available;
+  const locked = !run.canSend || noModel;
   const hasText = Boolean(draft.trim()) && !locked;
   const stopMode = run.canStop && !draft.trim();
-  const placeholder = run.status === 'running'
-    ? t(lang, 'composer_placeholder_running')
-    : t(lang, 'composer_placeholder');
+  const placeholder = noModel
+    ? t(lang, 'composer_placeholder_no_model')
+    : run.status === 'running'
+      ? t(lang, 'composer_placeholder_running')
+      : t(lang, 'composer_placeholder');
 
   function resize() {
     const el = area.current;
@@ -78,10 +130,42 @@ export function Composer({ lang, run, demo = false, onSend, onStop, onSent }: Pr
     void submit();
   }
 
+  const pickModel = useCallback(async (option: ComposerModelOption) => {
+    const next: ResolvedModel = { providerId: option.providerId, modelId: option.modelId };
+    if (isDraft || !conversationId) {
+      onDraftModel?.(next);
+      return;
+    }
+    try {
+      await patchConversationModel(conversationId, next);
+    } catch (err) {
+      setError(errorMessage(err, t(lang, 'send_failed')));
+    }
+  }, [conversationId, isDraft, lang, onDraftModel]);
+
+  const setWindow = useCallback(async (window: number | null) => {
+    if (!selected?.providerId || !selected.modelId) return;
+    try {
+      await putModelContextWindow(selected.providerId, selected.modelId, window);
+    } catch (err) {
+      setError(errorMessage(err, t(lang, 'send_failed')));
+    }
+  }, [lang, selected]);
+
+  function openManage() {
+    openSettings('providers');
+  }
+
+  function openNewChat() {
+    if (!workspaceId) return;
+    navigate(draftPath(workspaceId));
+  }
+
   return (
     <footer className="center-composer">
       <div className="composer-stack">
-        <div className="composer-box">
+        <div className={`composer-box${noModel ? ' is-no-model' : ''}`}>
+          {showModelControls ? <ContextBanner lang={lang} context={context} onNewChat={openNewChat} /> : null}
           <textarea
             ref={area}
             className="composer-textarea"
@@ -97,10 +181,33 @@ export function Composer({ lang, run, demo = false, onSend, onStop, onSent }: Pr
             onKeyDown={onKeyDown}
           />
           <div className="composer-bar">
-            <div className="composer-chips">
-              {demo ? <DemoModelBadge lang={lang} testId="next-demo-model-chip" /> : null}
-            </div>
-            {locked && run.lockedReason === 'no_workspace' ? (
+            {noModel ? (
+              <div className="composer-no-model" data-testid="next-no-model">
+                <button
+                  type="button"
+                  className="btn-connect-model"
+                  data-testid="next-no-model-connect"
+                  onClick={openManage}
+                >
+                  {t(lang, 'no_model_connect')}
+                </button>
+                <span className="composer-no-model-hint">{t(lang, 'no_model_hint')}</span>
+              </div>
+            ) : (
+              <div className="composer-chips">
+                {showModelControls && available ? (
+                  <ModelChip
+                    lang={lang}
+                    selected={selected}
+                    groups={groups}
+                    onPick={(option) => { void pickModel(option); }}
+                    onManage={openManage}
+                  />
+                ) : null}
+                {demo ? <DemoModelBadge lang={lang} testId="next-demo-model-chip" /> : null}
+              </div>
+            )}
+            {locked && !noModel && run.lockedReason === 'no_workspace' ? (
               <span className="composer-lock">{t(lang, 'locked_no_workspace')}</span>
             ) : null}
             {error ? (
@@ -112,6 +219,14 @@ export function Composer({ lang, run, demo = false, onSend, onStop, onSent }: Pr
               </span>
             ) : null}
             <div className="composer-actions">
+              {showModelControls && !noModel ? (
+                <ContextChip
+                  lang={lang}
+                  context={context}
+                  selected={selected}
+                  onSetWindow={setWindow}
+                />
+              ) : null}
               {stopMode ? (
                 <button
                   type="button"

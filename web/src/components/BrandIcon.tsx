@@ -1,4 +1,7 @@
 import { useEffect, useState } from 'react';
+import { brandIconUrl } from '../data/composerModel';
+
+export { brandIconUrl };
 
 const CUBE = (
   <svg viewBox="0 0 16 16" aria-hidden="true" className="brand-icon-cube">
@@ -6,12 +9,6 @@ const CUBE = (
     <path d="M8 1.8v6.2M2 5l6 3.2L14 5" />
   </svg>
 );
-
-export function brandIconUrl(brand: string | null | undefined): string | null {
-  const id = String(brand || '').trim();
-  if (!id) return null;
-  return `/vendor/brand-icons/${id.toLowerCase()}.svg`;
-}
 
 type Props = {
   brand?: string | null;

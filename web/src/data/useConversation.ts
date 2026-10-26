@@ -2,9 +2,11 @@ import { useCallback, useMemo, useRef, useSyncExternalStore } from 'react';
 import {
   continueRun as continueRunApi,
   createConversation,
+  patchConversationModel,
   sendMessage,
   stop as stopApi,
   toolOutput,
+  type ResolvedModel,
 } from './api';
 import { navigate, conversationPath } from './nav';
 import { useSession } from './session';
@@ -62,7 +64,10 @@ export function useConversation(cid: string | null | undefined): ConversationSta
   return { conversation, items, toolsById, status, missing, actions };
 }
 
-export function useDraftSend(workspaceId: string | null | undefined): ConversationActions {
+export function useDraftSend(
+  workspaceId: string | null | undefined,
+  modelForCreate?: () => ResolvedModel | null,
+): ConversationActions {
   const createdId = useRef<string | null>(null);
   const wsId = workspaceId || '';
 
@@ -71,11 +76,13 @@ export function useDraftSend(workspaceId: string | null | undefined): Conversati
     if (!createdId.current) {
       const created = await createConversation(wsId);
       createdId.current = created.id;
+      const model = modelForCreate?.() || null;
+      if (model) await patchConversationModel(created.id, model);
     }
     const cid = createdId.current;
     await sendMessage(cid, text, requestId);
     navigate(conversationPath(cid));
-  }, [wsId]);
+  }, [wsId, modelForCreate]);
 
   return useMemo(() => ({
     send,

@@ -16,8 +16,8 @@ const BACKGROUND_NAME = '巡查';
 const BACKGROUND_MESSAGE = '请在后台查看仓库。';
 const CHILD_TEXT = '仓库干净，没有未提交改动。';
 const REPORT_MARKER = '[subagent 巡查 answered, no reply needed]';
-const CHIP_USED_200 = /已用 8% · 剩 92% · 200k|Used 8% · Left 92% · 200k/;
-const CHIP_ZERO_200 = /已用 0% · 剩 100% · 200k|Used 0% · Left 100% · 200k/;
+const CHIP_USED_200 = '8%';
+const CHIP_ZERO_200 = '0%';
 
 test('background sub-agent report is a folded card, not a user bubble, including after refresh', async ({ page }) => {
   const prepared = await prepareWorkspaces(['repo']);
@@ -191,12 +191,12 @@ test('context chip shows reported usage over the configured window', async ({ pa
   try {
     const { conv } = await openWorkspaceConversation(srv, 'usage', prepared.dirs[0]);
     await openNextChat(page, srv, conv.id);
-    await expect(page.getByTestId('next-context')).toHaveText(CHIP_ZERO_200);
+    await expect(page.getByTestId('next-context-chip')).toHaveText(CHIP_ZERO_200);
     await sendNext(page, 'count tokens');
-    await expect(page.getByTestId('next-context')).toHaveText(CHIP_USED_200, { timeout: 20000 });
+    await expect(page.getByTestId('next-context-chip')).toHaveText(CHIP_USED_200, { timeout: 20000 });
     await waitRunDone(page);
     await page.reload();
-    await expect(page.getByTestId('next-context')).toHaveText(CHIP_USED_200, { timeout: 20000 });
+    await expect(page.getByTestId('next-context-chip')).toHaveText(CHIP_USED_200, { timeout: 20000 });
   } finally {
     await srv.kill();
   }
@@ -216,9 +216,9 @@ test('context chip stays at 0% when the model reports no usage', async ({ page }
     await openNextChat(page, srv, conv.id);
     await sendNext(page, 'hello');
     await waitRunDone(page);
-    await expect(page.getByTestId('next-context')).toHaveText(CHIP_ZERO_200);
+    await expect(page.getByTestId('next-context-chip')).toHaveText(CHIP_ZERO_200);
     await page.reload();
-    await expect(page.getByTestId('next-context')).toHaveText(CHIP_ZERO_200, { timeout: 20000 });
+    await expect(page.getByTestId('next-context-chip')).toHaveText(CHIP_ZERO_200, { timeout: 20000 });
   } finally {
     await srv.kill();
   }
