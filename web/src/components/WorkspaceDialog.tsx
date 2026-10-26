@@ -527,7 +527,7 @@ export function WorkspaceDialog({ lang, onClose, onToast, onCreated }: Props) {
           </div>
         ) : null}
         <div className="modal-actions">
-          <button type="button" className="btn" disabled={busy} onClick={onClose}>
+          <button type="button" className="btn" data-testid="next-ws-cancel" disabled={busy} onClick={onClose}>
             {t(lang, 'btn_cancel')}
           </button>
           <button

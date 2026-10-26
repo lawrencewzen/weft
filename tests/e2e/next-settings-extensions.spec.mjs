@@ -155,7 +155,7 @@ test('git connection tests, imports a project, and never echoes the token', asyn
   await expect(page.getByTestId('next-ws-dialog')).toContainText('认证失败');
   await expect(page.getByTestId('next-ws-dialog')).not.toContainText(BAD);
   await expect(page.getByTestId('next-ws-dialog')).not.toContainText(PAT);
-  await page.getByTestId('next-ws-dialog').getByRole('button', { name: '取消' }).click();
+  await page.getByTestId('next-ws-cancel').click();
 
   const html = await page.content();
   expect(html.includes(PAT), 'page html has no PAT').toBe(false);
