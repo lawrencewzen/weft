@@ -3,16 +3,25 @@ import { ApiError, stop as stopApi } from '../data/api';
 import { copyText } from '../data/copyText';
 import type { Lang } from '../data/lang';
 import {
-  readOpenWorkspaces,
+  readSubagentTrees,
+  readWorkspaceOpen,
   writeActiveWorkspace,
-  writeOpenWorkspaces,
+  writeSubagentTrees,
+  writeWorkspaceOpen,
 } from '../data/layout';
 import { conversationPath, draftPath, navigate, openSettings, subagentPath } from '../data/nav';
 import { useSession } from '../data/session';
 import {
   conversationMeta,
   conversationStatusKind,
+  deleteOpenRecord,
+  hasLiveSubagents,
   runningCount,
+  setOpenRecord,
+  subagentTreeIsOpen,
+  toggleOpenRecord,
+  workspaceIsOpen,
+  type OpenRecord,
 } from '../data/sidebarModel';
 import {
   conversationTopic,
@@ -77,9 +86,8 @@ export function Sidebar({
   const { store, setExtraConversationIds } = useSession();
   const { showFiles } = useRightPane();
   const now = useNow(1_000);
-  const [openIds, setOpenIds] = useState<Set<string>>(() => new Set(readOpenWorkspaces()));
-  const [collapsedTrees, setCollapsedTrees] = useState<Set<string>>(() => new Set());
-  const [expandedOther, setExpandedOther] = useState<Set<string>>(() => new Set());
+  const [openMap, setOpenMap] = useState<OpenRecord>(() => readWorkspaceOpen());
+  const [treeRecorded, setTreeRecorded] = useState<OpenRecord>(() => readSubagentTrees());
   const [menu, setMenu] = useState<MenuState | null>(null);
 
   const activeWorkspaceId = useMemo(() => {
@@ -94,51 +102,53 @@ export function Sidebar({
   }, [groups, activeConversationId, draftWorkspaceId]);
 
   useEffect(() => {
-    const next = [...expandedOther].filter((id) => id !== activeConversationId).sort();
+    const extra: string[] = [];
+    for (const group of groups) {
+      for (const conv of group.conversations) {
+        if (conv.id === activeConversationId) continue;
+        const live = hasLiveSubagents(conv.subagents, store.subagents(conv.id));
+        if (subagentTreeIsOpen(conv.id, treeRecorded, live)) extra.push(conv.id);
+      }
+    }
+    extra.sort();
     setExtraConversationIds((prev) => {
-      if (prev.length === next.length && prev.every((id, i) => id === next[i])) return prev;
-      return next;
+      if (prev.length === extra.length && prev.every((id, i) => id === extra[i])) return prev;
+      return extra;
     });
-  }, [expandedOther, activeConversationId, setExtraConversationIds]);
+  }, [groups, treeRecorded, activeConversationId, setExtraConversationIds, store]);
 
-  const persistOpen = useCallback((next: Set<string>) => {
-    setOpenIds(next);
-    writeOpenWorkspaces(next);
+  const persistOpen = useCallback((next: OpenRecord) => {
+    setOpenMap(next);
+    writeWorkspaceOpen(next);
+  }, []);
+
+  const persistTrees = useCallback((next: OpenRecord) => {
+    setTreeRecorded(next);
+    writeSubagentTrees(next);
   }, []);
 
   useEffect(() => {
     if (!draftWorkspaceId) return;
-    setOpenIds((prev) => {
-      if (prev.has(draftWorkspaceId)) return prev;
-      const next = new Set(prev);
-      next.add(draftWorkspaceId);
-      writeOpenWorkspaces(next);
+    setOpenMap((prev) => {
+      if (prev[draftWorkspaceId] === true) return prev;
+      const next = setOpenRecord(prev, draftWorkspaceId, true);
+      writeWorkspaceOpen(next);
       return next;
     });
   }, [draftWorkspaceId]);
 
-  const treeCollapsed = useCallback((cid: string) => {
-    if (cid === activeConversationId) return collapsedTrees.has(cid);
-    return !expandedOther.has(cid);
-  }, [activeConversationId, collapsedTrees, expandedOther]);
+  const treeOpen = useCallback((cid: string, live: boolean) => (
+    subagentTreeIsOpen(cid, treeRecorded, live)
+  ), [treeRecorded]);
 
   const toggleTree = useCallback((cid: string) => {
-    if (cid === activeConversationId) {
-      setCollapsedTrees((prev) => {
-        const next = new Set(prev);
-        if (next.has(cid)) next.delete(cid);
-        else next.add(cid);
-        return next;
-      });
-      return;
-    }
-    setExpandedOther((prev) => {
-      const next = new Set(prev);
-      if (next.has(cid)) next.delete(cid);
-      else next.add(cid);
-      return next;
-    });
-  }, [activeConversationId]);
+    const group = groups.find((item) => item.conversations.some((conv) => conv.id === cid));
+    const conv = group?.conversations.find((item) => item.id === cid);
+    const agents = store.subagents(cid);
+    const live = hasLiveSubagents(conv?.subagents, agents);
+    const currentlyOpen = subagentTreeIsOpen(cid, treeRecorded, live);
+    persistTrees(toggleOpenRecord(treeRecorded, cid, currentlyOpen));
+  }, [groups, persistTrees, store, treeRecorded]);
 
   const openSubagent = useCallback((cid: string, agentId: string) => {
     const group = groups.find((item) => item.conversations.some((conv) => conv.id === cid));
@@ -147,24 +157,19 @@ export function Sidebar({
   }, [groups]);
 
   const isOpen = useCallback((wsId: string, isActive: boolean) => (
-    openIds.has(wsId) || (isActive && openIds.size === 0)
-  ), [openIds]);
+    workspaceIsOpen(wsId, isActive, openMap)
+  ), [openMap]);
 
   const toggleProject = useCallback((wsId: string, isActive: boolean) => {
-    const currentlyOpen = isOpen(wsId, isActive);
-    const next = new Set(openIds);
-    if (currentlyOpen) next.delete(wsId);
-    else next.add(wsId);
-    persistOpen(next);
-  }, [isOpen, openIds, persistOpen]);
+    const currentlyOpen = workspaceIsOpen(wsId, isActive, openMap);
+    persistOpen(toggleOpenRecord(openMap, wsId, currentlyOpen));
+  }, [openMap, persistOpen]);
 
   const startDraft = useCallback((wsId: string) => {
-    const next = new Set(openIds);
-    next.add(wsId);
-    persistOpen(next);
+    persistOpen(setOpenRecord(openMap, wsId, true));
     writeActiveWorkspace(wsId);
     navigate(draftPath(wsId));
-  }, [openIds, persistOpen]);
+  }, [openMap, persistOpen]);
 
   const openConversation = useCallback((wsId: string, cid: string) => {
     writeActiveWorkspace(wsId);
@@ -186,9 +191,7 @@ export function Sidebar({
     if (!ok) return;
     try {
       await onRemoveWorkspace(ws.id);
-      const next = new Set(openIds);
-      next.delete(ws.id);
-      persistOpen(next);
+      persistOpen(deleteOpenRecord(openMap, ws.id));
       onToast(t(lang, 'ws_removed', { name: ws.name }));
     } catch (err) {
       if (err instanceof ApiError && (err.status === 409 || err.code === 'E_WS_BUSY')) {
@@ -197,7 +200,7 @@ export function Sidebar({
       }
       onToast(err instanceof Error ? err.message : t(lang, 'ws_remove_busy'));
     }
-  }, [lang, onConfirm, onRemoveWorkspace, onToast, openIds, persistOpen]);
+  }, [lang, onConfirm, onRemoveWorkspace, onToast, openMap, persistOpen]);
 
   const projectItems = useCallback((ws: Workspace): CtxMenuItem[] => [
     { label: t(lang, 'new_workspace'), action: 'new-workspace', run: () => onNewWorkspace() },
@@ -338,6 +341,7 @@ export function Sidebar({
                   className="ws-node-header"
                   data-testid="next-ws-toggle"
                   title={ws.path}
+                  aria-expanded={open ? 'true' : 'false'}
                   onClick={() => toggleProject(ws.id, isActive)}
                   onContextMenu={(ev) => openMenu(ev, projectItems(ws), ws.name)}
                 >
@@ -381,15 +385,17 @@ export function Sidebar({
                     const meta = conversationMeta(conv, lang, now);
                     const kind = conversationStatusKind(conv.status);
                     const counts = conv.subagents;
-                    const collapsed = treeCollapsed(conv.id);
                     const agents = store.subagents(conv.id);
+                    const live = hasLiveSubagents(counts, agents);
+                    const openTree = treeOpen(conv.id, live);
+                    const collapsed = !openTree;
                     const hasChip = Boolean(counts && counts.total > 0) || agents.length > 0;
                     const chipLive = counts?.live ?? agents.filter((agent) => (
                       agent.status === 'running' || agent.status === 'stuck' || agent.status === 'waiting'
                     )).length;
                     const chipTotal = counts?.total ?? agents.length;
-                    const loadingOther = !isCurrent && !collapsed && !store.hasTopic(conversationTopic(conv.id));
-                    const showTree = hasChip && (isCurrent || !collapsed || agents.length > 0);
+                    const loadingOther = !isCurrent && openTree && !store.hasTopic(conversationTopic(conv.id));
+                    const showTree = hasChip && (openTree || isCurrent || agents.length > 0);
                     return (
                       <div
                         key={conv.id}
@@ -439,7 +445,7 @@ export function Sidebar({
                         {showTree ? (
                           <SubagentTree
                             convId={conv.id}
-                            agents={isCurrent || !collapsed ? agents : []}
+                            agents={openTree || isCurrent ? agents : []}
                             collapsed={collapsed}
                             loading={loadingOther}
                             activeAgentId={isCurrent ? activeAgentId : null}

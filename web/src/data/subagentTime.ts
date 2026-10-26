@@ -26,6 +26,17 @@ export function subagentDotKind(status: SubagentStatus | string): SubagentStatus
   return DOT_STATUSES.has(st) ? st : '';
 }
 
+export type SubagentTreeVisual = 'running' | 'stuck' | 'done' | 'stopped' | 'failed';
+
+/** Tree-A row icon: waiting uses the running spinner. */
+export function subagentTreeVisual(status: SubagentStatus | string): SubagentTreeVisual {
+  if (status === 'failed') return 'failed';
+  if (status === 'done') return 'done';
+  if (status === 'stopped') return 'stopped';
+  if (status === 'stuck') return 'stuck';
+  return 'running';
+}
+
 export function isLiveSubagentStatus(status: SubagentStatus | string): boolean {
   return LIVE_STATUSES.has(status as SubagentStatus);
 }

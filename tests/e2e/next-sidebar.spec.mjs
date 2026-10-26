@@ -267,3 +267,41 @@ test('860px width collapses the sidebar and does not scroll horizontally', async
     await srv.kill();
   }
 });
+
+test('a single workspace title click collapses, expands, and keeps the state after refresh', async ({ page }) => {
+  const prepared = await prepareWorkspaces(['solo']);
+  const srv = await startServer({ extraEnv: { WEFT_WORKSPACE_ROOT: prepared.root } });
+  try {
+    const ws = await createWorkspace(srv, 'solo', prepared.dirs[0]);
+    const conv = await createConversation(srv, ws.id, 'chat');
+    await loginNext(page, srv);
+    await waitSidebar(page);
+
+    const node = wsNode(page, 'solo');
+    await expect(node).toHaveClass(/is-open/);
+    await expect(node.getByTestId('next-ws-toggle')).toHaveAttribute('aria-expanded', 'true');
+    await expect(convRow(page, conv.id)).toBeVisible();
+
+    await node.locator('.ws-node-title').click();
+    await expect(node).not.toHaveClass(/is-open/);
+    await expect(node.getByTestId('next-ws-toggle')).toHaveAttribute('aria-expanded', 'false');
+    await expect(convRow(page, conv.id)).toBeHidden();
+    await expect.poll(() => page.evaluate(() => localStorage.getItem('weft_next_workspace_open') || '')).toMatch(new RegExp(`"${ws.id}"\\s*:\\s*false`));
+
+    await page.reload();
+    await waitSidebar(page);
+    await expect(wsNode(page, 'solo')).not.toHaveClass(/is-open/);
+    await expect(convRow(page, conv.id)).toBeHidden();
+
+    await wsNode(page, 'solo').locator('.ws-node-title').click();
+    await expect(wsNode(page, 'solo')).toHaveClass(/is-open/);
+    await expect(convRow(page, conv.id)).toBeVisible();
+
+    await page.reload();
+    await waitSidebar(page);
+    await expect(wsNode(page, 'solo')).toHaveClass(/is-open/);
+    await expect(convRow(page, conv.id)).toBeVisible();
+  } finally {
+    await srv.kill();
+  }
+});

@@ -38,24 +38,41 @@ function agent(over = {}) {
   };
 }
 
-test('title fallback: title → brief first line → lastText → name', () => {
-  assert.equal(subagentSummary(agent({ title: '  写登录单测  ' })), '写登录单测');
+test('title fallback: title → name → brief first line → lastText', () => {
+  assert.equal(subagentSummary(agent({
+    title: '  写登录单测  ',
+    name: 'worker',
+    brief: '你在仓库里查看',
+  })), '写登录单测');
   assert.equal(subagentSummary(agent({
     title: '',
+    name: 'worker',
+    brief: '你在仓库里查看',
+    lastText: '旧的 lastText',
+  })), 'worker');
+  assert.equal(subagentSummary(agent({
+    title: '',
+    name: 'agent-1',
     brief: '你在仓库里查看\n第二行不要',
     lastText: '旧的 lastText',
   })), '你在仓库里查看');
   assert.equal(subagentSummary(agent({
+    title: '',
+    name: '子 agent',
+    brief: '巡查仓库',
+  })), '巡查仓库');
+  assert.equal(subagentSummary(agent({
     title: '   ',
+    name: '',
+    brief: '你在仓库里查看\n第二行不要',
+    lastText: '旧的 lastText',
+  })), '你在仓库里查看');
+  assert.equal(subagentSummary(agent({
+    title: '',
+    name: 'subagent 2',
     brief: '\n\n',
     lastText: '  正在读文件  ',
   })), '正在读文件');
-  assert.equal(subagentSummary(agent({
-    title: '',
-    brief: '',
-    lastText: '',
-    name: 'worker',
-  })), 'worker');
   assert.equal(subagentSummary({ id: 'c1:sub:1' }), '');
 });
 
