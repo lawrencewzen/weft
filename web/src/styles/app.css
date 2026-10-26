@@ -582,6 +582,12 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.6; backgroun
 .center-thread { flex: 1; min-height: 0; overflow: auto; scrollbar-gutter: stable both-edges; }
 .thread-inner { padding: 20px 0 96px; display: flex; flex-direction: column; gap: 18px; }
 .thread-inner > * { flex-shrink: 0; }
+/* 发送后、Agent 还没出内容时的「思考中」，纯文字行，不是气泡 */
+.thread-pending { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--mute); }
+.thread-pending .run-spin { width: 12px; height: 12px; }
+.thread-pending .run-spin span { display: none; }
+.thread-pending .run-spin::before { border-width: 1.5px; border-color: var(--line); border-top-color: var(--mute); }
+.thread-pending-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .msg-group { display: flex; flex-direction: column; gap: 6px; min-width: 0; max-width: 100%; }
 .msg-side-user { align-self: flex-end; max-width: 80%; }
 .msg-side-user .msg-header { display: none; }

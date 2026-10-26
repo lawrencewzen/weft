@@ -109,14 +109,18 @@ export function Composer({
     const requestId = req.current.begin(text);
     setBusy(true);
     setError(null);
+    // 先把消息和输入框清掉：气泡已经上屏，不等服务端
+    setDraft('');
+    requestAnimationFrame(resize);
     try {
       await onSend(text, requestId);
       req.current.succeed();
-      setDraft('');
       onSent?.();
-      requestAnimationFrame(resize);
     } catch (err) {
+      // 发失败才把文字塞回去，requestId 不重置，重试仍幂等
+      setDraft((current) => (current ? current : text));
       setError(errorMessage(err, t(lang, 'send_failed')));
+      requestAnimationFrame(resize);
     } finally {
       setBusy(false);
     }

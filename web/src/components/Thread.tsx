@@ -18,6 +18,8 @@ type Props = {
   toolsById: Record<string, ToolCall>;
   lang: Lang;
   running: boolean;
+  /** Sent but not yet answered: show the plain 「思考中」row under the last user message. */
+  pending?: boolean;
   actions: ConversationActions;
   stickNonce: number;
   conversationId?: string | null;
@@ -31,6 +33,7 @@ export function Thread({
   toolsById,
   lang,
   running,
+  pending = false,
   actions,
   stickNonce,
   conversationId,
@@ -50,7 +53,7 @@ export function Thread({
     const padBottom = inner ? parseFloat(getComputedStyle(inner).paddingBottom) || 0 : 0;
     const maxScroll = Math.max(0, el.scrollHeight - el.clientHeight);
     el.scrollTop = maxScroll <= padBottom + 1 ? 0 : maxScroll;
-  }, [items, stickNonce]);
+  }, [items, pending, stickNonce]);
 
   function onScroll() {
     const el = scroller.current;
@@ -109,6 +112,12 @@ export function Thread({
             }
             return null;
           })}
+        {pending ? (
+          <div className="thread-pending" data-testid="next-thread-pending">
+            <span className="run-spin" aria-hidden="true"><span /></span>
+            <span className="thread-pending-text">{t(lang, 'pending_thinking')}</span>
+          </div>
+        ) : null}
       </div>
     </div>
   );
