@@ -76,6 +76,12 @@ export interface paths {
          *
          *     快照与 GET /api/v2/workspaces 同一套数据拆成上述实体。工作区或对话增删改、运行状态或子 Agent 计数变化时 upsert；实体删除时 remove。
          *
+         *     主题 `providers` 注册为精确主题。实体：
+         *     - `provider`：id 为 Provider id，值为 Provider
+         *     - `defaults`：id 为 `self`，值为 ProviderDefaults（`model` 为当前默认 `{ providerId, modelId }`，没有则为 null）
+         *
+         *     快照是 GET /api/v2/providers 的 providers 与 defaultModel 拆成上述实体（vendors 是静态预设，不进推送）。任何 Provider 增删改、连通性测试、Grok 登录状态变化、上下文上限或默认模型修改后 upsert（新旧接口改动都要触发）；实体删除时 remove。
+         *
          *     主题 `conversation:<id>`（`<id>` 为对话 id）按前缀动态注册。实体：
          *     - `conversation`：id 为对话 id，值为 ConversationView
          *     - `item`：id 为 ThreadItem.id，值为 ThreadItem
@@ -226,6 +232,221 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/providers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Provider 列表、厂商预设和默认模型
+         * @description 返回当前已保存的 Provider 视图、VENDOR_PRESETS 预设列表，以及默认模型。
+         *     `statusText` 按 `lang` 出成句。密钥只以 keyMasked 出现，响应不含明文 key。
+         */
+        get: operations["getProviders"];
+        put?: never;
+        /**
+         * 新增 API Provider
+         * @description 创建规则与旧 POST /api/sources 相同（createApiSource）。Grok 不能用此接口创建。
+         *     成功后推送 providers 主题。
+         */
+        post: operations["createProvider"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/providers/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 用请求体里的配置测试连通并探测模型（不保存）
+         * @description 只把请求发往请求体里的 baseUrl（或该 vendor 预设地址）。不写 lastTest。
+         *     探测失败时 models 为空数组。statusText 按 lang 出成句。响应不含明文 key。
+         */
+        post: operations["testProviderDraft"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/providers/grok/session": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Grok Build 账号会话
+         * @description 与旧 GET /api/grok/session 相同：读 ~/.grok/auth.json，不返回令牌。
+         *     expiresAt 为毫秒时间戳。
+         */
+        get: operations["getGrokSession"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/providers/grok/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 开始 Grok Build 设备码登录
+         * @description 与旧 POST /api/grok/login 相同。返回验证网址和用户码。令牌写回 ~/.grok/auth.json。
+         */
+        post: operations["startGrokLogin"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/providers/grok/login/poll": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 轮询 Grok 设备码登录
+         * @description 与旧 POST /api/grok/login/poll 相同。成功后确保存在 grok Provider，并推送 providers 主题。
+         */
+        post: operations["pollGrokLogin"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/providers/grok/login/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 取消进行中的 Grok 设备码登录
+         * @description 与旧 POST /api/grok/login/cancel 相同。loginId 缺省则取消全部进行中的登录。
+         */
+        post: operations["cancelGrokLogin"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/providers/grok/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 退出 Grok Build 登录
+         * @description 与旧 POST /api/grok/logout 相同。只删除 OIDC 会话，保留 xai::api_key。推送 providers 主题。
+         */
+        post: operations["logoutGrok"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/providers/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * 删除 Provider
+         * @description Grok 不能删，返回 400。删除后若它是默认模型来源则清空默认。推送 providers 主题。
+         */
+        delete: operations["deleteProvider"];
+        options?: never;
+        head?: never;
+        /**
+         * 修改已保存的 Provider
+         * @description 改名、baseUrl、key、模型列表、默认模型。换 baseUrl 或 vendor 且没给新 key 时清空已存 key，规则同旧 applySourcePatch。
+         *     成功后推送 providers 主题；若改了上下文相关字段或默认模型，对话主题的 model / context 也会重算。
+         */
+        patch: operations["patchProvider"];
+        trace?: never;
+    };
+    "/api/v2/providers/{id}/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 测试已保存的 Provider
+         * @description 探测已保存配置的连通性和模型列表，结果写回 lastTest。成功时按旧 modelsAfterProbe 合并模型。
+         *     推送 providers 主题。响应不含明文 key。
+         */
+        post: operations["testProvider"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/providers/{id}/models/{modelId}/context-window": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * 设置或恢复某个模型的上下文上限
+         * @description `window` 为整数时写入 source.contextWindows（范围同旧 CONTEXT_WINDOW_MIN/MAX，1000–10000000）。
+         *     `null` 恢复默认（目录或环境变量）。推送 providers 主题，并重算相关对话的 context。
+         */
+        put: operations["putProviderModelContextWindow"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/conversations/{id}": {
         parameters: {
             query?: never;
@@ -244,7 +465,12 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * 切换对话模型
+         * @description `model` 为 `{ providerId, modelId }` 时绑定该模型，规则同旧 resolveConversationModelPatch。
+         *     `model` 为 null 时回到默认。运行中也能改，下次提交生效。成功后推送该对话主题的 ConversationView.model 和 context。
+         */
+        patch: operations["patchConversation"];
         trace?: never;
     };
     "/api/v2/conversations/{id}/diff": {
@@ -715,6 +941,164 @@ export interface components {
             /** @description 先用 modelId */
             label: string;
         };
+        /**
+         * @description agent 只在契约里预留，当前实现不会返回。
+         * @enum {string}
+         */
+        ProviderAccess: "api_key" | "account" | "local" | "custom_endpoint" | "agent";
+        /** @enum {string} */
+        ProviderStatus: "ok" | "needs_auth" | "unreachable" | "error" | "untested";
+        /** @description Provider 上的一个可用模型。 */
+        ProviderModel: {
+            id: string;
+            /** @description 按品牌表算出的显示名；认不出品牌时等于 id */
+            displayName: string;
+            /** @description 品牌 id，认不出为 null */
+            brand: null | string;
+            /** @description 手动覆盖 → 模型目录 → 环境变量 */
+            contextWindow: number;
+            /** @description true 表示用户手动覆盖 */
+            contextWindowCustom: boolean;
+        };
+        /** @description 模型来源的视图。响应和日志都不含明文 API key。 */
+        Provider: {
+            id: string;
+            /** @description 品牌 id，认不出为 null */
+            vendor: null | string;
+            name: string;
+            access: components["schemas"]["ProviderAccess"];
+            /**
+             * @description 当前实现恒为 model。agent 只在契约里预留。
+             * @enum {string}
+             */
+            runtime: "model" | "agent";
+            baseUrl: string;
+            /** @description 没有 key 时为 null。永远不是明文 */
+            keyMasked: null | string;
+            hasKey: boolean;
+            status: components["schemas"]["ProviderStatus"];
+            /** @description 服务端按 lang 出成句。ok / untested 时为空字符串 */
+            statusText: string;
+            /** @description 最近一次探测时间（毫秒）。从未探测为 null */
+            lastTestedAt: null | number;
+            models: components["schemas"]["ProviderModel"][];
+            isDefault: boolean;
+        };
+        /** @description 可添加的厂商预设（VENDOR_PRESETS）。不含 Grok。 */
+        Vendor: {
+            id: string;
+            name: string;
+            access: components["schemas"]["ProviderAccess"];
+            needsKey: boolean;
+            /** @description 预设默认地址。custom 为空字符串 */
+            baseUrl: string;
+            /** @description 品牌 id，认不出为 null */
+            brand: null | string;
+        };
+        /** @description 对话或默认绑定的 Provider + 模型。 */
+        ResolvedModel: {
+            providerId: string;
+            modelId: string;
+        };
+        /** @description GET /api/v2/providers 的响应。 */
+        ProvidersSnapshot: {
+            providers: components["schemas"]["Provider"][];
+            vendors: components["schemas"]["Vendor"][];
+            /** @description 当前默认模型。没有则为 null */
+            defaultModel: null | components["schemas"]["ResolvedModel"];
+        };
+        /** @description providers 主题里 defaults/self 实体的值。 */
+        ProviderDefaults: {
+            /** @description 当前默认模型。没有则为 null */
+            model: null | components["schemas"]["ResolvedModel"];
+        };
+        /** @description 创建 API Provider。规则同旧 POST /api/sources。 */
+        CreateProviderRequest: {
+            vendor: string;
+            name?: string;
+            baseUrl?: string;
+            apiKey?: string;
+            models?: string[];
+        };
+        /** @description 修改已保存的 Provider。applySourcePatch 规则。 */
+        PatchProviderRequest: {
+            vendor?: string;
+            name?: string;
+            baseUrl?: string;
+            apiKey?: string;
+            models?: string[];
+            /** @description 把该 Provider 上的这个模型设为默认；null 且当前默认就是它时清空默认 */
+            defaultModel?: null | string;
+        };
+        /** @description 未保存配置的连通性测试。请求只发往这里的 baseUrl（或 vendor 预设地址）。 */
+        TestProviderRequest: {
+            vendor: string;
+            baseUrl?: string;
+            apiKey?: string;
+        };
+        /** @description 未保存配置的探测结果。失败时 models 为空数组。 */
+        ProviderProbeResult: {
+            ok: boolean;
+            models: string[];
+            status: components["schemas"]["ProviderStatus"];
+            statusText: string;
+        };
+        ContextWindowRequest: {
+            /** @description 新的上下文上限；null 恢复默认。整数范围 1000–10000000 */
+            window: null | number;
+        };
+        /** @description DELETE /api/v2/providers/{id} 成功。 */
+        ProviderRemoved: {
+            /** @constant */
+            removed: true;
+        };
+        /** @description PATCH /api/v2/conversations/{id} 的请求体。 */
+        PatchConversationModelRequest: {
+            /** @description 绑定的模型；null 回到默认 */
+            model: null | components["schemas"]["ResolvedModel"];
+        };
+        /** @description 进行中的设备码登录。 */
+        GrokPending: {
+            loginId: string;
+            verificationUri: string;
+            userCode: string;
+            /** @description 建议轮询间隔（秒） */
+            interval: number;
+            /** @description 设备码过期时间（毫秒） */
+            expiresAt: number;
+        };
+        /** @description Grok Build 会话。不含 access / refresh token。 */
+        GrokSession: {
+            signedIn: boolean;
+            account: null | string;
+            email: null | string;
+            /** @description 会话过期时间（毫秒）。未登录为 null */
+            expiresAt: null | number;
+            authMode: null | string;
+            source: null | string;
+            /** @description 进行中的设备码登录。没有则为 null */
+            pending: null | components["schemas"]["GrokPending"];
+        };
+        GrokLoginStart: components["schemas"]["GrokPending"];
+        GrokLoginPollRequest: {
+            loginId: string;
+        };
+        GrokLoginCancelRequest: {
+            loginId?: string;
+        };
+        GrokLoginPending: {
+            /** @constant */
+            status: "pending";
+            interval: number;
+            /** @description 设备码过期时间（毫秒） */
+            expiresAt: number;
+        };
+        GrokLoginDone: {
+            /** @constant */
+            status: "done";
+            grok: components["schemas"]["GrokSession"];
+        };
+        GrokLoginPollResult: components["schemas"]["GrokLoginPending"] | components["schemas"]["GrokLoginDone"];
         /** @description 侧栏工作区。 */
         Workspace: {
             id: string;
@@ -1101,7 +1485,7 @@ export interface operations {
     getEvents: {
         parameters: {
             query: {
-                /** @description 逗号分隔的主题列表。空或含未注册主题时 400。`workspaces` 已注册；`conversation:<id>` 和 `subagent:<cid>:<agentId>` 按前缀视为已注册。 */
+                /** @description 逗号分隔的主题列表。空或含未注册主题时 400。`workspaces`、`providers` 已注册；`conversation:<id>` 和 `subagent:<cid>:<agentId>` 按前缀视为已注册。 */
                 topics: string;
                 /** @description 客户端语言。先支持 zh、en；缺省或不认识的按 zh。 */
                 lang?: string;
@@ -1589,6 +1973,759 @@ export interface operations {
             };
         };
     };
+    getProviders: {
+        parameters: {
+            query?: {
+                /** @description 客户端语言。先支持 zh、en；缺省或不认识的按 zh。 */
+                lang?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Provider 快照 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProvidersSnapshot"];
+                };
+            };
+            /** @description 未授权 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 客户端错误 */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 服务端错误 */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+        };
+    };
+    createProvider: {
+        parameters: {
+            query?: {
+                lang?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateProviderRequest"];
+            };
+        };
+        responses: {
+            /** @description 已创建 */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Provider"];
+                };
+            };
+            /** @description 请求体无效 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 未授权 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description id 已存在 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 客户端错误 */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 服务端错误 */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+        };
+    };
+    testProviderDraft: {
+        parameters: {
+            query?: {
+                lang?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TestProviderRequest"];
+            };
+        };
+        responses: {
+            /** @description 探测结果 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderProbeResult"];
+                };
+            };
+            /** @description 请求体无效 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 未授权 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 客户端错误 */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 服务端错误 */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+        };
+    };
+    getGrokSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 当前会话 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GrokSession"];
+                };
+            };
+            /** @description 未授权 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 客户端错误 */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 服务端错误 */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+        };
+    };
+    startGrokLogin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": Record<string, never>;
+            };
+        };
+        responses: {
+            /** @description 设备码已签发 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GrokLoginStart"];
+                };
+            };
+            /** @description 未授权 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 登录服务不可用 */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 客户端错误 */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 服务端错误 */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+        };
+    };
+    pollGrokLogin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GrokLoginPollRequest"];
+            };
+        };
+        responses: {
+            /** @description 仍在等待或已完成 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GrokLoginPollResult"];
+                };
+            };
+            /** @description 未授权 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 没有进行中的登录 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 登录失败或过期 */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 客户端错误 */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 服务端错误 */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+        };
+    };
+    cancelGrokLogin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GrokLoginCancelRequest"];
+            };
+        };
+        responses: {
+            /** @description 当前会话 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GrokSession"];
+                };
+            };
+            /** @description 未授权 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 客户端错误 */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 服务端错误 */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+        };
+    };
+    logoutGrok: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": Record<string, never>;
+            };
+        };
+        responses: {
+            /** @description 当前会话 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GrokSession"];
+                };
+            };
+            /** @description 未授权 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 退出失败 */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 客户端错误 */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 服务端错误 */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+        };
+    };
+    deleteProvider: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Provider id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 已删除 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderRemoved"];
+                };
+            };
+            /** @description 不能删除 Grok */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 未授权 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description Provider 不存在 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 客户端错误 */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 服务端错误 */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+        };
+    };
+    patchProvider: {
+        parameters: {
+            query?: {
+                lang?: string;
+            };
+            header?: never;
+            path: {
+                /** @description Provider id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PatchProviderRequest"];
+            };
+        };
+        responses: {
+            /** @description 更新后的 Provider */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Provider"];
+                };
+            };
+            /** @description 请求体无效或 applySourcePatch 拒绝 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 未授权 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description Provider 不存在 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 客户端错误 */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 服务端错误 */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+        };
+    };
+    testProvider: {
+        parameters: {
+            query?: {
+                lang?: string;
+            };
+            header?: never;
+            path: {
+                /** @description Provider id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": Record<string, never>;
+            };
+        };
+        responses: {
+            /** @description 更新后的 Provider */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Provider"];
+                };
+            };
+            /** @description 未授权 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description Provider 不存在 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 客户端错误 */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 服务端错误 */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+        };
+    };
+    putProviderModelContextWindow: {
+        parameters: {
+            query?: {
+                lang?: string;
+            };
+            header?: never;
+            path: {
+                /** @description Provider id */
+                id: string;
+                /** @description 模型 id（含斜杠时需百分号编码） */
+                modelId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ContextWindowRequest"];
+            };
+        };
+        responses: {
+            /** @description 更新后的 Provider */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Provider"];
+                };
+            };
+            /** @description 窗口超出范围或请求体无效 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 未授权 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description Provider 不存在 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 客户端错误 */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 服务端错误 */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+        };
+    };
     getConversation: {
         parameters: {
             query?: {
@@ -1611,6 +2748,80 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ConversationSnapshot"];
+                };
+            };
+            /** @description 未授权 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 对话不存在 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 客户端错误 */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 服务端错误 */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+        };
+    };
+    patchConversation: {
+        parameters: {
+            query?: {
+                lang?: string;
+            };
+            header?: never;
+            path: {
+                /** @description 对话 id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PatchConversationModelRequest"];
+            };
+        };
+        responses: {
+            /** @description 更新后的对话视图 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConversationView"];
+                };
+            };
+            /** @description 模型不存在或请求体无效 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
                 };
             };
             /** @description 未授权 */

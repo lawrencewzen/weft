@@ -21,7 +21,9 @@ import {
 } from './stream/hub.ts';
 import { contractMismatchLog, validateResponse } from './validate.ts';
 import { PROTOCOL_VERSION } from './version.ts';
+import { handleProvidersApi, type ProvidersHttpOpts, type ProvidersJsonBody } from './providers-http.ts';
 import { attachConversationTopic, type KernelEvent } from './stream/conversation-topic.ts';
+import { attachProvidersTopic } from './stream/providers-topic.ts';
 import { attachWorkspacesTopic } from './stream/workspaces-topic.ts';
 import { attachSubagentTopic, type LoadSubagent } from './stream/subagent-topic.ts';
 import { createStuckWatch } from './stream/stuck-watch.ts';
@@ -71,12 +73,14 @@ type FileTree = components['schemas']['FileTree'];
 type FileContent = components['schemas']['FileContent'];
 type SaveResult = components['schemas']['SaveResult'];
 type FileConflict = components['schemas']['FileConflict'];
+type ConversationView = components['schemas']['ConversationView'];
 type V2JsonBody =
   | ServiceInfo
   | WebCode
   | V2Error
   | RestartAccepted
   | ConversationSnapshot
+  | ConversationView
   | RunAccepted
   | StopAccepted
   | ToolOutput
@@ -90,7 +94,8 @@ type V2JsonBody =
   | FileTree
   | FileContent
   | SaveResult
-  | FileConflict;
+  | FileConflict
+  | ProvidersJsonBody;
 
 export type ConversationRow = {
   id?: unknown;
@@ -138,6 +143,10 @@ export type DiffConversationFn = (
   filePath: string,
 ) => Promise<{ status: number; body?: KernelDiffBody }>;
 export type NotifyConversationFn = (cid: string) => void;
+export type PatchConversationFn = (
+  id: string,
+  body: Record<string, unknown>,
+) => Promise<{ status: number; body?: { errors?: unknown; error?: unknown } }>;
 
 export type { LoadConversation, LoadSubagent, KernelEvent, KernelChange };
 
@@ -152,6 +161,8 @@ export type V2Runtime = {
   trackConnection: IdleWatcher['trackConnection'];
   startIdleExit: IdleWatcher['start'];
   notifySidebarChanged: () => void;
+  notifyProvidersChanged: () => void;
+  notifyConversation: NotifyConversationFn;
   dispose: () => void;
 };
 
@@ -405,6 +416,8 @@ export function createV2Handler(opts: {
   changesConversation?: ChangesConversationFn;
   diffConversation?: DiffConversationFn;
   notifyConversation?: NotifyConversationFn;
+  patchConversation?: PatchConversationFn;
+  providers?: ProvidersHttpOpts;
 }): V2Handler {
   const { serviceVersion, startedAt, auth, hub } = opts;
   const pid = opts.pid ?? process.pid;
@@ -445,6 +458,18 @@ export function createV2Handler(opts: {
 
     if (method === 'GET' && pathname === '/api/v2/service') {
       sendV2(res, pathname, method, 200, serviceInfo({ serviceVersion, startedAt, pid, demo }));
+      return true;
+    }
+
+    if (await handleProvidersApi({
+      req,
+      res,
+      url,
+      pathname,
+      method,
+      sendV2,
+      readObjectBody,
+    }, opts.providers || {})) {
       return true;
     }
 
@@ -709,6 +734,64 @@ export function createV2Handler(opts: {
         sendV2(res, pathname, method, 200, snapshot);
       } catch (err) {
         const message = err instanceof Error ? err.message : 'snapshot failed';
+        sendV2(res, pathname, method, 500, { error: message, code: 'E_INTERNAL' } satisfies V2Error);
+      }
+      return true;
+    }
+    if (method === 'PATCH' && convMatch) {
+      const id = decodeURIComponent(convMatch[1]);
+      const body = await readObjectBody(req, res, pathname, method);
+      if (!body) return true;
+      if (!Object.prototype.hasOwnProperty.call(body, 'model')) {
+        sendV2(res, pathname, method, 400, { error: 'model required', code: 'E_BAD_REQUEST' } satisfies V2Error);
+        return true;
+      }
+      let kernelBody: Record<string, unknown>;
+      if (body.model === null) {
+        kernelBody = { modelSourceId: null, modelId: null };
+      } else if (body.model && typeof body.model === 'object' && !Array.isArray(body.model)) {
+        const model = body.model as Record<string, unknown>;
+        kernelBody = { modelSourceId: model.providerId, modelId: model.modelId };
+      } else {
+        sendV2(res, pathname, method, 400, { error: 'invalid model', code: 'E_BAD_REQUEST' } satisfies V2Error);
+        return true;
+      }
+      if (!opts.patchConversation) {
+        sendV2(res, pathname, method, 500, { error: 'kernel not ready', code: 'E_INTERNAL' } satisfies V2Error);
+        return true;
+      }
+      try {
+        const patched = await opts.patchConversation(id, kernelBody);
+        if (patched.status === 404) {
+          sendV2(res, pathname, method, 404, { error: 'not found' } satisfies V2Error);
+          return true;
+        }
+        if (patched.status === 400) {
+          const errors = patched.body?.errors;
+          const first = Array.isArray(errors) && errors.length ? String(errors[0]) : String(patched.body?.error || 'invalid model');
+          sendV2(res, pathname, method, 400, { error: first, code: 'E_BAD_REQUEST' } satisfies V2Error);
+          return true;
+        }
+        if (patched.status >= 400) {
+          sendV2(res, pathname, method, patched.status, {
+            error: String(patched.body?.error || 'patch failed'),
+            code: 'E_INTERNAL',
+          } satisfies V2Error);
+          return true;
+        }
+        let loaded: Awaited<ReturnType<LoadConversation>> = null;
+        loaded = opts.loadConversation ? await opts.loadConversation(id) : null;
+        if (!loaded) {
+          sendV2(res, pathname, method, 404, { error: 'not found' } satisfies V2Error);
+          return true;
+        }
+        const lang = normalizeLang(url.searchParams.get('lang')) === 'en' ? 'en' : 'zh';
+        const snapshot = await conversationSnapshot({ ...loaded, lang });
+        opts.notifyConversation?.(id);
+        opts.onSidebarChanged?.();
+        sendV2(res, pathname, method, 200, snapshot.conversation);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'patch failed';
         sendV2(res, pathname, method, 500, { error: message, code: 'E_INTERNAL' } satisfies V2Error);
       }
       return true;
@@ -1056,6 +1139,17 @@ export function createV2Runtime(opts: {
   demo?: boolean;
   changesConversation?: ChangesConversationFn;
   diffConversation?: DiffConversationFn;
+  patchConversation?: PatchConversationFn;
+  getSettings?: ProvidersHttpOpts['getSettings'];
+  putSettings?: ProvidersHttpOpts['putSettings'];
+  grokStatus?: ProvidersHttpOpts['grokStatus'];
+  grokStartLogin?: ProvidersHttpOpts['grokStartLogin'];
+  grokPollLogin?: ProvidersHttpOpts['grokPollLogin'];
+  grokCancelLogin?: ProvidersHttpOpts['grokCancelLogin'];
+  grokLogout?: ProvidersHttpOpts['grokLogout'];
+  ensureGrokSource?: ProvidersHttpOpts['ensureGrokSource'];
+  probeFetch?: ProvidersHttpOpts['probeFetch'];
+  probeTimeoutMs?: ProvidersHttpOpts['probeTimeoutMs'];
 }): V2Runtime {
   const pid = opts.pid ?? process.pid;
   const auth = createV2Auth({
@@ -1096,6 +1190,36 @@ export function createV2Runtime(opts: {
     loader: sidebarLoader(opts),
     subscribeAll: opts.subscribeAll,
   });
+  const providersTopic = attachProvidersTopic(hub, {
+    loader: {
+      getSettings: opts.getSettings,
+      async grokSignedIn() {
+        if (!opts.grokStatus) return false;
+        const grok = await opts.grokStatus();
+        return Boolean(grok?.signedIn);
+      },
+    },
+  });
+  async function notifyAllConversations(): Promise<void> {
+    try {
+      const workspaces = opts.listWorkspaces ? await opts.listWorkspaces() : [];
+      for (const ws of workspaces) {
+        const wid = ws.id == null ? '' : String(ws.id);
+        if (!wid) continue;
+        const convs = opts.listConversations ? await opts.listConversations(wid) : [];
+        for (const conv of convs) {
+          const cid = conv.id == null ? '' : String(conv.id);
+          if (cid) conversationTopic.notify(cid);
+        }
+      }
+    } catch (err) {
+      console.error('WEFT_V2_PROVIDERS_CONV_NOTIFY', err);
+    }
+  }
+  function notifyProvidersChanged(): void {
+    providersTopic.notify();
+    void notifyAllConversations();
+  }
   const idle = createIdleWatcher({
     hasActiveWork: opts.hasActiveWork ?? (() => false),
     shutdown: () => opts.onIdleExit?.(),
@@ -1130,6 +1254,21 @@ export function createV2Runtime(opts: {
     changesConversation: opts.changesConversation,
     diffConversation: opts.diffConversation,
     notifyConversation: (cid) => conversationTopic.notify(cid),
+    patchConversation: opts.patchConversation,
+    providers: {
+      getSettings: opts.getSettings,
+      putSettings: opts.putSettings,
+      grokStatus: opts.grokStatus,
+      grokStartLogin: opts.grokStartLogin,
+      grokPollLogin: opts.grokPollLogin,
+      grokCancelLogin: opts.grokCancelLogin,
+      grokLogout: opts.grokLogout,
+      ensureGrokSource: opts.ensureGrokSource,
+      probeFetch: opts.probeFetch,
+      probeTimeoutMs: opts.probeTimeoutMs,
+      now: opts.now,
+      onProvidersChanged: notifyProvidersChanged,
+    },
   });
 
   return {
@@ -1156,8 +1295,13 @@ export function createV2Runtime(opts: {
     notifySidebarChanged() {
       workspacesTopic.notify();
     },
+    notifyProvidersChanged,
+    notifyConversation(cid) {
+      conversationTopic.notify(cid);
+    },
     dispose() {
       workspacesTopic.dispose();
+      providersTopic.dispose();
       conversationTopic.dispose();
       subagentTopic.dispose();
       stuck.dispose();

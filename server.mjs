@@ -199,6 +199,34 @@ const v2 = createV2Runtime({
     if (!kernelApi) return { status: 500, body: { error: 'kernel not ready' } };
     return kernelApi.diff(cid, filePath);
   },
+  async patchConversation(id, body) {
+    if (!kernelApi) return { status: 500, body: { error: 'kernel not ready' } };
+    return kernelApi.patchConversation(id, body);
+  },
+  getSettings() {
+    return ensureSettings();
+  },
+  putSettings(patch) {
+    return store.putSettings(patch);
+  },
+  grokStatus() {
+    return currentGrok();
+  },
+  grokStartLogin() {
+    return grokAuth.startLogin();
+  },
+  grokPollLogin(loginId) {
+    return grokAuth.pollLogin(loginId);
+  },
+  grokCancelLogin(loginId) {
+    return grokAuth.cancelLogin(loginId);
+  },
+  grokLogout() {
+    return grokAuth.logout();
+  },
+  ensureGrokSource() {
+    return ensureGrokSource();
+  },
 });
 
 let dataLock;
@@ -657,6 +685,7 @@ async function handleSources(req, res, p, m) {
     }
     await store.putSettings({ sources: [...settings.sources, created.source] });
     const grok = await currentGrok();
+    v2.notifyProvidersChanged();
     sendJson(res, 201, publicSource(created.source, grok));
     return true;
   }
@@ -702,6 +731,7 @@ async function handleSources(req, res, p, m) {
           return next;
         });
         await store.putSettings({ sources });
+        v2.notifyProvidersChanged();
       }
       sendJson(res, 200, probeSource.kind === 'grok' ? { ok: result.ok, models: result.models } : presentProbe(result));
       return true;
@@ -749,6 +779,7 @@ async function handleSources(req, res, p, m) {
     const models = { ...(settings.models || {}) };
     if (models.default?.sourceId === current.id) models.default = null;
     await store.putSettings({ sources, models });
+    v2.notifyProvidersChanged();
     sendJson(res, 200, { ok: true, id: current.id });
     return true;
   }
@@ -762,6 +793,7 @@ async function handleSources(req, res, p, m) {
     const sources = settings.sources.slice();
     sources[index] = patched.source;
     await store.putSettings({ sources });
+    v2.notifyProvidersChanged();
     sendJson(res, 200, publicSource(patched.source, await currentGrok()));
     return true;
   }
@@ -1294,7 +1326,10 @@ async function routeApi(req, res, url) {
     const body = await readBody(req);
     const patched = await kernelApi.patchConversation(cid, body);
     sendJson(res, patched.status, patched.body);
-    if (patched.status < 400) v2.notifySidebarChanged();
+    if (patched.status < 400) {
+      v2.notifySidebarChanged();
+      v2.notifyConversation(cid);
+    }
     return;
   }
 
@@ -1383,6 +1418,7 @@ async function routeApi(req, res, url) {
     delete patch.hasApiKey;
     delete patch.gitConnections;
     const saved = await store.putSettings(patch);
+    if (Object.prototype.hasOwnProperty.call(body, 'models')) v2.notifyProvidersChanged();
     sendJson(res, 200, await settingsResponse(saved));
     return;
   }
@@ -1393,7 +1429,9 @@ async function routeApi(req, res, url) {
   }
   if (p === '/api/grok/login' && m === 'POST') {
     try {
-      sendJson(res, 200, await grokAuth.startLogin());
+      const started = await grokAuth.startLogin();
+      v2.notifyProvidersChanged();
+      sendJson(res, 200, started);
     } catch (err) {
       sendGrokError(res, err);
     }
@@ -1404,6 +1442,7 @@ async function routeApi(req, res, url) {
     try {
       const result = await grokAuth.pollLogin(body?.loginId);
       if (result?.status === 'done') await ensureGrokSource();
+      v2.notifyProvidersChanged();
       sendJson(res, 200, result);
     } catch (err) {
       sendGrokError(res, err);
@@ -1412,12 +1451,16 @@ async function routeApi(req, res, url) {
   }
   if (p === '/api/grok/login/cancel' && m === 'POST') {
     const body = await readBody(req);
-    sendJson(res, 200, await grokAuth.cancelLogin(body?.loginId));
+    const cancelled = await grokAuth.cancelLogin(body?.loginId);
+    v2.notifyProvidersChanged();
+    sendJson(res, 200, cancelled);
     return;
   }
   if (p === '/api/grok/logout' && m === 'POST') {
     try {
-      sendJson(res, 200, await grokAuth.logout());
+      const after = await grokAuth.logout();
+      v2.notifyProvidersChanged();
+      sendJson(res, 200, after);
     } catch (err) {
       sendGrokError(res, err);
     }
