@@ -352,6 +352,7 @@ function workspace(id: string, extra?: Partial<Workspace>): Workspace {
     source: 'local',
     gitUrl: null,
     branch: null,
+    git: null,
     conversationCount: 0,
     runningCount: 0,
     ...extra,

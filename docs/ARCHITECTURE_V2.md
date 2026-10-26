@@ -93,7 +93,7 @@
 
 ### 6.1 列表
 
-- **Workspace**：`id, name, path, source(local|git), conversationCount, runningCount`
+- **Workspace**：`id, name, path, source(local|git), gitUrl, branch, git(GitStatus|null), conversationCount, runningCount`
 - **ConversationSummary**：`id, workspaceId, title, updatedAt, status(idle|running|waiting|failed), runningAgents, subagents{total, live}, archived`
   - 状态归一：recovering、resuming 算 running；paused 算 waiting；error 算 failed。
 

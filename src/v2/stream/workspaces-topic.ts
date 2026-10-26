@@ -1,6 +1,7 @@
 /** Live `workspaces` topic: snapshot + kernel-driven upserts of sidebar entities. */
 
 import type { KernelEvent } from './conversation-topic.ts';
+import type { GitStatusCache } from '../views/git-status.ts';
 import {
   buildWorkspacesSnapshot,
   type SidebarLoader,
@@ -13,6 +14,7 @@ export const COALESCE_MS = 200;
 export const SWEEP_MS = 5_000;
 
 const STATUS_EVENTS = new Set(['status', 'agent']);
+const TERMINAL_RUN = new Set(['done', 'failed', 'stopped']);
 
 export type WorkspacesTopicOpts = {
   loader?: SidebarLoader;
@@ -20,6 +22,9 @@ export type WorkspacesTopicOpts = {
   coalesceMs?: number;
   sweepMs?: number;
   log?: (line: string) => void;
+  gitStatus?: GitStatusCache;
+  getConversation?: (id: string) => Promise<{ workspaceId?: unknown } | null | undefined>;
+  getWorkspace?: (id: string) => Promise<{ path?: unknown; removedAt?: unknown } | null | undefined>;
 };
 
 type EntityKey = string;
@@ -42,6 +47,11 @@ function parseKey(key: EntityKey): { entity: string; id: string } {
 
 function jsonEq(a: unknown, b: unknown): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  if (value && typeof value === 'object' && !Array.isArray(value)) return value as Record<string, unknown>;
+  return {};
 }
 
 export function entitiesFromSnapshot(snap: WorkspacesSnapshot): Entity[] {
@@ -83,8 +93,25 @@ export function attachWorkspacesTopic(hub: EventHub, opts: WorkspacesTopicOpts =
   }
 
   async function loadSnapshot(): Promise<WorkspacesSnapshot> {
-    if (!opts.loader) return { workspaces: [], conversations: [] };
-    return buildWorkspacesSnapshot(opts.loader);
+    const snap = opts.loader
+      ? await buildWorkspacesSnapshot(opts.loader)
+      : { workspaces: [], conversations: [] };
+    if (!opts.gitStatus) return snap;
+    return opts.gitStatus.overlay(snap);
+  }
+
+  async function refreshGitForConversation(cid: string): Promise<void> {
+    if (!opts.gitStatus || !opts.getConversation || !opts.getWorkspace) return;
+    try {
+      const conv = await opts.getConversation(cid);
+      const wsId = conv?.workspaceId == null ? '' : String(conv.workspaceId);
+      if (!wsId) return;
+      const ws = await opts.getWorkspace(wsId);
+      if (!ws || ws.removedAt != null || ws.path == null || String(ws.path) === '') return;
+      await opts.gitStatus.refresh(wsId, String(ws.path));
+    } catch (err) {
+      console.error('WEFT_V2_GIT_REFRESH', err);
+    }
   }
 
   function publishRemove(entity: string, id: string): void {
@@ -144,9 +171,18 @@ export function attachWorkspacesTopic(hub: EventHub, opts: WorkspacesTopicOpts =
     timer.unref?.();
   }
 
-  function onKernelEvent(_cid: string, ev: KernelEvent): void {
+  function onKernelEvent(cid: string, ev: KernelEvent): void {
     if (disposed || !active) return;
     const event = String(ev?.event || '');
+    const status = String(asRecord(ev?.data).status || '');
+    if (event === 'status' && TERMINAL_RUN.has(status)) {
+      enqueue(async () => {
+        await refreshGitForConversation(cid);
+        if (disposed || !active) return;
+        await publishDiff();
+      });
+      return;
+    }
     if (!STATUS_EVENTS.has(event)) return;
     schedule();
   }

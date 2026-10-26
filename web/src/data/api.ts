@@ -230,6 +230,13 @@ export function createConversation(workspaceId: string, title?: string): Promise
   );
 }
 
+export function refreshWorkspaceGit(workspaceId: string): Promise<Workspace> {
+  return requestJson<Workspace>(
+    `/api/v2/workspaces/${encodeURIComponent(workspaceId)}/git/refresh`,
+    { method: 'POST', body: '{}' },
+  );
+}
+
 export function removeWorkspace(workspaceId: string): Promise<WorkspaceRemoved> {
   return requestJson<WorkspaceRemoved>(
     `/api/v2/workspaces/${encodeURIComponent(workspaceId)}`,

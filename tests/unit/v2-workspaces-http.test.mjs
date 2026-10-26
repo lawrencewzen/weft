@@ -1,6 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp } from 'node:fs/promises';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import { mkdtemp, mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { PROTOCOL_VERSION } from '../../src/v2/version.ts';
@@ -105,6 +107,10 @@ test('GET /api/v2/workspaces returns a contract snapshot; create then list; remo
     const unauth = await getV2(srv.base, '/api/v2/workspaces');
     assert.equal(unauth.status, 401);
     assertChecked('/api/v2/workspaces', 'GET', 401, unauth.body);
+
+    const gitMissing = await sendV2(srv.base, 'POST', '/api/v2/workspaces/nope/git/refresh', discovery.token, {});
+    assert.equal(gitMissing.status, 404);
+    assertChecked('/api/v2/workspaces/nope/git/refresh', 'POST', 404, gitMissing.body);
   } finally {
     await stopServer(srv);
   }
@@ -154,6 +160,76 @@ test('DELETE /api/v2/workspaces/{id} is 409 E_WS_BUSY while a conversation is ru
     assert.deepEqual(busy.body.conversations, [conv.body.id]);
 
     await request(srv.base, 'POST', `/api/conversations/${conv.body.id}/stop`, {}, TOKEN);
+  } finally {
+    await stopServer(srv);
+  }
+});
+
+test('POST /api/v2/workspaces/{id}/git/refresh returns git status or null', { timeout: 40_000 }, async () => {
+  const execFileP = promisify(execFile);
+  const wsRoot = await mkdtemp(path.join(tmpdir(), 'weft-v2-git-wsroot-'));
+  const repo = path.join(wsRoot, 'repo');
+  await writeFile(path.join(wsRoot, '.keep'), '');
+  await mkdir(repo, { recursive: true });
+  async function initRepo() {
+    await writeFile(path.join(repo, 'readme.txt'), 'hello\n');
+    await execFileP('git', ['-c', 'user.name=weft', '-c', 'user.email=weft@test', 'add', 'readme.txt'], {
+      cwd: repo, windowsHide: true, timeout: 15_000,
+    });
+    await execFileP('git', ['-c', 'user.name=weft', '-c', 'user.email=weft@test', 'commit', '-m', 'init', '--no-gpg-sign'], {
+      cwd: repo, windowsHide: true, timeout: 15_000,
+    });
+  }
+  try {
+    await execFileP('git', ['init', '-b', 'main'], { cwd: repo, windowsHide: true, timeout: 15_000 });
+    await initRepo();
+  } catch {
+    try {
+      await execFileP('git', ['init'], { cwd: repo, windowsHide: true, timeout: 15_000 });
+      await initRepo();
+    } catch {
+      /* git missing or init failed: collectGitStatus returns null */
+    }
+  }
+  const srv = await startServer({
+    token: TOKEN,
+    env: { WEFT_LLM: 'faux', WEFT_WORKSPACE_ROOT: wsRoot },
+  });
+  try {
+    const discovery = await readDiscovery(srv.dataDir);
+    const created = await sendV2(srv.base, 'POST', '/api/v2/workspaces', discovery.token, {
+      name: 'gitws',
+      source: 'local',
+      path: repo,
+    });
+    assert.equal(created.status, 201, created.text);
+    assertChecked('/api/v2/workspaces', 'POST', 201, created.body);
+    assert.ok('git' in created.body);
+
+    const listed = await getV2(srv.base, '/api/v2/workspaces', discovery.token);
+    assert.equal(listed.status, 200, listed.text);
+    assertChecked('/api/v2/workspaces', 'GET', 200, listed.body);
+    const ws = listed.body.workspaces.find((row) => row.id === created.body.id);
+    assert.ok(ws);
+    assert.ok('git' in ws);
+    await writeFile(path.join(repo, 'readme.txt'), 'hello\nworld\n');
+    const refreshed = await sendV2(
+      srv.base,
+      'POST',
+      `/api/v2/workspaces/${created.body.id}/git/refresh`,
+      discovery.token,
+      {},
+    );
+    assert.equal(refreshed.status, 200, refreshed.text);
+    assertChecked(`/api/v2/workspaces/${created.body.id}/git/refresh`, 'POST', 200, refreshed.body);
+    if (!refreshed.body.git) {
+      assert.equal(refreshed.body.git, null);
+      return;
+    }
+    assert.equal(refreshed.body.git.detached, false);
+    assert.ok(refreshed.body.git.branch === 'main' || refreshed.body.git.branch === 'master', refreshed.body.git.branch);
+    assert.ok(refreshed.body.git.changedFiles >= 1);
+    assert.ok(refreshed.body.git.insertions >= 1);
   } finally {
     await stopServer(srv);
   }

@@ -17,6 +17,7 @@ import {
   getWorkspaceTree,
   isConflictError,
   isUnauthenticatedError,
+  refreshWorkspaceGit,
   removeWorkspace,
   saveWorkspaceFile,
   sendMessage,
@@ -179,6 +180,18 @@ describe('api client', () => {
       expect((err as ApiError).code).toBe('E_WS_BUSY');
       return true;
     });
+  });
+
+  it('posts git refresh for a workspace', async () => {
+    const gitWs = {
+      id: 'w1', name: 'n', path: '/p', source: 'local' as const,
+      gitUrl: null, branch: null, git: null, conversationCount: 0, runningCount: 0,
+    };
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(200, gitWs));
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(refreshWorkspaceGit('w/1')).resolves.toEqual(gitWs);
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/v2/workspaces/w%2F1/git/refresh');
+    expect(fetchMock.mock.calls[0][1]).toMatchObject({ method: 'POST' });
   });
 
   it('loads tree, file, and diff through v2 endpoints and encodes the path query', async () => {
