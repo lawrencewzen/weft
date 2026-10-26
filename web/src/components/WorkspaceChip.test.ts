@@ -9,7 +9,7 @@ import { WorkspaceChip } from './WorkspaceChip';
 const { mockState, workspaces } = vi.hoisted(() => {
   const list: Workspace[] = [
     {
-      id: 'w1', name: 'alpha', path: '/tmp/alpha', source: 'local',
+      id: 'w1', name: 'alpha', path: '/Users/alice/code/team/monorepo/apps/desktop/weft', source: 'local',
       gitUrl: null, branch: null, git: null, conversationCount: 0, runningCount: 0,
     },
     {
@@ -79,6 +79,9 @@ describe('WorkspaceChip', () => {
     const options = [...host!.querySelectorAll<HTMLButtonElement>('[data-testid=next-ws-chip-option]')];
     expect(options.map((el) => el.getAttribute('data-id'))).toEqual(['w1', 'w2']);
     expect(options[0].getAttribute('aria-selected')).toBe('true');
+    expect(options[0].getAttribute('title')).toBe('/Users/alice/code/team/monorepo/apps/desktop/weft');
+    expect(options[0].querySelector('.ws-chip-path')?.textContent).toBe('~/…/weft');
+    expect(options[0].querySelector('.ws-chip-path')?.textContent).not.toContain('\n');
     await act(async () => {
       options[1].click();
     });

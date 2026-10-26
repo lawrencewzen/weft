@@ -774,7 +774,8 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.6; backgroun
 .model-menu-item.is-selected { background: var(--sub); }
 .model-menu-copy { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
 .model-menu-title { font-size: 13px; }
-.model-menu-id { font-family: var(--mono); font-size: 11px; color: var(--mute); overflow: hidden; text-overflow: ellipsis; }
+.model-menu-id { font-family: var(--mono); font-size: 11px; color: var(--mute); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ws-chip-path { display: block; }
 .model-menu-meta { font-size: 11px; color: var(--mute); white-space: nowrap; margin-left: auto; padding-top: 2px; }
 .model-menu-check { color: var(--mute); font-size: 12px; padding-top: 1px; }
 .model-menu-foot {

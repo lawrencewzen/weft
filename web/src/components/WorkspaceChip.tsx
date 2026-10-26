@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Lang } from '../data/lang';
 import { useWorkspaces } from '../data/useWorkspaces';
+import { shortenWorkspacePath } from '../data/workspacePath';
 import { t } from '../i18n';
 
 type Props = {
@@ -123,7 +124,9 @@ export function WorkspaceChip({
               >
                 <span className="model-menu-copy">
                   <span className="model-menu-title">{ws.name}</span>
-                  {ws.path ? <span className="model-menu-id">{ws.path}</span> : null}
+                  {ws.path ? (
+                    <span className="model-menu-id ws-chip-path">{shortenWorkspacePath(ws.path)}</span>
+                  ) : null}
                 </span>
                 {selectedRow ? <span className="model-menu-check" aria-hidden="true">✓</span> : null}
               </button>

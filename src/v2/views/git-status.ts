@@ -39,9 +39,11 @@ export type GitStatusCache = {
   overlay(snap: WorkspacesSnapshot): Promise<WorkspacesSnapshot>;
 };
 
-function gitCommandEnv(base: NodeJS.ProcessEnv | undefined): NodeJS.ProcessEnv {
+/** Env for background git status only. Does not touch git-import's buildGitChildEnv. */
+export function gitCommandEnv(base: NodeJS.ProcessEnv | undefined = process.env): NodeJS.ProcessEnv {
   const env = { ...(buildGitChildEnv(base || process.env) as unknown as NodeJS.ProcessEnv) };
   for (const key of DROP_GIT_VARS) delete env[key];
+  env.GIT_OPTIONAL_LOCKS = '0';
   return env;
 }
 
@@ -160,6 +162,7 @@ export async function collectGitStatus(cwd: string, opts: CollectGitOpts = {}): 
 export function createGitStatusCache(opts: CollectGitOpts = {}): GitStatusCache {
   const cache = new Map<string, GitStatus | null>();
   const inflight = new Map<string, Promise<GitStatus | null>>();
+  const pendingCwd = new Map<string, string>();
 
   function compute(id: string, cwd: string): Promise<GitStatus | null> {
     const existing = inflight.get(id);
@@ -174,7 +177,12 @@ export function createGitStatusCache(opts: CollectGitOpts = {}): GitStatusCache 
         return null;
       })
       .finally(() => {
-        if (inflight.get(id) === job) inflight.delete(id);
+        if (inflight.get(id) !== job) return;
+        inflight.delete(id);
+        const nextCwd = pendingCwd.get(id);
+        if (nextCwd === undefined) return;
+        pendingCwd.delete(id);
+        compute(id, nextCwd);
       });
     inflight.set(id, job);
     return job;
@@ -197,8 +205,19 @@ export function createGitStatusCache(opts: CollectGitOpts = {}): GitStatusCache 
       if (cache.has(id)) return Promise.resolve(cache.get(id)!);
       return compute(id, cwd);
     },
-    refresh(id, cwd) {
-      return compute(id, cwd);
+    async refresh(id, cwd) {
+      const current = inflight.get(id);
+      if (!current) return compute(id, cwd);
+      pendingCwd.set(id, cwd);
+      await current.catch(() => {});
+      const extra = inflight.get(id);
+      if (extra) return extra;
+      if (pendingCwd.has(id)) {
+        const nextCwd = pendingCwd.get(id)!;
+        pendingCwd.delete(id);
+        return compute(id, nextCwd);
+      }
+      return cache.has(id) ? cache.get(id)! : null;
     },
     overlay,
   };

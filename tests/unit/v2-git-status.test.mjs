@@ -9,6 +9,7 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import {
   collectGitStatus,
   createGitStatusCache,
+  gitCommandEnv,
   parseAheadBehind,
   parseBranch,
   parseNumstat,
@@ -173,7 +174,18 @@ test('collectGitStatus returns null for a non-git directory, missing git, or emp
   assert.equal(real, null);
 });
 
-test('createGitStatusCache merges concurrent refresh of the same workspace', async () => {
+test('gitCommandEnv sets GIT_OPTIONAL_LOCKS=0 for background status', () => {
+  const env = gitCommandEnv({
+    PATH: '/bin',
+    GIT_DIR: '/secret.git',
+    GIT_OPTIONAL_LOCKS: '1',
+  });
+  assert.equal(env.GIT_OPTIONAL_LOCKS, '0');
+  assert.equal(env.GIT_DIR, undefined);
+  assert.equal(env.PATH, '/bin');
+});
+
+test('createGitStatusCache ensure reuses an in-flight compute', async () => {
   let insideCalls = 0;
   const run = async (args) => {
     if (args[0] === 'rev-parse' && args[1] === '--is-inside-work-tree') {
@@ -188,13 +200,53 @@ test('createGitStatusCache merges concurrent refresh of the same workspace', asy
   };
   const cache = createGitStatusCache({ run });
   const [a, b] = await Promise.all([
-    cache.refresh('w1', '/repo'),
-    cache.refresh('w1', '/repo'),
+    cache.ensure('w1', '/repo'),
+    cache.ensure('w1', '/repo'),
   ]);
   assert.equal(insideCalls, 1);
   assert.equal(a.branch, 'main');
   assert.equal(b.branch, 'main');
-  assert.equal(cache.peek('w1').branch, 'main');
+});
+
+test('refresh waits for an in-flight compute then runs one extra round', async () => {
+  let insideCalls = 0;
+  let statusCalls = 0;
+  let releaseFirst;
+  let enteredFirst;
+  const firstGate = new Promise((resolve) => { releaseFirst = resolve; });
+  const entered = new Promise((resolve) => { enteredFirst = resolve; });
+  const run = async (args) => {
+    if (args[0] === 'rev-parse' && args[1] === '--is-inside-work-tree') {
+      insideCalls += 1;
+      return { stdout: 'true\n', code: 0 };
+    }
+    if (args[0] === 'status') {
+      statusCalls += 1;
+      if (statusCalls === 1) {
+        enteredFirst();
+        await firstGate;
+        return { stdout: '', code: 0 };
+      }
+      return { stdout: ' M a.ts\n', code: 0 };
+    }
+    if (args[0] === 'symbolic-ref') return { stdout: 'main\n', code: 0 };
+    if (args[0] === 'diff') return { stdout: '', code: 0 };
+    if (args[0] === 'rev-parse') return { stdout: 'abc\n', code: 0 };
+    return { stdout: '', code: 1 };
+  };
+  const cache = createGitStatusCache({ run });
+  const first = cache.ensure('w1', '/repo');
+  await entered;
+  const refreshA = cache.refresh('w1', '/repo');
+  const refreshB = cache.refresh('w1', '/repo');
+  releaseFirst();
+  const [ensured, a, b] = await Promise.all([first, refreshA, refreshB]);
+  assert.equal(ensured.changedFiles, 0);
+  assert.equal(a.changedFiles, 1);
+  assert.equal(b.changedFiles, 1);
+  assert.equal(cache.peek('w1').changedFiles, 1);
+  assert.equal(insideCalls, 2);
+  assert.equal(statusCalls, 2);
 });
 
 test('real git init: clean branch, dirty, untracked, detached, upstream ahead/behind', { timeout: 30_000 }, async () => {
