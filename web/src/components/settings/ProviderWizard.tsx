@@ -242,29 +242,26 @@ export function ProviderWizard({
     : !canFinish(state) || busy;
 
   return (
-    <div className="ns-wizard" style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
-      <div className="next-settings-head">
+    <div className="ns-wizard">
+      <div className="ns-wizard-head">
         <div>
-          <div className="next-settings-crumb">
-            {state.mode === 'edit' ? t(lang, 'provider_edit_crumb') : t(lang, 'provider_add_crumb')}
-            {state.step === 3 ? (
-              <>
-                {' · '}
-                <strong>{t(lang, 'provider_step_models')}</strong>
-              </>
-            ) : null}
-          </div>
           {state.step === 3 && vendor ? (
-            <div className="ns-grok-head" style={{ marginTop: 10 }}>
-              <span className="ns-icon-box is-lg"><BrandIcon brand={vendor.brand} size={20} /></span>
-              <h2 style={{ margin: 0 }}>{vendor.name}</h2>
+            <>
+              <div className="ns-grok-head">
+                <span className="ns-icon-box is-lg"><BrandIcon brand={vendor.brand} size={20} /></span>
+                <h2>{vendor.name}</h2>
+              </div>
+              <p className="next-settings-sub">
+                {state.mode === 'edit' ? t(lang, 'provider_models_edit_sub') : t(lang, 'provider_models_sub')}
+              </p>
+            </>
+          ) : (
+            <div className="next-settings-crumb">
+              <span>{t(lang, 'provider_title')}</span>
+              <span className="next-settings-crumb-sep">/</span>
+              <strong>{t(lang, state.mode === 'edit' ? 'provider_edit' : 'provider_add_leaf')}</strong>
             </div>
-          ) : null}
-          {state.step === 3 ? (
-            <p className="next-settings-sub">
-              {state.mode === 'edit' ? t(lang, 'provider_models_edit_sub') : t(lang, 'provider_models_sub')}
-            </p>
-          ) : null}
+          )}
         </div>
         <div className="ns-steps" aria-hidden="true">
           {([
@@ -280,7 +277,7 @@ export function ProviderWizard({
         </div>
       </div>
 
-      <div className="next-settings-content" style={{ paddingTop: 0 }}>
+      <div className="next-settings-content ns-wizard-body">
         {state.step === 1 ? (
           <>
             <input
@@ -392,7 +389,7 @@ export function ProviderWizard({
                   </>
                 ) : (
                   <div className="ns-form-grid">
-                    <div>
+                    <div className="ns-form-main">
                       <KeyFields
                         lang={lang}
                         vendor={vendor}
@@ -421,7 +418,8 @@ export function ProviderWizard({
                         </div>
                       </details>
                     </div>
-                    <div>
+                    <div className="ns-form-split" />
+                    <div className="ns-test-col">
                       <TestPanel
                         lang={lang}
                         vendor={vendor}
@@ -464,13 +462,12 @@ export function ProviderWizard({
               ))}
               <input
                 className="ns-search"
-                style={{ marginLeft: 'auto' }}
                 value={state.modelQuery}
                 placeholder={t(lang, 'provider_models_search')}
                 onChange={(ev) => patch({ modelQuery: ev.target.value })}
               />
             </div>
-            <div>
+            <div className="ns-model-list">
               {visibleModels.map((model) => {
                 const on = state.selectedModelIds.includes(model.id);
                 return (
@@ -523,7 +520,7 @@ export function ProviderWizard({
               {' · '}
               <button
                 type="button"
-                className="ns-field-link"
+                className={`ns-field-link${state.showSelectedOnly ? ' is-on' : ''}`}
                 onClick={() => patch({ showSelectedOnly: !state.showSelectedOnly })}
               >
                 {t(lang, 'provider_models_only')}
@@ -641,10 +638,11 @@ function TestPanel({
 }) {
   const host = hostOf(vendor.baseUrl);
   return (
-    <div>
+    <div className="ns-test-panel">
+      <h3>{t(lang, 'provider_test')}</h3>
       <button
         type="button"
-        className="ns-btn ns-btn-primary"
+        className="ns-btn"
         data-testid="next-provider-test"
         disabled={probing}
         onClick={onTest}

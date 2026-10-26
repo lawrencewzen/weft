@@ -53,7 +53,7 @@ export function SettingsOverlay({ page, lang, onToast, onConfirm }: Props) {
               type="button"
               className={`next-settings-nav-item${current === item.id ? ' is-on' : ''}`}
               data-testid={`next-settings-nav-${item.id}`}
-              onClick={() => navigate(settingsPath(item.id), { replace: true, state: { weftSettings: true } })}
+              onClick={() => navigate(settingsPath(item.id), { replace: true })}
             >
               {t(lang, item.key)}
             </button>

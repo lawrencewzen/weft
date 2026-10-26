@@ -142,7 +142,7 @@ export function ProviderPage({ lang, onToast, onConfirm }: Props) {
         </div>
         <button
           type="button"
-          className="ns-btn ns-btn-primary"
+          className="ns-btn"
           data-testid="next-provider-add"
           onClick={() => setView({ kind: 'wizard', state: blankWizard('add') })}
         >
