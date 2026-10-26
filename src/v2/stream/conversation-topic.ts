@@ -324,7 +324,10 @@ export function attachConversationTopic(hub: EventHub, opts: ConversationTopicOp
     };
   }
 
-  async function snapshotFor(cid: string, lang: 'zh' | 'en', state: TopicState): Promise<TopicSnapshot | null> {
+  type LoadedConversation = NonNullable<Awaited<ReturnType<LoadConversation>>>;
+  type TopicSource = { loaded: LoadedConversation; changeRows: Change[] };
+
+  async function loadTopicSource(cid: string, state: TopicState): Promise<TopicSource | null> {
     if (!opts.loadConversation) return null;
     const loaded = await opts.loadConversation(cid);
     if (!loaded) {
@@ -335,39 +338,75 @@ export function attachConversationTopic(hub: EventHub, opts: ConversationTopicOp
     const rawAgents = Array.isArray(loaded.subagents) ? loaded.subagents : [];
     state.rawAgents = rawAgents;
     opts.stuck?.sync(cid, rawAgents);
-    const workspacePath = loaded.presented?.workspacePath == null ? '' : String(loaded.presented.workspacePath);
+    let changeRows: Change[] = [];
+    if (opts.loadChanges) {
+      try {
+        changeRows = changeViews(await opts.loadChanges(cid));
+      } catch (err) {
+        console.error(`WEFT_V2_CONV_CHANGES ${cid}`, err);
+        changeRows = [];
+      }
+    }
+    return { loaded, changeRows };
+  }
+
+  async function assembleSnapshot(
+    cid: string,
+    lang: 'zh' | 'en',
+    state: TopicState,
+    source: TopicSource,
+  ): Promise<TopicSnapshot> {
+    const workspacePath = source.loaded.presented?.workspacePath == null
+      ? ''
+      : String(source.loaded.presented.workspacePath);
     const snap = await conversationSnapshot({
-      ...loaded,
+      ...source.loaded,
       lang,
       exists: existsFor(cid, workspacePath),
     });
-    let changes: Change[] = [];
-    if (opts.loadChanges) {
-      try {
-        changes = overlayLiveChanges(state, lang, changeViews(await opts.loadChanges(cid)));
-      } catch (err) {
-        console.error(`WEFT_V2_CONV_CHANGES ${cid}`, err);
-        changes = [];
-      }
-    }
     const t = now();
     return overlayLive({
       ...snap,
-      subagents: subagentViews(rawAgents, {
+      subagents: subagentViews(state.rawAgents, {
         parentConversationId: cid,
         now: t,
         stuckAfterMs,
       }),
-      changes,
+      changes: overlayLiveChanges(state, lang, source.changeRows),
     }, state.lives);
+  }
+
+  async function snapshotsFor(
+    cid: string,
+    state: TopicState,
+  ): Promise<{ zh: TopicSnapshot; en: TopicSnapshot } | null> {
+    const source = await loadTopicSource(cid, state);
+    if (!source) return null;
+    const zh = await assembleSnapshot(cid, 'zh', state, source);
+    const en = await assembleSnapshot(cid, 'en', state, source);
+    return { zh, en };
+  }
+
+  function seedBaseline(state: TopicState, zh: TopicSnapshot, en: TopicSnapshot): void {
+    if (state.lastZh.size || state.lastEn.size) return;
+    state.lastZh = mapsFromSnapshot(zh);
+    state.lastEn = mapsFromSnapshot(en);
   }
 
   async function snapshotEntities(topic: string, lang: string): Promise<SnapshotPayload> {
     const cid = conversationIdFromTopic(topic);
     if (!cid) return { entities: [], missing: [topic] };
     const state = stateOf(cid);
-    const snap = await snapshotFor(cid, normalizeLang(lang) === 'en' ? 'en' : 'zh', state);
-    if (!snap) return { entities: [], missing: [topic] };
+    const wantEn = normalizeLang(lang) === 'en';
+    if (!state.lastZh.size && !state.lastEn.size) {
+      const pair = await snapshotsFor(cid, state);
+      if (!pair) return { entities: [], missing: [topic] };
+      seedBaseline(state, pair.zh, pair.en);
+      return { entities: entitiesFromSnapshot(wantEn ? pair.en : pair.zh) };
+    }
+    const source = await loadTopicSource(cid, state);
+    if (!source) return { entities: [], missing: [topic] };
+    const snap = await assembleSnapshot(cid, wantEn ? 'en' : 'zh', state, source);
     return { entities: entitiesFromSnapshot(snap) };
   }
 
@@ -424,21 +463,19 @@ export function attachConversationTopic(hub: EventHub, opts: ConversationTopicOp
     if (disposed || !kernelUnsubs.has(cid)) return;
     const state = stateOf(cid);
     state.changeRetryNeeded = false;
-    let zh: TopicSnapshot | null = null;
-    let en: TopicSnapshot | null = null;
+    let pair: { zh: TopicSnapshot; en: TopicSnapshot } | null = null;
     try {
-      zh = await snapshotFor(cid, 'zh', state);
-      en = await snapshotFor(cid, 'en', state);
+      pair = await snapshotsFor(cid, state);
     } catch (err) {
       console.error(`WEFT_V2_CONV_SNAPSHOT ${cid}`, err);
       return;
     }
     if (disposed || !kernelUnsubs.has(cid)) return;
-    if (!zh || !en) {
+    if (!pair) {
       removeAll(cid, state);
       return;
     }
-    diffAndPublish(cid, state, zh, en);
+    diffAndPublish(cid, state, pair.zh, pair.en);
     if (state.changeRetryNeeded) {
       state.changeRetryNeeded = false;
       scheduleChangeRetry(cid);

@@ -178,12 +178,9 @@ export function attachSubagentTopic(hub: EventHub, opts: SubagentTopicOpts = {})
     };
   }
 
-  async function snapshotFor(
-    cid: string,
-    agentId: string,
-    lang: 'zh' | 'en',
-    state: TopicState,
-  ): Promise<SubagentSnapshot | null> {
+  type LoadedSubagent = NonNullable<Awaited<ReturnType<LoadSubagent>>>;
+
+  async function loadTopicSource(cid: string, agentId: string): Promise<LoadedSubagent | null> {
     if (!opts.loadSubagent) return null;
     const loaded = await opts.loadSubagent(cid, agentId);
     if (!loaded) {
@@ -191,6 +188,15 @@ export function attachSubagentTopic(hub: EventHub, opts: SubagentTopicOpts = {})
       return null;
     }
     opts.stuck?.patch(cid, [loaded.agent]);
+    return loaded;
+  }
+
+  function assembleSnapshot(
+    cid: string,
+    agentId: string,
+    lang: 'zh' | 'en',
+    loaded: LoadedSubagent,
+  ): Promise<SubagentSnapshot> {
     const workspacePath = loaded.presented?.workspacePath == null ? '' : String(loaded.presented.workspacePath);
     return subagentSnapshot({
       presented: loaded.presented,
@@ -203,12 +209,37 @@ export function attachSubagentTopic(hub: EventHub, opts: SubagentTopicOpts = {})
     });
   }
 
+  async function snapshotsFor(
+    cid: string,
+    agentId: string,
+  ): Promise<{ zh: SubagentSnapshot; en: SubagentSnapshot } | null> {
+    const loaded = await loadTopicSource(cid, agentId);
+    if (!loaded) return null;
+    const zh = await assembleSnapshot(cid, agentId, 'zh', loaded);
+    const en = await assembleSnapshot(cid, agentId, 'en', loaded);
+    return { zh, en };
+  }
+
+  function seedBaseline(state: TopicState, zh: SubagentSnapshot, en: SubagentSnapshot): void {
+    if (state.lastZh.size || state.lastEn.size) return;
+    state.lastZh = mapsFromSnapshot(zh);
+    state.lastEn = mapsFromSnapshot(en);
+  }
+
   async function snapshotEntities(topic: string, lang: string): Promise<SnapshotPayload> {
     const parsed = parseSubagentTopic(topic);
     if (!parsed) return { entities: [], missing: [topic] };
     const state = stateOf(topicKey(parsed.cid, parsed.agentId));
-    const snap = await snapshotFor(parsed.cid, parsed.agentId, normalizeLang(lang) === 'en' ? 'en' : 'zh', state);
-    if (!snap) return { entities: [], missing: [topic] };
+    const wantEn = normalizeLang(lang) === 'en';
+    if (!state.lastZh.size && !state.lastEn.size) {
+      const pair = await snapshotsFor(parsed.cid, parsed.agentId);
+      if (!pair) return { entities: [], missing: [topic] };
+      seedBaseline(state, pair.zh, pair.en);
+      return { entities: entitiesFromSubagentSnapshot(wantEn ? pair.en : pair.zh) };
+    }
+    const loaded = await loadTopicSource(parsed.cid, parsed.agentId);
+    if (!loaded) return { entities: [], missing: [topic] };
+    const snap = await assembleSnapshot(parsed.cid, parsed.agentId, wantEn ? 'en' : 'zh', loaded);
     return { entities: entitiesFromSubagentSnapshot(snap) };
   }
 
@@ -269,21 +300,19 @@ export function attachSubagentTopic(hub: EventHub, opts: SubagentTopicOpts = {})
     if (disposed || !kernelUnsubs.has(cid)) return;
     const key = topicKey(cid, agentId);
     const state = stateOf(key);
-    let zh: SubagentSnapshot | null = null;
-    let en: SubagentSnapshot | null = null;
+    let pair: { zh: SubagentSnapshot; en: SubagentSnapshot } | null = null;
     try {
-      zh = await snapshotFor(cid, agentId, 'zh', state);
-      en = await snapshotFor(cid, agentId, 'en', state);
+      pair = await snapshotsFor(cid, agentId);
     } catch (err) {
       console.error(`WEFT_V2_SUBAGENT_SNAPSHOT ${cid} ${agentId}`, err);
       return;
     }
     if (disposed || !kernelUnsubs.has(cid)) return;
-    if (!zh || !en) {
+    if (!pair) {
       removeAll(cid, agentId, state);
       return;
     }
-    diffAndPublish(cid, agentId, state, zh, en);
+    diffAndPublish(cid, agentId, state, pair.zh, pair.en);
   }
 
   async function recomputeCid(cid: string): Promise<void> {

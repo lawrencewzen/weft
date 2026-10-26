@@ -940,3 +940,172 @@ test('new subscriber during a held run keeps GET items', { timeout: 45_000 }, as
   }
 });
 
+async function waitUntil(ready, timeoutMs = 2000, label = 'condition') {
+  const started = Date.now();
+  while (Date.now() - started < timeoutMs) {
+    if (ready()) return;
+    await sleep(10);
+  }
+  throw new Error(`timed out waiting for ${label}`);
+}
+
+test('in-process: one recompute calls loadConversation once', async () => {
+  const hub = createEventHub({ heartbeatMs: 60_000, protocolVersion: PROTOCOL_VERSION });
+  const data = {
+    presented: presentedFixture({
+      messages: [
+        { id: 'u1', role: 'user', text: 'hi' },
+        { id: 'a1', role: 'assistant', text: 'ok' },
+      ],
+    }),
+    subagents: [],
+    modelTarget: null,
+    window: 128000,
+  };
+  let loads = 0;
+  const topic = attachConversationTopic(hub, {
+    loadConversation: async (id) => {
+      loads += 1;
+      return id === 'c1' ? structuredClone(data) : null;
+    },
+    subscribe: () => () => {},
+    coalesceMs: 5,
+    log() {},
+  });
+  try {
+    const frames = [];
+    const session = hub.connect({
+      topics: ['conversation:c1'],
+      lang: 'zh',
+      send: (frame) => frames.push(frame),
+    });
+    await session.ready;
+    const afterSnap = loads;
+    assert.equal(afterSnap >= 1, true);
+    topic.notify('c1');
+    await waitUntil(() => loads >= afterSnap + 1, 2000, 'recompute load');
+    await sleep(20);
+    assert.equal(loads, afterSnap + 1, `loads=${loads} afterSnap=${afterSnap}`);
+    session.close();
+  } finally {
+    topic.dispose();
+    hub.dispose();
+  }
+});
+
+test('in-process: first kernel event after snapshot only upserts the changed conversation', async () => {
+  const hub = createEventHub({ heartbeatMs: 60_000, protocolVersion: PROTOCOL_VERSION });
+  const listeners = new Set();
+  const data = {
+    presented: presentedFixture({
+      status: 'idle',
+      messages: [
+        { id: 'u1', role: 'user', text: 'hi' },
+        { id: 'a1', role: 'assistant', text: 'ok' },
+      ],
+    }),
+    subagents: [],
+    modelTarget: null,
+    window: 128000,
+  };
+  const topic = attachConversationTopic(hub, {
+    loadConversation: async (id) => (id === 'c1' ? structuredClone(data) : null),
+    subscribe: (_cid, fn) => {
+      listeners.add(fn);
+      return () => listeners.delete(fn);
+    },
+    coalesceMs: 10,
+    log() {},
+  });
+  try {
+    const frames = [];
+    const session = hub.connect({
+      topics: ['conversation:c1'],
+      lang: 'zh',
+      send: (frame) => frames.push(frame),
+    });
+    await session.ready;
+    assert.equal(frames[0]?.event, 'snapshot');
+    const snapItems = (frames[0].data.entities || []).filter((row) => row.entity === 'item');
+    assert.equal(snapItems.length, 2);
+    const before = frames.length;
+
+    data.presented = {
+      ...data.presented,
+      status: 'running',
+    };
+    for (const fn of listeners) fn({ event: 'status', data: { status: 'running' } });
+    await waitUntil(() => frames.slice(before).some((frame) => (
+      frame.event === 'upsert'
+      && frame.data.entity === 'conversation'
+      && frame.data.value?.status === 'running'
+    )), 2000, 'running upsert');
+    await sleep(30);
+    const added = frames.slice(before).filter((frame) => frame.event !== 'heartbeat');
+    assert.equal(added.length, 1, JSON.stringify(added.map((frame) => ({
+      event: frame.event,
+      entity: frame.data?.entity,
+      id: frame.data?.id,
+      status: frame.data?.value?.status,
+    }))));
+    assert.equal(added[0].event, 'upsert');
+    assert.equal(added[0].data.entity, 'conversation');
+    assert.equal(added[0].data.id, 'c1');
+    assert.equal(added[0].data.value.status, 'running');
+    assert.equal(added[0].data.value.run?.status, 'running');
+    session.close();
+  } finally {
+    topic.dispose();
+    hub.dispose();
+  }
+});
+
+test('in-process: 300-message conversation, 20 recomputes stay under a loose bound', async () => {
+  const messages = [];
+  for (let i = 0; i < 150; i += 1) {
+    messages.push({ id: `u${i}`, role: 'user', text: `user ${i} hello world` });
+    messages.push({ id: `a${i}`, role: 'assistant', text: `assistant ${i} reply with padding` });
+  }
+  const data = {
+    presented: presentedFixture({ messages }),
+    subagents: [],
+    modelTarget: null,
+    window: 128000,
+  };
+  const hub = createEventHub({ heartbeatMs: 60_000, protocolVersion: PROTOCOL_VERSION });
+  let loads = 0;
+  const topic = attachConversationTopic(hub, {
+    loadConversation: async (id) => {
+      loads += 1;
+      return id === 'c1' ? structuredClone(data) : null;
+    },
+    subscribe: () => () => {},
+    coalesceMs: 5,
+    log() {},
+  });
+  try {
+    const frames = [];
+    const session = hub.connect({
+      topics: ['conversation:c1'],
+      lang: 'zh',
+      send: (frame) => frames.push(frame),
+    });
+    await session.ready;
+    const afterSnap = loads;
+    const t0 = performance.now();
+    for (let i = 0; i < 20; i += 1) topic.notify('c1');
+    await waitUntil(() => loads >= afterSnap + 20, 5000, '20 recomputes');
+    const elapsed = performance.now() - t0;
+    await sleep(20);
+    assert.equal(loads, afterSnap + 20, `loads=${loads} afterSnap=${afterSnap}`);
+    const upserts = frames.filter((frame) => frame.event === 'upsert').length;
+    assert.equal(upserts, 0, `unexpected upserts after snapshot: ${upserts}`);
+    assert.equal(elapsed < 1500, true, `20 recomputes took ${elapsed.toFixed(1)}ms`);
+    session.close();
+  } finally {
+    topic.dispose();
+    hub.dispose();
+  }
+});
+
+
