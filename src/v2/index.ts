@@ -55,6 +55,7 @@ import {
   conversationSummaryView,
   type SidebarLoader,
 } from './views/sidebar.ts';
+import { createGitStatusCache, type GitStatusCache } from './views/git-status.ts';
 import { subagentSnapshot } from './views/subagents.ts';
 
 type ServiceInfo = components['schemas']['ServiceInfo'];
@@ -461,6 +462,7 @@ export function createV2Handler(opts: {
   providers?: ProvidersHttpOpts;
   extensions?: ExtensionsHost;
   onExtensionsChanged?: () => void;
+  gitStatus?: GitStatusCache;
 }): V2Handler {
   const { serviceVersion, startedAt, auth, hub } = opts;
   const pid = opts.pid ?? process.pid;
@@ -538,7 +540,8 @@ export function createV2Handler(opts: {
 
     if (method === 'GET' && pathname === '/api/v2/workspaces') {
       try {
-        const snapshot = await buildWorkspacesSnapshot(sidebarLoader(opts));
+        let snapshot = await buildWorkspacesSnapshot(sidebarLoader(opts));
+        if (opts.gitStatus) snapshot = await opts.gitStatus.overlay(snapshot);
         sendV2(res, pathname, method, 200, snapshot);
       } catch (err) {
         const message = err instanceof Error ? err.message : 'list workspaces failed';
@@ -591,6 +594,40 @@ export function createV2Handler(opts: {
         sendV2(res, pathname, method, 201, summary);
       } catch (err) {
         const message = err instanceof Error ? err.message : 'create failed';
+        sendV2(res, pathname, method, 500, { error: message, code: 'E_INTERNAL' } satisfies V2Error);
+      }
+      return true;
+    }
+
+    const gitRefreshMatch = /^\/api\/v2\/workspaces\/([^/]+)\/git\/refresh$/.exec(pathname);
+    if (method === 'POST' && gitRefreshMatch) {
+      const workspaceId = decodeURIComponent(gitRefreshMatch[1]);
+      let ws: WorkspaceRow | null | undefined = null;
+      try {
+        ws = opts.getWorkspace ? await opts.getWorkspace(workspaceId) : null;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'workspace check failed';
+        sendV2(res, pathname, method, 500, { error: message, code: 'E_INTERNAL' } satisfies V2Error);
+        return true;
+      }
+      const root = workspacePathOf(ws);
+      if (!root) {
+        sendV2(res, pathname, method, 404, { error: 'not found' } satisfies V2Error);
+        return true;
+      }
+      try {
+        if (opts.gitStatus) await opts.gitStatus.refresh(workspaceId, root);
+        let snapshot = await buildWorkspacesSnapshot(sidebarLoader(opts));
+        if (opts.gitStatus) snapshot = await opts.gitStatus.overlay(snapshot);
+        const view = snapshot.workspaces.find((row) => row.id === workspaceId);
+        if (!view) {
+          sendV2(res, pathname, method, 404, { error: 'not found' } satisfies V2Error);
+          return true;
+        }
+        opts.onSidebarChanged?.();
+        sendV2(res, pathname, method, 200, view);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'git refresh failed';
         sendV2(res, pathname, method, 500, { error: message, code: 'E_INTERNAL' } satisfies V2Error);
       }
       return true;
@@ -1245,9 +1282,13 @@ export function createV2Runtime(opts: {
     now: opts.now,
     stuck,
   });
+  const gitStatus = createGitStatusCache();
   const workspacesTopic = attachWorkspacesTopic(hub, {
     loader: sidebarLoader(opts),
     subscribeAll: opts.subscribeAll,
+    gitStatus,
+    getConversation: opts.getConversation,
+    getWorkspace: opts.getWorkspace,
   });
   const providersTopic = attachProvidersTopic(hub, {
     loader: {
@@ -1333,6 +1374,7 @@ export function createV2Runtime(opts: {
     },
     extensions: opts.extensions,
     onExtensionsChanged: () => extensionsTopic.notify(),
+    gitStatus,
   });
 
   return {

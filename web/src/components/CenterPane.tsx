@@ -1,4 +1,5 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { refreshWorkspaceGit } from '../data/api';
 import type { ResolvedModel } from '../data/composerModel';
 import type { Lang } from '../data/lang';
 import { useConversation, useDraftSend } from '../data/useConversation';
@@ -11,15 +12,18 @@ import { SubagentPane } from './SubagentPane';
 import { Thread } from './Thread';
 
 type ConversationView = components['schemas']['ConversationView'];
+type Workspace = components['schemas']['Workspace'];
 
 type Props = {
   cid?: string | null;
   agentId?: string | null;
   workspaceId?: string | null;
+  workspace?: Workspace | null;
   lang: Lang;
   demo?: boolean;
   showOpenLeft?: boolean;
   onOpenLeft?: () => void;
+  onNewWorkspace?: () => void;
 };
 
 const DRAFT_RUN: ConversationView['run'] = {
@@ -50,10 +54,12 @@ export function CenterPane({
   cid,
   agentId,
   workspaceId,
+  workspace = null,
   lang,
   demo = false,
   showOpenLeft = false,
   onOpenLeft,
+  onNewWorkspace,
 }: Props) {
   const isDraft = !cid && Boolean(workspaceId);
   const { conversation, items, toolsById, missing, actions } = useConversation(cid);
@@ -64,6 +70,12 @@ export function CenterPane({
   const draftActions = useDraftSend(workspaceId, modelForCreate);
   const [stickNonce, setStickNonce] = useState(0);
   const bumpStick = useCallback(() => setStickNonce((n) => n + 1), []);
+  const refreshId = workspace?.id || workspaceId || conversation?.workspaceId || null;
+
+  useEffect(() => {
+    if (!refreshId) return;
+    void refreshWorkspaceGit(refreshId).catch(() => {});
+  }, [refreshId, cid]);
 
   if (cid && agentId) {
     return (
@@ -88,6 +100,7 @@ export function CenterPane({
           demo={demo}
           showOpenLeft={showOpenLeft}
           onOpenLeft={onOpenLeft}
+          workspace={workspace}
         />
         <Thread
           items={[]}
@@ -96,6 +109,8 @@ export function CenterPane({
           running={false}
           actions={draftActions}
           stickNonce={stickNonce}
+          isDraft
+          draftWorkspaceName={workspace?.name || null}
         />
         <Composer
           lang={lang}
@@ -107,6 +122,7 @@ export function CenterPane({
           isDraft
           draftModel={draftModel}
           onDraftModel={setDraftModel}
+          onNewWorkspace={onNewWorkspace}
           onSend={draftActions.send}
           onStop={draftActions.stop}
           onSent={bumpStick}
@@ -179,6 +195,7 @@ export function CenterPane({
         hidePending={liveTools}
         showOpenLeft={showOpenLeft}
         onOpenLeft={onOpenLeft}
+        workspace={workspace}
       />
         <Thread
           items={items}
@@ -198,6 +215,7 @@ export function CenterPane({
           workspaceId={conversation.workspaceId || workspaceId}
           model={conversation.model}
           context={conversation.context}
+          onNewWorkspace={onNewWorkspace}
           onSend={actions.send}
           onStop={actions.stop}
           onSent={bumpStick}

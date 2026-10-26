@@ -71,10 +71,10 @@ export interface paths {
          *     心跳每 15 秒一次，不带 id，不进缓冲。
          *
          *     主题 `workspaces` 注册为精确主题。实体：
-         *     - `workspace`：id 为工作区 id，值为 Workspace
+         *     - `workspace`：id 为工作区 id，值为 Workspace（含可选 git 状态）
          *     - `conversation_summary`：id 为对话 id，值为 ConversationSummary
          *
-         *     快照与 GET /api/v2/workspaces 同一套数据拆成上述实体。工作区或对话增删改、运行状态或子 Agent 计数变化时 upsert；实体删除时 remove。
+         *     快照与 GET /api/v2/workspaces 同一套数据拆成上述实体。工作区或对话增删改、运行状态、子 Agent 计数或 git 状态变化时 upsert；实体删除时 remove。值没变不推送。
          *
          *     主题 `providers` 注册为精确主题。实体：
          *     - `provider`：id 为 Provider id，值为 Provider
@@ -425,6 +425,28 @@ export interface paths {
          *     工作区不存在或已移除时 404。成功返回新对话的 ConversationSummary。
          */
         post: operations["createWorkspaceConversation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/workspaces/{id}/git/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 刷新工作区 git 状态
+         * @description 用 git（execFile，无 shell，约 3 秒超时）读取工作区当前分支、未提交改动和相对上游的 ahead/behind。
+         *     不是 git 仓库或未安装 git 时 `git` 为 null，不报错。同一工作区并发刷新合并为一次，避免同时起多个 git 进程。
+         *     值变化时通过 `workspaces` 主题 upsert 该 Workspace。
+         */
+        post: operations["refreshWorkspaceGit"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1382,10 +1404,29 @@ export interface components {
             gitUrl: null | string;
             /** @description Git 导入时的分支。本地工作区或未指定分支为 null */
             branch: null | string;
+            /** @description 工作区当前 git 状态。不是 git 仓库或未安装 git 时为 null */
+            git: null | components["schemas"]["GitStatus"];
             /** @description 该工作区下的对话数 */
             conversationCount: number;
             /** @description 状态为 running 的对话数（recovering、resuming 算 running） */
             runningCount: number;
+        };
+        /** @description 工作区实时 git 状态。 */
+        GitStatus: {
+            /** @description 当前分支名。detached HEAD 时为短 sha */
+            branch: string;
+            /** @description detached HEAD 时为 true */
+            detached: boolean;
+            /** @description 未提交改动的文件数，含未跟踪的文件 */
+            changedFiles: number;
+            /** @description 相对 HEAD 的未提交插入行数（git diff --numstat HEAD；二进制不计） */
+            insertions: number;
+            /** @description 相对 HEAD 的未提交删除行数（git diff --numstat HEAD；二进制不计） */
+            deletions: number;
+            /** @description 领先上游的提交数。没有上游时为 null */
+            ahead: null | number;
+            /** @description 落后上游的提交数。没有上游时为 null */
+            behind: null | number;
         };
         /** @description 子 Agent 总数和正在跑的数量。没有子 Agent 时 ConversationSummary.subagents 为 null。 */
         SubagentCounts: {
@@ -3342,6 +3383,65 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 未授权 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 工作区不存在 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 客户端错误 */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 服务端错误 */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+        };
+    };
+    refreshWorkspaceGit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 工作区 id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 刷新后的工作区（含最新 git） */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Workspace"];
                 };
             };
             /** @description 未授权 */

@@ -329,7 +329,6 @@ export function Sidebar({
             const count = open
               ? ''
               : (runN ? t(lang, 'running_count', { n: runN }) : (group.conversations.length ? String(group.conversations.length) : ''));
-            const showDraft = isActive && Boolean(draftWorkspaceId);
             return (
               <div
                 key={ws.id}
@@ -373,13 +372,6 @@ export function Sidebar({
                   </button>
                 </div>
                 <div className="ws-node-children">
-                  {showDraft ? (
-                    <div className="draft-row is-active" data-testid="next-draft-row">
-                      <span className="draft-dot" />
-                      <span className="conv-node-title">{t(lang, 'new_conversation')}</span>
-                      <span className="conv-node-meta">{t(lang, 'draft_label')}</span>
-                    </div>
-                  ) : null}
                   {group.conversations.map((conv) => {
                     const isCurrent = conv.id === activeConversationId;
                     const meta = conversationMeta(conv, lang, now);
@@ -458,7 +450,7 @@ export function Sidebar({
                       </div>
                     );
                   })}
-                  {!group.conversations.length && !showDraft ? (
+                  {!group.conversations.length ? (
                     <div className="ws-empty-note">{t(lang, 'ws_no_conversations')}</div>
                   ) : null}
                 </div>

@@ -14,7 +14,7 @@ describe('useWorkspaces selectors', () => {
           entity: 'workspace',
           id: 'w1',
           value: {
-            id: 'w1', name: 'alpha', path: '/a', source: 'local', gitUrl: null, branch: null, conversationCount: 2, runningCount: 0,
+            id: 'w1', name: 'alpha', path: '/a', source: 'local', gitUrl: null, branch: null, git: null, conversationCount: 2, runningCount: 0,
           } as EntityRef['value'],
         },
         {
@@ -22,7 +22,7 @@ describe('useWorkspaces selectors', () => {
           entity: 'workspace',
           id: 'w2',
           value: {
-            id: 'w2', name: 'beta', path: '/b', source: 'local', gitUrl: null, branch: null, conversationCount: 1, runningCount: 1,
+            id: 'w2', name: 'beta', path: '/b', source: 'local', gitUrl: null, branch: null, git: null, conversationCount: 1, runningCount: 1,
           } as EntityRef['value'],
         },
         {

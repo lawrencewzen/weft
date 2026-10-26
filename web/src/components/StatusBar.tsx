@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { gitAheadBehind, gitDiffParts } from '../data/gitBar';
 import type { Lang } from '../data/lang';
 import type { components } from '../../../src/v2/contract.gen';
 import { formatElapsed, t } from '../i18n';
@@ -6,6 +7,7 @@ import { DemoModelBadge } from './DemoModelBadge';
 import { RightToggle } from './RightToggle';
 
 type ConversationView = components['schemas']['ConversationView'];
+type Workspace = components['schemas']['Workspace'];
 
 type Props = {
   conversation: ConversationView;
@@ -14,7 +16,17 @@ type Props = {
   hidePending?: boolean;
   showOpenLeft?: boolean;
   onOpenLeft?: () => void;
+  workspace?: Workspace | null;
 };
+
+const BRANCH_ICON = (
+  <svg className="top-git-ico" viewBox="0 0 12 12" width="12" height="12" aria-hidden="true">
+    <circle cx="3.2" cy="3" r="1.5" fill="none" stroke="currentColor" strokeWidth="1.1" />
+    <circle cx="3.2" cy="9" r="1.5" fill="none" stroke="currentColor" strokeWidth="1.1" />
+    <circle cx="8.8" cy="6" r="1.5" fill="none" stroke="currentColor" strokeWidth="1.1" />
+    <path d="M3.2 4.5v3M3.2 6h4" fill="none" stroke="currentColor" strokeWidth="1.1" strokeLinejoin="round" />
+  </svg>
+);
 
 export function StatusBar({
   conversation,
@@ -23,6 +35,7 @@ export function StatusBar({
   hidePending = false,
   showOpenLeft = false,
   onOpenLeft,
+  workspace = null,
 }: Props) {
   const run = conversation.run;
   const running = run.status === 'running';
@@ -49,6 +62,9 @@ export function StatusBar({
       : run.status === 'failed' ? 'status_failed'
         : run.status === 'waiting' ? 'status_waiting'
           : itemCount > 0 ? 'status_done' : 'status_idle';
+  const git = workspace?.git ?? null;
+  const diff = gitDiffParts(git);
+  const ab = gitAheadBehind(git);
 
   return (
     <header className="next-status" data-testid="next-status">
@@ -67,7 +83,29 @@ export function StatusBar({
             </button>
           ) : null}
           {running && !hidePending ? <span className="run-spin" aria-hidden="true"><span /></span> : null}
-          <span className="top-title">{conversation.title}</span>
+          <div className="top-heading">
+            <span className="top-title">{conversation.title}</span>
+            {workspace ? (
+              <span className="top-git" data-testid="next-status-git" title={workspace.path || workspace.name}>
+                <span className="top-git-ws">{workspace.name}</span>
+                {git ? (
+                  <>
+                    <span className="top-git-dot" aria-hidden="true">·</span>
+                    {BRANCH_ICON}
+                    <span className="top-git-branch" data-testid="next-status-git-branch">{git.branch}</span>
+                    {diff ? (
+                      <span className="top-git-diff" data-testid="next-status-git-diff">
+                        <span className="top-git-ins">{diff.ins}</span>
+                        <span className="top-git-del">{diff.del}</span>
+                      </span>
+                    ) : null}
+                    {ab.ahead ? <span className="top-git-ab" data-testid="next-status-git-ahead">{ab.ahead}</span> : null}
+                    {ab.behind ? <span className="top-git-ab" data-testid="next-status-git-behind">{ab.behind}</span> : null}
+                  </>
+                ) : null}
+              </span>
+            ) : null}
+          </div>
           {demo ? <DemoModelBadge lang={lang} testId="next-demo-model-badge" /> : null}
           <span className="status-pill" data-testid="next-run-status" data-status={run.status}>
             {t(lang, statusKey)}

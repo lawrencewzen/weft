@@ -12,6 +12,7 @@ export type Workspace = components['schemas']['Workspace'];
 export type ConversationSummary = components['schemas']['ConversationSummary'];
 export type WorkspacesSnapshot = components['schemas']['WorkspacesSnapshot'];
 export type SubagentCounts = components['schemas']['SubagentCounts'];
+export type GitStatus = components['schemas']['GitStatus'];
 
 export type SidebarConv = {
   id?: unknown;
@@ -84,6 +85,7 @@ export function conversationSummaryView(input: {
 export function workspaceView(input: {
   workspace: SidebarWorkspace;
   conversations: ConversationSummary[];
+  git?: GitStatus | null;
 }): Workspace {
   const conversations = input.conversations;
   return {
@@ -93,6 +95,7 @@ export function workspaceView(input: {
     source: workspaceSource(input.workspace.source),
     gitUrl: input.workspace.gitUrl == null ? null : String(input.workspace.gitUrl),
     branch: input.workspace.branch == null ? null : String(input.workspace.branch),
+    git: input.git === undefined ? null : input.git,
     conversationCount: conversations.length,
     runningCount: conversations.filter((row) => row.status === 'running').length,
   };

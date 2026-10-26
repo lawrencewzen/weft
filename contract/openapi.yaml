@@ -140,10 +140,10 @@ paths:
         心跳每 15 秒一次，不带 id，不进缓冲。
 
         主题 `workspaces` 注册为精确主题。实体：
-        - `workspace`：id 为工作区 id，值为 Workspace
+        - `workspace`：id 为工作区 id，值为 Workspace（含可选 git 状态）
         - `conversation_summary`：id 为对话 id，值为 ConversationSummary
 
-        快照与 GET /api/v2/workspaces 同一套数据拆成上述实体。工作区或对话增删改、运行状态或子 Agent 计数变化时 upsert；实体删除时 remove。
+        快照与 GET /api/v2/workspaces 同一套数据拆成上述实体。工作区或对话增删改、运行状态、子 Agent 计数或 git 状态变化时 upsert；实体删除时 remove。值没变不推送。
 
         主题 `providers` 注册为精确主题。实体：
         - `provider`：id 为 Provider id，值为 Provider
@@ -1306,6 +1306,55 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/V2Error"
+        "401":
+          description: 未授权
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        "404":
+          description: 工作区不存在
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        4XX:
+          description: 客户端错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        5XX:
+          description: 服务端错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+  /api/v2/workspaces/{id}/git/refresh:
+    post:
+      operationId: refreshWorkspaceGit
+      summary: 刷新工作区 git 状态
+      description: |
+        用 git（execFile，无 shell，约 3 秒超时）读取工作区当前分支、未提交改动和相对上游的 ahead/behind。
+        不是 git 仓库或未安装 git 时 `git` 为 null，不报错。同一工作区并发刷新合并为一次，避免同时起多个 git 进程。
+        值变化时通过 `workspaces` 主题 upsert 该 Workspace。
+      security:
+        - bearerAuth: []
+        - sessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: 工作区 id
+      responses:
+        "200":
+          description: 刷新后的工作区（含最新 git）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Workspace"
         "401":
           description: 未授权
           content:
@@ -3903,6 +3952,7 @@ components:
         - source
         - gitUrl
         - branch
+        - git
         - conversationCount
         - runningCount
       properties:
@@ -3927,6 +3977,11 @@ components:
           oneOf:
             - type: "null"
             - type: string
+        git:
+          description: 工作区当前 git 状态。不是 git 仓库或未安装 git 时为 null
+          oneOf:
+            - type: "null"
+            - $ref: "#/components/schemas/GitStatus"
         conversationCount:
           type: integer
           minimum: 0
@@ -3936,6 +3991,49 @@ components:
           minimum: 0
           description: 状态为 running 的对话数（recovering、resuming 算 running）
       description: 侧栏工作区。
+    GitStatus:
+      type: object
+      additionalProperties: false
+      required:
+        - branch
+        - detached
+        - changedFiles
+        - insertions
+        - deletions
+        - ahead
+        - behind
+      properties:
+        branch:
+          type: string
+          description: 当前分支名。detached HEAD 时为短 sha
+        detached:
+          type: boolean
+          description: detached HEAD 时为 true
+        changedFiles:
+          type: integer
+          minimum: 0
+          description: 未提交改动的文件数，含未跟踪的文件
+        insertions:
+          type: integer
+          minimum: 0
+          description: 相对 HEAD 的未提交插入行数（git diff --numstat HEAD；二进制不计）
+        deletions:
+          type: integer
+          minimum: 0
+          description: 相对 HEAD 的未提交删除行数（git diff --numstat HEAD；二进制不计）
+        ahead:
+          description: 领先上游的提交数。没有上游时为 null
+          oneOf:
+            - type: "null"
+            - type: integer
+              minimum: 0
+        behind:
+          description: 落后上游的提交数。没有上游时为 null
+          oneOf:
+            - type: "null"
+            - type: integer
+              minimum: 0
+      description: 工作区实时 git 状态。
     SubagentCounts:
       type: object
       additionalProperties: false

@@ -22,6 +22,8 @@ type Props = {
   stickNonce: number;
   conversationId?: string | null;
   conversationModel?: ConversationModel | null;
+  isDraft?: boolean;
+  draftWorkspaceName?: string | null;
 };
 
 export function Thread({
@@ -33,6 +35,8 @@ export function Thread({
   stickNonce,
   conversationId,
   conversationModel = null,
+  isDraft = false,
+  draftWorkspaceName = null,
 }: Props) {
   const { providers } = useProviders();
   const scroller = useRef<HTMLDivElement>(null);
@@ -58,7 +62,13 @@ export function Thread({
     <div className="center-thread" data-testid="next-thread" ref={scroller} onScroll={onScroll}>
       <div className="thread-inner">
         {items.length === 0 ? (
-          <div className="thread-empty">{t(lang, 'empty_chat_hint')}</div>
+          <div className="thread-empty" data-testid={isDraft ? 'next-draft-hint' : undefined}>
+            {isDraft
+              ? (draftWorkspaceName
+                ? t(lang, 'draft_hint', { name: draftWorkspaceName })
+                : t(lang, 'draft_hint_no_project'))
+              : t(lang, 'empty_chat_hint')}
+          </div>
         ) : items.map((item) => {
             if (item.kind === 'user') return <UserMessage key={item.id} item={item} lang={lang} />;
             if (item.kind === 'assistant') {

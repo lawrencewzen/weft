@@ -14,9 +14,11 @@ import { draftPath, navigate, openSettings } from '../data/nav';
 import { useProviders } from '../data/useProviders';
 import type { components } from '../../../src/v2/contract.gen';
 import { t } from '../i18n';
+import { writeActiveWorkspace } from '../data/layout';
 import { ContextBanner, ContextChip } from './ContextChip';
 import { DemoModelBadge } from './DemoModelBadge';
 import { ModelChip } from './ModelChip';
+import { WorkspaceChip } from './WorkspaceChip';
 import { createSendRequest, errorMessage } from './sendRequest';
 
 type RunState = components['schemas']['RunState'];
@@ -33,6 +35,7 @@ type Props = {
   draftModel?: ResolvedModel | null;
   onDraftModel?: (model: ResolvedModel) => void;
   showModelControls?: boolean;
+  onNewWorkspace?: () => void;
   onSend: (text: string, requestId: string) => Promise<unknown>;
   onStop: () => Promise<unknown>;
   onSent?: () => void;
@@ -63,6 +66,7 @@ export function Composer({
   draftModel = null,
   onDraftModel,
   showModelControls = true,
+  onNewWorkspace,
   onSend,
   onStop,
   onSent,
@@ -83,7 +87,8 @@ export function Composer({
     isDraft,
   }), [providers, model, defaultModel, draftModel, isDraft]);
   const noModel = showModelControls && !demo && providersReady && !available;
-  const locked = !run.canSend || noModel;
+  const noWorkspace = isDraft && !workspaceId;
+  const locked = !run.canSend || noModel || noWorkspace;
   const hasText = Boolean(draft.trim()) && !locked;
   const stopMode = run.canStop && !draft.trim();
   const placeholder = noModel
@@ -204,10 +209,22 @@ export function Composer({
                     onManage={openManage}
                   />
                 ) : null}
+                <WorkspaceChip
+                  lang={lang}
+                  selectedId={workspaceId}
+                  canSwitch={isDraft}
+                  onPick={(id) => {
+                    writeActiveWorkspace(id);
+                    navigate(draftPath(id), { replace: true });
+                  }}
+                  onNew={() => onNewWorkspace?.()}
+                />
                 {demo ? <DemoModelBadge lang={lang} testId="next-demo-model-chip" /> : null}
               </div>
             )}
-            {locked && !noModel && run.lockedReason === 'no_workspace' ? (
+            {noWorkspace ? (
+              <span className="composer-lock" data-testid="next-composer-need-ws">{t(lang, 'composer_need_workspace')}</span>
+            ) : locked && !noModel && run.lockedReason === 'no_workspace' ? (
               <span className="composer-lock">{t(lang, 'locked_no_workspace')}</span>
             ) : null}
             {error ? (
@@ -245,7 +262,7 @@ export function Composer({
                   type="button"
                   className={`btn-send${hasText ? ' is-ready' : ''}`}
                   data-testid="next-send"
-                  title={t(lang, 'send_title')}
+                  title={noWorkspace ? t(lang, 'composer_need_workspace') : t(lang, 'send_title')}
                   aria-label={t(lang, 'btn_send')}
                   disabled={locked || busy || !hasText}
                   onClick={() => { void submit(); }}

@@ -131,7 +131,8 @@ test('new-conversation draft posts on first send then jumps to the new chat', as
     await waitSidebar(page);
     await wsNode(page, 'draft').getByTestId('next-ws-add').click();
     await expect(page).toHaveURL(new RegExp(`/w/${ws.id}/new$`));
-    await expect(page.getByTestId('next-draft-row')).toBeVisible();
+    await expect(page.getByTestId('next-draft-row')).toHaveCount(0);
+    await expect(page.locator('.conv-tree-node.conv-active')).toHaveCount(0);
     await expect(page.getByTestId('next-composer-input')).toBeVisible();
     await page.getByTestId('next-composer-input').fill('写个 README');
     await page.getByTestId('next-send').click();

@@ -372,10 +372,12 @@ function AppShellLayout({
           cid={activeConversationId}
           agentId={activeAgentId}
           workspaceId={draftWorkspaceId}
+          workspace={workspace || null}
           lang={lang}
           demo={demo}
           showOpenLeft={!leftOpen}
           onOpenLeft={() => setOpen(true)}
+          onNewWorkspace={() => setWsDialog(true)}
         />
       )}
       <div

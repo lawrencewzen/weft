@@ -24,6 +24,7 @@ function ws(id: string, name = id): Workspace {
     source: 'local',
     gitUrl: null,
     branch: null,
+    git: null,
     conversationCount: 0,
     runningCount: 0,
   };
