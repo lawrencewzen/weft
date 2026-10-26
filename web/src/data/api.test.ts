@@ -4,8 +4,11 @@ import {
   ConflictError,
   continueRun,
   createConversation,
+  createGitConnection,
   createProvider,
+  createWorkspace,
   patchConversationModel,
+  patchGitConnection,
   putModelContextWindow,
   getConversationDiff,
   patchProvider,
@@ -278,5 +281,34 @@ describe('api client', () => {
     );
     expect(JSON.parse(String(fetchMock.mock.calls[2][1].body))).toEqual({ window: 256000 });
     expect(JSON.parse(String(fetchMock.mock.calls[3][1].body))).toEqual({ window: null });
+  });
+
+  it('creates a workspace and a git connection through v2 endpoints', async () => {
+    const ws = {
+      id: 'w1', name: 'widget', path: '/tmp/widget', source: 'git', gitUrl: 'https://gitlab.example/acme/widget.git',
+      branch: 'main', conversationCount: 0, runningCount: 0,
+    };
+    const conn = {
+      id: 'g1', name: 'Corp', kind: 'gitlab-self', baseUrl: 'http://127.0.0.1:1',
+      token: '••••9k3q', hasToken: true, allowHttp: true, caFile: '', lastTest: null,
+    };
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse(201, ws))
+      .mockResolvedValueOnce(jsonResponse(201, conn))
+      .mockResolvedValueOnce(jsonResponse(200, { ...conn, name: 'Home' }));
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(createWorkspace({
+      name: 'widget', source: 'git', connectionId: 'g1', projectId: 7, branch: 'main',
+    }, 'zh')).resolves.toMatchObject({ id: 'w1' });
+    await expect(createGitConnection({
+      kind: 'gitlab-self', name: 'Corp', baseUrl: 'http://127.0.0.1:1', token: 'glpat-secret', allowHttp: true,
+    }, 'zh')).resolves.toMatchObject({ token: '••••9k3q' });
+    await expect(patchGitConnection('g1', { name: 'Home' }, 'zh')).resolves.toMatchObject({ name: 'Home' });
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/v2/workspaces?lang=zh');
+    expect(JSON.parse(String(fetchMock.mock.calls[0][1].body))).toEqual({
+      name: 'widget', source: 'git', connectionId: 'g1', projectId: 7, branch: 'main',
+    });
+    expect(JSON.parse(String(fetchMock.mock.calls[1][1].body)).token).toBe('glpat-secret');
+    expect(JSON.parse(String(fetchMock.mock.calls[2][1].body))).toEqual({ name: 'Home' });
   });
 });

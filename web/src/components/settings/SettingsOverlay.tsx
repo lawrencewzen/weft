@@ -2,11 +2,15 @@ import { useEffect } from 'react';
 import type { Lang } from '../../data/lang';
 import { closeSettings, navigate, settingsPath } from '../../data/nav';
 import { SETTINGS_PAGES, type SettingsPage } from '../../data/providerWizard';
+import { useExtensions } from '../../data/useExtensions';
 import { t, type I18nKey } from '../../i18n';
 import type { ConfirmOpts } from '../ConfirmDialog';
 import { AboutPage, type AboutService } from './AboutPage';
 import { GeneralPage } from './GeneralPage';
+import { GitPage } from './GitPage';
+import { PluginsPage } from './PluginsPage';
 import { ProviderPage } from './ProviderPage';
+import { SkillsPage } from './SkillsPage';
 
 const NAV: { id: SettingsPage; key: I18nKey }[] = [
   { id: 'general', key: 'settings_nav_general' },
@@ -26,6 +30,7 @@ type Props = {
 };
 
 export function SettingsOverlay({ page, lang, service, onToast, onConfirm }: Props) {
+  useExtensions();
   useEffect(() => {
     const onKey = (ev: KeyboardEvent) => {
       if (ev.key === 'Escape') {
@@ -77,6 +82,12 @@ export function SettingsOverlay({ page, lang, service, onToast, onConfirm }: Pro
             <GeneralPage lang={lang} />
           ) : current === 'about' ? (
             <AboutPage lang={lang} service={service} />
+          ) : current === 'git' ? (
+            <GitPage lang={lang} onToast={onToast} onConfirm={onConfirm} />
+          ) : current === 'plugins' ? (
+            <PluginsPage lang={lang} onToast={onToast} />
+          ) : current === 'skills' ? (
+            <SkillsPage lang={lang} onToast={onToast} onConfirm={onConfirm} />
           ) : (
             <div className="next-settings-content">
               <div className="next-settings-head">

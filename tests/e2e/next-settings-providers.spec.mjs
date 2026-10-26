@@ -104,7 +104,8 @@ test('settings overlay opens from the sidebar, Esc returns, and other tabs are p
   await expect(page.getByTestId('next-pref-lang')).toBeVisible();
   await page.getByTestId('next-settings-nav-git').click();
   await expect(page).toHaveURL(/\/next\/settings\/git/);
-  await expect(page.getByText('即将迁移')).toBeVisible();
+  await expect(page.getByTestId('next-settings-git')).toBeVisible();
+  await expect(page.getByTestId('next-git-add')).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(page.getByTestId('next-settings')).toHaveCount(0);
   await expect(page).toHaveURL(/\/next\//);

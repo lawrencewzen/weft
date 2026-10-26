@@ -16,6 +16,9 @@ export type Provider = components['schemas']['Provider'];
 export type ProviderDefaults = components['schemas']['ProviderDefaults'];
 export type ResolvedModel = components['schemas']['ResolvedModel'];
 export type Vendor = components['schemas']['Vendor'];
+export type Plugin = components['schemas']['Plugin'];
+export type Skill = components['schemas']['Skill'];
+export type GitConnection = components['schemas']['GitConnection'];
 
 type StoredEntity = {
   topic: string;
@@ -54,11 +57,14 @@ export function subagentTopic(cid: string, agentId: string): string {
 
 export const WORKSPACES_TOPIC = 'workspaces';
 export const PROVIDERS_TOPIC = 'providers';
+export const EXTENSIONS_TOPIC = 'extensions';
 export const PROVIDERS_DEFAULTS_ID = 'self';
 
 export type SessionTopicOpts = {
   conversationId?: string | null;
   extraConversationIds?: readonly string[];
+  /** Topics such as `extensions`, retained only while a surface needs them. */
+  extraTopics?: readonly string[];
   subagent?: { conversationId: string; agentId: string } | null;
 };
 
@@ -70,6 +76,10 @@ export function sessionTopics(
     ? cidOrOpts
     : { conversationId: cidOrOpts, ...extra };
   const topics = [WORKSPACES_TOPIC, PROVIDERS_TOPIC];
+  const extraTopics = [...new Set((opts.extraTopics || []).filter((topic) => (
+    topic && topic !== WORKSPACES_TOPIC && topic !== PROVIDERS_TOPIC
+  )))].sort((a, b) => a.localeCompare(b));
+  for (const topic of extraTopics) topics.push(topic);
   const current = opts.conversationId || '';
   const extraIds = [...new Set((opts.extraConversationIds || []).filter((id) => id && id !== current))]
     .sort((a, b) => a.localeCompare(b));
@@ -97,6 +107,12 @@ export type EntityStore = {
   providers(): Provider[];
   provider(id: string): Provider | undefined;
   defaultModel(): ResolvedModel | null;
+  plugins(): Plugin[];
+  plugin(id: string): Plugin | undefined;
+  skills(): Skill[];
+  skill(id: string): Skill | undefined;
+  gitConnections(): GitConnection[];
+  gitConnection(id: string): GitConnection | undefined;
   subagents(cid: string): Subagent[];
   subagent(cid: string, agentId: string): Subagent | undefined;
   topicItems(topic: string): ThreadItem[];
@@ -317,6 +333,54 @@ export function createEntityStore(): EntityStore {
       const rec = get(PROVIDERS_TOPIC, 'defaults', PROVIDERS_DEFAULTS_ID);
       const value = rec?.value as ProviderDefaults | undefined;
       return value?.model ?? null;
+    },
+
+    plugins() {
+      const out: Plugin[] = [];
+      for (const rec of entities.values()) {
+        if (rec.topic === EXTENSIONS_TOPIC && rec.entity === 'plugin') {
+          out.push(rec.value as unknown as Plugin);
+        }
+      }
+      return out.sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
+    },
+
+    plugin(id) {
+      const rec = get(EXTENSIONS_TOPIC, 'plugin', id)
+        ?? byEntityId.get(entityIdKey('plugin', id));
+      return rec?.value as Plugin | undefined;
+    },
+
+    skills() {
+      const out: Skill[] = [];
+      for (const rec of entities.values()) {
+        if (rec.topic === EXTENSIONS_TOPIC && rec.entity === 'skill') {
+          out.push(rec.value as unknown as Skill);
+        }
+      }
+      return out.sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
+    },
+
+    skill(id) {
+      const rec = get(EXTENSIONS_TOPIC, 'skill', id)
+        ?? byEntityId.get(entityIdKey('skill', id));
+      return rec?.value as Skill | undefined;
+    },
+
+    gitConnections() {
+      const out: GitConnection[] = [];
+      for (const rec of entities.values()) {
+        if (rec.topic === EXTENSIONS_TOPIC && rec.entity === 'git_connection') {
+          out.push(rec.value as unknown as GitConnection);
+        }
+      }
+      return out;
+    },
+
+    gitConnection(id) {
+      const rec = get(EXTENSIONS_TOPIC, 'git_connection', id)
+        ?? byEntityId.get(entityIdKey('git_connection', id));
+      return rec?.value as GitConnection | undefined;
     },
 
     subagents(cid) {
