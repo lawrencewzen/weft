@@ -24,8 +24,8 @@ export const SETTINGS_VERSION = 2;
 
 const SOURCE_ID = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,31}$/;
 const BLOCKED_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
-const CONTEXT_WINDOW_MIN = 1000;
-const CONTEXT_WINDOW_MAX = 10_000_000;
+export const CONTEXT_WINDOW_MIN = 1000;
+export const CONTEXT_WINDOW_MAX = 10_000_000;
 
 export function createSourceId() {
   return randomBytes(4).toString('hex');
@@ -730,6 +730,11 @@ function modelIdsFrom(json) {
   return ids;
 }
 
+/**
+ * Probe OpenAI-compatible `/models`. The API key is only sent as Bearer and never logged.
+ * @param {{ baseUrl?: string, apiKey?: string, fetchImpl?: typeof fetch, timeoutMs?: number }} [opts]
+ * @returns {Promise<{ ok?: boolean, models?: string[], error?: string, code?: string, status?: number }>}
+ */
 export async function probeModels({ baseUrl, apiKey = '', fetchImpl = globalThis.fetch, timeoutMs = 10_000 } = {}) {
   const root = normalizeHttpUrl(baseUrl);
   if (!root) return { ok: false, error: 'base url required' };
