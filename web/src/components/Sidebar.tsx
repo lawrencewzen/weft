@@ -46,6 +46,7 @@ type MenuState = {
 
 type Props = {
   lang: Lang;
+  collapsed?: boolean;
   activeConversationId: string | null;
   activeAgentId: string | null;
   draftWorkspaceId: string | null;
@@ -73,6 +74,7 @@ function useNow(ms: number): number {
 
 export function Sidebar({
   lang,
+  collapsed = false,
   activeConversationId,
   activeAgentId,
   draftWorkspaceId,
@@ -284,7 +286,13 @@ export function Sidebar({
   const newChatTarget = activeWorkspaceId || groups[0]?.workspace.id || null;
 
   return (
-    <aside className="col-left" data-testid="next-sidebar">
+    <aside
+      className="col-left"
+      data-testid="next-sidebar"
+      inert={collapsed || undefined}
+      aria-hidden={collapsed || undefined}
+    >
+      <div className="col-panel-inner">
       <div className="left-top">
         <button
           type="button"
@@ -469,6 +477,7 @@ export function Sidebar({
         >
           {t(lang, 'settings_short')}
         </button>
+      </div>
       </div>
       {menu ? (
         <CtxMenu

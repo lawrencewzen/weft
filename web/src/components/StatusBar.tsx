@@ -4,7 +4,7 @@ import type { Lang } from '../data/lang';
 import type { components } from '../../../src/v2/contract.gen';
 import { formatElapsed, t } from '../i18n';
 import { DemoModelBadge } from './DemoModelBadge';
-import { RightToggle } from './RightToggle';
+import { LeftOpenButton, RightToggle } from './RightToggle';
 
 type ConversationView = components['schemas']['ConversationView'];
 type Workspace = components['schemas']['Workspace'];
@@ -14,7 +14,6 @@ type Props = {
   lang: Lang;
   demo?: boolean;
   hidePending?: boolean;
-  showOpenLeft?: boolean;
   onOpenLeft?: () => void;
   workspace?: Workspace | null;
 };
@@ -33,7 +32,6 @@ export function StatusBar({
   lang,
   demo = false,
   hidePending = false,
-  showOpenLeft = false,
   onOpenLeft,
   workspace = null,
 }: Props) {
@@ -70,18 +68,7 @@ export function StatusBar({
     <header className="next-status" data-testid="next-status">
       <div className="next-status-inner">
         <div className="pending-line">
-          {showOpenLeft ? (
-            <button
-              type="button"
-              className="icon-btn top-left-open"
-              data-testid="next-left-open"
-              title={t(lang, 'expand_sidebar')}
-              aria-label={t(lang, 'expand_sidebar')}
-              onClick={onOpenLeft}
-            >
-              <span className="ico-panel ico-panel-left" aria-hidden="true" />
-            </button>
-          ) : null}
+          <LeftOpenButton lang={lang} onOpen={onOpenLeft} />
           {running && !hidePending ? <span className="run-spin" aria-hidden="true"><span /></span> : null}
           <div className="top-heading">
             <span className="top-title">{conversation.title}</span>

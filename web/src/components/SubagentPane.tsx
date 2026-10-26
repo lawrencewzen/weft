@@ -6,7 +6,7 @@ import { useSubagent } from '../data/useSubagent';
 import { t } from '../i18n';
 import { Composer } from './Composer';
 import { DemoModelBadge } from './DemoModelBadge';
-import { RightToggle } from './RightToggle';
+import { LeftOpenButton, RightToggle } from './RightToggle';
 import { Thread } from './Thread';
 
 type Props = {
@@ -14,7 +14,6 @@ type Props = {
   agentId: string;
   lang: Lang;
   demo?: boolean;
-  showOpenLeft?: boolean;
   onOpenLeft?: () => void;
 };
 
@@ -23,7 +22,6 @@ export function SubagentPane({
   agentId,
   lang,
   demo = false,
-  showOpenLeft = false,
   onOpenLeft,
 }: Props) {
   const [now, setNow] = useState(() => Date.now());
@@ -44,17 +42,7 @@ export function SubagentPane({
       <main className="col-center" data-testid="next-subagent-view">
         <header className="next-status">
           <div className="next-status-inner">
-            {showOpenLeft ? (
-              <button
-                type="button"
-                className="icon-btn top-left-open"
-                data-testid="next-left-open"
-                title={t(lang, 'expand_sidebar')}
-                onClick={onOpenLeft}
-              >
-                <span className="ico-panel ico-panel-left" aria-hidden="true" />
-              </button>
-            ) : null}
+            <LeftOpenButton lang={lang} onOpen={onOpenLeft} />
             <h1 className="top-title">{t(lang, 'home_title')}</h1>
             <div className="top-right"><RightToggle lang={lang} /></div>
           </div>
@@ -71,17 +59,7 @@ export function SubagentPane({
       <main className="col-center" data-testid="next-subagent-view">
         <header className="next-status">
           <div className="next-status-inner">
-            {showOpenLeft ? (
-              <button
-                type="button"
-                className="icon-btn top-left-open"
-                data-testid="next-left-open"
-                title={t(lang, 'expand_sidebar')}
-                onClick={onOpenLeft}
-              >
-                <span className="ico-panel ico-panel-left" aria-hidden="true" />
-              </button>
-            ) : null}
+            <LeftOpenButton lang={lang} onOpen={onOpenLeft} />
             <p>{t(lang, 'loading')}</p>
             <div className="top-right"><RightToggle lang={lang} /></div>
           </div>
@@ -114,18 +92,7 @@ export function SubagentPane({
       <header className="next-status" data-testid="next-status">
         <div className="next-status-inner">
           <div className="pending-line">
-            {showOpenLeft ? (
-              <button
-                type="button"
-                className="icon-btn top-left-open"
-                data-testid="next-left-open"
-                title={t(lang, 'expand_sidebar')}
-                aria-label={t(lang, 'expand_sidebar')}
-                onClick={onOpenLeft}
-              >
-                <span className="ico-panel ico-panel-left" aria-hidden="true" />
-              </button>
-            ) : null}
+            <LeftOpenButton lang={lang} onOpen={onOpenLeft} />
             <button
               type="button"
               className="subagent-back"

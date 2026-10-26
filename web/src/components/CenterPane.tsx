@@ -6,7 +6,7 @@ import { useConversation, useDraftSend } from '../data/useConversation';
 import { t } from '../i18n';
 import type { components } from '../../../src/v2/contract.gen';
 import { Composer } from './Composer';
-import { RightToggle } from './RightToggle';
+import { LeftOpenButton, RightToggle } from './RightToggle';
 import { StatusBar } from './StatusBar';
 import { SubagentPane } from './SubagentPane';
 import { Thread } from './Thread';
@@ -21,7 +21,6 @@ type Props = {
   workspace?: Workspace | null;
   lang: Lang;
   demo?: boolean;
-  showOpenLeft?: boolean;
   onOpenLeft?: () => void;
   onNewWorkspace?: () => void;
 };
@@ -57,7 +56,6 @@ export function CenterPane({
   workspace = null,
   lang,
   demo = false,
-  showOpenLeft = false,
   onOpenLeft,
   onNewWorkspace,
 }: Props) {
@@ -84,7 +82,6 @@ export function CenterPane({
         agentId={agentId}
         lang={lang}
         demo={demo}
-        showOpenLeft={showOpenLeft}
         onOpenLeft={onOpenLeft}
       />
     );
@@ -98,7 +95,6 @@ export function CenterPane({
           conversation={draft}
           lang={lang}
           demo={demo}
-          showOpenLeft={showOpenLeft}
           onOpenLeft={onOpenLeft}
           workspace={workspace}
         />
@@ -136,17 +132,7 @@ export function CenterPane({
       <main className="col-center" data-testid="next-center">
         <header className="next-status">
           <div className="next-status-inner">
-            {showOpenLeft ? (
-              <button
-                type="button"
-                className="icon-btn top-left-open"
-                data-testid="next-left-open"
-                title={t(lang, 'expand_sidebar')}
-                onClick={onOpenLeft}
-              >
-                <span className="ico-panel ico-panel-left" aria-hidden="true" />
-              </button>
-            ) : null}
+            <LeftOpenButton lang={lang} onOpen={onOpenLeft} />
             <h1 className="top-title">{t(lang, 'home_title')}</h1>
             <div className="top-right"><RightToggle lang={lang} /></div>
           </div>
@@ -163,17 +149,7 @@ export function CenterPane({
       <main className="col-center" data-testid="next-center">
         <header className="next-status">
           <div className="next-status-inner">
-            {showOpenLeft ? (
-              <button
-                type="button"
-                className="icon-btn top-left-open"
-                data-testid="next-left-open"
-                title={t(lang, 'expand_sidebar')}
-                onClick={onOpenLeft}
-              >
-                <span className="ico-panel ico-panel-left" aria-hidden="true" />
-              </button>
-            ) : null}
+            <LeftOpenButton lang={lang} onOpen={onOpenLeft} />
             <p>{t(lang, 'loading')}</p>
             <div className="top-right"><RightToggle lang={lang} /></div>
           </div>
@@ -193,7 +169,6 @@ export function CenterPane({
         lang={lang}
         demo={demo}
         hidePending={liveTools}
-        showOpenLeft={showOpenLeft}
         onOpenLeft={onOpenLeft}
         workspace={workspace}
       />
