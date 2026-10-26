@@ -36,6 +36,7 @@ export type CreateWorkspaceRequest = components['schemas']['CreateWorkspaceReque
 export type Workspace = components['schemas']['Workspace'];
 export type WorkspaceRoot = components['schemas']['WorkspaceRoot'];
 export type WorkspaceDirs = components['schemas']['WorkspaceDirs'];
+export type WorkspaceDirEntry = components['schemas']['WorkspaceDirEntry'];
 export type Plugin = components['schemas']['Plugin'];
 export type PluginList = components['schemas']['PluginList'];
 export type InstallPluginRequest = components['schemas']['InstallPluginRequest'];
@@ -47,7 +48,9 @@ export type GitConnection = components['schemas']['GitConnection'];
 export type GitConnectionList = components['schemas']['GitConnectionList'];
 export type GitConnectionWrite = components['schemas']['GitConnectionWrite'];
 export type GitTestResult = components['schemas']['GitTestResult'];
+export type GitProject = components['schemas']['GitProject'];
 export type GitProjectList = components['schemas']['GitProjectList'];
+export type GitBranch = components['schemas']['GitBranch'];
 export type GitBranchList = components['schemas']['GitBranchList'];
 export type OkId = components['schemas']['OkId'];
 
