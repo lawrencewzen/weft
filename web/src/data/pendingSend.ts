@@ -24,8 +24,8 @@ export type SettleOptions = {
 };
 
 /**
- * Last resort: a resolved send whose entry never shows up (and whose submission is
- * still reported as running) must not sit on screen forever.
+ * Last resort for a send the server does not report at all: once the POST resolved, stop
+ * waiting after this long. A send the server still lists as queued is never dropped by it.
  */
 export const PENDING_TIMEOUT_MS = 10_000;
 
@@ -63,13 +63,20 @@ function caughtUpByText(pending: readonly PendingUser[], items: readonly ThreadI
 }
 
 /**
- * Did the server thread catch up with this send?
+ * Did the server thread catch up with this send? In this order:
  *
- * 1. By requestId: the server reports, for each send, the entry it wrote. The entry may
- *    render as a user bubble, a subagent-report card or a system note, so we settle on the
- *    entry id and never look at the text.
- * 2. By text: fallback for a send the server no longer reports (older than its window).
- * 3. After PENDING_TIMEOUT_MS once the POST resolved.
+ * 1. The server reports this requestId with an entry (`sends`): settle as soon as that entry
+ *    is on screen. The entry may render as a user bubble, a subagent-report card or a system
+ *    note, so we match the id and never the text.
+ * 2. The server reports it as still queued (`entryId: null`, `dropped: false`): keep showing
+ *    it, however long the queue takes. A steer sent during a long tool call waits in Pi
+ *    Durable's inbox until the batch ends; dropping it on a timer would make the message
+ *    vanish and come back later.
+ * 3. The server reports it as dropped (`dropped: true`): the input was withdrawn or failed
+ *    before it landed, so nothing will appear.
+ * 4. The server does not report this requestId at all (service restarted, or the send aged
+ *    out of the window it keeps): fall back to the text rule, and to `PENDING_TIMEOUT_MS`
+ *    after the POST resolved, because nothing else can tell us it landed.
  */
 export function settlePending(
   pending: readonly PendingUser[],
@@ -85,13 +92,9 @@ export function settlePending(
   return pending.filter((entry) => {
     const send = byRequest.get(entry.key);
     if (send) {
-      // The server already told us which entry this send became.
-      if (send.entryId) {
-        if (ids.has(send.entryId)) return false;
-      } else if (send.dropped) {
-        // Withdrawn while still queued: no entry will ever appear.
-        return false;
-      }
+      if (send.entryId) return !ids.has(send.entryId);
+      // Queued: keep waiting; withdrawn: nothing will appear.
+      return !send.dropped;
     }
     if (byText.has(entry.key)) return false;
     return !(entry.doneAt != null && now - entry.doneAt >= timeoutMs);

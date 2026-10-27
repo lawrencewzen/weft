@@ -58,7 +58,7 @@ describe('settlePending by requestId', () => {
   it('collects a send the server rendered as a subagent-report card', () => {
     const entry = `[subagent 巡查 answered, no reply needed] 仓库干净`;
     const card: PendingUser = { key: 'r9', text: entry, baseline: 0, doneAt: 1000 };
-    const sends = [{ requestId: 'r9', entryId: '40', dropped: true }];
+    const sends = [{ requestId: 'r9', entryId: '40', dropped: false }];
     const items = [user('1', '请派子代理'), report('40', '巡查', '仓库干净')];
     expect(settlePending([card], items, { sends, now: 1000 })).toEqual([]);
   });
@@ -68,16 +68,31 @@ describe('settlePending by requestId', () => {
     const first: PendingUser = { key: 'a', text: '[subagent 巡查 answered] 一', baseline: 0, doneAt: 1000 };
     const second: PendingUser = { key: 'b', text: '[subagent 编码 failed: x]', baseline: 0, doneAt: 1000 };
     const sends = [
-      { requestId: 'a', entryId: '13', dropped: true },
+      { requestId: 'a', entryId: '13', dropped: false },
       { requestId: 'b', entryId: '17', dropped: false },
     ];
     const items = [user('8', '请派子代理'), report('13', '巡查', '一')];
     expect(settlePending([first, second], items, { sends, now: 1000 })).toEqual([second]);
   });
 
-  it('waits while the input is still queued, and drops it once it settled without an entry', () => {
+  it('keeps a queued send on screen however long the queue takes', () => {
+    // 运行中插话要等工具批次结束才落盘：期间服务端报 entryId null / dropped false。
     const queued = [{ requestId: 'r1', entryId: null, dropped: false }];
     expect(settlePending([sent], [assistant('2', '好的')], { sends: queued, now: 1000 })).toEqual([sent]);
+    expect(settlePending([sent], [assistant('2', '还在跑')], { sends: queued, now: 1000 + PENDING_TIMEOUT_MS - 1 })).toEqual([sent]);
+    // 超过 10 秒上限也不收回。
+    expect(settlePending([sent], [assistant('2', '还在跑')], { sends: queued, now: 1000 + PENDING_TIMEOUT_MS * 6 })).toEqual([sent]);
+  });
+
+  it('collects a queued send once it lands in the thread', () => {
+    const queued = [{ requestId: 'r1', entryId: null, dropped: false }];
+    const items = [assistant('2', '跑完了'), user('3', '改一下圆角')];
+    expect(settlePending([sent], items, { sends: queued, now: 1000 })).toEqual([sent]);
+    const placed = [{ requestId: 'r1', entryId: '3', dropped: false }];
+    expect(settlePending([sent], items, { sends: placed, now: 1000 })).toEqual([]);
+  });
+
+  it('drops a send the server reports as withdrawn before it landed', () => {
     const withdrawn = [{ requestId: 'r1', entryId: null, dropped: true }];
     expect(settlePending([sent], [assistant('2', '跑完了')], { sends: withdrawn, now: 1000 })).toEqual([]);
   });
@@ -120,9 +135,13 @@ describe('settlePending by text and timeout', () => {
     expect(settlePending([b], [...afterFirst, user('53', '继续')], { sends: sendsB, now: 1000 })).toEqual([]);
   });
 
-  it('drops a resolved send after the cap even if nothing ever shows up', () => {
-    expect(settlePending([sent], [], { now: 1000 + PENDING_TIMEOUT_MS - 1 })).toEqual([sent]);
-    expect(settlePending([sent], [], { now: 1000 + PENDING_TIMEOUT_MS })).toEqual([]);
+  it('drops a resolved send after the cap when the server does not report it at all', () => {
+    // 服务重启、或超出 sends 的 20 条 / 5 分钟窗口：没有 requestId 可对，只能靠文本和上限。
+    expect(settlePending([sent], [], { sends: [], now: 1000 + PENDING_TIMEOUT_MS - 1 })).toEqual([sent]);
+    expect(settlePending([sent], [], { sends: [], now: 1000 + PENDING_TIMEOUT_MS })).toEqual([]);
+    const other = [{ requestId: 'someone-else', entryId: null, dropped: false }];
+    expect(settlePending([sent], [], { sends: other, now: 1000 + PENDING_TIMEOUT_MS - 1 })).toEqual([sent]);
+    expect(settlePending([sent], [], { sends: other, now: 1000 + PENDING_TIMEOUT_MS })).toEqual([]);
   });
 
   it('never drops a send whose POST has not resolved yet', () => {

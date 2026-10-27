@@ -37,17 +37,22 @@ export function usePendingSend(items: readonly ThreadItem[], send: Send, sends?:
     if (shown.length !== pending.length) setPending(shown);
   }, [shown, pending]);
 
-  // Last resort for a send whose entry never arrives: drop it once the cap passes.
+  // Last resort for a send the server does not report at all; a queued one is kept.
   useEffect(() => {
     const waits = pending
       .filter((entry) => entry.doneAt != null)
       .map((entry) => Math.max(0, entry.doneAt! + PENDING_TIMEOUT_MS - Date.now()));
     if (!waits.length) return;
     const timer = setTimeout(() => {
-      setPending((prev) => settlePending(prev, itemsRef.current, {
-        sends: sendsRef.current,
-        now: Date.now(),
-      }));
+      setPending((prev) => {
+        const next = settlePending(prev, itemsRef.current, {
+          sends: sendsRef.current,
+          now: Date.now(),
+        });
+        // Same list (nothing settled, e.g. still queued): keep the state object so the
+        // effect does not schedule another timer for a deadline that already passed.
+        return next.length === prev.length ? prev : next;
+      });
     }, Math.min(...waits) + 10);
     return () => clearTimeout(timer);
   }, [pending]);
