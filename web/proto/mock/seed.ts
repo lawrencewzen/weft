@@ -439,7 +439,7 @@ function docsConversation(now: number): MockConv {
     workspaceId: 'ws-weft',
     title: '把架构文档的图补上',
     updatedAt: now - 3 * HOUR,
-    used: 6_400,
+    used: 172_000,
     model: { sourceId: 'demo', modelId: 'grok-code-fast', label: 'Grok Code Fast' },
     items: [
       user('docs-u1', 'docs/ARCHITECTURE_V2.md 里还缺一张主题和事件的关系图。'),

@@ -8,6 +8,12 @@ import {
 import { formatTokenCount, t } from '../i18n';
 import { BrandIcon } from './BrandIcon';
 
+const CHECK_ICON = (
+  <svg className="model-menu-check" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true">
+    <path d="M5 12l5 5L20 7" />
+  </svg>
+);
+
 type Props = {
   lang: Lang;
   selected: ComposerModelOption | null;
@@ -51,14 +57,14 @@ export function ModelChip({ lang, selected, groups, onPick, onManage }: Props) {
       >
         <BrandIcon brand={selected?.brand} size={13} />
         <span className="model-chip-name">{label}</span>
-        <span className="model-chip-caret" aria-hidden="true">▾</span>
+        <span className="model-chip-caret" aria-hidden="true">{open ? '▴' : '▾'}</span>
       </button>
       {open ? (
         <div className="model-menu" data-testid="next-model-menu" role="listbox">
           {groups.map((group) => (
             <div key={group.providerId} className="model-menu-group">
               <div className="model-menu-label">
-                {group.mixedBrands ? <BrandIcon brand={group.providerBrand} size={12} /> : null}
+                {group.mixedBrands ? <BrandIcon brand={group.providerBrand} size={11} /> : null}
                 <span>{group.providerName}</span>
               </div>
               {group.models.map((option) => {
@@ -78,7 +84,7 @@ export function ModelChip({ lang, selected, groups, onPick, onManage }: Props) {
                       onPick(option);
                     }}
                   >
-                    <BrandIcon brand={option.brand} size={16} />
+                    <BrandIcon brand={option.brand} size={14} />
                     <span className="model-menu-copy">
                       <span className="model-menu-title">{option.displayName}</span>
                       <span className="model-menu-id">{option.modelId}</span>
@@ -87,7 +93,9 @@ export function ModelChip({ lang, selected, groups, onPick, onManage }: Props) {
                       {formatTokenCount(option.contextWindow)}
                       {option.isDefault ? ` · ${t(lang, 'ctx_default_mark')}` : ''}
                     </span>
-                    {selectedRow ? <span className="model-menu-check" aria-hidden="true">✓</span> : null}
+                    <span className="model-menu-check-slot">
+                      {selectedRow ? CHECK_ICON : null}
+                    </span>
                   </button>
                 );
               })}

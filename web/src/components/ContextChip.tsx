@@ -51,7 +51,8 @@ export function ContextChip({ lang, context, selected, onSetWindow }: Props) {
   const wrap = useRef<HTMLDivElement>(null);
   const warn = contextIsWarn(context.level);
   const remain = contextRemainPercent(context);
-  const circumference = 2 * Math.PI * 5;
+  const ringRadius = 7.5;
+  const circumference = 2 * Math.PI * ringRadius;
   const canEdit = Boolean(selected?.providerId && selected.modelId);
   const windowTokens = selected?.contextWindow || context.window;
   const options = contextWindowOptions(windowTokens);
@@ -111,15 +112,15 @@ export function ContextChip({ lang, context, selected, onSetWindow }: Props) {
             setError(null);
           }}
         >
-          <svg className="ctx-ring" viewBox="0 0 14 14" width="14" height="14" aria-hidden="true">
-            <circle className="ctx-ring-track" cx="7" cy="7" r="5" fill="none" strokeWidth="2" />
+          <svg className="ctx-ring" viewBox="0 0 20 20" width="16" height="16" aria-hidden="true">
+            <circle className="ctx-ring-track" cx="10" cy="10" r="7.5" fill="none" strokeWidth="2.5" />
             <circle
               className="ctx-ring-fill"
-              cx="7"
-              cy="7"
-              r="5"
+              cx="10"
+              cy="10"
+              r="7.5"
               fill="none"
-              strokeWidth="2"
+              strokeWidth="2.5"
               strokeDasharray={`${(Math.min(100, context.percent) / 100) * circumference} ${circumference}`}
             />
           </svg>
