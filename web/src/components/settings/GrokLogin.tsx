@@ -101,51 +101,85 @@ export function GrokLogin({ lang, onSignedIn, onToast }: Props) {
 
   return (
     <div className="ns-grok">
-      <div className="ns-grok-head">
-        <span className="ns-icon-box is-lg"><BrandIcon brand="Grok" size={20} /></span>
-        <strong>Grok Build</strong>
-        <span className="ns-tag is-account">{t(lang, 'provider_access_account')}</span>
-      </div>
-      <p className="ns-hint" style={{ marginTop: 0 }}>{t(lang, 'grok_login_desc')}</p>
+      <p className="ns-grok-desc">
+        {t(lang, 'grok_login_desc_pre')}{' '}
+        <code>grok login --device-auth</code>
+        {t(lang, 'grok_login_desc_post')}
+      </p>
       {error ? <div className="ns-test-card is-bad" data-testid="next-test-result">{error}</div> : null}
       <div className="ns-grok-cards">
-        <div className="ns-grok-card">
-          <h4>① {t(lang, 'grok_step1')}</h4>
+        <div className="ns-grok-card is-done">
+          <div className="ns-grok-kicker">
+            <span className="ns-step-num is-done-mark" aria-hidden="true">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M5 12l5 5L20 7" /></svg>
+            </span>
+            {t(lang, 'grok_step1_kicker')}
+          </div>
+          <h4>{t(lang, 'grok_step1')}</h4>
           <p>{t(lang, 'grok_step1_done')}</p>
-          <button type="button" className="ns-btn" style={{ marginTop: 10 }} onClick={() => openUrl(pending?.verificationUri || '')}>
+          <button type="button" className="ns-btn" onClick={() => openUrl(pending?.verificationUri || '')}>
             {t(lang, 'grok_reopen')}
           </button>
         </div>
         <div className="ns-grok-card is-on">
-          <h4>② {t(lang, 'grok_step2')}</h4>
-          <div className="ns-grok-code" data-testid="next-grok-code">{pending?.userCode || '····-····'}</div>
-          <button type="button" className="ns-btn" onClick={() => { if (pending?.userCode) void copy(pending.userCode); }}>
-            {t(lang, 'copy_code')}
-          </button>
-          <p style={{ marginTop: 8 }}>{t(lang, 'grok_code_ttl', { n: ttlMin })}</p>
+          <div className="ns-grok-kicker">
+            <span className="ns-step-num">2</span>
+            {t(lang, 'grok_step2_kicker')}
+          </div>
+          <h4>{t(lang, 'grok_step2')}</h4>
+          <div className="ns-grok-code-wrap">
+            <div className="ns-grok-code" data-testid="next-grok-code">{pending?.userCode || '····-····'}</div>
+            <button type="button" className="ns-btn" onClick={() => { if (pending?.userCode) void copy(pending.userCode); }}>
+              {t(lang, 'copy_code')}
+            </button>
+          </div>
+          <p className="ns-grok-ttl">{t(lang, 'grok_code_ttl', { n: ttlMin })}</p>
         </div>
         <div className="ns-grok-card">
-          <h4>③ {t(lang, 'grok_step3')}</h4>
-          <p style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div className="ns-grok-kicker">
+            <span className="ns-step-num is-idle">3</span>
+            {t(lang, 'grok_step3_kicker')}
+          </div>
+          <h4>{t(lang, 'grok_step3')}</h4>
+          <p className="ns-grok-wait">
             <span className="ns-spin" aria-hidden="true" />
             {t(lang, 'grok_waiting')}
           </p>
+          <p className="ns-grok-idle">{t(lang, 'grok_step3_idle')}</p>
         </div>
       </div>
       <div className="ns-grok-help">
-        <section>
+        <section className="is-after">
           <h4>{t(lang, 'grok_after')}</h4>
-          <p>{t(lang, 'grok_after_account')}</p>
-          <p>{t(lang, 'grok_after_token')}</p>
-          <p>{t(lang, 'grok_after_models')}</p>
+          <div className="ns-grok-meta">
+            <span className="ns-grok-meta-k">{t(lang, 'grok_after_account')}</span>
+            <span>{t(lang, 'grok_after_account_value')}</span>
+            <span className="ns-grok-meta-k">{t(lang, 'grok_after_token')}</span>
+            <span>
+              <code>{t(lang, 'grok_after_token_path')}</code>
+              <span className="ns-grok-meta-note">{t(lang, 'grok_after_token_local')}</span>
+            </span>
+            <span className="ns-grok-meta-k">{t(lang, 'grok_after_models')}</span>
+            <span className="ns-grok-models">
+              <span className="ns-grok-chip"><BrandIcon brand="Grok" size={12} />{t(lang, 'grok_after_model_chip')}</span>
+              <span className="ns-grok-chip"><BrandIcon brand="Grok" size={12} />{t(lang, 'grok_after_model_chip')}</span>
+              <span className="ns-grok-meta-note">{t(lang, 'grok_after_models_hint')}</span>
+            </span>
+          </div>
         </section>
         <section>
           <h4>{t(lang, 'grok_trouble')}</h4>
-          <button type="button" onClick={() => { if (pending?.verificationUri) void copy(pending.verificationUri); }}>
-            {t(lang, 'grok_copy_url')}
-          </button>
-          <p>{t(lang, 'grok_proxy')}</p>
-          <button type="button" onClick={() => { void begin(); }}>{t(lang, 'grok_restart')}</button>
+          <p>
+            {t(lang, 'grok_trouble_url')}{' '}
+            <button type="button" className="ns-field-link" onClick={() => { if (pending?.verificationUri) void copy(pending.verificationUri); }}>
+              {t(lang, 'grok_copy_url')}
+            </button>
+          </p>
+          <p>{t(lang, 'grok_trouble_proxy')}</p>
+          <p>
+            {t(lang, 'grok_trouble_restart')}{' '}
+            <button type="button" className="ns-field-link" onClick={() => { void begin(); }}>{t(lang, 'grok_restart')}</button>
+          </p>
         </section>
       </div>
     </div>

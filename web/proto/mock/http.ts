@@ -107,18 +107,27 @@ function modelLabel(db: MockDb, model: ResolvedModel | null): string {
   return found?.displayName || model.modelId;
 }
 
-const MODEL_NAMES: Record<string, { name: string; brand: string; window: number }> = {
-  'grok-4.6': { name: 'Grok 4.6', brand: 'xai', window: 200_000 },
-  'grok-4': { name: 'Grok 4', brand: 'xai', window: 128_000 },
-  'grok-code-fast': { name: 'Grok Code Fast', brand: 'xai', window: 256_000 },
-  'grok-build': { name: 'Grok Build', brand: 'grok', window: 256_000 },
-  'gpt-5': { name: 'GPT-5', brand: 'openai', window: 400_000 },
-  'gpt-5-mini': { name: 'GPT-5 mini', brand: 'openai', window: 200_000 },
-  'gpt-4.1': { name: 'GPT-4.1', brand: 'openai', window: 128_000 },
-  'claude-sonnet-4-5': { name: 'Claude Sonnet 4.5', brand: 'anthropic', window: 200_000 },
-  'claude-opus-4-1': { name: 'Claude Opus 4.1', brand: 'anthropic', window: 200_000 },
-  'deepseek-chat': { name: 'DeepSeek Chat', brand: 'deepseek', window: 128_000 },
-  'local-model': { name: 'Local Model', brand: null as unknown as string, window: 32_000 },
+const MODEL_NAMES: Record<string, { name: string; brand: string | null; window: number }> = {
+  'grok-4.6': { name: 'Grok 4.6', brand: 'Grok', window: 200_000 },
+  'grok-4': { name: 'Grok 4', brand: 'Grok', window: 128_000 },
+  'grok-code-fast': { name: 'Grok Code Fast', brand: 'Grok', window: 256_000 },
+  'grok-build': { name: 'Grok Build', brand: 'Grok', window: 256_000 },
+  'gpt-5': { name: 'GPT-5', brand: 'OpenAI', window: 400_000 },
+  'gpt-5-mini': { name: 'GPT-5 mini', brand: 'OpenAI', window: 200_000 },
+  'gpt-4.1': { name: 'GPT-4.1', brand: 'OpenAI', window: 128_000 },
+  'claude-sonnet-4-5': { name: 'Claude Sonnet', brand: 'Claude', window: 200_000 },
+  'claude-opus-4-1': { name: 'Claude Opus', brand: 'Claude', window: 200_000 },
+  'anthropic/claude-sonnet': { name: 'Claude Sonnet', brand: 'Claude', window: 200_000 },
+  'anthropic/claude-haiku': { name: 'Claude Haiku', brand: 'Claude', window: 200_000 },
+  'openai/gpt-5': { name: 'GPT', brand: 'OpenAI', window: 400_000 },
+  'google/gemini-pro': { name: 'Gemini Pro', brand: 'Gemini', window: 1_000_000 },
+  'deepseek/deepseek-chat': { name: 'DeepSeek Chat', brand: 'DeepSeek', window: 128_000 },
+  'qwen/qwen-coder': { name: '通义千问 Coder', brand: 'Qwen', window: 256_000 },
+  'meta-llama/llama-3': { name: 'Llama', brand: 'Meta', window: 128_000 },
+  'mistralai/mistral-large': { name: 'Mistral Large', brand: 'Mistral', window: 128_000 },
+  'x-ai/grok-4': { name: 'Grok', brand: 'Grok', window: 256_000 },
+  'deepseek-chat': { name: 'DeepSeek Chat', brand: 'DeepSeek', window: 128_000 },
+  'local-model': { name: 'Local Model', brand: null, window: 32_000 },
 };
 
 function modelRows(ids: string[], fallbackBrand: string | null): Provider['models'] {
@@ -153,6 +162,19 @@ function probeModels(vendor: string, modelIds?: string[]): string[] {
   if (vendor === 'openai') return ['gpt-5', 'gpt-5-mini', 'gpt-4.1'];
   if (vendor === 'anthropic') return ['claude-sonnet-4-5', 'claude-opus-4-1'];
   if (vendor === 'deepseek') return ['deepseek-chat'];
+  if (vendor === 'openrouter') {
+    return [
+      'anthropic/claude-sonnet',
+      'anthropic/claude-haiku',
+      'openai/gpt-5',
+      'google/gemini-pro',
+      'deepseek/deepseek-chat',
+      'qwen/qwen-coder',
+      'meta-llama/llama-3',
+      'mistralai/mistral-large',
+      'x-ai/grok-4',
+    ];
+  }
   return ['local-model', 'gpt-4o-mini'];
 }
 
@@ -417,7 +439,7 @@ function ensureGrokProvider(db: MockDb, hub: MockHub): Provider {
   const provider: Provider = {
     id: 'grok',
     vendor: 'xai',
-    name: 'Grok',
+    name: 'Grok Build',
     access: 'account',
     runtime: 'model',
     baseUrl: 'https://cli-chat-proxy.grok.com/v1',

@@ -3,7 +3,7 @@ import { useSyncExternalStore } from 'react';
 import { getProviders } from './api';
 import { useSession } from './session';
 import { PROVIDERS_TOPIC, type Provider, type ResolvedModel, type Vendor } from './store';
-import { withGrokVendor } from './providerWizard';
+import { presentVendors } from './providerWizard';
 
 export type ProvidersState = {
   providers: Provider[];
@@ -25,16 +25,16 @@ export function useProviders(): ProvidersState {
     let cancelled = false;
     getProviders(lang).then((snap) => {
       if (cancelled) return;
-      setVendors(withGrokVendor(snap.vendors || []));
+      setVendors(presentVendors(snap.vendors || [], lang));
     }).catch(() => {
-      if (!cancelled) setVendors(withGrokVendor([]));
+      if (!cancelled) setVendors(presentVendors([], lang));
     });
     return () => {
       cancelled = true;
     };
   }, [lang, ready]);
 
-  const mergedVendors = useMemo(() => withGrokVendor(vendors), [vendors]);
+  const mergedVendors = useMemo(() => presentVendors(vendors, lang), [vendors, lang]);
 
   return { providers, defaultModel, vendors: mergedVendors, ready, status };
 }

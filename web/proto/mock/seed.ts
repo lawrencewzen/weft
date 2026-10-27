@@ -599,10 +599,17 @@ const PROVIDERS: Provider[] = [
 ];
 
 const VENDORS: Vendor[] = [
-  { id: 'xai', name: 'xAI', access: 'api_key', needsKey: true, baseUrl: 'https://api.x.ai/v1', brand: 'xai' },
-  { id: 'openai', name: 'OpenAI', access: 'api_key', needsKey: true, baseUrl: 'https://api.openai.com/v1', brand: 'openai' },
-  { id: 'anthropic', name: 'Anthropic', access: 'api_key', needsKey: true, baseUrl: 'https://api.anthropic.com/v1', brand: 'anthropic' },
-  { id: 'custom', name: '自定义', access: 'custom_endpoint', needsKey: false, baseUrl: '', brand: null },
+  { id: 'deepseek', name: 'DeepSeek', access: 'api_key', needsKey: true, baseUrl: 'https://api.deepseek.com/v1', brand: 'DeepSeek' },
+  { id: 'xai', name: 'xAI', access: 'api_key', needsKey: true, baseUrl: 'https://api.x.ai/v1', brand: 'XAI' },
+  { id: 'openai', name: 'OpenAI', access: 'api_key', needsKey: true, baseUrl: 'https://api.openai.com/v1', brand: 'OpenAI' },
+  { id: 'anthropic', name: 'Anthropic', access: 'api_key', needsKey: true, baseUrl: 'https://api.anthropic.com/v1', brand: 'Anthropic' },
+  { id: 'gemini', name: 'Gemini', access: 'api_key', needsKey: true, baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai', brand: 'Gemini' },
+  { id: 'qwen', name: '通义千问', access: 'api_key', needsKey: true, baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', brand: 'Qwen' },
+  { id: 'moonshot', name: 'Kimi', access: 'api_key', needsKey: true, baseUrl: 'https://api.moonshot.cn/v1', brand: 'Moonshot' },
+  { id: 'zhipu', name: '智谱', access: 'api_key', needsKey: true, baseUrl: 'https://open.bigmodel.cn/api/paas/v4', brand: 'Zhipu' },
+  { id: 'openrouter', name: 'OpenRouter', access: 'api_key', needsKey: true, baseUrl: 'https://openrouter.ai/api/v1', brand: 'OpenRouter' },
+  { id: 'ollama', name: 'Ollama', access: 'local', needsKey: false, baseUrl: 'http://127.0.0.1:11434/v1', brand: 'Ollama' },
+  { id: 'custom', name: '自定义地址', access: 'custom_endpoint', needsKey: false, baseUrl: '', brand: null },
 ];
 
 const DEFAULT_MODEL: ResolvedModel = { providerId: 'demo', modelId: 'grok-4.6' };

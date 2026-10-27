@@ -23,12 +23,16 @@ import {
   filterVendors,
   formatContextWindow,
   hostOf,
+  isComingSoonVendor,
+  isGrokAccountVendor,
   modelsFromIds,
   shouldDiscardDraftOnCancel,
+  vendorDocsName,
   vendorDocsUrl,
+  vendorProtocolName,
   waysForVendor,
   GROK_VENDOR_ID,
-  type ConnectWay,
+  type WayOption,
   type WizardState,
 } from '../../data/providerWizard';
 import { t } from '../../i18n';
@@ -66,11 +70,61 @@ function BackArrow() {
   );
 }
 
-function accessWayDesc(lang: Lang, way: ConnectWay, vendor: Vendor): string {
-  if (way === 'api_key') return t(lang, 'provider_way_api_key_desc', { name: vendor.name });
-  if (way === 'account') return t(lang, 'provider_way_account_desc');
-  if (way === 'custom_endpoint') return t(lang, 'provider_way_custom_desc', { proto: t(lang, 'provider_proto') });
-  return t(lang, 'provider_way_agent_desc');
+function SearchIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+      <circle cx="11" cy="11" r="7" />
+      <path d="M20 20l-3.5-3.5" />
+    </svg>
+  );
+}
+
+function CheckIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" aria-hidden="true">
+      <path d="M5 12l5 5L20 7" />
+    </svg>
+  );
+}
+
+function RefreshIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+      <path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v5h-5" />
+    </svg>
+  );
+}
+
+function StepCheckIcon() {
+  return (
+    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" aria-hidden="true">
+      <path d="M5 12l5 5L20 7" />
+    </svg>
+  );
+}
+
+function wayTitle(lang: Lang, way: WayOption): string {
+  if (way.id === 'account' && way.product) return t(lang, 'provider_way_account_named', { name: way.product });
+  if (way.id === 'agent' && way.product) return t(lang, 'provider_way_agent_named', { name: way.product });
+  if (way.id === 'api_key') return t(lang, 'provider_way_api_key');
+  if (way.id === 'custom_endpoint') return t(lang, 'provider_way_custom');
+  if (way.id === 'account') return t(lang, 'provider_way_account');
+  return t(lang, 'provider_way_agent');
+}
+
+function accessWayDesc(lang: Lang, way: WayOption, vendor: Vendor): string {
+  if (way.id === 'api_key') return t(lang, 'provider_way_api_key_desc', { name: vendorDocsName(vendor, lang) });
+  if (way.id === 'account') {
+    return way.product
+      ? t(lang, 'provider_way_account_desc_named', { name: way.product })
+      : t(lang, 'provider_way_account_desc');
+  }
+  if (way.id === 'custom_endpoint') {
+    return t(lang, 'provider_way_custom_desc', { proto: vendorProtocolName(vendor, lang) });
+  }
+  return way.product
+    ? t(lang, 'provider_way_agent_desc_named', { name: way.product })
+    : t(lang, 'provider_way_agent_desc');
 }
 
 export function ProviderWizard({
@@ -96,7 +150,8 @@ export function ProviderWizard({
     () => filterVendors(vendors, state.vendorQuery),
     [vendors, state.vendorQuery],
   );
-  const ways = vendor ? waysForVendor(vendor) : [];
+  const ways = vendor ? waysForVendor(vendor, lang) : [];
+  const grokAccount = Boolean(vendor && isGrokAccountVendor(vendor) && state.way === 'account');
   const listedModels = models.length ? models : modelsFromIds(state.probedModelIds);
   const extraSelected = state.selectedModelIds
     .filter((id) => !listedModels.some((item) => item.id === id))
@@ -116,6 +171,7 @@ export function ProviderWizard({
   }
 
   function pickVendor(next: Vendor) {
+    if (isComingSoonVendor(next)) return;
     const way = defaultWay(next);
     onChange({
       ...state,
@@ -247,9 +303,10 @@ export function ProviderWizard({
     goBackStep();
   }
 
-  const crumbLeaf = state.step === 3 && vendor
-    ? vendor.name
-    : t(lang, state.mode === 'edit' ? 'provider_edit' : 'provider_add_leaf');
+  const crumbLeaf = t(lang, state.mode === 'edit' ? 'provider_edit' : 'provider_add_leaf');
+  const connectSub = state.mode === 'edit' ? t(lang, 'provider_connect_edit_sub') : t(lang, 'provider_connect_sub');
+  const showVendorHead = state.step > 1 && vendor && !grokAccount;
+  const showGrokCrumb = state.step === 2 && grokAccount;
 
   function toggleModel(id: string) {
     const has = state.selectedModelIds.includes(id);
@@ -289,7 +346,10 @@ export function ProviderWizard({
           >
             <BackArrow />
           </button>
-          <div>
+          {showVendorHead && vendor ? (
+            <span className="ns-icon-box is-lg"><BrandIcon brand={vendor.brand} size={20} /></span>
+          ) : null}
+          <div className="ns-wizard-heading">
             <div className="next-settings-crumb">
               <button
                 type="button"
@@ -301,15 +361,22 @@ export function ProviderWizard({
               </button>
               <span className="next-settings-crumb-sep">/</span>
               <strong>{crumbLeaf}</strong>
+              {showGrokCrumb && vendor ? (
+                <>
+                  <span className="next-settings-crumb-sep">/</span>
+                  <BrandIcon brand={vendor.brand} size={18} />
+                  <strong>{vendor.name}</strong>
+                  <span className="ns-tag is-account">{t(lang, 'provider_access_account')}</span>
+                </>
+              ) : null}
             </div>
-            {state.step === 3 && vendor ? (
+            {showVendorHead && vendor ? (
               <>
-                <div className="ns-grok-head">
-                  <span className="ns-icon-box is-lg"><BrandIcon brand={vendor.brand} size={20} /></span>
-                  <h2>{vendor.name}</h2>
-                </div>
+                <h2>{vendor.name}</h2>
                 <p className="next-settings-sub">
-                  {state.mode === 'edit' ? t(lang, 'provider_models_edit_sub') : t(lang, 'provider_models_sub')}
+                  {state.step === 3
+                    ? (state.mode === 'edit' ? t(lang, 'provider_models_edit_sub') : t(lang, 'provider_models_sub'))
+                    : connectSub}
                 </p>
               </>
             ) : null}
@@ -320,10 +387,13 @@ export function ProviderWizard({
             [1, 'provider_step_vendor'],
             [2, 'provider_step_connect'],
             [3, 'provider_step_models'],
-          ] as const).map(([n, key]) => (
-            <span key={n} className={`ns-step${state.step === n ? ' is-on' : ''}${state.step > n ? ' is-done' : ''}`}>
-              <span className="ns-step-num">{state.step > n ? '✓' : n}</span>
-              {t(lang, key)}
+          ] as const).map(([n, key], index) => (
+            <span key={n} className="ns-step-wrap">
+              {index > 0 ? <span className="ns-step-line" /> : null}
+              <span className={`ns-step${state.step === n ? ' is-on' : ''}${state.step > n ? ' is-done' : ''}`}>
+                <span className="ns-step-num">{state.step > n ? <StepCheckIcon /> : n}</span>
+                {t(lang, key)}
+              </span>
             </span>
           ))}
         </div>
@@ -332,33 +402,44 @@ export function ProviderWizard({
       <div className="next-settings-content ns-wizard-body">
         {state.step === 1 ? (
           <>
-            <input
-              className="ns-search"
-              value={state.vendorQuery}
-              placeholder={t(lang, 'provider_vendor_search')}
-              onChange={(ev) => patch({ vendorQuery: ev.target.value })}
-            />
-            <p className="ns-hint">{t(lang, 'provider_vendor_hint')}</p>
+            <div className="ns-vendor-toolbar">
+              <label className="ns-search-wrap">
+                <SearchIcon />
+                <input
+                  className="ns-search"
+                  value={state.vendorQuery}
+                  placeholder={t(lang, 'provider_vendor_search')}
+                  aria-label={t(lang, 'provider_vendor_search')}
+                  onChange={(ev) => patch({ vendorQuery: ev.target.value })}
+                />
+              </label>
+              <span className="ns-hint">{t(lang, 'provider_vendor_hint')}</span>
+            </div>
             <div className="ns-vendor-grid">
-              {visibleVendors.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  className={`ns-vendor-card${state.vendorId === item.id ? ' is-on' : ''}`}
-                  data-testid="next-vendor-card"
-                  data-vendor={item.id}
-                  onClick={() => pickVendor(item)}
-                >
-                  <BrandIcon brand={item.brand} size={18} />
-                  <span>{item.name}</span>
-                </button>
-              ))}
+              {visibleVendors.map((item) => {
+                const soon = isComingSoonVendor(item);
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className={`ns-vendor-card${state.vendorId === item.id ? ' is-on' : ''}${soon ? ' is-off' : ''}`}
+                    data-testid="next-vendor-card"
+                    data-vendor={item.id}
+                    disabled={soon}
+                    onClick={() => pickVendor(item)}
+                  >
+                    <BrandIcon brand={item.brand} size={18} />
+                    <span>{item.name}</span>
+                    {soon ? <span className="ns-tag is-coming">{t(lang, 'provider_coming')}</span> : null}
+                  </button>
+                );
+              })}
             </div>
           </>
         ) : null}
 
         {state.step === 2 && vendor ? (
-          state.way === 'account' ? (
+          grokAccount ? (
             <GrokLogin
               lang={lang}
               onToast={onToast}
@@ -373,12 +454,14 @@ export function ProviderWizard({
             />
           ) : (
             <div className="ns-connect">
-              <div className="ns-ways">
+              <div className="ns-ways" role="radiogroup" aria-label={t(lang, 'provider_way_title')}>
                 <h3>{t(lang, 'provider_way_title')}</h3>
                 {ways.map((way) => (
                   <button
                     key={way.id}
                     type="button"
+                    role="radio"
+                    aria-checked={state.way === way.id}
                     className={`ns-way${state.way === way.id ? ' is-on' : ''}${way.enabled ? '' : ' is-off'}`}
                     data-testid={`next-way-${way.id}`}
                     disabled={!way.enabled}
@@ -391,20 +474,18 @@ export function ProviderWizard({
                     <span className="ns-radio" />
                     <span className="ns-way-text">
                       <b>
-                        {t(lang, way.id === 'api_key' ? 'provider_way_api_key'
-                          : way.id === 'custom_endpoint' ? 'provider_way_custom'
-                            : way.id === 'account' ? 'provider_way_account'
-                              : 'provider_way_agent')}
+                        {wayTitle(lang, way)}
                         {!way.enabled ? <span className="ns-tag is-coming">{t(lang, 'provider_coming')}</span> : null}
                       </b>
-                      <span>{accessWayDesc(lang, way.id, vendor)}</span>
+                      <span>{accessWayDesc(lang, way, vendor)}</span>
                     </span>
                   </button>
                 ))}
               </div>
-              <div className="ns-connect-split" />
               <div className="ns-form">
-                {state.way === 'custom_endpoint' ? (
+                {state.way === 'account' ? (
+                  <div className="ns-account-soon">{t(lang, 'provider_account_soon')}</div>
+                ) : state.way === 'custom_endpoint' ? (
                   <>
                     <div className="ns-field">
                       <label>{t(lang, 'provider_url_label')}</label>
@@ -419,7 +500,7 @@ export function ProviderWizard({
                           probeOk: false,
                         })}
                       />
-                      <div className="ns-field-hint">{t(lang, 'provider_url_hint', { proto: t(lang, 'provider_proto') })}</div>
+                      <div className="ns-field-hint">{t(lang, 'provider_url_hint', { proto: vendorProtocolName(vendor, lang) })}</div>
                     </div>
                     <KeyFields
                       lang={lang}
@@ -490,33 +571,40 @@ export function ProviderWizard({
         {state.step === 3 ? (
           <>
             <div className="ns-filters">
-              <button
-                type="button"
-                className={`ns-chip${state.brandFilter == null ? ' is-on' : ''}`}
-                data-testid="next-model-filter"
-                data-brand="all"
-                onClick={() => patch({ brandFilter: null })}
-              >
-                {t(lang, 'provider_models_filter_all')}
-              </button>
-              {brands.map((brand) => (
+              <label className="ns-search-wrap is-wide">
+                <SearchIcon />
+                <input
+                  className="ns-search"
+                  value={state.modelQuery}
+                  placeholder={t(lang, 'provider_models_search')}
+                  aria-label={t(lang, 'provider_models_search')}
+                  onChange={(ev) => patch({ modelQuery: ev.target.value })}
+                />
+              </label>
+              <div className="ns-chips">
                 <button
-                  key={brand.id}
                   type="button"
-                  className={`ns-chip${state.brandFilter === brand.id ? ' is-on' : ''}`}
+                  className={`ns-chip${state.brandFilter == null ? ' is-on' : ''}`}
                   data-testid="next-model-filter"
-                  data-brand={brand.id}
-                  onClick={() => patch({ brandFilter: brand.id })}
+                  data-brand="all"
+                  onClick={() => patch({ brandFilter: null })}
                 >
-                  {brand.name} {brand.count}
+                  {t(lang, 'provider_models_filter_all')}
                 </button>
-              ))}
-              <input
-                className="ns-search"
-                value={state.modelQuery}
-                placeholder={t(lang, 'provider_models_search')}
-                onChange={(ev) => patch({ modelQuery: ev.target.value })}
-              />
+                {brands.map((brand) => (
+                  <button
+                    key={brand.id}
+                    type="button"
+                    className={`ns-chip${state.brandFilter === brand.id ? ' is-on' : ''}`}
+                    data-testid="next-model-filter"
+                    data-brand={brand.id}
+                    onClick={() => patch({ brandFilter: brand.id })}
+                  >
+                    <BrandIcon brand={brand.id} size={12} />
+                    {brand.name} <span className="ns-chip-count">{brand.count}</span>
+                  </button>
+                ))}
+              </div>
             </div>
             <div className="ns-model-list">
               {visibleModels.map((model) => {
@@ -528,12 +616,6 @@ export function ProviderWizard({
                     data-testid="next-model-row"
                     data-model={model.id}
                   >
-                    <BrandIcon brand={model.brand} size={16} />
-                    <div className="ns-model-main">
-                      <b>{model.displayName}</b>
-                      <span>{model.id}</span>
-                    </div>
-                    <span className="ns-model-ctx">{model.contextWindow ? formatContextWindow(model.contextWindow) : ''}</span>
                     <button
                       type="button"
                       className={`ns-switch${on ? ' is-on' : ''}`}
@@ -541,6 +623,12 @@ export function ProviderWizard({
                       aria-pressed={on}
                       onClick={() => toggleModel(model.id)}
                     />
+                    <BrandIcon brand={model.brand} size={16} />
+                    <div className="ns-model-main">
+                      <b>{model.displayName}</b>
+                      <span>{model.id}</span>
+                    </div>
+                    <span className="ns-model-ctx">{model.contextWindow ? formatContextWindow(model.contextWindow) : ''}</span>
                   </div>
                 );
               })}
@@ -563,8 +651,14 @@ export function ProviderWizard({
 
       <div className="ns-foot" data-testid="next-wizard-foot">
         <div className="ns-foot-hint">
-          {state.step === 1 && vendor ? t(lang, 'provider_selected_vendor', { name: vendor.name }) : null}
-          {state.step === 2 && state.way !== 'account' ? t(lang, 'provider_test_required') : null}
+          {state.step === 1 && vendor ? (
+            <span className="ns-foot-selected">
+              <BrandIcon brand={vendor.brand} size={14} />
+              {t(lang, 'provider_selected_vendor', { name: vendor.name })}
+            </span>
+          ) : null}
+          {state.step === 2 && grokAccount ? t(lang, 'provider_login_auto') : null}
+          {state.step === 2 && !grokAccount && state.way !== 'account' ? t(lang, 'provider_test_required') : null}
           {state.step === 3 ? (
             <>
               {t(lang, 'provider_models_selected', { n: state.selectedModelIds.length })}
@@ -596,9 +690,13 @@ export function ProviderWizard({
               type="button"
               className="ns-btn ns-btn-primary"
               disabled={nextDisabled}
-            onClick={() => { void goNext(); }}
+              onClick={() => { void goNext(); }}
             >
-              {grokWaiting ? t(lang, 'grok_wait_btn') : t(lang, 'provider_next')}
+              {grokWaiting
+                ? t(lang, 'grok_wait_btn')
+                : state.step === 2
+                  ? t(lang, 'provider_next_models')
+                  : t(lang, 'provider_next')}
             </button>
           ) : (
             <button
@@ -655,7 +753,7 @@ function KeyFields({
         {t(lang, 'provider_key_label')}
         {docs ? (
           <a className="ns-field-link" href={docs} target="_blank" rel="noreferrer">
-            {t(lang, 'provider_key_get', { name: vendor.name })}
+            {t(lang, 'provider_key_get', { name: vendorDocsName(vendor, lang) })}
           </a>
         ) : null}
       </label>
@@ -698,6 +796,7 @@ function TestPanel({
         disabled={probing}
         onClick={onTest}
       >
+        <RefreshIcon />
         {probing ? t(lang, 'provider_testing') : (probe ? t(lang, 'provider_retest') : t(lang, 'provider_test'))}
       </button>
       {probe ? (
@@ -705,15 +804,20 @@ function TestPanel({
           className={`ns-test-card ${probe.ok ? 'is-ok' : 'is-bad'}`}
           data-testid="next-test-result"
         >
-          <b>
-            {probe.ok
-              ? t(lang, 'provider_test_ok', { n: probe.models.length })
-              : (probe.statusText || t(lang, 'provider_status_untested'))}
-          </b>
-          <span>
-            {probe.ok
-              ? t(lang, 'provider_test_ok_meta', { ms: probeMs ?? 0 })
-              : t(lang, 'provider_test_fail_hint', { host: host || vendor.name })}
+          <span className={`ns-test-mark ${probe.ok ? 'is-ok' : 'is-bad'}`} aria-hidden="true">
+            {probe.ok ? <CheckIcon /> : '!'}
+          </span>
+          <span className="ns-test-copy">
+            <b>
+              {probe.ok
+                ? t(lang, 'provider_test_ok', { n: probe.models.length })
+                : t(lang, 'provider_test_fail_title', { reason: probe.statusText || t(lang, 'provider_status_untested') })}
+            </b>
+            <span>
+              {probe.ok
+                ? t(lang, 'provider_test_ok_meta', { ms: probeMs ?? 0 })
+                : t(lang, 'provider_test_fail_body', { host: host || vendor.name })}
+            </span>
           </span>
         </div>
       ) : null}
