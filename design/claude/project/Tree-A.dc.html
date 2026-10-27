@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>侧栏方向 A 安静列表</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(46,140,90,.35)}70%{box-shadow:0 0 0 5px rgba(46,140,90,0)}100%{box-shadow:0 0 0 0 rgba(46,140,90,0)}}
+.cap{font-size:12px;color:#6e6e6e;margin:0 0 10px 4px}
+.side{width:264px;background:#f5f5f5;border-radius:12px;padding:12px 8px;box-sizing:border-box;display:flex;flex-direction:column;gap:1px;font-size:13px;color:#1f1f1f}
+.new{display:flex;align-items:center;justify-content:center;height:32px;background:#fff;border:1px solid #e8e8e8;border-radius:8px;font-size:13px;margin:0 4px 14px}
+.lbl{display:flex;justify-content:space-between;align-items:center;padding:4px 8px 6px;font-size:12px;color:#6e6e6e}
+.proj{display:flex;align-items:center;gap:6px;height:30px;padding:0 8px;border-radius:7px;font-weight:600}
+.proj .chev{color:#999}
+.proj .n{margin-left:auto;font-size:11px;font-weight:400;color:#6e6e6e}
+.conv{display:flex;align-items:center;gap:8px;height:30px;padding:0 8px 0 10px;border-radius:7px}
+.conv.on{background:#ebebeb}
+.conv.on .t{font-weight:500}
+.lead{width:12px;display:flex;justify-content:center;flex-shrink:0}
+.dot{width:6px;height:6px;border-radius:50%}
+.dot.run{background:#2e8c5a;animation:pulse 1.8s ease-out infinite}
+.dot.wait{background:#c98a16}
+.dot.fail{background:#c2412d}
+.t{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.meta{font-size:11px;color:#6e6e6e;white-space:nowrap;flex-shrink:0}
+.meta.run{color:#2a7a4f}.meta.wait{color:#9a6a0e}.meta.fail{color:#b13a28}
+.chip{display:inline-flex;align-items:center;gap:3px;height:18px;padding:0 5px;border-radius:5px;font-size:11px;color:#6e6e6e;flex-shrink:0}
+.chip:hover{background:#dcdcdc}
+.chip.run{color:#2a7a4f}
+.kids{position:relative;display:flex;flex-direction:column;margin-left:16px}
+.kid{position:relative;display:flex;flex-direction:column;justify-content:center;min-height:26px;padding:3px 8px 3px 22px;border-radius:6px;font-size:12.5px;color:#4f4f4f}
+.kid::before{content:'';position:absolute;left:5px;top:0;bottom:0;border-left:1px solid #dcdcdc}
+.kid.last::before{bottom:auto;height:13px}
+.kid::after{content:'';position:absolute;left:5px;top:13px;width:9px;border-top:1px solid #dcdcdc}
+.kid .row{display:flex;align-items:center;gap:7px;min-width:0}
+.kid.done{color:#6e6e6e}
+.kid.on{background:#ebebeb;color:#1f1f1f}
+.ico{width:12px;height:12px;flex-shrink:0;display:block}
+.spin{width:10px;height:10px;border-radius:50%;border:1.5px solid #dcdcdc;border-top-color:#2e8c5a;animation:spin .9s linear infinite;flex-shrink:0;margin:0 1px}
+.spin.stuck{border-top-color:#c98a16;animation-duration:2.8s}
+.tm{font-family:ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:11px;color:#6e6e6e;flex-shrink:0}
+.tm.stuck{color:#9a6a0e}
+.act{font-size:11.5px;color:#6e6e6e;padding-left:19px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+</style>
+</helmet>
+<div style="width: 1000px; height: 780px; box-sizing: border-box; padding: 40px 48px; background: #ffffff; display: flex; gap: 48px; font-family: -apple-system, 'PingFang SC', 'Microsoft YaHei', 'Helvetica Neue', sans-serif">
+
+  <div>
+    <p class="cap">空闲 · 子 Agent 全部完成（截图那个场景）</p>
+    <div class="side">
+      <div class="new">新对话</div>
+      <div class="lbl"><span>项目</span><span>+</span></div>
+      <div class="proj"><svg class="chev" width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5l3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path></svg>write-workflow</div>
+      <div class="conv on">
+        <span class="lead"></span><span class="t">你好</span>
+        <span class="chip"><svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="4" cy="3.5" r="1.6"></circle><circle cx="4" cy="12.5" r="1.6"></circle><circle cx="12" cy="7" r="1.6"></circle><path d="M4 5v6M4 8.5c0-1.5 2-1.5 6.4-1.5"></path></svg>3</span>
+        <span class="meta">2分钟前</span>
+      </div>
+      <div class="kids">
+        <div class="kid done"><div class="row"><svg class="ico" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 6.3l2 2 4-4.3" fill="none" stroke="#8fae9b" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path></svg><span class="t">梳理目录结构</span></div></div>
+        <div class="kid done"><div class="row"><svg class="ico" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 6.3l2 2 4-4.3" fill="none" stroke="#8fae9b" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path></svg><span class="t">检查 workflow 配置</span></div></div>
+        <div class="kid done last"><div class="row"><svg class="ico" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 6.3l2 2 4-4.3" fill="none" stroke="#8fae9b" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path></svg><span class="t">汇总改动建议</span></div></div>
+      </div>
+      <div class="conv"><span class="lead"></span><span class="t">你好。</span><span class="meta">7小时前</span></div>
+      <div class="conv"><span class="lead"></span><span class="t">重构写作流程</span><span class="meta">昨天</span></div>
+      <div class="proj" style="margin-top: 6px"><svg class="chev" width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M4.5 3l3 3-3 3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path></svg>weft<span class="n">5</span></div>
+    </div>
+  </div>
+
+  <div>
+    <p class="cap">运行中 · 2 个在跑，1 个卡住</p>
+    <div class="side">
+      <div class="new">新对话</div>
+      <div class="lbl"><span>项目</span><span>+</span></div>
+      <div class="proj"><svg class="chev" width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5l3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path></svg>write-workflow</div>
+      <div class="conv on">
+        <span class="lead"><span class="dot run"></span></span><span class="t">你好</span>
+        <span class="chip run"><svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="4" cy="3.5" r="1.6"></circle><circle cx="4" cy="12.5" r="1.6"></circle><circle cx="12" cy="7" r="1.6"></circle><path d="M4 5v6M4 8.5c0-1.5 2-1.5 6.4-1.5"></path></svg>2/3</span>
+        <span class="meta run">运行中</span>
+      </div>
+      <div class="kids">
+        <div class="kid on"><div class="row"><span class="spin"></span><span class="t">梳理目录结构</span><span class="tm">01:24</span></div><div class="act">读取 src/workflow/index.ts</div></div>
+        <div class="kid"><div class="row"><span class="spin stuck"></span><span class="t">检查 workflow 配置</span><span class="tm stuck">静默 01:12</span></div></div>
+        <div class="kid done last"><div class="row"><svg class="ico" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 6.3l2 2 4-4.3" fill="none" stroke="#8fae9b" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path></svg><span class="t">汇总改动建议</span></div></div>
+      </div>
+      <div class="conv"><span class="lead"><span class="dot wait"></span></span><span class="t">你好。</span><span class="meta wait">等你确认</span></div>
+      <div class="conv"><span class="lead"><span class="dot fail"></span></span><span class="t">重构写作流程</span><span class="meta fail">失败</span></div>
+      <div class="proj" style="margin-top: 6px"><svg class="chev" width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M4.5 3l3 3-3 3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path></svg>weft<span class="n" style="color: #2a7a4f">1 运行中</span></div>
+    </div>
+  </div>
+
+  <div>
+    <p class="cap">非当前对话 · 收起只留角标，点开可看</p>
+    <div class="side">
+      <div class="new">新对话</div>
+      <div class="lbl"><span>项目</span><span>+</span></div>
+      <div class="proj"><svg class="chev" width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5l3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path></svg>write-workflow</div>
+      <div class="conv"><span class="lead"></span><span class="t">你好</span>
+        <span class="chip"><svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="4" cy="3.5" r="1.6"></circle><circle cx="4" cy="12.5" r="1.6"></circle><circle cx="12" cy="7" r="1.6"></circle><path d="M4 5v6M4 8.5c0-1.5 2-1.5 6.4-1.5"></path></svg>3</span>
+        <span class="meta">2分钟前</span></div>
+      <div class="conv on"><span class="lead"></span><span class="t">你好。</span><span class="meta">7小时前</span></div>
+      <div class="conv"><span class="lead"><span class="dot run"></span></span><span class="t">重构写作流程</span>
+        <span class="chip run" style="background: #dcdcdc"><svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="4" cy="3.5" r="1.6"></circle><circle cx="4" cy="12.5" r="1.6"></circle><circle cx="12" cy="7" r="1.6"></circle><path d="M4 5v6M4 8.5c0-1.5 2-1.5 6.4-1.5"></path></svg>1/2</span>
+        <span class="meta run">运行中</span></div>
+      <div class="kids">
+        <div class="kid"><div class="row"><span class="spin"></span><span class="t">改写第三章大纲</span><span class="tm">04:51</span></div></div>
+        <div class="kid done last"><div class="row"><svg class="ico" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 6.3l2 2 4-4.3" fill="none" stroke="#8fae9b" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path></svg><span class="t">统计章节字数</span></div></div>
+      </div>
+      <div class="proj" style="margin-top: 6px"><svg class="chev" width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M4.5 3l3 3-3 3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path></svg>weft<span class="n">5</span></div>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1000,"height":780}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

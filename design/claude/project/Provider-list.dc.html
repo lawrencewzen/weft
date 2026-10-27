@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Provider 列表</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="width: 1200px; height: 860px; box-sizing: border-box; padding: 30px; background: #8E8E8C; font-family: -apple-system, 'PingFang SC', 'Helvetica Neue', system-ui, sans-serif; color: #1A1A1A; font-size: 14px">
+  <div style="width: 1140px; height: 800px; background: #FFFFFF; border-radius: 16px; overflow: hidden; display: flex">
+    <nav style="width: 220px; flex-shrink: 0; background: #F7F7F5; padding: 24px 12px; box-sizing: border-box; display: flex; flex-direction: column; gap: 2px; font-size: 14px; color: #3A3A3A">
+      <div style="padding: 0 10px 14px; font-weight: 600; color: #1A1A1A">系统设置</div>
+      <div style="padding: 8px 10px">通用</div>
+      <div style="padding: 8px 10px; background: #ECECE9; border-radius: 8px; color: #1A1A1A">Provider</div>
+      <div style="padding: 8px 10px">Git</div>
+      <div style="padding: 8px 10px">插件</div>
+      <div style="padding: 8px 10px">Skills</div>
+      <div style="padding: 8px 10px">关于</div>
+    </nav>
+    <div style="flex: 1; min-width: 0; padding: 28px 36px; display: flex; flex-direction: column; gap: 22px">
+      <div style="display: flex; align-items: flex-start; justify-content: space-between">
+        <div>
+          <div style="font-size: 18px; font-weight: 600">Provider</div>
+          <div style="margin-top: 6px; font-size: 13px; color: #6E6E6E">用 API Key 或账号登录接入，接好后在下面选默认模型。</div>
+        </div>
+        <button type="button" style="height: 34px; padding: 0 14px; border-radius: 8px; border: 1px solid #DCDCD9; background: #FFFFFF; font-size: 13px; font-family: inherit; color: #1A1A1A">＋ 添加 Provider</button>
+      </div>
+
+      <div style="border: 1px solid #E6E6E3; border-radius: 12px; overflow: hidden">
+        <sc-for list="{{rows}}" as="r" hint-placeholder-count="5">
+          <div style="display: grid; grid-template-columns: 28px minmax(0, 1fr) 110px 130px 92px; align-items: center; column-gap: 16px; padding: 14px 16px; border-bottom: 1px solid #F1F1EF">
+            <span style="width: 28px; height: 28px; border-radius: 8px; border: 1px solid #EFEFED; display: flex; align-items: center; justify-content: center; flex-shrink: 0"><img src="{{r.icon}}" alt="" width="16" height="16" style="display: block"></span>
+            <span style="min-width: 0; display: flex; flex-direction: column; gap: 3px">
+              <span style="display: flex; align-items: center; gap: 8px"><span style="font-weight: 600">{{r.name}}</span><span style="font-size: 11px; padding: 1px 7px; border-radius: 999px; background: {{r.authBg}}; color: {{r.authColor}}">{{r.auth}}</span></span>
+              <span style="font-size: 12px; color: #6E6E6E; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{r.detail}}</span>
+            </span>
+            <span style="font-size: 12px; color: #555555; white-space: nowrap">{{r.models}}</span>
+            <span style="display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: {{r.stateColor}}; white-space: nowrap"><span style="width: 7px; height: 7px; border-radius: 50%; background: {{r.stateColor}}"></span>{{r.state}}</span>
+            <button type="button" style="justify-self: stretch; height: 30px; padding: 0 10px; border-radius: 8px; border: 1px solid #DCDCD9; background: #FFFFFF; font-size: 12px; font-family: inherit; color: #1A1A1A; white-space: nowrap">{{r.action}}</button>
+          </div>
+        </sc-for>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 8px">
+        <div style="font-size: 14px; font-weight: 600">默认模型 <span style="font-size: 12px; font-weight: 400; color: #6E6E6E">对话没有单独选模型时用它</span></div>
+        <button type="button" style="width: 360px; height: 40px; display: flex; align-items: center; gap: 10px; padding: 0 12px; border-radius: 10px; border: 1px solid #DCDCD9; background: #FFFFFF; font-size: 14px; font-family: inherit; color: #1A1A1A; text-align: left">
+          <img src="/_blob/225be02fc9dc1471ba4ebc137a9c457c" alt="" width="14" height="14" style="display: block">
+          <span style="flex: 1">DeepSeek Flash</span>
+          <span style="font-size: 12px; color: #6E6E6E">来自 DeepSeek</span>
+          <span style="font-size: 10px; color: #6E6E6E">▾</span>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1200,"height":860}}'>
+class Component extends DCLogic {
+  renderVals() {
+    var key = { authBg: '#F1F1EF', authColor: '#3A3A3A' };
+    var login = { authBg: '#EEF2FF', authColor: '#3446B8' };
+    var local = { authBg: '#F1F8F3', authColor: '#245A3A' };
+    function row(name, icon, auth, style, detail, models, state, stateColor, action) {
+      return { name: name, icon: icon, auth: auth, authBg: style.authBg, authColor: style.authColor, detail: detail, models: models, state: state, stateColor: stateColor, action: action };
+    }
+    return {
+      rows: [
+        row('DeepSeek', '/_blob/225be02fc9dc1471ba4ebc137a9c457c', 'API Key', key, 'Key 尾号 3f9c · api.deepseek.com', '启用 2 个模型', '测试通过', '#2F9E5B', '编辑'),
+        row('Claude Code', '/_blob/2c3ab7337cf7b9e48382b86a6803f5b0', '账号登录', login, '[你的账号] · Claude 订阅', '启用 3 个模型', '登录已过期', '#B25E09', '重新登录'),
+        row('Grok Build', '/_blob/5e3426225edb3b17e4dc8e8c0aaf2456', '账号登录', login, '[你的账号] · 令牌在 ~/.grok/auth.json', '启用 2 个模型', '测试通过', '#2F9E5B', '编辑'),
+        row('OpenRouter', '/_blob/7b3fad4ef6efe79b91fc328ba36f0b7f', 'API Key', key, 'Key 尾号 [xxxx] · openrouter.ai', '启用 4 个模型', '测试通过', '#2F9E5B', '编辑'),
+        row('Ollama', '/_blob/3cca5b185802c35409e13e832640ac9a', '本地', local, '127.0.0.1:11434 · 确认 Ollama 已经启动', '启用 1 个模型', '连接失败', '#C2412D', '重试')
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

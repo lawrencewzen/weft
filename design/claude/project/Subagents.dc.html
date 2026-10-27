@@ -1,0 +1,475 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>子 Agent 界面</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+.sa-root{--bg:#161616;--side:#1c1c1c;--panel:#191919;--raise:#222222;--ink:#ececec;--ink2:#cfcfcf;--mute:#a3a3a3;--faint:#7c7c7c;--line:#2c2c2c;--line2:#262626;--sel:#2b2b2b;--hover:#242424;--track:#3a3a3a;--run:oklch(0.74 0.15 152);--run-soft:oklch(0.74 0.15 152 / .16);--done:oklch(0.62 0.05 152);--warn:oklch(0.8 0.13 78);--stop:#8a8a8a;--glow:oklch(0.74 0.15 152 / .14);--on-accent:#111;--accent:#ececec;--font:-apple-system,BlinkMacSystemFont,"PingFang SC","Helvetica Neue",sans-serif;--mono:ui-monospace,"SF Mono",Menlo,monospace}
+.sa-root[data-mode="浅色"]{--bg:#fcfcfc;--side:#f4f4f4;--panel:#ffffff;--raise:#ffffff;--ink:#1f1f1f;--ink2:#363636;--mute:#5f5f5f;--faint:#8a8a8a;--line:#e6e6e6;--line2:#efefef;--sel:#e8e8e8;--hover:#ececec;--track:#d6d6d6;--run:oklch(0.6 0.15 152);--run-soft:oklch(0.6 0.15 152 / .14);--done:oklch(0.6 0.06 152);--warn:oklch(0.68 0.14 70);--stop:#9a9a9a;--glow:oklch(0.6 0.15 152 / .12);--on-accent:#fff;--accent:#2b2b2b}
+@keyframes saSpin{to{transform:rotate(360deg)}}
+@keyframes saRowIn{0%{opacity:0;transform:translateY(-6px);filter:blur(3px);max-height:0}60%{max-height:60px}100%{opacity:1;transform:none;filter:none;max-height:60px}}
+@keyframes saGlow{0%{opacity:1}100%{opacity:0}}
+@keyframes saActIn{0%{opacity:0;transform:translateY(5px)}100%{opacity:1;transform:none}}
+@keyframes saOrbit{to{transform:rotate(360deg)}}
+@keyframes saBeat{0%,100%{transform:scaleY(.35)}50%{transform:scaleY(1)}}
+@keyframes saRelay{0%,100%{transform:scale(.7);opacity:.45}30%{transform:scale(1.25);opacity:1}}
+@keyframes saBreath{0%,100%{opacity:.55}50%{opacity:1}}
+@keyframes saPop{0%{transform:scale(.4);opacity:0}70%{transform:scale(1.15);opacity:1}100%{transform:scale(1)}}
+@keyframes saMenuIn{0%{opacity:0;transform:translateY(-4px) scale(.98)}100%{opacity:1;transform:none}}
+textarea::placeholder{color:var(--faint)}
+</style>
+</helmet>
+<div class="sa-root" data-mode="{{ mode }}" onClick="{{ closeMenus }}" style="width:100%;height:780px;display:flex;background:var(--bg);color:var(--ink);font-family:var(--font);font-size:14px;line-height:1.55;overflow:hidden;transition:background .3s,color .3s">
+
+  <aside style="width:286px;flex-shrink:0;background:var(--side);display:flex;flex-direction:column;border-right:1px solid var(--line2)">
+    <div style="height:52px;display:flex;align-items:center;padding:0 12px;box-sizing:border-box">
+      <button type="button" style="flex:1;height:34px;padding:0 10px;border:1px solid var(--line);border-radius:8px;font:inherit;font-size:13px;color:var(--ink);background:var(--raise);display:flex;align-items:center;justify-content:center;cursor:pointer" style-hover="border-color:var(--track)">新对话</button>
+    </div>
+    <div style="flex:1;overflow:auto;padding:0 8px 12px;display:flex;flex-direction:column;gap:2px">
+      <div style="padding:6px 8px;font-size:12px;color:var(--faint)">项目</div>
+      <div style="display:flex;align-items:center;gap:6px;padding:6px 8px;font-size:13px;font-weight:500;color:var(--ink2)"><span style="color:var(--faint);font-size:11px">›</span><span style="flex:1">reverse</span><span style="font-size:11px;color:var(--faint);font-weight:400">2</span></div>
+      <div style="display:flex;align-items:center;gap:6px;padding:6px 8px;font-size:13px;font-weight:500;color:var(--ink2)"><span style="color:var(--faint);font-size:11px">›</span><span style="flex:1">write-workflow</span><span style="font-size:11px;color:var(--faint);font-weight:400">1</span></div>
+      <div style="display:flex;align-items:center;gap:6px;padding:6px 8px;font-size:13px;font-weight:500;color:var(--ink2)"><span style="color:var(--faint);font-size:11px;transform:rotate(90deg)">›</span><span style="flex:1">pi-work</span></div>
+
+      <div onClick="{{ selectMain }}" style="position:relative;display:flex;align-items:center;gap:9px;padding:6px 8px 6px 24px;border-radius:7px;cursor:pointer;background:{{ convBg }};font-size:13px" style-hover="background:var(--hover)">
+        <span style="width:7px;height:7px;border-radius:50%;background:{{ convDot }};flex-shrink:0;transition:background .6s"></span>
+        <span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:500">修复登录接口偶发超时</span>
+        <span title="{{ loaderTitle }}" style="display:flex;align-items:center;gap:6px;height:20px;color:var(--faint);cursor:default">
+          <sc-if value="{{ isOrbit }}" hint-placeholder-val="{{ true }}">
+            <span style="position:relative;width:18px;height:18px;display:block">
+              <span style="position:absolute;left:7px;top:7px;width:4px;height:4px;border-radius:50%;background:{{ coreColor }};transition:background .6s"></span>
+              <sc-for list="{{ loader }}" as="d" hint-placeholder-count="3">
+                <span style="position:absolute;inset:0;animation:saOrbit {{ d.dur }} linear infinite;animation-delay:{{ d.delay }};animation-play-state:{{ d.play }}">
+                  <span style="position:absolute;left:7.5px;top:{{ d.top }};width:3px;height:3px;border-radius:50%;background:{{ d.color }};transition:background .7s,opacity .7s;opacity:{{ d.op }}"></span>
+                </span>
+              </sc-for>
+            </span>
+          </sc-if>
+          <sc-if value="{{ isBeat }}" hint-placeholder-val="{{ false }}">
+            <span style="display:flex;align-items:center;gap:2px;height:12px">
+              <sc-for list="{{ loader }}" as="d" hint-placeholder-count="3">
+                <span style="width:2px;height:12px;border-radius:1px;background:{{ d.color }};transform-origin:center;animation:saBeat {{ d.dur }} ease-in-out infinite;animation-delay:{{ d.delay }};animation-play-state:{{ d.play }};transition:background .7s,opacity .7s;opacity:{{ d.op }}"></span>
+              </sc-for>
+            </span>
+          </sc-if>
+          <sc-if value="{{ isRelay }}" hint-placeholder-val="{{ false }}">
+            <span style="display:flex;align-items:center;gap:3px;height:12px">
+              <sc-for list="{{ loader }}" as="d" hint-placeholder-count="3">
+                <span style="width:5px;height:5px;border-radius:50%;box-sizing:border-box;background:{{ d.fill }};border:1.2px solid {{ d.color }};animation:saRelay 1.4s ease-in-out infinite;animation-delay:{{ d.delay }};animation-play-state:{{ d.play }};transition:background .7s,border-color .7s"></span>
+              </sc-for>
+            </span>
+          </sc-if>
+          <sc-if value="{{ isPetal }}" hint-placeholder-val="{{ false }}">
+            <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" style="animation:saSpin 3.2s linear infinite;animation-play-state:{{ petalPlay }}">
+              <sc-for list="{{ loader }}" as="d" hint-placeholder-count="3">
+                <circle cx="8" cy="8" r="6" fill="none" stroke="{{ d.color }}" stroke-width="2.2" stroke-linecap="round" stroke-dasharray="{{ d.dash }}" stroke-dashoffset="{{ d.offset }}" style="transition:stroke .7s;animation:saBreath 1.6s ease-in-out infinite;animation-delay:{{ d.delay }};animation-play-state:{{ d.play }}"></circle>
+              </sc-for>
+            </svg>
+          </sc-if>
+          <span style="font-size:11px;color:{{ convMetaColor }};transition:color .6s;white-space:nowrap">{{ convMeta }}</span>
+        </span>
+        <sc-if value="{{ hasAgents }}" hint-placeholder-val="{{ true }}">
+          <button type="button" onClick="{{ toggleSubs }}" aria-label="{{ subsLabel }}" title="{{ subsLabel }}" style="width:20px;height:20px;margin:-2px -4px -2px 0;padding:0;border:none;background:transparent;border-radius:5px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0" style-hover="background:var(--sel)"><svg width="11" height="11" viewBox="0 0 12 12" aria-hidden="true" style="transition:transform .3s cubic-bezier(.3,.8,.3,1);transform:rotate({{ subsRot }})"><path d="M4.5 3l3 3-3 3" fill="none" stroke="var(--mute)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path></svg></button>
+        </sc-if>
+      </div>
+
+      <div style="display:grid;grid-template-rows:{{ subsRows }};transition:grid-template-rows .45s cubic-bezier(.3,.8,.3,1)">
+        <div style="overflow:hidden;min-height:0">
+          <div style="position:relative;display:flex;flex-direction:column;gap:1px;padding:2px 0 4px">
+            <sc-for list="{{ rows }}" as="r" hint-placeholder-count="3">
+              <div onClick="{{ r.open }}" title="{{ r.title }}" style="position:relative;display:flex;align-items:flex-start;gap:8px;margin-left:{{ r.indent }};padding:5px 8px;border-radius:7px;cursor:pointer;background:{{ r.bg }};animation:{{ r.enter }};overflow:hidden;transition:background .3s" style-hover="background:var(--hover)">
+                <span aria-hidden="true" style="position:absolute;left:0;top:0;bottom:0;width:1px;background:var(--line)"></span>
+                <span aria-hidden="true" style="position:absolute;inset:0;background:var(--glow);pointer-events:none;opacity:0;animation:{{ r.glow }}"></span>
+                <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true" style="flex-shrink:0;margin-top:4px;overflow:visible">
+                  <circle cx="6" cy="6" r="4.5" fill="none" stroke="var(--track)" stroke-width="1.4" style="opacity:{{ r.trackOp }};transition:opacity .5s"></circle>
+                  <g style="transform-origin:6px 6px;animation:saSpin {{ r.spinDur }} linear infinite;opacity:{{ r.arcOp }};transition:opacity .45s">
+                    <circle cx="6" cy="6" r="4.5" fill="none" stroke="{{ r.arcColor }}" stroke-width="1.6" stroke-linecap="round" stroke-dasharray="9 19.3" style="transition:stroke .8s"></circle>
+                  </g>
+                  <circle cx="6" cy="6" r="5" fill="var(--done)" style="transform-box:fill-box;transform-origin:center;transform:scale({{ r.doneScale }});transition:transform .5s cubic-bezier(.3,1.6,.5,1)"></circle>
+                  <path d="M3.6 6.2l1.7 1.6 3.1-3.4" fill="none" stroke="var(--bg)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="8" stroke-dashoffset="{{ r.checkOff }}" style="transition:stroke-dashoffset .45s .2s ease-out"></path>
+                  <rect x="4.2" y="4.2" width="3.6" height="3.6" rx=".8" fill="var(--stop)" style="opacity:{{ r.stopOp }};transition:opacity .5s"></rect>
+                </svg>
+                <div style="flex:1;min-width:0;display:flex;flex-direction:column">
+                  <div style="display:flex;align-items:baseline;gap:8px;min-width:0">
+                    <span style="flex:1;min-width:0;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:{{ r.color }};font-weight:{{ r.weight }};transition:color .6s">{{ r.sum }}</span>
+                    <span style="font-size:11px;font-family:var(--mono);color:{{ r.metaColor }};white-space:nowrap;flex-shrink:0;transition:color .6s">{{ r.meta }}</span>
+                  </div>
+                  <div style="display:grid;grid-template-rows:{{ r.actRows }};transition:grid-template-rows .45s ease,opacity .45s;opacity:{{ r.actOp }}">
+                    <div style="overflow:hidden;min-height:0">
+                      <div style="font-size:11.5px;color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;animation:{{ r.actAnim }}">{{ r.act }}</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:9px;padding:6px 8px 6px 24px;border-radius:7px;font-size:13px;color:var(--ink2)">
+        <span style="width:7px;height:7px;border-radius:50%;border:1.5px solid var(--track);box-sizing:border-box;flex-shrink:0"></span>
+        <span style="flex:1">你好。</span><span style="font-size:11px;color:var(--faint)">周三</span>
+      </div>
+    </div>
+  </aside>
+
+  <main style="flex:1;min-width:0;display:flex;flex-direction:column">
+    <header style="height:52px;display:flex;align-items:center;justify-content:space-between;padding:0 16px;border-bottom:1px solid var(--line2)">
+      <span style="font-weight:500">修复登录接口偶发超时</span>
+      <button type="button" onClick="{{ replay }}" style="font:inherit;font-size:12px;padding:5px 12px;border-radius:7px;border:1px solid var(--line);background:var(--raise);color:var(--ink2);cursor:pointer" style-hover="border-color:var(--track)">重放演示</button>
+    </header>
+    <div style="flex:1;overflow:auto">
+      <div style="max-width:620px;margin:0 auto;padding:24px;display:flex;flex-direction:column;gap:16px">
+        <div style="align-self:flex-end;max-width:80%;background:var(--sel);padding:10px 16px;border-radius:18px">登录接口偶尔会超时，帮我查一下原因并修复，改完跑一下测试和压测，顺便更新 CHANGELOG。</div>
+        <div style="color:var(--ink2)">原因是 refreshToken() 每次请求都新建 Redis 连接。已改成复用连接，并加了超时和重试。接下来分给几个子 Agent 同时验证。</div>
+        <div style="font-size:12.5px;color:var(--faint)">{{ mainHint }}</div>
+      </div>
+    </div>
+  </main>
+
+  <aside onClick="{{ stopProp }}" style="width:420px;flex-shrink:0;background:var(--panel);border-left:1px solid var(--line2);display:flex;flex-direction:column;min-width:0">
+
+    <sc-if value="{{ h1 }}" hint-placeholder-val="{{ true }}">
+      <div style="height:52px;flex-shrink:0;display:flex;align-items:center;gap:2px;padding:0 10px;border-bottom:1px solid var(--line)">
+        <sc-for list="{{ fixedTabs }}" as="f" hint-placeholder-count="3">
+          <button type="button" onClick="{{ f.pick }}" style="display:flex;align-items:center;gap:6px;height:30px;padding:0 10px;border:none;border-radius:7px;background:{{ f.bg }};color:{{ f.color }};font:inherit;font-size:13px;cursor:pointer;flex-shrink:0;white-space:nowrap;transition:background .25s,color .25s" style-hover="color:var(--ink)">{{ f.label }}<span style="font-family:var(--mono);font-size:11px;color:var(--run)">{{ f.add }}</span><span style="font-family:var(--mono);font-size:11px;color:oklch(0.65 0.15 25)">{{ f.del }}</span></button>
+        </sc-for>
+        <sc-if value="{{ hasAgents }}" hint-placeholder-val="{{ true }}">
+          <span aria-hidden="true" style="width:1px;height:16px;background:var(--line);margin:0 6px;flex-shrink:0"></span>
+          <div style="flex:1;min-width:0;display:flex;align-items:center;gap:2px;overflow-x:auto;scrollbar-width:none;-webkit-mask-image:linear-gradient(90deg,#000 85%,transparent);mask-image:linear-gradient(90deg,#000 85%,transparent)">
+            <sc-for list="{{ tabs }}" as="t" hint-placeholder-count="3">
+              <button type="button" onClick="{{ t.pick }}" title="{{ t.sum }}" style="display:flex;align-items:center;gap:7px;height:30px;max-width:128px;padding:0 10px;border:none;border-radius:7px;background:{{ t.bg }};color:{{ t.color }};font:inherit;font-size:12.5px;cursor:pointer;flex-shrink:0;animation:{{ t.enter }};transition:background .25s,color .25s" style-hover="color:var(--ink)">
+                <span style="width:6px;height:6px;border-radius:50%;background:{{ t.dot }};flex-shrink:0;animation:{{ t.pulse }};transition:background .7s"></span>
+                <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ t.sum }}</span>
+              </button>
+            </sc-for>
+          </div>
+        </sc-if>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ h2 }}" hint-placeholder-val="{{ false }}">
+      <div style="flex-shrink:0;border-bottom:1px solid var(--line)">
+        <div style="height:52px;display:flex;align-items:center;padding:0 12px">
+          <div style="display:flex;align-items:center;gap:2px;padding:3px;border-radius:9px;background:var(--hover)">
+            <sc-for list="{{ allTabs }}" as="f" hint-placeholder-count="4">
+              <button type="button" onClick="{{ f.pick }}" style="display:flex;align-items:center;gap:6px;height:26px;padding:0 11px;border:none;border-radius:7px;background:{{ f.segBg }};color:{{ f.color }};font:inherit;font-size:12.5px;cursor:pointer;white-space:nowrap;box-shadow:{{ f.shadow }};transition:background .25s,color .25s,box-shadow .25s">{{ f.label }}<span style="font-size:11px;color:var(--faint)">{{ f.count }}</span></button>
+            </sc-for>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-rows:{{ agentRowRows }};transition:grid-template-rows .35s cubic-bezier(.3,.8,.3,1)">
+          <div style="overflow:hidden;min-height:0">
+            <div style="display:flex;align-items:center;gap:4px;padding:0 12px 10px;overflow-x:auto;scrollbar-width:none">
+              <sc-for list="{{ tabs }}" as="t" hint-placeholder-count="3">
+                <button type="button" onClick="{{ t.pick }}" title="{{ t.sum }}" style="display:flex;align-items:center;gap:6px;height:26px;padding:0 {{ t.pillPad }};min-width:26px;justify-content:center;border:1px solid {{ t.pillLine }};border-radius:999px;background:{{ t.pillBg }};color:var(--ink);font:inherit;font-size:12px;cursor:pointer;flex-shrink:0;transition:background .3s,border-color .3s,padding .35s cubic-bezier(.3,.8,.3,1)">
+                  <span style="width:7px;height:7px;border-radius:50%;background:{{ t.dot }};animation:{{ t.pulse }};transition:background .7s;flex-shrink:0"></span>
+                  <span style="max-width:{{ t.pillW }};overflow:hidden;white-space:nowrap;text-overflow:ellipsis;transition:max-width .35s cubic-bezier(.3,.8,.3,1)">{{ t.sum }}</span>
+                </button>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ h3 }}" hint-placeholder-val="{{ false }}">
+      <div style="position:relative;height:52px;flex-shrink:0;display:flex;align-items:center;gap:2px;padding:0 10px;border-bottom:1px solid var(--line)">
+        <sc-for list="{{ fixedTabs }}" as="f" hint-placeholder-count="3">
+          <button type="button" onClick="{{ f.pick }}" style="display:flex;align-items:center;gap:6px;height:30px;padding:0 10px;border:none;border-radius:7px;background:{{ f.bg }};color:{{ f.color }};font:inherit;font-size:13px;cursor:pointer;flex-shrink:0;white-space:nowrap" style-hover="color:var(--ink)">{{ f.label }}</button>
+        </sc-for>
+        <sc-if value="{{ hasAgents }}" hint-placeholder-val="{{ true }}">
+          <button type="button" onClick="{{ toggleMenu }}" style="display:flex;align-items:center;gap:7px;height:30px;min-width:0;padding:0 10px;border:none;border-radius:7px;background:{{ agentTabBg }};color:{{ agentTabColor }};font:inherit;font-size:13px;cursor:pointer" style-hover="color:var(--ink)">
+            <span style="width:6px;height:6px;border-radius:50%;background:{{ agentTabDot }};flex-shrink:0;animation:{{ agentTabPulse }};transition:background .7s"></span>
+            <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ agentTabLabel }}</span>
+            <span style="font-size:10px;color:var(--faint)">▾</span>
+          </button>
+        </sc-if>
+        <sc-if value="{{ menuOpen }}" hint-placeholder-val="{{ false }}">
+          <div style="position:absolute;right:10px;top:46px;width:330px;z-index:5;background:var(--raise);border:1px solid var(--line);border-radius:10px;box-shadow:0 12px 32px rgba(0,0,0,.35);padding:4px;animation:saMenuIn .18s ease-out">
+            <sc-for list="{{ tabs }}" as="t" hint-placeholder-count="3">
+              <div onClick="{{ t.pickClose }}" style="display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:7px;cursor:pointer;background:{{ t.menuBg }}" style-hover="background:var(--hover)">
+                <span style="width:7px;height:7px;border-radius:50%;background:{{ t.dot }};animation:{{ t.pulse }};flex-shrink:0"></span>
+                <span style="flex:1;min-width:0;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ t.sum }}</span>
+                <span style="font-size:11px;font-family:var(--mono);color:var(--faint)">{{ t.meta }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ h45 }}" hint-placeholder-val="{{ false }}">
+      <div style="height:52px;flex-shrink:0;display:flex;align-items:center;gap:2px;padding:0 10px;border-bottom:1px solid var(--line)">
+        <sc-for list="{{ allTabs }}" as="f" hint-placeholder-count="4">
+          <button type="button" onClick="{{ f.pick }}" style="display:flex;align-items:center;gap:6px;height:30px;padding:0 10px;border:none;border-radius:7px;background:{{ f.bg }};color:{{ f.color }};font:inherit;font-size:13px;cursor:pointer;flex-shrink:0;white-space:nowrap;transition:background .25s,color .25s" style-hover="color:var(--ink)">{{ f.label }}<span style="font-size:11px;color:var(--faint)">{{ f.count }}</span></button>
+        </sc-for>
+      </div>
+    </sc-if>
+
+    <div style="flex:1;min-height:0;display:flex">
+      <sc-if value="{{ showRail }}" hint-placeholder-val="{{ false }}">
+        <div style="width:138px;flex-shrink:0;border-right:1px solid var(--line);display:flex;flex-direction:column;gap:2px;padding:8px 6px;overflow:auto">
+          <sc-for list="{{ tabs }}" as="t" hint-placeholder-count="3">
+            <button type="button" onClick="{{ t.pick }}" title="{{ t.sum }}" style="display:flex;align-items:flex-start;gap:8px;padding:7px 8px;border:none;border-radius:7px;background:{{ t.menuBg }};color:{{ t.color }};font:inherit;font-size:12px;line-height:1.4;cursor:pointer;text-align:left;animation:{{ t.enter }};transition:background .25s,color .25s" style-hover="background:var(--hover)">
+              <span style="width:6px;height:6px;border-radius:50%;background:{{ t.dot }};animation:{{ t.pulse }};flex-shrink:0;margin-top:5px;transition:background .7s"></span>
+              <span style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">{{ t.sum }}</span>
+            </button>
+          </sc-for>
+        </div>
+      </sc-if>
+
+      <div style="flex:1;min-width:0;display:flex;flex-direction:column">
+        <sc-if value="{{ showOverview }}" hint-placeholder-val="{{ false }}">
+          <div style="flex:1;overflow:auto;padding:14px 16px 18px;display:flex;flex-direction:column;gap:12px">
+            <nav aria-label="位置" style="display:flex;align-items:center;gap:6px;height:22px;font-size:12.5px;color:var(--ink2)">子 Agent<span style="color:var(--faint)">{{ ovCount }}</span></nav>
+            <div style="display:flex;flex-direction:column;gap:6px">
+              <sc-for list="{{ tabs }}" as="t" hint-placeholder-count="3">
+                <button type="button" onClick="{{ t.pick }}" style="display:flex;align-items:center;gap:10px;padding:11px 12px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink);font:inherit;font-size:13px;cursor:pointer;text-align:left;animation:{{ t.enter }};transition:border-color .25s" style-hover="border-color:var(--track)">
+                  <span style="width:7px;height:7px;border-radius:50%;background:{{ t.dot }};animation:{{ t.pulse }};flex-shrink:0;transition:background .7s"></span>
+                  <span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px"><span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ t.sum }}</span><span style="font-size:11.5px;color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ t.now }}</span></span>
+                  <span style="font-size:11px;font-family:var(--mono);color:var(--faint);white-space:nowrap">{{ t.meta }}</span>
+                  <span style="color:var(--faint);font-size:12px">›</span>
+                </button>
+              </sc-for>
+            </div>
+          </div>
+        </sc-if>
+        <sc-if value="{{ showAgent }}" hint-placeholder-val="{{ false }}">
+          <div style="flex:1;overflow:auto;padding:16px 16px 18px;display:flex;flex-direction:column;gap:14px">
+            <sc-if value="{{ h5 }}" hint-placeholder-val="{{ false }}">
+              <nav aria-label="位置" style="position:relative;display:flex;align-items:center;gap:4px;height:22px;margin:-2px 0 -4px;font-size:12.5px;min-width:0">
+                <button type="button" onClick="{{ toOverview }}" style="border:none;background:transparent;padding:2px 6px;margin-left:-6px;border-radius:5px;color:var(--faint);font:inherit;cursor:pointer;white-space:nowrap" style-hover="background:var(--hover);color:var(--ink)">子 Agent</button>
+                <span aria-hidden="true" style="color:var(--track)">›</span>
+                <button type="button" onClick="{{ toggleMenu }}" aria-label="切换子 Agent" style="display:flex;align-items:center;gap:6px;min-width:0;border:none;background:transparent;padding:2px 6px;border-radius:5px;color:var(--ink2);font:inherit;cursor:pointer" style-hover="background:var(--hover);color:var(--ink)"><span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ curSum }}</span><span style="font-size:10px;color:var(--faint)">▾</span></button>
+                <sc-if value="{{ menuOpen }}" hint-placeholder-val="{{ false }}">
+                  <div style="position:absolute;left:60px;top:26px;width:310px;z-index:5;background:var(--raise);border:1px solid var(--line);border-radius:10px;box-shadow:0 12px 32px rgba(0,0,0,.35);padding:4px;animation:saMenuIn .18s ease-out">
+                    <sc-for list="{{ tabs }}" as="t" hint-placeholder-count="3">
+                      <div onClick="{{ t.pickClose }}" style="display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:7px;cursor:pointer;background:{{ t.menuBg }}" style-hover="background:var(--hover)">
+                        <span style="width:7px;height:7px;border-radius:50%;background:{{ t.dot }};animation:{{ t.pulse }};flex-shrink:0"></span>
+                        <span style="flex:1;min-width:0;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ t.sum }}</span>
+                        <span style="font-size:11px;font-family:var(--mono);color:var(--faint)">{{ t.meta }}</span>
+                      </div>
+                    </sc-for>
+                  </div>
+                </sc-if>
+              </nav>
+            </sc-if>
+            <div style="display:flex;align-items:center;gap:10px">
+              <span style="width:9px;height:9px;border-radius:50%;background:{{ curDot }};animation:{{ curPulse }};transition:background .7s;flex-shrink:0"></span>
+              <span style="font-size:15px;font-weight:600;flex:1;min-width:0;text-wrap:pretty">{{ curSum }}</span>
+              <span style="font-size:12px;font-family:var(--mono);color:{{ curMetaColor }};transition:color .6s;white-space:nowrap">{{ curMeta }}</span>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:4px;padding:10px 12px;background:var(--bg);border:1px solid var(--line);border-radius:10px">
+              <span style="font-size:11.5px;color:var(--faint)">主 Agent 分派的任务</span>
+              <span style="font-size:13px;text-wrap:pretty">{{ curBrief }}</span>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:9px">
+              <sc-for list="{{ steps }}" as="s" hint-placeholder-count="3">
+                <div style="display:flex;align-items:center;gap:10px;font-size:12.5px;animation:saActIn .35s ease-out">
+                  <span style="width:12px;display:flex;justify-content:center;color:{{ s.color }};flex-shrink:0">{{ s.mark }}</span>
+                  <span style="flex:1;min-width:0;color:{{ s.text }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ s.label }}</span>
+                </div>
+              </sc-for>
+            </div>
+            <sc-for list="{{ notes }}" as="n" hint-placeholder-count="0">
+              <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;animation:saActIn .35s ease-out">
+                <div style="max-width:85%;background:var(--sel);padding:8px 12px;border-radius:14px;font-size:13px;white-space:pre-wrap">{{ n.text }}</div>
+                <span style="font-size:11px;color:{{ n.color }};transition:color .6s">{{ n.label }}</span>
+              </div>
+            </sc-for>
+            <sc-if value="{{ curDone }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex;flex-direction:column;gap:4px;padding:10px 12px;border:1px solid var(--run-soft);background:var(--run-soft);border-radius:10px;animation:saActIn .45s ease-out">
+                <span style="font-size:11.5px;color:var(--done)">交回给主 Agent</span>
+                <span style="font-size:13px;text-wrap:pretty">{{ curResult }}</span>
+              </div>
+            </sc-if>
+            <sc-if value="{{ curStopped }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex;flex-direction:column;gap:4px;padding:10px 12px;border:1px solid var(--line);background:var(--bg);border-radius:10px;animation:saActIn .45s ease-out">
+                <span style="font-size:11.5px;color:var(--faint)">已被你停止</span>
+                <span style="font-size:13px;text-wrap:pretty">主 Agent 收到通知，会自己决定接下来怎么做。其他子 Agent 照常运行。</span>
+              </div>
+            </sc-if>
+          </div>
+          <sc-if value="{{ curRunning }}" hint-placeholder-val="{{ true }}">
+            <div style="padding:10px 12px 12px">
+              <div style="display:flex;flex-direction:column;gap:6px;border:1px solid var(--line);border-radius:12px;padding:9px 10px 8px 12px;background:var(--bg);transition:border-color .2s" style-hover="border-color:var(--track)">
+                <label style="display:flex">
+                  <span style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)">给这个子 Agent 插话</span>
+                  <textarea value="{{ draft }}" onChange="{{ draftInput }}" onKeyDown="{{ draftKey }}" placeholder="插话，比如「只跑 auth 相关的」" rows="2" style="flex:1;border:none;outline:none;resize:none;font:inherit;font-size:13px;line-height:1.5;background:transparent;color:var(--ink);padding:0"></textarea>
+                </label>
+                <div style="display:flex;align-items:center;gap:8px">
+                  <span style="flex:1;min-width:0;font-size:11px;color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">当前这一步做完后送达</span>
+                  <button type="button" onClick="{{ stopCur }}" title="只停这个子 Agent，主 Agent 和其他子 Agent 继续" style="display:flex;align-items:center;gap:6px;height:28px;padding:0 10px;border:1px solid var(--line);border-radius:999px;background:transparent;color:var(--ink2);font:inherit;font-size:12px;cursor:pointer" style-hover="background:var(--hover);color:var(--ink)"><span style="width:8px;height:8px;border-radius:2px;background:currentColor"></span>停止</button>
+                  <button type="button" onClick="{{ send }}" aria-label="发送" style="width:28px;height:28px;border:none;border-radius:50%;background:{{ sendBg }};color:{{ sendColor }};display:flex;align-items:center;justify-content:center;cursor:{{ sendCursor }};flex-shrink:0;transition:background .2s,color .2s"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M6 10V2.5M2.8 5.5L6 2.3l3.2 3.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path></svg></button>
+                </div>
+              </div>
+            </div>
+          </sc-if>
+        </sc-if>
+
+        <sc-if value="{{ showChanges }}" hint-placeholder-val="{{ true }}">
+          <div style="flex:1;overflow:auto;display:flex;flex-direction:column">
+            <div style="padding:14px 16px;border-bottom:1px solid var(--line);display:flex;gap:10px;align-items:baseline;font-size:13px"><span style="font-weight:500">3 个文件</span><span style="font-family:var(--mono);font-size:12px;color:var(--run)">+21</span><span style="font-family:var(--mono);font-size:12px;color:oklch(0.65 0.15 25)">−7</span></div>
+            <div style="display:flex;align-items:center;gap:8px;padding:10px 16px;border-bottom:1px solid var(--line);font-size:12px"><span style="flex:1;font-family:var(--mono)">src/api/auth.ts</span><span style="font-family:var(--mono);color:var(--run)">+14</span><span style="font-family:var(--mono);color:oklch(0.65 0.15 25)">−6</span></div>
+            <div style="display:flex;align-items:center;gap:8px;padding:10px 16px;border-bottom:1px solid var(--line);font-size:12px"><span style="flex:1;font-family:var(--mono)">src/lib/redis.ts</span><span style="font-family:var(--mono);color:var(--run)">+3</span><span style="font-family:var(--mono);color:oklch(0.65 0.15 25)">−1</span></div>
+            <div style="display:flex;align-items:center;gap:8px;padding:10px 16px;border-bottom:1px solid var(--line);font-size:12px"><span style="flex:1;font-family:var(--mono)">CHANGELOG.md</span><span style="font-family:var(--mono);color:var(--run)">+4</span><span style="font-family:var(--mono);color:oklch(0.65 0.15 25)">−0</span></div>
+          </div>
+        </sc-if>
+        <sc-if value="{{ showFiles }}" hint-placeholder-val="{{ false }}">
+          <div style="flex:1;overflow:auto;padding:12px 16px;display:flex;flex-direction:column;gap:6px;font-family:var(--mono);font-size:12px;color:var(--ink2)"><span>src/</span><span style="padding-left:14px">api/auth.ts</span><span style="padding-left:14px">lib/redis.ts</span><span>tests/auth.spec.ts</span><span>CHANGELOG.md</span></div>
+        </sc-if>
+        <sc-if value="{{ showTerm }}" hint-placeholder-val="{{ false }}">
+          <div style="flex:1;overflow:auto;padding:12px 16px;background:#0f0f0f;font-family:var(--mono);font-size:12px;line-height:1.7;color:#cfcfcf"><div>~/code/pi-work $ npm test</div><div style="color:var(--done)">✓ 260 passed</div><div>~/code/pi-work $</div></div>
+        </sc-if>
+      </div>
+    </div>
+  </aside>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"mode":{"editor":"enum","options":["深色","浅色"],"default":"深色","tsType":"string","section":"外观"},"loader":{"editor":"enum","options":["轨道","节拍","接力","花瓣"],"default":"轨道","tsType":"string","section":"对话行动画"},"header":{"editor":"enum","options":["5 标签+面包屑","1 单行","2 两层","3 下拉","4 侧边列"],"default":"5 标签+面包屑","tsType":"string","section":"右侧顶部"},"speed":{"editor":"range","min":0.5,"max":2,"step":0.25,"default":1,"tsType":"number","section":"演示"},"$preview":{"width":1280,"height":780}}'>
+const AG = [
+  { id: 'a', born: 1.0, end: 14, sum: '跑 auth 相关的单元和集成测试', brief: '运行 auth 相关的单元测试和集成测试，确认 refreshToken 的修改没有引入回归。失败时汇报用例名和报错。',
+    acts: ['读取 tests/auth.spec.ts', '运行 npm test -- unit/auth', '运行 docker compose up -d redis', '运行 npm test -- auth.spec.ts', '汇总测试结果'], result: '单元 18/18、集成 15/15 全部通过，没有回归。' },
+  { id: 'b', born: 1.7, end: 20, stall: [11.5, 15], sum: '200 并发压测登录接口，对比 p95', brief: '用 200 并发压测登录接口 60 秒，对比修复前的 p95 延迟和失败率。',
+    acts: ['读取 logs/bench-1012.json', '编辑 scripts/login.js', '运行 k6 run scripts/login.js', '对比修复前后的 p95'], result: 'p95 从 30.1s 降到 182ms，失败率 0。' },
+  { id: 'c', born: 2.4, end: 8, sum: '更新 CHANGELOG 的 2.4.1 条目', brief: '根据这次修改更新 CHANGELOG.md 的 2.4.1 条目。',
+    acts: ['读取 CHANGELOG.md', '运行 git diff --stat', '编辑 CHANGELOG.md'], result: '在 2.4.1 下补了 3 条说明。' },
+];
+const mmss = (n) => `${Math.floor(n / 60)}:${String(Math.floor(n % 60)).padStart(2, '0')}`;
+
+class Component extends DCLogic {
+  state = { t0: Date.now(), now: Date.now(), panel: 'changes', cur: null, subsOpen: true, stopped: {}, notes: {}, draft: '', menu: false };
+  componentDidMount() { this._t = setInterval(() => this.setState({ now: Date.now() }), 120); }
+  componentWillUnmount() { clearInterval(this._t); }
+
+  info(a, t) {
+    if (t < a.born) return null;
+    const stopAt = this.state.stopped[a.id];
+    const dur = a.end - a.born;
+    const tt = stopAt != null ? Math.min(t, stopAt) : t;
+    const idx = Math.min(a.acts.length - 1, Math.floor(((tt - a.born) / dur) * a.acts.length));
+    const actAt = a.born + (idx * dur) / a.acts.length;
+    let status = 'running';
+    if (stopAt != null && t >= stopAt) status = 'stopped';
+    else if (t >= a.end) status = 'done';
+    else if (a.stall && t >= a.stall[0] && t < a.stall[1]) status = 'stalled';
+    const changedAt = status === 'done' ? a.end : status === 'stopped' ? stopAt : status === 'stalled' ? a.stall[0] : a.born;
+    return { status, idx, actAt, changedAt, elapsed: Math.min(tt, a.end) - a.born };
+  }
+
+  renderVals() {
+    const S = this.state, P = this.props;
+    const t = ((S.now - S.t0) / 1000) * (P.speed ?? 1);
+    const loaderKind = P.loader ?? '轨道';
+    const hk = (P.header ?? '5 标签+面包屑').slice(0, 1);
+    const live = AG.map((a) => ({ a, i: this.info(a, t) })).filter((x) => x.i);
+    const n = live.length;
+    const isRun = (st) => st === 'running' || st === 'stalled';
+    const runN = live.filter((x) => isRun(x.i.status)).length;
+    const mainDone = n === AG.length && !runN;
+    const dotOf = (st) => (st === 'running' ? 'var(--run)' : st === 'stalled' ? 'var(--warn)' : st === 'done' ? 'var(--done)' : 'var(--stop)');
+    const pulseOf = (st) => (st === 'running' ? 'saBreath 1.6s ease-in-out infinite' : st === 'stalled' ? 'saBreath 2.6s ease-in-out infinite' : 'none');
+    const metaOf = (x) => (x.i.status === 'done' ? '完成' : x.i.status === 'stopped' ? '已停止' : x.i.status === 'stalled' ? `无动作 ${mmss(t - x.a.stall[0])}` : mmss(x.i.elapsed));
+    const viewing = S.panel === 'agent';
+    const C = viewing ? (live.find((x) => x.a.id === S.cur) || (hk === '5' ? null : live[0]) || null) : null;
+
+    const seg = 37.7 / Math.max(n, 1);
+    const loader = live.map((x, k) => {
+      const st = x.i.status, run = isRun(st);
+      return { color: dotOf(st), op: run ? 1 : 0.55, play: run ? 'running' : 'paused', dur: `${1.6 + k * 0.45}s`, delay: `${-k * 0.37}s`, top: k % 2 ? '1px' : '0px',
+        fill: run ? dotOf(st) : 'transparent', dash: `${Math.max(seg - 3, 1.5)} ${37.7 - Math.max(seg - 3, 1.5)}`, offset: `${-k * seg}` };
+    });
+
+    const openAgent = (id) => (e) => { e && e.stopPropagation(); this.setState({ panel: 'agent', cur: id, menu: false }); };
+    const rows = live.map((x) => {
+      const st = x.i.status, run = isRun(st), sel = C && C.a.id === x.a.id, since = t - x.i.changedAt;
+      return {
+        sum: x.a.sum, title: `${x.a.sum}\n此刻：${x.a.acts[x.i.idx]}`, indent: '32px',
+        bg: sel ? 'var(--sel)' : 'transparent', weight: sel ? 500 : 400, color: run ? 'var(--ink)' : 'var(--mute)',
+        enter: t - x.a.born < 0.6 ? 'saRowIn .6s cubic-bezier(.2,.8,.2,1) both' : 'none',
+        glow: (st === 'done' || st === 'stopped') && since < 1.6 ? 'saGlow 1.6s ease-out both' : 'none',
+        trackOp: st === 'done' ? 0 : 1, arcOp: run ? 1 : 0, arcColor: st === 'stalled' ? 'var(--warn)' : 'var(--run)', spinDur: st === 'stalled' ? '2.8s' : '0.9s',
+        doneScale: st === 'done' ? 1 : 0, checkOff: st === 'done' ? 0 : 8, stopOp: st === 'stopped' ? 1 : 0,
+        meta: metaOf(x), metaColor: st === 'stalled' ? 'var(--warn)' : run ? 'var(--mute)' : 'var(--faint)',
+        act: x.a.acts[x.i.idx], actRows: run ? '1fr' : '0fr', actOp: run ? 1 : 0, actAnim: t - x.i.actAt < 0.4 ? 'saActIn .4s ease-out both' : 'none',
+        open: openAgent(x.a.id),
+      };
+    });
+
+    const tabs = live.map((x) => {
+      const st = x.i.status, sel = C && C.a.id === x.a.id;
+      return {
+        sum: x.a.sum, now: isRun(st) ? `此刻：${x.a.acts[x.i.idx]}` : x.a.result, meta: metaOf(x), dot: dotOf(st), pulse: pulseOf(st), pick: openAgent(x.a.id), pickClose: openAgent(x.a.id),
+        bg: sel ? 'var(--sel)' : 'transparent', color: sel ? 'var(--ink)' : 'var(--mute)', menuBg: sel ? 'var(--sel)' : 'transparent',
+        enter: t - x.a.born < 0.5 ? 'saActIn .4s ease-out both' : 'none',
+        pillBg: sel ? 'var(--raise)' : 'transparent', pillLine: sel ? 'var(--line)' : 'transparent', pillPad: sel ? '10px' : '0px', pillW: sel ? '220px' : '0px',
+      };
+    });
+    const tabOf = (key, label, extra = {}) => {
+      const on = key === 'agent' ? viewing : S.panel === key;
+      return { label, add: '', del: '', count: '', ...extra,
+        bg: on ? 'var(--sel)' : 'transparent', color: on ? 'var(--ink)' : 'var(--mute)',
+        segBg: on ? 'var(--raise)' : 'transparent', shadow: on ? '0 1px 2px rgba(0,0,0,.25)' : 'none',
+        pick: (e) => { e.stopPropagation(); this.setState(key === 'agent' && hk === '5' ? { panel: key, menu: false, cur: viewing ? null : S.cur } : { panel: key, menu: false }); } };
+    };
+    const fixedTabs = [tabOf('changes', '变更', { add: '+21', del: '−7' }), tabOf('files', '文件'), tabOf('term', '终端')];
+    const allTabs = n ? [...fixedTabs, tabOf('agent', '子 Agent', { count: String(n) })] : fixedTabs;
+
+    const steps = C ? C.a.acts.slice(0, C.i.idx + 1).map((label, k) => {
+      const last = k === C.i.idx, running = last && isRun(C.i.status);
+      return { label, mark: running ? '●' : C.i.status === 'stopped' && last ? '■' : '✓', color: running ? (C.i.status === 'stalled' ? 'var(--warn)' : 'var(--run)') : 'var(--done)', text: running ? 'var(--ink)' : 'var(--mute)' };
+    }) : [];
+    const notes = C ? (S.notes[C.a.id] || []).map((nn) => {
+      const ok = t - nn.at > 2.2;
+      return { text: nn.text, label: ok ? '已送达' : '插话 · 等当前这一步做完', color: ok ? 'var(--faint)' : 'var(--warn)' };
+    }) : [];
+    const send = () => {
+      const text = S.draft.trim();
+      if (!C || !text) return;
+      this.setState((s) => ({ draft: '', notes: { ...s.notes, [C.a.id]: [...(s.notes[C.a.id] || []), { text, at: t }] } }));
+    };
+
+    return {
+      mode: P.mode ?? '深色',
+      isOrbit: loaderKind === '轨道', isBeat: loaderKind === '节拍', isRelay: loaderKind === '接力', isPetal: loaderKind === '花瓣',
+      loader, petalPlay: runN ? 'running' : 'paused', coreColor: mainDone ? 'var(--done)' : 'var(--run)',
+      loaderTitle: n ? `${n} 个子 Agent，${runN} 个在运行` : '',
+      convDot: mainDone ? 'transparent' : 'var(--run)', convBg: viewing ? 'transparent' : 'var(--sel)',
+      convMeta: n === 0 ? '运行中' : runN ? `${runN}/${n}` : `${n} 个完成`, convMetaColor: runN ? 'var(--run)' : 'var(--faint)',
+      hasAgents: n > 0, subsRows: S.subsOpen ? '1fr' : '0fr', subsRot: S.subsOpen ? '90deg' : '0deg', subsLabel: S.subsOpen ? '收起子 Agent' : '展开子 Agent',
+      toggleSubs: (e) => { e.stopPropagation(); this.setState((s) => ({ subsOpen: !s.subsOpen })); },
+      selectMain: () => this.setState({ panel: viewing ? 'changes' : S.panel, menu: false }),
+      rows, tabs, fixedTabs, allTabs,
+      h1: hk === '1', h2: hk === '2', h3: hk === '3', h45: hk === '4' || hk === '5', h5: hk === '5',
+      showOverview: hk === '5' && viewing && !C, ovCount: String(n), toOverview: (e) => { e.stopPropagation(); this.setState({ cur: null, menu: false }); },
+      agentRowRows: viewing && n ? '1fr' : '0fr',
+      agentTabBg: viewing ? 'var(--sel)' : 'transparent', agentTabColor: viewing ? 'var(--ink)' : 'var(--mute)',
+      agentTabDot: C ? dotOf(C.i.status) : runN ? 'var(--run)' : 'var(--done)', agentTabPulse: C ? pulseOf(C.i.status) : 'none',
+      agentTabLabel: C ? (C.a.sum.length > 9 ? `${C.a.sum.slice(0, 9)}…` : C.a.sum) : `子 Agent ${n}`,
+      menuOpen: S.menu, toggleMenu: (e) => { e.stopPropagation(); this.setState((s) => ({ menu: !s.menu })); },
+      closeMenus: () => S.menu && this.setState({ menu: false }), stopProp: () => {},
+      showRail: hk === '4' && viewing && n > 0, showAgent: !!C,
+      showChanges: S.panel === 'changes' || (viewing && !C && hk !== '5'), showFiles: S.panel === 'files', showTerm: S.panel === 'term',
+      steps, notes,
+      curSum: C ? C.a.sum : '', curDot: C ? dotOf(C.i.status) : 'var(--track)', curPulse: C ? pulseOf(C.i.status) : 'none',
+      curMeta: C ? metaOf(C) : '', curMetaColor: C && C.i.status === 'stalled' ? 'var(--warn)' : 'var(--faint)',
+      curBrief: C ? C.a.brief : '', curDone: !!C && C.i.status === 'done', curResult: C ? C.a.result : '',
+      curStopped: !!C && C.i.status === 'stopped', curRunning: !!C && isRun(C.i.status),
+      draft: S.draft, draftInput: (e) => this.setState({ draft: e.target.value }),
+      draftKey: (e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(); } },
+      send, sendBg: S.draft.trim() ? 'var(--accent)' : 'var(--hover)', sendColor: S.draft.trim() ? 'var(--on-accent)' : 'var(--faint)', sendCursor: S.draft.trim() ? 'pointer' : 'default',
+      stopCur: () => C && this.setState((s) => ({ stopped: { ...s.stopped, [C.a.id]: t } })),
+      replay: () => this.setState({ t0: Date.now(), now: Date.now(), stopped: {}, notes: {}, panel: 'changes', cur: null, subsOpen: true, menu: false }),
+      mainHint: mainDone ? '子 Agent 都已交回结果。' : n ? `${runN} 个子 Agent 在运行。点左侧任意一行，在右侧看它的过程；点对话本身，右侧回到变更。` : '正在派出子 Agent…',
+    };
+  }
+}
+</script>
+</body>
+</html>

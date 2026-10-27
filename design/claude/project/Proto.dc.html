@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Weft 可交互模板</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="height: 100vh; min-height: 640px; display: flex; overflow: hidden; font-family: -apple-system, 'PingFang SC', 'Helvetica Neue', system-ui, sans-serif; color: #1A1A1A; background: #FAFAFA; font-size: 14px; user-select: {{userSelect}}; cursor: {{dragCursor}}">
+
+  <sc-if value="{{leftOpen}}" hint-placeholder-val="{{true}}">
+    <aside style="width: {{leftPx}}; flex-shrink: 0; background: #F4F4F3; border-right: 1px solid #E7E7E5; display: flex; flex-direction: column; box-sizing: border-box; padding: 14px 12px 12px">
+      <div style="display: flex; align-items: center; gap: 10px">
+        <button type="button" onClick="{{newChat}}" style="flex: 1; height: 38px; border: 1px solid #E2E2E0; background: #FFFFFF; border-radius: 8px; font-size: 13px; color: #1A1A1A; font-family: inherit; cursor: pointer">新对话</button>
+        <button type="button" aria-label="收起左栏" onClick="{{toggleLeft}}" style="width: 32px; height: 32px; border: none; background: transparent; color: #6B6B6B; display: flex; align-items: center; justify-content: center; cursor: pointer">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"></rect><path d="M9 5v14"></path></svg>
+        </button>
+      </div>
+      <div style="display: flex; align-items: center; justify-content: space-between; padding: 22px 6px 6px; font-size: 12px; color: #6B6B6B">
+        <span>项目</span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+      </div>
+      <sc-if value="{{hasProject}}" hint-placeholder-val="{{false}}">
+        <div style="padding: 6px 8px; font-size: 13px; color: #3A3A3A; display: flex; align-items: center; gap: 8px">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg>
+          {{project}}
+        </div>
+        <sc-if value="{{thread}}" hint-placeholder-val="{{false}}">
+          <div style="padding: 7px 8px 7px 30px; font-size: 13px; background: #E9E9E7; border-radius: 6px; color: #1A1A1A; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{convTitle}}</div>
+        </sc-if>
+      </sc-if>
+      <div style="margin-top: auto; display: flex; align-items: center; justify-content: space-between; padding: 8px 6px 0; font-size: 13px; color: #555555">
+        <span>设置</span>
+        <span style="display: flex; align-items: center; gap: 12px">
+          <span style="width: 7px; height: 7px; border-radius: 50%; background: #2F9E5B"></span>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"></path></svg>
+        </span>
+      </div>
+    </aside>
+    <div role="separator" aria-label="拖动调整左栏宽度" onPointerDown="{{startLeft}}" style="width: 8px; margin: 0 -4px; flex-shrink: 0; cursor: col-resize; position: relative; z-index: 5; background: {{leftHandle}}"></div>
+  </sc-if>
+
+  <main style="flex: 1; min-width: 0; display: flex; flex-direction: column; background: #FAFAFA">
+    <div style="height: 52px; flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; gap: 12px">
+      <span style="display: flex; align-items: center; gap: 10px; min-width: 0">
+        <sc-if value="{{leftClosed}}" hint-placeholder-val="{{false}}">
+          <button type="button" aria-label="展开左栏" onClick="{{toggleLeft}}" style="width: 32px; height: 32px; border: none; background: transparent; color: #6B6B6B; display: flex; align-items: center; justify-content: center; cursor: pointer">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"></rect><path d="M9 5v14"></path></svg>
+          </button>
+        </sc-if>
+        <sc-if value="{{guides}}" hint-placeholder-val="{{true}}">
+          <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 12px; color: #B4410B; background: #FFF1E7; border-radius: 999px; padding: 4px 10px; white-space: nowrap">窗口 {{vw}} · 左栏 {{leftShown}} · 右栏 {{rightShown}} · 中间栏 {{centerW}}</span>
+        </sc-if>
+      </span>
+      <span style="display: flex; align-items: center; gap: 8px">
+        <button type="button" onClick="{{toggleGuides}}" style="border: 1px solid #E2E2E0; background: #FFFFFF; border-radius: 6px; padding: 4px 10px; font-size: 12px; color: #3A3A3A; font-family: inherit; cursor: pointer">{{guidesLabel}}</button>
+        <sc-if value="{{rightClosed}}" hint-placeholder-val="{{false}}">
+          <button type="button" aria-label="展开右栏" onClick="{{toggleRight}}" style="width: 32px; height: 32px; border: none; background: transparent; color: #6B6B6B; display: flex; align-items: center; justify-content: center; cursor: pointer">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"></rect><path d="M15 5v14"></path></svg>
+          </button>
+        </sc-if>
+      </span>
+    </div>
+
+    <sc-if value="{{empty}}" hint-placeholder-val="{{true}}">
+      <div style="flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 0 24px 40px; text-align: center">
+        <div style="display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 10px; font-size: 28px; font-weight: 600">
+          <span>要在</span>
+          <button type="button" onClick="{{pickProject}}" style="display: inline-flex; align-items: center; gap: 8px; padding: 3px 12px; border-radius: 8px; background: #EFEFED; border: none; font-size: 28px; font-weight: 600; color: #1A1A1A; font-family: inherit; cursor: pointer">{{projectLabel}} <span style="font-size: 11px; color: #6B6B6B">▾</span></button>
+          <span>里做什么？</span>
+        </div>
+        <p style="margin: 18px 0 0; font-size: 13px; color: #6E6E6E">{{heroHint}}</p>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{thread}}" hint-placeholder-val="{{false}}">
+      <div data-thread-scroll="1" style="flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; align-items: center">
+        <div style="width: {{cwPx}}; display: flex; flex-direction: column; gap: 18px; padding: 12px 0 24px">
+          <sc-for list="{{messages}}" as="m" hint-placeholder-count="2">
+            <sc-if value="{{m.isUser}}" hint-placeholder-val="{{true}}">
+              <div style="align-self: flex-end; max-width: 80%; background: #EFEFED; border-radius: 14px; padding: 10px 14px; line-height: 1.6; white-space: pre-wrap; word-break: break-word">{{m.text}}</div>
+            </sc-if>
+            <sc-if value="{{m.isBot}}" hint-placeholder-val="{{false}}">
+              <div style="line-height: 1.75; white-space: pre-wrap; word-break: break-word">{{m.text}}</div>
+            </sc-if>
+          </sc-for>
+        </div>
+      </div>
+    </sc-if>
+
+    <div style="flex-shrink: 0; display: flex; flex-direction: column; align-items: center; padding-bottom: 20px">
+      <sc-if value="{{guides}}" hint-placeholder-val="{{true}}">
+        <div style="width: {{cwPx}}; margin-bottom: 10px; display: flex; align-items: center; gap: 10px; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 12px; color: #B4410B">
+          <span style="width: 1px; height: 12px; background: #EA580C"></span>
+          <span style="flex: 1; border-top: 1px dashed #EA580C"></span>
+          <span style="white-space: nowrap">输入框 {{cw}}px · {{status}} · 两侧 {{gap}}px</span>
+          <span style="flex: 1; border-top: 1px dashed #EA580C"></span>
+          <span style="width: 1px; height: 12px; background: #EA580C"></span>
+        </div>
+      </sc-if>
+      <div style="width: {{cwPx}}; box-sizing: border-box; background: #FFFFFF; border: 1px solid #E4E4E2; border-radius: 18px; box-shadow: 0 6px 24px rgba(0, 0, 0, 0.05); padding: 14px 16px 12px 20px; display: flex; flex-direction: column; gap: 10px">
+        <textarea aria-label="输入消息" placeholder="继续对话，Enter 发送，Shift+Enter 换行" value="{{draft}}" onChange="{{onDraft}}" onKeyDown="{{onKey}}" style="height: {{taHeight}}; border: none; outline: none; resize: none; font-size: 15px; line-height: 1.6; font-family: inherit; color: #1A1A1A; background: transparent; padding: 0"></textarea>
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px">
+          <div style="display: flex; align-items: center; gap: 6px; min-width: 0">
+            <sc-if value="{{showChip}}" hint-placeholder-val="{{false}}">
+              <span style="font-size: 12px; background: #EFEFED; border-radius: 6px; padding: 3px 8px; color: #3A3A3A">{{project}}</span>
+            </sc-if>
+            <button type="button" style="border: none; background: transparent; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 13px; color: #1A1A1A; padding: 4px 6px; white-space: nowrap">deepseek-flash <span style="font-size: 10px; color: #6B6B6B">▾</span></button>
+          </div>
+          <div style="display: flex; align-items: center; gap: 14px">
+            <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 12px; color: #6E6E6E; white-space: nowrap">已用 {{used}}% · 剩 {{remain}}% · 1M ▾</span>
+            <button type="button" aria-label="发送" onClick="{{send}}" style="width: 36px; height: 36px; flex-shrink: 0; border-radius: 50%; border: none; background: {{sendBg}}; color: #FFFFFF; display: flex; align-items: center; justify-content: center; cursor: pointer">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"></path></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <sc-if value="{{rightOpen}}" hint-placeholder-val="{{true}}">
+    <div role="separator" aria-label="拖动调整右栏宽度" onPointerDown="{{startRight}}" style="width: 8px; margin: 0 -4px; flex-shrink: 0; cursor: col-resize; position: relative; z-index: 5; background: {{rightHandle}}"></div>
+    <aside style="width: {{rightPx}}; flex-shrink: 0; background: #FFFFFF; border-left: 1px solid #E7E7E5; display: flex; flex-direction: column">
+      <div style="height: 60px; display: flex; align-items: center; justify-content: space-between; padding: 0 14px; border-bottom: 1px solid #EFEFED">
+        <div style="display: flex; gap: 6px">
+          <button type="button" style="border: none; background: #EFEFED; border-radius: 6px; padding: 6px 12px; font-size: 13px; color: #1A1A1A; font-family: inherit">变更</button>
+          <button type="button" style="border: none; background: transparent; border-radius: 6px; padding: 6px 12px; font-size: 13px; color: #555555; font-family: inherit">文件</button>
+        </div>
+        <button type="button" aria-label="收起右栏" onClick="{{toggleRight}}" style="width: 32px; height: 32px; border: none; background: transparent; color: #6B6B6B; display: flex; align-items: center; justify-content: center; cursor: pointer">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"></rect><path d="M15 5v14"></path></svg>
+        </button>
+      </div>
+      <div style="flex: 1; display: flex; align-items: center; justify-content: center; font-size: 13px; color: #6E6E6E">暂无变更</div>
+    </aside>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1720,"height":1000}}'>
+class Component extends DCLogic {
+  componentDidMount() {
+    var self = this;
+    this._onResize = function () { self.setState({ vw: window.innerWidth }); };
+    window.addEventListener('resize', this._onResize);
+    this._onResize();
+  }
+  componentDidUpdate(prevProps, prevState) {
+    var before = prevState && prevState.messages ? prevState.messages.length : 0;
+    var now = this.state && this.state.messages ? this.state.messages.length : 0;
+    if (now > before) {
+      var el = document.querySelector('[data-thread-scroll]');
+      if (el) el.scrollTop = el.scrollHeight;
+    }
+  }
+  componentWillUnmount() {
+    window.removeEventListener('resize', this._onResize);
+  }
+  s(key, fallback) {
+    var st = this.state || {};
+    return st[key] !== undefined ? st[key] : fallback;
+  }
+  drag(e, key, sign, lo, hi) {
+    e.preventDefault();
+    var self = this;
+    var x0 = e.clientX;
+    var w0 = this.s(key, key === 'leftW' ? 264 : 440);
+    var move = function (ev) {
+      var w = w0 + sign * (ev.clientX - x0);
+      var patch = { dragging: key };
+      patch[key] = Math.max(lo, Math.min(hi, Math.round(w)));
+      self.setState(patch);
+    };
+    var up = function () {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      self.setState({ dragging: null });
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    this.setState({ dragging: key });
+  }
+  renderVals() {
+    var self = this;
+    var vw = this.s('vw', 1720);
+    var leftOpen = this.s('leftOpen', true);
+    var rightOpen = this.s('rightOpen', true);
+    var leftW = this.s('leftW', 264);
+    var rightW = this.s('rightW', 440);
+    var guides = this.s('guides', true);
+    var messages = this.s('messages', []);
+    var draft = this.s('draft', '');
+    var project = this.s('project', '');
+    var dragging = this.s('dragging', null);
+
+    var centerW = vw - (leftOpen ? leftW : 0) - (rightOpen ? rightW : 0);
+    var maxW = vw - 264 - 440 - 96;
+    var minW = 560;
+    var fit = centerW - 96;
+    var cw = Math.max(0, Math.min(centerW - 32, Math.max(minW, Math.min(fit, maxW))));
+    var status = fit > maxW ? '到上限（窗口 − 800）' : (fit < minW ? '到下限 560' : '正常');
+    var thread = messages.length > 0;
+    var lines = draft.split('\n').length;
+
+    var send = function () {
+      var text = draft.trim();
+      if (!text) return;
+      var reply = '收到。这是原型里的演示回复，用来看消息区和输入框的宽度：现在输入框 ' + cw + 'px，' + status + '。\n试试拖动两侧侧栏的边缘，或者收起侧栏，看宽度怎么变。';
+      self.setState({
+        messages: messages.concat([
+          { text: text, isUser: true, isBot: false },
+          { text: reply, isUser: false, isBot: true }
+        ]),
+        draft: ''
+      });
+    };
+
+    return {
+      vw: vw,
+      leftOpen: leftOpen,
+      leftClosed: !leftOpen,
+      rightOpen: rightOpen,
+      rightClosed: !rightOpen,
+      leftPx: leftW + 'px',
+      rightPx: rightW + 'px',
+      leftShown: leftOpen ? leftW : '收起',
+      rightShown: rightOpen ? rightW : '收起',
+      centerW: centerW,
+      cw: cw,
+      cwPx: cw + 'px',
+      gap: Math.round((centerW - cw) / 2),
+      status: status,
+      guides: guides,
+      guidesLabel: guides ? '隐藏标注' : '显示标注',
+      thread: thread,
+      empty: !thread,
+      messages: messages,
+      convTitle: thread ? messages[0].text.slice(0, 18) : '',
+      draft: draft,
+      taHeight: Math.min(160, Math.max(thread ? 26 : 56, lines * 24)) + 'px',
+      sendBg: draft.trim() ? '#1A1A1A' : '#C9C9C7',
+      used: Math.min(99, messages.length * 2),
+      remain: 100 - Math.min(99, messages.length * 2),
+      project: project,
+      hasProject: !!project,
+      showChip: !!project && thread,
+      projectLabel: project || '选择项目',
+      heroHint: project ? 'Agent 会在 ' + project + ' 这个目录里工作。' : '先在左侧添加一个项目，Agent 会在这个目录里工作。',
+      userSelect: dragging ? 'none' : 'auto',
+      dragCursor: dragging ? 'col-resize' : 'auto',
+      leftHandle: dragging === 'leftW' ? 'rgba(234, 88, 12, 0.35)' : 'transparent',
+      rightHandle: dragging === 'rightW' ? 'rgba(234, 88, 12, 0.35)' : 'transparent',
+      toggleLeft: function () { self.setState({ leftOpen: !leftOpen }); },
+      toggleRight: function () { self.setState({ rightOpen: !rightOpen }); },
+      toggleGuides: function () { self.setState({ guides: !guides }); },
+      startLeft: function (e) { self.drag(e, 'leftW', 1, 200, 480); },
+      startRight: function (e) { self.drag(e, 'rightW', -1, 320, 800); },
+      pickProject: function () { self.setState({ project: project === 'weft' ? 'pi-work' : 'weft' }); },
+      newChat: function () { self.setState({ messages: [], draft: '' }); },
+      onDraft: function (e) { self.setState({ draft: e.target.value }); },
+      onKey: function (e) {
+        if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); send(); }
+      },
+      send: send
+    };
+  }
+}
+</script>
+</body>
+</html>

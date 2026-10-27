@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Markdown 融合稿</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+.md{color:#1f1f1f;font-size:15px;line-height:1.75;letter-spacing:.01em}
+.md p{margin:0 0 14px}
+.md strong{font-weight:600;color:#1f1f1f}
+.md h2{font-size:18px;font-weight:600;line-height:1.4;margin:32px 0 10px;letter-spacing:0}
+.md h3{font-size:15px;font-weight:600;line-height:1.4;margin:24px 0 8px}
+.md>:first-child{margin-top:0}.md>:last-child{margin-bottom:0}
+.md ol,.md ul{margin:0 0 14px;padding-left:1.6em}
+.md li{margin:6px 0;padding-left:2px}
+.md li::marker{color:#999999}
+.md ol>li::marker{font-variant-numeric:tabular-nums}
+.md li>ul{margin:6px 0 0}
+.md a{color:#1f1f1f;text-decoration:underline;text-decoration-color:#c8c8c8;text-decoration-thickness:1px;text-underline-offset:4px}
+.md a:hover{text-decoration-color:#1f1f1f}
+.md code{font-family:ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:.86em;color:#363636;background:#f3f3f3;border:1px solid #ebebeb;padding:1px 6px;border-radius:6px;white-space:nowrap}
+.md blockquote{margin:0 0 14px;padding:2px 0 2px 16px;border-left:3px solid #e0e0e0;color:#4f4f4f}
+.md blockquote p{margin:0}
+.md hr{border:none;border-top:1px solid #e8e8e8;margin:28px 0}
+.tbl{margin:0 0 16px;border:1px solid #e8e8e8;border-radius:12px;overflow:auto}
+.md table{border-collapse:collapse;width:100%;font-size:14px;line-height:1.5}
+.md th{font-size:13px;font-weight:500;color:#6e6e6e;text-align:left;background:#f7f7f7;padding:9px 16px;border-bottom:1px solid #e8e8e8}
+.md td{padding:10px 16px;border-top:1px solid #f0f0f0}
+.md tr:first-child td{border-top:none}
+.md td.num,.md th.num{text-align:right;font-variant-numeric:tabular-nums}
+.md ul.tasks{list-style:none;padding-left:0}
+.md ul.tasks li{display:flex;align-items:center;gap:10px;margin:8px 0}
+.md ul.tasks input{appearance:none;margin:0;width:16px;height:16px;flex-shrink:0;border:1.5px solid #c8c8c8;border-radius:5px;background:#ffffff;display:grid;place-items:center}
+.md ul.tasks input:checked{background:#2b2b2b;border-color:#2b2b2b}
+.md ul.tasks input:checked::after{content:'';width:8px;height:4px;border:solid #ffffff;border-width:0 0 1.8px 1.8px;transform:translateY(-1px) rotate(-45deg)}
+.md ul.tasks li.done span{color:#6e6e6e}
+.card{margin:4px 0 18px;border:1px solid #e8e8e8;border-radius:12px;background:#f7f7f7;overflow:hidden}
+.bar{display:flex;align-items:center;justify-content:space-between;height:36px;padding:0 8px 0 16px;font-size:12px;color:#6e6e6e}
+.copy{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 8px;border:none;border-radius:6px;background:transparent;color:#6e6e6e;font-size:12px;font-family:inherit;cursor:pointer}
+.copy:hover{background:#ebebeb;color:#1f1f1f}
+.card pre{margin:0;padding:2px 16px 16px;overflow-x:auto;font-family:ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:13px;line-height:1.7;color:#1f1f1f;white-space:pre}
+.card pre code{background:none;border:none;padding:0;font-size:13px;white-space:pre;color:inherit}
+.md code.path{display:inline-flex;align-items:center;gap:4px;padding:0 6px 0 5px;line-height:22px;vertical-align:1px;cursor:pointer;color:#1f1f1f}
+.md code.path svg{color:#999999;flex-shrink:0}
+.md code.path .ln{color:#999999}
+.md code.path:hover{background:#ebebeb;border-color:#d2d2d2}
+.pr{color:#b0b0b0;user-select:none}
+.c{color:#999999;font-style:italic}.k{color:#1f1f1f;font-weight:600}.n{color:#4f4f4f}.p{color:#6e6e6e}
+</style>
+</helmet>
+<div style="width: 1080px; min-height: 1900px; box-sizing: border-box; padding: 64px 80px; background: #FCFCFC; display: flex; flex-direction: column; gap: 28px; font-family: -apple-system, 'PingFang SC', 'Microsoft YaHei', 'Helvetica Neue', sans-serif">
+  <div style="align-self: flex-end; max-width: 80%; background: #EFEFEF; border-radius: 18px; padding: 10px 16px; font-size: 15px; line-height: 1.6; color: #1F1F1F">中间栏宽度那个改完了吗？跑一下测试，把结果贴给我。</div>
+  <div class="md">
+    <p>改好了。中间栏宽度现在跟着栏宽走，空对话时输入框固定在底部。主要改动在 <code class="path"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"></path><path d="M14 3v5h5"></path></svg>public/app.css<span class="ln">:446</span></code>，测试补在 <code class="path"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"></path><path d="M14 3v5h5"></path></svg>tests/e2e/chat-width.spec.mjs</code>。</p>
+    <h2>宽度规则</h2>
+    <p>消息区和输入框共用一个宽度，<strong>两侧各留 48px</strong>，上下限如下：</p>
+    <ol>
+      <li>上限 = 屏幕宽 − 800，相当于默认侧栏（264 / 440）下的宽度，收起侧栏不会变宽</li>
+      <li>下限 560px，侧栏拖得再宽也不低于它
+        <ul>
+          <li>极窄时两侧至少留 16px</li>
+          <li>Windows 传统滚动条用 <code>scrollbar-gutter</code> 对齐</li>
+        </ul>
+      </li>
+      <li>空态和有对话时同宽</li>
+    </ol>
+    <div class="card">
+      <div class="bar"><span>css</span><button type="button" class="copy"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"></rect><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"></path></svg>复制</button></div>
+      <pre><code><span class="k">.thread-inner</span>,
+<span class="k">.composer-stack</span> {
+  <span class="c">/* 两侧 48px，夹在 560 和 屏幕−800 之间 */</span>
+  <span class="p">width</span>: min(calc(<span class="n">100%</span> - <span class="n">32px</span>),
+             max(<span class="n">560px</span>, min(calc(<span class="n">100%</span> - <span class="n">96px</span>), calc(<span class="n">100vw</span> - <span class="n">800px</span>))));
+  <span class="p">scrollbar-gutter</span>: stable both-edges;
+}</code></pre>
+    </div>
+    <h2>验证</h2>
+    <div class="tbl">
+      <table>
+        <thead><tr><th>检查项</th><th>结果</th><th class="num">用时</th></tr></thead>
+        <tbody>
+          <tr><td>npm run check</td><td>通过</td><td class="num">3.1s</td></tr>
+          <tr><td>npm test</td><td>274 / 274</td><td class="num">41.8s</td></tr>
+          <tr><td>e2e（Playwright）</td><td>12 / 12</td><td class="num">1m 52s</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <blockquote><p>已知小问题：中间栏窄于 592px 时，Windows 下可能多出约 2px 横向滚动。修法是给 <code>.thread-inner</code> 加 <code>max-width: 100%</code>，要的话我顺手改。</p></blockquote>
+    <h3>接下来</h3>
+    <ul class="tasks">
+      <li class="done"><input type="checkbox" checked disabled aria-label="已完成"><span>合并 #99</span></li>
+      <li class="done"><input type="checkbox" checked disabled aria-label="已完成"><span>CI 三项全绿</span></li>
+      <li><input type="checkbox" disabled aria-label="未完成"><span>更新本地服务（会先备份 data 目录）</span></li>
+    </ul>
+    <p>本地复跑：</p>
+    <div class="card">
+      <div class="bar"><span>bash</span><button type="button" class="copy"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"></rect><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"></path></svg>复制</button></div>
+      <pre><code><span class="pr">$ </span>npm run check &amp;&amp; npm test</code></pre>
+    </div>
+    <hr>
+    <p>参考：<a href="#t30">T30 原型</a> · <a href="#pr99">PR #99</a></p>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1080,"height":1900}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

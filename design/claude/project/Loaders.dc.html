@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Loading 动画方案</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+.ld-root{--bg:#161616;--card:#1c1c1c;--ink:#ececec;--mute:#a3a3a3;--faint:#7c7c7c;--line:#2c2c2c;--track:#3a3a3a;--run:oklch(0.74 0.15 152);--done:oklch(0.62 0.05 152);--warn:oklch(0.8 0.13 78);--stop:#8a8a8a;--font:-apple-system,BlinkMacSystemFont,"PingFang SC","Helvetica Neue",sans-serif}
+@keyframes ldSpin{to{transform:rotate(360deg)}}
+@keyframes ldOrbit{to{transform:rotate(360deg)}}
+@keyframes ldBeat{0%,100%{transform:scaleY(.35)}50%{transform:scaleY(1)}}
+@keyframes ldRelay{0%,100%{transform:scale(.7);opacity:.45}30%{transform:scale(1.25);opacity:1}}
+@keyframes ldBreath{0%,100%{opacity:.55}50%{opacity:1}}
+</style>
+</helmet>
+<div class="ld-root" style="width:1280px;box-sizing:border-box;padding:48px;background:var(--bg);color:var(--ink);font-family:var(--font);display:flex;flex-direction:column;gap:36px">
+  <div style="display:flex;align-items:baseline;justify-content:space-between;gap:24px">
+    <div style="display:flex;flex-direction:column;gap:6px">
+      <h1 style="margin:0;font-size:28px;font-weight:600">对话行上的子 Agent 动画</h1>
+      <p style="margin:0;color:var(--mute);font-size:14px">每个子 Agent 一个元素。运行中是绿色，卡住变琥珀色，完成后停下并褪成灰绿。放大 4 倍展示，实际约 16px。</p>
+    </div>
+    <span style="font-size:13px;color:var(--faint);white-space:nowrap">{{ phaseLabel }}</span>
+  </div>
+
+  <div style="display:grid;grid-template-columns:repeat(4, minmax(0, 1fr));gap:20px">
+    <div style="background:var(--card);border:1px solid var(--line);border-radius:14px;padding:22px;display:flex;flex-direction:column;gap:18px">
+      <div style="height:120px;display:flex;align-items:center;justify-content:center">
+        <span style="position:relative;width:18px;height:18px;display:block;transform:scale(4.5)">
+          <span style="position:absolute;left:7px;top:7px;width:4px;height:4px;border-radius:50%;background:{{ core }};transition:background .7s"></span>
+          <sc-for list="{{ dots }}" as="d" hint-placeholder-count="3">
+            <span style="position:absolute;inset:0;animation:ldOrbit {{ d.dur }} linear infinite;animation-delay:{{ d.delay }};animation-play-state:{{ d.play }}">
+              <span style="position:absolute;left:7.5px;top:{{ d.top }};width:3px;height:3px;border-radius:50%;background:{{ d.color }};opacity:{{ d.op }};transition:background .7s,opacity .7s"></span>
+            </span>
+          </sc-for>
+        </span>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px"><span style="font-size:15px;font-weight:600">轨道</span><span style="font-size:13px;color:var(--mute);text-wrap:pretty">中间是主 Agent，子 Agent 像卫星绕着转，速度各不相同。做完的停在原位、变灰。</span></div>
+    </div>
+    <div style="background:var(--card);border:1px solid var(--line);border-radius:14px;padding:22px;display:flex;flex-direction:column;gap:18px">
+      <div style="height:120px;display:flex;align-items:center;justify-content:center">
+        <span style="display:flex;align-items:center;gap:2px;height:12px;transform:scale(4.5)">
+          <sc-for list="{{ dots }}" as="d" hint-placeholder-count="3">
+            <span style="width:2px;height:12px;border-radius:1px;background:{{ d.color }};animation:ldBeat {{ d.dur }} ease-in-out infinite;animation-delay:{{ d.delay }};animation-play-state:{{ d.play }};opacity:{{ d.op }};transition:background .7s,opacity .7s"></span>
+          </sc-for>
+        </span>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px"><span style="font-size:15px;font-weight:600">节拍</span><span style="font-size:13px;color:var(--mute);text-wrap:pretty">每个子 Agent 一根细竖条，像音量跳动，节奏错开。做完的停住，变成短灰条。</span></div>
+    </div>
+    <div style="background:var(--card);border:1px solid var(--line);border-radius:14px;padding:22px;display:flex;flex-direction:column;gap:18px">
+      <div style="height:120px;display:flex;align-items:center;justify-content:center">
+        <span style="display:flex;align-items:center;gap:3px;height:12px;transform:scale(4.5)">
+          <sc-for list="{{ dots }}" as="d" hint-placeholder-count="3">
+            <span style="width:5px;height:5px;border-radius:50%;box-sizing:border-box;background:{{ d.fill }};border:1.2px solid {{ d.color }};animation:ldRelay 1.4s ease-in-out infinite;animation-delay:{{ d.delay }};animation-play-state:{{ d.play }};transition:background .7s,border-color .7s"></span>
+          </sc-for>
+        </span>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px"><span style="font-size:15px;font-weight:600">接力</span><span style="font-size:13px;color:var(--mute);text-wrap:pretty">一排圆点，一道光依次从左传到右。做完的变成空心圈，不再参与接力。</span></div>
+    </div>
+    <div style="background:var(--card);border:1px solid var(--line);border-radius:14px;padding:22px;display:flex;flex-direction:column;gap:18px">
+      <div style="height:120px;display:flex;align-items:center;justify-content:center">
+        <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" style="transform:scale(4.5);overflow:visible">
+          <g style="transform-origin:8px 8px;animation:ldSpin 3.2s linear infinite;animation-play-state:{{ ringPlay }}">
+            <sc-for list="{{ dots }}" as="d" hint-placeholder-count="3">
+              <circle cx="8" cy="8" r="6" fill="none" stroke="{{ d.color }}" stroke-width="2.2" stroke-linecap="round" stroke-dasharray="{{ d.dash }}" stroke-dashoffset="{{ d.offset }}" style="transition:stroke .7s;animation:ldBreath 1.6s ease-in-out infinite;animation-delay:{{ d.delay }};animation-play-state:{{ d.play }}"></circle>
+            </sc-for>
+          </g>
+        </svg>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px"><span style="font-size:15px;font-weight:600">花瓣</span><span style="font-size:13px;color:var(--mute);text-wrap:pretty">一个圆环按子 Agent 数量分段，整体慢慢转，运行中的段在呼吸。全部做完时圆环停下。</span></div>
+    </div>
+  </div>
+
+  <div style="display:flex;flex-direction:column;gap:14px">
+    <div style="display:flex;flex-direction:column;gap:4px">
+      <h2 style="margin:0;font-size:18px;font-weight:600">每一行子 Agent 的状态图标</h2>
+      <p style="margin:0;color:var(--mute);font-size:13px">状态之间不跳变：转圈的弧线淡出，实心圆弹出，对勾一笔画出来；停止时弧线淡出，中间浮出小方块。</p>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(4, minmax(0, 1fr));gap:20px">
+      <sc-for list="{{ icons }}" as="r" hint-placeholder-count="4">
+        <div style="background:var(--card);border:1px solid var(--line);border-radius:14px;padding:22px;display:flex;align-items:center;gap:22px">
+          <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true" style="transform:scale(4);margin:18px;overflow:visible;flex-shrink:0">
+            <circle cx="6" cy="6" r="4.5" fill="none" stroke="var(--track)" stroke-width="1.4" style="opacity:{{ r.trackOp }};transition:opacity .5s"></circle>
+            <g style="transform-origin:6px 6px;animation:ldSpin {{ r.spinDur }} linear infinite;opacity:{{ r.arcOp }};transition:opacity .45s">
+              <circle cx="6" cy="6" r="4.5" fill="none" stroke="{{ r.arcColor }}" stroke-width="1.6" stroke-linecap="round" stroke-dasharray="9 19.3" style="transition:stroke .8s"></circle>
+            </g>
+            <circle cx="6" cy="6" r="5" fill="var(--done)" style="transform-box:fill-box;transform-origin:center;transform:scale({{ r.doneScale }});transition:transform .5s cubic-bezier(.3,1.6,.5,1)"></circle>
+            <path d="M3.6 6.2l1.7 1.6 3.1-3.4" fill="none" stroke="var(--bg)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="8" stroke-dashoffset="{{ r.checkOff }}" style="transition:stroke-dashoffset .45s .2s ease-out"></path>
+            <rect x="4.2" y="4.2" width="3.6" height="3.6" rx=".8" fill="var(--stop)" style="opacity:{{ r.stopOp }};transition:opacity .5s"></rect>
+          </svg>
+          <div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:14px;font-weight:600">{{ r.name }}</span><span style="font-size:12.5px;color:var(--mute)">{{ r.now }}</span></div>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":720}}'>
+const PHASES = [
+  { label: '3 个子 Agent 都在运行', st: ['run', 'run', 'run'] },
+  { label: '第 1 个做完了', st: ['done', 'run', 'run'] },
+  { label: '第 2 个卡住了', st: ['done', 'stall', 'run'] },
+  { label: '全部做完', st: ['done', 'done', 'done'] },
+];
+const ICONS = [
+  { name: '运行 → 完成', seq: ['run', 'done'] },
+  { name: '运行 → 卡住 → 运行', seq: ['run', 'stall'] },
+  { name: '运行 → 停止', seq: ['run', 'stop'] },
+  { name: '卡住 → 完成', seq: ['stall', 'done'] },
+];
+class Component extends DCLogic {
+  state = { tick: 0 };
+  componentDidMount() { this._t = setInterval(() => this.setState((s) => ({ tick: s.tick + 1 })), 2200); }
+  componentWillUnmount() { clearInterval(this._t); }
+  renderVals() {
+    const ph = PHASES[this.state.tick % PHASES.length];
+    const color = (s) => (s === 'run' ? 'var(--run)' : s === 'stall' ? 'var(--warn)' : 'var(--done)');
+    const n = ph.st.length, seg = 37.7 / n;
+    const dots = ph.st.map((s, k) => {
+      const live = s !== 'done';
+      return { color: color(s), op: live ? 1 : 0.55, play: live ? 'running' : 'paused', dur: `${1.6 + k * 0.45}s`, delay: `${-k * 0.37}s`,
+        top: k % 2 ? '1px' : '0px', fill: live ? color(s) : 'transparent', dash: `${seg - 3} ${37.7 - seg + 3}`, offset: `${-k * seg}` };
+    });
+    const icons = ICONS.map((ic) => {
+      const s = ic.seq[this.state.tick % 2];
+      const live = s === 'run' || s === 'stall';
+      return { name: ic.name, now: { run: '运行中', stall: '卡住了', done: '完成', stop: '已停止' }[s],
+        trackOp: s === 'done' ? 0 : 1, arcOp: live ? 1 : 0, arcColor: s === 'stall' ? 'var(--warn)' : 'var(--run)', spinDur: s === 'stall' ? '2.8s' : '0.9s',
+        doneScale: s === 'done' ? 1 : 0, checkOff: s === 'done' ? 0 : 8, stopOp: s === 'stop' ? 1 : 0 };
+    });
+    const anyLive = ph.st.some((s) => s !== 'done');
+    return { dots, icons, phaseLabel: `演示中：${ph.label}`, core: anyLive ? 'var(--run)' : 'var(--done)', ringPlay: anyLive ? 'running' : 'paused' };
+  }
+}
+</script>
+</body>
+</html>
