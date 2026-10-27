@@ -9,6 +9,7 @@ import { validateResponse } from '../../src/v2/validate.ts';
 import { phrase } from '../../src/v2/phrases/index.ts';
 import { ROOT } from './_root.mjs';
 import { readDiscovery, request, startServer, stopServer } from './_server.mjs';
+import { makeTempDir, removeTempDir } from './_tmp.mjs';
 
 const TOKEN = 'v2-ext-http-token';
 
@@ -68,7 +69,7 @@ async function writePlugin(dir, id, toolName, { exportTool = true } = {}) {
 }
 
 test('POST /api/v2/workspaces local empty, path out of bounds, git file: rejected', { timeout: 40_000 }, async () => {
-  const wsRoot = await mkdtemp(path.join(tmpdir(), 'weft-v2-wsroot-'));
+  const wsRoot = await makeTempDir('weft-v2-wsroot-');
   const outside = await mkdtemp(path.join(tmpdir(), 'weft-v2-outside-'));
   const srv = await startServer({
     token: TOKEN,
@@ -135,11 +136,13 @@ test('POST /api/v2/workspaces local empty, path out of bounds, git file: rejecte
     assert.equal(unauth.status, 401);
   } finally {
     await stopServer(srv);
+    await removeTempDir(wsRoot);
+    await removeTempDir(outside);
   }
 });
 
 test('workspace-root listing stays inside the allowed root', { timeout: 40_000 }, async () => {
-  const wsRoot = await mkdtemp(path.join(tmpdir(), 'weft-v2-browse-'));
+  const wsRoot = await makeTempDir('weft-v2-browse-');
   await mkdir(path.join(wsRoot, 'keep'));
   const outside = await mkdtemp(path.join(tmpdir(), 'weft-v2-browse-out-'));
   const srv = await startServer({
@@ -173,6 +176,8 @@ test('workspace-root listing stays inside the allowed root', { timeout: 40_000 }
     assert.equal(escaped.body.error.includes(outside), false);
   } finally {
     await stopServer(srv);
+    await removeTempDir(wsRoot);
+    await removeTempDir(outside);
   }
 });
 
