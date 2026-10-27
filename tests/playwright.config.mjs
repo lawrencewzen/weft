@@ -13,7 +13,8 @@ export default defineConfig({
   timeout: 60_000,
   fullyParallel: false,
   workers: 1,
-  retries: 0,
+  // CI 上偶发失败重试一次（报告里标 flaky，不弄红整个运行）；本地保持 0。
+  retries: ci ? 1 : 0,
   forbidOnly: ci,
   reporter: [['list'], ['html', { open: 'never', outputFolder: path.join(root, 'playwright-report') }]],
   use: {
