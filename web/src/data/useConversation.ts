@@ -12,6 +12,7 @@ import { navigate, conversationPath } from './nav';
 import { useSession } from './session';
 import {
   conversationTopic,
+  type Change,
   type ConversationView,
   type ThreadItem,
   type ToolCall,
@@ -28,6 +29,7 @@ export type ConversationState = {
   conversation: ConversationView | undefined;
   items: ThreadItem[];
   toolsById: Record<string, ToolCall>;
+  changes: Change[];
   status: ReturnType<typeof useSession>['status'];
   missing: boolean;
   actions: ConversationActions;
@@ -49,6 +51,7 @@ export function useConversation(cid: string | null | undefined): ConversationSta
   const conversation = id ? store.conversation(id) : undefined;
   const items = id ? store.items(id) : [];
   const toolsById = id ? store.toolsById(id) : {};
+  const changes = id ? store.changes(id) : [];
   const missing = Boolean(id) && store.isMissing(conversationTopic(id));
 
   const send = useCallback((text: string, requestId?: string) => sendMessage(id, text, requestId), [id]);
@@ -61,7 +64,7 @@ export function useConversation(cid: string | null | undefined): ConversationSta
     [send, stop, continueRun, loadToolOutput],
   );
 
-  return { conversation, items, toolsById, status, missing, actions };
+  return { conversation, items, toolsById, changes, status, missing, actions };
 }
 
 /**

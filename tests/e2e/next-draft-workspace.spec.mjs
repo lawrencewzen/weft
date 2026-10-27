@@ -61,6 +61,8 @@ test('new chat does not add a sidebar row until the first message is sent', asyn
     await expect(page.locator('.conv-tree-node.conv-active')).toHaveCount(0);
     await expect(wsNode(page, 'draft').getByTestId('next-conv-row')).toHaveCount(1);
     await expect(page.getByTestId('next-draft-hint')).toContainText('draft');
+    await expect(page.getByTestId('next-draft-hero-ws')).toContainText('draft');
+    await expect(page.getByTestId('next-draft-hint')).toContainText('要在');
     await page.getByTestId('next-composer-input').fill('写个 README');
     await page.getByTestId('next-send').click();
     await expect(page).toHaveURL(/\/c\/[^/]+$/, { timeout: 20000 });

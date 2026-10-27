@@ -45,6 +45,13 @@ test('diff, file tree, preview, save and the 409 conflict demo', async ({ page }
   }
   expect([...perPath.values()].every((count) => count === 1)).toBe(true);
 
+  // The thread change-summary opens the same file in the right pane without a new fetch.
+  await expect(page.getByTestId('next-change-summary-row')).toHaveCount(2);
+  await page.locator('[data-testid=next-change-summary-row][data-path="web/src/data/store.ts"]').click();
+  await expect(
+    page.locator('[data-testid=next-change-row][data-path="web/src/data/store.ts"]').getByTestId('next-diff'),
+  ).toBeVisible();
+
   // File tab: the mock repository has a real tree.
   await page.getByTestId('next-right-tab-files').click();
   await expect(page.getByTestId('next-file-node').first()).toBeVisible();

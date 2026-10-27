@@ -7,15 +7,15 @@ type PathRef = components['schemas']['PathRef'];
 const SHELL_LANGS = new Set(['bash', 'sh', 'shell', 'zsh', 'console']);
 
 const COPY_ICON =
-  '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">' +
-  '<rect x="5.5" y="5.5" width="8" height="8" rx="1.5" stroke="currentColor" stroke-width="1.25"/>' +
-  '<rect x="2.5" y="2.5" width="8" height="8" rx="1.5" stroke="currentColor" stroke-width="1.25"/>' +
+  '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">' +
+  '<rect x="8" y="8" width="12" height="12" rx="2" stroke="currentColor" stroke-width="1.8"/>' +
+  '<path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2" stroke="currentColor" stroke-width="1.8"/>' +
   '</svg>';
 
 const FILE_ICON =
-  '<svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">' +
-  '<path d="M4.2 2.4h5.1L12.6 5.8v7.8H4.2V2.4z" stroke="currentColor" stroke-width="1.25"/>' +
-  '<path d="M9.2 2.4V6h3.4" stroke="currentColor" stroke-width="1.25"/>' +
+  '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">' +
+  '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" stroke="currentColor" stroke-width="2"/>' +
+  '<path d="M14 3v5h5" stroke="currentColor" stroke-width="2"/>' +
   '</svg>';
 
 const LINE_HASH_RE = /#L(\d+)$/;
@@ -123,10 +123,18 @@ const marked = new Marked({
       return `<${tag}${startAttr}${cls}>\n${items}</${tag}>\n`;
     },
     listitem(this: Renderer, item: Tokens.ListItem) {
-      const body = this.parser.parse(item.tokens);
+      let body = this.parser.parse(item.tokens);
       if (item.task) {
+        body = body.replace(/^\s*<input[^>]*type="checkbox"[^>]*>\s*/i, '');
+        body = body.replace(/^<p>([\s\S]*)<\/p>\n?$/, '$1');
         const done = item.checked ? ' is-done' : '';
-        return `<li class="task-list-item${done}">${body}</li>\n`;
+        const checked = item.checked ? ' checked' : '';
+        return (
+          `<li class="task-list-item${done}">` +
+          `<input type="checkbox" disabled${checked} aria-hidden="true">` +
+          `<span>${body}</span>` +
+          `</li>\n`
+        );
       }
       return `<li>${body}</li>\n`;
     },

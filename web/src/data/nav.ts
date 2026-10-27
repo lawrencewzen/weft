@@ -94,6 +94,8 @@ export function navigate(path: string, opts: NavigateOpts = {}): void {
 }
 
 export function openSettings(page: SettingsPage = 'general'): void {
+  const current = readAddressPath();
+  if (!/^\/settings(?:\/|$)/.test(current)) rememberSettingsBehind(current);
   navigate(settingsPath(page), { state: { weftSettings: true } });
 }
 
@@ -101,6 +103,10 @@ let settingsBehindPath: string | null = null;
 
 export function rememberSettingsBehind(path: string | null): void {
   settingsBehindPath = path;
+}
+
+export function peekSettingsBehind(): string | null {
+  return settingsBehindPath;
 }
 
 export function closeSettings(): void {

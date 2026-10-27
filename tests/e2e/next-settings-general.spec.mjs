@@ -72,6 +72,9 @@ test('switching language updates UI and server phrases, persists, and old UI fol
   await page.getByTestId('next-open-settings').click();
   await expect(page.getByTestId('next-settings-general')).toBeVisible();
   await expect(page.getByTestId('next-settings')).toContainText('系统设置');
+  await expect(page.getByTestId('next-status')).not.toContainText(/加载中|Loading/);
+  await expect(page.getByTestId('next-item-user')).toBeVisible();
+  await expect(page.getByTestId('next-item-user')).toContainText('看看');
   const savedLang = page.waitForResponse((res) => (
     /\/api\/settings$/.test(new URL(res.url()).pathname)
     && res.request().method() === 'PUT'

@@ -8,6 +8,8 @@ type Props = {
   lang: Lang;
   selectedId?: string | null;
   canSwitch?: boolean;
+  /** Draft empty-state title uses the same picker as the composer chip. */
+  variant?: 'chip' | 'hero';
   onPick: (workspaceId: string) => void;
   onNew: () => void;
 };
@@ -28,6 +30,7 @@ export function WorkspaceChip({
   lang,
   selectedId = null,
   canSwitch = false,
+  variant = 'chip',
   onPick,
   onNew,
 }: Props) {
@@ -37,8 +40,12 @@ export function WorkspaceChip({
   const wrap = useRef<HTMLDivElement>(null);
   const selected = workspaces.find((ws) => ws.id === selectedId) || null;
   const empty = workspaces.length === 0;
-  const label = selected?.name || t(lang, 'pick_workspace');
-  const title = selected?.path || selected?.name || t(lang, 'pick_workspace');
+  const hero = variant === 'hero';
+  const emptyLabel = t(lang, hero ? 'pick_project' : 'pick_workspace');
+  const label = selected?.name || emptyLabel;
+  const title = selected?.path || selected?.name || emptyLabel;
+  const triggerId = hero ? 'next-draft-hero-ws' : 'next-ws-chip';
+  const menuId = hero ? 'next-draft-hero-menu' : 'next-ws-chip-menu';
 
   useEffect(() => {
     if (!open && !boundHint) return;
@@ -83,18 +90,18 @@ export function WorkspaceChip({
   }
 
   return (
-    <div className="chip-selector-wrap" ref={wrap}>
+    <div className={`chip-selector-wrap${hero ? ' is-hero' : ''}`} ref={wrap}>
       <button
         type="button"
-        className={`model-chip ws-chip${open || boundHint ? ' is-open' : ''}`}
-        data-testid="next-ws-chip"
+        className={`model-chip ws-chip${hero ? ' ws-chip-hero' : ''}${open || boundHint ? ' is-open' : ''}`}
+        data-testid={triggerId}
         data-bound={canSwitch ? undefined : 'true'}
         aria-haspopup={canSwitch && !empty ? 'listbox' : undefined}
         aria-expanded={open}
         title={title}
         onClick={onClick}
       >
-        {FOLDER_ICON}
+        {hero ? null : FOLDER_ICON}
         <span className="model-chip-name">{label}</span>
         {canSwitch && !empty ? <span className="model-chip-caret" aria-hidden="true">▾</span> : null}
       </button>
@@ -104,7 +111,7 @@ export function WorkspaceChip({
         </div>
       ) : null}
       {open && canSwitch ? (
-        <div className="model-menu ws-chip-menu" data-testid="next-ws-chip-menu" role="listbox">
+        <div className="model-menu ws-chip-menu" data-testid={menuId} role="listbox">
           {workspaces.map((ws) => {
             const selectedRow = ws.id === selected?.id;
             return (

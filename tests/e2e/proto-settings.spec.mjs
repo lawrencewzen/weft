@@ -10,6 +10,19 @@ import { expectClean, openProto } from './helpers/proto.mjs';
 test.use({ locale: 'zh-CN', viewport: { width: 1440, height: 900 } });
 test.describe.configure({ timeout: 120_000 });
 
+test('opening settings keeps the conversation behind the overlay', async ({ page }) => {
+  const state = await openProto(page);
+  await expect(page.getByTestId('next-status')).toContainText('重构会话列表的加载逻辑');
+  await expect(page.getByTestId('next-item-assistant').first()).toBeVisible();
+  await page.getByTestId('next-open-settings').click();
+  await expect(page.getByTestId('next-settings')).toBeVisible();
+  await expect(page.getByTestId('next-status')).toContainText('重构会话列表的加载逻辑');
+  await expect(page.getByTestId('next-status')).not.toContainText(/加载中|Loading/);
+  await expect(page.getByTestId('next-item-assistant').first()).toBeVisible();
+  await expect(page.getByTestId('next-change-summary')).toBeVisible();
+  expectClean(state);
+});
+
 test('general: language, appearance, theme and font size apply immediately', async ({ page }) => {
   const state = await openProto(page);
   await page.getByTestId('next-open-settings').click();
