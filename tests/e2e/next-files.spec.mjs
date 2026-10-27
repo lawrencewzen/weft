@@ -395,7 +395,11 @@ test('a 409 conflict offers overwrite and reload', async ({ page }) => {
     await expect(page.getByTestId('next-file-conflict')).toBeVisible();
     await page.getByTestId('next-file-overwrite').click();
     await expect(page.getByTestId('next-file-conflict')).toHaveCount(0, { timeout: 10000 });
-    await expect(await fs.readFile(path.join(wsDir, 'notes/today.md'), 'utf8')).toBe('mine-overwrite\n');
+    // The conflict box goes away on click, before the PUT finishes: poll instead of
+    // reading once, which raced with the server's truncate-then-write (empty file).
+    await expect
+      .poll(() => fs.readFile(path.join(wsDir, 'notes/today.md'), 'utf8'))
+      .toBe('mine-overwrite\n');
 
     await editor.fill('mine-reload\n');
     await fs.writeFile(path.join(wsDir, 'notes/today.md'), 'disk-again\n');
