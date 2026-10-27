@@ -275,8 +275,10 @@ test('bash keeps the model\'s timeout, else 600 s, else WEFT_BASH_TIMEOUT_SECOND
 
 test('kernel path: path escape is E_SANDBOX and bash stays in the workspace', { timeout: 40_000 }, async () => {
   const dataDir = await mkdtemp(path.join(tmpdir(), 'piw-ksand-'));
+  // Sequential on Windows too: a backgrounded `& echo` let the shell exit before
+  // `sand.txt` was written, so the read below could miss the file.
   const command = process.platform === 'win32'
-    ? 'echo bash-ok> sand.txt & echo bash-ok'
+    ? 'echo bash-ok> sand.txt; echo bash-ok'
     : 'printf bash-ok > sand.txt && printf bash-ok';
   const script = await writeScript(dataDir, 'sandbox.json', [
     { tool: 'read', args: { path: '../outside.txt' }, id: 'escape-read' },
