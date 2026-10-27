@@ -6,6 +6,7 @@ Web 编码工作台，内核是 Pi Durable（`@earendil-works/pi-durable` 的 Ha
 - 入口 `server.mjs`；代码在 `src/`（core / llm / store / tools）、`web/`（前端源码，构建到 `public-next/`）；插件在 `plugins/`、`examples/plugins/`。
 - 验证：`npm run check`（语法检查）、`npm test`（`tests/unit`）；e2e 用 Playwright（`tests/playwright.config.mjs`）。
 - 新增 `.mjs` 入口文件时，记得加进 `package.json` 的 `check` 脚本。
+- 界面改动先改原型：`design/prototype/README.md`（先加提案 → 用户确认 → 实现 → 删提案并重截基线）。
 
 ## 开发方式：通过 grokbot 调度
 
