@@ -105,7 +105,7 @@ export function Composer({
   const locked = !run.canSend || noModel || noWorkspace;
   const hasText = Boolean(draft.trim()) && !locked;
   const stopMode = run.canStop && !draft.trim();
-  const showBanner = showModelControls && contextIsWarn(context.level);
+  const showBanner = showModelControls && !noModel && contextIsWarn(context.level);
   const showAttach = COMPOSER_SHOW_ATTACH && !noModel;
   const showNewline = Boolean(draft) && !stopMode;
   const placeholder = noModel
@@ -206,7 +206,7 @@ export function Composer({
     <footer className="center-composer">
       <div className="composer-stack">
         <div className={boxClass} data-testid="next-composer">
-          {showModelControls ? <ContextBanner lang={lang} context={context} onNewChat={openNewChat} /> : null}
+          {showBanner ? <ContextBanner lang={lang} context={context} onNewChat={openNewChat} /> : null}
           <div className="composer-body">
             <textarea
               ref={area}
