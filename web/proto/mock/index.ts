@@ -25,6 +25,7 @@ function installFetch(db: ReturnType<typeof createDb>, hub: MockHub): void {
     }
     // Everything under /api is answered in memory; nothing else may leave the page.
     if (path.startsWith('/api/')) {
+      window.__protoRequests?.push({ method: String(init?.method || 'GET').toUpperCase(), url: raw });
       await new Promise<void>((resolve) => {
         window.setTimeout(resolve, latencyMs);
       });
@@ -124,7 +125,22 @@ function installResetButton(): void {
  * SSE shapes as `src/v2`, so the product components run unmodified. Data lives
  * only in this object: a reload (or the reset button) starts from the seed.
  */
+declare global {
+  interface Window {
+    /** Every mocked `/api` call, in order. Read by the prototype e2e tests. */
+    __protoRequests?: Array<{ method: string; url: string }>;
+  }
+}
+
+function blockExternalWindows(): void {
+  // The prototype must not leave the page. Grok's device-code screen opens the
+  // verification page automatically; in the prototype the URL is only displayed.
+  window.open = () => null;
+}
+
 export function installMockBackend(): void {
+  window.__protoRequests = [];
+  blockExternalWindows();
   const db = createDb();
   const hub = createHub(readTopic(db));
   installFetch(db, hub);

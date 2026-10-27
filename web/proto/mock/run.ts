@@ -1,6 +1,7 @@
 import type { MockHub } from './hub';
 import {
   nextId,
+  publishChange,
   publishConversationView,
   publishItem,
   publishRemove,
@@ -10,9 +11,13 @@ import {
   recomputeContext,
   touch,
 } from './db';
+import { mockDiff } from './repo';
+import { SPAWN_TITLE, appendReport, createSubThread, runSubagent } from './subagents';
 import { conversationGroupId } from './views';
 import type {
   Bilingual,
+  Change,
+  Diff,
   MockConv,
   MockDb,
   MockGroup,
@@ -264,6 +269,70 @@ function finishTool(tool: MockTool): void {
   tool.preview = (tool.output || '').split('\n').slice(0, 4).join('\n');
 }
 
+/** A small structured diff for the file an edit tool just touched. */
+function editDiffFor(path: string): Diff {
+  if (path.endsWith('store.ts')) {
+    return mockDiff(path, [
+      {
+        oldStart: 238,
+        newStart: 238,
+        lines: [
+          { op: 'ctx', text: '  function items(cid: string): ThreadItem[] {' },
+          { op: 'del', text: '    const ids = conv?.value?.itemIds || [];' },
+          { op: 'add', text: '    const out: ThreadItem[] = [];' },
+          { op: 'add', text: '    for (const id of conv?.value?.itemIds || []) {' },
+          { op: 'add', text: '      const rec = get(conversationTopic(cid), "item", id);' },
+          { op: 'add', text: '      if (rec) out.push(rec.value as unknown as ThreadItem);' },
+          { op: 'add', text: '    }' },
+          { op: 'add', text: '    return out;' },
+          { op: 'ctx', text: '  }' },
+        ],
+      },
+    ]);
+  }
+  return mockDiff(path, [
+    {
+      oldStart: 12,
+      newStart: 12,
+      lines: [
+        { op: 'ctx', text: '  // narrow the input first' },
+        { op: 'del', text: '  const rows = load().map(normalize);' },
+        { op: 'add', text: '  const rows = load().filter(Boolean).map(normalize);' },
+        { op: 'ctx', text: '  return rows;' },
+      ],
+    },
+  ]);
+}
+
+/** Turn a finished edit tool into a `change` entity plus a diff the right pane can draw. */
+function applyEditChange(db: MockDb, conv: MockConv, hub: MockHub, tool: MockTool): void {
+  const path = tool.path;
+  if (!path) return;
+  const diff = editDiffFor(path);
+  const existing = conv.changes.find((row) => row.path === path);
+  const change: Change = existing || { path, added: 0, removed: 0, error: null };
+  change.added += diff.added;
+  change.removed += diff.removed;
+  if (!existing) conv.changes.push(change);
+  conv.diffs[path] = diff;
+  tool.diff = { added: diff.added, removed: diff.removed };
+  const repo = db.repos.get(conv.view.workspaceId);
+  const file = repo?.files.get(path);
+  if (file && !file.text.includes('模拟运行')) {
+    file.text = `${file.text.trimEnd()}\n\n// 模拟运行：这一行是 Agent 刚改的\n`;
+  }
+  publishChange(conv, hub, change);
+}
+
+function wantsSubagent(text: string): boolean {
+  return /(派|叫|让|安排|spawn|delegate)[^\n]{0,12}(子\s*agent|subagent|子代理|子助手)/i.test(text)
+    || /(子\s*agent|subagent)[^\n]{0,12}(派|跑|做|帮我)/i.test(text);
+}
+
+function wantsFailedSubagent(text: string): boolean {
+  return wantsSubagent(text) && /(失败|出错|error|fail)/i.test(text);
+}
+
 function runningLine(tool: MockTool): Bilingual {
   const target = tool.path || (tool.kind === 'bash' ? tool.title.zh : tool.title.zh);
   const action = {
@@ -376,6 +445,7 @@ async function runTool(
   await sleep(TOOL_MS);
   if (run.cancelled) return;
   finishTool(tool);
+  if (tool.kind === 'edit') applyEditChange(db, conv, hub, tool);
   publishTool(conv, hub, tool, conversationGroupId(conv, tool.id));
   refreshGroup(conv, hub, group, true);
   setPending(conv, hub, THINKING);
@@ -479,6 +549,19 @@ function finishRun(db: MockDb, conv: MockConv, hub: MockHub): void {
 async function execute(db: MockDb, conv: MockConv, hub: MockHub, run: RunHandle, text: string): Promise<void> {
   await sleep(THINK_MS);
   if (run.cancelled) return;
+  let spawnNote = '';
+  if (wantsSubagent(text)) {
+    const thread = createSubThread(db, conv, SPAWN_TITLE.zh);
+    setPending(conv, hub, { zh: '子 Agent 正在跑', en: 'Subagent is running' });
+    publishSummary(db, hub, conv.view.id);
+    const spawned = await runSubagent(db, conv, hub, thread, run, { fail: wantsFailedSubagent(text) });
+    if (!spawned || run.cancelled) return;
+    appendReport(db, conv, hub, spawned.report);
+    spawnNote = spawned.report.reportKind === 'failed'
+      ? '\n\n### 子 Agent\n\n派出去的 `' + spawned.thread.view.title + '` 失败了，原因写在上面那张卡片里。'
+      : '\n\n### 子 Agent\n\n派出去的 `' + spawned.thread.view.title + '` 已经交回结果，卡片在上面。';
+    setPending(conv, hub, THINKING);
+  }
   const plan = planFor(text);
   const newGroup = (): MockGroup => ({
     kind: 'tool_group',
@@ -511,7 +594,7 @@ async function execute(db: MockDb, conv: MockConv, hub: MockHub, run: RunHandle,
   const ack = interjections.length
     ? `收到插话：${interjections.map((item) => `「${clip(item, 36)}」`).join('、')}。我把当前这一步做完后一起看了。\n\n`
     : '';
-  const ok = await streamAssistant(db, conv, hub, run, `${ack}${plan.reply}`);
+  const ok = await streamAssistant(db, conv, hub, run, `${ack}${plan.reply}${spawnNote}`);
   if (!ok || run.cancelled) return;
   finishRun(db, conv, hub);
 }

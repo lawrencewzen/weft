@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { startServer, stopServer } from './_server.mjs';
 import { ROOT } from './_root.mjs';
@@ -77,6 +77,20 @@ test('GET / is SPA html when built, or the not-built message', async () => {
     }
   } finally {
     await stopServer(srv);
+  }
+});
+
+test('the production bundle ships no prototype mock code', () => {
+  const assets = path.join(ROOT, 'public-next', 'assets');
+  if (!existsSync(assets)) return; // not built in this checkout
+  const bundles = readdirSync(assets).filter((name) => name.endsWith('.js'));
+  assert.ok(bundles.length > 0, 'expected a JS bundle in public-next/assets');
+  const markers = ['重置原型数据', '__protoRequests', 'installMockBackend', '原型不联网'];
+  for (const name of bundles) {
+    const text = readFileSync(path.join(assets, name), 'utf8');
+    for (const marker of markers) {
+      assert.ok(!text.includes(marker), `${name} must not contain prototype code (${marker})`);
+    }
   }
 });
 

@@ -1,4 +1,5 @@
 import type { components } from '../../../src/v2/contract.gen';
+import type { MockRepo } from './repo';
 
 export type Lang = 'zh' | 'en';
 export type Bilingual = { zh: string; en: string };
@@ -19,6 +20,20 @@ export type RunState = components['schemas']['RunState'];
 export type ServiceInfo = components['schemas']['ServiceInfo'];
 export type ProvidersSnapshot = components['schemas']['ProvidersSnapshot'];
 export type ToolOutput = components['schemas']['ToolOutput'];
+export type FileContent = components['schemas']['FileContent'];
+export type FileNode = components['schemas']['FileNode'];
+export type FileTree = components['schemas']['FileTree'];
+export type SaveResult = components['schemas']['SaveResult'];
+export type WorkspaceDirEntry = components['schemas']['WorkspaceDirEntry'];
+export type WorkspaceDirs = components['schemas']['WorkspaceDirs'];
+export type Plugin = components['schemas']['Plugin'];
+export type Skill = components['schemas']['Skill'];
+export type GitConnection = components['schemas']['GitConnection'];
+export type GitProject = components['schemas']['GitProject'];
+export type GitBranch = components['schemas']['GitBranch'];
+export type GitTestResult = components['schemas']['GitTestResult'];
+export type GrokPending = components['schemas']['GrokPending'];
+export type GrokSession = components['schemas']['GrokSession'];
 
 /** A tool row before it is folded into the language the client asked for. */
 export type MockTool = {
@@ -76,6 +91,20 @@ export type MockConv = {
   requestRuns: Map<string, string>;
 };
 
+/** One subagent of a conversation: view plus its own thread (`subagent:<cid>:<id>` topic). */
+export type MockSubThread = {
+  view: Subagent;
+  items: MockItem[];
+  tools: Record<string, MockTool>;
+  run: RunHandle | null;
+};
+
+export type MockGrok = {
+  signedIn: boolean;
+  account: string | null;
+  pending: GrokPending | null;
+};
+
 export type MockDb = {
   workspaces: Workspace[];
   conversations: Map<string, MockConv>;
@@ -84,6 +113,17 @@ export type MockDb = {
   defaultModel: ResolvedModel | null;
   /** providerId:modelId → default context window, so 「恢复默认」 works. */
   defaultWindows: Map<string, number>;
+  /** Per-workspace mock repository used by the right pane file tab. */
+  repos: Map<string, MockRepo>;
+  plugins: Plugin[];
+  skills: Skill[];
+  gitConnections: GitConnection[];
+  gitProjects: Record<string, GitProject[]>;
+  /** `${cid}:${agentId}` → subagent thread. */
+  subagents: Map<string, MockSubThread>;
+  grok: MockGrok;
+  /** loginId → polls answered so far (device-code demo becomes `done` on the 2nd poll). */
+  grokPolls: Map<string, number>;
   seq: number;
 };
 

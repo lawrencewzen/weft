@@ -1,5 +1,6 @@
 import type {
   Bilingual,
+  Change,
   ConversationView,
   MockConv,
   MockDb,
@@ -9,9 +10,14 @@ import type {
   Provider,
   ResolvedModel,
   RunState,
+  Subagent,
+  MockSubThread,
   Vendor,
   Workspace,
 } from './types';
+import { seedWebsiteRepo, seedWeftRepo, mockDiff } from './repo';
+import { seedGitConnections, seedGitProjects, seedPlugins, seedSkills } from './extensions';
+import { seedSubThreads, seedSubagentReports } from './subagents';
 
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
@@ -44,6 +50,9 @@ function conversation(input: {
   items: MockItem[];
   tools?: Record<string, MockTool>;
   model?: ConversationView['model'];
+  changes?: Change[];
+  diffs?: Record<string, MockConv['diffs'][string]>;
+  subagents?: Subagent[];
 }): MockConv {
   const tools = input.tools || {};
   return {
@@ -64,9 +73,9 @@ function conversation(input: {
     pending: null,
     items: input.items,
     tools,
-    changes: [],
-    diffs: {},
-    subagents: [],
+    changes: input.changes || [],
+    diffs: input.diffs || {},
+    subagents: input.subagents || [],
     run: null,
     requestRuns: new Map(),
   };
@@ -213,7 +222,7 @@ const STORE_EDIT: MockTool = tool({
   kind: 'edit',
   title: hint('web/src/data/store.ts', 'web/src/data/store.ts'),
   path: 'web/src/data/store.ts',
-  diff: { added: 18, removed: 6 },
+  diff: { added: 8, removed: 3 },
   preview: [
     '@@ -241,6 +241,9 @@',
     '   applySnapshot(event) {',
@@ -258,8 +267,8 @@ const RICH_ASSISTANT_TWO = [
   '',
   '| 文件 | +/− | 结果 |',
   '| --- | --- | --- |',
-  '| `web/src/data/store.ts` | +18 / −6 | 通过 |',
-  '| `web/src/data/store.test.ts` | +64 / −0 | 通过 |',
+  '| `web/src/data/store.ts` | +8 / −3 | 通过 |',
+  '| `web/src/data/store.test.ts` | +12 / −0 | 通过 |',
   '',
   '```bash',
   '$ npm run test:web',
@@ -268,7 +277,7 @@ const RICH_ASSISTANT_TWO = [
   '```',
 ].join('\n');
 
-function richConversation(now: number): MockConv {
+function richConversation(now: number, threads: Map<string, MockSubThread>): MockConv {
   const tools: Record<string, MockTool> = {
     [STORE_READ.id]: STORE_READ,
     [STORE_GREP.id]: STORE_GREP,
@@ -320,7 +329,71 @@ function richConversation(now: number): MockConv {
         ],
       ),
       assistant('rich-a3', '测试全绿。要不要我把这批改动整理成一条提交信息？'),
+      ...seedSubagentReports(),
     ],
+    changes: [
+      { path: 'web/src/data/store.ts', added: 8, removed: 3, error: null },
+      { path: 'web/src/data/store.test.ts', added: 12, removed: 0, error: null },
+    ],
+    diffs: {
+      'web/src/data/store.ts': mockDiff('web/src/data/store.ts', [
+        {
+          oldStart: 238,
+          newStart: 238,
+          lines: [
+            { op: 'ctx', text: '  function items(cid: string): ThreadItem[] {' },
+            { op: 'ctx', text: '    const conv = get(conversationTopic(cid), "conversation", cid);' },
+            { op: 'del', text: '    const ids = conv?.value?.itemIds || [];' },
+            { op: 'del', text: '    return ids.map((id) => get(topic, "item", id));' },
+            { op: 'add', text: '    const out: ThreadItem[] = [];' },
+            { op: 'add', text: '    for (const id of conv?.value?.itemIds || []) {' },
+            { op: 'add', text: '      const rec = get(topic, "item", id);' },
+            { op: 'add', text: '      if (rec) out.push(rec.value as unknown as ThreadItem);' },
+            { op: 'add', text: '    }' },
+            { op: 'add', text: '    return out;' },
+            { op: 'ctx', text: '  }' },
+            { op: 'ctx', text: '' },
+            { op: 'ctx', text: '  function notify(): void {' },
+          ],
+        },
+        {
+          oldStart: 296,
+          newStart: 302,
+          lines: [
+            { op: 'ctx', text: '  function put(rec: StoredEntity): void {' },
+            { op: 'del', text: '    const key = `${rec.topic}:${rec.entity}:${rec.id}`;' },
+            { op: 'add', text: '    const key = `${rec.topic}\\t${rec.entity}\\t${rec.id}`;' },
+            { op: 'ctx', text: '    entities.set(key, rec);' },
+            { op: 'add', text: '    if (rec.entity === "item") staleItems.delete(rec.id);' },
+            { op: 'ctx', text: '  }' },
+          ],
+        },
+      ]),
+      'web/src/data/store.test.ts': mockDiff('web/src/data/store.test.ts', [
+        {
+          oldStart: 40,
+          newStart: 40,
+          lines: [
+            { op: 'ctx', text: "describe('text.delta', () => {" },
+            { op: 'ctx', text: "  it('appends on a matching offset', () => {" },
+            { op: 'add', text: '    const store = createEntityStore();' },
+            { op: 'add', text: "    applySnapshot(store, snapshot(['a']));" },
+            { op: 'add', text: "    textDelta(store, { topic: 'conversation:c1', itemId: 'a', offset: 0, append: 'hi' });" },
+            { op: 'add', text: "    expect(store.items('c1')[0]?.text).toBe('hi');" },
+            { op: 'add', text: '  });' },
+            { op: 'add', text: '' },
+            { op: 'add', text: "  it('marks stale when the offset does not match', () => {" },
+            { op: 'add', text: '    const store = createEntityStore();' },
+            { op: 'add', text: "    applySnapshot(store, snapshot(['a']));" },
+            { op: 'add', text: "    textDelta(store, { topic: 'conversation:c1', itemId: 'a', offset: 9, append: 'x' });" },
+            { op: 'add', text: "    expect(store.needsFullValue('a')).toBe(true);" },
+            { op: 'add', text: '  });' },
+            { op: 'ctx', text: '});' },
+          ],
+        },
+      ]),
+    },
+    subagents: [...threads.values()].map((thread) => thread.view),
   });
 }
 
@@ -449,7 +522,7 @@ function siteOne(now: number): MockConv {
     title: '落地页首屏文案',
     updatedAt: now - 20 * MINUTE,
     used: 22_600,
-    model: { sourceId: 'grok', modelId: 'grok-build', label: 'Grok Build' },
+    model: { sourceId: 'demo', modelId: 'grok-code-fast', label: 'Grok Code Fast' },
     items: [
       user('site-u1', '首屏那句 slogan 再收一点，别太像广告。'),
       assistant(
@@ -465,7 +538,7 @@ function siteOne(now: number): MockConv {
           '',
           '我倾向「具体」那条，和实际界面能对上。',
         ].join('\n'),
-        'grok-build',
+        'grok-code-fast',
       ),
     ],
   });
@@ -523,29 +596,6 @@ const PROVIDERS: Provider[] = [
     ],
     isDefault: true,
   },
-  {
-    id: 'grok',
-    vendor: 'xai',
-    name: 'Grok',
-    access: 'account',
-    runtime: 'model',
-    baseUrl: 'https://cli-chat-proxy.grok.com/v1',
-    keyMasked: null,
-    hasKey: true,
-    status: 'ok',
-    statusText: '',
-    lastTestedAt: null,
-    models: [
-      {
-        id: 'grok-build',
-        displayName: 'Grok Build',
-        brand: 'grok',
-        contextWindow: 256_000,
-        contextWindowCustom: false,
-      },
-    ],
-    isDefault: false,
-  },
 ];
 
 const VENDORS: Vendor[] = [
@@ -571,8 +621,9 @@ function workspace(
 }
 
 export function createSeed(now: number): MockDb {
+  const subagents = seedSubThreads(now);
   const conversations = [
-    richConversation(now),
+    richConversation(now, subagents),
     testsConversation(now),
     docsConversation(now),
     scriptsConversation(now),
@@ -630,6 +681,17 @@ export function createSeed(now: number): MockDb {
         model.contextWindow,
       ] as [string, number])),
     ),
+    repos: new Map([
+      ['ws-weft', seedWeftRepo()],
+      ['ws-website', seedWebsiteRepo()],
+    ]),
+    plugins: seedPlugins(),
+    skills: seedSkills(),
+    gitConnections: seedGitConnections(now),
+    gitProjects: seedGitProjects(now),
+    subagents,
+    grok: { signedIn: false, account: null, pending: null },
+    grokPolls: new Map(),
     seq: 0,
   };
 }

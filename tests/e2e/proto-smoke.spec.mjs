@@ -55,7 +55,7 @@ test('prototype runs from file:// with mock data, no network and no console erro
     page.getByTestId('next-tool-group').nth(1)
       .getByTestId('next-tool-row').filter({ hasText: 'store.ts' })
       .getByTestId('next-tool-row-added'),
-  ).toContainText('+18');
+  ).toContainText('+8');
 
   // Workspace rows expand/collapse in place.
   const websiteNode = page.getByTestId('next-ws-node').filter({ hasText: 'website' });
@@ -139,7 +139,7 @@ test('prototype runs from file:// with mock data, no network and no console erro
   // The model menu really switches the conversation model.
   await page.getByTestId('next-model-chip').click();
   await expect(page.getByTestId('next-model-menu')).toBeVisible();
-  await expect(page.getByTestId('next-model-option')).toHaveCount(4);
+  await expect(page.getByTestId('next-model-option')).toHaveCount(3);
   await page.locator('[data-testid=next-model-option][data-model="grok-4"]').click();
   await expect(page.getByTestId('next-model-chip')).toContainText('Grok 4');
 

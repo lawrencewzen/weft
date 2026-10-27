@@ -4,12 +4,14 @@ import type { MockHub } from './hub';
 import {
   conversationEntities,
   conversationValue,
+  extensionsEntities,
   itemValue,
   providersEntities,
   summaryOf,
   toolValue,
   workspacesEntities,
 } from './views';
+import type { Change } from './types';
 
 export function createDb(): MockDb {
   return createSeed(Date.now());
@@ -103,6 +105,21 @@ export function publishProviders(db: MockDb, hub: MockHub): void {
   for (const entity of providersEntities(db)) {
     hub.publish('providers', { event: 'upsert', entity: entity.entity, id: entity.id, value: entity.value });
   }
+}
+
+export function publishExtensions(db: MockDb, hub: MockHub): void {
+  for (const entity of extensionsEntities(db)) {
+    hub.publish('extensions', { event: 'upsert', entity: entity.entity, id: entity.id, value: entity.value });
+  }
+}
+
+export function publishChange(conv: MockConv, hub: MockHub, change: Change): void {
+  hub.publish(conversationTopic(conv.view.id), {
+    event: 'upsert',
+    entity: 'change',
+    id: change.path,
+    value: change as unknown as object,
+  });
 }
 
 export function publishSummary(db: MockDb, hub: MockHub, cid: string): void {
