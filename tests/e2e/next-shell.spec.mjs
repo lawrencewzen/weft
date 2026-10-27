@@ -73,12 +73,14 @@ test('GET /assets/not-exist.js returns 404', async ({ page }) => {
   }
 });
 
-test('GET /legacy loads the old frontend', async ({ page }) => {
+test('GET /legacy 302s to the new frontend', async () => {
   const srv = await startServer();
   try {
-    await page.goto(`${srv.url}/legacy`);
-    await expect(page.getByTestId('new-chat-top')).toBeVisible();
-    await expect(page.getByTestId('next-app')).toHaveCount(0);
+    for (const path of ['/legacy', '/legacy/', '/legacy/c/abc?x=1']) {
+      const res = await fetch(`${srv.url}${path}`, { redirect: 'manual' });
+      expect(res.status).toBe(302);
+      expect(res.headers.get('location')).toBe('/');
+    }
   } finally {
     await srv.kill();
   }

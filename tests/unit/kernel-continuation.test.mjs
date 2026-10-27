@@ -14,7 +14,6 @@ import {
 } from '../../src/kernel/continuation.mjs';
 import { createKernelModels, DEFAULT_MAX_OUTPUT_TOKENS, maxOutputTokensFromEnv } from '../../src/kernel/models.mjs';
 import { autoTitleFromText } from '../../src/kernel/agent-config.mjs';
-import { applyMessageDone } from '../../public/stream.js';
 import { request as serverRequest, startServer, stopServer } from './_server.mjs';
 
 const TOKEN = 'unit-kernel-continuation-token';
@@ -141,28 +140,6 @@ test('assistant snapshots carry stopReason and auto-continue kind', () => {
   assert.equal(messages.find((message) => message.id === '4').stopReason, 'stop');
   assert.equal(messages.find((message) => message.id === '3').kind, 'auto-continue');
   assert.equal(Object.hasOwn(messages.find((message) => message.id === '1'), 'kind'), false);
-});
-
-test('message.done inserts an auto-continue user row for the live thread', () => {
-  const msgs = [
-    { id: '1', role: 'user', text: 'hello' },
-    { id: '2', role: 'assistant', text: 'part-one', stopReason: 'length', done: true },
-  ];
-  applyMessageDone(msgs, {
-    messageId: '3',
-    role: 'user',
-    text: CONTINUE_TEXT,
-    kind: 'auto-continue',
-  });
-  assert.equal(msgs.length, 3);
-  assert.equal(msgs[2].kind, 'auto-continue');
-  assert.equal(isAutoContinueText(msgs[2].text), true);
-  applyMessageDone(msgs, {
-    messageId: '4',
-    text: 'part-two',
-    stopReason: 'stop',
-  });
-  assert.equal(msgs[3].stopReason, 'stop');
 });
 
 test('kernel path: length then stop auto-continues into one run', { timeout: 30000 }, async () => {

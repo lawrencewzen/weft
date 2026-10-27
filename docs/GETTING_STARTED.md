@@ -48,7 +48,7 @@ npm run weft -- open --print    # 只把登录地址打印到 stdout，不打开
 
 数据目录默认是仓库下的 `data`，可用环境变量 `WEFT_DATA_DIR` 或 `--data-dir <路径>` 改。
 
-旧版界面过渡期仍可用：浏览器打开 `http://127.0.0.1:<端口>/legacy`。旧接口 `/api/*` 不变。书签里的 `/next/...` 会 302 到去掉前缀的同一路径。
+旧版界面已删除：`/legacy` 会 302 回 `/`。旧接口 `/api/*` 不变。书签里的 `/next/...` 会 302 到去掉前缀的同一路径。
 
 端口占用时改 `PORT=3001 npm start`。
 
@@ -70,6 +70,6 @@ LLM_MODEL=your-provider-model-id
 
 - 网页断开不等于任务取消：对话跑在后端，重新打开页面即可接着看。
 - 进程可恢复不等于数据可恢复：请备份 `WEFT_DATA_DIR` 下的 SQLite。
-- 旧版界面在 `/legacy`，只作过渡；新功能做在新版网页端。
+- 旧版界面已删除（T47-1）；新功能做在新版网页端。
 
 部署、常驻和升级见 [部署说明](DEPLOYMENT.md)，环境变量见 [配置参考](CONFIGURATION.md)，问题见 [故障排查](TROUBLESHOOTING.md)。

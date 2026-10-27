@@ -1,5 +1,4 @@
-// Re-exported so the server and the browser share one implementation.
-// The browser can only load files under public/.
+// Re-exported so the kernel and the v2 views share one implementation.
 export {
   normalizeUsage,
   attachUsage,
@@ -9,9 +8,9 @@ export {
   formatContextValue,
   presentContext,
   composerContextText,
-} from '../../public/usage.js';
+} from './usage-math.mjs';
 
-import { formatContextValue, presentContext } from '../../public/usage.js';
+import { formatContextValue, presentContext } from './usage-math.mjs';
 
 /**
  * Prefer a resolved model window over `presentContext`'s env/provider value.

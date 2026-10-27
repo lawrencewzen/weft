@@ -82,7 +82,6 @@ if (PROXY_ENV && process.env.NODE_USE_ENV_PROXY !== '1') {
 }
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
-const PUBLIC = path.join(ROOT, 'public');
 const PUBLIC_NEXT = path.join(ROOT, 'public-next');
 const PORT = process.env.PORT !== undefined && process.env.PORT !== '' ? Number(process.env.PORT) : 3000;
 const pkg = JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
@@ -447,44 +446,16 @@ function serveNextRedirect(req, res, url) {
   return true;
 }
 
-/** Old UI at /legacy. Returns true when the request was handled. */
-function serveLegacy(req, res, url) {
+/** The legacy UI is gone (T47-1); old bookmarks fall back to the new app. */
+function serveLegacyRedirect(req, res, url) {
   const pathname = url.pathname;
-  if (pathname === '/legacy') {
-    res.writeHead(302, {
-      ...SECURITY_HEADERS,
-      'cache-control': 'no-store',
-      Location: `/legacy/${url.search || ''}`,
-    });
-    res.end();
-    return true;
-  }
-  if (!pathname.startsWith('/legacy/')) return false;
-  if (!existsSync(PUBLIC)) {
-    res.writeHead(404, { ...SECURITY_HEADERS });
-    res.end('Not found');
-    return true;
-  }
-  let rel = decodeURIComponent(pathname.slice('/legacy'.length));
-  if (rel === '/') rel = '/index.html';
-  const fp = path.resolve(PUBLIC, `.${rel}`);
-  if (!fp.startsWith(PUBLIC + path.sep) && fp !== PUBLIC) {
-    res.writeHead(403, { ...SECURITY_HEADERS });
-    res.end('Forbidden');
-    return true;
-  }
-  if (!existsSync(fp) || !statSync(fp).isFile()) {
-    const fallback = path.join(PUBLIC, 'index.html');
-    if (rel !== '/index.html' && existsSync(fallback)) {
-      sendStaticFile(req, res, fallback, 'text/html; charset=utf-8');
-      return true;
-    }
-    res.writeHead(404, { ...SECURITY_HEADERS });
-    res.end('Not found');
-    return true;
-  }
-  const type = MIME[path.extname(fp)] || 'application/octet-stream';
-  sendStaticFile(req, res, fp, type);
+  if (pathname !== '/legacy' && !pathname.startsWith('/legacy/')) return false;
+  res.writeHead(302, {
+    ...SECURITY_HEADERS,
+    'cache-control': 'no-store',
+    Location: '/',
+  });
+  res.end();
   return true;
 }
 
@@ -675,7 +646,7 @@ const server = createServer(async (req, res) => {
     if (req.method === 'GET' || req.method === 'HEAD') {
       if (v2.handleLogin(req, res, url)) return;
       if (serveNextRedirect(req, res, url)) return;
-      if (serveLegacy(req, res, url)) return;
+      if (serveLegacyRedirect(req, res, url)) return;
       serveNew(req, res, url);
       return;
     }

@@ -25,12 +25,12 @@ import {
   MAX_AUTO_CONTINUES as publicMax,
   isAutoContinueText as publicIsAuto,
   isPromptUserMessage as publicIsPrompt,
-} from '../../public/continuation.js';
+} from '../../src/kernel/continuation-text.mjs';
 import {
   formatSubagentReport as formatFromPublic,
   parseSubagentReport as parseFromPublic,
   isSubagentReportText as isReportFromPublic,
-} from '../../public/subagent-report.js';
+} from '../../src/kernel/subagent-report-text.mjs';
 import { buildThread, findAgentForReport, lastVisibleAssistant } from '../../src/v2/views/thread.ts';
 import { ROOT } from './_root.mjs';
 
@@ -57,7 +57,7 @@ function toolMsg(id, t) {
 
 const none = () => false;
 
-test('v2 subagent-report helpers match public/subagent-report.js', () => {
+test('v2 subagent-report helpers match the kernel implementation', () => {
   const cases = [
     { name: 'a', kind: 'answered', body: 'SCOUT_PONG' },
     { name: 'bg', kind: 'failed', body: 'timeout' },
@@ -74,7 +74,7 @@ test('v2 subagent-report helpers match public/subagent-report.js', () => {
   assert.equal(parseSubagentReport('please look at this'), parseFromPublic('please look at this'));
 });
 
-test('v2 continuation helpers match public/continuation.js', () => {
+test('v2 continuation helpers match the kernel implementation', () => {
   assert.equal(AUTO_CONTINUE_PREFIX, publicPrefix);
   assert.equal(CONTINUE_TEXT, publicContinue);
   assert.equal(MANUAL_CONTINUE_TEXT, publicManual);

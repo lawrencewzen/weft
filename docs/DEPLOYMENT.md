@@ -53,7 +53,7 @@ npm run weft -- status
 npm run weft -- stop
 ```
 
-旧版界面在 `/legacy`。旧接口 `/api/*` 不变。可选的旧登录 `GET /login?token=`（`WEFT_TOKEN`）行为不变。
+旧版界面已删除，`/legacy` 302 回 `/`。旧接口 `/api/*` 不变。可选的旧登录 `GET /login?token=`（`WEFT_TOKEN`）行为不变。
 
 ## 4. 常驻和空闲退出
 
@@ -76,6 +76,6 @@ npm run weft -- stop
 - 控制台有 `WEFT_READY` 和登录链接；点链接能进新版界面。
 - `npm run weft -- status` 能读到端口和 pid。
 - 发一条消息（演示模型或真实模型），刷新页面后对话还在。
-- `/legacy` 仍能打开旧界面（过渡期）。
+- `/legacy` 现在 302 回 `/`（旧界面已删除）。
 
 配置项见 [CONFIGURATION.md](CONFIGURATION.md)，排障见 [TROUBLESHOOTING.md](TROUBLESHOOTING.md)。

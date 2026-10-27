@@ -1,4 +1,4 @@
-// Shared by the browser composer and the Node runtime.
+// Shared usage math for the kernel, the v2 views, and the web app tests.
 // Counts come only from provider-reported usage. Nothing here estimates tokens.
 
 const EMPTY = '—';
