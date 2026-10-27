@@ -169,6 +169,7 @@ describe('context window range', () => {
 describe('brand helpers', () => {
   it('builds a same-origin icon url and falls back attribution to the raw id', () => {
     expect(brandIconUrl('grok')).toBe('/vendor/brand-icons/grok.svg');
+    expect(brandIconUrl('Claude')).toBe('/vendor/brand-icons/anthropic.svg');
     expect(brandIconUrl(null)).toBeNull();
     expect(brandIconUrl('../etc/passwd')).toBeNull();
     expect(conversationToResolved({ sourceId: 'p', modelId: 'm', label: 'm' })).toEqual({

@@ -337,15 +337,17 @@ export function ProviderWizard({
     <div className="ns-wizard">
       <div className="ns-wizard-head">
         <div className="ns-wizard-title">
-          <button
-            type="button"
-            className="ns-wizard-back"
-            data-testid="next-wizard-back"
-            aria-label={t(lang, 'provider_wizard_back')}
-            onClick={headerBack}
-          >
-            <BackArrow />
-          </button>
+          {state.step > 1 && !grokAccount ? (
+            <button
+              type="button"
+              className="ns-wizard-back"
+              data-testid="next-wizard-back"
+              aria-label={t(lang, 'provider_wizard_back')}
+              onClick={headerBack}
+            >
+              <BackArrow />
+            </button>
+          ) : null}
           {showVendorHead && vendor ? (
             <span className="ns-icon-box is-lg"><BrandIcon brand={vendor.brand} size={20} /></span>
           ) : null}
@@ -521,47 +523,43 @@ export function ProviderWizard({
                     />
                   </>
                 ) : (
-                  <div className="ns-form-grid">
-                    <div className="ns-form-main">
-                      <KeyFields
-                        lang={lang}
-                        vendor={vendor}
-                        state={state}
-                        showKey={showKey}
-                        onShow={setShowKey}
-                        onChange={patch}
-                      />
-                      <NameField lang={lang} state={state} onChange={patch} />
-                      <details
-                        className="ns-advanced"
-                        open={state.advancedOpen}
-                        onToggle={(ev) => patch({ advancedOpen: (ev.target as HTMLDetailsElement).open })}
-                      >
-                        <summary>{t(lang, 'provider_advanced', { url: effectiveBaseUrl(state, vendor) || '—' })}</summary>
-                        <div className="ns-field" style={{ marginTop: 8 }}>
-                          <input
-                            className="ns-input is-mono"
-                            value={state.baseUrl}
-                            onChange={(ev) => patch({
-                              baseUrl: ev.target.value,
-                              baseUrlTouched: true,
-                              probeOk: false,
-                            })}
-                          />
-                        </div>
-                      </details>
-                    </div>
-                    <div className="ns-test-col">
-                      <TestPanel
-                        lang={lang}
-                        vendor={vendor}
-                        probing={probing}
-                        probe={probe}
-                        probeMs={probeMs}
-                        onTest={() => { void runTest(); }}
-                      />
-                    </div>
-                  </div>
+                  <>
+                    <KeyFields
+                      lang={lang}
+                      vendor={vendor}
+                      state={state}
+                      showKey={showKey}
+                      onShow={setShowKey}
+                      onChange={patch}
+                    />
+                    <NameField lang={lang} state={state} onChange={patch} />
+                    <details
+                      className="ns-advanced"
+                      open={state.advancedOpen}
+                      onToggle={(ev) => patch({ advancedOpen: (ev.target as HTMLDetailsElement).open })}
+                    >
+                      <summary>{t(lang, 'provider_advanced', { url: effectiveBaseUrl(state, vendor) || '—' })}</summary>
+                      <div className="ns-field" style={{ marginTop: 8 }}>
+                        <input
+                          className="ns-input is-mono"
+                          value={state.baseUrl}
+                          onChange={(ev) => patch({
+                            baseUrl: ev.target.value,
+                            baseUrlTouched: true,
+                            probeOk: false,
+                          })}
+                        />
+                      </div>
+                    </details>
+                    <TestPanel
+                      lang={lang}
+                      vendor={vendor}
+                      probing={probing}
+                      probe={probe}
+                      probeMs={probeMs}
+                      onTest={() => { void runTest(); }}
+                    />
+                  </>
                 )}
               </div>
             </div>

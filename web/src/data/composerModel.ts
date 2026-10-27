@@ -168,11 +168,16 @@ export function contextWindowOptions(current: number): ContextWindowOption[] {
   return rows;
 }
 
+const BRAND_ICON_FILE: Record<string, string> = {
+  claude: 'anthropic',
+};
+
 export function brandIconUrl(brand: string | null | undefined): string | null {
   const id = typeof brand === 'string' ? brand.trim() : '';
   if (!id) return null;
   if (!/^[a-z0-9][a-z0-9._-]*$/i.test(id)) return null;
-  return `/vendor/brand-icons/${id.toLowerCase()}.svg`;
+  const file = BRAND_ICON_FILE[id.toLowerCase()] || id.toLowerCase();
+  return `/vendor/brand-icons/${file}.svg`;
 }
 
 export function modelAttribution(

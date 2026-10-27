@@ -233,8 +233,8 @@ test('Grok device-code login uses the test double and reaches the model step', a
   await expect(page.getByRole('button', { name: '复制', exact: true })).toBeVisible();
   await expect(page.getByText('第 3 步')).toBeVisible();
   await expect(page.getByText('等你确认，这里会自动往下走')).toBeVisible();
-  await expect(page.getByText('登录后')).toBeVisible();
-  await expect(page.getByText('遇到问题')).toBeVisible();
+  await expect(page.getByRole('heading', { name: '登录后' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '遇到问题' })).toBeVisible();
   await expect(page.getByRole('button', { name: /等待登录/ })).toBeDisabled();
   await expect(page.getByTestId('next-model-row')).toBeVisible({ timeout: 20000 });
   await page.getByTestId('next-model-row').locator('.ns-switch').click();
