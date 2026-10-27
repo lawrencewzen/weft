@@ -1,7 +1,6 @@
 FROM node:22-slim
 WORKDIR /app
 COPY package.json package-lock.json ./
-COPY scripts/copy-md-vendor.mjs ./scripts/copy-md-vendor.mjs
 RUN npm ci --omit=dev && npm cache clean --force
 COPY server.mjs ./
 COPY public ./public
