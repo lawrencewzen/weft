@@ -7,7 +7,13 @@ import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
 import { Type } from '@earendil-works/pi-ai';
 import { parseSSE } from '../../src/core/sse.mjs';
 import { fauxTurnFromScript, offeredToolNames } from '../../src/kernel/faux-script.mjs';
-import { withIntent, workspaceTools } from '../../src/kernel/tools.mjs';
+import {
+  bashTimeoutSeconds,
+  DEFAULT_BASH_TIMEOUT_SECONDS,
+  MAX_BASH_TIMEOUT_SECONDS,
+  withIntent,
+  workspaceTools,
+} from '../../src/kernel/tools.mjs';
 import { createWorkspaceEnv } from '../../src/kernel/workspace-env.mjs';
 import { ROOT } from './_root.mjs';
 import { killChild, request as serverRequest, startServer, stopServer } from './_server.mjs';
@@ -81,6 +87,16 @@ async function waitFinished(base, id, timeoutMs = 20000) {
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
   throw new Error(`conversation ${id} did not finish: ${JSON.stringify(body)}`);
+}
+
+/** Whether `pid` still exists: signal 0 probes without sending anything. */
+function isProcessAlive(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return error?.code === 'EPERM';
+  }
 }
 
 async function writeScript(dataDir, name, turns) {
@@ -222,6 +238,39 @@ test('a tools array is one assistant message with each call', () => {
   assert.equal(message.stopReason, 'toolUse');
   assert.deepEqual(message.content.map((block) => block.name), ['read', 'read', 'ls']);
   assert.deepEqual(message.content.map((block) => block.id), ['a', 'b', 'c']);
+});
+
+test('bash keeps the model\'s timeout, else 600 s, else WEFT_BASH_TIMEOUT_SECONDS', () => {
+  const bash = workspaceTools().find((tool) => tool.name === 'bash');
+  const previous = process.env.WEFT_BASH_TIMEOUT_SECONDS;
+  const restore = () => {
+    if (previous === undefined) delete process.env.WEFT_BASH_TIMEOUT_SECONDS;
+    else process.env.WEFT_BASH_TIMEOUT_SECONDS = previous;
+  };
+  try {
+    delete process.env.WEFT_BASH_TIMEOUT_SECONDS;
+    assert.equal(bash.prepareArguments({ command: 'echo hi' }).timeout, 600);
+    assert.equal(DEFAULT_BASH_TIMEOUT_SECONDS, 600);
+    assert.equal(bash.prepareArguments({ command: 'echo hi', timeout: 12 }).timeout, 12);
+    assert.equal(bash.prepareArguments({ command: 'echo hi', description: '打招呼' }).timeout, 600);
+
+    process.env.WEFT_BASH_TIMEOUT_SECONDS = '45';
+    assert.equal(bash.prepareArguments({ command: 'echo hi' }).timeout, 45);
+    assert.equal(bash.prepareArguments({ command: 'echo hi', timeout: 12 }).timeout, 12);
+
+    for (const bad of ['', '   ', 'abc', '0', '-3', 'NaN', 'Infinity']) {
+      process.env.WEFT_BASH_TIMEOUT_SECONDS = bad;
+      assert.equal(bashTimeoutSeconds(), DEFAULT_BASH_TIMEOUT_SECONDS, `WEFT_BASH_TIMEOUT_SECONDS=${bad}`);
+      assert.equal(bash.prepareArguments({ command: 'echo hi' }).timeout, DEFAULT_BASH_TIMEOUT_SECONDS, bad);
+    }
+
+    process.env.WEFT_BASH_TIMEOUT_SECONDS = String(MAX_BASH_TIMEOUT_SECONDS * 10);
+    assert.equal(bashTimeoutSeconds(), MAX_BASH_TIMEOUT_SECONDS);
+    process.env.WEFT_BASH_TIMEOUT_SECONDS = String(MAX_BASH_TIMEOUT_SECONDS);
+    assert.equal(bash.prepareArguments({ command: 'echo hi' }).timeout, MAX_BASH_TIMEOUT_SECONDS);
+  } finally {
+    restore();
+  }
 });
 
 test('kernel path: path escape is E_SANDBOX and bash stays in the workspace', { timeout: 40_000 }, async () => {
@@ -388,6 +437,64 @@ test('kernel path: the main agent offers every workspace tool plus plugins and d
       assert.equal(offered[0].includes(name), true, name);
     }
   } finally {
+    await stopServer(srv);
+    await rm(dataDir, { recursive: true, force: true });
+  }
+});
+
+test('kernel path: a timed-out bash ends the command and its child, and the run continues', { timeout: 90_000 }, async () => {
+  const dataDir = await mkdtemp(path.join(tmpdir(), 'piw-ktimeout-'));
+  const hang = path.join(dataDir, 'hang.cjs');
+  const childPidFile = path.join(dataDir, 'child.pid');
+  await writeFile(hang, [
+    "const { spawn } = require('node:child_process');",
+    "const fs = require('node:fs');",
+    "const path = require('node:path');",
+    "const child = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 30000)'], { stdio: 'ignore' });",
+    "fs.writeFileSync(path.join(__dirname, 'child.pid'), String(child.pid));",
+    'setInterval(() => {}, 1000);',
+    '',
+  ].join('\n'));
+  const command = `"${process.execPath}" "${hang}"`;
+  const script = await writeScript(dataDir, 'timeout.json', [
+    { tool: 'bash', args: { command }, id: 'bash-timeout' },
+    { text: 'after-timeout' },
+  ]);
+  const srv = await startServer({
+    token: TOKEN,
+    env: durableEnv(script, { WEFT_BASH_TIMEOUT_SECONDS: '2' }),
+    dataDir,
+  });
+  let childPid;
+  try {
+    const { conv } = await openConversation(srv.base, { title: 'timeout' });
+    const sent = await request(srv.base, 'POST', `/api/conversations/${conv.id}/messages`, { text: 'go' });
+    assert.equal(sent.status, 202);
+    const started = Date.now();
+    const done = await waitFinished(srv.base, conv.id, 60000);
+    const elapsed = Date.now() - started;
+    assert.equal(done.status, 'done', `${JSON.stringify(done.messages)}\n${srv.logs()}`);
+    const tool = done.messages.find((message) => message.role === 'tool' && message.tool?.id === 'bash-timeout');
+    assert.ok(tool, JSON.stringify(done.messages));
+    assert.equal(tool.tool.status, 'error');
+    assert.equal(String(tool.text || '').includes('Command timed out after 2 seconds'), true, tool.text);
+    assert.equal(elapsed < 30000, true, `took ${elapsed} ms`);
+    assert.equal(
+      done.messages.some((message) => message.role === 'assistant' && message.text === 'after-timeout'),
+      true,
+      JSON.stringify(done.messages),
+    );
+    childPid = Number((await readFile(childPidFile, 'utf8')).trim());
+    assert.equal(Number.isInteger(childPid) && childPid > 0, true, `child pid: ${childPid}`);
+    const gone = Date.now();
+    while (Date.now() - gone < 10000 && isProcessAlive(childPid)) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    assert.equal(isProcessAlive(childPid), false, `child process ${childPid} survived the timeout`);
+  } finally {
+    if (childPid && isProcessAlive(childPid)) {
+      try { process.kill(childPid, 'SIGKILL'); } catch { /* already gone */ }
+    }
     await stopServer(srv);
     await rm(dataDir, { recursive: true, force: true });
   }

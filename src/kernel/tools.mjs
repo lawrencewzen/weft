@@ -17,6 +17,49 @@ import { EXT_WORKSPACE } from './ids.mjs';
 const DETAIL_CAP = 1024 * 1024;
 const SKIP_DIR_NAMES = new Set(['.git', 'node_modules']);
 
+export const DEFAULT_BASH_TIMEOUT_SECONDS = 600;
+/** The official bash tool refuses anything above 2_147_483_647 ms. */
+export const MAX_BASH_TIMEOUT_SECONDS = 2_147_483.647;
+
+/**
+ * The bash cap in seconds: `WEFT_BASH_TIMEOUT_SECONDS` when it is a positive
+ * number, clamped to the official maximum; the built-in default otherwise.
+ */
+export function bashTimeoutSeconds(env = process.env) {
+  const raw = String(env?.WEFT_BASH_TIMEOUT_SECONDS ?? '').trim();
+  if (raw === '') return DEFAULT_BASH_TIMEOUT_SECONDS;
+  const seconds = Number(raw);
+  if (!Number.isFinite(seconds) || seconds <= 0) return DEFAULT_BASH_TIMEOUT_SECONDS;
+  return Math.min(seconds, MAX_BASH_TIMEOUT_SECONDS);
+}
+
+/**
+ * Fill in the bash timeout when the model left it out. The official tool has no
+ * default, so a hung command (`npm test`, a stray watcher) would hold the
+ * conversation "running" until someone stops it. The value lands in the
+ * prepared arguments, so the checkpoint shows the timeout the call actually ran
+ * with, and a timeout the model chose is kept as is.
+ */
+function withDefaultTimeout(tool) {
+  const prepare = tool.prepareArguments;
+  const execute = tool.execute;
+  const capped = (input) => {
+    if (!input || typeof input !== 'object' || Array.isArray(input)) return input;
+    if (input.timeout !== undefined) return input;
+    return { ...input, timeout: bashTimeoutSeconds() };
+  };
+  return {
+    ...tool,
+    prepareArguments(input) {
+      const next = capped(input);
+      return prepare ? prepare(next) : next;
+    },
+    async execute(args, api, context) {
+      return execute(capped(args), api, context);
+    },
+  };
+}
+
 function withReplay(tool, replay) {
   return { ...tool, replay };
 }
@@ -219,7 +262,7 @@ const workspaceToolList = [
   withIntent(withReplay(withFileChangeDetails(withLegacyEditArgs(createEditTool())), 'unsafe')),
   withIntent(createLsTool()),
   withIntent(createGrepTool()),
-  withIntent(withReplay(createBashTool(), 'unsafe')),
+  withIntent(withReplay(withDefaultTimeout(createBashTool()), 'unsafe')),
 ];
 
 export function workspaceTools() {

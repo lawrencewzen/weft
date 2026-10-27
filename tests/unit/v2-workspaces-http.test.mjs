@@ -9,6 +9,7 @@ import { PROTOCOL_VERSION } from '../../src/v2/version.ts';
 import { validateResponse } from '../../src/v2/validate.ts';
 import { ROOT } from './_root.mjs';
 import { readDiscovery, request, startServer, stopServer } from './_server.mjs';
+import { makeTempDir, removeTempDir } from './_tmp.mjs';
 
 const TOKEN = 'v2-ws-http-token';
 const BASIC = path.join(ROOT, 'tests/fixtures/basic.json');
@@ -167,7 +168,7 @@ test('DELETE /api/v2/workspaces/{id} is 409 E_WS_BUSY while a conversation is ru
 
 test('POST /api/v2/workspaces/{id}/git/refresh returns git status or null', { timeout: 40_000 }, async () => {
   const execFileP = promisify(execFile);
-  const wsRoot = await mkdtemp(path.join(tmpdir(), 'weft-v2-git-wsroot-'));
+  const wsRoot = await makeTempDir('weft-v2-git-wsroot-');
   const repo = path.join(wsRoot, 'repo');
   await writeFile(path.join(wsRoot, '.keep'), '');
   await mkdir(repo, { recursive: true });
@@ -232,5 +233,6 @@ test('POST /api/v2/workspaces/{id}/git/refresh returns git status or null', { ti
     assert.ok(refreshed.body.git.insertions >= 1);
   } finally {
     await stopServer(srv);
+    await removeTempDir(wsRoot);
   }
 });
