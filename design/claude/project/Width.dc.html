@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Weft 空态</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="width: {{screenPx}}; height: 1000px; display: flex; overflow: hidden; font-family: -apple-system, 'PingFang SC', 'Helvetica Neue', system-ui, sans-serif; color: #1A1A1A; background: #FAFAFA; font-size: 14px">
+
+  <sc-if value="{{leftOpen}}" hint-placeholder-val="{{true}}">
+  <aside style="width: {{leftPx}}; flex-shrink: 0; background: #F4F4F3; border-right: 1px solid #E7E7E5; display: flex; flex-direction: column; box-sizing: border-box; padding: 14px 12px 12px">
+    <div style="display: flex; align-items: center; gap: 10px">
+      <button type="button" style="flex: 1; height: 38px; border: 1px solid #E2E2E0; background: #FFFFFF; border-radius: 8px; font-size: 13px; color: #1A1A1A; font-family: inherit">新对话</button>
+      <button type="button" aria-label="收起左栏" onClick="{{toggleLeft}}" style="width: 32px; height: 32px; border: none; background: transparent; color: #6B6B6B; display: flex; align-items: center; justify-content: center; cursor: pointer">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"></rect><path d="M9 5v14"></path></svg>
+      </button>
+    </div>
+    <div style="display: flex; align-items: center; justify-content: space-between; padding: 22px 6px 6px; font-size: 12px; color: #6B6B6B">
+      <span>项目</span>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+    </div>
+    <sc-if value="{{thread}}" hint-placeholder-val="{{false}}">
+      <div style="display: flex; flex-direction: column; gap: 2px; padding: 2px 0">
+        <div style="padding: 6px 8px; font-size: 13px; color: #3A3A3A; display: flex; align-items: center; gap: 8px">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg>
+          weft
+        </div>
+        <div style="padding: 7px 8px 7px 30px; font-size: 13px; background: #E9E9E7; border-radius: 6px; color: #1A1A1A">分开添加和关闭按钮</div>
+        <div style="padding: 7px 8px 7px 30px; font-size: 13px; color: #555555">加入按钮文字折行</div>
+      </div>
+    </sc-if>
+    <div style="margin-top: auto; display: flex; align-items: center; justify-content: space-between; padding: 8px 6px 0; font-size: 13px; color: #555555">
+      <span>设置</span>
+      <span style="display: flex; align-items: center; gap: 12px">
+        <span style="width: 7px; height: 7px; border-radius: 50%; background: #2F9E5B"></span>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"></path></svg>
+      </span>
+    </div>
+  </aside>
+  </sc-if>
+
+  <main style="flex: 1; min-width: 0; position: relative; display: flex; flex-direction: column; background: #FAFAFA">
+    <div style="height: 52px; flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; padding: 0 16px">
+      <span style="display: flex; align-items: center; gap: 10px">
+        <sc-if value="{{leftClosed}}" hint-placeholder-val="{{false}}">
+          <button type="button" aria-label="展开左栏" onClick="{{toggleLeft}}" style="width: 32px; height: 32px; border: none; background: transparent; color: #6B6B6B; display: flex; align-items: center; justify-content: center; cursor: pointer">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"></rect><path d="M9 5v14"></path></svg>
+          </button>
+        </sc-if>
+        <sc-if value="{{guides}}" hint-placeholder-val="{{true}}">
+          <span style="font-size: 12px; font-weight: 600; color: #B4410B; background: #FFF1E7; border-radius: 999px; padding: 3px 10px">{{modeLabel}}</span>
+        </sc-if>
+      </span>
+      <sc-if value="{{rightClosed}}" hint-placeholder-val="{{false}}">
+        <button type="button" aria-label="展开右栏" onClick="{{toggleRight}}" style="width: 32px; height: 32px; border: none; background: transparent; color: #6B6B6B; display: flex; align-items: center; justify-content: center; cursor: pointer">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"></rect><path d="M15 5v14"></path></svg>
+        </button>
+      </sc-if>
+    </div>
+
+    <sc-if value="{{centerGuide}}" hint-placeholder-val="{{true}}">
+      <div style="position: absolute; left: 0; right: 0; top: 500px; border-top: 1px dashed rgba(234, 88, 12, 0.45); pointer-events: none">
+        <span style="position: absolute; left: 12px; top: -20px; font-size: 11px; color: #B4410B">页面中线</span>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{emptyCentered}}" hint-placeholder-val="{{true}}">
+      <div style="position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; box-sizing: border-box; padding-bottom: {{padBottom}}">
+        <div style="display: flex; align-items: center; gap: 10px; font-size: 28px; font-weight: 600; margin-bottom: 26px">
+          <span>要在</span>
+          <button type="button" style="display: inline-flex; align-items: center; gap: 8px; padding: 3px 12px; border-radius: 8px; background: #EFEFED; border: none; font-size: 28px; font-weight: 600; color: #1A1A1A; font-family: inherit">选择项目 <span style="font-size: 11px; color: #6B6B6B">▾</span></button>
+          <span>里做什么？</span>
+        </div>
+        <div style="width: {{cwPx}}; box-sizing: border-box; background: #FFFFFF; border: 1px solid #E4E4E2; border-radius: 18px; box-shadow: 0 6px 24px rgba(0, 0, 0, 0.05); padding: 16px 16px 12px 20px; display: flex; flex-direction: column; gap: 14px">
+          <textarea aria-label="输入消息" placeholder="继续对话，Enter 发送，Shift+Enter 换行" style="height: 56px; border: none; outline: none; resize: none; font-size: 15px; font-family: inherit; color: #1A1A1A; background: transparent; padding: 0"></textarea>
+          <div style="display: flex; align-items: center; justify-content: space-between">
+            <button type="button" style="border: none; background: transparent; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 13px; color: #1A1A1A; padding: 4px 6px">deepseek-flash <span style="font-size: 10px; color: #6B6B6B">▾</span></button>
+            <div style="display: flex; align-items: center; gap: 14px">
+              <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 12px; color: #6E6E6E">已用 0% · 剩 100% · 1M ▾</span>
+              <button type="button" aria-label="发送" style="width: 36px; height: 36px; border-radius: 50%; border: none; background: #C9C9C7; color: #FFFFFF; display: flex; align-items: center; justify-content: center">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"></path></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+        <p style="margin: 14px 0 0; font-size: 13px; color: #6E6E6E">先在左侧添加一个项目，Agent 会在这个目录里工作。</p>
+        <sc-if value="{{guides}}" hint-placeholder-val="{{true}}">
+          <div style="width: {{cwPx}}; margin-top: 26px; display: flex; align-items: center; gap: 10px; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 12px; color: #B4410B">
+            <span style="width: 1px; height: 12px; background: #EA580C"></span>
+            <span style="flex: 1; border-top: 1px dashed #EA580C"></span>
+            <span>输入框 {{cw}}px</span>
+            <span style="flex: 1; border-top: 1px dashed #EA580C"></span>
+            <span style="width: 1px; height: 12px; background: #EA580C"></span>
+          </div>
+          <p style="margin: 8px 0 0; font-size: 12px; color: #B4410B">{{rule}} · 中间栏 {{centerW}}px · 两侧各空 {{gap}}px</p>
+        </sc-if>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{emptyBottom}}" hint-placeholder-val="{{false}}">
+      <div style="flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center">
+        <div style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding-bottom: 40px">
+          <div style="display: flex; align-items: center; gap: 10px; font-size: 28px; font-weight: 600">
+            <span>要在</span>
+            <button type="button" style="display: inline-flex; align-items: center; gap: 8px; padding: 3px 12px; border-radius: 8px; background: #EFEFED; border: none; font-size: 28px; font-weight: 600; color: #1A1A1A; font-family: inherit">选择项目 <span style="font-size: 11px; color: #6B6B6B">▾</span></button>
+            <span>里做什么？</span>
+          </div>
+          <p style="margin: 18px 0 0; font-size: 13px; color: #6E6E6E">先在左侧添加一个项目，Agent 会在这个目录里工作。</p>
+        </div>
+        <sc-if value="{{guides}}" hint-placeholder-val="{{true}}">
+          <div style="width: {{cwPx}}; margin-bottom: 10px; display: flex; align-items: center; gap: 10px; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 12px; color: #B4410B">
+            <span style="width: 1px; height: 12px; background: #EA580C"></span>
+            <span style="flex: 1; border-top: 1px dashed #EA580C"></span>
+            <span>输入框 {{cw}}px · {{rule}} · 中间栏 {{centerW}}px · 两侧各空 {{gap}}px</span>
+            <span style="flex: 1; border-top: 1px dashed #EA580C"></span>
+            <span style="width: 1px; height: 12px; background: #EA580C"></span>
+          </div>
+        </sc-if>
+        <div style="width: {{cwPx}}; box-sizing: border-box; margin-bottom: 20px; background: #FFFFFF; border: 1px solid #E4E4E2; border-radius: 18px; box-shadow: 0 6px 24px rgba(0, 0, 0, 0.05); padding: 16px 16px 12px 20px; display: flex; flex-direction: column; gap: 14px">
+          <textarea aria-label="输入消息" placeholder="继续对话，Enter 发送，Shift+Enter 换行" style="height: 56px; border: none; outline: none; resize: none; font-size: 15px; font-family: inherit; color: #1A1A1A; background: transparent; padding: 0"></textarea>
+          <div style="display: flex; align-items: center; justify-content: space-between">
+            <button type="button" style="border: none; background: transparent; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 13px; color: #1A1A1A; padding: 4px 6px">deepseek-flash <span style="font-size: 10px; color: #6B6B6B">▾</span></button>
+            <div style="display: flex; align-items: center; gap: 14px">
+              <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 12px; color: #6E6E6E">已用 0% · 剩 100% · 1M ▾</span>
+              <button type="button" aria-label="发送" style="width: 36px; height: 36px; border-radius: 50%; border: none; background: #C9C9C7; color: #FFFFFF; display: flex; align-items: center; justify-content: center">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"></path></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{thread}}" hint-placeholder-val="{{false}}">
+      <div style="flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center">
+        <div style="width: {{cwPx}}; flex: 1; display: flex; flex-direction: column; gap: 18px; padding: 12px 0 24px; box-sizing: border-box">
+          <div style="align-self: flex-end; max-width: 80%; background: #EFEFED; border-radius: 14px; padding: 10px 14px; line-height: 1.6">Git 设置页的「添加」按钮和右上角的关闭按钮挤在一起了，帮我分开。</div>
+          <div style="line-height: 1.75; color: #1A1A1A">看了一下：关闭按钮是绝对定位在弹窗右上角的，标题行右侧的「添加」按钮没给它留位置，所以两者叠在一起。</div>
+          <div style="display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: #555555">
+            <div style="display: flex; align-items: center; gap: 8px"><span style="width: 6px; height: 6px; border-radius: 50%; background: #2F9E5B"></span>读取 <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace">public/git-settings.js</span></div>
+            <div style="display: flex; align-items: center; gap: 8px"><span style="width: 6px; height: 6px; border-radius: 50%; background: #2F9E5B"></span>编辑 <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace">public/app.css</span> <span style="color: #2F7D4F">+3</span> <span style="color: #B42318">−1</span></div>
+            <div style="display: flex; align-items: center; gap: 8px"><span style="width: 6px; height: 6px; border-radius: 50%; background: #2F9E5B"></span>运行 <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace">npm run check &amp;&amp; npm test</span></div>
+          </div>
+          <div style="line-height: 1.75">给标题行右边留出了 40px，「添加」按钮现在和关闭按钮分开了。语法检查和单元测试都通过。</div>
+          <sc-if value="{{guides}}" hint-placeholder-val="{{true}}">
+            <div style="margin-top: auto; display: flex; align-items: center; gap: 10px; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 12px; color: #B4410B">
+              <span style="flex: 1; border-top: 1px dashed #EA580C"></span>
+              <span>{{rule}} · 消息区和输入框 {{cw}}px</span>
+              <span style="flex: 1; border-top: 1px dashed #EA580C"></span>
+            </div>
+          </sc-if>
+        </div>
+        <div style="width: {{cwPx}}; box-sizing: border-box; margin-bottom: 20px; background: #FFFFFF; border: 1px solid #E4E4E2; border-radius: 18px; box-shadow: 0 6px 24px rgba(0, 0, 0, 0.05); padding: 14px 16px 12px 20px; display: flex; flex-direction: column; gap: 10px">
+          <textarea aria-label="输入消息" placeholder="继续对话，Enter 发送，Shift+Enter 换行" style="height: 24px; border: none; outline: none; resize: none; font-size: 14px; font-family: inherit; color: #1A1A1A; background: transparent; padding: 0"></textarea>
+          <div style="display: flex; align-items: center; justify-content: space-between">
+            <div style="display: flex; align-items: center; gap: 6px">
+              <span style="font-size: 12px; background: #EFEFED; border-radius: 6px; padding: 3px 8px; color: #3A3A3A">weft</span>
+              <button type="button" style="border: none; background: transparent; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 13px; color: #1A1A1A; padding: 4px 6px">deepseek-flash <span style="font-size: 10px; color: #6B6B6B">▾</span></button>
+            </div>
+            <div style="display: flex; align-items: center; gap: 14px">
+              <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 12px; color: #6E6E6E">已用 4% · 剩 96% · 1M ▾</span>
+              <button type="button" aria-label="发送" style="width: 34px; height: 34px; border-radius: 50%; border: none; background: #C9C9C7; color: #FFFFFF; display: flex; align-items: center; justify-content: center">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"></path></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+  </main>
+
+  <sc-if value="{{rightOpen}}" hint-placeholder-val="{{true}}">
+    <aside style="width: {{rightPx}}; flex-shrink: 0; background: #FFFFFF; border-left: 1px solid #E7E7E5; display: flex; flex-direction: column">
+      <div style="height: 60px; display: flex; align-items: center; justify-content: space-between; padding: 0 14px; border-bottom: 1px solid #EFEFED">
+        <div style="display: flex; gap: 6px">
+          <button type="button" style="border: none; background: #EFEFED; border-radius: 6px; padding: 6px 12px; font-size: 13px; color: #1A1A1A; font-family: inherit">变更</button>
+          <button type="button" style="border: none; background: transparent; border-radius: 6px; padding: 6px 12px; font-size: 13px; color: #555555; font-family: inherit">文件</button>
+        </div>
+        <button type="button" aria-label="收起右栏" onClick="{{toggleRight}}" style="width: 32px; height: 32px; border: none; background: transparent; color: #6B6B6B; display: flex; align-items: center; justify-content: center; cursor: pointer">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"></rect><path d="M15 5v14"></path></svg>
+        </button>
+      </div>
+      <sc-if value="{{empty}}" hint-placeholder-val="{{true}}">
+        <div style="flex: 1; display: flex; align-items: center; justify-content: center; font-size: 13px; color: #6E6E6E">暂无变更</div>
+      </sc-if>
+      <sc-if value="{{thread}}" hint-placeholder-val="{{false}}">
+        <div style="padding: 12px 14px; display: flex; align-items: center; justify-content: space-between; font-size: 13px; border-bottom: 1px solid #F2F2F0">
+          <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace">public/app.css</span>
+          <span><span style="color: #2F7D4F">+3</span> <span style="color: #B42318">−1</span></span>
+        </div>
+      </sc-if>
+    </aside>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"mode":{"editor":"enum","options":["现状","A","B","C","D"],"default":"现状"},"screenW":{"editor":"int","min":1280,"max":2560,"step":20,"unit":"px","default":1720},"leftOpen":{"editor":"boolean","default":true},"leftW":{"editor":"int","min":200,"max":480,"step":10,"unit":"px","default":264},"rightOpen":{"editor":"boolean","default":true},"rightW":{"editor":"int","min":320,"max":800,"step":10,"unit":"px","default":440},"thread":{"editor":"boolean","default":false},"guides":{"editor":"boolean","default":true},"$preview":{"width":1720,"height":1000}}'>
+class Component extends DCLogic {
+  renderVals() {
+    var mode = this.props.mode ?? '现状';
+    var rightOpen = this.state && this.state.rightOpen !== undefined ? this.state.rightOpen : (this.props.rightOpen ?? true);
+    var thread = this.props.thread ?? false;
+    var guides = this.props.guides ?? true;
+    var leftOpen = this.state && this.state.leftOpen !== undefined ? this.state.leftOpen : (this.props.leftOpen ?? true);
+    var leftW = this.props.leftW ?? 264;
+    var rightW = this.props.rightW ?? 440;
+    var screenW = this.props.screenW ?? 1720;
+    var centerW = screenW - (leftOpen ? leftW : 0) - (rightOpen ? rightW : 0);
+    var cw, rule, label;
+    if (mode === 'D') {
+      var maxW = screenW - 264 - 440 - 96;
+      var minW = 560;
+      var fit = centerW - 96;
+      cw = Math.min(centerW - 32, Math.max(minW, Math.min(fit, maxW)));
+      if (fit > maxW) rule = '到上限：屏幕 − 800 = ' + maxW + 'px';
+      else if (fit < minW) rule = '到下限 560px';
+      else rule = '两侧各留 48px';
+      label = '定稿 · 屏幕 ' + screenW + 'px';
+    } else if (mode === 'A') {
+      cw = centerW - 80; rule = '两侧各留 40px，不设上限'; label = '方案 A';
+    } else if (mode === 'B') {
+      cw = Math.min(960, centerW - 96); rule = '两侧各留 48px，最大 960px'; label = '方案 B';
+    } else if (mode === 'C') {
+      cw = Math.min(1040, Math.round(centerW * 0.9)); rule = '中间栏 90%，最大 1040px'; label = '方案 C';
+    } else {
+      cw = thread ? 700 : 680; rule = thread ? '现状' : '现状：整体比中线偏上 36px'; label = '现状';
+    }
+    var self = this;
+    return {
+      leftOpen: leftOpen,
+      leftClosed: !leftOpen,
+      leftPx: leftW + 'px',
+      rightPx: rightW + 'px',
+      toggleLeft: function () { self.setState({ leftOpen: !leftOpen }); },
+      rightOpen: rightOpen,
+      rightClosed: !rightOpen,
+      thread: thread,
+      empty: !thread,
+      emptyCentered: !thread && mode !== 'D',
+      emptyBottom: !thread && mode === 'D',
+      screenPx: screenW + 'px',
+      guides: guides,
+      centerGuide: guides && !thread && mode !== 'D',
+      modeLabel: label,
+      cw: cw,
+      cwPx: cw + 'px',
+      centerW: centerW,
+      gap: Math.round((centerW - cw) / 2),
+      rule: rule,
+      padBottom: mode === '现状' ? '72px' : '0px',
+      toggleRight: function () { self.setState({ rightOpen: !rightOpen }); }
+    };
+  }
+}
+</script>
+</body>
+</html>

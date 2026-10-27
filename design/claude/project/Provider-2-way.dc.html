@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>添加 Provider 第二步 选接入方式</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="width: 1200px; height: 860px; box-sizing: border-box; padding: 30px; background: #8E8E8C; font-family: -apple-system, 'PingFang SC', 'Helvetica Neue', system-ui, sans-serif; color: #1A1A1A; font-size: 14px">
+  <div style="width: 1140px; height: 800px; background: #FFFFFF; border-radius: 16px; overflow: hidden; display: flex">
+    <nav style="width: 220px; flex-shrink: 0; background: #F7F7F5; padding: 24px 12px; box-sizing: border-box; display: flex; flex-direction: column; gap: 2px; font-size: 14px; color: #3A3A3A">
+      <div style="padding: 0 10px 14px; font-weight: 600; color: #1A1A1A">系统设置</div>
+      <div style="padding: 8px 10px">通用</div>
+      <div style="padding: 8px 10px; background: #ECECE9; border-radius: 8px; color: #1A1A1A">Provider</div>
+      <div style="padding: 8px 10px">Git</div>
+      <div style="padding: 8px 10px">插件</div>
+      <div style="padding: 8px 10px">Skills</div>
+      <div style="padding: 8px 10px">关于</div>
+    </nav>
+
+    <div style="flex: 1; min-width: 0; display: flex; flex-direction: column">
+      <div style="padding: 22px 36px 18px; display: flex; align-items: center; justify-content: space-between">
+        <div style="display: flex; align-items: center; gap: 12px">
+          <button type="button" aria-label="返回选厂商" style="width: 28px; height: 28px; border: none; background: transparent; color: #555555; display: flex; align-items: center; justify-content: center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M15 6l-6 6 6 6"></path></svg></button>
+          <span style="width: 32px; height: 32px; border-radius: 9px; border: 1px solid #EFEFED; display: flex; align-items: center; justify-content: center"><img src="/_blob/53bfe8f749ed95d49007d090442a7741" alt="" width="20" height="20" style="display: block"></span>
+          <div style="font-size: 17px; font-weight: 600">Anthropic</div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px; font-size: 12px; color: #6E6E6E">
+          <span style="display: inline-flex; align-items: center; gap: 6px"><span style="width: 18px; height: 18px; border-radius: 50%; border: 1px solid #CFCFCB; display: flex; align-items: center; justify-content: center; font-size: 11px">1</span>选厂商</span>
+          <span style="width: 20px; height: 1px; background: #DCDCD9"></span>
+          <span style="display: inline-flex; align-items: center; gap: 6px; color: #1A1A1A; font-weight: 600"><span style="width: 18px; height: 18px; border-radius: 50%; background: #1A1A1A; color: #FFFFFF; display: flex; align-items: center; justify-content: center; font-size: 11px">2</span>连接</span>
+          <span style="width: 20px; height: 1px; background: #DCDCD9"></span>
+          <span style="display: inline-flex; align-items: center; gap: 6px"><span style="width: 18px; height: 18px; border-radius: 50%; border: 1px solid #CFCFCB; display: flex; align-items: center; justify-content: center; font-size: 11px">3</span>选模型</span>
+        </div>
+      </div>
+
+      <div style="flex: 1; min-height: 0; padding: 4px 36px 0; display: flex; gap: 32px">
+        <div role="radiogroup" aria-label="接入方式" style="width: 300px; flex-shrink: 0; display: flex; flex-direction: column; gap: 8px">
+          <div style="font-size: 13px; font-weight: 600; margin-bottom: 2px">怎么接</div>
+          <sc-for list="{{ways}}" as="w" hint-placeholder-count="4">
+            <button type="button" role="radio" aria-checked="{{w.on}}" disabled="{{w.off}}" onClick="{{w.pick}}" style="display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; border-radius: 10px; border: {{w.border}}; background: {{w.bg}}; font-family: inherit; text-align: left; opacity: {{w.opacity}}">
+              <span style="width: 16px; height: 16px; margin-top: 1px; border-radius: 50%; border: {{w.dot}}; box-sizing: border-box; flex-shrink: 0"></span>
+              <span style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; line-height: 1.4">
+                <span style="display: flex; align-items: center; gap: 8px; font-size: 14px; color: #1A1A1A">{{w.name}}<sc-if value="{{w.soon}}" hint-placeholder-val="{{false}}"><span style="font-size: 11px; color: #555555; background: #F2F2F0; border-radius: 4px; padding: 1px 6px">即将支持</span></sc-if></span>
+                <span style="font-size: 12px; color: #6E6E6E">{{w.desc}}</span>
+              </span>
+            </button>
+          </sc-for>
+        </div>
+
+        <div style="flex: 1; min-width: 0; padding-left: 32px; border-left: 1px solid #EFEFED; display: flex; flex-direction: column; gap: 18px">
+          <sc-if value="{{isKey}}" hint-placeholder-val="{{true}}">
+            <div style="display: flex; flex-direction: column; gap: 18px">
+              <div style="display: flex; flex-direction: column; gap: 6px">
+                <div style="display: flex; align-items: baseline; justify-content: space-between">
+                  <label for="key" style="font-size: 13px; font-weight: 600">API Key</label>
+                  <a href="#key" style="font-size: 12px; color: #3446B8; text-decoration: none">去 Anthropic Console 获取 ↗</a>
+                </div>
+                <input id="key" type="password" value="sk-ant-0123456789abcdef" style="height: 40px; padding: 0 12px; border: 1px solid #BDBDBA; border-radius: 10px; font-size: 14px; font-family: ui-monospace, 'SF Mono', Menlo, monospace; outline: none">
+                <div style="font-size: 12px; color: #6E6E6E">只存在这台机器上，保存后只显示后 4 位。</div>
+              </div>
+              <div style="display: flex; flex-direction: column; gap: 6px">
+                <label for="name" style="font-size: 13px; font-weight: 600">名称</label>
+                <input id="name" value="Anthropic" style="height: 40px; padding: 0 12px; border: 1px solid #DCDCD9; border-radius: 10px; font-size: 14px; font-family: inherit; outline: none">
+              </div>
+              <div style="display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 10px; background: #F1F8F3; border: 1px solid #D5EADB">
+                <span style="width: 22px; height: 22px; border-radius: 50%; background: #2F9E5B; color: #FFFFFF; display: flex; align-items: center; justify-content: center; flex-shrink: 0"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><path d="M5 12l5 5L20 7"></path></svg></span>
+                <span style="font-size: 13px; color: #1F5135; font-weight: 600">连接成功，找到 [N] 个模型</span>
+              </div>
+            </div>
+          </sc-if>
+          <sc-if value="{{isLogin}}" hint-placeholder-val="{{false}}">
+            <div style="display: flex; flex-direction: column; gap: 14px; align-items: flex-start">
+              <div style="font-size: 13px; font-weight: 600">用 Claude 账号登录</div>
+              <div style="font-size: 13px; color: #555555; line-height: 1.6">会打开浏览器登录你的 Claude 订阅账号，登录完自动回到这里，不需要 Key。</div>
+              <button type="button" style="height: 36px; padding: 0 16px; border-radius: 8px; border: none; background: #1A1A1A; color: #FFFFFF; font-size: 13px; font-family: inherit">在浏览器里登录</button>
+            </div>
+          </sc-if>
+          <sc-if value="{{isCustom}}" hint-placeholder-val="{{false}}">
+            <div style="display: flex; flex-direction: column; gap: 6px">
+              <label for="base" style="font-size: 13px; font-weight: 600">API 地址</label>
+              <input id="base" placeholder="https://your-gateway.example.com" style="height: 40px; padding: 0 12px; border: 1px solid #DCDCD9; border-radius: 10px; font-size: 14px; font-family: ui-monospace, 'SF Mono', Menlo, monospace; outline: none">
+              <div style="font-size: 12px; color: #6E6E6E">走 Anthropic 协议的网关或代理，Key 选填。</div>
+            </div>
+          </sc-if>
+        </div>
+      </div>
+
+      <div style="padding: 14px 36px; border-top: 1px solid #EFEFED; display: flex; align-items: center; justify-content: space-between; font-size: 13px; color: #6E6E6E">
+        <span>{{footer}}</span>
+        <span style="display: flex; gap: 8px">
+          <button type="button" style="height: 34px; padding: 0 14px; border-radius: 8px; border: 1px solid #DCDCD9; background: #FFFFFF; font-size: 13px; font-family: inherit; color: #1A1A1A">上一步</button>
+          <button type="button" style="height: 34px; padding: 0 16px; border-radius: 8px; border: none; background: #1A1A1A; color: #FFFFFF; font-size: 13px; font-family: inherit">下一步：选模型</button>
+        </span>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1200,"height":860}}'>
+class Component extends DCLogic {
+  renderVals() {
+    var cur = (this.state && this.state.way) || 'key';
+    var self = this;
+    var list = [
+      { id: 'login', name: '账号登录 · Claude Code', desc: '用 Claude 订阅登录，不用 Key' },
+      { id: 'key', name: 'API Key', desc: 'Anthropic Console 的 Key，按量计费' },
+      { id: 'acp', name: 'ACP Agent · Claude Code', desc: '把 Claude Code 当外部 Agent 接进来', soon: true },
+      { id: 'custom', name: '自定义地址', desc: '兼容 Anthropic 协议的网关' }
+    ];
+    var ways = list.map(function (w) {
+      var on = w.id === cur;
+      return {
+        name: w.name, desc: w.desc, soon: !!w.soon, on: on, off: !!w.soon,
+        border: on ? '1.5px solid #1A1A1A' : '1px solid #E6E6E3',
+        bg: on ? '#F7F7F5' : '#FFFFFF',
+        dot: on ? '5px solid #1A1A1A' : '1.5px solid #BDBDBA',
+        opacity: w.soon ? '0.6' : '1',
+        pick: function () { if (!w.soon) self.setState({ way: w.id }); }
+      };
+    });
+    var footer = cur === 'key' ? '测试通过才能进下一步' : cur === 'login' ? '登录成功后进下一步' : '填好地址后测试连接';
+    return { ways: ways, isKey: cur === 'key', isLogin: cur === 'login', isCustom: cur === 'custom', footer: footer };
+  }
+}
+</script>
+</body>
+</html>

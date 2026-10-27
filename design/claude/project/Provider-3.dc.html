@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>添加 Provider 第三步</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="width: 1200px; height: 860px; box-sizing: border-box; padding: 30px; background: #8E8E8C; font-family: -apple-system, 'PingFang SC', 'Helvetica Neue', system-ui, sans-serif; color: #1A1A1A; font-size: 14px">
+  <div style="width: 1140px; height: 800px; background: #FFFFFF; border-radius: 16px; overflow: hidden; display: flex; position: relative">
+    <nav style="width: 220px; flex-shrink: 0; background: #F7F7F5; padding: 24px 12px; box-sizing: border-box; display: flex; flex-direction: column; gap: 2px; font-size: 14px; color: #3A3A3A">
+      <div style="padding: 0 10px 14px; font-weight: 600; color: #1A1A1A">系统设置</div>
+      <div style="padding: 8px 10px">通用</div>
+      <div style="padding: 8px 10px; background: #ECECE9; border-radius: 8px; color: #1A1A1A">Provider</div>
+      <div style="padding: 8px 10px">Git</div>
+      <div style="padding: 8px 10px">插件</div>
+      <div style="padding: 8px 10px">Skills</div>
+      <div style="padding: 8px 10px">关于</div>
+    </nav>
+
+    <aside style="flex: 1; min-width: 0; background: #FFFFFF; display: flex; flex-direction: column; padding: 0 12px; box-sizing: border-box">
+      <div style="padding: 22px 24px 14px; display: flex; align-items: flex-start; justify-content: space-between">
+        <div style="display: flex; align-items: center; gap: 12px">
+          <button type="button" aria-label="返回上一步" style="width: 28px; height: 28px; border: none; background: transparent; color: #555555; display: flex; align-items: center; justify-content: center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M15 6l-6 6 6 6"></path></svg></button>
+          <span style="width: 32px; height: 32px; border-radius: 9px; border: 1px solid #EFEFED; display: flex; align-items: center; justify-content: center"><img src="/_blob/7b3fad4ef6efe79b91fc328ba36f0b7f" alt="" width="20" height="20" style="display: block"></span>
+          <div>
+            <div style="font-size: 17px; font-weight: 600">OpenRouter</div>
+            <div style="margin-top: 2px; font-size: 13px; color: #6E6E6E">Provider / 添加 · 第 3 步 · 选要用的模型</div>
+          </div>
+        </div>
+      </div>
+
+      <div style="padding: 0 24px 10px; display: flex; flex-direction: column; gap: 10px">
+        <label style="height: 36px; display: flex; align-items: center; gap: 8px; padding: 0 12px; border: 1px solid #DCDCD9; border-radius: 10px; color: #6E6E6E">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path></svg>
+          <input aria-label="搜索模型" placeholder="搜索模型名或 ID" style="flex: 1; border: none; outline: none; font-size: 14px; font-family: inherit; background: transparent">
+        </label>
+        <div style="display: flex; flex-wrap: wrap; gap: 6px">
+          <sc-for list="{{brands}}" as="b" hint-placeholder-count="8">
+            <button type="button" style="height: 28px; display: inline-flex; align-items: center; gap: 6px; padding: 0 10px; border-radius: 999px; border: {{b.border}}; background: {{b.bg}}; color: {{b.color}}; font-size: 12px; font-family: inherit">
+              <sc-if value="{{b.hasIcon}}" hint-placeholder-val="{{true}}"><img src="{{b.icon}}" alt="" width="12" height="12" style="display: block"></sc-if>
+              {{b.name}} <span style="opacity: 0.6">{{b.count}}</span>
+            </button>
+          </sc-for>
+        </div>
+      </div>
+
+      <div style="flex: 1; min-height: 0; overflow: hidden; border-top: 1px solid #EFEFED">
+        <sc-for list="{{models}}" as="m" hint-placeholder-count="9">
+          <label style="display: flex; align-items: center; gap: 12px; padding: 9px 24px; border-bottom: 1px solid #F4F4F2; background: {{m.bg}}">
+            <input type="checkbox" checked="{{m.on}}" readOnly="{{true}}" aria-label="{{m.name}}" style="width: 16px; height: 16px; accent-color: #1A1A1A; margin: 0">
+            <img src="{{m.icon}}" alt="" width="16" height="16" style="display: block; flex-shrink: 0">
+            <span style="flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.35">
+              <span style="font-size: 14px">{{m.name}}</span>
+              <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11px; color: #6E6E6E; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{m.id}}</span>
+            </span>
+            <span style="font-size: 12px; color: #6E6E6E; width: 48px; text-align: right; font-variant-numeric: tabular-nums">{{m.ctx}}</span>
+          </label>
+        </sc-for>
+      </div>
+
+      <div style="padding: 10px 24px; border-top: 1px solid #EFEFED; display: flex; gap: 8px">
+        <input aria-label="手动添加模型 ID" placeholder="列表里没有？手动加一个模型 ID" style="flex: 1; min-width: 0; height: 34px; padding: 0 12px; border: 1px solid #DCDCD9; border-radius: 8px; font-size: 13px; font-family: ui-monospace, 'SF Mono', Menlo, monospace; outline: none">
+        <button type="button" style="flex-shrink: 0; white-space: nowrap; height: 34px; padding: 0 14px; border-radius: 8px; border: 1px solid #DCDCD9; background: #FFFFFF; font-size: 13px; font-family: inherit; color: #1A1A1A">加入</button>
+      </div>
+
+      <div style="padding: 14px 24px; border-top: 1px solid #EFEFED; display: flex; align-items: center; justify-content: space-between; font-size: 13px; color: #3A3A3A">
+        <span>已选 4 个 · <span style="text-decoration: underline; color: #555555">只看已选</span></span>
+        <span style="display: flex; gap: 8px">
+          <button type="button" style="height: 34px; padding: 0 14px; border-radius: 8px; border: 1px solid #DCDCD9; background: #FFFFFF; font-size: 13px; font-family: inherit; color: #1A1A1A">上一步</button>
+          <button type="button" style="height: 34px; padding: 0 16px; border-radius: 8px; border: none; background: #1A1A1A; color: #FFFFFF; font-size: 13px; font-family: inherit">完成添加</button>
+        </span>
+      </div>
+    </aside>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1200,"height":860}}'>
+class Component extends DCLogic {
+  renderVals() {
+    var I = {
+      claude: '/_blob/085339778c5cca6342532c8cf7c8176f',
+      openai: '/_blob/018be6d5bf5e008ed6bc719be886f502',
+      gemini: '/_blob/44d7c211de143f3b1ac39a73d0c97e18',
+      deepseek: '/_blob/225be02fc9dc1471ba4ebc137a9c457c',
+      qwen: '/_blob/28ef97126fe736d0dd602ceaae1f2625',
+      meta: '/_blob/8cad5d7c286a77c2152f518eb1141e5e',
+      mistral: '/_blob/d3bb5b1797abdac3cba97bb8cc0f7794',
+      grok: '/_blob/5e3426225edb3b17e4dc8e8c0aaf2456'
+    };
+    function brand(name, icon, count, on) {
+      return { name: name, icon: icon || '', hasIcon: !!icon, count: count,
+        border: on ? '1px solid #1A1A1A' : '1px solid #E4E4E2', bg: on ? '#1A1A1A' : '#FFFFFF', color: on ? '#FFFFFF' : '#3A3A3A' };
+    }
+    function model(name, id, icon, ctx, on) {
+      return { name: name, id: id, icon: icon, ctx: ctx, on: !!on, bg: on ? '#FAFAF8' : '#FFFFFF' };
+    }
+    return {
+      brands: [
+        brand('全部', '', '', true),
+        brand('Claude', I.claude, '[N]'),
+        brand('GPT', I.openai, '[N]'),
+        brand('Gemini', I.gemini, '[N]'),
+        brand('DeepSeek', I.deepseek, '[N]'),
+        brand('通义千问', I.qwen, '[N]'),
+        brand('Llama', I.meta, '[N]'),
+        brand('Mistral', I.mistral, '[N]'),
+        brand('Grok', I.grok, '[N]')
+      ],
+      models: [
+        model('Claude Sonnet', 'anthropic/claude-sonnet', I.claude, '200K', true),
+        model('Claude Haiku', 'anthropic/claude-haiku', I.claude, '200K'),
+        model('GPT', 'openai/gpt-[版本]', I.openai, '[ctx]', true),
+        model('Gemini Pro', 'google/gemini-pro', I.gemini, '1M', true),
+        model('DeepSeek Chat', 'deepseek/deepseek-chat', I.deepseek, '128K'),
+        model('通义千问 Coder', 'qwen/qwen-coder', I.qwen, '256K', true),
+        model('Llama', 'meta-llama/llama-[版本]', I.meta, '[ctx]'),
+        model('Mistral Large', 'mistralai/mistral-large', I.mistral, '128K'),
+        model('Grok', 'x-ai/grok-[版本]', I.grok, '[ctx]')
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>
