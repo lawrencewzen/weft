@@ -1492,6 +1492,26 @@ export interface components {
             context: components["schemas"]["ContextUsage"];
             /** @description 对话流 ThreadItem id 的顺序 */
             itemIds: string[];
+            /**
+             * @description 本进程内经 POST .../messages 与 .../continue 发出的提交，按先后顺序，最多保留最近 20 条。
+             *     前端用 requestId 找到自己那条乐观上屏的消息落在哪个 entry 上，据此收回。只在写入它们的服务进程内存在。
+             */
+            sends?: components["schemas"]["ConversationSend"][];
+        };
+        /** @description 一次发送在对话里的落点，供前端按 requestId 收回乐观上屏的消息。 */
+        ConversationSend: {
+            /** @description 发送时带的幂等键（POST 请求体的 requestId）。 */
+            requestId: string;
+            /**
+             * @description 内核把这条输入写进对话后的 entry id，也就是对应 ThreadItem 的 id（user 气泡、subagent 报告卡片或系统提示都可能）。
+             *     这条输入还在队列里、没有落盘时为 null。
+             */
+            entryId: null | string;
+            /**
+             * @description 这条输入被撤回、丢弃或提交失败，对话里不会再有对应条目（只在 entryId 为 null 时有意义）。
+             *     服务端查到 entryId 之后就不再回查提交记录，所以 entryId 不为 null 时该值可能仍是 false。
+             */
+            dropped: boolean;
         };
         /** @description GET /api/v2/conversations/{id} 的响应。客户端按 itemIds 画对话流，按 toolIds 取工具行。 */
         ConversationSnapshot: {

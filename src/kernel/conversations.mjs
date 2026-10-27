@@ -59,6 +59,32 @@ export function kernelSettings(env = process.env) {
 }
 
 /**
+ * Sends the app layer handed to the kernel, as `requestId -> submission -> entry`.
+ * The kernel keeps the submission records (and the requestId on them), but it only looks
+ * them up by requestId, so the ids it minted for us are kept here. Display-only, bounded,
+ * per process: it exists to retract the optimistic message on screen, never to drive work.
+ */
+const SEND_LOOKUP_MS = 250;
+const SEND_KEEP_MS = 5 * 60_000;
+const SEND_KEEP_ROWS = 20;
+
+function recentSendsFor(sends, cid, now = Date.now()) {
+  let rows = sends.get(cid);
+  if (!rows) return [];
+  rows = rows.filter((row) => now - row.at <= SEND_KEEP_MS);
+  if (rows.length) sends.set(cid, rows);
+  else sends.delete(cid);
+  return rows;
+}
+
+function rememberSend(sends, cid, requestId, submissionId, now = Date.now()) {
+  const rows = recentSendsFor(sends, cid, now);
+  rows.push({ requestId, submissionId, entryId: null, dropped: false, at: now, checkedAt: 0 });
+  while (rows.length > SEND_KEEP_ROWS) rows.shift();
+  sends.set(cid, rows);
+}
+
+/**
  * Open the Harness for the conversation HTTP routes.
  * `harness.resume()` continues unfinished work. Status is the last submission
  * reacquired with `harness.submission(id)`, not a host-side scan.
@@ -86,6 +112,7 @@ export async function openConversationKernel({
   const watches = new Map();
   const tails = new Map();
   const listeners = new Map();
+  const sends = new Map();
   const allListeners = new Set();
   const settings = kernelSettings(env);
   let agentHost;
@@ -172,6 +199,32 @@ export async function openConversationKernel({
       };
     }
     return statusFromSubmission(await handle.status(context));
+  }
+
+  /**
+   * Which entry did each recently sent message become? Ask the kernel's submission record
+   * (it carries requestId → entry) until it names one, then remember it: an entry never
+   * moves. A record that ends without an entry was withdrawn before it landed.
+   */
+  async function sendsView(conv) {
+    const rows = recentSendsFor(sends, conv.id);
+    if (!rows?.length) return [];
+    const now = Date.now();
+    const out = [];
+    for (const row of rows) {
+      if (!row.entryId && !row.dropped && now - row.checkedAt >= SEND_LOOKUP_MS) {
+        row.checkedAt = now;
+        const handle = await harness.submission(row.submissionId, context);
+        if (handle) {
+          const record = await handle.status(context);
+          const entry = record?.entry == null ? '' : String(record.entry);
+          if (entry) row.entryId = entry;
+          else row.dropped = record?.status === 'done' || record?.status === 'unanswered';
+        }
+      }
+      out.push({ requestId: row.requestId, entryId: row.entryId || null, dropped: row.dropped === true });
+    }
+    return out;
   }
 
   async function readTranscript(harnessId) {
@@ -479,7 +532,9 @@ export async function openConversationKernel({
       }
     },
     async present(conv, { includeMessages = false } = {}) {
-      if (!conv?.harnessId) return { ...conv, status: 'idle', messages: includeMessages ? [] : undefined };
+      if (!conv?.harnessId) {
+        return { ...conv, status: 'idle', messages: includeMessages ? [] : undefined, sends: [] };
+      }
       const view = await submissionView(conv);
       const status = view.status;
       let usage = null;
@@ -495,7 +550,7 @@ export async function openConversationKernel({
         const harnessView = await readView(conv.harnessId);
         usage = presentContext(latestCallUsage(harnessView?.entries)).usage;
       }
-      const out = { ...conv, status, usage };
+      const out = { ...conv, status, usage, sends: await sendsView(conv) };
       if (view.llmError) out.llmError = view.llmError;
       if (includeMessages) out.messages = messages;
       return out;
@@ -510,12 +565,14 @@ export async function openConversationKernel({
         await conversation.configure({ model: model ?? null }, context);
       }
       const given = typeof options.requestId === 'string' ? options.requestId.trim() : '';
+      const requestId = given || prepared?.requestId || randomUUID();
       const submission = await conversation.submit({
         type: 'input',
         content: text,
-        requestId: given || prepared?.requestId || randomUUID(),
+        requestId,
         whenBusy: 'steer',
       }, context);
+      rememberSend(sends, current.id, requestId, submission.id);
       await store.updateConversation(current.id, { lastSubmissionId: submission.id });
       return { status: 202, body: { runId: String(submission.id), status: 'running' } };
     },

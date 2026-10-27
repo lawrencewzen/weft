@@ -31,7 +31,7 @@
 
 ### I-5 工具调用没有超时，run 会无限期 running
 - 现象：对话 `803950aa`（weft 工作区）卡在 `pendingText: 跑单元测试` 20 分钟以上。
-- 证据：`ps` 里 `npm test`（pid 41496）7:33 起一直在跑，两个 `node --test` 子进程 CPU 占用 0；该对话跑在 worktree `/tmp/weft-p5`，`public/vendor` 不存在（没跑 postinstall），测试挂起后工具调用一直不返回。
+- 证据：该对话跑在 worktree `/tmp/weft-p5`。先在那边删了 `src/kernel` 还在 import 的 `public/continuation.js` 等文件，测试子服务启动就报 `ERR_MODULE_NOT_FOUND`；再加上 bash 工具没有默认超时（PR #150 在修），工具调用一直不返回，于是 run 永远停在 `running`。
 - 影响：run 永远 `running`，`canStop` 有但没有任何自动兜底提示。
 - 位置：`src/v2/stream/stuck-watch.ts` 只做显示判定，不处理工具超时；工具执行没有 `timeoutMs`。
 

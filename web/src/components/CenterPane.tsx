@@ -62,8 +62,8 @@ export function CenterPane({
 }: Props) {
   const isDraft = !cid && Boolean(workspaceId);
   const { conversation, items, toolsById, missing, actions } = useConversation(cid);
-  // 乐观发送：回车即上屏，服务端确认后收敛（草稿页直接跳转，暂不接）
-  const optimistic = usePendingSend(items, actions.send);
+  // 乐观发送：回车即上屏，服务端按 requestId → entry 收回（草稿页直接跳转，暂不接）
+  const optimistic = usePendingSend(items, actions.send, conversation?.sends);
   const shownItems = useMemo(
     () => (optimistic.pending.length ? [...items, ...optimistic.pending] : items),
     [items, optimistic.pending],
