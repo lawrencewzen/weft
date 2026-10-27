@@ -1,6 +1,8 @@
 import type { components } from '../../../src/v2/contract.gen';
 
 export type ConversationView = components['schemas']['ConversationView'];
+/** Where one send landed: the requestId the client sent and the entry it became. */
+export type ConversationSend = components['schemas']['ConversationSend'];
 export type ConversationSummary = components['schemas']['ConversationSummary'];
 export type Workspace = components['schemas']['Workspace'];
 export type ThreadItem = components['schemas']['ThreadItem'];

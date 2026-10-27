@@ -11,6 +11,7 @@ import { outputLineCount, toolOutputText, type ToolLike } from './tools.ts';
 export type ConversationView = components['schemas']['ConversationView'];
 export type ConversationSnapshot = components['schemas']['ConversationSnapshot'];
 export type ConversationModel = components['schemas']['ConversationModel'];
+export type ConversationSend = components['schemas']['ConversationSend'];
 export type ToolOutput = components['schemas']['ToolOutput'];
 
 export type PresentedConversation = {
@@ -25,6 +26,8 @@ export type PresentedConversation = {
   messages?: ThreadMessage[] | null;
   modelSourceId?: unknown;
   modelId?: unknown;
+  /** Where the conversation's recent sends landed; see `sendsView`. */
+  sends?: unknown;
 };
 
 /** Result of resolveConversationTarget in src/core/model-sources.mjs. */
@@ -54,6 +57,21 @@ export function conversationModelView(target: ConversationModelTarget): Conversa
 function asUpdatedAt(value: unknown): number {
   const n = Number(value);
   return Number.isFinite(n) ? Math.trunc(n) : 0;
+}
+
+/** Present() sends → contract. Rows without a requestId are dropped. */
+export function sendsView(value: unknown): ConversationSend[] {
+  if (!Array.isArray(value)) return [];
+  const out: ConversationSend[] = [];
+  for (const raw of value) {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue;
+    const row = raw as Record<string, unknown>;
+    const requestId = typeof row.requestId === 'string' ? row.requestId : '';
+    if (!requestId) continue;
+    const entryId = row.entryId == null ? '' : String(row.entryId);
+    out.push({ requestId, entryId: entryId || null, dropped: row.dropped === true });
+  }
+  return out;
 }
 
 /**
@@ -98,6 +116,7 @@ export async function conversationSnapshot({
       window: window ?? contextWindowFromEnv(),
     }),
     itemIds: thread.items.map((item) => item.id),
+    sends: sendsView(presented?.sends),
   };
   return { conversation, items: thread.items, tools: thread.tools };
 }

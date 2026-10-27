@@ -4188,7 +4188,38 @@ components:
           items:
             type: string
           description: 对话流 ThreadItem id 的顺序
+        sends:
+          type: array
+          items:
+            $ref: "#/components/schemas/ConversationSend"
+          description: |
+            本进程内经 POST .../messages 与 .../continue 发出的提交，按先后顺序，最多保留最近 20 条。
+            前端用 requestId 找到自己那条乐观上屏的消息落在哪个 entry 上，据此收回。只在写入它们的服务进程内存在。
       description: 一个对话的视图。摘要字段加上模型、运行状态、上下文和对话流顺序。
+    ConversationSend:
+      type: object
+      additionalProperties: false
+      required:
+        - requestId
+        - entryId
+        - dropped
+      properties:
+        requestId:
+          type: string
+          description: 发送时带的幂等键（POST 请求体的 requestId）。
+        entryId:
+          description: |
+            内核把这条输入写进对话后的 entry id，也就是对应 ThreadItem 的 id（user 气泡、subagent 报告卡片或系统提示都可能）。
+            这条输入还在队列里、没有落盘时为 null。
+          oneOf:
+            - type: "null"
+            - type: string
+        dropped:
+          type: boolean
+          description: |
+            这条输入被撤回、丢弃或提交失败，对话里不会再有对应条目（只在 entryId 为 null 时有意义）。
+            服务端查到 entryId 之后就不再回查提交记录，所以 entryId 不为 null 时该值可能仍是 false。
+      description: 一次发送在对话里的落点，供前端按 requestId 收回乐观上屏的消息。
     ConversationSnapshot:
       type: object
       additionalProperties: false

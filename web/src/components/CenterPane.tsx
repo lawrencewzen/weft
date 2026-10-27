@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { refreshWorkspaceGit } from '../data/api';
 import type { ResolvedModel } from '../data/composerModel';
 import type { Lang } from '../data/lang';
 import { useConversation, useDraftSend } from '../data/useConversation';
+import { usePendingSend, waitingForAgent } from '../data/usePendingSend';
 import { t } from '../i18n';
 import type { components } from '../../../src/v2/contract.gen';
 import { Composer } from './Composer';
@@ -61,6 +62,12 @@ export function CenterPane({
 }: Props) {
   const isDraft = !cid && Boolean(workspaceId);
   const { conversation, items, toolsById, missing, actions } = useConversation(cid);
+  // 乐观发送：回车即上屏，服务端按 requestId → entry 收回（草稿页直接跳转，暂不接）
+  const optimistic = usePendingSend(items, actions.send, conversation?.sends);
+  const shownItems = useMemo(
+    () => (optimistic.pending.length ? [...items, ...optimistic.pending] : items),
+    [items, optimistic.pending],
+  );
   const [draftModel, setDraftModel] = useState<ResolvedModel | null>(null);
   const draftModelRef = useRef<ResolvedModel | null>(null);
   draftModelRef.current = draftModel;
@@ -173,10 +180,14 @@ export function CenterPane({
         workspace={workspace}
       />
         <Thread
-          items={items}
+          items={shownItems}
           toolsById={toolsById}
           lang={lang}
           running={conversation.run.status === 'running'}
+          pending={waitingForAgent(shownItems, {
+            running: conversation.run.status === 'running',
+            pending: optimistic.sending,
+          })}
           actions={actions}
           stickNonce={stickNonce}
           conversationId={cid}
@@ -191,7 +202,7 @@ export function CenterPane({
           model={conversation.model}
           context={conversation.context}
           onNewWorkspace={onNewWorkspace}
-          onSend={actions.send}
+          onSend={optimistic.send}
           onStop={actions.stop}
           onSent={bumpStick}
         />
