@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   formatMmSs,
   progressLabel,
+  stripActionMarks,
   subagentActionText,
   subagentTimeText,
   subagentTreeTimeText,
@@ -44,7 +45,8 @@ describe('subagent time text', () => {
     });
     expect(subagentTimeText(stuck, 'zh', NOW)).toBe('无动作 01:05');
     expect(subagentTimeText(stuck, 'en', NOW)).toBe('idle 01:05');
-    expect(subagentTreeTimeText(stuck, 'zh', NOW)).toBe('无动作 01:05');
+    expect(subagentTreeTimeText(stuck, 'zh', NOW)).toBe('静默 01:05');
+    expect(subagentTreeTimeText(stuck, 'en', NOW)).toBe('silent 01:05');
   });
 
   it('shows terminal labels; tree hides 完成', () => {
@@ -74,5 +76,13 @@ describe('subagent time text', () => {
       progress: { step: 2, total: 5 },
     }))).toBe('正在读 auth.test.js · 2/5');
     expect(subagentActionText(agent({ status: 'done', currentAction: 'x', progress: { step: 1, total: 1 } }))).toBe('');
+  });
+
+  it('strips backticks from the current action so the tree does not show markup', () => {
+    expect(stripActionMarks('正在读取 `web/src/data/store.ts`')).toBe('正在读取 web/src/data/store.ts');
+    expect(subagentActionText(agent({
+      status: 'running',
+      currentAction: '正在读取 `src/workflow/index.ts`',
+    }))).toBe('正在读取 src/workflow/index.ts');
   });
 });

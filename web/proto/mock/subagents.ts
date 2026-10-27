@@ -17,6 +17,7 @@ import type {
 } from './types';
 
 const MINUTE = 60_000;
+const HOUR = 60 * MINUTE;
 
 /** Key for `db.subagents`: `agentId` is the full Subagent id (`<cid>:sub:<n>`). */
 export function subagentKey(cid: string, agentId: string): string {
@@ -127,6 +128,25 @@ export function seedSubThreads(now: number): Map<string, MockSubThread> {
     run: null,
   });
 
+  const stuck = agent({
+    cid,
+    agentId: 'sa-5',
+    title: '核对 Git 工作树状态',
+    name: 'sub-git-status',
+    status: 'stuck',
+    startedAt: now - 4 * MINUTE,
+    lastActivityAt: now - 72_000,
+  });
+  out.set(subagentKey(cid, stuck.id), {
+    view: stuck,
+    items: [
+      user('sa5-u1', '看一下工作树是不是干净的，有没有漏提交。'),
+      assistant('sa5-a1', '已经列出 `git status`，接下来对变更文件分类。'),
+    ],
+    tools: {},
+    run: null,
+  });
+
   const done = agent({
     cid,
     agentId: 'sa-2',
@@ -221,6 +241,34 @@ export function seedSubThreads(now: number): Map<string, MockSubThread> {
     tools: { [failing.id]: failing },
     run: null,
   });
+
+  const docsCid = 'c-docs';
+  const docsDone: Array<{ agentId: string; title: string; name: string; offset: number }> = [
+    { agentId: 'doc-1', title: '梳理目录结构', name: 'sub-tree', offset: 3 * HOUR + 12 * MINUTE },
+    { agentId: 'doc-2', title: '检查 workflow 配置', name: 'sub-workflow', offset: 3 * HOUR + 8 * MINUTE },
+    { agentId: 'doc-3', title: '汇总改动建议', name: 'sub-summary', offset: 3 * HOUR + 4 * MINUTE },
+  ];
+  for (const row of docsDone) {
+    const item = agent({
+      cid: docsCid,
+      agentId: row.agentId,
+      title: row.title,
+      name: row.name,
+      status: 'done',
+      startedAt: now - row.offset - 8 * MINUTE,
+      lastActivityAt: now - row.offset,
+      endedAt: now - row.offset,
+    });
+    out.set(subagentKey(docsCid, item.id), {
+      view: item,
+      items: [
+        user(`${row.agentId}-u1`, `请处理：${row.title}`),
+        assistant(`${row.agentId}-a1`, `${row.title}已经做完。`),
+      ],
+      tools: {},
+      run: null,
+    });
+  }
 
   return out;
 }

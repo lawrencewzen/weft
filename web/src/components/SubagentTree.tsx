@@ -28,20 +28,18 @@ const STATUS_ICON = (
 const CHIP_ICON = (
   <svg
     className="subagent-chip-icon"
-    viewBox="0 0 12 12"
+    viewBox="0 0 16 16"
     width="11"
     height="11"
     fill="none"
     stroke="currentColor"
-    strokeWidth="1.25"
-    strokeLinecap="round"
-    strokeLinejoin="round"
+    strokeWidth="1.5"
     aria-hidden="true"
   >
-    <circle cx="3" cy="2.4" r="1.35" />
-    <circle cx="3" cy="9.6" r="1.35" />
-    <circle cx="9" cy="6" r="1.35" />
-    <path d="M3 3.75v4.5M3 6h4.65" />
+    <circle cx="4" cy="3.5" r="1.6" />
+    <circle cx="4" cy="12.5" r="1.6" />
+    <circle cx="12" cy="7" r="1.6" />
+    <path d="M4 5v6M4 8.5c0-1.5 2-1.5 6.4-1.5" />
   </svg>
 );
 
@@ -215,27 +213,25 @@ export function SubagentTree({
                         onMenu(ev, agent);
                       }}
                     >
-                      {STATUS_ICON}
-                      <div className="subagent-tree-main">
-                        <div className="subagent-tree-line">
-                          <span className="subagent-tree-summary" data-testid="next-subagent-summary">
-                            {agent.title || agent.name}
-                          </span>
-                          <span
-                            className={`subagent-tree-time${agent.status === 'stuck' ? ' is-idle' : ''}`}
-                            data-testid="next-subagent-time"
-                          >
-                            {time}
-                          </span>
-                        </div>
-                        <div className={`subagent-tree-action-slot${action ? ' is-open' : ''}`}>
-                          <div className="subagent-tree-action-clip">
-                            {action ? (
-                              <div className="subagent-tree-action" data-testid="next-subagent-action">
-                                {action}
-                              </div>
-                            ) : null}
-                          </div>
+                      <div className="subagent-tree-line">
+                        {STATUS_ICON}
+                        <span className="subagent-tree-summary" data-testid="next-subagent-summary">
+                          {agent.title || agent.name}
+                        </span>
+                        <span
+                          className={`subagent-tree-time${agent.status === 'stuck' ? ' is-idle' : ''}`}
+                          data-testid="next-subagent-time"
+                        >
+                          {time}
+                        </span>
+                      </div>
+                      <div className={`subagent-tree-action-slot${action ? ' is-open' : ''}`}>
+                        <div className="subagent-tree-action-clip">
+                          {action ? (
+                            <div className="subagent-tree-action" data-testid="next-subagent-action">
+                              {action}
+                            </div>
+                          ) : null}
                         </div>
                       </div>
                     </div>

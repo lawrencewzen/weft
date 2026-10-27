@@ -270,6 +270,40 @@ test('860px width collapses the sidebar and does not scroll horizontally', async
   }
 });
 
+test('footer service dot is on and appearance toggle persists after reload', async ({ page }) => {
+  const prepared = await prepareWorkspaces(['theme']);
+  const srv = await startServer({ extraEnv: { WEFT_WORKSPACE_ROOT: prepared.root } });
+  try {
+    const ws = await createWorkspace(srv, 'theme', prepared.dirs[0]);
+    await createConversation(srv, ws.id, 'chat');
+    await loginNext(page, srv);
+    await waitSidebar(page);
+
+    await expect(page.getByTestId('next-service-dot')).toHaveClass(/is-ok/);
+    await expect(page.getByTestId('next-appearance-toggle')).toBeVisible();
+    await expect(page.locator('html')).toHaveAttribute('data-theme', /light$/);
+
+    await page.getByTestId('next-appearance-toggle').click();
+    await expect(page.locator('html')).toHaveAttribute('data-theme', /dark$/);
+    expect(await page.evaluate(() => localStorage.getItem('weft_appearance'))).toBe('dark');
+
+    await page.reload();
+    await waitSidebar(page);
+    await expect(page.locator('html')).toHaveAttribute('data-theme', /dark$/);
+    await expect(page.getByTestId('next-appearance-toggle')).toHaveAttribute('aria-pressed', 'true');
+
+    await page.getByTestId('next-open-settings').click();
+    await expect(page.getByTestId('next-settings-general')).toBeVisible();
+    await expect(page.getByTestId('next-pref-appearance').locator('[data-mode=dark]')).toHaveClass(/is-on/);
+    await page.keyboard.press('Escape');
+
+    await page.getByTestId('next-appearance-toggle').click();
+    await expect(page.locator('html')).toHaveAttribute('data-theme', /light$/);
+  } finally {
+    await srv.kill();
+  }
+});
+
 test('a single workspace title click collapses, expands, and keeps the state after refresh', async ({ page }) => {
   const prepared = await prepareWorkspaces(['solo']);
   const srv = await startServer({ extraEnv: { WEFT_WORKSPACE_ROOT: prepared.root } });

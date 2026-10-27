@@ -61,6 +61,14 @@ test('prototype runs from file:// with mock data, no network and no console erro
   const websiteNode = page.getByTestId('next-ws-node').filter({ hasText: 'website' });
   const websiteToggle = websiteNode.getByTestId('next-ws-toggle');
   await expect(websiteToggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(websiteNode.locator('.ws-node-count')).toHaveText('1 运行中');
+  const richRow = page.locator('[data-testid=next-conv-row][data-id="c-rich"]');
+  await expect(richRow).toHaveAttribute('data-status', 'running');
+  await expect(richRow.getByTestId('next-conv-dot')).toHaveAttribute('data-kind', 'running');
+  await expect(richRow.getByTestId('next-conv-meta')).toHaveText('运行中');
+  await expect(page.locator('[data-testid=next-conv-row][data-id="c-tests"]').getByTestId('next-conv-meta')).toHaveText('等待确认');
+  await expect(page.locator('[data-testid=next-conv-row][data-id="c-scripts"]').getByTestId('next-conv-meta')).toHaveText('失败');
+  await expect(page.getByTestId('next-service-dot')).toHaveClass(/is-ok/);
   await websiteToggle.click();
   await expect(websiteToggle).toHaveAttribute('aria-expanded', 'true');
   await expect(websiteNode.getByTestId('next-conv-row')).toHaveCount(2);
@@ -142,6 +150,44 @@ test('prototype runs from file:// with mock data, no network and no console erro
   await expect(page.getByTestId('next-model-option')).toHaveCount(3);
   await page.locator('[data-testid=next-model-option][data-model="grok-4"]').click();
   await expect(page.getByTestId('next-model-chip')).toContainText('Grok 4');
+
+  expect(pageErrors, 'page has no uncaught errors').toEqual([]);
+  expect(consoleErrors, 'page has no console errors').toEqual([]);
+  expect(external, 'page makes no external requests').toEqual([]);
+});
+
+test('sidebar appearance toggle persists across reload', async ({ page }) => {
+  expect(
+    fs.existsSync(protoFile),
+    'prototype build missing: run `npm run build:proto` first',
+  ).toBe(true);
+
+  const consoleErrors = [];
+  const pageErrors = [];
+  const external = [];
+  page.on('console', (msg) => {
+    if (msg.type() === 'error') consoleErrors.push(msg.text());
+  });
+  page.on('pageerror', (err) => pageErrors.push(err.message));
+  page.on('request', (req) => {
+    const url = req.url();
+    if (!/^(file|data|blob):/i.test(url)) external.push(url);
+  });
+
+  await page.goto(pathToFileURL(protoFile).href);
+  await expect(page.getByTestId('next-appearance-toggle')).toBeVisible();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', /light$/);
+  await page.getByTestId('next-appearance-toggle').click();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', /dark$/);
+  expect(await page.evaluate(() => localStorage.getItem('weft_appearance'))).toBe('dark');
+
+  await page.reload();
+  await expect(page.getByTestId('next-appearance-toggle')).toBeVisible();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', /dark$/);
+  await expect(page.getByTestId('next-appearance-toggle')).toHaveAttribute('aria-pressed', 'true');
+  await page.getByTestId('next-appearance-toggle').click();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', /light$/);
+  expect(await page.evaluate(() => localStorage.getItem('weft_appearance'))).toBe('light');
 
   expect(pageErrors, 'page has no uncaught errors').toEqual([]);
   expect(consoleErrors, 'page has no console errors').toEqual([]);

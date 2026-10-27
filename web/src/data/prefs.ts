@@ -155,6 +155,15 @@ export function notifyPrefs(): void {
   window.dispatchEvent(new Event(PREFS_EVENT));
 }
 
+/** Flip the resolved light/dark mode. System follows the current effective look. */
+export function toggleAppearance(): 'light' | 'dark' {
+  const next = effectiveAppearance() === 'dark' ? 'light' : 'dark';
+  writeAppearance(next);
+  applyDocumentPrefs();
+  notifyPrefs();
+  return next;
+}
+
 export function subscribePrefs(fn: () => void): () => void {
   if (typeof window === 'undefined') return () => {};
   window.addEventListener(PREFS_EVENT, fn);

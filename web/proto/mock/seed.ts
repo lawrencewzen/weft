@@ -53,6 +53,7 @@ function conversation(input: {
   changes?: Change[];
   diffs?: Record<string, MockConv['diffs'][string]>;
   subagents?: Subagent[];
+  status?: ConversationView['status'];
 }): MockConv {
   const tools = input.tools || {};
   return {
@@ -61,7 +62,7 @@ function conversation(input: {
       workspaceId: input.workspaceId,
       title: input.title,
       updatedAt: input.updatedAt,
-      status: 'idle',
+      status: input.status ?? 'idle',
       model: input.model === undefined
         ? { sourceId: 'demo', modelId: 'grok-4.6', label: 'Grok 4.6' }
         : input.model,
@@ -393,7 +394,10 @@ function richConversation(now: number, threads: Map<string, MockSubThread>): Moc
         },
       ]),
     },
-    subagents: [...threads.values()].map((thread) => thread.view),
+    subagents: [...threads.values()]
+      .filter((thread) => thread.view.parentConversationId === 'c-rich')
+      .map((thread) => thread.view),
+    status: 'running',
   });
 }
 
@@ -412,6 +416,7 @@ function testsConversation(now: number): MockConv {
     title: 'heartbeat 要不要单测',
     updatedAt: now - 52 * MINUTE,
     used: 12_800,
+    status: 'waiting',
     tools: { [grep.id]: grep },
     items: [
       user('tests-u1', '事件流里的 heartbeat 需要单独写用例吗？'),
@@ -433,7 +438,7 @@ function testsConversation(now: number): MockConv {
   });
 }
 
-function docsConversation(now: number): MockConv {
+function docsConversation(now: number, threads: Map<string, MockSubThread>): MockConv {
   return conversation({
     id: 'c-docs',
     workspaceId: 'ws-weft',
@@ -441,6 +446,9 @@ function docsConversation(now: number): MockConv {
     updatedAt: now - 3 * HOUR,
     used: 6_400,
     model: { sourceId: 'demo', modelId: 'grok-code-fast', label: 'Grok Code Fast' },
+    subagents: [...threads.values()]
+      .filter((thread) => thread.view.parentConversationId === 'c-docs')
+      .map((thread) => thread.view),
     items: [
       user('docs-u1', 'docs/ARCHITECTURE_V2.md 里还缺一张主题和事件的关系图。'),
       assistant(
@@ -477,6 +485,7 @@ function scriptsConversation(now: number): MockConv {
     title: '整理 Windows 下的启动脚本',
     updatedAt: now - 6 * HOUR,
     used: 9_100,
+    status: 'failed',
     tools: { [bash.id]: bash },
     items: [
       user('scripts-u1', '内网那台 Windows 机器装的是 Node 22，启动脚本要检查一下。'),
@@ -522,6 +531,7 @@ function siteOne(now: number): MockConv {
     title: '落地页首屏文案',
     updatedAt: now - 20 * MINUTE,
     used: 22_600,
+    status: 'running',
     model: { sourceId: 'demo', modelId: 'grok-code-fast', label: 'Grok Code Fast' },
     items: [
       user('site-u1', '首屏那句 slogan 再收一点，别太像广告。'),
@@ -625,7 +635,7 @@ export function createSeed(now: number): MockDb {
   const conversations = [
     richConversation(now, subagents),
     testsConversation(now),
-    docsConversation(now),
+    docsConversation(now, subagents),
     scriptsConversation(now),
     gitConversation(now),
     siteOne(now),
