@@ -93,6 +93,7 @@ export const WORKSPACES = [
     conversations: [
       { key: 'demo', title: '网页端原型截取' },
       { key: 'long', title: '重跑全部单元测试' },
+      { key: 'pending', title: 'Composer 附件区' },
       { key: 'tools', title: '排查构建失败' },
       { key: 'agents', title: '子 Agent 协作' },
       { key: 'settings', title: '设置面板间距' },
@@ -130,6 +131,11 @@ async function initRepo(dir) {
   const run = (args) => execFileP('git', args, { cwd: dir, windowsHide: true, timeout: 20000 });
   const who = ['-c', 'user.name=weft', '-c', 'user.email=weft@test'];
   try {
+    // Two servers can share a directory; only the first one has to create the repo.
+    // The temp dirs live inside this repo, so a plain `rev-parse --git-dir` would find
+    // the parent repo — compare the top level instead.
+    const top = await run(['rev-parse', '--show-toplevel']).then((r) => r.stdout.trim(), () => '');
+    if (top && path.resolve(top) === path.resolve(dir)) return;
     await run(['init', '-b', 'main']);
     await run([...who, 'add', '-A']);
     await run([...who, 'commit', '-m', 'init', '--no-gpg-sign']);
@@ -170,7 +176,7 @@ export function seedMain(srv, prepared) {
 
 /** Seed the bare server (no provider configured) in its own directory. */
 export function seedBare(srv, prepared) {
-  return seed(srv, [{ ...BARE_WORKSPACE, dir: prepared.dirs[1] }]);
+  return seed(srv, [{ ...BARE_WORKSPACE, dir: prepared.dirs[2] }]);
 }
 
 /** Stable replacement for one captured id: ws/conv/agent ids become readable names. */

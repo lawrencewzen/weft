@@ -2,7 +2,7 @@
 // `{ runs: [...] }` for a conversation with several user turns. Turns without
 // `when` are tagged with their run's `send` by the capture runner, so several
 // conversations can share one script file and one server.
-import { settle, waitDone, waitRunning } from './page.mjs';
+import { RUN_STATUS_RUNNING, settle, waitDone, waitRunning } from './page.mjs';
 
 const PROTOTYPE_MD = [
   '# 原型截取',
@@ -54,6 +54,24 @@ export const demo = {
         },
         { text: DONE_ANSWER },
       ],
+    },
+  ],
+};
+
+// 发送后、Agent 还没出内容：#148 的「思考中」行。第一段先垫一点上下文，
+// 第二段用一次很慢的模型调用，让这一行稳定停在 thread 末尾。
+export const pending = {
+  runs: [
+    {
+      send: '看下 Composer 的附件区为什么没渲染。',
+      script: [
+        { tool: 'read', args: { path: 'src/components/Composer.tsx' } },
+        { text: '附件区还没实现，`Composer.tsx` 里只有 textarea 和底部那行 chip。' },
+      ],
+    },
+    {
+      send: '那就按粘贴图片的方案先改一版。',
+      script: [{ delayMs: 300000, text: '改好了。' }],
     },
   ],
 };
@@ -127,6 +145,21 @@ export async function ensureAgentsRun(ctx) {
   await ctx.page.locator('[data-testid=next-item-subagent-report].is-failed').waitFor({ timeout: 90000 });
   await settle(ctx.page, 400);
   agentsDone.add(ctx.session);
+}
+
+const pendingDone = new WeakSet();
+
+/** 跑到「发送后、还没输出」的那一帧：user 气泡 + 末尾「思考中」行。 */
+export async function ensurePendingChat(ctx) {
+  await ctx.openConv('pending');
+  if (pendingDone.has(ctx.session)) return;
+  await ctx.send(pending.runs[0].send);
+  await waitDone(ctx.page, 90000);
+  await ctx.send(pending.runs[1].send);
+  await ctx.page.getByTestId('next-run-status').filter({ hasText: RUN_STATUS_RUNNING }).waitFor({ timeout: 30000 });
+  await ctx.page.getByTestId('next-thread-pending').waitFor({ timeout: 30000 });
+  await settle(ctx.page, 300);
+  pendingDone.add(ctx.session);
 }
 
 /** 运行态对话只跑一次（它一直停在运行中）。 */

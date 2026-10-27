@@ -151,7 +151,7 @@ async function main() {
     };
   }
 
-  const prepared = await prepareWorkspaces(['weft', 'website']);
+  const prepared = await prepareWorkspaces(['weft', 'website', 'sandbox']);
   const scriptPath = path.join(prepared.root, 'proto-script.json');
   await fs.writeFile(scriptPath, `${JSON.stringify({ turns: buildTurns(states) }, null, 2)}\n`);
 

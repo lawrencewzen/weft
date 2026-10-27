@@ -1,6 +1,6 @@
 // 对话页基线：草稿、完成态、运行中、工具组展开。
 import { settle, waitDone } from '../lib/page.mjs';
-import { demo, ensureDemoChat, ensureRunningChat, running, tools } from '../lib/scenarios.mjs';
+import { demo, ensureDemoChat, ensurePendingChat, ensureRunningChat, pending, running, tools } from '../lib/scenarios.mjs';
 
 export const states = [
   {
@@ -35,6 +35,15 @@ export const states = [
     script: running.script,
     async prepare(ctx) {
       await ensureRunningChat(ctx);
+    },
+  },
+  {
+    id: 'chat-pending',
+    title: '发送后等待输出',
+    note: '回车后 thread 末尾一行「思考中」（#148），Agent 还没出内容',
+    runs: pending.runs,
+    async prepare(ctx) {
+      await ensurePendingChat(ctx);
     },
   },
   {

@@ -17,7 +17,7 @@
 ```bash
 npm ci                 # 会顺带构建 public-next
 npm run build:web      # 改了 web/ 之后必须重跑
-npm run proto:capture  # 约 11 秒，输出 design/prototype/index.html
+npm run proto:capture  # 约 12 秒，输出 design/prototype/index.html
 ```
 
 `proto:capture` 开头会检查 `public-next/index.html`，没有就提示先构建。任何一个状态截取失败都会
