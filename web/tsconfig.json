@@ -13,5 +13,5 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src", "../src/v2/contract.gen.ts"]
+  "include": ["src", "proto", "../src/v2/contract.gen.ts"]
 }

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { getPreferredLang } from './data/lang';
+import { readAddressPath, subscribeAddress } from './data/nav';
 import { applyDocumentPrefs, subscribePrefs, watchSystemAppearance } from './data/prefs';
 import { SessionProvider } from './data/session';
 import { t } from './i18n';
@@ -10,12 +11,8 @@ import type { AboutService } from './components/settings/AboutPage';
 const UNAUTH = '请用 weft open 打开新版网页端';
 
 function usePathname(): string {
-  const [path, setPath] = useState(() => window.location.pathname);
-  useEffect(() => {
-    const onPop = () => setPath(window.location.pathname);
-    window.addEventListener('popstate', onPop);
-    return () => window.removeEventListener('popstate', onPop);
-  }, []);
+  const [path, setPath] = useState(() => readAddressPath());
+  useEffect(() => subscribeAddress(() => setPath(readAddressPath())), []);
   return path;
 }
 
