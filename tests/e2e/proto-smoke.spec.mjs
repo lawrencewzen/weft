@@ -84,6 +84,7 @@ test('prototype runs from file:// with mock data, no network and no console erro
   await expect(page).toHaveURL(/#\/w\/ws-weft\/new$/);
   await expect(page.getByTestId('next-draft-hint')).toContainText('weft');
   await expect(page.getByTestId('next-draft-hero-ws')).toContainText('weft');
+  await expect(page.getByTestId('next-draft-hero-ws')).toHaveCSS('font-size', '28px');
   await expect(page.getByTestId('next-draft-hint')).toContainText('要在');
   await expect(page.getByTestId('next-ws-chip')).toContainText('weft');
   // The draft workspace chip really retargets the conversation.

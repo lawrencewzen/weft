@@ -909,6 +909,13 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.6; backgroun
 .model-chip-caret { font-size: 10px; color: var(--mute); }
 .model-chip:hover, .model-chip.is-open, .context-chip:hover, .context-chip.is-open { background: var(--side); }
 .model-chip:disabled, .context-chip:disabled { cursor: default; opacity: .6; }
+/* After .model-chip so the 28px draft title chip is not overwritten by the 13px composer chip. */
+.model-chip.ws-chip-hero {
+  font-size: 28px; font-weight: 600; line-height: 1.3; padding: 3px 12px; gap: 8px;
+  background: var(--line2); max-width: 100%;
+}
+.model-chip.ws-chip-hero:hover, .model-chip.ws-chip-hero.is-open { background: var(--line); }
+.model-chip.ws-chip-hero .model-chip-caret { font-size: 11px; color: var(--mute); }
 
 .ws-chip-menu { width: 280px; max-width: min(280px, calc(100vw - 24px)); }
 .ws-chip-hint {
