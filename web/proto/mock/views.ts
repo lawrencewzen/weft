@@ -1,18 +1,25 @@
 import type { Entity } from './hub';
-import { tr, type ConversationSummary, type EntityValue, type Lang, type MockConv, type MockDb, type MockGroup, type MockItem, type MockTool, type ToolCall } from './types';
+import { tr, type ConversationSummary, type EntityValue, type Lang, type MockConv, type MockDb, type MockGroup, type MockItem, type MockTool, type Subagent, type ToolCall } from './types';
+
+const LIVE_SUBAGENT_STATUS = new Set<Subagent['status']>(['running', 'stuck', 'waiting']);
+
+export function liveSubagentCount(agents: readonly Subagent[]): number {
+  return agents.filter((agent) => LIVE_SUBAGENT_STATUS.has(agent.status)).length;
+}
 
 export type TopicEntities = Entity[];
 
 export function summaryOf(conv: MockConv): ConversationSummary {
   const view = conv.view;
+  const live = liveSubagentCount(conv.subagents);
   return {
     id: view.id,
     workspaceId: view.workspaceId,
     title: view.title,
     updatedAt: view.updatedAt,
     status: view.status,
-    runningAgents: view.status === 'running' ? 1 : 0,
-    subagents: conv.subagents.length ? { total: conv.subagents.length, live: 0 } : null,
+    runningAgents: (view.status === 'running' ? 1 : 0) + live,
+    subagents: conv.subagents.length ? { total: conv.subagents.length, live } : null,
     archived: false,
   };
 }
@@ -47,8 +54,14 @@ export function providersEntities(db: MockDb): TopicEntities {
   return out;
 }
 
-export function extensionsEntities(): TopicEntities {
-  return [];
+export function extensionsEntities(db: MockDb): TopicEntities {
+  const out: TopicEntities = [];
+  for (const plugin of db.plugins) out.push({ entity: 'plugin', id: plugin.id, value: plugin as unknown as object });
+  for (const skill of db.skills) out.push({ entity: 'skill', id: skill.id, value: skill as unknown as object });
+  for (const conn of db.gitConnections) {
+    out.push({ entity: 'git_connection', id: conn.id, value: conn as unknown as object });
+  }
+  return out;
 }
 
 export function conversationValue(conv: MockConv): EntityValue {

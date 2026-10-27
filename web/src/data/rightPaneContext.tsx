@@ -103,7 +103,10 @@ export function RightPaneProvider({
   children,
 }: Props) {
   const { store } = useSession();
-  useSyncExternalStore(store.subscribe, store.getVersion);
+  // The store version is the only thing that can change entities, so it is what
+  // `changes` / `toolsById` are memoized on. Without that, those arrays get a new
+  // identity on every render and every effect that depends on them re-runs.
+  const storeVersion = useSyncExternalStore(store.subscribe, store.getVersion);
 
   const [open, setOpenState] = useState(() => defaultRightOpen(window.innerWidth));
   const [tab, setTabState] = useState<RightTab>(() => readRightTab());
@@ -124,8 +127,16 @@ export function RightPaneProvider({
 
   const cid = conversationId || '';
   const wsId = workspaceId || '';
-  const changes = cid ? store.changes(cid) : [];
-  const toolsById = cid ? store.toolsById(cid) : {};
+  const changes = useMemo(
+    () => (cid ? store.changes(cid) : []),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- store is stable; storeVersion tracks writes
+    [store, cid, storeVersion],
+  );
+  const toolsById = useMemo(
+    () => (cid ? store.toolsById(cid) : {}),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- store is stable; storeVersion tracks writes
+    [store, cid, storeVersion],
+  );
   const visibleChanges = useMemo(() => changes.filter(changeHasDiff), [changes]);
   const totals = useMemo(() => diffTotals(visibleChanges), [visibleChanges]);
   const hasChanges = visibleChanges.length > 0;
@@ -135,6 +146,8 @@ export function RightPaneProvider({
   const diffsRef = useRef(diffs);
   diffsRef.current = diffs;
   const sigRef = useRef<Record<string, string>>({});
+  /** path → signature of the diff request currently in flight. */
+  const inflightDiffs = useRef<Map<string, string>>(new Map());
   const treeWsRef = useRef<string | null>(null);
   const treeDirsRef = useRef<Set<string>>(new Set());
   const treeTimer = useRef<number | null>(null);
@@ -277,7 +290,13 @@ export function RightPaneProvider({
       const sig = changeSignature(change);
       if (sigRef.current[change.path] === sig && diffsRef.current[change.path]
         && diffsRef.current[change.path] !== 'loading') continue;
-      void loadDiff(change.path, sig);
+      // One request per path+signature: a fast answer (or a loading state that
+      // triggers another render) must not start the same request again.
+      if (inflightDiffs.current.get(change.path) === sig) continue;
+      inflightDiffs.current.set(change.path, sig);
+      void loadDiff(change.path, sig).finally(() => {
+        if (inflightDiffs.current.get(change.path) === sig) inflightDiffs.current.delete(change.path);
+      });
     }
   }, [cid, tab, visibleChanges, loadDiff, openPaths]);
 
