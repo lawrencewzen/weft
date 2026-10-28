@@ -1,3 +1,5 @@
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { test, expect } from '@playwright/test';
 import { loginNext, openWorkspaceConversation } from './helpers/next.mjs';
 import { prepareWorkspaces, startServer } from './helpers/server.mjs';
@@ -99,6 +101,11 @@ test('over-limit paste stays in the composer as a hint', async ({ page }) => {
 
 test('composer @ file selection and sending with @path', async ({ page }) => {
   const prepared = await prepareWorkspaces(['ws']);
+  const dir = prepared.dirs[0];
+  mkdirSync(join(dir, 'src'), { recursive: true });
+  writeFileSync(join(dir, 'README.md'), '# test project\n');
+  writeFileSync(join(dir, 'src', 'app.ts'), 'console.log("hello");\n');
+
   const srv = await startServer({
     script: 'no-usage.json',
     extraEnv: { WEFT_WORKSPACE_ROOT: prepared.root },
@@ -110,10 +117,27 @@ test('composer @ file selection and sending with @path', async ({ page }) => {
     const input = page.getByTestId('next-composer-input');
     await expect(input).toBeVisible();
 
+    // 1. When there is no match (e.g. @zzzz), pressing Enter should NOT send a message
     await input.focus();
-    await input.pressSequentially('@');
+    await input.pressSequentially('@zzzz');
     const atMenu = page.getByTestId('next-composer-at-menu');
     await expect(atMenu).toBeVisible();
+    await expect(page.getByTestId('next-composer-at-empty')).toBeVisible();
+    const userMsgsBefore = await page.getByTestId('next-item-user').count();
+    await input.press('Enter');
+    // Popup stays open, message count remains unchanged
+    await expect(atMenu).toBeVisible();
+    await expect(page.getByTestId('next-item-user')).toHaveCount(userMsgsBefore);
+
+    // 2. Clear input and trigger file popup
+    await input.fill('');
+    await expect(atMenu).toHaveCount(0);
+
+    await input.focus();
+    await input.pressSequentially('@');
+    await expect(atMenu).toBeVisible();
+    const firstItem = page.getByTestId('next-composer-at-item').first();
+    await expect(firstItem).toBeVisible();
 
     // Select the first file with Enter
     await input.press('Enter');

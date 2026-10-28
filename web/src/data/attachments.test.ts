@@ -92,6 +92,22 @@ describe('file reference tokens', () => {
     expect(matchAtTrigger('a @b @c', 7)).toEqual({ query: 'c', atIndex: 5, cursorIndex: 7 });
   });
 
+  it('computes @ query when draft content is completely replaced with new cursor position', () => {
+    // Before: draft was '@', cursor was at 1
+    const oldCursor = 1;
+    // Entire text replaced (e.g. via fill / paste / IME) to '请查看 @store'
+    const replacedText = '请查看 @store';
+    // If evaluated with stale old cursor (1), it fails to detect @store
+    expect(matchAtTrigger(replacedText, oldCursor)).toBeNull();
+    // When updated with new cursor at end of replaced text (target.selectionStart ?? target.value.length)
+    const newCursor = replacedText.length;
+    expect(matchAtTrigger(replacedText, newCursor)).toEqual({
+      query: 'store',
+      atIndex: 4,
+      cursorIndex: replacedText.length,
+    });
+  });
+
   it('filters files by query case-insensitively up to limit', () => {
     const files = [
       'README.md',

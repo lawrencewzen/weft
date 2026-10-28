@@ -177,6 +177,7 @@ export function Composer({
   const [dragging, setDragging] = useState(false);
   const [plusOpen, setPlusOpen] = useState(false);
   const [atActiveIndex, setAtActiveIndex] = useState(0);
+  const [atDismissed, setAtDismissed] = useState(false);
   const [treeCache, setTreeCache] = useState<Record<string, { files: string[]; error: boolean }>>({});
   const [cursorPos, setCursorPos] = useState<number | null>(null);
   const plusMenuRef = useRef<HTMLDivElement>(null);
@@ -210,12 +211,20 @@ export function Composer({
   const allowAttach = showModelControls && !noModel;
   const supportsImages = demo || selected?.images === true;
 
-  const activeCursor = cursorPos ?? area.current?.selectionStart ?? draft.length;
+  const activeCursor = cursorPos !== null
+    ? Math.min(cursorPos, draft.length)
+    : (area.current?.selectionStart ?? draft.length);
   const atTrigger = useMemo(() => {
     return matchAtTrigger(draft, activeCursor);
   }, [draft, activeCursor]);
 
-  const atOpen = Boolean(atTrigger && focused && !locked);
+  const atOpen = Boolean(atTrigger && focused && !locked && !atDismissed);
+
+  useEffect(() => {
+    if (!atTrigger) {
+      setAtDismissed(false);
+    }
+  }, [atTrigger]);
 
   useEffect(() => {
     if (!atOpen || !workspaceId) return;
@@ -411,6 +420,7 @@ export function Composer({
     setFileRefs([]);
     imagesRef.current = [];
     setCursorPos(null);
+    setAtDismissed(false);
     requestAnimationFrame(resize);
     try {
       await onSend(sentText, requestId, imagePayload.length ? imagePayload : undefined, mode);
@@ -440,29 +450,33 @@ export function Composer({
     if (atOpen) {
       if (event.key === 'Escape') {
         event.preventDefault();
-        setFocused(false);
+        setAtDismissed(true);
         return;
       }
-      if (matchedFiles.length > 0) {
-        if (event.key === 'ArrowDown') {
-          event.preventDefault();
+      if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        if (matchedFiles.length > 0) {
           setAtActiveIndex((prev) => (prev + 1) % matchedFiles.length);
-          return;
         }
-        if (event.key === 'ArrowUp') {
-          event.preventDefault();
+        return;
+      }
+      if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        if (matchedFiles.length > 0) {
           setAtActiveIndex((prev) => (prev - 1 + matchedFiles.length) % matchedFiles.length);
-          return;
         }
-        if (event.key === 'Enter' || event.key === 'Tab') {
-          if (!event.nativeEvent.isComposing && event.keyCode !== 229) {
-            event.preventDefault();
+        return;
+      }
+      if (event.key === 'Enter' || event.key === 'Tab') {
+        if (!event.nativeEvent.isComposing && event.keyCode !== 229) {
+          event.preventDefault();
+          if (matchedFiles.length > 0) {
             const picked = matchedFiles[atActiveIndex] || matchedFiles[0];
             if (picked) {
               pickAtFile(picked);
-              return;
             }
           }
+          return;
         }
       }
     }
@@ -763,6 +777,7 @@ export function Composer({
               value={draft}
               onFocus={() => {
                 setFocused(true);
+                setAtDismissed(false);
                 if (area.current) {
                   setCursorPos(area.current.selectionStart ?? draft.length);
                 }
@@ -772,20 +787,22 @@ export function Composer({
               }}
               onSelect={(event) => {
                 const target = event.target as HTMLTextAreaElement;
-                setCursorPos(target.selectionStart ?? draft.length);
+                setCursorPos(target.selectionStart ?? target.value.length);
               }}
               onClick={(event) => {
                 const target = event.target as HTMLTextAreaElement;
-                setCursorPos(target.selectionStart ?? draft.length);
+                setCursorPos(target.selectionStart ?? target.value.length);
               }}
               onKeyUp={(event) => {
                 const target = event.target as HTMLTextAreaElement;
-                setCursorPos(target.selectionStart ?? draft.length);
+                setCursorPos(target.selectionStart ?? target.value.length);
               }}
               onChange={(event) => {
                 const target = event.target;
+                const nextCursor = target.selectionStart ?? target.value.length;
                 setDraft(target.value);
-                setCursorPos(target.selectionStart ?? target.value.length);
+                setCursorPos(nextCursor);
+                setAtDismissed(false);
                 resize();
               }}
               onKeyDown={onKeyDown}
