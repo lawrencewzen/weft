@@ -1,5 +1,10 @@
 /** Parse, assemble, and redact user-message images. Pi Durable ImageContent shape. */
 
+import {
+  formatAttachedFilesBlock,
+  formatPasteBlock,
+} from '../../core/user-message-parts.mjs';
+
 export const IMAGE_MAX_BYTES = 5 * 1024 * 1024;
 export const IMAGE_MAX_COUNT = 6;
 export const MESSAGE_BODY_MAX_BYTES = 44 * 1024 * 1024;
@@ -128,12 +133,25 @@ export function toImageContent(image: MessageImage): ImageContent {
   return block;
 }
 
-/** Pi Durable UserInput: string, or [text, image...]. Empty text with images omits the text part. */
-export function assembleUserContent(text: string, images: readonly MessageImage[] = []): UserContent {
+export type AssembleExtras = {
+  pastes?: readonly string[];
+  files?: ReadonlyArray<{ path: string; bytes?: number; name?: string }>;
+};
+
+/** Pi Durable UserInput: string, or [text, paste..., files, image...]. Empty text omits the text part. */
+export function assembleUserContent(
+  text: string,
+  images: readonly MessageImage[] = [],
+  extras: AssembleExtras = {},
+): UserContent {
   const trimmed = String(text ?? '').trim();
-  if (!images.length) return trimmed;
+  const pastes = Array.isArray(extras.pastes) ? extras.pastes : [];
+  const files = Array.isArray(extras.files) ? extras.files : [];
+  if (!images.length && !pastes.length && !files.length) return trimmed;
   const parts: Array<TextContent | ImageContent> = [];
   if (trimmed) parts.push({ type: 'text', text: trimmed });
+  for (const paste of pastes) parts.push({ type: 'text', text: formatPasteBlock(paste) });
+  if (files.length) parts.push({ type: 'text', text: formatAttachedFilesBlock(files) });
   for (const image of images) parts.push(toImageContent(image));
   return parts;
 }

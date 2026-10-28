@@ -123,6 +123,10 @@ const v2 = createV2Runtime({
     if (!kernelApi) return null;
     return kernelApi.getMessageImage(conversationId, messageId, index);
   },
+  async getMessagePaste(conversationId, messageId, index) {
+    if (!kernelApi) return null;
+    return kernelApi.getMessagePaste(conversationId, messageId, index);
+  },
   async getWorkspace(id) {
     return (await store.getWorkspace(id)) || null;
   },

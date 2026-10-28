@@ -10,6 +10,7 @@ import {
   baselinesFromEntries,
   createMapContext,
   findUserMessageImage,
+  findUserMessagePaste,
   mapHarnessBatch,
   messagesFromEntries,
   statusFromSubmission,
@@ -265,6 +266,35 @@ test('user images in messagesFromEntries are metadata without base64', () => {
   assert.equal(found.data, png);
   assert.equal(found.mediaType, 'image/png');
   assert.equal(findUserMessageImage([], 'u-img', 0), null);
+});
+
+test('user pastes and files in messagesFromEntries are metadata without paste bodies', () => {
+  const paste = Array.from({ length: 12 }, (_, i) => `keep-${i + 1}`).join('\n');
+  const content = [
+    { type: 'text', text: '正文' },
+    { type: 'text', text: `<pasted_text lines="12">\n${paste}\n</pasted_text>` },
+    { type: 'text', text: `<attached_files>\n用户附上了这些文件，需要时用读文件工具读取：\n- .weft/uploads/stamp/a.txt（4 字节）\n</attached_files>` },
+  ];
+  const entries = [{
+    id: 'u-attach',
+    kind: 'pi.user',
+    model: [{ role: 'user', content }],
+  }];
+  const { messages } = messagesFromEntries(entries);
+  const user = messages.find((message) => message.id === 'u-attach');
+  assert.equal(user.role, 'user');
+  assert.equal(user.text, '正文');
+  assert.equal(user.pastes.length, 1);
+  assert.equal(user.pastes[0].lines, 12);
+  assert.equal(user.pastes[0].chars, paste.length);
+  assert.equal(user.pastes[0].preview, paste.split('\n').slice(0, 8).join('\n'));
+  assert.equal(user.files[0].path, '.weft/uploads/stamp/a.txt');
+  assert.equal(user.files[0].name, 'a.txt');
+  assert.equal(user.files[0].bytes, 4);
+  assert.equal(JSON.stringify(messages).includes('keep-12'), false);
+  assert.equal(JSON.stringify(messages).includes(paste), false);
+  assert.equal(findUserMessagePaste(entries, 'u-attach', 0), paste);
+  assert.equal(findUserMessagePaste(entries, 'u-attach', 1), null);
 });
 
 test('assistant messages carry the stored model name', () => {

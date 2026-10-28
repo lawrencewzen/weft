@@ -18,6 +18,7 @@ import {
   createMapContext,
   mapHarnessBatch,
   findUserMessageImage,
+  findUserMessagePaste,
   messagesFromEntries,
   statusFromSubmission,
 } from './events.mjs';
@@ -576,6 +577,13 @@ export async function openConversationKernel({
       const view = await readView(conv.harnessId);
       if (!view) return null;
       return findUserMessageImage(view.entries, messageId, index);
+    },
+    async getMessagePaste(cid, messageId, index) {
+      const conv = await store.getConversation(cid);
+      if (!conv?.harnessId) return null;
+      const view = await readView(conv.harnessId);
+      if (!view) return null;
+      return findUserMessagePaste(view.entries, messageId, index);
     },
     async present(conv, { includeMessages = false } = {}) {
       if (!conv?.harnessId) {

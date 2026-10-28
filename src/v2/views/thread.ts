@@ -34,6 +34,16 @@ export type ThreadMessage = {
     bytes?: unknown;
     data?: unknown;
   }>;
+  pastes?: Array<{
+    lines?: unknown;
+    chars?: unknown;
+    preview?: unknown;
+  }>;
+  files?: Array<{
+    path?: unknown;
+    name?: unknown;
+    bytes?: unknown;
+  }>;
 };
 
 export type ThreadSubagent = {
@@ -62,6 +72,48 @@ function messageId(message: ThreadMessage | null | undefined): string {
 
 function messageText(message: ThreadMessage | null | undefined): string {
   return String(message?.text ?? '');
+}
+
+function asNonNegInt(value: unknown): number | null {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) return null;
+  return Math.trunc(value);
+}
+
+function toThreadUserPastes(
+  pastes: ThreadMessage['pastes'] | null | undefined,
+): components['schemas']['ThreadUserPaste'][] {
+  if (!Array.isArray(pastes) || !pastes.length) return [];
+  const out: components['schemas']['ThreadUserPaste'][] = [];
+  for (const row of pastes) {
+    if (!row || typeof row !== 'object') continue;
+    const lines = asNonNegInt(row.lines);
+    const chars = asNonNegInt(row.chars);
+    if (lines == null || chars == null) continue;
+    out.push({
+      lines,
+      chars,
+      preview: typeof row.preview === 'string' ? row.preview : '',
+    });
+  }
+  return out;
+}
+
+function toThreadUserFiles(
+  files: ThreadMessage['files'] | null | undefined,
+): components['schemas']['ThreadUserFile'][] {
+  if (!Array.isArray(files) || !files.length) return [];
+  const out: components['schemas']['ThreadUserFile'][] = [];
+  for (const row of files) {
+    if (!row || typeof row !== 'object') continue;
+    const filePath = typeof row.path === 'string' ? row.path.trim() : '';
+    if (!filePath) continue;
+    const bytes = asNonNegInt(row.bytes) ?? 0;
+    const name = typeof row.name === 'string' && row.name.trim()
+      ? row.name.trim()
+      : filePath.replaceAll('\\', '/').split('/').filter(Boolean).pop() || filePath;
+    out.push({ path: filePath.replaceAll('\\', '/'), name, bytes });
+  }
+  return out;
 }
 
 /** Last non-empty, non-correction assistant. Same walk as public/app.js lastVisibleAssistant. */
@@ -204,6 +256,10 @@ export async function buildThread(
       };
       const images = toThreadUserImages(m.images, conversationId, messageId(m));
       if (images.length) userItem.images = images;
+      const pastes = toThreadUserPastes(m.pastes);
+      if (pastes.length) userItem.pastes = pastes;
+      const files = toThreadUserFiles(m.files);
+      if (files.length) userItem.files = files;
       items.push(userItem);
       continue;
     }

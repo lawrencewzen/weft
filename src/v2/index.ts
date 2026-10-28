@@ -51,7 +51,16 @@ import {
   MESSAGE_BODY_MAX_BYTES,
   normalizeMediaType,
   parseSendImages,
+  type MessageImage,
 } from './views/message-images.ts';
+import {
+  parseSendFiles,
+  parseSendPastes,
+  parseUploadBody,
+  resolveSendFiles,
+  saveWorkspaceUpload,
+  UPLOAD_BODY_MAX_BYTES,
+} from './views/uploads.ts';
 import {
   readWorkspaceFile,
   saveWorkspaceFile,
@@ -105,6 +114,7 @@ type GitProjectList = components['schemas']['GitProjectList'];
 type GitBranchList = components['schemas']['GitBranchList'];
 type OkId = components['schemas']['OkId'];
 type OpenTerminalResult = components['schemas']['OpenTerminalResult'];
+type UploadResult = components['schemas']['UploadResult'];
 type V2JsonBody =
   | ServiceInfo
   | WebCode
@@ -145,7 +155,8 @@ type V2JsonBody =
   | GitProjectList
   | GitBranchList
   | OkId
-  | OpenTerminalResult;
+  | OpenTerminalResult
+  | UploadResult;
 
 export type ConversationRow = {
   id?: unknown;
@@ -170,6 +181,11 @@ export type GetMessageImage = (
   messageId: string,
   index: number,
 ) => Promise<MessageImageRecord | null | undefined>;
+export type GetMessagePaste = (
+  conversationId: string,
+  messageId: string,
+  index: number,
+) => Promise<string | null | undefined>;
 export type GetWorkspace = (id: string) => Promise<WorkspaceRow | null | undefined>;
 export type SendMode = 'steer' | 'queue';
 export type PostMessage = (
@@ -284,7 +300,12 @@ function imageEtag(buf: Buffer): string {
   return `"${createHash('sha256').update(buf).digest('hex')}"`;
 }
 
-function sendImageBytes(req: IncomingMessage, res: ServerResponse, mediaType: string, buf: Buffer): void {
+function sendCachedBytes(
+  req: IncomingMessage,
+  res: ServerResponse,
+  mediaType: string,
+  buf: Buffer,
+): void {
   const etag = imageEtag(buf);
   const headers: Record<string, string> = {
     ...SECURITY_HEADERS,
@@ -302,6 +323,10 @@ function sendImageBytes(req: IncomingMessage, res: ServerResponse, mediaType: st
   headers['content-length'] = String(buf.length);
   res.writeHead(200, headers);
   res.end(buf);
+}
+
+function sendImageBytes(req: IncomingMessage, res: ServerResponse, mediaType: string, buf: Buffer): void {
+  sendCachedBytes(req, res, mediaType, buf);
 }
 
 async function readObjectBody(
@@ -502,6 +527,7 @@ export function createV2Handler(opts: {
   loadConversation?: LoadConversation;
   getConversation?: GetConversation;
   getMessageImage?: GetMessageImage;
+  getMessagePaste?: GetMessagePaste;
   getWorkspace?: GetWorkspace;
   postMessage?: PostMessage;
   withdrawMessage?: WithdrawMessageFn;
@@ -673,6 +699,42 @@ export function createV2Handler(opts: {
       readObjectBody,
       getWorkspace: opts.getWorkspace,
     })) return true;
+
+    const uploadMatch = /^\/api\/v2\/workspaces\/([^/]+)\/uploads$/.exec(pathname);
+    if (method === 'POST' && uploadMatch) {
+      const workspaceId = decodeURIComponent(uploadMatch[1]);
+      const body = await readObjectBody(req, res, pathname, method, UPLOAD_BODY_MAX_BYTES);
+      if (!body) return true;
+      const parsed = parseUploadBody(body);
+      if (!parsed.ok) {
+        sendV2(res, pathname, method, parsed.status || 400, {
+          error: parsed.error,
+          code: parsed.code,
+        } satisfies V2Error);
+        return true;
+      }
+      let ws: WorkspaceRow | null | undefined = null;
+      try {
+        ws = opts.getWorkspace ? await opts.getWorkspace(workspaceId) : null;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'workspace check failed';
+        sendV2(res, pathname, method, 500, { error: message, code: 'E_INTERNAL' } satisfies V2Error);
+        return true;
+      }
+      const root = workspacePathOf(ws);
+      if (!root) {
+        sendV2(res, pathname, method, 404, { error: 'not found' } satisfies V2Error);
+        return true;
+      }
+      try {
+        const saved = await saveWorkspaceUpload(root, parsed);
+        sendV2(res, pathname, method, 201, saved satisfies UploadResult);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'upload failed';
+        sendV2(res, pathname, method, 500, { error: message, code: 'E_INTERNAL' } satisfies V2Error);
+      }
+      return true;
+    }
 
     const gitRefreshMatch = /^\/api\/v2\/workspaces\/([^/]+)\/git\/refresh$/.exec(pathname);
     if (method === 'POST' && gitRefreshMatch) {
@@ -1030,6 +1092,34 @@ export function createV2Handler(opts: {
       return true;
     }
 
+    const pasteMatch = /^\/api\/v2\/conversations\/([^/]+)\/messages\/([^/]+)\/pastes\/([^/]+)$/.exec(pathname);
+    if (method === 'GET' && pasteMatch) {
+      const id = decodeURIComponent(pasteMatch[1]);
+      const messageId = decodeURIComponent(pasteMatch[2]);
+      const indexRaw = decodeURIComponent(pasteMatch[3]);
+      const index = Number(indexRaw);
+      if (!Number.isInteger(index) || index < 0 || String(index) !== indexRaw) {
+        sendV2(res, pathname, method, 404, { error: 'not found' } satisfies V2Error);
+        return true;
+      }
+      if (!opts.getMessagePaste) {
+        sendV2(res, pathname, method, 500, { error: 'kernel not ready', code: 'E_INTERNAL' } satisfies V2Error);
+        return true;
+      }
+      try {
+        const paste = await opts.getMessagePaste(id, messageId, index);
+        if (paste == null || typeof paste !== 'string') {
+          sendV2(res, pathname, method, 404, { error: 'not found' } satisfies V2Error);
+          return true;
+        }
+        sendCachedBytes(req, res, 'text/plain; charset=utf-8', Buffer.from(paste, 'utf8'));
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'load paste failed';
+        sendV2(res, pathname, method, 500, { error: message, code: 'E_INTERNAL' } satisfies V2Error);
+      }
+      return true;
+    }
+
     const messagesMatch = /^\/api\/v2\/conversations\/([^/]+)\/messages$/.exec(pathname);
     const continueMatch = /^\/api\/v2\/conversations\/([^/]+)\/continue$/.exec(pathname);
     if (method === 'POST' && (messagesMatch || continueMatch)) {
@@ -1048,7 +1138,10 @@ export function createV2Handler(opts: {
         return true;
       }
       let text: string;
-      let content: unknown;
+      let content: unknown = '';
+      let sendImages: MessageImage[] = [];
+      let sendPastes: string[] = [];
+      let sendFiles: Array<{ path: string; name?: string; bytes?: number }> = [];
       if (continueMatch) {
         text = MANUAL_CONTINUE_TEXT;
         content = text;
@@ -1066,11 +1159,34 @@ export function createV2Handler(opts: {
           } satisfies V2Error);
           return true;
         }
-        if (!text && parsedImages.images.length === 0) {
+        const parsedPastes = parseSendPastes(body.pastes);
+        if (!parsedPastes.ok) {
+          sendV2(res, pathname, method, 400, {
+            error: parsedPastes.error,
+            code: parsedPastes.code,
+          } satisfies V2Error);
+          return true;
+        }
+        const parsedFiles = parseSendFiles(body.files);
+        if (!parsedFiles.ok) {
+          sendV2(res, pathname, method, 400, {
+            error: parsedFiles.error,
+            code: parsedFiles.code,
+          } satisfies V2Error);
+          return true;
+        }
+        if (
+          !text
+          && parsedImages.images.length === 0
+          && parsedPastes.pastes.length === 0
+          && parsedFiles.files.length === 0
+        ) {
           sendV2(res, pathname, method, 400, { error: 'text required', code: 'E_BAD_REQUEST' } satisfies V2Error);
           return true;
         }
-        content = assembleUserContent(text, parsedImages.images);
+        sendImages = parsedImages.images;
+        sendPastes = parsedPastes.pastes;
+        sendFiles = parsedFiles.files;
       }
       let conv: ConversationRow | null | undefined = null;
       try {
@@ -1095,6 +1211,44 @@ export function createV2Handler(opts: {
       if (!ready) {
         sendV2(res, pathname, method, 409, { error: 'no workspace', code: 'E_NO_WORKSPACE' } satisfies V2Error);
         return true;
+      }
+      if (messagesMatch) {
+        let attached: Array<{ path: string; name: string; bytes: number }> = [];
+        if (sendFiles.length) {
+          let ws: WorkspaceRow | null | undefined = null;
+          try {
+            ws = opts.getWorkspace ? await opts.getWorkspace(workspaceIdOf(conv)) : null;
+          } catch (err) {
+            const message = err instanceof Error ? err.message : 'workspace check failed';
+            sendV2(res, pathname, method, 500, { error: message, code: 'E_INTERNAL' } satisfies V2Error);
+            return true;
+          }
+          const root = workspacePathOf(ws);
+          if (!root) {
+            sendV2(res, pathname, method, 409, { error: 'no workspace', code: 'E_NO_WORKSPACE' } satisfies V2Error);
+            return true;
+          }
+          let resolved;
+          try {
+            resolved = await resolveSendFiles(root, sendFiles);
+          } catch (err) {
+            const message = err instanceof Error ? err.message : 'resolve files failed';
+            sendV2(res, pathname, method, 500, { error: message, code: 'E_INTERNAL' } satisfies V2Error);
+            return true;
+          }
+          if (!resolved.ok) {
+            sendV2(res, pathname, method, 400, {
+              error: resolved.error,
+              code: resolved.code,
+            } satisfies V2Error);
+            return true;
+          }
+          attached = resolved.files;
+        }
+        content = assembleUserContent(text, sendImages, {
+          pastes: sendPastes,
+          files: attached,
+        });
       }
       const requestId = parsedId.value || randomUUID();
       if (!opts.postMessage) {
@@ -1406,6 +1560,7 @@ export function createV2Runtime(opts: {
   loadConversation?: LoadConversation;
   getConversation?: GetConversation;
   getMessageImage?: GetMessageImage;
+  getMessagePaste?: GetMessagePaste;
   getWorkspace?: GetWorkspace;
   postMessage?: PostMessage;
   withdrawMessage?: WithdrawMessageFn;
@@ -1531,6 +1686,7 @@ export function createV2Runtime(opts: {
     loadConversation: opts.loadConversation,
     getConversation: opts.getConversation,
     getMessageImage: opts.getMessageImage,
+    getMessagePaste: opts.getMessagePaste,
     getWorkspace: opts.getWorkspace,
     postMessage: opts.postMessage,
     withdrawMessage: opts.withdrawMessage,
