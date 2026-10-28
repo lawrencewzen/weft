@@ -37,7 +37,6 @@ import { useRightPane } from '../data/rightPaneContext';
 import type { components } from '../../../src/v2/contract.gen';
 import { formatElapsed, t } from '../i18n';
 import { writeActiveWorkspace } from '../data/layout';
-import { useRightPane } from '../data/rightPaneContext';
 import { ContextBanner, ContextChip } from './ContextChip';
 import { DemoModelBadge } from './DemoModelBadge';
 import { ModelChip } from './ModelChip';
@@ -163,7 +162,7 @@ export function Composer({
   const imagesRef = useRef(images);
   imagesRef.current = images;
   const { providers, defaultModel, ready: providersReady } = useProviders();
-  const { openInTerminal, copyPath } = useRightPane();
+  const { openInTerminal, copyPath, setTab } = useRightPane();
   const groups = useMemo(() => groupComposerModels(providers, defaultModel), [providers, defaultModel]);
   const available = hasAvailableModels(providers);
   const selected = useMemo(() => resolveComposerSelection({
@@ -188,7 +187,6 @@ export function Composer({
   const liveAgents = useMemo(() => liveSubagents(subagents), [subagents]);
   const [subPop, setSubPop] = useState(false);
   const [now, setNow] = useState(() => Date.now());
-  const { setTab } = useRightPane();
   const popRef = useRef<HTMLDivElement>(null);
   const placeholder = noModel
     ? t(lang, 'composer_placeholder_no_model')
