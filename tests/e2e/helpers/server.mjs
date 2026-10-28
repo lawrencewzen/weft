@@ -50,11 +50,14 @@ export async function startServer({ script = 'basic.json', dataDir, port = 0, ex
     WEFT_RETRY_MAX: '5',
     WEFT_V2_VALIDATE: '1',
     WEFT_STDIN_EXIT: '1',
+    // Never launch a real terminal window from e2e (T51-12). extraEnv can override with a JSONL path.
+    WEFT_TERMINAL_MOCK: '1',
     ...extraEnv,
   };
   if (!Object.prototype.hasOwnProperty.call(extraEnv, 'WEFT_LAUNCHED_BY')) delete env.WEFT_LAUNCHED_BY;
   if (!Object.prototype.hasOwnProperty.call(extraEnv, 'WEFT_IDLE_EXIT_MINUTES')) delete env.WEFT_IDLE_EXIT_MINUTES;
   if (!Object.prototype.hasOwnProperty.call(extraEnv, 'WEFT_TOKEN')) delete env.WEFT_TOKEN;
+  if (!Object.prototype.hasOwnProperty.call(extraEnv, 'WEFT_TERMINAL_APP')) delete env.WEFT_TERMINAL_APP;
   const proc = spawn(process.execPath, ['server.mjs'], {
     cwd: ROOT,
     env,

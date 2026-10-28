@@ -1,8 +1,9 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState, type MouseEvent } from 'react';
 import type { Lang } from '../data/lang';
 import { isMarkdownFile, useRightPane } from '../data/rightPaneContext';
 import { visibleTreeRows } from '../data/fileTree';
 import { t } from '../i18n';
+import { CtxMenu, type CtxMenuItem } from './CtxMenu';
 import { Markdown } from './Markdown';
 
 const DIR_CHEV = (
@@ -167,6 +168,8 @@ function FileEditor({ lang }: { lang: Lang }) {
   );
 }
 
+type DirMenu = { x: number; y: number; path: string };
+
 export function FileBrowser({ lang, workspaceLabel }: { lang: Lang; workspaceLabel: string }) {
   const {
     tree,
@@ -177,10 +180,28 @@ export function FileBrowser({ lang, workspaceLabel }: { lang: Lang; workspaceLab
     openFile,
     activeFilePath,
     visibleChanges,
+    copyPath,
+    openInTerminal,
   } = useRightPane();
+  const [dirMenu, setDirMenu] = useState<DirMenu | null>(null);
   const rows = treeReady ? visibleTreeRows(tree, expandedDirs) : [];
   const changed = new Set(visibleChanges.map((item) => item.path));
   const md = isMarkdownFile(activeFilePath);
+
+  function onDirMenu(ev: MouseEvent, dirPath: string) {
+    ev.preventDefault();
+    ev.stopPropagation();
+    setDirMenu({ x: ev.clientX, y: ev.clientY, path: dirPath });
+  }
+
+  const dirItems = (dirPath: string): CtxMenuItem[] => [
+    { label: t(lang, 'copy_path'), action: 'copy-path', run: () => copyPath(dirPath) },
+    {
+      label: t(lang, 'open_in_terminal'),
+      action: 'open-terminal',
+      run: () => { void openInTerminal(dirPath); },
+    },
+  ];
 
   return (
     <div className="file-browser">
@@ -203,6 +224,7 @@ export function FileBrowser({ lang, workspaceLabel }: { lang: Lang; workspaceLab
                 data-path={row.path}
                 data-type="dir"
                 onClick={() => toggleDirectory(row.path)}
+                onContextMenu={(ev) => onDirMenu(ev, row.path)}
               >
                 <span className="file-tree-icon">{DIR_CHEV}</span>
                 <span className="file-tree-name">{row.name}</span>
@@ -235,6 +257,15 @@ export function FileBrowser({ lang, workspaceLabel }: { lang: Lang; workspaceLab
       <div className="file-preview" data-testid="next-file-view">
         {md ? <FileEditor lang={lang} /> : <FilePreview lang={lang} />}
       </div>
+      {dirMenu ? (
+        <CtxMenu
+          x={dirMenu.x}
+          y={dirMenu.y}
+          title={dirMenu.path}
+          items={dirItems(dirMenu.path)}
+          onClose={() => setDirMenu(null)}
+        />
+      ) : null}
     </div>
   );
 }

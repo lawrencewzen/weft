@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
 import type { Lang } from '../data/lang';
 import { useWorkspaces } from '../data/useWorkspaces';
 import { shortenWorkspacePath } from '../data/workspacePath';
 import { t } from '../i18n';
+import { CtxMenu, type CtxMenuItem } from './CtxMenu';
 
 type Props = {
   lang: Lang;
@@ -12,6 +13,8 @@ type Props = {
   variant?: 'chip' | 'hero';
   onPick: (workspaceId: string) => void;
   onNew: () => void;
+  onOpenTerminal?: () => void;
+  onCopyPath?: (path: string) => void;
 };
 
 const FOLDER_ICON = (
@@ -27,10 +30,13 @@ export function WorkspaceChip({
   variant = 'chip',
   onPick,
   onNew,
+  onOpenTerminal,
+  onCopyPath,
 }: Props) {
   const { workspaces } = useWorkspaces();
   const [open, setOpen] = useState(false);
   const [boundHint, setBoundHint] = useState(false);
+  const [ctx, setCtx] = useState<{ x: number; y: number } | null>(null);
   const wrap = useRef<HTMLDivElement>(null);
   const selected = workspaces.find((ws) => ws.id === selectedId) || null;
   const empty = workspaces.length === 0;
@@ -83,6 +89,30 @@ export function WorkspaceChip({
     setOpen((value) => !value);
   }
 
+  function onContextMenu(ev: ReactMouseEvent) {
+    if (!selected) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    setOpen(false);
+    setBoundHint(false);
+    setCtx({ x: ev.clientX, y: ev.clientY });
+  }
+
+  const ctxItems: CtxMenuItem[] = selected ? [
+    {
+      label: t(lang, 'open_in_terminal'),
+      action: 'open-terminal',
+      run: () => onOpenTerminal?.(),
+    },
+    {
+      label: t(lang, 'copy_path'),
+      action: 'copy-path',
+      run: () => {
+        if (selected.path) onCopyPath?.(selected.path);
+      },
+    },
+  ] : [];
+
   return (
     <div className={`chip-selector-wrap${hero ? ' is-hero' : ''}`} ref={wrap}>
       <button
@@ -94,6 +124,7 @@ export function WorkspaceChip({
         aria-expanded={open}
         title={title}
         onClick={onClick}
+        onContextMenu={onContextMenu}
       >
         {hero ? null : FOLDER_ICON}
         <span className="model-chip-name">{label}</span>
@@ -147,6 +178,15 @@ export function WorkspaceChip({
             </button>
           </div>
         </div>
+      ) : null}
+      {ctx && selected ? (
+        <CtxMenu
+          x={ctx.x}
+          y={ctx.y}
+          title={selected.path || selected.name}
+          items={ctxItems}
+          onClose={() => setCtx(null)}
+        />
       ) : null}
     </div>
   );

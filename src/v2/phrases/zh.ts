@@ -151,4 +151,7 @@ export const zh: Record<string, string> = {
   err_skill_exists: '同名 Skill 已存在',
   err_skill_not_found: '找不到该 Skill',
   err_skill_builtin: '内置 Skill 不能删除',
+  term_err_path: '路径超出工作区',
+  term_err_not_dir: '只能打开目录',
+  term_err_spawn: '无法打开系统终端',
 };

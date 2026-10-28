@@ -1380,6 +1380,86 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/V2Error"
+  /api/v2/workspaces/{id}/open-terminal:
+    post:
+      operationId: openWorkspaceTerminal
+      summary: 在系统终端中打开目录
+      description: |
+        在本机打开系统自带的终端，cwd 为工作区内的目录。浏览器和服务都在 127.0.0.1，服务端直接 spawn 本机终端程序。
+        body.path 是相对工作区的路径，缺省为工作区根。必须通过 resolveInWorkspace，且必须是已存在的目录。
+        越界或不是目录时 400 E_PATH。用 spawn 的参数数组，detached、stdio ignore、unref，绝不拼接 shell 字符串。
+        macOS：`open -a Terminal <dir>`；环境变量 WEFT_TERMINAL_APP 可换成 iTerm 等。
+        Windows：优先 `wt.exe -d <dir>`；没有则 `cmd /c start "" powershell.exe -NoExit -Command Set-Location -LiteralPath <dir>`。
+        Linux：`x-terminal-emulator`，否则 `gnome-terminal --working-directory=<dir>`；都没有 501。
+        找不到程序时返回明确错误。测试用 WEFT_TERMINAL_MOCK 跳过真正拉起窗口。
+      security:
+        - bearerAuth: []
+        - sessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: 工作区 id
+        - name: lang
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - zh
+              - en
+          description: 错误文案语言，缺省 zh
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OpenTerminalRequest"
+      responses:
+        "200":
+          description: 已请求打开系统终端
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OpenTerminalResult"
+        "400":
+          description: 路径越界或不是目录（E_PATH）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        "401":
+          description: 未授权
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        "404":
+          description: 工作区不存在
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        "501":
+          description: 找不到可用的终端程序（E_NO_TERMINAL）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        4XX:
+          description: 客户端错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        5XX:
+          description: 服务端错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
   /api/v2/workspaces/{id}:
     delete:
       operationId: removeWorkspace
@@ -4390,6 +4470,27 @@ components:
           type: boolean
           const: true
       description: DELETE /api/v2/workspaces/{id} 成功。
+    OpenTerminalRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        path:
+          type: string
+          description: 相对工作区的目录。缺省或空字符串表示工作区根。
+      description: POST /api/v2/workspaces/{id}/open-terminal 的请求体。
+    OpenTerminalResult:
+      type: object
+      additionalProperties: false
+      required:
+        - opened
+      properties:
+        opened:
+          type: boolean
+          const: true
+        message:
+          type: string
+          description: 可选提示。原型会带「已在系统终端中打开（原型不会真的打开）」；真服务端省略，由客户端显示默认文案。
+      description: POST /api/v2/workspaces/{id}/open-terminal 成功。
     WorkspaceBusy:
       type: object
       additionalProperties: false

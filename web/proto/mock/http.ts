@@ -19,6 +19,7 @@ import { branchesOf, tokenFails } from './extensions';
 import {
   EXTERNAL_TOUCH_MS,
   createRepo,
+  posixPath,
   readRepoFile,
   repoTree,
   saveRepoFile,
@@ -970,6 +971,36 @@ export function handleMockRequest(db: MockDb, hub: MockHub, rawUrl: string, init
   if (wsConvMatch && method === 'POST') {
     const workspaceId = decodeURIComponent(wsConvMatch[1]);
     return createConversation(db, hub, workspaceId, String(body.title || ''));
+  }
+  const wsOpenTermMatch = /^\/api\/v2\/workspaces\/([^/]+)\/open-terminal$/.exec(path);
+  if (wsOpenTermMatch && method === 'POST') {
+    const workspaceId = decodeURIComponent(wsOpenTermMatch[1]);
+    const ws = db.workspaces.find((row) => row.id === workspaceId);
+    const repo = db.repos.get(workspaceId);
+    if (!ws || !repo) return fail(404, lang === 'en' ? 'Workspace not found' : '工作区不存在');
+    const raw = typeof body.path === 'string' ? body.path : '';
+    const rel = posixPath(raw);
+    if (
+      rel.split('/').includes('..')
+      || rel.includes('..')
+      || /^[a-zA-Z]:/.test(raw.trim())
+      || raw.trim().startsWith('/')
+      || raw.trim().startsWith('\\')
+    ) {
+      return fail(400, lang === 'en' ? 'Path is outside the workspace' : '路径超出工作区', 'E_PATH');
+    }
+    if (rel) {
+      const node = repoTree(repo).entries.find((row) => row.path === rel);
+      if (!node || node.type !== 'dir') {
+        return fail(400, lang === 'en' ? 'Only directories can be opened' : '只能打开目录', 'E_PATH');
+      }
+    }
+    return ok({
+      opened: true,
+      message: lang === 'en'
+        ? 'Opened in the system terminal (prototype does not launch it)'
+        : '已在系统终端中打开（原型不会真的打开）',
+    });
   }
   const wsGitMatch = /^\/api\/v2\/workspaces\/([^/]+)\/git\/refresh$/.exec(path);
   if (wsGitMatch && method === 'POST') {

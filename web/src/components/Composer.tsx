@@ -162,6 +162,7 @@ export function Composer({
   const imagesRef = useRef(images);
   imagesRef.current = images;
   const { providers, defaultModel, ready: providersReady } = useProviders();
+  const { openInTerminal, copyPath, setTab } = useRightPane();
   const groups = useMemo(() => groupComposerModels(providers, defaultModel), [providers, defaultModel]);
   const available = hasAvailableModels(providers);
   const selected = useMemo(() => resolveComposerSelection({
@@ -186,7 +187,6 @@ export function Composer({
   const liveAgents = useMemo(() => liveSubagents(subagents), [subagents]);
   const [subPop, setSubPop] = useState(false);
   const [now, setNow] = useState(() => Date.now());
-  const { setTab } = useRightPane();
   const popRef = useRef<HTMLDivElement>(null);
   const placeholder = noModel
     ? t(lang, 'composer_placeholder_no_model')
@@ -662,6 +662,10 @@ export function Composer({
                       navigate(draftPath(id), { replace: true });
                     }}
                     onNew={() => onNewWorkspace?.()}
+                    onOpenTerminal={workspaceId
+                      ? () => { void openInTerminal(undefined, workspaceId); }
+                      : undefined}
+                    onCopyPath={copyPath}
                   />
                   {demo ? <DemoModelBadge lang={lang} testId="next-demo-model-chip" /> : null}
                 </div>

@@ -53,6 +53,8 @@ export type GitProjectList = components['schemas']['GitProjectList'];
 export type GitBranch = components['schemas']['GitBranch'];
 export type GitBranchList = components['schemas']['GitBranchList'];
 export type OkId = components['schemas']['OkId'];
+export type OpenTerminalRequest = components['schemas']['OpenTerminalRequest'];
+export type OpenTerminalResult = components['schemas']['OpenTerminalResult'];
 
 export class ApiError extends Error {
   readonly status: number;
@@ -260,6 +262,18 @@ export function refreshWorkspaceGit(workspaceId: string): Promise<Workspace> {
   return requestJson<Workspace>(
     `/api/v2/workspaces/${encodeURIComponent(workspaceId)}/git/refresh`,
     { method: 'POST', body: '{}' },
+  );
+}
+
+export function openWorkspaceTerminal(
+  workspaceId: string,
+  dirPath?: string,
+): Promise<OpenTerminalResult> {
+  const body: OpenTerminalRequest = {};
+  if (dirPath != null && dirPath !== '') body.path = dirPath;
+  return requestJson<OpenTerminalResult>(
+    `/api/v2/workspaces/${encodeURIComponent(workspaceId)}/open-terminal`,
+    { method: 'POST', body: JSON.stringify(body) },
   );
 }
 

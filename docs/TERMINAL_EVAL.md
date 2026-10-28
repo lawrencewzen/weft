@@ -394,3 +394,13 @@ T51-10 → T51-11 → T51-12。10 没有原生风险，先让右栏「终端」�
 | v2 鉴权 | `src/v2/auth.ts`，`src/v2/index.ts` 对 `/api/v2` 的 `isAuthorized` |
 | 主题 `--term` | `web/src/styles/themes.css` |
 | SECURITY.md 环境白名单 | 与当前 `inheritEnv: true` 不一致，见 4.3 |
+
+---
+
+## 后记：用户决定
+
+用户已决定**不做 Weft 内嵌的交互式终端**（不要 PTY、不要 xterm、不要右栏里自己敲命令的用户标签）。
+
+只做「在系统终端中打开」：侧栏项目右键、右栏文件树的目录右键、输入框项目芯片菜单，一键在对应目录拉起本机 Terminal / Windows Terminal / 系统默认终端。Weft 服务只监听 `127.0.0.1`，浏览器和服务在同一台机器上，所以服务端 `spawn` 本机终端程序即可。路径必须落在当前工作区里。
+
+接口：`POST /api/v2/workspaces/{id}/open-terminal`。macOS 可用 `WEFT_TERMINAL_APP` 换成 iTerm 等。评估里的用户 PTY 方案留作以后若需求回潮时的参考，不按这个后记实现。

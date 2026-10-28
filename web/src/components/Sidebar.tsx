@@ -104,7 +104,7 @@ export function Sidebar({
 }: Props) {
   const { groups } = useWorkspaces();
   const { store, status, setExtraConversationIds } = useSession();
-  const { tab, setTab, showFiles } = useRightPane();
+  const { tab, setTab, showFiles, openInTerminal } = useRightPane();
   const now = useNow(1_000);
   const [openMap, setOpenMap] = useState<OpenRecord>(() => readWorkspaceOpen());
   const [treeRecorded, setTreeRecorded] = useState<OpenRecord>(() => readSubagentTrees());
@@ -235,6 +235,11 @@ export function Sidebar({
     { label: t(lang, 'new_conversation'), action: 'new-conversation', run: () => startDraft(ws.id) },
     { label: t(lang, 'copy_path'), action: 'copy-path', run: () => { void copy(ws.path || ''); } },
     {
+      label: t(lang, 'open_in_terminal'),
+      action: 'open-terminal',
+      run: () => { void openInTerminal(undefined, ws.id); },
+    },
+    {
       label: t(lang, 'show_files'),
       action: 'show-files',
       run: () => {
@@ -254,7 +259,7 @@ export function Sidebar({
       danger: true,
       run: () => { void removeWorkspace(ws); },
     },
-  ], [activeWorkspaceId, copy, groups, lang, onNewWorkspace, removeWorkspace, showFiles, startDraft]);
+  ], [activeWorkspaceId, copy, groups, lang, onNewWorkspace, openInTerminal, removeWorkspace, showFiles, startDraft]);
 
   const conversationItems = useCallback((wsId: string, conv: ConversationSummary): CtxMenuItem[] => {
     const items: CtxMenuItem[] = [];

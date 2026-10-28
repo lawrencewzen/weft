@@ -151,4 +151,7 @@ export const en: Record<string, string> = {
   err_skill_exists: 'A skill with that id already exists',
   err_skill_not_found: 'Skill not found',
   err_skill_builtin: 'Built-in skills cannot be deleted',
+  term_err_path: 'Path is outside the workspace',
+  term_err_not_dir: 'Only directories can be opened',
+  term_err_spawn: 'Could not open a system terminal',
 };
