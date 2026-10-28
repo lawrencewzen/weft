@@ -50,7 +50,7 @@ test('diff, file tree, preview, save and the 409 conflict demo', async ({ page }
   }).toBe(true);
 
   // Changes default to expanded (<= 8 files, <= 300 lines) with diff lines visible.
-  await expect(page.getByTestId('next-diff')).toHaveCount(4);
+  await expect(page.getByTestId('next-diff')).toHaveCount(8);
   await expect(page.getByTestId('next-diff-line').first()).toBeVisible();
   expect(await testRow.locator('[data-testid=next-diff-line][data-op=add]').count()).toBeGreaterThan(0);
   const added = testRow.locator('[data-testid=next-diff-line][data-op=add]').first();
