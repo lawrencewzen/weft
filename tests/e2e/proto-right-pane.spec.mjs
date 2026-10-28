@@ -103,11 +103,14 @@ test('diff, file tree, preview, save and the 409 conflict demo', async ({ page }
     .filter((row) => row.method === 'PUT' && row.url.includes('/files')).length);
   expect(savedVersion).toBe(1);
 
-  // The saved file shows up in the changes tab with a real line diff (expanded by default).
+  // The saved file shows up in the changes tab with a real line diff (collapsed by default when > 8 files).
   await page.getByTestId('next-right-tab-changes').click();
   const readmeChange = page.locator('[data-testid=next-change-row][data-path="README.md"]');
   await expect(readmeChange).toBeVisible();
   await expect(readmeChange.getByTestId('next-change-by')).toHaveCount(0);
+  await expect(readmeChange).not.toHaveClass(/is-open/); // 9 个文件，默认收起
+  await readmeChange.locator('.changed-file-pill').click();
+  await expect(readmeChange).toHaveClass(/is-open/);
   await expect(readmeChange.getByTestId('next-diff-line').first()).toBeVisible();
   await expect.poll(async () => readmeChange.locator('[data-op=add]').count()).toBeGreaterThan(0);
   await page.getByTestId('next-right-tab-files').click();
