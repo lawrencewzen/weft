@@ -57,7 +57,7 @@ test('bashChildEnv copies the allow-list and drops secrets, even with WEFT_BASH_
   const { env, warnings } = collect({
     ...unixBase(),
     WEFT_BASH_ENV_ALLOW: 'MY_BASH_CUSTOM,OPENAI_API_KEY',
-  }, undefined, { platform: 'linux' });
+  });
 
   assert.equal(env.PATH, '/usr/bin:/bin');
   assert.equal(env.HOME, '/home/weft');
@@ -107,10 +107,27 @@ test('Windows matching is case-insensitive and keeps Path', () => {
   assert.equal(env.Path, 'C:\\Windows\\System32');
   assert.equal(env.PATH, undefined);
   assert.equal(env.HTTPS_PROXY, 'http://weft-test-proxy.example:8080');
+  assert.equal(env.https_proxy, 'http://weft-test-proxy.example:8080');
   assert.equal(env.My_Bash_Custom, 'weft-allow-custom-ok');
   assert.equal(env.OpenAI_API_KEY, undefined);
   assert.equal(env.Weft_Test_Secret, undefined);
   assert.equal(warnings.some((line) => /openai_api_key/i.test(line)), true);
+});
+
+test('proxy names keep both casings on Windows, including when the host only set one', () => {
+  const both = collect({
+    PATH: 'C:\\Windows\\System32',
+    HTTPS_PROXY: 'http://weft-test-proxy.example:8080',
+    https_proxy: 'http://weft-test-proxy-lower.example:8080',
+  }, undefined, { platform: 'win32' });
+  assert.equal(both.env.HTTPS_PROXY, 'http://weft-test-proxy.example:8080');
+  assert.equal(both.env.https_proxy, 'http://weft-test-proxy-lower.example:8080');
+
+  const one = collect({
+    HTTPS_PROXY: 'http://weft-test-proxy.example:8080',
+  }, undefined, { platform: 'win32' });
+  assert.equal(one.env.HTTPS_PROXY, 'http://weft-test-proxy.example:8080');
+  assert.equal(one.env.https_proxy, 'http://weft-test-proxy.example:8080');
 });
 
 test('applyBashEnvAllowlist uses the official inheritEnv: false + env options', () => {

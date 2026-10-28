@@ -33,7 +33,7 @@ Agent commands (main Agent and sub-agents) go through Pi Durable's official `cre
 
 Environment (T52-1): `createBashTool` `prepare` and `WorkspaceExecutionEnv.exec` both set the official `inheritEnv: false` and pass `env` from `src/kernel/bash-env.mjs`. `NodeExecutionEnv` then starts the child with only that object (`getShellEnv` returns `extraEnv` when `inheritEnv` is false). The service process environment is **not** inherited.
 
-Copied when present (Windows names are matched case-insensitively; on Unix the listed spelling, plus both cases of the proxy variables):
+Copied when present (Windows names are matched case-insensitively; on Unix the listed spelling). Proxy names are written in both conventional casings whenever either is set, because Git Bash/MSYS on Windows treats them as distinct:
 
 - Process / locale: `PATH` (Windows `Path`), `PATHEXT`, `SystemRoot`, `SYSTEMDRIVE`, `windir`, `ComSpec`, `HOME`, `USERPROFILE`, `HOMEDRIVE`, `HOMEPATH`, `APPDATA`, `LOCALAPPDATA`, `ProgramData`, `ProgramFiles`, `ProgramFiles(x86)`, `CommonProgramFiles`, `TEMP`, `TMP`, `TMPDIR`, `USER`, `USERNAME`, `LOGNAME`, `SHELL`, `LANG`, `LC_*`, `TZ`, `TERM` (set to `dumb` when missing), `NUMBER_OF_PROCESSORS`, `PROCESSOR_ARCHITECTURE`, `OS`
 - Network / certificates: `HTTP_PROXY` / `http_proxy`, `HTTPS_PROXY` / `https_proxy`, `ALL_PROXY` / `all_proxy`, `NO_PROXY` / `no_proxy`, `NODE_EXTRA_CA_CERTS`, `SSL_CERT_FILE`, `SSL_CERT_DIR`, `REQUESTS_CA_BUNDLE`

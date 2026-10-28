@@ -109,6 +109,10 @@ function customAllowed(name, patterns, platform) {
   return patterns.some((pattern) => matchesAllowPattern(name, pattern, platform));
 }
 
+function isProxyName(name) {
+  return PROXY_NAMES.includes(String(name).toUpperCase());
+}
+
 function setEnvKey(out, key, value, platform) {
   if (namesAreCaseInsensitive(platform)) {
     const folded = key.toLowerCase();
@@ -117,6 +121,21 @@ function setEnvKey(out, key, value, platform) {
     }
   }
   out[key] = value;
+}
+
+/**
+ * Proxy tools (curl, git, Git Bash/MSYS) look up HTTP_PROXY and http_proxy as
+ * distinct names. Windows native APIs do not, so collapsing them would drop one
+ * casing and Agent bash on Git Bash would miss the proxy. Write the given key,
+ * then fill the missing conventional upper/lower spelling with the same value.
+ */
+function setProxyKey(out, key, value) {
+  const text = String(value);
+  const upper = key.toUpperCase();
+  const lower = upper.toLowerCase();
+  out[key] = text;
+  if (!Object.hasOwn(out, upper)) out[upper] = text;
+  if (!Object.hasOwn(out, lower)) out[lower] = text;
 }
 
 function hasEnvKey(out, key, platform) {
@@ -204,7 +223,10 @@ export function bashChildEnv(source = process.env, extra, options = {}) {
       if (custom) warnBlocked(log, warned, key, reason);
       return;
     }
-    if (builtin || custom) setEnvKey(out, key, String(value), platform);
+    if (builtin || custom) {
+      if (isProxyName(key)) setProxyKey(out, key, value);
+      else setEnvKey(out, key, String(value), platform);
+    }
   };
 
   for (const [key, value] of Object.entries(source || {})) take(key, value);
