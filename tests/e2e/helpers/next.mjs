@@ -57,6 +57,13 @@ export async function waitRunDone(page, timeout = 30000) {
   if (await row.count() > 0) {
     await expect(row).not.toHaveAttribute('data-status', 'running', { timeout });
   }
+  // 避免断流重试期间短暂变为 done 又变回 running 的抖动
+  await page.waitForTimeout(300);
+  await expect(page.getByTestId('next-stop')).toHaveCount(0);
+  await expect(page.getByTestId('next-send')).toBeVisible();
+  if (await row.count() > 0) {
+    await expect(row).not.toHaveAttribute('data-status', 'running');
+  }
 }
 
 export async function waitRunStopped(page, timeout = 20000) {

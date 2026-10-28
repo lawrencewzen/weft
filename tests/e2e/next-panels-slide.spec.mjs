@@ -97,6 +97,16 @@ test('panels slide transition and monotonicity for left and right panels', async
     await page.getByTestId('next-right-collapse').click();
     await expect(page.getByTestId('next-right-toggle')).toBeVisible();
 
+    // 展开右栏按钮贴右边（距中间栏右边 12±2px）
+    const rightMargin = await page.evaluate(() => {
+      const center = document.querySelector('[data-testid="next-center"]');
+      const rb = document.querySelector('[data-testid="next-right-toggle"]');
+      if (!center || !rb) return null;
+      return center.getBoundingClientRect().right - rb.getBoundingClientRect().right;
+    });
+    expect(rightMargin).toBeGreaterThanOrEqual(10);
+    expect(rightMargin).toBeLessThanOrEqual(14);
+
     await page.getByTestId('next-right-toggle').click();
     await expect(page.getByTestId('next-right-collapse')).toBeVisible();
   } finally {

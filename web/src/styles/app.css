@@ -586,12 +586,12 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.6; backgroun
 }
 
 .col-center { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--bg); position: relative; }
-.thread-inner, .composer-stack, .next-status-inner {
+.thread-inner, .composer-stack {
   width: min(100% - 32px, 920px); max-width: none; margin-left: auto; margin-right: auto;
 }
 @supports (width: 1cqw) {
   .col-center { container-type: inline-size; }
-  .thread-inner, .composer-stack, .next-status-inner {
+  .thread-inner, .composer-stack {
     --chat-w: min(100cqw - 32px, max(560px, min(100cqw - 96px, 100vw - 800px)));
     width: var(--chat-w);
   }
@@ -602,7 +602,7 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.6; backgroun
   display: flex; flex-direction: column; justify-content: center; gap: 6px; padding: 0 12px;
 }
 .next-status-inner {
-  display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0;
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; width: 100%;
 }
 .top-heading { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1; overflow: hidden; }
 .top-title { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex-shrink: 1; }
