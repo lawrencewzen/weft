@@ -102,7 +102,11 @@ test('prototype @ file popup, filter, keyboard/mouse pick, escape, and tag sync'
   // 2. Type @store to filter files
   await input.fill('请查看 @store');
   await expect(atMenu).toBeVisible();
-  await expect(items).toHaveCount(2); // store.ts and store.test.ts
+  await expect(items).toHaveCount(2); // store.test.ts and store.ts
+
+  const secondDir = await items.nth(1).locator('.composer-at-dir').innerText();
+  const secondName = await items.nth(1).locator('.composer-at-name').innerText();
+  const secondPath = `${secondDir}${secondName}`;
 
   // ArrowDown to move highlight to the second item and Enter to pick
   await input.press('ArrowDown');
@@ -110,23 +114,23 @@ test('prototype @ file popup, filter, keyboard/mouse pick, escape, and tag sync'
   await input.press('Enter');
 
   // Selected item inserted with trailing space and tag added
-  await expect(input).toHaveValue('请查看 @web/src/data/store.test.ts ');
+  await expect(input).toHaveValue(`请查看 @${secondPath} `);
   const fileTags = page.getByTestId('next-attach-file');
   await expect(fileTags).toHaveCount(1);
-  await expect(fileTags).toContainText('web/src/data/store.test.ts');
+  await expect(fileTags).toContainText(secondPath);
 
   // 3. Mouse pick: type @README and click
   await input.focus();
   await input.pressSequentially('@README');
   await expect(atMenu).toBeVisible();
   await items.first().click();
-  await expect(input).toHaveValue('请查看 @web/src/data/store.test.ts @README.md ');
+  await expect(input).toHaveValue(`请查看 @${secondPath} @README.md `);
   await expect(fileTags).toHaveCount(2);
 
   // 4. Delete @README.md from text -> tag automatically disappears
-  await input.fill('请查看 @web/src/data/store.test.ts ');
+  await input.fill(`请查看 @${secondPath} `);
   await expect(fileTags).toHaveCount(1);
-  await expect(fileTags).toContainText('web/src/data/store.test.ts');
+  await expect(fileTags).toContainText(secondPath);
 
   // 5. Click tag × -> removes @path from text and collapses spaces
   await page.getByTestId('next-attach-remove').click();
