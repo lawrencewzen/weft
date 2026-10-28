@@ -433,11 +433,12 @@ test('POST /messages accepts images, image-only, and rejects over-limit payloads
     const imageGet = await fetch(srv.base + user.images[0].url, {
       headers: { authorization: `Bearer ${discovery.token}` },
     });
-    assert.equal(imageGet.status, 200, await imageGet.text());
+    const imageBytes = Buffer.from(await imageGet.arrayBuffer());
+    assert.equal(imageGet.status, 200, imageBytes.toString('utf8').slice(0, 200));
     assert.equal(imageGet.headers.get('content-type'), 'image/png');
     assert.equal(imageGet.headers.get('cache-control'), 'private, max-age=31536000, immutable');
     assert.ok(imageGet.headers.get('etag'));
-    assert.equal(Buffer.from(await imageGet.arrayBuffer()).toString('base64'), PNG);
+    assert.equal(imageBytes.toString('base64'), PNG);
 
     const missing = await getV2(srv.base, `/api/v2/conversations/${conv.id}/messages/${user.id}/images/9`, discovery.token);
     assert.equal(missing.status, 404, missing.text);
