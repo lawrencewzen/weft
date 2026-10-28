@@ -12,7 +12,7 @@ test.describe.configure({ timeout: 90_000 });
 
 test('Enter steers a running turn; Alt+Enter queues until the turn ends', async ({ page }) => {
   const { root, dirs: [ws] } = await prepareWorkspaces(['steer']);
-  const srv = await startServer({ script: 'slow.json', extraEnv: { WEFT_WORKSPACE_ROOT: root } });
+  const srv = await startServer({ script: 'slow-queue.json', extraEnv: { WEFT_WORKSPACE_ROOT: root } });
   try {
     const { conv } = await openWorkspaceConversation(srv, 'steer', ws);
     await openNextChat(page, srv, conv.id);
@@ -43,7 +43,7 @@ test('Enter steers a running turn; Alt+Enter queues until the turn ends', async 
 
 test('withdraw drops a queued follow-up; edit puts the text back', async ({ page }) => {
   const { root, dirs: [ws] } = await prepareWorkspaces(['withdraw']);
-  const srv = await startServer({ script: 'slow.json', extraEnv: { WEFT_WORKSPACE_ROOT: root } });
+  const srv = await startServer({ script: 'slow-queue.json', extraEnv: { WEFT_WORKSPACE_ROOT: root } });
   try {
     const { conv } = await openWorkspaceConversation(srv, 'withdraw', ws, 'drop');
     await openNextChat(page, srv, conv.id);
@@ -56,11 +56,7 @@ test('withdraw drops a queued follow-up; edit puts the text back', async ({ page
     await expect(page.getByTestId('next-queue-chip')).toContainText('不要执行这条');
     await page.getByTestId('next-queue-dismiss').click();
     await expect(page.getByTestId('next-queue-chip')).toHaveCount(0);
-    await waitRunDone(page);
-    await expect(page.getByTestId('next-item-user').filter({ hasText: '不要执行这条' })).toHaveCount(0);
 
-    await sendNext(page, 'run again');
-    await expect(page.getByTestId('next-stop')).toBeVisible();
     await input.fill('改回去再发');
     await input.press('Alt+Enter');
     await expect(page.getByTestId('next-queue-chip')).toContainText('改回去再发');
@@ -68,6 +64,7 @@ test('withdraw drops a queued follow-up; edit puts the text back', async ({ page
     await expect(page.getByTestId('next-queue-chip')).toHaveCount(0);
     await expect(input).toHaveValue('改回去再发');
     await waitRunDone(page);
+    await expect(page.getByTestId('next-item-user').filter({ hasText: '不要执行这条' })).toHaveCount(0);
     await expect(page.getByTestId('next-item-user').filter({ hasText: '改回去再发' })).toHaveCount(0);
   } finally {
     await srv.kill();
