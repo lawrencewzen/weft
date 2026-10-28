@@ -365,7 +365,11 @@ export function Composer({
   useEffect(() => {
     if (!pastePeekId) return;
     function onDocClick(event: MouseEvent) {
-      if (pastePeekRef.current?.contains(event.target as Node)) {
+      const target = event.target as Element | null;
+      if (
+        pastePeekRef.current?.contains(target as Node) ||
+        target?.closest?.('[data-testid="next-attach-paste"]')
+      ) {
         return;
       }
       setPastePeekId(null);
@@ -813,7 +817,7 @@ export function Composer({
         setError(t(lang, 'paste_too_large'));
         return;
       }
-      const newPaste = createPasteAttachment(text);
+      const newPaste = createPasteAttachment(text, t(lang, 'paste_default_name'));
       setPastes((prev) => [...prev, newPaste]);
     }
   }
@@ -1001,8 +1005,8 @@ export function Composer({
                           <path d="M4 6h16M4 10h16M4 14h10M4 18h7" />
                         </svg>
                       </span>
-                      <span className="composer-tag-name">{item.name}</span>
-                      <span className="composer-tag-size">&middot; {item.lines} 行</span>
+                      <span className="composer-tag-name">{item.name || t(lang, 'paste_default_name')}</span>
+                      <span className="composer-tag-size">{t(lang, 'paste_tag_lines', { n: item.lines })}</span>
                       {isPeekOpen ? (
                         <div
                           ref={pastePeekRef}

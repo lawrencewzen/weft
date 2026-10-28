@@ -234,6 +234,14 @@ test('pastes long text (128 lines), displays paste tag with peek popup, restore,
     await expect(peek).toBeVisible();
     await expect(page.getByTestId('next-paste-peek-head')).toContainText('line 1:');
 
+    // Click tag again: peek closes
+    await pasteTag.click();
+    await expect(page.getByTestId('next-paste-peek')).toHaveCount(0);
+
+    // Re-open peek to test restore
+    await pasteTag.click();
+    await expect(page.getByTestId('next-paste-peek')).toBeVisible();
+
     // Click restore: tag is removed, text is placed back into textarea
     await page.getByTestId('next-paste-peek-restore').click();
     await expect(pasteTag).toHaveCount(0);

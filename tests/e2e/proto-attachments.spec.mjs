@@ -208,6 +208,14 @@ test('prototype long paste folds into tag, peeks, restores, sends, and expands i
   await expect(page.getByTestId('next-paste-peek')).toBeVisible();
   await expect(page.getByTestId('next-paste-peek-head')).toContainText('proto line 1:');
 
+  // Click tag again to close peek
+  await pasteTag.click();
+  await expect(page.getByTestId('next-paste-peek')).toHaveCount(0);
+
+  // Re-open peek to test restore
+  await pasteTag.click();
+  await expect(page.getByTestId('next-paste-peek')).toBeVisible();
+
   // Restore
   await page.getByTestId('next-paste-peek-restore').click();
   await expect(pasteTag).toHaveCount(0);

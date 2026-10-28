@@ -21,6 +21,7 @@ import {
   matchAtTrigger,
   matchProjectPath,
   mediaTypeOfFile,
+  pasteSummaryName,
   readAsBase64,
   recordLocalPastes,
   relativeToWorkspace,
@@ -289,12 +290,18 @@ describe('paste detection and local storage', () => {
     expect(isLongPaste(longChars)).toBe(true);
   });
 
-  it('creates paste attachment with first line summary', () => {
+  it('creates paste attachment with first line summary or custom default name', () => {
     const text = '  function testCode() {\n  return true;\n}';
     const paste = createPasteAttachment(text);
     expect(paste.kind).toBe('paste');
     expect(paste.lines).toBe(3);
     expect(paste.name).toBe('function testCode() {');
+
+    expect(pasteSummaryName(text)).toBe('function testCode() {');
+    expect(pasteSummaryName('   \n  \n', 'Pasted text')).toBe('Pasted text');
+    expect(pasteSummaryName('', '默认文字')).toBe('默认文字');
+    expect(pasteSummaryName('   \n  \n')).toBe('');
+    expect(createPasteAttachment('   \n  \n', 'Pasted text').name).toBe('Pasted text');
   });
 
   it('records and retrieves local pastes', () => {

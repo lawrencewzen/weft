@@ -64,12 +64,13 @@ export function isLongPaste(text: string): boolean {
   return lines >= PASTE_THRESHOLD_LINES || Boolean(text && text.length >= PASTE_THRESHOLD_CHARS);
 }
 
-export function pasteSummaryName(text: string): string {
-  const first = String(text || '').split('\n').find((l) => l.trim()) || '粘贴的文字';
-  return first.trim().slice(0, 28) || '粘贴的文字';
+export function pasteSummaryName(text: string, defaultName = ''): string {
+  const first = String(text || '').split('\n').find((l) => l.trim());
+  const trimmed = first ? first.trim().slice(0, 28) : '';
+  return trimmed || defaultName;
 }
 
-export function createPasteAttachment(text: string): PasteAttachment {
+export function createPasteAttachment(text: string, defaultName = ''): PasteAttachment {
   const lines = pasteLineCount(text);
   return {
     id: newId(),
@@ -77,7 +78,7 @@ export function createPasteAttachment(text: string): PasteAttachment {
     text,
     lines,
     chars: text.length,
-    name: pasteSummaryName(text),
+    name: pasteSummaryName(text, defaultName),
   };
 }
 
