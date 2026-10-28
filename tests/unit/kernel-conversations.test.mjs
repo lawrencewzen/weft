@@ -409,7 +409,7 @@ test('rebaseChangePath keeps files under the main workspace and drops another wo
   assert.equal(rebaseChangePath('secret.txt', '/other-tree', '/ws'), null);
 });
 
-test('rebaseChangePath: converts absolute in workspace to relative and preserves outside workspace', () => {
+test('rebaseChangePath: converts absolute in workspace to relative and preserves outside workspace', { skip: process.platform === 'win32' && 'POSIX 路径，Windows 上由盘符路径用例覆盖' }, () => {
   assert.equal(rebaseChangePath('/ws/data/foo.mjs', '/ws', '/ws'), 'data/foo.mjs');
   assert.equal(rebaseChangePath('/ws/nested/sub/file.txt', '/ws', '/ws'), 'nested/sub/file.txt');
   assert.equal(rebaseChangePath('/Users/lawrence/.config/weft/notes.md', '/ws', '/ws'), '/Users/lawrence/.config/weft/notes.md');
