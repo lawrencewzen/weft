@@ -131,7 +131,7 @@ test('prototype runs from file:// with mock data, no network and no console erro
   await expect(page.getByTestId('next-right-tab-files')).toBeVisible();
   await expect(page.getByTestId('next-right-tab-term')).toBeVisible();
   await page.getByTestId('next-right-tab-term').click();
-  await expect(page.getByTestId('next-term-pane')).toContainText('暂无终端');
+  await expect(page.getByTestId('next-term-pane')).toContainText('还没有命令输出');
   await page.getByTestId('next-right-tab-changes').click();
 
   // The draft workspace chip really retargets the conversation.
