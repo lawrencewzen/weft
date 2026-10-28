@@ -44,7 +44,13 @@ test('prototype runs from file:// with mock data, no network and no console erro
   await expect(page.getByTestId('next-status-git-branch')).toHaveText('main');
   await expect(page.getByTestId('next-status-git-diff')).toContainText('+42');
   await expect(page.locator('.md-table')).toHaveCount(1);
+  await expect(page.locator('.task-list-item')).toHaveCount(3);
+  await expect(page.locator('.task-list-item.is-done')).toHaveCount(2);
   await expect(page.locator('.md-path').first()).toBeVisible();
+  await expect(page.getByTestId('next-change-summary')).toBeVisible();
+  await expect(page.getByTestId('next-change-summary-row')).toHaveCount(2);
+  await expect(page.getByTestId('next-change-summary')).toContainText('web/src/data/store.ts');
+  await expect(page.getByTestId('next-change-summary')).toContainText('+8');
   // Tool groups start collapsed; expanding shows read/search/bash/edit rows.
   await expect(page.getByTestId('next-tool-row').first()).not.toBeVisible();
   await page.getByTestId('next-tool-group-summary').first().click();
@@ -85,6 +91,9 @@ test('prototype runs from file:// with mock data, no network and no console erro
   await page.getByTestId('next-new-chat').click();
   await expect(page).toHaveURL(/#\/w\/ws-weft\/new$/);
   await expect(page.getByTestId('next-draft-hint')).toContainText('weft');
+  await expect(page.getByTestId('next-draft-hero-ws')).toContainText('weft');
+  await expect(page.getByTestId('next-draft-hero-ws')).toHaveCSS('font-size', '28px');
+  await expect(page.getByTestId('next-draft-hint')).toContainText('要在');
   await expect(page.getByTestId('next-ws-chip')).toContainText('weft');
   // The draft workspace chip really retargets the conversation.
   await page.getByTestId('next-ws-chip').click();

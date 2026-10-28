@@ -1,10 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { getPreferredLang } from './data/lang';
-import { readAddressPath, subscribeAddress } from './data/nav';
+import { peekSettingsBehind, readAddressPath, subscribeAddress } from './data/nav';
 import { applyDocumentPrefs, subscribePrefs, watchSystemAppearance } from './data/prefs';
 import { SessionProvider } from './data/session';
 import { t } from './i18n';
-import { parseRoute, type AppRoute } from './route';
+import { parseRoute, viewRouteWhileSettings, type AppRoute } from './route';
 import { AppShell } from './components/AppShell';
 import type { AboutService } from './components/settings/AboutPage';
 
@@ -19,12 +19,11 @@ function usePathname(): string {
 export function App() {
   const pathname = usePathname();
   const parsed = parseRoute(pathname);
-  const [background, setBackground] = useState<AppRoute>({ name: 'home' });
-  useEffect(() => {
-    const next = parseRoute(pathname);
-    if (next.name !== 'settings') setBackground(next);
-  }, [pathname]);
-  const route = parsed.name === 'settings' ? background : parsed;
+  const backgroundRef = useRef<AppRoute | null>(parsed.name === 'settings' ? null : parsed);
+  if (parsed.name !== 'settings') backgroundRef.current = parsed;
+  const route = parsed.name === 'settings'
+    ? viewRouteWhileSettings(backgroundRef.current, peekSettingsBehind())
+    : parsed;
   const settingsPage = parsed.name === 'settings' ? parsed.page : null;
   const [lang, setLang] = useState(getPreferredLang);
   const [ready, setReady] = useState(false);

@@ -41,3 +41,19 @@ export function parseRoute(pathname: string): AppRoute {
   }
   return { name: 'home' };
 }
+
+/**
+ * Settings is an overlay: keep showing the conversation / draft that was open
+ * underneath, including the first paint after `/settings` replaces the path.
+ */
+export function viewRouteWhileSettings(
+  previous: AppRoute | null | undefined,
+  behindPath?: string | null,
+): AppRoute {
+  if (previous && previous.name !== 'home' && previous.name !== 'settings') return previous;
+  if (behindPath) {
+    const behind = parseRoute(behindPath);
+    if (behind.name !== 'settings' && behind.name !== 'home') return behind;
+  }
+  return previous && previous.name !== 'settings' ? previous : { name: 'home' };
+}

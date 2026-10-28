@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseRoute } from './route';
+import { parseRoute, viewRouteWhileSettings } from './route';
 
 describe('parseRoute', () => {
   it('treats / and unknown paths as home', () => {
@@ -40,5 +40,38 @@ describe('parseRoute', () => {
     expect(parseRoute('/settings/skills')).toEqual({ name: 'settings', page: 'skills' });
     expect(parseRoute('/settings/about')).toEqual({ name: 'settings', page: 'about' });
     expect(parseRoute('/settings/nope')).toEqual({ name: 'settings', page: 'general' });
+  });
+});
+
+describe('viewRouteWhileSettings', () => {
+  it('keeps the conversation that was open under the overlay', () => {
+    expect(viewRouteWhileSettings({ name: 'conversation', id: 'c-rich' })).toEqual({
+      name: 'conversation',
+      id: 'c-rich',
+    });
+  });
+
+  it('keeps a draft under the overlay', () => {
+    expect(viewRouteWhileSettings({ name: 'draft', workspaceId: 'ws1' })).toEqual({
+      name: 'draft',
+      workspaceId: 'ws1',
+    });
+  });
+
+  it('falls back to the path remembered before opening settings', () => {
+    expect(viewRouteWhileSettings({ name: 'home' }, '/c/abc')).toEqual({
+      name: 'conversation',
+      id: 'abc',
+    });
+    expect(viewRouteWhileSettings(null, '/w/ws1/new')).toEqual({
+      name: 'draft',
+      workspaceId: 'ws1',
+    });
+  });
+
+  it('does not treat /settings itself as the background', () => {
+    expect(viewRouteWhileSettings({ name: 'settings', page: 'general' }, '/settings/providers')).toEqual({
+      name: 'home',
+    });
   });
 });

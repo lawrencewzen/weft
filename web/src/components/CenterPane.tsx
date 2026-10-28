@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { refreshWorkspaceGit } from '../data/api';
 import type { ResolvedModel } from '../data/composerModel';
 import type { Lang } from '../data/lang';
+import { writeActiveWorkspace } from '../data/layout';
+import { draftPath, navigate } from '../data/nav';
 import { useConversation, useDraftSend } from '../data/useConversation';
 import { usePendingSend, waitingForAgent } from '../data/usePendingSend';
 import { t } from '../i18n';
@@ -61,7 +63,11 @@ export function CenterPane({
   onNewWorkspace,
 }: Props) {
   const isDraft = !cid && Boolean(workspaceId);
-  const { conversation, items, toolsById, missing, actions } = useConversation(cid);
+  const { conversation, items, toolsById, changes, missing, actions } = useConversation(cid);
+  const pickDraftWorkspace = useCallback((id: string) => {
+    writeActiveWorkspace(id);
+    navigate(draftPath(id), { replace: true });
+  }, []);
   // 乐观发送：回车即上屏，服务端按 requestId → entry 收回（草稿页直接跳转，暂不接）
   const optimistic = usePendingSend(items, actions.send, conversation?.sends);
   const shownItems = useMemo(
@@ -113,7 +119,10 @@ export function CenterPane({
           actions={draftActions}
           stickNonce={stickNonce}
           isDraft
+          draftWorkspaceId={workspaceId}
           draftWorkspaceName={workspace?.name || null}
+          onPickWorkspace={pickDraftWorkspace}
+          onNewWorkspace={onNewWorkspace}
         />
         <Composer
           lang={lang}
@@ -157,7 +166,7 @@ export function CenterPane({
         <header className="next-status">
           <div className="next-status-inner">
             <LeftOpenButton lang={lang} onOpen={onOpenLeft} />
-            <p>{t(lang, 'loading')}</p>
+            {cid ? <p>{t(lang, 'loading')}</p> : <h1 className="top-title">{t(lang, 'home_title')}</h1>}
             <div className="top-right"><RightToggle lang={lang} /></div>
           </div>
         </header>
@@ -188,10 +197,12 @@ export function CenterPane({
             running: conversation.run.status === 'running',
             pending: optimistic.sending,
           })}
+          pendingText={conversation.run.pendingText}
           actions={actions}
           stickNonce={stickNonce}
           conversationId={cid}
           conversationModel={conversation.model}
+          changes={changes}
         />
         <Composer
           lang={lang}

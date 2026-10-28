@@ -131,4 +131,25 @@ describe('WorkspaceChip', () => {
     });
     expect(onNew).toHaveBeenCalledTimes(1);
   });
+
+  it('renders the draft hero picker with the same workspace options', async () => {
+    const onPick = vi.fn();
+    await render(createElement(WorkspaceChip, {
+      lang: 'zh',
+      selectedId: 'w1',
+      canSwitch: true,
+      variant: 'hero',
+      onPick,
+      onNew: vi.fn(),
+    }));
+    const trigger = host!.querySelector<HTMLButtonElement>('[data-testid=next-draft-hero-ws]');
+    expect(trigger?.textContent).toContain('alpha');
+    expect(host!.querySelector('[data-testid=next-ws-chip]')).toBeNull();
+    await act(async () => { trigger?.click(); });
+    expect(host!.querySelector('[data-testid=next-draft-hero-menu]')).toBeTruthy();
+    const options = [...host!.querySelectorAll<HTMLButtonElement>('[data-testid=next-ws-chip-option]')];
+    expect(options.map((el) => el.getAttribute('data-id'))).toEqual(['w1', 'w2']);
+    await act(async () => { options[1].click(); });
+    expect(onPick).toHaveBeenCalledWith('w2');
+  });
 });

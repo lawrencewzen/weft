@@ -25,7 +25,36 @@ describe('renderMarkdown', () => {
     expect(html).toContain('class="md-path"');
     expect(html).toContain('data-path="src/app.ts"');
     expect(html).toContain('data-line="12"');
+    expect(html).toContain('class="md-path-line"');
     expect(html).not.toContain('data-action');
     expect(html).toContain('nope');
+  });
+
+  it('renders GFM tables, task lists, and fenced code with a copy control', () => {
+    const html = renderMarkdown([
+      '| A | B |',
+      '| --- | --- |',
+      '| 1 | 2 |',
+      '',
+      '- [x] done',
+      '- [ ] todo',
+      '',
+      '```bash',
+      'npm test',
+      '```',
+    ].join('\n'));
+    expect(html).toContain('class="md-table"');
+    expect(html).toContain('<thead>');
+    expect(html).toContain('class="task-list-item is-done"');
+    expect(html).toContain('class="task-list-item"');
+    expect(html).toMatch(/<input type="checkbox"[^>]*checked/);
+    expect(html).toMatch(/<input type="checkbox"[^>]*>/);
+    expect(html).toContain('>done</span>');
+    expect(html).toContain('>todo</span>');
+    expect(html).toContain('class="code-block-card"');
+    expect(html).toContain('class="code-copy-btn"');
+    expect(html).toContain('>bash<');
+    expect(html).toContain('class="code-line has-prompt"');
+    expect(html).toContain('npm test');
   });
 });
