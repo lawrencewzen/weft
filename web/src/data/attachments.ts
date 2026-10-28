@@ -216,6 +216,36 @@ export function isFileRefInText(text: string, filePath: string): boolean {
   return normalized.includes(` ${token} `);
 }
 
+export function stepAtActiveIndex(
+  currentIndex: number,
+  total: number,
+  direction: 'down' | 'up',
+): number {
+  if (total <= 0) return 0;
+  if (direction === 'down') {
+    return (currentIndex + 1) % total;
+  }
+  return (currentIndex - 1 + total) % total;
+}
+
+export function shouldResetAtActiveIndex(
+  prevQuery: string | null,
+  currentQuery: string | null,
+  isOpening: boolean,
+): boolean {
+  if (isOpening) return true;
+  if (currentQuery === null) return false;
+  return prevQuery !== currentQuery;
+}
+
+export function resolveAtSelection(
+  matchedFiles: readonly string[],
+  activeIndex: number,
+): string | null {
+  if (matchedFiles.length === 0) return null;
+  return matchedFiles[activeIndex] ?? matchedFiles[0] ?? null;
+}
+
 export function fromFileUrl(value: string): string | null {
   const text = String(value || '').trim();
   if (!/^file:/i.test(text)) return null;

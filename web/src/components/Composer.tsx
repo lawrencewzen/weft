@@ -16,8 +16,11 @@ import {
   matchProjectPath,
   pathsFromUriList,
   removeFileRef,
+  resolveAtSelection,
   revokePreview,
+  shouldResetAtActiveIndex,
   splitFilePath,
+  stepAtActiveIndex,
   toMessageImages,
   type ComposerHint,
   type FileRefAttachment,
@@ -177,6 +180,10 @@ export function Composer({
   const [dragging, setDragging] = useState(false);
   const [plusOpen, setPlusOpen] = useState(false);
   const [atActiveIndex, setAtActiveIndex] = useState(0);
+  const atActiveIndexRef = useRef(0);
+  atActiveIndexRef.current = atActiveIndex;
+  const prevQueryRef = useRef<string | null>(null);
+  const prevOpenRef = useRef(false);
   const [atDismissed, setAtDismissed] = useState(false);
   const [treeCache, setTreeCache] = useState<Record<string, { files: string[]; error: boolean }>>({});
   const [cursorPos, setCursorPos] = useState<number | null>(null);
@@ -257,8 +264,19 @@ export function Composer({
   }, [atTrigger, treeError, treeFiles]);
 
   useEffect(() => {
-    setAtActiveIndex(0);
-  }, [atTrigger?.query]);
+    if (atOpen) {
+      const currentQuery = atTrigger?.query ?? '';
+      const isOpening = !prevOpenRef.current;
+      if (shouldResetAtActiveIndex(prevQueryRef.current, currentQuery, isOpening)) {
+        atActiveIndexRef.current = 0;
+        setAtActiveIndex(0);
+      }
+      prevQueryRef.current = currentQuery;
+    } else {
+      prevQueryRef.current = null;
+    }
+    prevOpenRef.current = atOpen;
+  }, [atOpen, atTrigger?.query]);
 
   // Sync file tags with text: if @path is removed or edited in draft, hide the tag
   const visibleFileRefs = useMemo(() => {
@@ -448,36 +466,45 @@ export function Composer({
 
   function onKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
     if (atOpen) {
-      if (event.key === 'Escape') {
+      if (
+        event.key === 'ArrowDown' ||
+        event.key === 'ArrowUp' ||
+        event.key === 'Enter' ||
+        event.key === 'Tab' ||
+        event.key === 'Escape'
+      ) {
         event.preventDefault();
+      }
+      if (event.key === 'Escape') {
         setAtDismissed(true);
         return;
       }
       if (event.key === 'ArrowDown') {
-        event.preventDefault();
         if (matchedFiles.length > 0) {
-          setAtActiveIndex((prev) => (prev + 1) % matchedFiles.length);
+          const next = stepAtActiveIndex(atActiveIndexRef.current, matchedFiles.length, 'down');
+          atActiveIndexRef.current = next;
+          setAtActiveIndex(next);
         }
         return;
       }
       if (event.key === 'ArrowUp') {
-        event.preventDefault();
         if (matchedFiles.length > 0) {
-          setAtActiveIndex((prev) => (prev - 1 + matchedFiles.length) % matchedFiles.length);
+          const next = stepAtActiveIndex(atActiveIndexRef.current, matchedFiles.length, 'up');
+          atActiveIndexRef.current = next;
+          setAtActiveIndex(next);
         }
         return;
       }
       if (event.key === 'Enter' || event.key === 'Tab') {
         if (!event.nativeEvent.isComposing && event.keyCode !== 229) {
-          event.preventDefault();
           if (matchedFiles.length > 0) {
-            const picked = matchedFiles[atActiveIndex] || matchedFiles[0];
+            const picked = resolveAtSelection(matchedFiles, atActiveIndexRef.current);
             if (picked) {
               pickAtFile(picked);
             }
           }
-          return;
         }
+        return;
       }
     }
     if (event.key === 'Escape' && plusOpen) {

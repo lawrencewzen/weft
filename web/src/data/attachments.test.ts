@@ -15,8 +15,11 @@ import {
   mediaTypeOfFile,
   relativeToWorkspace,
   removeFileRef,
+  resolveAtSelection,
   revokePreview,
+  shouldResetAtActiveIndex,
   splitFilePath,
+  stepAtActiveIndex,
   type ImageAttachment,
 } from './attachments';
 
@@ -166,6 +169,51 @@ describe('file reference tokens', () => {
     expect(isFileRefInText('@web/src/store', 'web/src/store.ts')).toBe(false);
     expect(isFileRefInText('my@web/src/store.ts', 'web/src/store.ts')).toBe(false);
     expect(isFileRefInText('plain text without path', 'web/src/store.ts')).toBe(false);
+  });
+
+  it('steps active index with ArrowDown/ArrowUp and wraps around', () => {
+    expect(stepAtActiveIndex(0, 2, 'down')).toBe(1);
+    expect(stepAtActiveIndex(1, 2, 'down')).toBe(0);
+    expect(stepAtActiveIndex(0, 2, 'up')).toBe(1);
+    expect(stepAtActiveIndex(1, 2, 'up')).toBe(0);
+    expect(stepAtActiveIndex(0, 0, 'down')).toBe(0);
+  });
+
+  it('only resets active index on opening or query change, preserving highlight across cursor moves', () => {
+    // When opening fresh -> reset to 0
+    expect(shouldResetAtActiveIndex(null, 'store', true)).toBe(true);
+
+    // While open and query remains unchanged (e.g. cursor moves, arrow keys, selection updates) -> do not reset
+    expect(shouldResetAtActiveIndex('store', 'store', false)).toBe(false);
+
+    // When query actually changes -> reset to 0
+    expect(shouldResetAtActiveIndex('store', 'store.', false)).toBe(true);
+    expect(shouldResetAtActiveIndex('store', '', false)).toBe(true);
+  });
+
+  it('navigates with ArrowDown to second item and selects second item on Enter', () => {
+    const matchedFiles = ['web/src/data/store.ts', 'web/src/data/store.test.ts'];
+    let activeIndex = 0;
+    const initialQuery = 'store';
+
+    // User presses ArrowDown -> active index moves to 1 (second item)
+    activeIndex = stepAtActiveIndex(activeIndex, matchedFiles.length, 'down');
+    expect(activeIndex).toBe(1);
+
+    // Textarea selection/cursor changes occur, but query is still 'store' -> should NOT reset
+    const mustReset = shouldResetAtActiveIndex(initialQuery, 'store', false);
+    expect(mustReset).toBe(false);
+    if (mustReset) activeIndex = 0;
+    expect(activeIndex).toBe(1);
+
+    // User presses Enter -> resolves second item
+    const picked = resolveAtSelection(matchedFiles, activeIndex);
+    expect(picked).toBe('web/src/data/store.test.ts');
+
+    // Applies to text correctly
+    const trigger = { query: 'store', atIndex: 4, cursorIndex: 10 };
+    const applied = applyAtSelection('请查看 @store', picked!, trigger);
+    expect(applied.text).toBe('请查看 @web/src/data/store.test.ts ');
   });
 });
 
