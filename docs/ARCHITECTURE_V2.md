@@ -111,8 +111,9 @@
   - `pathRefs`：`[{ text, path, line? }]`，列出行内代码里在工作区中真实存在的文件路径，各端渲染 Markdown 时把这些变成可点的标签。
 - **ToolCall**：`id, groupId, kind(read|write|edit|ls|grep|bash|other), status(running|failed|interrupted|done), heading{title, detail, fromIntent}, path（相对工作区）, hint{text, failed}, failure(none|probe|real), diff{added, removed}, exitCode, output{preview, truncated, totalLines}`
   - 全文按需拉：`GET /api/v2/tools/<id>/output`。
-- **Subagent**：`id, parentConversationId, conversationId, title, mode(foreground|background), status(waiting|running|stuck|done|stopped|failed), startedAt, lastActivityAt, endedAt, currentAction, progress{step, total}`
+- **Subagent**：`id, parentConversationId, conversationId, title, mode(foreground|background), status(waiting|running|stuck|done|stopped|failed), startedAt, lastActivityAt, endedAt, currentAction, progress{step, total}, toolCallId`
   - `title` 按 title → brief 第一行 → lastText → name 的顺序回退，由服务端算。
+  - `toolCallId` 是派出该子 Agent 的那次 `delegate` / `subagent` 工具调用 id，与对话快照里 `ToolCall.id` 一致；从 roster 里来、找不到对应工具调用时为 `null`。
   - **卡住由服务端判定**：running 状态下超过 `stuckAfterMs` 没有活动，服务端把 status 改成 stuck 并推送 upsert；恢复活动后改回 running。
 - **RunState**：`status, startedAt, pendingText, canSend, canStop, lockedReason, error{code, message, retry{attempt, delayMs}}`
 - **ContextUsage**：`used, window, percent, level(ok|warn|full)`。窗口大小按"手动覆盖 → Provider 默认 → 模型目录 → 环境变量"的顺序由服务端解析。

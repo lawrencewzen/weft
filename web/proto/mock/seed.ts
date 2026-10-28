@@ -131,6 +131,29 @@ function tool(input: Partial<MockTool> & Pick<MockTool, 'id' | 'kind' | 'title'>
   };
 }
 
+function dispatchTool(id: string, title: string): MockTool {
+  return tool({
+    id,
+    kind: 'other',
+    title: hint(title, title),
+    hint: hint('已派出', 'spawned'),
+    preview: title,
+    totalLines: 1,
+    output: title,
+  });
+}
+
+function dispatchToolsOf(threads: Map<string, MockSubThread>, cid: string): Record<string, MockTool> {
+  const out: Record<string, MockTool> = {};
+  for (const thread of threads.values()) {
+    if (thread.view.parentConversationId !== cid) continue;
+    const id = thread.view.toolCallId;
+    if (!id || out[id]) continue;
+    out[id] = dispatchTool(id, thread.view.title || thread.view.name);
+  }
+  return out;
+}
+
 const STORE_READ: MockTool = tool({
   id: 'rich-t1',
   kind: 'read',
@@ -294,6 +317,8 @@ const RICH_ASSISTANT_TWO = [
 ].join('\n');
 
 function richConversation(now: number, threads: Map<string, MockSubThread>): MockConv {
+  const spawnTools = dispatchToolsOf(threads, 'c-rich');
+  const spawnIds = Object.keys(spawnTools);
   const tools: Record<string, MockTool> = {
     [STORE_READ.id]: STORE_READ,
     [STORE_GREP.id]: STORE_GREP,
@@ -301,6 +326,7 @@ function richConversation(now: number, threads: Map<string, MockSubThread>): Moc
     [TEST_RUN.id]: TEST_RUN,
     [STORE_EDIT.id]: STORE_EDIT,
     [EDIT_TEST_RUN.id]: EDIT_TEST_RUN,
+    ...spawnTools,
   };
   const rich = conversation({
     id: 'c-rich',
@@ -346,6 +372,11 @@ function richConversation(now: number, threads: Map<string, MockSubThread>): Moc
         ],
       ),
       assistant('rich-a3', '测试全绿。要不要我把这批改动整理成一条提交信息？'),
+      ...(spawnIds.length ? [group(
+        'rich-g-sa',
+        spawnIds,
+        { zh: `调用了 ${spawnIds.length} 次工具`, en: `called a tool ${spawnIds.length} times` },
+      )] : []),
       ...seedSubagentReports(),
     ],
     changes: [
@@ -479,6 +510,8 @@ function testsConversation(now: number): MockConv {
 }
 
 function docsConversation(now: number, threads: Map<string, MockSubThread>): MockConv {
+  const spawnTools = dispatchToolsOf(threads, 'c-docs');
+  const spawnIds = Object.keys(spawnTools);
   return conversation({
     id: 'c-docs',
     workspaceId: 'ws-weft',
@@ -486,11 +519,17 @@ function docsConversation(now: number, threads: Map<string, MockSubThread>): Moc
     updatedAt: now - 3 * HOUR,
     used: 172_000,
     model: { sourceId: 'demo', modelId: 'grok-code-fast', label: 'Grok Code Fast' },
+    tools: spawnTools,
     subagents: [...threads.values()]
       .filter((thread) => thread.view.parentConversationId === 'c-docs')
       .map((thread) => thread.view),
     items: [
       user('docs-u1', 'docs/ARCHITECTURE_V2.md 里还缺一张主题和事件的关系图。'),
+      ...(spawnIds.length ? [group(
+        'docs-g-sa',
+        spawnIds,
+        { zh: '调用了 1 次工具', en: 'called a tool 1 time' },
+      )] : []),
       assistant(
         'docs-a1',
         [

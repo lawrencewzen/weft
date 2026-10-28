@@ -7576,7 +7576,8 @@
           "lastActivityAt",
           "endedAt",
           "currentAction",
-          "progress"
+          "progress",
+          "toolCallId"
         ],
         "properties": {
           "id": {
@@ -7678,6 +7679,17 @@
                     "type": "number"
                   }
                 }
+              }
+            ]
+          },
+          "toolCallId": {
+            "description": "派出该子 Agent 的那次 delegate / subagent 工具调用 id，与对话快照里 ToolCall.id 一致。从 roster 里来、找不到对应工具调用时为 null",
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "string"
               }
             ]
           }

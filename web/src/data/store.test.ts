@@ -513,6 +513,7 @@ describe('workspace selectors', () => {
       endedAt: null,
       currentAction: 'reading',
       progress: { step: 1, total: 2 },
+      toolCallId: 'call-1',
     };
     store.applySnapshot(snapshot([
       ref('conversation', CID, conv(CID, ['u1'])),

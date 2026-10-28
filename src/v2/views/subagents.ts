@@ -29,6 +29,7 @@ export type SubagentLike = {
   currentAction?: unknown;
   step?: unknown;
   totalSteps?: unknown;
+  toolCallId?: unknown;
 };
 
 export type SubagentViewOpts = {
@@ -125,6 +126,11 @@ function asTs(value: unknown): number | null {
   return null;
 }
 
+function asToolCallId(value: unknown): string | null {
+  if (typeof value === 'string' && value) return value;
+  return null;
+}
+
 function progressOf(agent: SubagentLike | null | undefined): Subagent['progress'] {
   const step = Number(agent?.step);
   const total = Number(agent?.totalSteps);
@@ -164,6 +170,7 @@ export function subagentView(
     endedAt: asTs(agent?.endedAt),
     currentAction,
     progress: progressOf(agent),
+    toolCallId: asToolCallId(agent?.toolCallId),
   };
 }
 

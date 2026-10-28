@@ -149,9 +149,24 @@ test('progress, mode, currentAction, timestamps', () => {
   assert.equal(bare.endedAt, null);
   assert.equal(bare.currentAction, null);
   assert.equal(bare.parentConversationId, 'c1');
+  assert.equal(bare.toolCallId, null);
 
   const bg = subagentView(agent({ mode: 'background' }), { now: NOW });
   assert.equal(bg.mode, 'background');
+});
+
+test('toolCallId copies the spawn id, empty or missing becomes null', () => {
+  const matched = subagentView(agent({ toolCallId: 'call-fg' }), { now: NOW });
+  assertView(matched, 'with-id');
+  assert.equal(matched.toolCallId, 'call-fg');
+
+  const empty = subagentView(agent({ toolCallId: '' }), { now: NOW });
+  assertView(empty, 'empty');
+  assert.equal(empty.toolCallId, null);
+
+  const missing = subagentView(agent({ toolCallId: undefined }), { now: NOW });
+  assertView(missing, 'missing');
+  assert.equal(missing.toolCallId, null);
 });
 
 test('subagentSnapshot builds thread items from child messages without nested reports', async () => {
@@ -168,6 +183,7 @@ test('subagentSnapshot builds thread items from child messages without nested re
   assert.equal(validateSnapshot(snap), true, JSON.stringify(validateSnapshot.errors));
   assert.equal(snap.subagent.title, '巡查仓库');
   assert.equal(snap.subagent.parentConversationId, 'c1');
+  assert.equal(snap.subagent.toolCallId, null);
   assert.deepEqual(snap.items.map((item) => item.kind), ['user', 'assistant']);
   assert.equal(snap.tools.length, 0);
 });

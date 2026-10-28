@@ -522,6 +522,14 @@ function childStatus(busy, aborted, lastText) {
   return 'waiting';
 }
 
+/** First non-empty tool-call id wins, so a later send/wait/stop does not replace spawn. */
+function firstToolCallId(...values) {
+  for (const value of values) {
+    if (typeof value === 'string' && value) return value;
+  }
+  return null;
+}
+
 function takeChild(meta, order, id, patch) {
   if (id == null) return;
   const key = Number(id);
@@ -532,16 +540,18 @@ function takeChild(meta, order, id, patch) {
     mode: patch.mode || prev.mode || 'foreground',
     name: patch.name || prev.name || '',
     title: cleanTitle(patch.title) || prev.title || '',
+    toolCallId: firstToolCallId(prev.toolCallId, patch.toolCallId),
   });
 }
 
-function toolChild(details, mode) {
+function toolChild(details, mode, toolCallId) {
   if (details?.conversationId == null || !mode) return null;
   return {
     conversationId: details.conversationId,
     mode,
     name: details.name,
     title: details.title,
+    toolCallId: firstToolCallId(toolCallId),
   };
 }
 
@@ -578,12 +588,16 @@ export function createSubagentHost({
     for (const entry of parent.entries || []) {
       const result = entry?.model?.[0];
       const mode = result?.toolName === 'subagent' ? 'background' : result?.toolName === 'delegate' ? 'foreground' : null;
-      const found = toolChild(result?.details, mode);
+      const found = toolChild(result?.details, mode, result?.toolCallId);
       if (found) takeChild(meta, order, found.conversationId, found);
     }
     const live = await harness.snapshot(LiveDoc, conv.harnessId, context);
     for (const slot of live?.tools || []) {
-      const found = toolChild(slot.details, slot.name === 'subagent' ? 'background' : 'foreground');
+      const found = toolChild(
+        slot.details,
+        slot.name === 'subagent' ? 'background' : 'foreground',
+        slot.callId,
+      );
       if (found) takeChild(meta, order, found.conversationId, found);
     }
     const roster = await harness.snapshot(Subagents, conv.harnessId, context);
@@ -670,6 +684,7 @@ export function createSubagentHost({
         lastText: stats.lastText,
         mode: entry.mode === 'background' ? 'background' : 'foreground',
         harnessId: entry.conversationId,
+        toolCallId: firstToolCallId(entry.toolCallId),
         ...(title ? { title } : {}),
         ...activityFields(transcript, status),
       });

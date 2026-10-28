@@ -660,6 +660,14 @@ async function execute(db: MockDb, conv: MockConv, hub: MockHub, run: RunHandle,
   let spawnNote = '';
   if (wantsSubagent(text)) {
     const thread = createSubThread(db, conv, SPAWN_TITLE.zh);
+    const dispatchId = thread.view.toolCallId;
+    if (dispatchId && conv.tools[dispatchId]) {
+      const groupId = conversationGroupId(conv, dispatchId);
+      const groupItem = conv.items.find((item) => item.kind === 'tool_group' && item.toolIds.includes(dispatchId));
+      if (groupItem) publishItem(conv, hub, groupItem);
+      publishTool(conv, hub, conv.tools[dispatchId], groupId);
+      publishConversationView(conv, hub);
+    }
     setPending(conv, hub, { zh: '子 Agent 正在跑', en: 'Subagent is running' });
     publishSummary(db, hub, conv.view.id);
     const spawned = await runSubagent(db, conv, hub, thread, run, { fail: wantsFailedSubagent(text) });

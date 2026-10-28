@@ -71,6 +71,7 @@ function agent(input: {
   endedAt?: number | null;
   currentAction?: string | null;
   progress?: Subagent['progress'];
+  toolCallId?: string | null;
 }): Subagent {
   return {
     id: `${input.cid}:sub:${input.agentId}`,
@@ -84,6 +85,7 @@ function agent(input: {
     endedAt: input.endedAt ?? null,
     currentAction: input.currentAction ?? null,
     progress: input.progress ?? null,
+    toolCallId: input.toolCallId ?? null,
   };
 }
 
@@ -116,6 +118,7 @@ export function seedSubThreads(now: number): Map<string, MockSubThread> {
     lastActivityAt: now - 8_000,
     currentAction: '正在读取 `web/src/data/store.ts`',
     progress: { step: 2, total: 4 },
+    toolCallId: 'rich-sa-1',
   });
   out.set(subagentKey(cid, running.id), {
     view: running,
@@ -136,6 +139,7 @@ export function seedSubThreads(now: number): Map<string, MockSubThread> {
     status: 'stuck',
     startedAt: now - 4 * MINUTE,
     lastActivityAt: now - 72_000,
+    toolCallId: 'rich-sa-5',
   });
   out.set(subagentKey(cid, stuck.id), {
     view: stuck,
@@ -156,6 +160,7 @@ export function seedSubThreads(now: number): Map<string, MockSubThread> {
     startedAt: now - 18 * MINUTE,
     lastActivityAt: now - 12 * MINUTE,
     endedAt: now - 12 * MINUTE,
+    toolCallId: 'rich-sa-2',
   });
   out.set(subagentKey(cid, done.id), {
     view: done,
@@ -186,6 +191,7 @@ export function seedSubThreads(now: number): Map<string, MockSubThread> {
     startedAt: now - 9 * MINUTE,
     lastActivityAt: now - 3 * MINUTE,
     currentAction: '等主 Agent 给出字段命名再写',
+    toolCallId: 'rich-sa-3',
   });
   out.set(subagentKey(cid, waiting.id), {
     view: waiting,
@@ -230,6 +236,7 @@ export function seedSubThreads(now: number): Map<string, MockSubThread> {
     startedAt: now - 25 * MINUTE,
     lastActivityAt: now - 22 * MINUTE,
     endedAt: now - 22 * MINUTE,
+    toolCallId: 'rich-sa-4',
   });
   out.set(subagentKey(cid, failed.id), {
     view: failed,
@@ -258,6 +265,7 @@ export function seedSubThreads(now: number): Map<string, MockSubThread> {
       startedAt: now - row.offset - 8 * MINUTE,
       lastActivityAt: now - row.offset,
       endedAt: now - row.offset,
+      toolCallId: 'docs-sa-batch',
     });
     out.set(subagentKey(docsCid, item.id), {
       view: item,
@@ -426,6 +434,7 @@ let ctxReportSeq = 0;
 /** Create a running subagent that belongs to `conv` and publish it. */
 export function createSubThread(db: MockDb, conv: MockConv, title: string): MockSubThread {
   const seq = (db.seq += 1);
+  const toolCallId = `sub-dispatch-${seq}`;
   const view = agent({
     cid: conv.view.id,
     agentId: `run-${seq}`,
@@ -436,7 +445,29 @@ export function createSubThread(db: MockDb, conv: MockConv, title: string): Mock
     lastActivityAt: Date.now(),
     currentAction: '正在读取 `docs/ARCHITECTURE_V2.md`',
     progress: { step: 1, total: 3 },
+    toolCallId,
   });
+  const dispatch = tool({
+    id: toolCallId,
+    kind: 'other',
+    title: hint('subagent', 'subagent'),
+    hint: hint('已派出', 'spawned'),
+    preview: title,
+    totalLines: 1,
+    output: `Started ${view.name}.`,
+  });
+  conv.tools[dispatch.id] = dispatch;
+  const groupRow: MockGroup = {
+    kind: 'tool_group',
+    id: `sub-dispatch-g-${seq}`,
+    toolIds: [dispatch.id],
+    summary: { zh: '调用了 1 次工具', en: 'called a tool 1 time' },
+    failed: 0,
+    running: false,
+    live: false,
+  };
+  conv.items.push(groupRow);
+  conv.view.itemIds.push(groupRow.id);
   const thread: MockSubThread = { view, items: [], tools: {}, run: null };
   conv.subagents.push(view);
   db.subagents.set(subagentKey(conv.view.id, view.id), thread);
