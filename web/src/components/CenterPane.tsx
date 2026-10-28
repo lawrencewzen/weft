@@ -4,6 +4,7 @@ import type { ResolvedModel } from '../data/composerModel';
 import type { Lang } from '../data/lang';
 import { writeActiveWorkspace } from '../data/layout';
 import { draftPath, navigate } from '../data/nav';
+import { useSession } from '../data/session';
 import { useConversation, useDraftSend } from '../data/useConversation';
 import { usePendingSend, waitingForAgent } from '../data/usePendingSend';
 import { t } from '../i18n';
@@ -60,7 +61,28 @@ export function CenterPane({
   onNewWorkspace,
 }: Props) {
   const isDraft = !cid && Boolean(workspaceId);
+  const { store } = useSession();
   const { conversation, items, toolsById, changes, missing, actions } = useConversation(cid);
+  const [showDelayedLoading, setShowDelayedLoading] = useState(false);
+
+  useEffect(() => {
+    if (conversation) {
+      setShowDelayedLoading(false);
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      setShowDelayedLoading(true);
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [conversation, cid]);
+
+  const summary = useMemo(
+    () => (cid ? store.conversationSummaries().find((s) => s.id === cid) : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- store version tracked in useConversation
+    [store, cid, conversation],
+  );
+  const knownTitle = summary?.title || t(lang, 'default_conversation_title');
+
   const pickDraftWorkspace = useCallback((id: string) => {
     writeActiveWorkspace(id);
     navigate(draftPath(id), { replace: true });
@@ -152,15 +174,24 @@ export function CenterPane({
   if (!conversation) {
     return (
       <main className="col-center" data-testid="next-center">
-        <header className="next-status">
+        <header className="next-status" data-testid="next-status">
           <div className="next-status-inner">
             <div className="top-heading">
               <LeftOpenButton lang={lang} onOpen={onOpenLeft} />
-              {cid ? <p>{t(lang, 'loading')}</p> : <h1 className="top-title" style={{ color: 'var(--faint)' }}>{t(lang, 'home_title')}</h1>}
+              {cid ? (
+                <span className="top-title">{knownTitle}</span>
+              ) : (
+                <h1 className="top-title" style={{ color: 'var(--faint)' }}>{t(lang, 'home_title')}</h1>
+              )}
             </div>
             <div className="top-right"><RightToggle lang={lang} /></div>
           </div>
         </header>
+        {cid && showDelayedLoading ? (
+          <div className="thread-empty">
+            <p className="thread-empty-lead">{t(lang, 'loading')}</p>
+          </div>
+        ) : null}
       </main>
     );
   }

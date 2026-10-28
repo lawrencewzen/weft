@@ -175,11 +175,19 @@ export type EntityStore = {
   getVersion(): number;
 };
 
-export function createEntityStore(): EntityStore {
+export type StoreOptions = {
+  maxRetainedTopics?: number;
+};
+
+export const DEFAULT_MAX_RETAINED_TOPICS = 8;
+
+export function createEntityStore(options?: StoreOptions): EntityStore {
+  const maxRetainedTopics = options?.maxRetainedTopics ?? DEFAULT_MAX_RETAINED_TOPICS;
   const entities = new Map<string, StoredEntity>();
   const byEntityId = new Map<string, StoredEntity>();
   const missing = new Set<string>();
   const seenTopics = new Set<string>();
+  const retainedUnsubscribedTopics = new Map<string, true>();
   const staleItems = new Set<string>();
   const toolLives = new Map<string, ToolLive>();
   const listeners = new Set<Listener>();
@@ -265,12 +273,20 @@ export function createEntityStore(): EntityStore {
     return byEntityId.get(entityIdKey('tool', toolId));
   }
 
+  function touchRetained(topic: string): void {
+    if (retainedUnsubscribedTopics.has(topic)) {
+      retainedUnsubscribedTopics.delete(topic);
+      retainedUnsubscribedTopics.set(topic, true);
+    }
+  }
+
   return {
     applySnapshot(event) {
       const topics = Array.isArray(event.topics) ? event.topics : [];
       for (const topic of topics) {
         dropTopic(topic);
         seenTopics.add(topic);
+        retainedUnsubscribedTopics.delete(topic);
       }
       const listedMissing = new Set(event.missing || []);
       for (const topic of topics) {
@@ -288,6 +304,7 @@ export function createEntityStore(): EntityStore {
     },
 
     applyUpsert(event) {
+      if (event.topic && retainedUnsubscribedTopics.has(event.topic)) return;
       const value = asRecord(event.value);
       if (!value || !event.topic || !event.entity || !event.id) return;
       put({ topic: event.topic, entity: event.entity, id: event.id, value });
@@ -296,6 +313,7 @@ export function createEntityStore(): EntityStore {
     },
 
     applyRemove(event) {
+      if (event.topic && retainedUnsubscribedTopics.has(event.topic)) return;
       if (!event.topic || !event.entity || !event.id) return;
       const rec = get(event.topic, event.entity, event.id);
       if (!rec) return;
@@ -304,6 +322,7 @@ export function createEntityStore(): EntityStore {
     },
 
     applyTextDelta(event) {
+      if (event.topic && retainedUnsubscribedTopics.has(event.topic)) return;
       const rec = findItem(event.topic, event.itemId);
       if (!rec) return;
       if (staleItems.has(rec.id)) return;
@@ -327,6 +346,7 @@ export function createEntityStore(): EntityStore {
     },
 
     applyToolDelta(event) {
+      if (event.topic && retainedUnsubscribedTopics.has(event.topic)) return;
       const toolId = event.toolId;
       if (!toolId) return;
       let live = toolLives.get(toolId);
@@ -353,12 +373,14 @@ export function createEntityStore(): EntityStore {
     },
 
     conversation(cid) {
+      touchRetained(conversationTopic(cid));
       const rec = get(conversationTopic(cid), 'conversation', cid)
         ?? byEntityId.get(entityIdKey('conversation', cid));
       return rec?.value as ConversationView | undefined;
     },
 
     items(cid) {
+      touchRetained(conversationTopic(cid));
       const convRec = get(conversationTopic(cid), 'conversation', cid)
         ?? byEntityId.get(entityIdKey('conversation', cid));
       const conv = convRec?.value as ConversationView | undefined;
@@ -378,6 +400,7 @@ export function createEntityStore(): EntityStore {
     },
 
     toolsById(cid) {
+      touchRetained(conversationTopic(cid));
       const topic = conversationTopic(cid);
       const out: Record<string, ToolCall> = {};
       for (const rec of entities.values()) {
@@ -389,6 +412,7 @@ export function createEntityStore(): EntityStore {
     },
 
     changes(cid) {
+      touchRetained(conversationTopic(cid));
       const topic = conversationTopic(cid);
       const out: Change[] = [];
       for (const rec of entities.values()) {
@@ -485,6 +509,7 @@ export function createEntityStore(): EntityStore {
     },
 
     subagents(cid) {
+      touchRetained(conversationTopic(cid));
       const topic = conversationTopic(cid);
       const out: Subagent[] = [];
       for (const rec of entities.values()) {
@@ -496,6 +521,8 @@ export function createEntityStore(): EntityStore {
     },
 
     subagent(cid, agentId) {
+      touchRetained(subagentTopic(cid, agentId));
+      touchRetained(conversationTopic(cid));
       const dedicated = get(subagentTopic(cid, agentId), 'subagent', agentId);
       if (dedicated) return dedicated.value as unknown as Subagent;
       const fromConv = get(conversationTopic(cid), 'subagent', agentId);
@@ -504,6 +531,7 @@ export function createEntityStore(): EntityStore {
     },
 
     topicItems(topic) {
+      touchRetained(topic);
       const out: ThreadItem[] = [];
       for (const rec of entities.values()) {
         if (rec.topic === topic && rec.entity === 'item') {
@@ -514,6 +542,7 @@ export function createEntityStore(): EntityStore {
     },
 
     toolsByTopic(topic) {
+      touchRetained(topic);
       const out: Record<string, ToolCall> = {};
       for (const rec of entities.values()) {
         if (rec.topic === topic && rec.entity === 'tool') {
@@ -524,6 +553,7 @@ export function createEntityStore(): EntityStore {
     },
 
     lastAssistantText(topic) {
+      touchRetained(topic);
       const items = [] as ThreadItem[];
       for (const rec of entities.values()) {
         if (rec.topic === topic && rec.entity === 'item') {
@@ -543,13 +573,29 @@ export function createEntityStore(): EntityStore {
     retainTopics(keep) {
       const keepSet = new Set(keep);
       let dropped = false;
-      for (const topic of [...seenTopics]) {
-        if (keepSet.has(topic)) continue;
-        dropTopic(topic);
-        seenTopics.delete(topic);
-        missing.delete(topic);
+
+      for (const topic of keep) {
+        retainedUnsubscribedTopics.delete(topic);
+      }
+
+      for (const topic of seenTopics) {
+        if (!keepSet.has(topic)) {
+          if (!retainedUnsubscribedTopics.has(topic)) {
+            retainedUnsubscribedTopics.set(topic, true);
+          }
+        }
+      }
+
+      while (retainedUnsubscribedTopics.size > maxRetainedTopics) {
+        const oldestTopic = retainedUnsubscribedTopics.keys().next().value;
+        if (!oldestTopic) break;
+        retainedUnsubscribedTopics.delete(oldestTopic);
+        dropTopic(oldestTopic);
+        seenTopics.delete(oldestTopic);
+        missing.delete(oldestTopic);
         dropped = true;
       }
+
       if (dropped) notify();
     },
 

@@ -1,6 +1,8 @@
+import fs from 'node:fs/promises';
+import path from 'node:path';
 import { test, expect } from '@playwright/test';
 import { api, prepareWorkspaces, startServer } from './helpers/server.mjs';
-import { loginNext } from './helpers/next.mjs';
+import { loginNext, sendNext, waitRunDone } from './helpers/next.mjs';
 
 test.use({ locale: 'zh-CN', viewport: { width: 1440, height: 900 } });
 test.describe.configure({ timeout: 90_000 });
@@ -487,6 +489,121 @@ test('archived conversations section is fixed at bottom above footer, collapsed 
     // Clicking again toggles collapsed
     await toggle.click();
     await expect(page.getByTestId('next-archived-list')).toHaveCount(0);
+  } finally {
+    await srv.kill();
+  }
+});
+
+test('switching between conversations never flashes loading or empty thread, subagent tree never flashes loading', async ({ page }) => {
+  const HOLD = 'hold-worker-task';
+  const prepared = await prepareWorkspaces(['repo']);
+  const scriptFile = path.join(prepared.root, 'sidebar-switch-script.json');
+  await fs.writeFile(
+    scriptFile,
+    JSON.stringify({
+      turns: [
+        { tool: 'subagent', args: { action: 'spawn', name: 'worker', message: HOLD } },
+        { text: 'parent-done' },
+        { when: HOLD, delayMs: 60000, text: 'child-idle' },
+      ],
+    }),
+  );
+
+  const srv = await startServer({
+    extraEnv: {
+      WEFT_WORKSPACE_ROOT: prepared.root,
+      WEFT_FAUX_SCRIPT: scriptFile,
+    },
+  });
+
+  try {
+    const ws = await createWorkspace(srv, 'repo', prepared.dirs[0]);
+    const conv1 = await createConversation(srv, ws.id, 'conv-with-subagent');
+    const conv2 = await createConversation(srv, ws.id, 'conv-plain');
+
+    await loginNext(page, srv);
+    await waitSidebar(page);
+
+    // Visit conv1, send message to trigger faux script that spawns subagent
+    await page.goto(`${srv.url}/c/${encodeURIComponent(conv1.id)}`);
+    await expect(page.getByTestId('next-composer-input')).toBeVisible();
+    await sendNext(page, 'spawn subagent');
+    await waitRunDone(page);
+
+    // Wait for subagent row and message to appear in conv1
+    const tree1 = page.locator(`[data-testid=next-subagent-tree][data-conv-id="${conv1.id}"]`);
+    await expect(tree1).toBeVisible({ timeout: 20000 });
+    await expect(tree1).toHaveClass(/is-open/);
+    await expect(page.locator('.msg-group')).not.toHaveCount(0);
+
+    // Visit conv2, send message so conv2 also has messages
+    await convRow(page, conv2.id).click();
+    await expect(page).toHaveURL(new RegExp(`/c/${conv2.id}$`));
+    await expect(page.getByTestId('next-composer-input')).toBeVisible();
+    await sendNext(page, 'hello plain');
+    await waitRunDone(page);
+    await expect(page.locator('.msg-group')).not.toHaveCount(0);
+
+    // Both conv1 and conv2 have now been visited and have messages.
+    // Ensure conv1's subagent tree is open
+    await expect(tree1).toHaveClass(/is-open/);
+
+    // Start requestAnimationFrame continuous sampling
+    await page.evaluate(({ c1, c2 }) => {
+      window.__frameViolations = [];
+      window.__frameSampleCount = 0;
+      window.__samplingActive = true;
+      function check() {
+        if (!window.__samplingActive) return;
+        window.__frameSampleCount += 1;
+
+        // 1. Top bar: never shows "加载中" or "Loading"
+        const topHeading = document.querySelector('.top-heading');
+        if (topHeading) {
+          const text = topHeading.textContent || '';
+          if (/加载中|Loading/i.test(text)) {
+            window.__frameViolations.push(`top heading showed loading: "${text}"`);
+          }
+        }
+
+        // 2. .subagent-tree-loading never appears
+        if (document.querySelector('.subagent-tree-loading')) {
+          window.__frameViolations.push('.subagent-tree-loading element was present in DOM');
+        }
+
+        // 3. Middle pane message count: when on viewed conversations (c1 or c2), count is never 0
+        const path = location.pathname || '';
+        if (path.includes(c1) || path.includes(c2)) {
+          const msgCount = document.querySelectorAll('.msg-group').length;
+          if (msgCount === 0) {
+            window.__frameViolations.push(`center pane message count was 0 while on ${path}`);
+          }
+        }
+
+        requestAnimationFrame(check);
+      }
+      requestAnimationFrame(check);
+    }, { c1: conv1.id, c2: conv2.id });
+
+    // Switch back and forth between conv1 and conv2 3 times
+    for (let i = 0; i < 3; i++) {
+      await convRow(page, conv1.id).click();
+      await expect(page).toHaveURL(new RegExp(`/c/${conv1.id}$`));
+      await convRow(page, conv2.id).click();
+      await expect(page).toHaveURL(new RegExp(`/c/${conv2.id}$`));
+    }
+
+    // Stop sampling and verify
+    const { violations, sampleCount } = await page.evaluate(() => {
+      window.__samplingActive = false;
+      return {
+        violations: window.__frameViolations || [],
+        sampleCount: window.__frameSampleCount || 0,
+      };
+    });
+
+    expect(sampleCount).toBeGreaterThan(10);
+    expect(violations).toEqual([]);
   } finally {
     await srv.kill();
   }

@@ -144,6 +144,7 @@ test('prototype @ file popup, filter, keyboard/mouse pick, escape, and tag sync'
   await draftInput.focus();
   await draftInput.pressSequentially('@pack');
   await expect(page.getByTestId('next-composer-at-menu')).toBeVisible();
+  await expect(page.getByTestId('next-composer-at-item').first()).toContainText('package.json');
   await draftInput.press('Enter');
   await expect(draftInput).toHaveValue('@package.json ');
   await expect(page.getByTestId('next-attach-file')).toContainText('package.json');

@@ -498,7 +498,7 @@ describe('workspace selectors', () => {
     ]);
   });
 
-  it('lists subagents on a conversation topic and drops unsubscribed topics', () => {
+  it('lists subagents on a conversation topic and retains unsubscribed topics in cache', () => {
     const store = createEntityStore();
     const other = conversationTopic('c2');
     const agent: Subagent = {
@@ -527,8 +527,8 @@ describe('workspace selectors', () => {
     expect(store.lastAssistantText(other)).toBe('child out');
 
     store.retainTopics([TOPIC]);
-    expect(store.hasTopic(other)).toBe(false);
-    expect(store.items('c2')).toEqual([]);
+    expect(store.hasTopic(other)).toBe(true);
+    expect(store.items('c2')).toHaveLength(1);
     expect(store.subagents(CID)).toHaveLength(1);
   });
 
@@ -684,5 +684,137 @@ describe('workspace selectors', () => {
     expect(store.gitConnections().map((item) => item.id)).toEqual(['g1']);
     store.applyRemove({ topic: EXTENSIONS_TOPIC, entity: 'git_connection', id: 'g1' });
     expect(store.gitConnections()).toEqual([]);
+  });
+
+  describe('retained topic cache (LRU)', () => {
+    it('leaves topic data readable when unsubscribed within limit', () => {
+      const store = createEntityStore({ maxRetainedTopics: 2 });
+      const c1Topic = conversationTopic('c1');
+      store.applySnapshot(snapshot([
+        ref('conversation', 'c1', conv('c1', ['m1']), c1Topic),
+        ref('item', 'm1', user('m1', 'hello c1'), c1Topic),
+      ], { topics: [c1Topic] }));
+
+      expect(store.hasTopic(c1Topic)).toBe(true);
+      expect(store.items('c1')).toHaveLength(1);
+      expect(store.conversation('c1')?.id).toBe('c1');
+
+      // Unsubscribe c1
+      store.retainTopics([WORKSPACES_TOPIC]);
+
+      // c1 is not in keep, but retained in cache: data can still be read
+      expect(store.hasTopic(c1Topic)).toBe(true);
+      expect(store.conversation('c1')?.id).toBe('c1');
+      expect(store.items('c1')).toHaveLength(1);
+      expect((store.items('c1')[0] as { text?: string }).text).toBe('hello c1');
+    });
+
+    it('ignores deltas, upserts, and removes for retained unsubscribed topics', () => {
+      const store = createEntityStore({ maxRetainedTopics: 2 });
+      const c1Topic = conversationTopic('c1');
+      store.applySnapshot(snapshot([
+        ref('conversation', 'c1', conv('c1', ['m1']), c1Topic),
+        ref('item', 'm1', assistant('m1', 'initial text'), c1Topic),
+      ], { topics: [c1Topic] }));
+
+      // Unsubscribe c1
+      store.retainTopics([WORKSPACES_TOPIC]);
+
+      // Attempt to append delta to retained unsubscribed topic
+      store.applyTextDelta({
+        topic: c1Topic,
+        itemId: 'm1',
+        offset: 'initial text'.length,
+        append: ' more',
+      });
+      expect((store.items('c1')[0] as { text?: string }).text).toBe('initial text');
+
+      // Attempt to upsert onto retained unsubscribed topic
+      store.applyUpsert({
+        topic: c1Topic,
+        entity: 'item',
+        id: 'm2',
+        value: user('m2', 'new') as EntityRef['value'],
+      });
+      expect(store.items('c1')).toHaveLength(1);
+
+      // Attempt to remove from retained unsubscribed topic
+      store.applyRemove({
+        topic: c1Topic,
+        entity: 'item',
+        id: 'm1',
+      });
+      expect(store.items('c1')).toHaveLength(1);
+    });
+
+    it('evicts the oldest topic in LRU order when exceeding maxRetainedTopics limit', () => {
+      const store = createEntityStore({ maxRetainedTopics: 2 });
+      const t1 = conversationTopic('c1');
+      const t2 = conversationTopic('c2');
+      const t3 = conversationTopic('c3');
+
+      // Snapshot for c1 and c2
+      store.applySnapshot(snapshot([
+        ref('conversation', 'c1', conv('c1', ['m1']), t1),
+        ref('item', 'm1', user('m1', 'msg1'), t1),
+        ref('conversation', 'c2', conv('c2', ['m2']), t2),
+        ref('item', 'm2', user('m2', 'msg2'), t2),
+      ], { topics: [t1, t2] }));
+
+      // Both c1 and c2 become unsubscribed
+      store.retainTopics([WORKSPACES_TOPIC]);
+      expect(store.hasTopic(t1)).toBe(true);
+      expect(store.hasTopic(t2)).toBe(true);
+
+      // Touch c1 by reading its items (makes c1 MRU, c2 LRU)
+      expect(store.items('c1')).toHaveLength(1);
+
+      // Now introduce a 3rd topic c3
+      store.applySnapshot(snapshot([
+        ref('conversation', 'c3', conv('c3', ['m3']), t3),
+        ref('item', 'm3', user('m3', 'msg3'), t3),
+      ], { topics: [t3] }));
+
+      // Unsubscribe c3 as well: now unsubscribed count would be 3 > 2
+      // c2 was the oldest/LRU, so c2 should be evicted!
+      store.retainTopics([WORKSPACES_TOPIC]);
+
+      expect(store.hasTopic(t2)).toBe(false);
+      expect(store.items('c2')).toEqual([]);
+      expect(store.conversation('c2')).toBeUndefined();
+
+      // c1 and c3 are still retained
+      expect(store.hasTopic(t1)).toBe(true);
+      expect(store.items('c1')).toHaveLength(1);
+      expect(store.hasTopic(t3)).toBe(true);
+      expect(store.items('c3')).toHaveLength(1);
+    });
+
+    it('replaces old cached data synchronously when a new snapshot arrives', () => {
+      const store = createEntityStore({ maxRetainedTopics: 2 });
+      const c1Topic = conversationTopic('c1');
+
+      // Initial snapshot
+      store.applySnapshot(snapshot([
+        ref('conversation', 'c1', conv('c1', ['m1']), c1Topic),
+        ref('item', 'm1', user('m1', 'original message'), c1Topic),
+      ], { topics: [c1Topic] }));
+
+      // Unsubscribe c1
+      store.retainTopics([WORKSPACES_TOPIC]);
+      expect((store.items('c1')[0] as { text?: string }).text).toBe('original message');
+
+      // Re-subscribe c1 and apply fresh snapshot with updated messages
+      store.retainTopics([c1Topic]);
+      store.applySnapshot(snapshot([
+        ref('conversation', 'c1', conv('c1', ['m1', 'm2']), c1Topic),
+        ref('item', 'm1', user('m1', 'original message'), c1Topic),
+        ref('item', 'm2', assistant('m2', 'new response'), c1Topic),
+      ], { topics: [c1Topic] }));
+
+      expect(store.hasTopic(c1Topic)).toBe(true);
+      expect(store.items('c1')).toHaveLength(2);
+      expect((store.items('c1')[1] as { text?: string }).text).toBe('new response');
+    });
   });
 });
