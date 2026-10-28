@@ -402,6 +402,10 @@ html[data-theme$="-dark"] .ns-ws-dialog {
   color: currentColor;
 }
 .brand-icon img { width: 100%; height: 100%; object-fit: contain; display: block; }
+[data-theme$="-dark"] .brand-icon:not(.is-color) img,
+[data-theme$="-dark"] .brand-icon.is-mono img {
+  filter: invert(1);
+}
 .brand-icon-cube { width: 100%; height: 100%; fill: none; stroke: currentColor; stroke-width: 1.2; }
 
 .ns-default {

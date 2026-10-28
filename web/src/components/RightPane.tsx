@@ -38,11 +38,10 @@ export function RightPane({ lang, workspaceLabel }: Props) {
     [store, conversationId, agents, storeVersion],
   );
   const runningCount = commands.filter((row) => row.running).length;
-  const showTermTab = commands.length > 0;
   const showSubagentsTab = agents.length > 0 || Boolean(selectedSubagentId);
   const effectiveTab: RightTab = tab === 'subagents' && showSubagentsTab
     ? 'subagents'
-    : tab === 'term' && showTermTab
+    : tab === 'term'
       ? 'term'
       : tab === 'files'
         ? 'files'
@@ -117,18 +116,16 @@ export function RightPane({ lang, workspaceLabel }: Props) {
           >
             <span>{t(lang, 'tab_file')}</span>
           </button>
-          {showTermTab ? (
-            <button
-              type="button"
-              className={`tab-btn${effectiveTab === 'term' ? ' active' : ''}`}
-              data-testid="next-right-tab-term"
-              title={t(lang, 'tab_term_title')}
-              onClick={() => setTab('term')}
-            >
-              <span>{t(lang, 'tab_term')}</span>
-              {runningCount > 0 ? <span className="tab-count">{runningCount}</span> : null}
-            </button>
-          ) : null}
+          <button
+            type="button"
+            className={`tab-btn${effectiveTab === 'term' ? ' active' : ''}`}
+            data-testid="next-right-tab-term"
+            title={t(lang, 'tab_term_title')}
+            onClick={() => setTab('term')}
+          >
+            <span>{t(lang, 'tab_term')}</span>
+            {runningCount > 0 ? <span className="tab-count">{runningCount}</span> : null}
+          </button>
           {showSubagentsTab ? (
             <button
               type="button"

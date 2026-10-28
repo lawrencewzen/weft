@@ -175,6 +175,25 @@ const BRAND_ICON_FILE: Record<string, string> = {
   claude: 'anthropic',
 };
 
+const BAKED_COLOR_BRANDS = new Set([
+  'amdradeoncloud',
+  'cogvideo',
+  'cogview',
+  'crewai-brand',
+  'crusoe',
+  'cybercut',
+  'lobehub',
+  'openclaw',
+  'poolside',
+  'rwkv',
+]);
+
+export function isColorBrand(brand: string | null | undefined): boolean {
+  if (!brand) return false;
+  const lower = brand.trim().toLowerCase();
+  return lower.endsWith('-color') || BAKED_COLOR_BRANDS.has(lower);
+}
+
 export function brandIconUrl(brand: string | null | undefined): string | null {
   const id = typeof brand === 'string' ? brand.trim() : '';
   if (!id) return null;

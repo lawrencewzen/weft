@@ -542,16 +542,16 @@ export function Sidebar({
         ) : null}
       </div>
       <div className="left-footer">
-        <button
-          type="button"
-          className="foot-link"
-          data-testid="next-open-settings"
-          title={t(lang, 'settings_title')}
-          onClick={() => openSettings('general')}
-        >
-          {t(lang, 'settings_short')}
-        </button>
-        <span className="foot-right">
+        <span className="foot-left">
+          <button
+            type="button"
+            className="foot-link"
+            data-testid="next-open-settings"
+            title={t(lang, 'settings_title')}
+            onClick={() => openSettings('general')}
+          >
+            {t(lang, 'settings_short')}
+          </button>
           <span
             className={`foot-status-dot${serviceOk ? ' is-ok' : ''}`}
             data-testid="next-service-dot"
@@ -559,6 +559,8 @@ export function Sidebar({
             title={t(lang, serviceOk ? 'service_ok' : 'service_reconnecting')}
             aria-label={t(lang, serviceOk ? 'service_ok' : 'service_reconnecting')}
           />
+        </span>
+        <span className="foot-right">
           <button
             type="button"
             className="foot-appearance"
