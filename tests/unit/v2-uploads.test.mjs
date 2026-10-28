@@ -4,7 +4,7 @@ import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { PROTOCOL_VERSION } from '../../src/v2/version.ts';
 import { matchContractPath, validateResponse } from '../../src/v2/validate.ts';
-import { UPLOAD_MAX_BYTES } from '../../src/v2/views/uploads.ts';
+import { sanitizeUploadName, UPLOAD_MAX_BYTES } from '../../src/v2/views/uploads.ts';
 import { readDiscovery, request, startServer, stopServer } from './_server.mjs';
 
 const TOKEN = 'v2-uploads-token';
@@ -64,6 +64,15 @@ async function waitV2(base, id, token, ready, timeoutMs = 35000) {
   }
   throw new Error(`v2 snapshot did not match: ${JSON.stringify(last?.body)}`);
 }
+
+test('sanitizeUploadName replaces Windows-forbidden chars and prefixes reserved device names', () => {
+  assert.equal(sanitizeUploadName('a:b.txt'), 'a_b.txt');
+  assert.equal(sanitizeUploadName('what?.md'), 'what_.md');
+  assert.equal(sanitizeUploadName('CON'), '_CON');
+  assert.equal(sanitizeUploadName('nul.txt'), '_nul.txt');
+  assert.equal(sanitizeUploadName('Com1.log'), '_Com1.log');
+  assert.equal(sanitizeUploadName('说明文档.txt'), '说明文档.txt');
+});
 
 test('contract path templates cover upload and paste routes', () => {
   assert.equal(

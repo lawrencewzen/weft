@@ -127,6 +127,17 @@ test('parseUserMessageParts keeps body text and paste/file metadata without past
   assert.equal(JSON.stringify({ text: parts.text, pastes: parts.pastes, files: parts.files }).includes(long), false);
 });
 
+test('parseUserMessageParts keeps a paste whose body contains a closing tag line', () => {
+  const original = 'before\n</pasted_text>\nafter';
+  const content = assembleUserContent('正文', [], { pastes: [original] });
+  const parts = parseUserMessageParts(content);
+  assert.equal(parts.text, '正文');
+  assert.equal(parts.pastes.length, 1);
+  assert.deepEqual(extractPasteTexts(content), [original]);
+  assert.equal(parts.pastes[0].lines, 3);
+  assert.equal(parts.pastes[0].chars, original.length);
+});
+
 test('parseSendFiles and parseSendPastes enforce count and size', () => {
   assert.deepEqual(parseSendFiles(null), { ok: true, files: [] });
   assert.equal(parseSendFiles({}).ok, false);

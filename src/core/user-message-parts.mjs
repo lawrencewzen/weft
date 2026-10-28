@@ -124,6 +124,21 @@ export function isWeftUploadRel(rel) {
   return parts.length >= 2;
 }
 
+const WIN_BAD_CHARS = new Set(['<', '>', ':', '"', '|', '?', '*']);
+const WIN_RESERVED = new Set([
+  'CON', 'PRN', 'AUX', 'NUL',
+  'COM1', 'COM2', 'COM3', 'COM4', 'COM5', 'COM6', 'COM7', 'COM8', 'COM9',
+  'LPT1', 'LPT2', 'LPT3', 'LPT4', 'LPT5', 'LPT6', 'LPT7', 'LPT8', 'LPT9',
+]);
+
+function isWinReservedDeviceName(name) {
+  const upper = name.toUpperCase();
+  if (WIN_RESERVED.has(upper)) return true;
+  const dot = name.indexOf('.');
+  if (dot <= 0) return false;
+  return WIN_RESERVED.has(upper.slice(0, dot));
+}
+
 export function sanitizeUploadName(raw) {
   const s = String(raw ?? '');
   let start = 0;
@@ -135,10 +150,11 @@ export function sanitizeUploadName(raw) {
     const code = ch.codePointAt(0) ?? 0;
     if (code <= 31 || code === 127) continue;
     if (ch === '/' || ch === '\\') continue;
-    out += ch;
+    out += WIN_BAD_CHARS.has(ch) ? '_' : ch;
   }
   out = out.replace(/^[.\s]+/, '').replace(/[.\s]+$/, '');
   if (!out || out === '.' || out === '..') return 'file';
+  if (isWinReservedDeviceName(out)) out = `_${out}`;
   if (out.length > UPLOAD_NAME_MAX) out = out.slice(0, UPLOAD_NAME_MAX);
   if (!out || out === '.' || out === '..') return 'file';
   return out;
@@ -149,34 +165,6 @@ export function mediaTypeFromName(name) {
   const dot = base.lastIndexOf('.');
   if (dot <= 0) return 'application/octet-stream';
   return MIME_BY_EXT.get(base.slice(dot)) || 'application/octet-stream';
-}
-
-const SPECIAL_BLOCK_RE = /<pasted_text lines="\d+">\n[\s\S]*?\n<\/pasted_text>|<attached_files>\n[\s\S]*?\n<\/attached_files>/g;
-
-function splitSpecialBlocks(raw) {
-  const text = String(raw ?? '');
-  const pieces = [];
-  SPECIAL_BLOCK_RE.lastIndex = 0;
-  let last = 0;
-  let match;
-  while ((match = SPECIAL_BLOCK_RE.exec(text))) {
-    if (match.index > last) {
-      pieces.push({ kind: 'text', text: text.slice(last, match.index) });
-    }
-    const chunk = match[0];
-    const paste = parsePasteBlock(chunk);
-    if (paste) {
-      pieces.push({ kind: 'paste', paste });
-    } else {
-      const files = parseAttachedFilesBlock(chunk);
-      if (files) pieces.push({ kind: 'files', files });
-      else pieces.push({ kind: 'text', text: chunk });
-    }
-    last = match.index + chunk.length;
-  }
-  if (last < text.length) pieces.push({ kind: 'text', text: text.slice(last) });
-  if (!pieces.length && text) pieces.push({ kind: 'text', text });
-  return pieces;
 }
 
 function walkTextChunks(content) {
@@ -203,21 +191,26 @@ function pasteMeta(paste) {
   };
 }
 
-/** Split stored UserContent into view fields. Snapshot must not include paste bodies. */
+/** Split stored UserContent into view fields. Snapshot must not include paste bodies.
+ *  Each Pi Durable TextContent is classified as a whole paste/files block or as body text. */
 export function parseUserMessageParts(content) {
   const textParts = [];
   const pastes = [];
   const files = [];
   const pasteTexts = [];
   for (const chunk of walkTextChunks(content)) {
-    for (const piece of splitSpecialBlocks(chunk)) {
-      if (piece.kind === 'text' && piece.text) textParts.push(piece.text);
-      if (piece.kind === 'paste') {
-        pastes.push(pasteMeta(piece.paste));
-        pasteTexts.push(piece.paste.text);
-      }
-      if (piece.kind === 'files') files.push(...piece.files);
+    const paste = parsePasteBlock(chunk);
+    if (paste) {
+      pastes.push(pasteMeta(paste));
+      pasteTexts.push(paste.text);
+      continue;
     }
+    const attached = parseAttachedFilesBlock(chunk);
+    if (attached) {
+      files.push(...attached);
+      continue;
+    }
+    if (chunk) textParts.push(chunk);
   }
   return {
     text: textParts.join(''),
