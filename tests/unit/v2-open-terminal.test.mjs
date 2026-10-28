@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { realpathSync } from 'node:fs';
 import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -10,6 +11,11 @@ import { readDiscovery, request, startServer, stopServer } from './_server.mjs';
 import { ROOT } from './_root.mjs';
 
 const TOKEN = 'v2-open-term-token';
+
+/** Same canonicalization as resolveInWorkspace / fs.realpath (Windows 8.3 → long path). */
+function nativeReal(p) {
+  return realpathSync.native(p);
+}
 
 function v2Headers(token) {
   return { authorization: `Bearer ${token}` };
@@ -77,19 +83,21 @@ test('POST open-terminal opens the workspace root and a subdirectory', { timeout
   assertChecked(`/api/v2/workspaces/${ws.id}/open-terminal`, 'POST', 200, nested.body);
 
   const lines = (await readFile(log, 'utf8')).trim().split('\n').map((row) => JSON.parse(row));
+  const rootDir = nativeReal(ws.path);
+  const srcDir = nativeReal(path.join(ws.path, 'src'));
   assert.equal(lines.length, 2);
-  assert.equal(lines[0].dir, ws.path);
-  assert.equal(lines[1].dir, path.join(ws.path, 'src'));
+  assert.equal(lines[0].dir, rootDir);
+  assert.equal(lines[1].dir, srcDir);
   assert.equal(lines[0].launches[0].detached, true);
   assert.equal(lines[0].launches[0].stdio, 'ignore');
   if (process.platform === 'win32') {
     assert.equal(lines[0].launches[0].command, 'wt.exe');
-    assert.deepEqual(lines[0].launches[0].args, ['-d', ws.path]);
+    assert.deepEqual(lines[0].launches[0].args, ['-d', rootDir]);
     assert.equal(lines[0].launches[1].command, 'cmd.exe');
-    assert.ok(lines[0].launches[1].args.includes(`Set-Location -LiteralPath ${quotePwshLiteral(ws.path)}`));
+    assert.ok(lines[0].launches[1].args.includes(`Set-Location -LiteralPath ${quotePwshLiteral(rootDir)}`));
   } else if (process.platform === 'darwin') {
     assert.equal(lines[0].launches[0].command, 'open');
-    assert.deepEqual(lines[0].launches[0].args, ['-a', 'Terminal', ws.path]);
+    assert.deepEqual(lines[0].launches[0].args, ['-a', 'Terminal', rootDir]);
   } else {
     assert.equal(lines[0].launches[0].command, 'x-terminal-emulator');
     assert.equal(lines[0].launches[1].command, 'gnome-terminal');
