@@ -24,6 +24,78 @@ export type FileRefAttachment = {
   path: string;
 };
 
+export type UploadAttachment = {
+  id: string;
+  kind: 'upload';
+  name: string;
+  size: number;
+  status: 'uploading' | 'done' | 'error';
+  error?: string;
+  uploaded?: {
+    path: string;
+    name: string;
+    bytes: number;
+    mediaType: string;
+  };
+};
+
+export type PasteAttachment = {
+  id: string;
+  kind: 'paste';
+  text: string;
+  lines: number;
+  chars: number;
+  name: string;
+};
+
+export const UPLOAD_MAX_BYTES = 20 * 1024 * 1024;
+export const UPLOAD_MAX_FILES = 20;
+export const PASTE_MAX_COUNT = 10;
+export const PASTE_MAX_BYTES = 1024 * 1024;
+export const PASTE_THRESHOLD_LINES = 8;
+export const PASTE_THRESHOLD_CHARS = 800;
+
+export function pasteLineCount(text: string): number {
+  return String(text || '').split('\n').length;
+}
+
+export function isLongPaste(text: string): boolean {
+  const lines = pasteLineCount(text);
+  return lines >= PASTE_THRESHOLD_LINES || Boolean(text && text.length >= PASTE_THRESHOLD_CHARS);
+}
+
+export function pasteSummaryName(text: string, defaultName = ''): string {
+  const first = String(text || '').split('\n').find((l) => l.trim());
+  const trimmed = first ? first.trim().slice(0, 28) : '';
+  return trimmed || defaultName;
+}
+
+export function createPasteAttachment(text: string, defaultName = ''): PasteAttachment {
+  const lines = pasteLineCount(text);
+  return {
+    id: newId(),
+    kind: 'paste',
+    text,
+    lines,
+    chars: text.length,
+    name: pasteSummaryName(text, defaultName),
+  };
+}
+
+const localPastesStore = new Map<string, string[]>();
+
+export function recordLocalPastes(id: string, pastes: string[]): void {
+  localPastesStore.set(id, pastes);
+}
+
+export function getLocalPastes(id: string): string[] | undefined {
+  return localPastesStore.get(id);
+}
+
+export function clearLocalPastes(): void {
+  localPastesStore.clear();
+}
+
 export type ComposerHintKind =
   | 'too_large'
   | 'too_many'
@@ -77,17 +149,29 @@ export function mediaTypeOfFile(file: Pick<File, 'type' | 'name'>): MessageImage
   return null;
 }
 
-function readAsBase64(file: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () => reject(new Error('read failed'));
-    reader.onload = () => {
-      const result = typeof reader.result === 'string' ? reader.result : '';
-      const comma = result.indexOf(',');
-      resolve(comma >= 0 ? result.slice(comma + 1) : result);
-    };
-    reader.readAsDataURL(file);
-  });
+export async function readAsBase64(file: Blob): Promise<string> {
+  if (typeof FileReader !== 'undefined') {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error('read failed'));
+      reader.onload = () => {
+        const result = typeof reader.result === 'string' ? reader.result : '';
+        const comma = result.indexOf(',');
+        resolve(comma >= 0 ? result.slice(comma + 1) : result);
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+  const buf = await file.arrayBuffer();
+  if (typeof Buffer !== 'undefined') {
+    return Buffer.from(buf).toString('base64');
+  }
+  const bytes = new Uint8Array(buf);
+  let binary = '';
+  for (let i = 0; i < bytes.byteLength; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
 }
 
 export async function fileToImageAttachment(file: File): Promise<ImageAttachment | { hint: ComposerHint }> {

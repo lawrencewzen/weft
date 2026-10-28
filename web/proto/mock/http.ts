@@ -1,3 +1,4 @@
+import type { components } from '../../../src/v2/contract.gen';
 import type { MockHub } from './hub';
 import {
   getConv,
@@ -1065,6 +1066,42 @@ export function handleMockRequest(db: MockDb, hub: MockHub, rawUrl: string, init
       return ok(saved);
     }
   }
+
+  const wsUploadMatch = /^\/api\/v2\/workspaces\/([^/]+)\/uploads$/.exec(path);
+  if (wsUploadMatch && method === 'POST') {
+    const workspaceId = decodeURIComponent(wsUploadMatch[1]);
+    const ws = db.workspaces.find((row) => row.id === workspaceId);
+    if (!ws) return fail(404, '工作区不存在');
+    const { name, data } = body as { name?: string; data?: unknown };
+    if (!data || typeof data !== 'string') return fail(400, 'data required', 'E_BAD_REQUEST');
+    let decodedLen = 0;
+    try {
+      decodedLen = atob(data).length;
+    } catch {
+      return fail(400, 'invalid base64 data', 'E_BAD_REQUEST');
+    }
+    if (decodedLen > 20 * 1024 * 1024) {
+      return fail(413, `file exceeds ${20 * 1024 * 1024} bytes`, 'E_TOO_LARGE');
+    }
+    const cleanName = (typeof name === 'string' && name ? name : 'file')
+      .replace(/[\\/:*?"<>|\x00-\x1f]/g, '_')
+      .replace(/^\.+/, '') || 'file';
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const now = new Date();
+    const stamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+    const rand = Math.random().toString(36).slice(2, 8);
+    const uploadPath = `.weft/uploads/${stamp}-${rand}/${cleanName}`;
+    const mediaType = 'application/octet-stream';
+    const uploadResult = {
+      path: uploadPath,
+      name: cleanName,
+      bytes: decodedLen,
+      mediaType,
+    };
+    db.workspaceUploads.set(`${workspaceId}\t${uploadPath}`, uploadResult);
+    return created(uploadResult);
+  }
+
   const wsMatch = /^\/api\/v2\/workspaces\/([^/]+)$/.exec(path);
   if (wsMatch && method === 'DELETE') {
     return removeWorkspace(db, hub, decodeURIComponent(wsMatch[1]));
@@ -1245,6 +1282,27 @@ export function handleMockRequest(db: MockDb, hub: MockHub, rawUrl: string, init
     };
   }
 
+  const pasteMatch = /^\/api\/v2\/conversations\/([^/]+)\/messages\/([^/]+)\/pastes\/([^/]+)$/.exec(path);
+  if (pasteMatch && method === 'GET') {
+    const cid = decodeURIComponent(pasteMatch[1]);
+    const messageId = decodeURIComponent(pasteMatch[2]);
+    const indexRaw = decodeURIComponent(pasteMatch[3]);
+    const index = Number(indexRaw);
+    if (!Number.isInteger(index) || index < 0 || String(index) !== indexRaw) {
+      return fail(404, 'not found');
+    }
+    const text = db.messagePastes.get(`${cid}\t${messageId}\t${index}`);
+    if (text == null) return fail(404, 'not found');
+    return {
+      status: 200,
+      bytes: new TextEncoder().encode(text),
+      headers: {
+        'content-type': 'text/plain; charset=utf-8',
+        'cache-control': 'private, max-age=31536000, immutable',
+      },
+    };
+  }
+
   const msgMatch = /^\/api\/v2\/conversations\/([^/]+)\/messages$/.exec(path);
   if (msgMatch && method === 'POST') {
     const cid = decodeURIComponent(msgMatch[1]);
@@ -1256,7 +1314,11 @@ export function handleMockRequest(db: MockDb, hub: MockHub, rawUrl: string, init
     const text = String(body.text ?? '').trim();
     const parsedImages = parseSendImages(body.images);
     if (!parsedImages.ok) return fail(400, parsedImages.error, parsedImages.code);
-    if (!text && parsedImages.images.length === 0) return fail(400, '消息不能为空', 'E_BAD_REQUEST');
+    const files = Array.isArray(body.files) ? (body.files as components['schemas']['SendMessageFile'][]) : undefined;
+    const pastes = Array.isArray(body.pastes) ? (body.pastes as string[]) : undefined;
+    if (!text && parsedImages.images.length === 0 && (!files || files.length === 0) && (!pastes || pastes.length === 0)) {
+      return fail(400, '消息不能为空', 'E_BAD_REQUEST');
+    }
     const requestId = typeof body.requestId === 'string' && body.requestId
       ? body.requestId
       : nextId(db, 'req');
@@ -1264,7 +1326,7 @@ export function handleMockRequest(db: MockDb, hub: MockHub, rawUrl: string, init
       ? 'steer'
       : null;
     if (mode == null) return fail(400, 'invalid mode', 'E_BAD_REQUEST');
-    const result = sendMessage(db, conv, hub, text, requestId, parsedImages.images, mode);
+    const result = sendMessage(db, conv, hub, text, requestId, parsedImages.images, mode, files, pastes);
     if (!result.ok) return fail(result.status, result.error);
     return accepted({ runId: result.runId });
   }

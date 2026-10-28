@@ -51,6 +51,21 @@ describe('pendingItem images', () => {
   });
 });
 
+describe('pendingItem files and pastes', () => {
+  it('copies files and pastes onto the optimistic user item and caches local pastes', () => {
+    const files = [{ path: '.weft/uploads/1/doc.pdf', name: 'doc.pdf', bytes: 1024 }];
+    const pastes = ['line1\nline2\nline3'];
+    const item = pendingItem({ key: 'p1', text: 'check this', files, pastes, baseline: 0, doneAt: null });
+    expect(item).toMatchObject({
+      kind: 'user',
+      id: 'local:p1',
+      text: 'check this',
+      files: [{ path: '.weft/uploads/1/doc.pdf', name: 'doc.pdf', bytes: 1024 }],
+      pastes: [{ lines: 3, chars: 17, preview: 'line1\nline2\nline3' }],
+    });
+  });
+});
+
 describe('countUserText', () => {
   it('counts only user items with the same trimmed text', () => {
     const items = [user('1', '改一下圆角'), user('2', ' 改一下圆角 '), assistant('3', '改一下圆角')];

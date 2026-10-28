@@ -141,7 +141,7 @@ export function Thread({
             <div className="thread-empty">{t(lang, 'empty_chat_hint')}</div>
           )
         ) : items.map((item) => {
-            if (item.kind === 'user') return <UserMessage key={item.id} item={item} lang={lang} />;
+            if (item.kind === 'user') return <UserMessage key={item.id} item={item} lang={lang} conversationId={conversationId} />;
             if (item.kind === 'assistant') {
               return (
                 <AssistantMessage

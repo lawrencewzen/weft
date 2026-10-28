@@ -22,6 +22,8 @@ import {
   removeWorkspace,
   saveWorkspaceFile,
   sendMessage,
+  uploadWorkspaceFile,
+  getMessagePaste,
   withdrawMessage,
   sendSubagentMessage,
   stop,
@@ -134,6 +136,51 @@ describe('api client', () => {
       requestId: 'held-img',
       images,
     });
+  });
+
+  it('includes files and pastes on sendMessage when provided', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(202, { runId: 'run-fp' }));
+    vi.stubGlobal('fetch', fetchMock);
+    const files = [{ path: '.weft/uploads/1/a.txt', name: 'a.txt', bytes: 12 }];
+    const pastes = ['first paste', 'second paste'];
+    await expect(sendMessage('c1', 'hello', 'held-fp', undefined, undefined, files, pastes)).resolves.toEqual({ runId: 'run-fp' });
+    expect(JSON.parse(String(fetchMock.mock.calls[0][1].body))).toEqual({
+      text: 'hello',
+      requestId: 'held-fp',
+      files,
+      pastes,
+    });
+  });
+
+  it('uploads workspace file with POST to uploads endpoint', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(201, {
+      path: '.weft/uploads/1/notes.txt',
+      name: 'notes.txt',
+      bytes: 123,
+      mediaType: 'text/plain',
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+    const res = await uploadWorkspaceFile('ws/1', { name: 'notes.txt', data: 'aGVsbG8=' });
+    expect(res).toEqual({
+      path: '.weft/uploads/1/notes.txt',
+      name: 'notes.txt',
+      bytes: 123,
+      mediaType: 'text/plain',
+    });
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/v2/workspaces/ws%2F1/uploads');
+    expect(fetchMock.mock.calls[0][1].method).toBe('POST');
+  });
+
+  it('fetches message paste as text/plain', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: () => Promise.resolve('full paste text here'),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const text = await getMessagePaste('c/1', 'm/2', 0);
+    expect(text).toBe('full paste text here');
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/v2/conversations/c%2F1/messages/m%2F2/pastes/0');
   });
 
   it('posts continue with a generated requestId and fetches tool output', async () => {

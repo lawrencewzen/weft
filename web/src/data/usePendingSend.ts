@@ -17,7 +17,15 @@ import type { components } from '../../../src/v2/contract.gen';
 import type { ThreadItem } from './store';
 
 type MessageImage = components['schemas']['MessageImage'];
-type Send = (text: string, requestId: string, images?: MessageImage[], mode?: SendMode) => Promise<unknown>;
+type SendMessageFile = components['schemas']['SendMessageFile'];
+type Send = (
+  text: string,
+  requestId: string,
+  images?: MessageImage[],
+  mode?: SendMode,
+  files?: SendMessageFile[],
+  pastes?: string[],
+) => Promise<unknown>;
 
 /**
  * Optimistic send: the user message goes on screen before the request resolves, and the
@@ -85,19 +93,23 @@ export function usePendingSend(
     requestId: string,
     images?: MessageImage[],
     mode?: SendMode,
+    files?: SendMessageFile[],
+    pastes?: string[],
   ) => {
     const key = requestId || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const entry: PendingUser = {
       key,
       text,
       images,
+      files,
+      pastes,
       baseline: countUserText(itemsRef.current, text),
       doneAt: null,
       mode,
     };
     setPending((prev) => [...prev, entry]);
     try {
-      const result = await send(text, requestId, images, mode);
+      const result = await send(text, requestId, images, mode, files, pastes);
       setPending((prev) => prev.map((item) => (
         item.key === key ? { ...item, doneAt: Date.now() } : item
       )));

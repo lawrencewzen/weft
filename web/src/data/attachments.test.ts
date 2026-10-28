@@ -2,17 +2,28 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   IMAGE_MAX_BYTES,
   IMAGE_MAX_COUNT,
+  UPLOAD_MAX_BYTES,
+  UPLOAD_MAX_FILES,
+  PASTE_MAX_BYTES,
+  PASTE_MAX_COUNT,
   addImages,
   applyAtSelection,
+  clearLocalPastes,
+  createPasteAttachment,
   fileToImageAttachment,
   filterAtFiles,
   formatFileSize,
+  getLocalPastes,
   insertFileRef,
   isFileRefInText,
   isImageFile,
+  isLongPaste,
   matchAtTrigger,
   matchProjectPath,
   mediaTypeOfFile,
+  pasteSummaryName,
+  readAsBase64,
+  recordLocalPastes,
   relativeToWorkspace,
   removeFileRef,
   resolveAtSelection,
@@ -266,5 +277,53 @@ describe('fileToImageAttachment', () => {
       previewUrl: 'blob:shot',
     });
     if ('previewUrl' in result) revokePreview(result);
+  });
+});
+
+describe('paste detection and local storage', () => {
+  it('detects long paste by lines or character count', () => {
+    const eightLines = Array.from({ length: 8 }, (_, i) => `line ${i}`).join('\n');
+    expect(isLongPaste(eightLines)).toBe(true);
+    const shortText = 'hello world';
+    expect(isLongPaste(shortText)).toBe(false);
+    const longChars = 'a'.repeat(800);
+    expect(isLongPaste(longChars)).toBe(true);
+  });
+
+  it('creates paste attachment with first line summary or custom default name', () => {
+    const text = '  function testCode() {\n  return true;\n}';
+    const paste = createPasteAttachment(text);
+    expect(paste.kind).toBe('paste');
+    expect(paste.lines).toBe(3);
+    expect(paste.name).toBe('function testCode() {');
+
+    expect(pasteSummaryName(text)).toBe('function testCode() {');
+    expect(pasteSummaryName('   \n  \n', 'Pasted text')).toBe('Pasted text');
+    expect(pasteSummaryName('', '默认文字')).toBe('默认文字');
+    expect(pasteSummaryName('   \n  \n')).toBe('');
+    expect(createPasteAttachment('   \n  \n', 'Pasted text').name).toBe('Pasted text');
+  });
+
+  it('records and retrieves local pastes', () => {
+    clearLocalPastes();
+    recordLocalPastes('local:123', ['paste-1', 'paste-2']);
+    expect(getLocalPastes('local:123')).toEqual(['paste-1', 'paste-2']);
+    expect(getLocalPastes('unknown')).toBeUndefined();
+  });
+});
+
+describe('upload and paste constraints', () => {
+  it('enforces 20MB upload limit and 1MB paste limit', () => {
+    expect(UPLOAD_MAX_BYTES).toBe(20 * 1024 * 1024);
+    expect(UPLOAD_MAX_FILES).toBe(20);
+    expect(PASTE_MAX_BYTES).toBe(1024 * 1024);
+    expect(PASTE_MAX_COUNT).toBe(10);
+  });
+
+  it('reads blob as raw base64 string without data url prefix', async () => {
+    const blob = new Blob(['hello world'], { type: 'text/plain' });
+    const b64 = await readAsBase64(blob);
+    expect(b64).toBe(btoa('hello world'));
+    expect(b64.includes('data:')).toBe(false);
   });
 });
