@@ -12,6 +12,7 @@
 | `WEFT_RETRY_BASE_MS` | `200` | 重试退避的起始毫秒。上限沿用 Pi Durable 的 `maxAgentDelayMs`（60000） |
 | `WEFT_STREAM_TIMEOUT_MS` | `120000` | 传给模型流的 `stream.timeoutMs`。超时后按上面的 retry 重试 |
 | `WEFT_BASH_TIMEOUT_SECONDS` | `600` | bash 工具没拿到 `timeout` 参数时的上限（秒）。模型自己传了就照用；非法值回退默认；超过官方上限（`2147483.647` 秒）按上限算 |
+| `WEFT_BASH_ENV_ALLOW` | 空 | Agent 执行命令时，在内置白名单之外额外放行的服务进程环境变量。逗号分隔，名字可带结尾 `*`（例如 `MY_APP_*,CI`）。Windows 上名字不区分大小写。变量本身不传给命令。`WEFT_*` / `LLM_*` / 各云厂商密钥前缀，以及名字里含 `KEY` / `TOKEN` / `SECRET` / `PASSWORD` 的项即使写在这里也会被挡住并打日志，不能靠它显式放行密钥。详见 [SECURITY.md](../SECURITY.md)「bash sandbox」 |
 
 演示模型只在显式设置 `WEFT_LLM=faux`、`LLM_API=faux` 或 `WEFT_FAUX_SCRIPT` 时启用。剧本里一段文字紧跟工具调用时合成一条助手消息；一段文字后面没有工具调用时这一轮结束。`WEFT_FAUX_HOLD=1` 让这次调用等到流超时或被中止。
 

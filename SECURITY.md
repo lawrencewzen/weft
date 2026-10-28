@@ -29,13 +29,23 @@ When `WEFT_TOKEN` is set, that check stays at the HTTP layer. In-process unit te
 
 ### bash sandbox (finding 2, 12)
 
-`src/tools/workspace.mjs` `bash()` now:
+Agent commands (main Agent and sub-agents) go through Pi Durable's official `createBashTool()` and `NodeExecutionEnv.exec`. Weft does not spawn or kill processes itself.
 
-- Passes only `PATH=/usr/bin:/bin:/usr/local/bin`, `HOME=<workspace>`, `LANG=C.UTF-8`, `TERM=dumb`. LLM keys, `WEFT_*`, `AWS_*`, `SSH_*` are not inherited.
-- Spawns `{ detached: true, stdio: ['ignore', 'pipe', 'pipe'] }` and `process.kill(-pid, 'SIGKILL')` on timeout/abort (process group).
-- Caps combined stdout+stderr at 1 MiB and appends a truncation marker.
+Environment (T52-1): `createBashTool` `prepare` and `WorkspaceExecutionEnv.exec` both set the official `inheritEnv: false` and pass `env` from `src/kernel/bash-env.mjs`. `NodeExecutionEnv` then starts the child with only that object (`getShellEnv` returns `extraEnv` when `inheritEnv` is false). The service process environment is **not** inherited.
 
-Full OS sandbox (bubblewrap / nsjail) is **deferred**. A `TODO` in `bash()` records that. v1 mitigations are env scrub, cwd, output cap, and pgid kill. `stdin` remains `'ignore'`.
+Copied when present (Windows names are matched case-insensitively; on Unix the listed spelling, plus both cases of the proxy variables):
+
+- Process / locale: `PATH` (Windows `Path`), `PATHEXT`, `SystemRoot`, `SYSTEMDRIVE`, `windir`, `ComSpec`, `HOME`, `USERPROFILE`, `HOMEDRIVE`, `HOMEPATH`, `APPDATA`, `LOCALAPPDATA`, `ProgramData`, `ProgramFiles`, `ProgramFiles(x86)`, `CommonProgramFiles`, `TEMP`, `TMP`, `TMPDIR`, `USER`, `USERNAME`, `LOGNAME`, `SHELL`, `LANG`, `LC_*`, `TZ`, `TERM` (set to `dumb` when missing), `NUMBER_OF_PROCESSORS`, `PROCESSOR_ARCHITECTURE`, `OS`
+- Network / certificates: `HTTP_PROXY` / `http_proxy`, `HTTPS_PROXY` / `https_proxy`, `ALL_PROXY` / `all_proxy`, `NO_PROXY` / `no_proxy`, `NODE_EXTRA_CA_CERTS`, `SSL_CERT_FILE`, `SSL_CERT_DIR`, `REQUESTS_CA_BUNDLE`
+- Git over SSH: `SSH_AUTH_SOCK`. `GIT_SSH`, `GIT_SSH_COMMAND`, and `GIT_ASKPASS` are not copied (they can pop a prompt and hang the tool)
+
+`WEFT_BASH_ENV_ALLOW` (comma-separated names, optional trailing `*`) adds extra names from the service process. The variable itself is a `WEFT_*` name and is not copied.
+
+Never copied, including when listed in `WEFT_BASH_ENV_ALLOW` (Weft logs a warning and still omits them): `WEFT_*`, `LLM_*`, `OPENAI_*`, `ANTHROPIC_*`, `XAI_*`, `DEEPSEEK_*`, `AWS_*`, `AZURE_*`, `GOOGLE_*`, `GITHUB_TOKEN`, `GH_TOKEN`, `NPM_TOKEN`, and any name containing `KEY`, `TOKEN`, `SECRET`, or `PASSWORD` (that last check is case-insensitive on every platform).
+
+cwd is the conversation workspace (`resolveInWorkspace`). Timeout/abort still uses official `killProcessTree` (Unix process-group `SIGKILL`; Windows `taskkill /F /T`). stdin is `'ignore'`, or a pipe that is written once and closed for the Windows PowerShell fallback. Combined output is the official bash tail (50 KiB or 2000 lines) with a spill file when it exceeds that; there is no separate 1 MiB cap in Weft.
+
+Full OS sandbox (bubblewrap / nsjail) is **deferred**. Mitigations are the env allow-list, cwd, official output window, and process-tree kill.
 
 ### Workspace path allowlist (finding 3)
 
@@ -100,7 +110,7 @@ Same-origin `EventSource` sends the cookie. `POST /api/sse-ticket` returns `{ ti
 | # | Severity | Status |
 |---|---------|--------|
 | 1 | Critical | **Fixed** — bind `127.0.0.1`; optional `WEFT_TOKEN`; Host, Origin, JSON Content-Type, CSP and related headers always on |
-| 2 | High | **Partial** — env allow-list, pgid kill, 1 MiB cap, cwd; full OS sandbox / bwrap **deferred** |
+| 2 | High | **Partial** — env allow-list (`inheritEnv: false`), process-tree kill, official output window, cwd; full OS sandbox / bwrap **deferred** |
 | 3 | High | **Fixed** — realpath + allowlisted roots; `/` and similar rejected |
 | 4 | High | **Fixed** — `baseUrl` / `provider` change without a new key clears `apiKey` |
 | 5 | Medium | **Fixed** (server) — registry/role allowlist + CSP; frontend XSS already done in `public/` |

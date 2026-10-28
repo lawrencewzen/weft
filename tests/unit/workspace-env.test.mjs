@@ -140,3 +140,83 @@ test('sandbox: exec cwd cannot leave the workspace, and a command writes inside 
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+function envValue(dumped, name) {
+  if (Object.hasOwn(dumped, name)) return dumped[name];
+  if (process.platform !== 'win32') return undefined;
+  const found = Object.keys(dumped).find((key) => key.toLowerCase() === name.toLowerCase());
+  return found ? dumped[found] : undefined;
+}
+
+async function execDumpEnv(env) {
+  const dump = `"${process.execPath}" -e "require('fs').writeFileSync('env.json', JSON.stringify(process.env))"`;
+  const ran = await env.exec(dump, undefined, context);
+  assert.equal(ran.ok, true, ran.ok ? '' : ran.error.message);
+  assert.equal(ran.value.exitCode, 0, JSON.stringify(ran.value));
+}
+
+test('sandbox: exec does not inherit secrets, keeps proxies, and honors WEFT_BASH_ENV_ALLOW', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'piw-env-allow-'));
+  const previous = {
+    WEFT_TEST_SECRET: process.env.WEFT_TEST_SECRET,
+    OPENAI_API_KEY: process.env.OPENAI_API_KEY,
+    HTTPS_PROXY: process.env.HTTPS_PROXY,
+    MY_BASH_CUSTOM: process.env.MY_BASH_CUSTOM,
+    NOT_ALLOWED_CUSTOM: process.env.NOT_ALLOWED_CUSTOM,
+    WEFT_BASH_ENV_ALLOW: process.env.WEFT_BASH_ENV_ALLOW,
+  };
+  const restore = () => {
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  };
+  process.env.WEFT_TEST_SECRET = 'weft-test-secret-value';
+  process.env.OPENAI_API_KEY = 'sk-weft-test-openai-key';
+  process.env.HTTPS_PROXY = 'http://weft-test-proxy.example:8080';
+  process.env.MY_BASH_CUSTOM = 'weft-allow-custom-ok';
+  process.env.NOT_ALLOWED_CUSTOM = 'should-not-leak';
+  process.env.WEFT_BASH_ENV_ALLOW = 'MY_BASH_CUSTOM,OPENAI_API_KEY';
+  let env;
+  try {
+    env = await createWorkspaceEnv({ cwd: dir });
+    await execDumpEnv(env);
+    const dumped = JSON.parse(await readFile(path.join(dir, 'env.json'), 'utf8'));
+    assert.equal(envValue(dumped, 'WEFT_TEST_SECRET'), undefined);
+    assert.equal(envValue(dumped, 'OPENAI_API_KEY'), undefined);
+    assert.equal(envValue(dumped, 'NOT_ALLOWED_CUSTOM'), undefined);
+    assert.equal(envValue(dumped, 'WEFT_BASH_ENV_ALLOW'), undefined);
+    assert.equal(envValue(dumped, 'HTTPS_PROXY'), 'http://weft-test-proxy.example:8080');
+    assert.equal(envValue(dumped, 'MY_BASH_CUSTOM'), 'weft-allow-custom-ok');
+    assert.equal(JSON.stringify(dumped).includes('weft-test-secret-value'), false);
+    assert.equal(JSON.stringify(dumped).includes('sk-weft-test-openai-key'), false);
+    assert.equal(JSON.stringify(dumped).includes('should-not-leak'), false);
+  } finally {
+    restore();
+    await env?.cleanup(context).catch(() => {});
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('sandbox: exec PATH can run node -v and git --version', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'piw-env-path-'));
+  const env = await createWorkspaceEnv({ cwd: dir });
+  try {
+    for (const command of ['node -v', 'git --version']) {
+      const output = { stdout: '', stderr: '' };
+      const ran = await env.exec(command, {
+        onOutput: (text, _ctx, info) => {
+          output[info.stream] += text;
+        },
+      }, context);
+      assert.equal(ran.ok, true, `${command}: ${ran.ok ? '' : ran.error.message}`);
+      assert.equal(ran.value.exitCode, 0, `${command}: ${JSON.stringify({ output, ran: ran.value })}`);
+      const text = `${output.stdout}${output.stderr}`;
+      if (command.startsWith('node')) assert.match(text, /v\d+/);
+      else assert.match(text, /git version/i);
+    }
+  } finally {
+    await env.cleanup(context).catch(() => {});
+    await rm(dir, { recursive: true, force: true });
+  }
+});
