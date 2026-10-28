@@ -12,11 +12,11 @@ test.describe.configure({ timeout: 120_000 });
 test('diff, file tree, preview, save and the 409 conflict demo', async ({ page }) => {
   const state = await openProto(page);
 
-  // Two seeded changes, sorted by path.
-  await expect(page.getByTestId('next-change-row')).toHaveCount(2);
+  // Seeded changes (main Agent and sub-agent), sorted by path.
+  await expect(page.getByTestId('next-change-row')).toHaveCount(4);
   await expect(page.getByTestId('next-change-row').first()).toHaveAttribute(
     'data-path',
-    'web/src/data/store.test.ts',
+    'web/src/components/ChangesPane.tsx',
   );
 
   // Right tabs container is aligned to the left, immediately following the collapse button.
@@ -29,16 +29,19 @@ test('diff, file tree, preview, save and the 409 conflict demo', async ({ page }
     return gap >= 0 && gap <= 8;
   }).toBe(true);
 
+  const testRow = page.locator('[data-testid=next-change-row][data-path="web/src/data/store.test.ts"]');
+  const storeRow = page.locator('[data-testid=next-change-row][data-path="web/src/data/store.ts"]');
+
   // Changes default to expanded (<= 8 files, <= 300 lines) with diff lines visible.
-  await expect(page.getByTestId('next-diff')).toHaveCount(2);
+  await expect(page.getByTestId('next-diff')).toHaveCount(4);
   await expect(page.getByTestId('next-diff-line').first()).toBeVisible();
-  expect(await page.locator('[data-testid=next-diff-line][data-op=add]').count()).toBeGreaterThan(0);
-  const added = page.locator('[data-testid=next-diff-line][data-op=add]').first();
+  expect(await testRow.locator('[data-testid=next-diff-line][data-op=add]').count()).toBeGreaterThan(0);
+  const added = testRow.locator('[data-testid=next-diff-line][data-op=add]').first();
   await expect(added.locator('.n.new')).toHaveText('42');
   await expect(added.locator('.code')).toContainText('createEntityStore');
 
-  // The second change has removals too.
-  const storeDiff = page.getByTestId('next-change-row').nth(1).getByTestId('next-diff');
+  // store.ts has removals too.
+  const storeDiff = storeRow.getByTestId('next-diff');
   await expect(storeDiff).toBeVisible();
   await expect.poll(async () => storeDiff.locator('[data-op=del]').count()).toBeGreaterThan(0);
   expect(await storeDiff.locator('[data-op=add]').count()).toBeGreaterThan(0);
@@ -60,7 +63,7 @@ test('diff, file tree, preview, save and the 409 conflict demo', async ({ page }
   expect([...perPath.values()].every((count) => count === 1)).toBe(true);
 
   // The thread change-summary opens the same file in the right pane without a new fetch.
-  await expect(page.getByTestId('next-change-summary-row')).toHaveCount(2);
+  await expect(page.getByTestId('next-change-summary-row')).toHaveCount(4);
   await page.locator('[data-testid=next-change-summary-row][data-path="web/src/data/store.ts"]').click();
   await expect(
     page.locator('[data-testid=next-change-row][data-path="web/src/data/store.ts"]').getByTestId('next-diff'),

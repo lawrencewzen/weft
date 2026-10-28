@@ -1,5 +1,6 @@
 // Map Pi Durable agent events onto the HTTP/SSE names the UI already listens for.
 // Nothing here is stored. HTTP status is the last submission record.
+import path from 'node:path';
 import { retryDelayMs } from '@earendil-works/pi-ai/utils/retry';
 import { DEFAULT_RETRY_POLICY } from '@earendil-works/pi-durable';
 import { redactAuthText } from '../core/grok-auth.mjs';
@@ -448,14 +449,52 @@ export function messagesFromEntries(entries) {
   return { messages, usage };
 }
 
-/** First write/edit details per path. Later edits of the same path keep that baseline. */
-export function baselinesFromEntries(entries) {
-  const byPath = new Map();
+const FILE_CHANGE_TOOLS = new Set(['write', 'edit']);
+
+function asTimestamp(value) {
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+/** True when `target` is `root` or a path inside it. */
+function isInsideRoot(root, target) {
+  const rel = path.relative(root, target);
+  return rel === '' || (rel !== '..' && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel));
+}
+
+/**
+ * Relocate a file path from a child cwd onto the main workspace.
+ * Sub-agents may run in a different cwd (git worktree). Files still under the
+ * main workspace are kept, with the path rewritten relative to it. Files in a
+ * different workspace are ignored (returns null).
+ */
+export function rebaseChangePath(filePath, fromCwd, toCwd) {
+  const rel = String(filePath ?? '').replaceAll('\\', '/');
+  if (!rel) return null;
+  if (!fromCwd || !toCwd) return rel;
+  const from = path.resolve(String(fromCwd));
+  const to = path.resolve(String(toCwd));
+  if (from === to) return rel;
+  const abs = path.resolve(from, rel);
+  if (!isInsideRoot(to, abs)) return null;
+  const moved = path.relative(to, abs);
+  return moved ? moved.split(path.sep).join('/') : rel;
+}
+
+/**
+ * write/edit (and any other tool-result with details.path) from a transcript, in order.
+ * `attributed` is true only for write/edit — bash and similar cannot set `by`.
+ */
+export function writesFromEntries(entries) {
+  const writes = [];
+  let index = 0;
   for (const entry of entries || []) {
     if (entry?.kind !== 'pi.tool-result') continue;
-    const details = entry.model?.[0]?.details;
-    if (!details || typeof details.path !== 'string' || byPath.has(details.path)) continue;
-    byPath.set(details.path, {
+    const result = entry.model?.[0];
+    const details = result?.details;
+    if (!details || typeof details.path !== 'string') continue;
+    const toolName = typeof result.toolName === 'string' ? result.toolName : '';
+    writes.push({
       path: details.path,
       before: details.before,
       after: details.after,
@@ -464,8 +503,105 @@ export function baselinesFromEntries(entries) {
       oversized: details.oversized === true,
       linesBefore: details.linesBefore,
       linesAfter: details.linesAfter,
-      toolCallId: entry.model?.[0]?.toolCallId || null,
+      toolCallId: result.toolCallId || null,
+      toolName,
+      attributed: FILE_CHANGE_TOOLS.has(toolName),
+      entryId: entry.id,
+      timestamp: asTimestamp(result.timestamp),
+      index: index++,
     });
+  }
+  return writes;
+}
+
+/** First details.path per conversation. Later edits of the same path keep that baseline. */
+export function baselinesFromEntries(entries) {
+  const byPath = new Map();
+  for (const write of writesFromEntries(entries)) {
+    if (byPath.has(write.path)) continue;
+    byPath.set(write.path, {
+      path: write.path,
+      before: write.before,
+      after: write.after,
+      added: write.added,
+      removed: write.removed,
+      oversized: write.oversized,
+      linesBefore: write.linesBefore,
+      linesAfter: write.linesAfter,
+      toolCallId: write.toolCallId,
+    });
+  }
+  return [...byPath.values()];
+}
+
+/**
+ * Order write/edit events across the main conversation and its descendants.
+ * Timestamps (when both sides have them) are the only cross-source clock.
+ * entryId / index are per-transcript: comparing them across sourceIndex is
+ * meaningless. Without timestamps, same-source rows use entryId then index;
+ * different sources fall back to sourceIndex (main conversation first). That
+ * last step is an approximation when timestamps are missing.
+ */
+function compareWrites(a, b) {
+  if (a.timestamp != null && b.timestamp != null && a.timestamp !== b.timestamp) {
+    return a.timestamp - b.timestamp;
+  }
+  if (a.sourceIndex === b.sourceIndex) {
+    const idA = Number(a.entryId);
+    const idB = Number(b.entryId);
+    if (Number.isFinite(idA) && Number.isFinite(idB) && idA !== idB) return idA - idB;
+    return a.index - b.index;
+  }
+  return a.sourceIndex - b.sourceIndex;
+}
+
+/**
+ * Merge write/edit snapshots from the main conversation and its descendants.
+ * Same path: the earliest write is the baseline (`before`); the last write/edit
+ * sets `by`. Sources whose files sit outside `workspacePath` (another worktree)
+ * are skipped — see rebaseChangePath.
+ *
+ * `sources`: `{ writer, workspacePath, writes }[]`
+ * `writer`: `{ kind: 'main' }` | `{ kind: 'subagent', agentId, name }` | null
+ */
+export function mergeFileChanges(sources, { workspacePath } = {}) {
+  const mainWs = workspacePath || '';
+  const events = [];
+  const list = Array.isArray(sources) ? sources : [];
+  for (let sourceIndex = 0; sourceIndex < list.length; sourceIndex++) {
+    const source = list[sourceIndex] || {};
+    const fromCwd = source.workspacePath || mainWs;
+    for (const write of source.writes || []) {
+      const relocated = rebaseChangePath(write.path, fromCwd, mainWs || fromCwd);
+      if (relocated == null) continue;
+      events.push({
+        ...write,
+        path: relocated,
+        writer: source.writer ?? null,
+        sourceIndex,
+      });
+    }
+  }
+  events.sort(compareWrites);
+  const byPath = new Map();
+  for (const ev of events) {
+    let row = byPath.get(ev.path);
+    if (!row) {
+      row = {
+        path: ev.path,
+        before: ev.before,
+        after: ev.after,
+        added: ev.added,
+        removed: ev.removed,
+        oversized: ev.oversized === true,
+        linesBefore: ev.linesBefore,
+        linesAfter: ev.linesAfter,
+        toolCallId: ev.toolCallId,
+        by: null,
+      };
+      byPath.set(ev.path, row);
+    }
+    if (ev.attributed && ev.writer) row.by = ev.writer;
   }
   return [...byPath.values()];
 }

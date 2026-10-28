@@ -12,7 +12,21 @@ export type KernelChange = {
   removed?: unknown;
   error?: unknown;
   toolCallId?: unknown;
+  by?: unknown;
 };
+
+function asBy(value: unknown): Change['by'] {
+  if (!value || typeof value !== 'object') return null;
+  const row = value as { kind?: unknown; agentId?: unknown; name?: unknown };
+  if (row.kind === 'main') return { kind: 'main' };
+  if (row.kind === 'subagent') {
+    const agentId = String(row.agentId ?? '');
+    const name = String(row.name ?? '');
+    if (!agentId) return null;
+    return { kind: 'subagent', agentId, name };
+  }
+  return null;
+}
 
 export type KernelDiffBody = {
   path?: unknown;
@@ -41,6 +55,7 @@ export function changeView(row: KernelChange): Change {
     added: asCount(row.added),
     removed: asCount(row.removed),
     error,
+    by: asBy(row.by),
   };
 }
 

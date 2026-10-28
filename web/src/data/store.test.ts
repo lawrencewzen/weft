@@ -587,8 +587,8 @@ describe('workspace selectors', () => {
     const store = createEntityStore();
     store.applySnapshot(snapshot([
       ref('conversation', CID, conv(CID, [])),
-      ref('change', 'z.md', { path: 'z.md', added: 1, removed: 0, error: null }),
-      ref('change', 'a.md', { path: 'a.md', added: 2, removed: 1, error: null }),
+      ref('change', 'z.md', { path: 'z.md', added: 1, removed: 0, error: null, by: { kind: 'main' } }),
+      ref('change', 'a.md', { path: 'a.md', added: 2, removed: 1, error: null, by: null }),
     ]));
     expect(store.changes(CID).map((item) => item.path)).toEqual(['a.md', 'z.md']);
     store.applyRemove({ topic: TOPIC, entity: 'change', id: 'a.md' });

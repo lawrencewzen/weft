@@ -56,8 +56,8 @@ function fakeStore(rows: Change[]): FakeStore {
 }
 
 const CHANGES: Change[] = [
-  { path: 'web/src/data/store.ts', added: 18, removed: 6, error: null },
-  { path: 'web/src/data/store.test.ts', added: 64, removed: 0, error: null },
+  { path: 'web/src/data/store.ts', added: 18, removed: 6, error: null, by: { kind: 'main' } },
+  { path: 'web/src/data/store.test.ts', added: 64, removed: 0, error: null, by: { kind: 'subagent', agentId: 'c1:sub:1', name: 'scout' } },
 ];
 
 const DIFF = {

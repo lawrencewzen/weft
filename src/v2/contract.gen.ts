@@ -1805,6 +1805,20 @@ export interface components {
             items: components["schemas"]["ThreadItem"][];
             tools: components["schemas"]["ToolCall"][];
         };
+        /** @description 最后一次 write/edit 这个文件的是主 Agent。 */
+        ChangeByMain: {
+            /** @enum {string} */
+            kind: "main";
+        };
+        /** @description 最后一次 write/edit 这个文件的是某个子 Agent。 */
+        ChangeBySubagent: {
+            /** @enum {string} */
+            kind: "subagent";
+            /** @description 子 Agent id，形如 `<cid>:sub:<子对话 id>` */
+            agentId: string;
+            /** @description 子 Agent 名。前端显示成「子 · <name>」 */
+            name: string;
+        };
         /** @description 对话右栏变更列表的一项。SSE conversation 主题里 entity=change，id 为 path。 */
         Change: {
             /** @description 相对工作区的路径，统一用 `/` */
@@ -1813,6 +1827,8 @@ export interface components {
             removed: number;
             /** @description 例如文件过大。没有则为 null */
             error: null | string;
+            /** @description 最后一次 write/edit 这个文件的是谁。主 Agent 和子 Agent 都改过时取最后一次。只被 bash 等非 write/edit 工具改、拿不到归属时为 null */
+            by: null | components["schemas"]["ChangeByMain"] | components["schemas"]["ChangeBySubagent"];
         };
         DiffLine: {
             /** @enum {string} */

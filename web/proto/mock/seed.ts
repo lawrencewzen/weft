@@ -380,8 +380,10 @@ function richConversation(now: number, threads: Map<string, MockSubThread>): Moc
       ...seedSubagentReports(),
     ],
     changes: [
-      { path: 'web/src/data/store.ts', added: 8, removed: 3, error: null },
-      { path: 'web/src/data/store.test.ts', added: 12, removed: 0, error: null },
+      { path: 'web/src/data/store.ts', added: 8, removed: 3, error: null, by: { kind: 'main' } },
+      { path: 'web/src/data/store.test.ts', added: 12, removed: 0, error: null, by: { kind: 'subagent', agentId: 'c-rich:sub:sa-2', name: 'sub-delta-test' } },
+      { path: 'web/src/data/diffView.ts', added: 4, removed: 1, error: null, by: { kind: 'main' } },
+      { path: 'web/src/components/ChangesPane.tsx', added: 6, removed: 2, error: null, by: { kind: 'subagent', agentId: 'c-rich:sub:sa-1', name: 'sub-load-order' } },
     ],
     diffs: {
       'web/src/data/store.ts': mockDiff('web/src/data/store.ts', [
@@ -437,6 +439,38 @@ function richConversation(now: number, threads: Map<string, MockSubThread>): Moc
             { op: 'add', text: "    expect(store.needsFullValue('a')).toBe(true);" },
             { op: 'add', text: '  });' },
             { op: 'ctx', text: '});' },
+          ],
+        },
+      ]),
+      'web/src/data/diffView.ts': mockDiff('web/src/data/diffView.ts', [
+        {
+          oldStart: 1,
+          newStart: 1,
+          lines: [
+            { op: 'ctx', text: 'export function numberDiffLines(hunk) {' },
+            { op: 'del', text: '  let oldLine = hunk.oldStart;' },
+            { op: 'add', text: '  let oldLine = Number(hunk.oldStart) || 1;' },
+            { op: 'add', text: '  let newLine = Number(hunk.newStart) || 1;' },
+            { op: 'ctx', text: '  return hunk.lines.map((line) => {' },
+            { op: 'add', text: '    if (!line) return { op: "ctx", text: "", oldLine: null, newLine: null };' },
+            { op: 'add', text: '    // keep numbering consecutive across ops' },
+          ],
+        },
+      ]),
+      'web/src/components/ChangesPane.tsx': mockDiff('web/src/components/ChangesPane.tsx', [
+        {
+          oldStart: 3,
+          newStart: 3,
+          lines: [
+            { op: 'ctx', text: '  const { visibleChanges, totals, openPaths, toggleChange, diffs } = useRightPane();' },
+            { op: 'del', text: '  if (!visibleChanges.length) return <div className="pane-empty">{t(lang, "no_changes_yet")}</div>;' },
+            { op: 'add', text: '  if (!visibleChanges.length) {' },
+            { op: 'add', text: '    return <div className="pane-empty">{t(lang, "no_changes_yet")}</div>;' },
+            { op: 'add', text: '  }' },
+            { op: 'ctx', text: '  return (' },
+            { op: 'del', text: '    <div className="changes-pane">' },
+            { op: 'add', text: '    <div className="changes-pane" data-testid="next-changes-pane">' },
+            { op: 'add', text: '      {/* by: 子 · sub-load-order */}' },
           ],
         },
       ]),

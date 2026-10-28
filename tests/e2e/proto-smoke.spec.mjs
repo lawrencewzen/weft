@@ -67,7 +67,7 @@ test('prototype runs from file:// with mock data, no network and no console erro
   await expect(page.locator('.task-list-item.is-done')).toHaveCount(2);
   await expect(page.locator('.md-path').first()).toBeVisible();
   await expect(page.getByTestId('next-change-summary')).toBeVisible();
-  await expect(page.getByTestId('next-change-summary-row')).toHaveCount(2);
+  await expect(page.getByTestId('next-change-summary-row')).toHaveCount(4);
   await expect(page.getByTestId('next-change-summary')).toContainText('web/src/data/store.ts');
   await expect(page.getByTestId('next-change-summary')).toContainText('+8');
   // Tool groups start collapsed; expanding shows read/search/bash/edit rows.
