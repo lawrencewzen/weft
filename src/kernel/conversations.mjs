@@ -65,7 +65,7 @@ export function kernelSettings(env = process.env) {
  * them up by requestId, so the ids it minted for us are kept here. Display-only, bounded,
  * per process: it exists to retract the optimistic message on screen, never to drive work.
  */
-const SEND_LOOKUP_MS = 250;
+const SEND_LOOKUP_MS = 0;
 const SEND_KEEP_MS = 5 * 60_000;
 const SEND_KEEP_ROWS = 20;
 

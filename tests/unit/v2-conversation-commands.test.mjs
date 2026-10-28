@@ -46,6 +46,7 @@ async function deleteV2(base, apiPath, token) {
   const res = await fetch(base + apiPath, {
     method: 'DELETE',
     headers: {
+      'content-type': 'application/json',
       ...(token ? v2Headers(token) : {}),
     },
   });
@@ -600,11 +601,13 @@ test('queue while running stays in sends until the turn ends; withdraw 200 then 
     });
     assert.equal(keep.status, 202, keep.text);
 
-    const done = await waitV2(srv.base, conv.id, discovery.token, (body) => (
-      body?.conversation?.run?.status === 'idle'
-      && userTexts(body).includes('first-user')
-      && userTexts(body).includes('run-after')
-    ), 40_000);
+    const done = await waitV2(srv.base, conv.id, discovery.token, (body) => {
+      const landed = (body?.conversation?.sends || []).find((row) => row.requestId === keepId);
+      return body?.conversation?.run?.status === 'idle'
+        && userTexts(body).includes('first-user')
+        && userTexts(body).includes('run-after')
+        && Boolean(landed?.entryId);
+    }, 40_000);
     assert.deepEqual(userTexts(done.body).filter((text) => text === 'queued-later'), []);
     const landed = (done.body.conversation.sends || []).find((row) => row.requestId === keepId);
     assert.ok(landed?.entryId, JSON.stringify(done.body.conversation.sends));
