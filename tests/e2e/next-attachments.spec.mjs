@@ -152,3 +152,160 @@ test('composer @ file selection and sending with @path', async ({ page }) => {
     await srv.kill();
   }
 });
+
+test('uploads non-image file, displays tag, sends it, and renders file chip in thread', async ({ page }) => {
+  const prepared = await prepareWorkspaces(['ws']);
+  const srv = await startServer({
+    script: 'no-usage.json',
+    extraEnv: { WEFT_WORKSPACE_ROOT: prepared.root },
+  });
+  try {
+    const { conv } = await openWorkspaceConversation(srv, 'demo', prepared.dirs[0]);
+    await loginNext(page, srv);
+    await page.goto(`${srv.url}/c/${encodeURIComponent(conv.id)}`);
+    await expect(page.getByTestId('next-composer-input')).toBeVisible();
+
+    const fileInput = page.getByTestId('next-composer-file-input');
+    await fileInput.setInputFiles({
+      name: 'notes.txt',
+      mimeType: 'text/plain',
+      buffer: Buffer.from('hello attachment'),
+    });
+
+    const uploadTag = page.getByTestId('next-attach-upload');
+    await expect(uploadTag).toBeVisible();
+    await expect(uploadTag).toContainText('notes.txt');
+    await expect(uploadTag).toHaveAttribute('data-status', 'done');
+
+    await expect(page.getByTestId('next-send')).toHaveClass(/is-ready/);
+    await page.getByTestId('next-send').click();
+
+    const userMsg = page.getByTestId('next-item-user').first();
+    await expect(userMsg).toBeVisible();
+    const userFile = userMsg.getByTestId('next-user-file');
+    await expect(userFile).toBeVisible();
+    await expect(userFile).toContainText('notes.txt');
+    const title = await userFile.getAttribute('title');
+    expect(title).toContain('.weft/uploads');
+
+    await page.reload();
+    await expect(page.getByTestId('next-user-file')).toBeVisible();
+    await expect(page.getByTestId('next-user-file')).toContainText('notes.txt');
+  } finally {
+    await srv.kill();
+  }
+});
+
+test('pastes long text (128 lines), displays paste tag with peek popup, restore, and expand in thread', async ({ page }) => {
+  const prepared = await prepareWorkspaces(['ws']);
+  const srv = await startServer({
+    script: 'no-usage.json',
+    extraEnv: { WEFT_WORKSPACE_ROOT: prepared.root },
+  });
+  try {
+    const { conv } = await openWorkspaceConversation(srv, 'demo', prepared.dirs[0]);
+    await loginNext(page, srv);
+    await page.goto(`${srv.url}/c/${encodeURIComponent(conv.id)}`);
+    const input = page.getByTestId('next-composer-input');
+    await expect(input).toBeVisible();
+
+    const lines128 = Array.from({ length: 128 }, (_, i) => `line ${i + 1}: ${'content'.repeat(5)}`).join('\n');
+
+    // Paste long text
+    await input.focus();
+    await page.evaluate((val) => {
+      const dt = new DataTransfer();
+      dt.setData('text/plain', val);
+      const el = document.querySelector('[data-testid="next-composer-input"]');
+      const event = new Event('paste', { bubbles: true, cancelable: true });
+      Object.defineProperty(event, 'clipboardData', { value: dt });
+      el.dispatchEvent(event);
+    }, lines128);
+
+    // Should NOT enter textarea, but become a paste tag
+    await expect(input).toHaveValue('');
+    const pasteTag = page.getByTestId('next-attach-paste');
+    await expect(pasteTag).toBeVisible();
+    await expect(pasteTag).toContainText('128 行');
+
+    // Click tag to open peek popup
+    await pasteTag.click();
+    const peek = page.getByTestId('next-paste-peek');
+    await expect(peek).toBeVisible();
+    await expect(page.getByTestId('next-paste-peek-head')).toContainText('line 1:');
+
+    // Click restore: tag is removed, text is placed back into textarea
+    await page.getByTestId('next-paste-peek-restore').click();
+    await expect(pasteTag).toHaveCount(0);
+    await expect(input).toHaveValue(lines128);
+
+    // Clear input and paste again for sending
+    await input.fill('');
+    await page.evaluate((val) => {
+      const dt = new DataTransfer();
+      dt.setData('text/plain', val);
+      const el = document.querySelector('[data-testid="next-composer-input"]');
+      const event = new Event('paste', { bubbles: true, cancelable: true });
+      Object.defineProperty(event, 'clipboardData', { value: dt });
+      el.dispatchEvent(event);
+    }, lines128);
+    await expect(pasteTag).toBeVisible();
+
+    // Send
+    await page.getByTestId('next-send').click();
+
+    // Thread shows user message with paste block
+    const userMsg = page.getByTestId('next-item-user').first();
+    await expect(userMsg).toBeVisible();
+    const pasteBlock = userMsg.getByTestId('next-user-paste');
+    await expect(pasteBlock).toBeVisible();
+    await expect(pasteBlock).toContainText('128 行');
+    const pasteText = pasteBlock.getByTestId('next-user-paste-text');
+    await expect(pasteText).toHaveClass(/is-collapsed/);
+
+    // Expand paste block
+    await pasteBlock.getByTestId('next-user-paste-toggle').click();
+    await expect(pasteText).toHaveClass(/is-expanded/);
+    await expect(pasteText).toContainText('line 128:');
+
+    // Collapse paste block
+    await pasteBlock.getByTestId('next-user-paste-toggle').click();
+    await expect(pasteText).toHaveClass(/is-collapsed/);
+  } finally {
+    await srv.kill();
+  }
+});
+
+test('over-limit upload (>20MB) displays error state and blocks send', async ({ page }) => {
+  const prepared = await prepareWorkspaces(['ws']);
+  const srv = await startServer({
+    script: 'no-usage.json',
+    extraEnv: { WEFT_WORKSPACE_ROOT: prepared.root },
+  });
+  try {
+    const { conv } = await openWorkspaceConversation(srv, 'demo', prepared.dirs[0]);
+    await loginNext(page, srv);
+    await page.goto(`${srv.url}/c/${encodeURIComponent(conv.id)}`);
+    await expect(page.getByTestId('next-composer-input')).toBeVisible();
+
+    // In browser, create a 21MB file and set to file input
+    await page.evaluate(() => {
+      const bytes = new Uint8Array(21 * 1024 * 1024);
+      const file = new File([bytes], 'huge.bin', { type: 'application/octet-stream' });
+      const input = document.querySelector('[data-testid="next-composer-file-input"]');
+      const dt = new DataTransfer();
+      dt.items.add(file);
+      input.files = dt.files;
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+
+    const uploadTag = page.getByTestId('next-attach-upload');
+    await expect(uploadTag).toBeVisible();
+    await expect(uploadTag).toHaveAttribute('data-status', 'error');
+    await expect(uploadTag).toContainText('20MB');
+    await expect(page.getByTestId('next-send')).not.toHaveClass(/is-ready/);
+  } finally {
+    await srv.kill();
+  }
+});
+

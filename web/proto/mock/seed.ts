@@ -786,5 +786,7 @@ export function createSeed(now: number): MockDb {
     grokPolls: new Map(),
     seq: 0,
     messageImages: new Map(),
+    messagePastes: new Map(),
+    workspaceUploads: new Map(),
   };
 }

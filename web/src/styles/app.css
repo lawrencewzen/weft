@@ -643,6 +643,44 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.6; backgroun
 .msg-side-user .msg-header { display: none; }
 .msg-group[data-role="user"] .msg-body { background: var(--line2); padding: 10px 16px; border-radius: 18px; text-wrap: pretty; font-size: 15px; line-height: 1.6; }
 .msg-user-images { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+.msg-user-files { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+.msg-user-file-tag {
+  height: 26px; display: inline-flex; align-items: center; gap: 6px; padding: 0 8px;
+  border-radius: 7px; border: 1px solid var(--line); font-size: 12px; color: var(--ink3);
+  font-family: var(--mono);
+}
+.msg-user-file-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 220px; }
+.msg-user-file-size { color: var(--mute); font-family: var(--font); flex-shrink: 0; }
+
+.msg-user-pastes { display: flex; flex-direction: column; gap: 6px; width: 100%; align-items: flex-end; }
+.msg-user-paste-block {
+  width: min(560px, 100%); border: 1px solid var(--line); border-radius: 12px;
+  background: var(--panel); overflow: hidden; display: flex; flex-direction: column;
+}
+.msg-user-paste-content {
+  padding: 10px 14px; font-family: var(--mono); font-size: 12px; line-height: 18px;
+  color: var(--ink3); white-space: pre;
+}
+.msg-user-paste-content.is-collapsed {
+  max-height: 72px; overflow: hidden;
+  -webkit-mask-image: linear-gradient(#000 40%, transparent);
+  mask-image: linear-gradient(#000 40%, transparent);
+}
+.msg-user-paste-content.is-expanded {
+  max-height: 420px; overflow: auto;
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+.msg-user-paste-bar {
+  display: flex; align-items: center; gap: 8px; padding: 6px 14px;
+  border-top: 1px solid var(--line2); font-size: 12px; color: var(--mute); cursor: pointer;
+  background: transparent; border-left: none; border-right: none; border-bottom: none; width: 100%;
+  text-align: left; font-family: inherit;
+}
+.msg-user-paste-bar:hover { background: var(--hover); }
+.msg-user-paste-bar svg { flex-shrink: 0; }
+.msg-user-paste-title { flex: 1; }
+.msg-user-paste-label { color: var(--ink3); }
 .msg-user-image {
   width: 132px; height: 132px; padding: 0; border: 1px solid var(--line); border-radius: 12px;
   overflow: hidden; background: var(--sub); cursor: zoom-in;
@@ -1052,12 +1090,45 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.6; backgroun
 .composer-divider { width: 1px; height: 16px; background: var(--line); margin: 0 6px; flex-shrink: 0; }
 .composer-tags { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .composer-tag {
+  position: relative;
   height: 30px; display: inline-flex; align-items: center; gap: 8px;
   padding: 0 6px 0 4px; border-radius: 8px; border: 1px solid var(--line);
   font-size: 12px; color: var(--ink2); max-width: 100%; min-width: 0;
 }
 .composer-tag.is-file { padding: 0 6px 0 8px; gap: 6px; font-family: var(--mono); }
-.composer-tag-file-icon { flex-shrink: 0; color: var(--mute); margin-left: 2px; }
+.composer-tag.is-paste { cursor: pointer; }
+.composer-tag.is-error { border-color: var(--del-ink); color: var(--del-ink); }
+.composer-tag-file-icon, .composer-tag-paste-icon { flex-shrink: 0; color: var(--mute); margin-left: 2px; display: inline-flex; align-items: center; }
+.composer-tag-spin {
+  width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid var(--line);
+  border-top-color: var(--accent); animation: spin .9s linear infinite; flex-shrink: 0; margin-left: 4px;
+}
+.composer-tag-error { color: var(--del-ink); flex-shrink: 0; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.composer-paste-peek {
+  position: absolute; left: 0; bottom: calc(100% + 6px); z-index: 70;
+  width: 440px; max-width: calc(100vw - 40px); background: var(--panel);
+  border: 1px solid var(--line); border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.09);
+  display: flex; flex-direction: column; cursor: default;
+  font-family: var(--font); text-align: left;
+}
+.composer-paste-peek-head {
+  display: block; padding: 10px 12px 0; font-family: var(--mono);
+  font-size: 12px; line-height: 18px; color: var(--ink3);
+  white-space: pre; overflow: hidden; max-height: 144px;
+  -webkit-mask-image: linear-gradient(#000 60%, transparent);
+  mask-image: linear-gradient(#000 60%, transparent);
+}
+.composer-paste-peek-bar {
+  display: flex; align-items: center; gap: 8px; padding: 8px 12px;
+  border-top: 1px solid var(--line2); font-size: 12px; color: var(--mute);
+}
+.composer-paste-peek-bar span { flex: 1; }
+.composer-paste-peek-restore {
+  cursor: pointer; color: var(--ink3); padding: 2px 6px; margin: -2px -6px;
+  border-radius: 5px; border: none; background: transparent; font-family: inherit; font-size: 12px;
+}
+.composer-paste-peek-restore:hover { background: var(--hover); }
 .composer-tag-thumb {
   width: 22px; height: 22px; border-radius: 5px; object-fit: cover; background: var(--bd2); flex-shrink: 0;
 }

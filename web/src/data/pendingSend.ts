@@ -1,5 +1,6 @@
 import type { components } from '../../../src/v2/contract.gen';
 import { pendingThreadImages } from '../../../src/v2/views/message-images';
+import { recordLocalPastes } from './attachments';
 import type { ConversationSend, ThreadItem } from './store';
 
 type MessageImage = components['schemas']['MessageImage'];
@@ -12,6 +13,8 @@ export type PendingUser = {
   key: string;
   text: string;
   images?: MessageImage[];
+  files?: components['schemas']['SendMessageFile'][];
+  pastes?: string[];
   /** How many server items already had this exact text when we sent it. */
   baseline: number;
   /** When POST /messages resolved, or null while it is still in flight. */
@@ -169,12 +172,27 @@ export function threadPending(pending: readonly PendingUser[]): PendingUser[] {
 export function pendingItem(entry: PendingUser): ThreadItem {
   const images = pendingThreadImages(entry.images);
   const steered = entry.mode === 'steer';
+  const files: components['schemas']['ThreadUserFile'][] = (entry.files || []).map((f) => ({
+    path: f.path,
+    name: f.name || f.path.split('/').pop() || f.path,
+    bytes: f.bytes ?? 0,
+  }));
+  const pastes: components['schemas']['ThreadUserPaste'][] = (entry.pastes || []).map((p) => ({
+    lines: p.split('\n').length,
+    chars: p.length,
+    preview: p.split('\n').slice(0, 8).join('\n'),
+  }));
+  if (entry.pastes?.length) {
+    recordLocalPastes(`local:${entry.key}`, entry.pastes);
+  }
   return {
     kind: 'user',
     id: `local:${entry.key}`,
     text: entry.text,
     pathRefs: [],
     ...(images.length ? { images } : {}),
+    ...(files.length ? { files } : {}),
+    ...(pastes.length ? { pastes } : {}),
     ...(steered ? { steered: true } : {}),
   } as ThreadItem;
 }

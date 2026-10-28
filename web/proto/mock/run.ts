@@ -607,12 +607,27 @@ function finishRun(db: MockDb, conv: MockConv, hub: MockHub): void {
   if (next && !run.cancelled) {
     const id = nextId(db, 'u');
     const images = attachThreadImages(db, conv.view.id, id, next.images);
+    const files = next.files?.map((f) => ({
+      path: f.path,
+      name: f.name || f.path.split('/').pop() || f.path,
+      bytes: f.bytes ?? 0,
+    }));
+    const pastes = next.pastes?.map((p, idx) => {
+      db.messagePastes.set(`${conv.view.id}\t${id}\t${idx}`, p);
+      return {
+        lines: p.split('\n').length,
+        chars: p.length,
+        preview: p.split('\n').slice(0, 8).join('\n'),
+      };
+    });
     const item: ThreadItem = {
       kind: 'user',
       id,
       text: next.text,
       pathRefs: [],
       ...(images ? { images } : {}),
+      ...(files?.length ? { files } : {}),
+      ...(pastes?.length ? { pastes } : {}),
     };
     conv.items.push(item);
     conv.view.itemIds.push(id);
@@ -747,12 +762,16 @@ export function sendMessage(
   requestId: string,
   images?: SendImage[],
   mode: 'steer' | 'queue' = 'steer',
+  files?: components['schemas']['SendMessageFile'][],
+  pastes?: string[],
 ): SendResult {
   const known = conv.view.sends?.find((row) => row.requestId === requestId);
   if (known) {
     return { ok: true, runId: conv.requestRuns.get(requestId) || '' };
   }
   const imageList = images?.length ? images : undefined;
+  const fileList = files?.length ? files : undefined;
+  const pasteList = pastes?.length ? pastes : undefined;
   const sends = conv.view.sends ?? (conv.view.sends = []);
   if (conv.run && conv.view.run.status === 'running') {
     const queued = mode === 'queue';
@@ -764,7 +783,13 @@ export function sendMessage(
       text,
     });
     trimSends(conv);
-    const payload = { requestId, text, ...(imageList ? { images: imageList } : {}) };
+    const payload = {
+      requestId,
+      text,
+      ...(imageList ? { images: imageList } : {}),
+      ...(fileList ? { files: fileList } : {}),
+      ...(pasteList ? { pastes: pasteList } : {}),
+    };
     if (queued) conv.run.followUps.push(payload);
     else conv.run.steers.push(payload);
     conv.requestRuns.set(requestId, conv.run.id);
@@ -775,12 +800,27 @@ export function sendMessage(
   }
   const id = nextId(db, 'u');
   const threadImages = attachThreadImages(db, conv.view.id, id, imageList);
+  const threadFiles = fileList?.map((f) => ({
+    path: f.path,
+    name: f.name || f.path.split('/').pop() || f.path,
+    bytes: f.bytes ?? 0,
+  }));
+  const threadPastes = pasteList?.map((p, idx) => {
+    db.messagePastes.set(`${conv.view.id}\t${id}\t${idx}`, p);
+    return {
+      lines: p.split('\n').length,
+      chars: p.length,
+      preview: p.split('\n').slice(0, 8).join('\n'),
+    };
+  });
   const item: ThreadItem = {
     kind: 'user',
     id,
     text,
     pathRefs: [],
     ...(threadImages ? { images: threadImages } : {}),
+    ...(threadFiles?.length ? { files: threadFiles } : {}),
+    ...(threadPastes?.length ? { pastes: threadPastes } : {}),
   };
   conv.items.push(item);
   conv.view.itemIds.push(id);
@@ -789,7 +829,13 @@ export function sendMessage(
   if (conv.items.filter((row) => row.kind === 'user').length === 1 && conv.view.title === '新对话') {
     conv.view.title = text.trim()
       ? titleFrom(text)
-      : (imageList?.[0]?.name ? imageList[0].name.replace(/\.[^.]+$/, '') : '图片');
+      : (imageList?.[0]?.name
+          ? imageList[0].name.replace(/\.[^.]+$/, '')
+          : (fileList?.[0]?.name
+              ? fileList[0].name.replace(/\.[^.]+$/, '')
+              : (pasteList?.[0]
+                  ? pasteList[0].split('\n')[0].slice(0, 28)
+                  : '新对话')));
   }
   touch(conv);
   publishItem(conv, hub, item);

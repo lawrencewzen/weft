@@ -150,3 +150,102 @@ test('prototype @ file popup, filter, keyboard/mouse pick, escape, and tag sync'
 
   expectClean(state);
 });
+
+test('prototype non-image file upload via file input and send', async ({ page }) => {
+  const state = await openProto(page);
+  await page.getByTestId('next-new-chat').click();
+  await expect(page.getByTestId('next-composer-input')).toBeVisible();
+
+  await page.evaluate(() => {
+    const file = new File(['mock content here'], 'sample.pdf', { type: 'application/pdf' });
+    const input = document.querySelector('[data-testid="next-composer-file-input"]');
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    input.files = dt.files;
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+
+  const uploadTag = page.getByTestId('next-attach-upload');
+  await expect(uploadTag).toBeVisible();
+  await expect(uploadTag).toContainText('sample.pdf');
+  await expect(uploadTag).toHaveAttribute('data-status', 'done');
+
+  await page.getByTestId('next-send').click();
+  const userMsg = page.getByTestId('next-item-user').first();
+  await expect(userMsg).toBeVisible();
+  const userFile = userMsg.getByTestId('next-user-file');
+  await expect(userFile).toBeVisible();
+  await expect(userFile).toContainText('sample.pdf');
+
+  expectClean(state);
+});
+
+test('prototype long paste folds into tag, peeks, restores, sends, and expands in thread', async ({ page }) => {
+  const state = await openProto(page);
+  await page.getByTestId('next-new-chat').click();
+  const input = page.getByTestId('next-composer-input');
+  await expect(input).toBeVisible();
+
+  const lines128 = Array.from({ length: 128 }, (_, i) => `proto line ${i + 1}: ${'text'.repeat(5)}`).join('\n');
+
+  await input.focus();
+  await page.evaluate((val) => {
+    const dt = new DataTransfer();
+    dt.setData('text/plain', val);
+    const el = document.querySelector('[data-testid="next-composer-input"]');
+    const event = new Event('paste', { bubbles: true, cancelable: true });
+    Object.defineProperty(event, 'clipboardData', { value: dt });
+    el.dispatchEvent(event);
+  }, lines128);
+
+  await expect(input).toHaveValue('');
+  const pasteTag = page.getByTestId('next-attach-paste');
+  await expect(pasteTag).toBeVisible();
+  await expect(pasteTag).toContainText('128 行');
+
+  // Peek
+  await pasteTag.click();
+  await expect(page.getByTestId('next-paste-peek')).toBeVisible();
+  await expect(page.getByTestId('next-paste-peek-head')).toContainText('proto line 1:');
+
+  // Restore
+  await page.getByTestId('next-paste-peek-restore').click();
+  await expect(pasteTag).toHaveCount(0);
+  await expect(input).toHaveValue(lines128);
+
+  // Clear and paste again
+  await input.fill('');
+  await page.evaluate((val) => {
+    const dt = new DataTransfer();
+    dt.setData('text/plain', val);
+    const el = document.querySelector('[data-testid="next-composer-input"]');
+    const event = new Event('paste', { bubbles: true, cancelable: true });
+    Object.defineProperty(event, 'clipboardData', { value: dt });
+    el.dispatchEvent(event);
+  }, lines128);
+  await expect(pasteTag).toBeVisible();
+
+  // Send
+  await page.getByTestId('next-send').click();
+
+  const userMsg = page.getByTestId('next-item-user').first();
+  await expect(userMsg).toBeVisible();
+  const pasteBlock = userMsg.getByTestId('next-user-paste');
+  await expect(pasteBlock).toBeVisible();
+  await expect(pasteBlock).toContainText('128 行');
+
+  const pasteText = pasteBlock.getByTestId('next-user-paste-text');
+  await expect(pasteText).toHaveClass(/is-collapsed/);
+
+  // Toggle expand
+  await pasteBlock.getByTestId('next-user-paste-toggle').click();
+  await expect(pasteText).toHaveClass(/is-expanded/);
+  await expect(pasteText).toContainText('proto line 128:');
+
+  // Toggle collapse
+  await pasteBlock.getByTestId('next-user-paste-toggle').click();
+  await expect(pasteText).toHaveClass(/is-collapsed/);
+
+  expectClean(state);
+});
+

@@ -13,6 +13,7 @@ import {
 } from './api';
 
 type MessageImage = components['schemas']['MessageImage'];
+type SendMessageFile = components['schemas']['SendMessageFile'];
 import { navigate, conversationPath } from './nav';
 import { useSession } from './session';
 import {
@@ -24,7 +25,14 @@ import {
 } from './store';
 
 export type ConversationActions = {
-  send: (text: string, requestId?: string, images?: MessageImage[], mode?: SendMode) => Promise<unknown>;
+  send: (
+    text: string,
+    requestId?: string,
+    images?: MessageImage[],
+    mode?: SendMode,
+    files?: SendMessageFile[],
+    pastes?: string[],
+  ) => Promise<unknown>;
   stop: () => ReturnType<typeof stopApi>;
   continueRun: (requestId?: string) => ReturnType<typeof continueRunApi>;
   loadToolOutput: (toolId: string) => ReturnType<typeof toolOutput>;
@@ -60,8 +68,15 @@ export function useConversation(cid: string | null | undefined): ConversationSta
   const changes = id ? store.changes(id) : [];
   const missing = Boolean(id) && store.isMissing(conversationTopic(id));
 
-  const send = useCallback((text: string, requestId?: string, images?: MessageImage[], mode?: SendMode) => (
-    sendMessage(id, text, requestId, images, mode)
+  const send = useCallback((
+    text: string,
+    requestId?: string,
+    images?: MessageImage[],
+    mode?: SendMode,
+    files?: SendMessageFile[],
+    pastes?: string[],
+  ) => (
+    sendMessage(id, text, requestId, images, mode, files, pastes)
   ), [id]);
   const stop = useCallback(() => stopApi(id), [id]);
   const continueRun = useCallback((requestId?: string) => continueRunApi(id, requestId), [id]);
@@ -90,7 +105,14 @@ export function useDraftSend(
   const created = useRef<{ workspaceId: string; conversationId: string } | null>(null);
   const wsId = workspaceId || '';
 
-  const send = useCallback(async (text: string, requestId?: string, images?: MessageImage[]) => {
+  const send = useCallback(async (
+    text: string,
+    requestId?: string,
+    images?: MessageImage[],
+    mode?: SendMode,
+    files?: SendMessageFile[],
+    pastes?: string[],
+  ) => {
     if (!wsId) throw new Error('no workspace');
     if (!created.current || created.current.workspaceId !== wsId) {
       const conversation = await createConversation(wsId);
@@ -99,7 +121,7 @@ export function useDraftSend(
       if (model) await patchConversationModel(conversation.id, model);
     }
     const cid = created.current.conversationId;
-    await sendMessage(cid, text, requestId, images);
+    await sendMessage(cid, text, requestId, images, mode, files, pastes);
     navigate(conversationPath(cid));
   }, [wsId, modelForCreate]);
 

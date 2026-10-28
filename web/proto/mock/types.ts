@@ -74,6 +74,8 @@ export type Steer = {
   requestId: string;
   text: string;
   images?: components['schemas']['MessageImage'][];
+  files?: components['schemas']['SendMessageFile'][];
+  pastes?: string[];
 };
 
 export type FollowUp = Steer;
@@ -141,6 +143,10 @@ export type MockDb = {
   seq: number;
   /** `${cid}\\t${messageId}\\t${index}` → raw bytes for GET .../images/{index}. */
   messageImages: Map<string, StoredMessageImage>;
+  /** `${cid}\t${messageId}\t${index}` → text for GET .../pastes/{index}. */
+  messagePastes: Map<string, string>;
+  /** `${wsId}\t${uploadPath}` → upload result. */
+  workspaceUploads: Map<string, components['schemas']['UploadResult']>;
 };
 
 export type EntityValue = object | ((lang: Lang) => object);

@@ -180,6 +180,8 @@ function conversationPath(cid: string, suffix = ''): string {
 }
 
 export type SendMode = components['schemas']['SendMessageRequest']['mode'];
+export type UploadResult = components['schemas']['UploadResult'];
+export type SendMessageFile = components['schemas']['SendMessageFile'];
 
 export function sendMessage(
   cid: string,
@@ -187,6 +189,8 @@ export function sendMessage(
   requestId?: string,
   images?: components['schemas']['MessageImage'][],
   mode?: SendMode,
+  files?: components['schemas']['SendMessageFile'][],
+  pastes?: string[],
 ): Promise<RunAccepted> {
   const id = requestId ?? crypto.randomUUID();
   const body: {
@@ -194,16 +198,48 @@ export function sendMessage(
     requestId: string;
     images?: components['schemas']['MessageImage'][];
     mode?: SendMode;
+    files?: components['schemas']['SendMessageFile'][];
+    pastes?: string[];
   } = {
     text,
     requestId: id,
   };
   if (images?.length) body.images = images;
   if (mode === 'steer' || mode === 'queue') body.mode = mode;
+  if (files?.length) body.files = files;
+  if (pastes?.length) body.pastes = pastes;
   return requestJson<RunAccepted>(conversationPath(cid, '/messages'), {
     method: 'POST',
     body: JSON.stringify(body),
   });
+}
+
+export function uploadWorkspaceFile(
+  workspaceId: string,
+  input: { name?: string; data: string },
+): Promise<UploadResult> {
+  return requestJson<UploadResult>(`/api/v2/workspaces/${encodeURIComponent(workspaceId)}/uploads`, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+export async function getMessagePaste(
+  cid: string,
+  messageId: string,
+  index: number,
+): Promise<string> {
+  const url = conversationPath(cid, `/messages/${encodeURIComponent(messageId)}/pastes/${encodeURIComponent(index)}`);
+  const res = await fetch(url, { credentials: 'same-origin' });
+  if (!res.ok) {
+    let msg = `HTTP ${res.status}`;
+    try {
+      const err = await res.json() as { error?: string };
+      if (err?.error) msg = err.error;
+    } catch {}
+    throw new ApiError(msg, { status: res.status });
+  }
+  return res.text();
 }
 
 export function withdrawMessage(cid: string, requestId: string): Promise<{ ok: true }> {
