@@ -432,6 +432,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/workspaces/{id}/uploads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 把文件存进工作区，供发消息时引用
+         * @description 任意文件（不只是图片）上传到该工作区 `.weft/uploads/<YYYYMMDD-HHmmss>-<6 位随机>/<name>`。
+         *     `name` 只取 basename，去掉控制字符和路径分隔符，空名用 `file`。
+         *     单个文件解码后上限 20MB，超了 413。第一次创建 `.weft/` 时写入 `.weft/.gitignore`，内容是 `*`。
+         *     返回相对工作区、正斜杠的 path，发消息时放进 `files`。工作区不存在或已删除 404。
+         */
+        post: operations["uploadWorkspaceFile"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/workspaces/{id}/git/refresh": {
         parameters: {
             query?: never;
@@ -828,7 +851,8 @@ export interface paths {
          * 向对话发消息
          * @description 空闲时发出去就是新一轮。运行中再发：默认 `mode: steer` 插话（Pi Durable `whenBusy: steer`，
          *     当前工具批次结束后写入对话）；`mode: queue` 排队（`whenBusy: followUp`，本轮结束后才作为新消息执行）。
-         *     `text` 去掉首尾空白后，若没有 `images` 则不能为空。只有图片没有文字也可以发送。
+         *     `text` 去掉首尾空白后，若没有 `images`、`files`、`pastes` 则不能为空。
+         *     只有图片、文件或粘贴没有文字也可以发送。`files` 的 path 必须是该工作区 `.weft/uploads/` 下已存在的文件。
          *     `requestId` 缺省时服务端生成；同一个 requestId 重复请求返回同一个 runId。
          */
         post: operations["postConversationMessage"];
@@ -872,6 +896,28 @@ export interface paths {
          *     对话记录里的图片不会变，响应带 Cache-Control: private, max-age=31536000, immutable 和 ETag。找不到 404。
          */
         get: operations["getConversationMessageImage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/conversations/{id}/messages/{messageId}/pastes/{index}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 取用户消息里一段粘贴的全文
+         * @description 对话快照里的 pastes 只有行数、字数和前 8 行预览。点「展开」时用这个接口取原文。
+         *     `messageId` 与 ThreadItemUser.id 一致，`index` 与 pastes 数组下标一致。
+         *     响应 text/plain，Cache-Control: private, max-age=31536000, immutable。找不到 404。
+         */
+        get: operations["getConversationMessagePaste"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1022,11 +1068,33 @@ export interface components {
             /** @description 始终为 true。服务即将退出，由客户端重新拉起。 */
             exiting: boolean;
         };
+        /** @description POST /api/v2/workspaces/{id}/uploads 的请求体。 */
+        UploadRequest: {
+            /** @description 原始文件名。服务端只取 basename，去掉控制字符和路径分隔符，空名用 file。 */
+            name?: string;
+            /** @description 原始字节的标准 base64，不含 data URL 前缀。 */
+            data: string;
+        };
+        /** @description 上传成功。 */
+        UploadResult: {
+            /** @description 相对工作区的路径，正斜杠，形如 .weft/uploads/YYYYMMDD-HHmmss-xxxxxx/name */
+            path: string;
+            /** @description 清洗后的文件名 */
+            name: string;
+            /** @description 解码后的字节数 */
+            bytes: number;
+            /** @description 按扩展名猜测的 MIME，没有则 application/octet-stream */
+            mediaType: string;
+        };
         SendMessageRequest: {
-            /** @description 用户输入。去掉首尾空白后，若没有 images 则不能为空。 */
+            /** @description 用户输入。去掉首尾空白后，若没有 images / files / pastes 则不能为空。 */
             text?: string;
             /** @description 内联图片。data 是不带 data URL 前缀的标准 base64，mediaType 为 png / jpeg / gif / webp。 单张解码后不超过 5MB，一条最多 6 张。选内联而不是先上传再拿 id，是因为 Pi Durable 的 UserInput 原生就是 TextContent | ImageContent，图片进对话记录后刷新才能再显示。 */
             images?: components["schemas"]["MessageImage"][];
+            /** @description 已上传到该工作区 `.weft/uploads/` 的文件。path 相对工作区、正斜杠，必须真实存在， 否则 400 E_BAD_REQUEST。一条最多 20 个。服务端拼进一条 TextContent，模型用读文件工具去读。 */
+            files?: components["schemas"]["SendMessageFile"][];
+            /** @description 长粘贴原文。每段最多 1MB，一条最多 10 段。服务端存成独立的 TextContent （`<pasted_text lines="N">`），快照里只给元数据和前 8 行预览。 */
+            pastes?: string[];
             /** @description 幂等键。缺省时服务端生成。同一个 requestId 重复提交返回同一个 runId。 */
             requestId?: string;
             /**
@@ -1045,6 +1113,15 @@ export interface components {
             /** @description 原始文件名，仅供显示 */
             name?: string;
         };
+        /** @description 发消息时引用的一个已上传文件。 */
+        SendMessageFile: {
+            /** @description 相对工作区的路径，必须在 .weft/uploads/ 下且文件存在 */
+            path: string;
+            /** @description 显示名，缺省用 path 的 basename */
+            name?: string;
+            /** @description 可选；服务端以磁盘实际大小为准 */
+            bytes?: number;
+        };
         /** @description 对话视图里的一张用户图片。只有元数据，不含 base64。 */
         ThreadUserImage: {
             /** @description 这条用户消息里的第几张图，和取图接口的 index 一致 */
@@ -1057,6 +1134,24 @@ export interface components {
             bytes: number;
             /** @description 取这张图的地址。正式快照是 GET /api/v2/conversations/{id}/messages/{messageId}/images/{index}。 乐观上屏还没有服务端地址时可以是 data: 或 blob: URL。 */
             url: string;
+        };
+        /** @description 对话视图里的一段长粘贴。不含全文。 */
+        ThreadUserPaste: {
+            /** @description 粘贴原文的行数 */
+            lines: number;
+            /** @description 粘贴原文的字符数 */
+            chars: number;
+            /** @description 前 8 行预览。全文走 GET .../pastes/{index} */
+            preview: string;
+        };
+        /** @description 用户附上的一个文件。内容在工作区磁盘上，不进快照。 */
+        ThreadUserFile: {
+            /** @description 相对工作区的路径，正斜杠 */
+            path: string;
+            /** @description 文件名，仅供显示 */
+            name: string;
+            /** @description 字节数 */
+            bytes: number;
         };
         ContinueRequest: {
             /** @description 幂等键。缺省时服务端生成。同一个 requestId 重复提交返回同一个 runId。 */
@@ -1251,7 +1346,7 @@ export interface components {
              */
             level: "ok" | "warn" | "full";
         };
-        /** @description 用户消息。 */
+        /** @description 用户消息。text 只含用户正文，不含粘贴块和附件说明。 */
         ThreadItemUser: {
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -1264,6 +1359,10 @@ export interface components {
             pathRefs: components["schemas"]["PathRef"][];
             /** @description 这条用户消息里的图片元数据。没有则省略。不含图片数据。 */
             images?: components["schemas"]["ThreadUserImage"][];
+            /** @description 长粘贴元数据。没有则省略。不含粘贴全文。 */
+            pastes?: components["schemas"]["ThreadUserPaste"][];
+            /** @description 附上的文件。没有则省略。path 相对工作区。 */
+            files?: components["schemas"]["ThreadUserFile"][];
         };
         /** @description 助手回复。空文字的助手消息不进入对话流。 */
         ThreadItemAssistant: {
@@ -3592,6 +3691,87 @@ export interface operations {
             };
         };
     };
+    uploadWorkspaceFile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 工作区 id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UploadRequest"];
+            };
+        };
+        responses: {
+            /** @description 已写入工作区 */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UploadResult"];
+                };
+            };
+            /** @description 请求体无效或 data 不是合法 base64 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 未授权 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 工作区不存在或已移除 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 文件超过 20MB */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 客户端错误 */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 服务端错误 */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+        };
+    };
     refreshWorkspaceGit: {
         parameters: {
             query?: never;
@@ -5026,7 +5206,7 @@ export interface operations {
                     "application/json": components["schemas"]["RunAccepted"];
                 };
             };
-            /** @description 空文字且没有图片，或图片超限 / 格式不对 */
+            /** @description 空文字且没有图片 / 文件 / 粘贴，或字段超限 / 格式不对 / 文件不在 uploads 下 */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -5202,6 +5382,72 @@ export interface operations {
                 };
             };
             /** @description 对话、消息或这张图不存在 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 客户端错误 */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 服务端错误 */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+        };
+    };
+    getConversationMessagePaste: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 对话 id */
+                id: string;
+                /** @description 用户消息 id，与 thread 里 user 项的 id 相同 */
+                messageId: string;
+                /** @description 这条消息里的第几段粘贴 */
+                index: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 粘贴原文 */
+            200: {
+                headers: {
+                    /** @description private, max-age=31536000, immutable */
+                    "Cache-Control"?: string;
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description 未授权 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 对话、消息或这段粘贴不存在 */
             404: {
                 headers: {
                     [name: string]: unknown;

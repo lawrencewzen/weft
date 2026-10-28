@@ -122,6 +122,10 @@ test('contract path templates cover the four command routes', () => {
     matchContractPath('/api/v2/conversations/abc-123/messages/req-1'),
     '/api/v2/conversations/{id}/messages/{requestId}',
   );
+  assert.equal(
+    matchContractPath('/api/v2/conversations/abc-123/messages/u1/pastes/0'),
+    '/api/v2/conversations/{id}/messages/{messageId}/pastes/{index}',
+  );
 });
 
 test('POST /messages 202 then snapshot has the user item and a reply', { timeout: 40_000 }, async () => {

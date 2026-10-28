@@ -229,6 +229,26 @@ test('user images copy onto the thread item as metadata without base64', async (
   assert.equal(thread.items[1].images[0].url, '/api/v2/conversations/c1/messages/u-only/images/0');
 });
 
+test('user pastes and files copy onto the thread item without paste bodies', async () => {
+  const long = Array.from({ length: 12 }, (_, i) => `keep-${i + 1}`).join('\n');
+  const thread = await buildThread([
+    {
+      id: 'u-attach',
+      role: 'user',
+      text: '正文',
+      pastes: [{ lines: 12, chars: long.length, preview: long.split('\n').slice(0, 8).join('\n') }],
+      files: [{ path: '.weft/uploads/stamp/a.txt', name: 'a.txt', bytes: 4 }],
+    },
+  ], { exists: none, conversationId: 'c1' });
+  assertValidThread(thread, 'user-attach');
+  assert.equal(thread.items[0].kind, 'user');
+  assert.equal(thread.items[0].text, '正文');
+  assert.equal(thread.items[0].pastes[0].lines, 12);
+  assert.equal(thread.items[0].files[0].path, '.weft/uploads/stamp/a.txt');
+  assert.equal(JSON.stringify(thread).includes(long), false);
+  assert.equal(JSON.stringify(thread).includes('keep-12'), false);
+});
+
 test('running marks only the last tool group live', async () => {
   const first = tool('r1', 'read', { path: 'a.js' });
   const last = tool('w1', 'write', { path: 'b.js', status: 'running' });

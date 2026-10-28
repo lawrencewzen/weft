@@ -3,6 +3,7 @@
 import { retryDelayMs } from '@earendil-works/pi-ai/utils/retry';
 import { DEFAULT_RETRY_POLICY } from '@earendil-works/pi-durable';
 import { redactAuthText } from '../core/grok-auth.mjs';
+import { extractPasteTexts, parseUserMessageParts } from '../core/user-message-parts.mjs';
 import { overlayContextWindow, presentContext } from '../core/usage.mjs';
 import { isAutoContinueText } from './continuation.mjs';
 import { parentNoteText, USER_TO_SUBAGENT_KIND } from './subagent-control.mjs';
@@ -101,6 +102,22 @@ export function findUserMessageImage(entries, messageId, index) {
   return null;
 }
 
+/** Full paste text for GET /messages/{id}/pastes/{index}. Index matches pastes metadata. */
+export function findUserMessagePaste(entries, messageId, index) {
+  const n = Number(index);
+  if (!Number.isInteger(n) || n < 0) return null;
+  const want = String(messageId ?? '');
+  if (!want) return null;
+  for (const entry of entries || []) {
+    if (entry?.kind !== 'pi.user') continue;
+    if (String(entry.id) !== want) continue;
+    const pastes = extractPasteTexts(entry.model?.[0]?.content);
+    if (n >= pastes.length) return null;
+    return pastes[n];
+  }
+  return null;
+}
+
 function toolBody({ id, name, status, input, output, path, added, removed }) {
   const tool = { id, name, status };
   if (input !== undefined) tool.input = input;
@@ -118,7 +135,8 @@ function assistantModelName(entry) {
 
 function messageDone(entry) {
   const message = entry.model?.[0];
-  const text = textOf(message?.content);
+  const parts = entry.kind === 'pi.user' ? parseUserMessageParts(message?.content) : null;
+  const text = parts ? parts.text : textOf(message?.content);
   const data = { messageId: String(entry.id) };
   if (text) data.text = text;
   if (entry.kind === 'pi.user') {
@@ -371,15 +389,19 @@ export function messagesFromEntries(entries) {
       continue;
     }
     if (entry?.kind === 'pi.user' || entry?.kind === 'pi.assistant') {
-      const text = textOf(entry.model?.[0]?.content);
+      const content = entry.model?.[0]?.content;
+      const parts = entry.kind === 'pi.user' ? parseUserMessageParts(content) : null;
+      const text = parts ? parts.text : textOf(content);
       if (entry.kind === 'pi.assistant' && !text) continue;
       const msg = { id: String(entry.id), role: entry.kind === 'pi.user' ? 'user' : 'assistant' };
       if (text) msg.text = text;
       if (entry.kind === 'pi.user') {
         const kind = kindOfUserText(text);
         if (kind) msg.kind = kind;
-        const images = imagesOf(entry.model?.[0]?.content);
+        const images = imagesOf(content);
         if (images.length) msg.images = images;
+        if (parts?.pastes.length) msg.pastes = parts.pastes;
+        if (parts?.files.length) msg.files = parts.files;
       }
       if (entry.kind === 'pi.assistant') {
         const model = assistantModelName(entry);

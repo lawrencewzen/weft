@@ -1331,6 +1331,74 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/V2Error"
+  /api/v2/workspaces/{id}/uploads:
+    post:
+      operationId: uploadWorkspaceFile
+      summary: 把文件存进工作区，供发消息时引用
+      description: |
+        任意文件（不只是图片）上传到该工作区 `.weft/uploads/<YYYYMMDD-HHmmss>-<6 位随机>/<name>`。
+        `name` 只取 basename，去掉控制字符和路径分隔符，空名用 `file`。
+        单个文件解码后上限 20MB，超了 413。第一次创建 `.weft/` 时写入 `.weft/.gitignore`，内容是 `*`。
+        返回相对工作区、正斜杠的 path，发消息时放进 `files`。工作区不存在或已删除 404。
+      security:
+        - bearerAuth: []
+        - sessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: 工作区 id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UploadRequest"
+      responses:
+        "201":
+          description: 已写入工作区
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UploadResult"
+        "400":
+          description: 请求体无效或 data 不是合法 base64
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        "401":
+          description: 未授权
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        "404":
+          description: 工作区不存在或已移除
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        "413":
+          description: 文件超过 20MB
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        4XX:
+          description: 客户端错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        5XX:
+          description: 服务端错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
   /api/v2/workspaces/{id}/git/refresh:
     post:
       operationId: refreshWorkspaceGit
@@ -2512,7 +2580,8 @@ paths:
       description: |
         空闲时发出去就是新一轮。运行中再发：默认 `mode: steer` 插话（Pi Durable `whenBusy: steer`，
         当前工具批次结束后写入对话）；`mode: queue` 排队（`whenBusy: followUp`，本轮结束后才作为新消息执行）。
-        `text` 去掉首尾空白后，若没有 `images` 则不能为空。只有图片没有文字也可以发送。
+        `text` 去掉首尾空白后，若没有 `images`、`files`、`pastes` 则不能为空。
+        只有图片、文件或粘贴没有文字也可以发送。`files` 的 path 必须是该工作区 `.weft/uploads/` 下已存在的文件。
         `requestId` 缺省时服务端生成；同一个 requestId 重复请求返回同一个 runId。
       security:
         - bearerAuth: []
@@ -2538,7 +2607,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/RunAccepted"
         "400":
-          description: 空文字且没有图片，或图片超限 / 格式不对
+          description: 空文字且没有图片 / 文件 / 粘贴，或字段超限 / 格式不对 / 文件不在 uploads 下
           content:
             application/json:
               schema:
@@ -2705,6 +2774,76 @@ paths:
                 $ref: "#/components/schemas/V2Error"
         "404":
           description: 对话、消息或这张图不存在
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        4XX:
+          description: 客户端错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        5XX:
+          description: 服务端错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+  /api/v2/conversations/{id}/messages/{messageId}/pastes/{index}:
+    get:
+      operationId: getConversationMessagePaste
+      summary: 取用户消息里一段粘贴的全文
+      description: |
+        对话快照里的 pastes 只有行数、字数和前 8 行预览。点「展开」时用这个接口取原文。
+        `messageId` 与 ThreadItemUser.id 一致，`index` 与 pastes 数组下标一致。
+        响应 text/plain，Cache-Control: private, max-age=31536000, immutable。找不到 404。
+      security:
+        - bearerAuth: []
+        - sessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: 对话 id
+        - name: messageId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: 用户消息 id，与 thread 里 user 项的 id 相同
+        - name: index
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 0
+          description: 这条消息里的第几段粘贴
+      responses:
+        "200":
+          description: 粘贴原文
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+              description: "private, max-age=31536000, immutable"
+            ETag:
+              schema:
+                type: string
+          content:
+            text/plain:
+              schema:
+                type: string
+        "401":
+          description: 未授权
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        "404":
+          description: 对话、消息或这段粘贴不存在
           content:
             application/json:
               schema:
@@ -3115,13 +3254,49 @@ components:
         exiting:
           type: boolean
           description: 始终为 true。服务即将退出，由客户端重新拉起。
+    UploadRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - data
+      properties:
+        name:
+          type: string
+          description: 原始文件名。服务端只取 basename，去掉控制字符和路径分隔符，空名用 file。
+        data:
+          type: string
+          description: 原始字节的标准 base64，不含 data URL 前缀。
+      description: POST /api/v2/workspaces/{id}/uploads 的请求体。
+    UploadResult:
+      type: object
+      additionalProperties: false
+      required:
+        - path
+        - name
+        - bytes
+        - mediaType
+      properties:
+        path:
+          type: string
+          description: 相对工作区的路径，正斜杠，形如 .weft/uploads/YYYYMMDD-HHmmss-xxxxxx/name
+        name:
+          type: string
+          description: 清洗后的文件名
+        bytes:
+          type: integer
+          minimum: 0
+          description: 解码后的字节数
+        mediaType:
+          type: string
+          description: 按扩展名猜测的 MIME，没有则 application/octet-stream
+      description: 上传成功。
     SendMessageRequest:
       type: object
       additionalProperties: false
       properties:
         text:
           type: string
-          description: 用户输入。去掉首尾空白后，若没有 images 则不能为空。
+          description: 用户输入。去掉首尾空白后，若没有 images / files / pastes 则不能为空。
         images:
           type: array
           maxItems: 6
@@ -3131,6 +3306,22 @@ components:
             Pi Durable 的 UserInput 原生就是 TextContent | ImageContent，图片进对话记录后刷新才能再显示。
           items:
             $ref: "#/components/schemas/MessageImage"
+        files:
+          type: array
+          maxItems: 20
+          description: >
+            已上传到该工作区 `.weft/uploads/` 的文件。path 相对工作区、正斜杠，必须真实存在，
+            否则 400 E_BAD_REQUEST。一条最多 20 个。服务端拼进一条 TextContent，模型用读文件工具去读。
+          items:
+            $ref: "#/components/schemas/SendMessageFile"
+        pastes:
+          type: array
+          maxItems: 10
+          description: >
+            长粘贴原文。每段最多 1MB，一条最多 10 段。服务端存成独立的 TextContent
+            （`<pasted_text lines="N">`），快照里只给元数据和前 8 行预览。
+          items:
+            type: string
         requestId:
           type: string
           description: 幂等键。缺省时服务端生成。同一个 requestId 重复提交返回同一个 runId。
@@ -3163,6 +3354,23 @@ components:
           type: string
           description: 原始文件名，仅供显示
       description: 发送时的一张图片。对话视图里不出现这个对象。
+    SendMessageFile:
+      type: object
+      additionalProperties: false
+      required:
+        - path
+      properties:
+        path:
+          type: string
+          description: 相对工作区的路径，必须在 .weft/uploads/ 下且文件存在
+        name:
+          type: string
+          description: 显示名，缺省用 path 的 basename
+        bytes:
+          type: integer
+          minimum: 0
+          description: 可选；服务端以磁盘实际大小为准
+      description: 发消息时引用的一个已上传文件。
     ThreadUserImage:
       type: object
       additionalProperties: false
@@ -3196,6 +3404,45 @@ components:
             取这张图的地址。正式快照是 GET /api/v2/conversations/{id}/messages/{messageId}/images/{index}。
             乐观上屏还没有服务端地址时可以是 data: 或 blob: URL。
       description: 对话视图里的一张用户图片。只有元数据，不含 base64。
+    ThreadUserPaste:
+      type: object
+      additionalProperties: false
+      required:
+        - lines
+        - chars
+        - preview
+      properties:
+        lines:
+          type: integer
+          minimum: 0
+          description: 粘贴原文的行数
+        chars:
+          type: integer
+          minimum: 0
+          description: 粘贴原文的字符数
+        preview:
+          type: string
+          description: 前 8 行预览。全文走 GET .../pastes/{index}
+      description: 对话视图里的一段长粘贴。不含全文。
+    ThreadUserFile:
+      type: object
+      additionalProperties: false
+      required:
+        - path
+        - name
+        - bytes
+      properties:
+        path:
+          type: string
+          description: 相对工作区的路径，正斜杠
+        name:
+          type: string
+          description: 文件名，仅供显示
+        bytes:
+          type: integer
+          minimum: 0
+          description: 字节数
+      description: 用户附上的一个文件。内容在工作区磁盘上，不进快照。
     ContinueRequest:
       type: object
       additionalProperties: false
@@ -3669,7 +3916,17 @@ components:
           description: 这条用户消息里的图片元数据。没有则省略。不含图片数据。
           items:
             $ref: "#/components/schemas/ThreadUserImage"
-      description: 用户消息。
+        pastes:
+          type: array
+          description: 长粘贴元数据。没有则省略。不含粘贴全文。
+          items:
+            $ref: "#/components/schemas/ThreadUserPaste"
+        files:
+          type: array
+          description: 附上的文件。没有则省略。path 相对工作区。
+          items:
+            $ref: "#/components/schemas/ThreadUserFile"
+      description: 用户消息。text 只含用户正文，不含粘贴块和附件说明。
     ThreadItemAssistant:
       type: object
       additionalProperties: false
