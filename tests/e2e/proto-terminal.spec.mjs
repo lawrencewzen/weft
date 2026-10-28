@@ -5,7 +5,7 @@ test.use({ locale: 'zh-CN', viewport: { width: 1440, height: 900 } });
 test.describe.configure({ timeout: 120_000 });
 
 test('prototype terminal tab streams a bash command', async ({ page }) => {
-  await openProto(page);
+  const state = await openProto(page);
 
   const termTab = page.getByTestId('next-right-tab-term');
   await expect(termTab).toBeVisible();
@@ -37,5 +37,5 @@ test('prototype terminal tab streams a bash command', async ({ page }) => {
   await expect(page.getByTestId('next-right-tab-term')).toHaveClass(/active/);
   await expect(page.getByTestId('next-term-body')).toContainText('npm test');
 
-  await expectClean(page);
+  await expectClean(state);
 });
