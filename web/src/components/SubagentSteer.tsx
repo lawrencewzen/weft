@@ -81,7 +81,7 @@ export function SubagentSteer({
             disabled={busy}
             onClick={() => { void onStop(); }}
           >
-            {t(lang, 'btn_stop')}
+            {t(lang, 'subagent_steer_stop')}
           </button>
           <button
             type="button"
