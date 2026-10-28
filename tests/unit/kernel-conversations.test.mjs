@@ -409,6 +409,111 @@ test('rebaseChangePath keeps files under the main workspace and drops another wo
   assert.equal(rebaseChangePath('secret.txt', '/other-tree', '/ws'), null);
 });
 
+test('rebaseChangePath: converts absolute in workspace to relative and preserves outside workspace', () => {
+  assert.equal(rebaseChangePath('/ws/data/foo.mjs', '/ws', '/ws'), 'data/foo.mjs');
+  assert.equal(rebaseChangePath('/ws/nested/sub/file.txt', '/ws', '/ws'), 'nested/sub/file.txt');
+  assert.equal(rebaseChangePath('/Users/lawrence/.config/weft/notes.md', '/ws', '/ws'), '/Users/lawrence/.config/weft/notes.md');
+  assert.equal(rebaseChangePath('/tmp/scratch.txt', '/ws', '/ws'), '/tmp/scratch.txt');
+});
+
+test('rebaseChangePath: handles Windows drive letter paths', () => {
+  assert.equal(rebaseChangePath('C:\\ws\\src\\index.ts', 'C:\\ws', 'C:\\ws'), 'src/index.ts');
+  assert.equal(rebaseChangePath('c:/ws/src/index.ts', 'C:\\ws', 'C:\\ws'), 'src/index.ts');
+  assert.equal(rebaseChangePath('C:\\ws\\src\\deep\\file.ts', 'c:\\ws', 'C:\\ws'), 'src/deep/file.ts');
+  assert.equal(rebaseChangePath('src\\index.ts', 'C:\\ws', 'C:\\ws'), 'src/index.ts');
+  assert.equal(rebaseChangePath('C:\\Users\\alice\\notes.md', 'C:\\ws', 'C:\\ws'), 'C:/Users/alice/notes.md');
+  assert.equal(rebaseChangePath('D:\\data\\notes.md', 'C:\\ws', 'C:\\ws'), 'D:/data/notes.md');
+  assert.equal(rebaseChangePath('secret.txt', 'C:\\other-tree', 'C:\\ws'), null);
+});
+
+test('mergeFileChanges: merges absolute and relative writes of the same file into one row', () => {
+  const rows = mergeFileChanges([
+    {
+      writer: { kind: 'main' },
+      workspacePath: '/ws',
+      writes: writesFromEntries([
+        toolResult({
+          id: 10,
+          toolCallId: 'm',
+          filePath: '/ws/data/foo.mjs',
+          before: 'initial',
+          after: 'first-edit',
+          timestamp: 10,
+        }),
+      ]),
+    },
+    {
+      writer: { kind: 'subagent', agentId: 'c1:sub:9', name: 'scout' },
+      workspacePath: '/ws',
+      writes: writesFromEntries([
+        toolResult({
+          id: 20,
+          toolCallId: 's',
+          filePath: 'data/foo.mjs',
+          before: 'first-edit',
+          after: 'second-edit',
+          timestamp: 20,
+        }),
+      ]),
+    },
+  ], { workspacePath: '/ws' });
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].path, 'data/foo.mjs');
+  assert.equal(rows[0].before, 'initial');
+  assert.equal(rows[0].after, 'second-edit');
+  assert.deepEqual(rows[0].by, { kind: 'subagent', agentId: 'c1:sub:9', name: 'scout' });
+});
+
+test('mergeFileChanges: handles Windows paths merging and keeps outside workspace files', () => {
+  const rows = mergeFileChanges([
+    {
+      writer: { kind: 'main' },
+      workspacePath: 'C:\\ws',
+      writes: writesFromEntries([
+        toolResult({
+          id: 10,
+          toolCallId: 'm1',
+          filePath: 'C:\\ws\\src\\app.ts',
+          before: 'init',
+          after: 'v1',
+          timestamp: 10,
+        }),
+        toolResult({
+          id: 30,
+          toolCallId: 'm2',
+          filePath: 'C:\\Users\\alice\\notes.md',
+          before: '',
+          after: 'external notes',
+          timestamp: 30,
+        }),
+      ]),
+    },
+    {
+      writer: { kind: 'subagent', agentId: 'c1:sub:1', name: 'helper' },
+      workspacePath: 'C:\\ws',
+      writes: writesFromEntries([
+        toolResult({
+          id: 20,
+          toolCallId: 's1',
+          filePath: 'src\\app.ts',
+          before: 'v1',
+          after: 'v2',
+          timestamp: 20,
+        }),
+      ]),
+    },
+  ], { workspacePath: 'C:\\ws' });
+  assert.equal(rows.length, 2);
+  const appRow = rows.find((r) => r.path === 'src/app.ts');
+  const noteRow = rows.find((r) => r.path === 'C:/Users/alice/notes.md');
+  assert.ok(appRow, 'app.ts should be present and merged');
+  assert.ok(noteRow, 'notes.md should be present as outside workspace');
+  assert.equal(appRow.before, 'init');
+  assert.equal(appRow.after, 'v2');
+  assert.deepEqual(appRow.by, { kind: 'subagent', agentId: 'c1:sub:1', name: 'helper' });
+  assert.deepEqual(noteRow.by, { kind: 'main' });
+});
+
 test('mergeFileChanges: only the main Agent wrote', () => {
   const rows = mergeFileChanges([{
     writer: { kind: 'main' },

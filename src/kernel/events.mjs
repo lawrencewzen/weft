@@ -456,29 +456,60 @@ function asTimestamp(value) {
   return Number.isFinite(n) && n > 0 ? n : null;
 }
 
-/** True when `target` is `root` or a path inside it. */
-function isInsideRoot(root, target) {
-  const rel = path.relative(root, target);
-  return rel === '' || (rel !== '..' && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel));
+function isWindowsPath(p) {
+  return typeof p === 'string' && (/^[A-Za-z]:[\\/]/.test(p) || /^[A-Za-z]:$/.test(p) || p.includes('\\'));
+}
+
+function getPathImpl(fromCwd, toCwd, filePath) {
+  if (process.platform === 'win32' || isWindowsPath(fromCwd) || isWindowsPath(toCwd) || isWindowsPath(filePath)) {
+    return path.win32;
+  }
+  return path.posix;
+}
+
+function isInsideRootWith(root, target, p) {
+  const rel = p.relative(root, target);
+  return rel === '' || (!rel.startsWith(`..${p.sep}`) && rel !== '..' && !p.isAbsolute(rel));
+}
+
+function normalizePosixSeparators(p) {
+  const s = String(p ?? '').replaceAll('\\', '/');
+  if (/^[a-z]:/i.test(s)) {
+    return s[0].toUpperCase() + s.slice(1);
+  }
+  return s;
 }
 
 /**
  * Relocate a file path from a child cwd onto the main workspace.
- * Sub-agents may run in a different cwd (git worktree). Files still under the
- * main workspace are kept, with the path rewritten relative to it. Files in a
- * different workspace are ignored (returns null).
+ * Files under the main workspace are rewritten relative to it, using `/`.
+ * Files outside the main workspace touched by the conversation keep their absolute path.
+ * Sub-agents in a different worktree touching non-main files are ignored (returns null).
  */
 export function rebaseChangePath(filePath, fromCwd, toCwd) {
-  const rel = String(filePath ?? '').replaceAll('\\', '/');
-  if (!rel) return null;
-  if (!fromCwd || !toCwd) return rel;
-  const from = path.resolve(String(fromCwd));
-  const to = path.resolve(String(toCwd));
-  if (from === to) return rel;
-  const abs = path.resolve(from, rel);
-  if (!isInsideRoot(to, abs)) return null;
-  const moved = path.relative(to, abs);
-  return moved ? moved.split(path.sep).join('/') : rel;
+  if (filePath == null) return null;
+  const raw = String(filePath).trim();
+  if (!raw) return null;
+  if (!fromCwd || !toCwd) return normalizePosixSeparators(raw);
+
+  const p = getPathImpl(fromCwd, toCwd, raw);
+  const from = p.resolve(String(fromCwd));
+  const to = p.resolve(String(toCwd));
+  const abs = p.resolve(from, raw);
+
+  if (isInsideRootWith(to, abs, p)) {
+    const moved = p.relative(to, abs);
+    return moved ? moved.split(p.sep).join('/') : normalizePosixSeparators(raw);
+  }
+
+  // Not inside toCwd:
+  // If from and to refer to the same root (e.g. main agent cwd), keep as absolute outside-workspace path.
+  if (p.relative(from, to) === '') {
+    return normalizePosixSeparators(abs.split(p.sep).join('/'));
+  }
+
+  // Sub-agent in another worktree: ignore
+  return null;
 }
 
 /**
@@ -600,6 +631,12 @@ export function mergeFileChanges(sources, { workspacePath } = {}) {
         by: null,
       };
       byPath.set(ev.path, row);
+    } else {
+      row.after = ev.after;
+      if (ev.oversized === true) row.oversized = true;
+      if (ev.added != null) row.added = ev.added;
+      if (ev.removed != null) row.removed = ev.removed;
+      if (ev.linesAfter != null) row.linesAfter = ev.linesAfter;
     }
     if (ev.attributed && ev.writer) row.by = ev.writer;
   }

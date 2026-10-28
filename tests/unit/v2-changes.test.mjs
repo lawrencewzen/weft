@@ -661,3 +661,23 @@ test('main then sub-agent on the same file: earliest baseline, last writer; reve
     await stopServer(srv);
   }
 });
+
+test('outside-workspace file: workspace files API rejects with 403 without error', async () => {
+  const srv = await startServer({ token: TOKEN });
+  try {
+    const discovery = await readDiscovery(srv.dataDir);
+    const { ws } = await openConversation(srv.base);
+    const outsidePath = '/tmp/outside-note.txt';
+
+    const getRes = await getV2(srv.base, `/api/v2/workspaces/${ws.id}/files?path=${encodeURIComponent(outsidePath)}`, discovery.token);
+    assert.equal(getRes.status, 403);
+
+    const putRes = await sendV2(srv.base, 'PUT', `/api/v2/workspaces/${ws.id}/files`, discovery.token, {
+      path: outsidePath,
+      text: 'hello',
+    });
+    assert.equal(putRes.status, 403);
+  } finally {
+    await stopServer(srv);
+  }
+});

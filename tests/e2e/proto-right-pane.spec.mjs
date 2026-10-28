@@ -13,10 +13,10 @@ test('diff, file tree, preview, save and the 409 conflict demo', async ({ page }
   const state = await openProto(page);
 
   // Seeded changes (main Agent and sub-agent), sorted by path.
-  await expect(page.getByTestId('next-change-row')).toHaveCount(4);
+  await expect(page.getByTestId('next-change-row')).toHaveCount(8);
   await expect(page.getByTestId('next-change-row').first()).toHaveAttribute(
     'data-path',
-    'web/src/components/ChangesPane.tsx',
+    '/Users/lawrence/.config/weft/notes.md',
   );
 
   const changesPaneRow = page.locator('[data-testid=next-change-row][data-path="web/src/components/ChangesPane.tsx"]');
@@ -80,7 +80,7 @@ test('diff, file tree, preview, save and the 409 conflict demo', async ({ page }
   expect([...perPath.values()].every((count) => count === 1)).toBe(true);
 
   // The thread change-summary opens the same file in the right pane without a new fetch.
-  await expect(page.getByTestId('next-change-summary-row')).toHaveCount(4);
+  await expect(page.getByTestId('next-change-summary-row')).toHaveCount(5);
   await page.locator('[data-testid=next-change-summary-row][data-path="web/src/data/store.ts"]').click();
   await expect(
     page.locator('[data-testid=next-change-row][data-path="web/src/data/store.ts"]').getByTestId('next-diff'),
