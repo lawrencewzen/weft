@@ -44,6 +44,7 @@ const TREE_KINDS = new Set<ToolCall['kind']>(['write', 'edit', 'bash']);
 const TREE_REFRESH_MS = 300;
 
 export type RightPaneValue = {
+  conversationId: string | null;
   open: boolean;
   setOpen: (open: boolean) => void;
   toggleRight: () => void;
@@ -542,6 +543,7 @@ export function RightPaneProvider({
   const rbTr = rbAnim ? 'transform .22s cubic-bezier(.3,.8,.3,1)' : 'none';
 
   const value = useMemo<RightPaneValue>(() => ({
+    conversationId: cid || null,
     open,
     setOpen,
     toggleRight,
@@ -589,6 +591,7 @@ export function RightPaneProvider({
     openInTerminal,
     onToast,
   }), [
+    cid,
     open, setOpen, toggleRight, rightOpening, rbDx, rbAnim, rbTr, rightBtnOp, rightBtnPe, rpBtnOp,
     tab, setTab, selectedSubagentId, width, persistWidth, hasChanges, totals, visibleChanges,
     openPaths, toggleChange, diffs, openFile, openChangeDiff, openTerminal, selectedCommandId, showFiles, tree, treeTruncated,
