@@ -719,6 +719,10 @@ export function seedWebsiteRepo(): MockRepo {
       text: ['# website', '', '落地页，静态导出到 `public/`。', ''].join('\n'),
     },
     {
+      path: 'package.json',
+      text: ['{', '  "name": "website",', '  "version": "1.0.0"', '}', ''].join('\n'),
+    },
+    {
       path: 'index.html',
       text: ['<!doctype html>', '<html lang="zh">', '  <head><title>weft</title></head>', '  <body></body>', '</html>', ''].join('\n'),
     },
@@ -727,12 +731,40 @@ export function seedWebsiteRepo(): MockRepo {
       text: ['export function mount(): void {', '  document.body.dataset.ready = "1";', '}', ''].join('\n'),
     },
     {
+      path: 'src/components/Header.ts',
+      text: ['export function Header() {', '  return "<header></header>";', '}', ''].join('\n'),
+    },
+    {
+      path: 'src/components/Footer.ts',
+      text: ['export function Footer() {', '  return "<footer></footer>";', '}', ''].join('\n'),
+    },
+    {
+      path: 'src/components/Hero.ts',
+      text: ['export function Hero() {', '  return "<section></section>";', '}', ''].join('\n'),
+    },
+    {
+      path: 'src/utils/analytics.ts',
+      text: ['export function track(event: string): void {}', ''].join('\n'),
+    },
+    {
       path: 'docs/copy.md',
       text: ['# 文案', '', '一个对话，从需求到提交。', ''].join('\n'),
     },
     {
+      path: 'docs/DEPLOY.md',
+      text: ['# 部署', '', '静态站点部署说明。', ''].join('\n'),
+    },
+    {
+      path: 'docs/ROUTING.md',
+      text: ['# 路由规划', ''].join('\n'),
+    },
+    {
       path: 'styles/site.css',
       text: [':root {', '  --ink: #111827;', '}', ''].join('\n'),
+    },
+    {
+      path: 'tsconfig.json',
+      text: ['{', '  "compilerOptions": { "target": "ES2022" }', '}', ''].join('\n'),
     },
   ]);
 }

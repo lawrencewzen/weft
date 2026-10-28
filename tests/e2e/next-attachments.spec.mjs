@@ -96,3 +96,35 @@ test('over-limit paste stays in the composer as a hint', async ({ page }) => {
     await srv.kill();
   }
 });
+
+test('composer @ file selection and sending with @path', async ({ page }) => {
+  const prepared = await prepareWorkspaces(['ws']);
+  const srv = await startServer({
+    script: 'no-usage.json',
+    extraEnv: { WEFT_WORKSPACE_ROOT: prepared.root },
+  });
+  try {
+    const { conv } = await openWorkspaceConversation(srv, 'demo', prepared.dirs[0]);
+    await loginNext(page, srv);
+    await page.goto(`${srv.url}/c/${encodeURIComponent(conv.id)}`);
+    const input = page.getByTestId('next-composer-input');
+    await expect(input).toBeVisible();
+
+    await input.focus();
+    await input.pressSequentially('@');
+    const atMenu = page.getByTestId('next-composer-at-menu');
+    await expect(atMenu).toBeVisible();
+
+    // Select the first file with Enter
+    await input.press('Enter');
+    await expect(page.getByTestId('next-attach-file')).toBeVisible();
+
+    // Send the message
+    await page.getByTestId('next-send').click();
+    const userMsg = page.getByTestId('next-item-user').first();
+    await expect(userMsg).toBeVisible();
+    await expect(userMsg).toContainText('@');
+  } finally {
+    await srv.kill();
+  }
+});

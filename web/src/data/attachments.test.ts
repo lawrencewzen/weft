@@ -3,15 +3,20 @@ import {
   IMAGE_MAX_BYTES,
   IMAGE_MAX_COUNT,
   addImages,
+  applyAtSelection,
   fileToImageAttachment,
+  filterAtFiles,
   formatFileSize,
   insertFileRef,
+  isFileRefInText,
   isImageFile,
+  matchAtTrigger,
   matchProjectPath,
   mediaTypeOfFile,
   relativeToWorkspace,
   removeFileRef,
   revokePreview,
+  splitFilePath,
   type ImageAttachment,
 } from './attachments';
 
@@ -69,7 +74,82 @@ describe('file reference tokens', () => {
     expect(insertFileRef('', 'web/src/app.css')).toBe('@web/src/app.css');
     expect(insertFileRef('看一下', 'web/src/app.css')).toBe('看一下 @web/src/app.css');
     expect(insertFileRef('看一下 @web/src/app.css', 'web/src/app.css')).toBe('看一下 @web/src/app.css');
-    expect(removeFileRef('看一下 @web/src/app.css 再改', 'web/src/app.css')).toBe('看一下  再改'.replace(/[ \t]{2,}/g, ' '));
+    expect(removeFileRef('看一下 @web/src/app.css 再改', 'web/src/app.css')).toBe('看一下 再改');
+    expect(removeFileRef('@web/src/app.css 好的', 'web/src/app.css')).toBe('好的');
+    expect(removeFileRef('@web/src/app.css', 'web/src/app.css')).toBe('');
+    expect(removeFileRef('@web/src/app.css ', 'web/src/app.css')).toBe('');
+    expect(removeFileRef('第一行\n@web/src/app.css 第二行', 'web/src/app.css')).toBe('第一行\n第二行');
+  });
+
+  it('matches @ triggers correctly', () => {
+    expect(matchAtTrigger('', 0)).toBeNull();
+    expect(matchAtTrigger('@', 1)).toEqual({ query: '', atIndex: 0, cursorIndex: 1 });
+    expect(matchAtTrigger('hello @', 7)).toEqual({ query: '', atIndex: 6, cursorIndex: 7 });
+    expect(matchAtTrigger('hello @store', 12)).toEqual({ query: 'store', atIndex: 6, cursorIndex: 12 });
+    expect(matchAtTrigger('hello@store', 11)).toBeNull();
+    expect(matchAtTrigger('@store done', 11)).toBeNull();
+    expect(matchAtTrigger('hello\n@data/st', 14)).toEqual({ query: 'data/st', atIndex: 6, cursorIndex: 14 });
+    expect(matchAtTrigger('a @b @c', 7)).toEqual({ query: 'c', atIndex: 5, cursorIndex: 7 });
+  });
+
+  it('filters files by query case-insensitively up to limit', () => {
+    const files = [
+      'README.md',
+      'web/src/data/store.ts',
+      'web/src/data/store.test.ts',
+      'web/src/styles/app.css',
+      'src/kernel/index.mjs',
+      'src/kernel/subagents.mjs',
+      'contract/openapi.json',
+    ];
+    expect(filterAtFiles(files, '', 3)).toEqual([
+      'README.md',
+      'web/src/data/store.ts',
+      'web/src/data/store.test.ts',
+    ]);
+    expect(filterAtFiles(files, 'STORE')).toEqual([
+      'web/src/data/store.ts',
+      'web/src/data/store.test.ts',
+    ]);
+    expect(filterAtFiles(files, 'nonexistent')).toEqual([]);
+  });
+
+  it('splits file path into filename and directory', () => {
+    expect(splitFilePath('web/src/data/store.ts')).toEqual({
+      name: 'store.ts',
+      dir: 'web/src/data/',
+    });
+    expect(splitFilePath('README.md')).toEqual({
+      name: 'README.md',
+      dir: '',
+    });
+    expect(splitFilePath('src/main.ts')).toEqual({
+      name: 'main.ts',
+      dir: 'src/',
+    });
+  });
+
+  it('applies @ selection with trailing space and computes new cursor', () => {
+    const trigger = { query: 'st', atIndex: 6, cursorIndex: 9 };
+    const result = applyAtSelection('hello @st world', 'web/src/data/store.ts', trigger);
+    expect(result.text).toBe('hello @web/src/data/store.ts  world');
+    expect(result.nextCursor).toBe(29);
+
+    const fromStart = applyAtSelection('@', 'README.md', { atIndex: 0, cursorIndex: 1 });
+    expect(fromStart.text).toBe('@README.md ');
+    expect(fromStart.nextCursor).toBe(11);
+  });
+
+  it('detects whether @path is complete in text', () => {
+    expect(isFileRefInText('@web/src/store.ts', 'web/src/store.ts')).toBe(true);
+    expect(isFileRefInText('@web/src/store.ts ', 'web/src/store.ts')).toBe(true);
+    expect(isFileRefInText('hello @web/src/store.ts world', 'web/src/store.ts')).toBe(true);
+    expect(isFileRefInText('hello @web/src/store.ts\nworld', 'web/src/store.ts')).toBe(true);
+    // Incomplete / deleted / altered
+    expect(isFileRefInText('@web/src/store.tsx', 'web/src/store.ts')).toBe(false);
+    expect(isFileRefInText('@web/src/store', 'web/src/store.ts')).toBe(false);
+    expect(isFileRefInText('my@web/src/store.ts', 'web/src/store.ts')).toBe(false);
+    expect(isFileRefInText('plain text without path', 'web/src/store.ts')).toBe(false);
   });
 });
 
