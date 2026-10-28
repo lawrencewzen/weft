@@ -909,6 +909,51 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.6; backgroun
   color: var(--ink2); font-size: 13px; line-height: 1.6;
 }
 .subagent-report.is-open .subagent-report-body { display: block; }
+.tool-dispatch-pair {
+  display: flex; flex-direction: column; gap: 8px; min-width: 0; max-width: 100%;
+}
+.dispatch-card {
+  display: flex; flex-direction: column;
+  background: var(--panel); border: 1px solid var(--hover); border-radius: 12px;
+  padding: 4px; min-width: 0; max-width: 100%;
+}
+.dispatch-card-row {
+  display: flex; align-items: center; gap: 10px; padding: 8px 10px;
+  border-radius: 9px; cursor: pointer; min-width: 0;
+  background: transparent; color: var(--ink);
+  transition: background .15s;
+}
+.dispatch-card-row:hover { background: var(--sub); }
+.dispatch-card-row.is-selected { background: var(--side); }
+.dispatch-card-row.is-selected:hover { background: var(--sub); }
+.dispatch-card-dot {
+  width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0;
+  background: var(--bd3);
+}
+.dispatch-card-dot.is-running {
+  background: var(--sa-run);
+  animation: sa-dot-pulse 1.6s ease-in-out infinite;
+}
+.dispatch-card-dot.is-stuck { background: var(--sa-stuck); }
+.dispatch-card-dot.is-failed { background: var(--fail); }
+.dispatch-card-name {
+  font-size: 13px; font-weight: 500; white-space: nowrap; flex-shrink: 0;
+  color: var(--ink);
+}
+.dispatch-card-task {
+  flex: 1; min-width: 0; font-size: 12.5px; color: var(--mute);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.dispatch-card-row .dispatch-card-status {
+  font-size: 12px; color: var(--faint); white-space: nowrap; flex-shrink: 0;
+  margin-left: auto;
+}
+.dispatch-card-chev {
+  font-size: 12px; color: var(--faint); flex-shrink: 0; line-height: 1;
+}
+@media (prefers-reduced-motion: reduce) {
+  .dispatch-card-dot.is-running { animation: none; }
+}
 .tool-row-wrapper { display: flex; flex-direction: column; min-width: 0; }
 .tool-row {
   display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 2px 8px; min-height: 26px; padding: 0 6px;

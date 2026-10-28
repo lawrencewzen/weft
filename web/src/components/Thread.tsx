@@ -1,12 +1,15 @@
-import { useLayoutEffect, useRef } from 'react';
+import { useLayoutEffect, useRef, useSyncExternalStore } from 'react';
 import { modelAttribution, type ConversationModel } from '../data/composerModel';
+import { matchDispatchSubagents } from '../data/dispatchCard';
 import type { Lang } from '../data/lang';
+import { useSession } from '../data/session';
 import type { ConversationActions } from '../data/useConversation';
 import { useProviders } from '../data/useProviders';
 import type { Change, ThreadItem, ToolCall } from '../data/store';
 import { t } from '../i18n';
 import { AssistantMessage } from './AssistantMessage';
 import { ChangeSummary } from './ChangeSummary';
+import { DispatchCard } from './DispatchCard';
 import { SubagentReport } from './SubagentReport';
 import { SystemNote } from './SystemNote';
 import { ToolGroup } from './ToolGroup';
@@ -69,6 +72,67 @@ function DraftHero({
           ? t(lang, 'draft_hint', { name: workspaceName })
           : t(lang, 'draft_hint_no_project')}
       </p>
+    </div>
+  );
+}
+
+type ToolGroupItemProps = {
+  item: Extract<ThreadItem, { kind: 'tool_group' }>;
+  toolsById: Record<string, ToolCall>;
+  lang: Lang;
+  conversationId?: string | null;
+  onLoadOutput: (toolId: string) => Promise<{ text: string }>;
+};
+
+function ToolGroupItem({
+  item,
+  toolsById,
+  lang,
+  conversationId,
+  onLoadOutput,
+}: ToolGroupItemProps) {
+  const { store } = useSession();
+  useSyncExternalStore(store.subscribe, store.getVersion);
+
+  const subagents = conversationId
+    ? store.subagents(conversationId).map((agent) => store.subagent(conversationId, agent.id) || agent)
+    : [];
+  const match = matchDispatchSubagents(item, subagents);
+
+  if (!match) {
+    return (
+      <ToolGroup
+        item={item}
+        toolsById={toolsById}
+        lang={lang}
+        onLoadOutput={onLoadOutput}
+      />
+    );
+  }
+
+  if (match.allDispatch) {
+    return (
+      <DispatchCard
+        cid={conversationId || ''}
+        agents={match.subagents}
+        lang={lang}
+      />
+    );
+  }
+
+  return (
+    <div className="tool-dispatch-pair">
+      <ToolGroup
+        item={item}
+        toolsById={toolsById}
+        lang={lang}
+        onLoadOutput={onLoadOutput}
+      />
+      <DispatchCard
+        cid={conversationId || ''}
+        agents={match.subagents}
+        lang={lang}
+      />
     </div>
   );
 }
@@ -156,11 +220,12 @@ export function Thread({
             }
             if (item.kind === 'tool_group') {
               return (
-                <ToolGroup
+                <ToolGroupItem
                   key={item.id}
                   item={item}
                   toolsById={toolsById}
                   lang={lang}
+                  conversationId={conversationId}
                   onLoadOutput={actions.loadToolOutput}
                 />
               );

@@ -498,3 +498,38 @@ test('opening a sub-agent keeps the parent lightweight; tree rails are unclipped
     await srv.kill();
   }
 });
+
+test('dispatch card appears in thread when spawning sub-agent, transitioning from running to done', async ({ page }) => {
+  const prepared = await prepareWorkspaces(['repo']);
+  const script = await writeScript(prepared.root, 'spawn-card.json', [
+    { tool: 'subagent', args: { action: 'spawn', name: 'worker', message: HOLD } },
+    { text: 'parent-idle' },
+    { when: HOLD, delayMs: 4000, text: 'child-done' },
+  ]);
+  const srv = await startServer({
+    extraEnv: { WEFT_FAUX_SCRIPT: script, WEFT_WORKSPACE_ROOT: prepared.root },
+  });
+  try {
+    const { conv } = await openWorkspaceConversation(srv, 'demo', prepared.dirs[0]);
+    await openNextChat(page, srv, conv.id);
+    await sendNext(page, '请派子代理');
+
+    // Wait for the dispatch card to appear in the center chat thread
+    const card = page.getByTestId('next-dispatch-card');
+    await expect(card).toBeVisible({ timeout: 45000 });
+
+    const row = card.getByTestId('next-dispatch-row').first();
+    await expect(row).toBeVisible();
+    await expect(row.getByTestId('next-dispatch-name')).toHaveText('worker');
+
+    // Status is initially running
+    await expect(row).toHaveAttribute('data-status', /running|waiting/);
+    await expect(row.getByTestId('next-dispatch-status')).toHaveText(/运行中|等待中/);
+
+    // After child finishes, status transitions to done
+    await expect(row).toHaveAttribute('data-status', 'done', { timeout: 30000 });
+    await expect(row.getByTestId('next-dispatch-status')).toHaveText('完成');
+  } finally {
+    await srv.kill();
+  }
+});

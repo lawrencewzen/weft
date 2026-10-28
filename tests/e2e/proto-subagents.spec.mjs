@@ -254,3 +254,86 @@ test('switching between conversations never flashes loading or empty thread, sub
 
   expectClean(state);
 });
+
+test('dispatch card in conversation thread: row count, statuses, click to open in right pane, context menu, and live dynamic dispatch', async ({ page }) => {
+  const state = await openProto(page);
+
+  // 1. Open conversation with seeded dispatch: c-rich (has 5 subagents dispatched in rich-g-sa)
+  await page.locator('[data-testid=next-conv-row][data-id="c-rich"]').click();
+  await expect(page).toHaveURL(/#\/c\/c-rich$/);
+
+  const card = page.getByTestId('next-dispatch-card');
+  await expect(card).toBeVisible();
+
+  const rows = card.getByTestId('next-dispatch-row');
+  await expect(rows).toHaveCount(5);
+
+  // Check rows: status dot, name, task, status text
+  // Row 0: sub-load-order, running, "运行中"
+  await expect(rows.nth(0).getByTestId('next-dispatch-name')).toHaveText('sub-load-order');
+  await expect(rows.nth(0).getByTestId('next-dispatch-task')).toHaveText('核对 store.ts 的加载顺序');
+  await expect(rows.nth(0).getByTestId('next-dispatch-status')).toHaveText('运行中');
+  await expect(rows.nth(0).getByTestId('next-dispatch-dot')).toHaveClass(/is-running/);
+
+  // Row 1: sub-git-status, stuck, "卡住"
+  await expect(rows.nth(1).getByTestId('next-dispatch-name')).toHaveText('sub-git-status');
+  await expect(rows.nth(1).getByTestId('next-dispatch-task')).toHaveText('核对 Git 工作树状态');
+  await expect(rows.nth(1).getByTestId('next-dispatch-status')).toHaveText('卡住');
+  await expect(rows.nth(1).getByTestId('next-dispatch-dot')).toHaveClass(/is-stuck/);
+
+  // Row 2: sub-delta-test, done, "完成"
+  await expect(rows.nth(2).getByTestId('next-dispatch-name')).toHaveText('sub-delta-test');
+  await expect(rows.nth(2).getByTestId('next-dispatch-task')).toHaveText('补 text.delta 偏移的用例');
+  await expect(rows.nth(2).getByTestId('next-dispatch-status')).toHaveText('完成');
+
+  // Row 3: sub-docs, waiting, "等待中"
+  await expect(rows.nth(3).getByTestId('next-dispatch-name')).toHaveText('sub-docs');
+  await expect(rows.nth(3).getByTestId('next-dispatch-task')).toHaveText('等主 Agent 确认文档口径');
+  await expect(rows.nth(3).getByTestId('next-dispatch-status')).toHaveText('等待中');
+
+  // Row 4: sub-win-script, failed, "失败"
+  await expect(rows.nth(4).getByTestId('next-dispatch-name')).toHaveText('sub-win-script');
+  await expect(rows.nth(4).getByTestId('next-dispatch-task')).toHaveText('跑 Windows 上的启动脚本');
+  await expect(rows.nth(4).getByTestId('next-dispatch-status')).toHaveText('失败');
+  await expect(rows.nth(4).getByTestId('next-dispatch-dot')).toHaveClass(/is-failed/);
+
+  // 2. Click a row to open subagent in right pane: URL becomes /c/<cid>/a/<aid> and row is highlighted
+  await rows.nth(0).click();
+  await expect.poll(() => decodeURIComponent(page.url())).toMatch(/\/c\/c-rich\/a\/c-rich:sub:sa-1$/);
+  await expect(page.getByTestId('next-subagent-view')).toBeVisible();
+  await expect(rows.nth(0)).toHaveClass(/is-selected/);
+  await expect(rows.nth(0)).toHaveCSS('background-color', /rgb/);
+
+  // 3. Right click row to trigger context menu
+  await rows.nth(0).click({ button: 'right' });
+  const menu = page.getByTestId('next-ctx-menu');
+  await expect(menu).toBeVisible();
+  await expect(menu.locator('.ctx-menu-title')).toHaveText('核对 store.ts 的加载顺序');
+  await expect(menu.locator('.ctx-menu-item').first()).toContainText('打开');
+
+  // Click outside to dismiss menu
+  await page.locator('body').click({ position: { x: 10, y: 10 } });
+  await expect(menu).toHaveCount(0);
+
+  // 4. Test newly dispatched subagent while running:
+  // Switch to an idle conversation (c-git) so sending triggers a run rather than steer
+  await page.locator('[data-testid=next-conv-row][data-id="c-git"]').click();
+  await expect(page).toHaveURL(/#\/c\/c-git$/);
+
+  await page.getByTestId('next-composer-input').fill('请安排一个子 Agent 帮我跑一下测试');
+  await page.getByTestId('next-send').click();
+
+  // Wait for the dispatch card to appear in this conversation, with 1 row
+  const dynamicCard = page.getByTestId('next-dispatch-card');
+  await expect(dynamicCard).toBeVisible({ timeout: 15_000 });
+  const dynamicRows = dynamicCard.getByTestId('next-dispatch-row');
+  await expect(dynamicRows).toHaveCount(1);
+  await expect(dynamicRows.first().getByTestId('next-dispatch-name')).toContainText(/sub-run-/);
+  await expect(dynamicRows.first().getByTestId('next-dispatch-task')).toHaveText('核对右栏的变更列表');
+
+  // Status is initially running, then becomes done (auto-retries with toHaveText, 15s timeout)
+  await expect(dynamicRows.first().getByTestId('next-dispatch-status')).toHaveText(/运行中|完成/);
+  await expect(dynamicRows.first().getByTestId('next-dispatch-status')).toHaveText('完成', { timeout: 15_000 });
+
+  expectClean(state);
+});

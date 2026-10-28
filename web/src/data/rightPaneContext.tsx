@@ -89,6 +89,7 @@ export type RightPaneValue = {
   reloadFile: () => Promise<void>;
   copyPath: (path: string) => void;
   openInTerminal: (relPath?: string, targetWorkspaceId?: string) => Promise<void>;
+  onToast: (message: string) => void;
 };
 
 const RightPaneContext = createContext<RightPaneValue | null>(null);
@@ -586,12 +587,13 @@ export function RightPaneProvider({
     reloadFile,
     copyPath,
     openInTerminal,
+    onToast,
   }), [
     open, setOpen, toggleRight, rightOpening, rbDx, rbAnim, rbTr, rightBtnOp, rightBtnPe, rpBtnOp,
     tab, setTab, selectedSubagentId, width, persistWidth, hasChanges, totals, visibleChanges,
     openPaths, toggleChange, diffs, openFile, openChangeDiff, openTerminal, selectedCommandId, showFiles, tree, treeTruncated,
     treeReady, expandedDirs, toggleDirectory, activeFilePath, fileTargetLine, file, fileBusy,
-    editorMode, draftText, saveState, saveFile, reloadFile, copyPath, openInTerminal,
+    editorMode, draftText, saveState, saveFile, reloadFile, copyPath, openInTerminal, onToast,
   ]);
 
   return <RightPaneContext.Provider value={value}>{children}</RightPaneContext.Provider>;
