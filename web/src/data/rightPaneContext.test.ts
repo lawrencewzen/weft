@@ -200,6 +200,7 @@ describe('RightPaneProvider diff effect', () => {
       added: 5,
       removed: 2,
       error: null,
+      by: null,
     }));
     const store = fakeStore(manyChanges);
     await renderProvider(store, 'c1');
@@ -208,8 +209,8 @@ describe('RightPaneProvider diff effect', () => {
 
   it('defaults to collapsed for a single file with > 300 lines', async () => {
     const bigChanges: Change[] = [
-      { path: 'small.ts', added: 10, removed: 5, error: null },
-      { path: 'big.ts', added: 250, removed: 60, error: null }, // 310 > 300
+      { path: 'small.ts', added: 10, removed: 5, error: null, by: null },
+      { path: 'big.ts', added: 250, removed: 60, error: null, by: null }, // 310 > 300
     ];
     const store = fakeStore(bigChanges);
     await renderProvider(store, 'c1');
