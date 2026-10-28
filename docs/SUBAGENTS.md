@@ -21,9 +21,11 @@ The main agent has dispatch tools plus `skill`. Children are configured with thi
 curl -sS http://127.0.0.1:3000/api/conversations/<cid>
 # → agents: main Agent chip, then
 #   {id, name, status, step, totalSteps, toolCalls, lastText, mode,
+#    toolCallId,
 #    brief?, startedAt?, lastActivityAt?, endedAt?, currentAction?}
 #   id is <cid>:sub:<child conversation id>
 #   mode is foreground | background
+#   toolCallId is the parent delegate/subagent ToolCall.id, or null when unknown
 #   brief is the first user message (the dispatched task)
 #   startedAt / lastActivityAt / endedAt are pi-ai timestamps in ms
 #   endedAt only when done / stopped / failed; currentAction only while running

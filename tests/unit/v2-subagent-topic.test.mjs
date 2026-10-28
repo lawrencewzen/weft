@@ -449,9 +449,17 @@ test('GET /api/v2/conversations/{id}/subagents/{agentId} snapshot matches contra
     assert.equal(snap.body.subagent.id, child.id);
     assert.equal(snap.body.subagent.parentConversationId, conv.id);
     assert.equal(typeof snap.body.subagent.title, 'string');
+    assert.equal(typeof snap.body.subagent.toolCallId, 'string');
+    assert.ok(snap.body.subagent.toolCallId);
     assert.ok(Array.isArray(snap.body.items));
     assert.ok(Array.isArray(snap.body.tools));
     assert.equal(snap.body.items.some((item) => item.kind === 'user' || item.kind === 'assistant'), true);
+
+    const convSnap = await getV2(srv.base, `/api/v2/conversations/${conv.id}`, discovery.token);
+    assert.equal(convSnap.status, 200, convSnap.text);
+    assertChecked(`/api/v2/conversations/${conv.id}`, 'GET', 200, convSnap.body);
+    const spawnTool = (convSnap.body.tools || []).find((row) => row.id === snap.body.subagent.toolCallId);
+    assert.ok(spawnTool, JSON.stringify(convSnap.body.tools));
   } finally {
     await stopServer(srv);
   }
@@ -562,6 +570,12 @@ test('HTTP conversation topic snapshot includes subagent; child item arrives on 
     const subEntity = convSnap.data.entities.find((item) => item.entity === 'subagent');
     assert.ok(subEntity);
     assertSchema('Subagent', subEntity.value);
+    assert.equal(typeof subEntity.value.toolCallId, 'string');
+    assert.ok(subEntity.value.toolCallId);
+    const spawnTool = convSnap.data.entities.find((item) => (
+      item.entity === 'tool' && item.id === subEntity.value.toolCallId
+    ));
+    assert.ok(spawnTool, JSON.stringify((convSnap.data.entities || []).filter((item) => item.entity === 'tool')));
 
     const session = await openEvents({
       port: srv.port,
@@ -716,6 +730,90 @@ test('in-process: subagent topic tool.delta throttles, trimStart, set, and skips
   } finally {
     topic.dispose();
     hub.dispose();
+  }
+});
+
+test('subagent toolCallId matches parent ToolCall.id for delegate and subagent', { timeout: 60_000 }, async () => {
+  const dataDir = await mkdtemp(path.join(tmpdir(), 'piw-v2-sa-toolcall-'));
+  const script = path.join(dataDir, 'script.json');
+  await writeFile(script, JSON.stringify({
+    turns: [
+      { tool: 'delegate', args: { task: 'do-fg', title: '前台项' }, id: 'call-fg' },
+      { tool: 'subagent', args: { action: 'spawn', name: '后台项', message: 'do-bg', title: '后台巡查' }, id: 'call-bg' },
+      { text: 'parent-done' },
+      { when: 'do-fg', text: 'FG_OK' },
+      { when: 'do-bg', text: 'BG_OK' },
+    ],
+  }));
+  const srv = await startServer({
+    token: TOKEN,
+    dataDir,
+    env: { WEFT_LLM: 'faux', WEFT_FAUX_SCRIPT: script, WEFT_RETRY_MAX: '2' },
+  });
+  try {
+    const discovery = await readDiscovery(srv.dataDir);
+    const { conv } = await openConversation(srv.base, 'toolcall');
+    const sent = await request(srv.base, 'POST', `/api/conversations/${conv.id}/messages`, { text: 'go' }, TOKEN);
+    assert.equal(sent.status, 202, JSON.stringify(sent.body));
+    const done = await waitConv(srv.base, conv.id, (body) => (
+      body?.status === 'done'
+      && subagentsOf(body).some((agent) => agent.mode === 'foreground')
+      && subagentsOf(body).some((agent) => agent.mode === 'background')
+    ), 200);
+    const fg = subagentsOf(done).find((agent) => agent.mode === 'foreground');
+    const bg = subagentsOf(done).find((agent) => agent.mode === 'background');
+    assert.ok(fg, JSON.stringify(done?.agents));
+    assert.ok(bg, JSON.stringify(done?.agents));
+    assert.equal(fg.toolCallId, 'call-fg');
+    assert.equal(bg.toolCallId, 'call-bg');
+
+    const convSnap = await getV2(srv.base, `/api/v2/conversations/${conv.id}`, discovery.token);
+    assert.equal(convSnap.status, 200, convSnap.text);
+    assertChecked(`/api/v2/conversations/${conv.id}`, 'GET', 200, convSnap.body);
+    const toolIds = (convSnap.body.tools || []).map((row) => row.id);
+    assert.equal(toolIds.includes('call-fg'), true, JSON.stringify(toolIds));
+    assert.equal(toolIds.includes('call-bg'), true, JSON.stringify(toolIds));
+
+    const fgSnap = await getV2(srv.base, subPath(conv.id, fg.id), discovery.token);
+    const bgSnap = await getV2(srv.base, subPath(conv.id, bg.id), discovery.token);
+    assert.equal(fgSnap.status, 200, fgSnap.text);
+    assert.equal(bgSnap.status, 200, bgSnap.text);
+    assertChecked(subPath(conv.id, fg.id), 'GET', 200, fgSnap.body);
+    assertChecked(subPath(conv.id, bg.id), 'GET', 200, bgSnap.body);
+    assert.equal(fgSnap.body.subagent.toolCallId, 'call-fg');
+    assert.equal(bgSnap.body.subagent.toolCallId, 'call-bg');
+
+    const convEvents = await openEvents({
+      port: srv.port,
+      token: discovery.token,
+      topics: `conversation:${conv.id}`,
+      lang: 'zh',
+    });
+    await waitEvents(convEvents, (list) => {
+      const snap = list.find((ev) => ev.event === 'snapshot');
+      const agents = (snap?.data?.entities || []).filter((item) => item.entity === 'subagent');
+      return agents.length >= 2;
+    });
+    convEvents.close();
+    const snapEvent = convEvents.events.find((ev) => ev.event === 'snapshot');
+    const byId = new Map(
+      (snapEvent.data.entities || [])
+        .filter((item) => item.entity === 'subagent')
+        .map((item) => [item.id, item.value]),
+    );
+    assert.equal(byId.get(fg.id)?.toolCallId, 'call-fg');
+    assert.equal(byId.get(bg.id)?.toolCallId, 'call-bg');
+    assertSchema('Subagent', byId.get(fg.id));
+    assertSchema('Subagent', byId.get(bg.id));
+    const sseTools = new Set(
+      (snapEvent.data.entities || [])
+        .filter((item) => item.entity === 'tool')
+        .map((item) => item.id),
+    );
+    assert.equal(sseTools.has('call-fg'), true);
+    assert.equal(sseTools.has('call-bg'), true);
+  } finally {
+    await stopServer(srv);
   }
 });
 

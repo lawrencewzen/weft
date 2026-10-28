@@ -28,6 +28,7 @@ function agent(extra: Partial<Subagent>): Subagent {
     endedAt: null,
     currentAction: null,
     progress: null,
+    toolCallId: null,
     ...extra,
   };
 }

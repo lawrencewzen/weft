@@ -54,6 +54,7 @@ function agent(): Subagent {
     endedAt: null,
     currentAction: null,
     progress: { step: 1, total: 1 },
+    toolCallId: null,
   };
 }
 

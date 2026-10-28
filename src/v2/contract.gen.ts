@@ -1796,6 +1796,8 @@ export interface components {
                 step: number;
                 total: number;
             };
+            /** @description 派出该子 Agent 的那次 delegate / subagent 工具调用 id，与对话快照里 ToolCall.id 一致。从 roster 里来、找不到对应工具调用时为 null */
+            toolCallId: null | string;
         };
         /** @description GET /api/v2/conversations/{id}/subagents/{agentId} 的响应。 */
         SubagentSnapshot: {

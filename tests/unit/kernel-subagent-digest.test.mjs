@@ -11,10 +11,10 @@ import { request as serverRequest, startServer, stopServer } from './_server.mjs
 const TOKEN = 'unit-kernel-subagent-digest-token';
 const request = (base, method, apiPath, body) => serverRequest(base, method, apiPath, body, TOKEN);
 
-function toolResult(toolName, details) {
+function toolResult(toolName, details, toolCallId) {
   return {
     kind: 'pi.tool-result',
-    model: [{ toolName, details }],
+    model: [{ toolName, details, ...(toolCallId ? { toolCallId } : {}) }],
   };
 }
 
@@ -36,6 +36,7 @@ function mockHost({
   const entries = parentEntries ?? children.map((child) => toolResult(
     child.mode === 'background' ? 'subagent' : 'delegate',
     { conversationId: child.id, name: child.name, title: child.title },
+    child.toolCallId,
   ));
   const harness = {
     async snapshot(doc, id) {
@@ -213,6 +214,7 @@ test('listSubagents still returns the same child fields after roster extract', a
   assert.equal(agents[0].mode, 'foreground');
   assert.equal(agents[0].harnessId, childId);
   assert.equal(agents[0].lastText, 'child-101');
+  assert.equal(agents[0].toolCallId, null);
   assert.deepEqual(transcriptReads, [parentId, childId]);
 });
 
@@ -307,4 +309,100 @@ test('list API carries subagent counts; GET /agents matches conversation agents 
     await stopServer(proc);
     await rm(dataDir, { recursive: true, force: true });
   }
+});
+
+test('listSubagents records toolCallId from foreground delegate and background subagent', async () => {
+  const parentId = 10;
+  const fgId = 201;
+  const bgId = 202;
+  const { host } = mockHost({
+    parentId,
+    allowChildTranscripts: true,
+    parentEntries: [
+      toolResult('delegate', { conversationId: fgId, name: 'coder', title: '改登录' }, 'call-fg'),
+      toolResult('subagent', { conversationId: bgId, name: 'scout', title: '巡查' }, 'call-bg'),
+    ],
+  });
+  const agents = await host.listSubagents({ id: 'c1', harnessId: parentId });
+  assert.equal(agents.length, 2);
+  const fg = agents.find((agent) => agent.mode === 'foreground');
+  const bg = agents.find((agent) => agent.mode === 'background');
+  assert.equal(fg?.id, 'c1:sub:201');
+  assert.equal(fg?.toolCallId, 'call-fg');
+  assert.equal(bg?.id, 'c1:sub:202');
+  assert.equal(bg?.toolCallId, 'call-bg');
+});
+
+test('listSubagents keeps a distinct toolCallId per child when two delegates run in one turn', async () => {
+  const parentId = 10;
+  const { host } = mockHost({
+    parentId,
+    allowChildTranscripts: true,
+    parentEntries: [
+      toolResult('delegate', { conversationId: 301, name: '甲', title: '甲任务' }, 'call-a'),
+      toolResult('delegate', { conversationId: 302, name: '乙', title: '乙任务' }, 'call-b'),
+    ],
+  });
+  const agents = await host.listSubagents({ id: 'c1', harnessId: parentId });
+  assert.equal(agents.length, 2);
+  assert.equal(agents.find((agent) => agent.harnessId === 301)?.toolCallId, 'call-a');
+  assert.equal(agents.find((agent) => agent.harnessId === 302)?.toolCallId, 'call-b');
+});
+
+test('listSubagents keeps the spawn toolCallId when a later subagent send also has details', async () => {
+  const parentId = 10;
+  const childId = 401;
+  const { host } = mockHost({
+    parentId,
+    allowChildTranscripts: true,
+    parentEntries: [
+      toolResult('subagent', { conversationId: childId, name: 'worker', title: '后台' }, 'call-spawn'),
+      toolResult('subagent', { conversationId: childId, name: 'worker', title: '后台' }, 'call-send'),
+    ],
+  });
+  const agents = await host.listSubagents({ id: 'c1', harnessId: parentId });
+  assert.equal(agents.length, 1);
+  assert.equal(agents[0].toolCallId, 'call-spawn');
+});
+
+test('listSubagents uses LiveDoc callId when the transcript has no result yet', async () => {
+  const parentId = 10;
+  const childId = 501;
+  const { host } = mockHost({
+    parentId,
+    allowChildTranscripts: true,
+    parentEntries: [],
+    lives: new Map([
+      [parentId, {
+        tools: [{
+          name: 'delegate',
+          callId: 'live-fg',
+          details: { conversationId: childId, name: 'live', title: '进行中' },
+        }],
+      }],
+      [childId, { run: { id: 1 } }],
+    ]),
+  });
+  const agents = await host.listSubagents({ id: 'c1', harnessId: parentId });
+  assert.equal(agents.length, 1);
+  assert.equal(agents[0].toolCallId, 'live-fg');
+  assert.equal(agents[0].mode, 'foreground');
+});
+
+test('listSubagents sets toolCallId null for roster-only children', async () => {
+  const parentId = 10;
+  const childId = 601;
+  const { host } = mockHost({
+    parentId,
+    allowChildTranscripts: true,
+    parentEntries: [],
+    rosters: new Map([
+      [parentId, { agents: { ghost: { conversationId: childId, title: '无名' } }, reporters: {} }],
+    ]),
+  });
+  const agents = await host.listSubagents({ id: 'c1', harnessId: parentId });
+  assert.equal(agents.length, 1);
+  assert.equal(agents[0].name, 'ghost');
+  assert.equal(agents[0].mode, 'background');
+  assert.equal(agents[0].toolCallId, null);
 });
