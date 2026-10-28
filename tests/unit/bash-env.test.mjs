@@ -57,7 +57,7 @@ test('bashChildEnv copies the allow-list and drops secrets, even with WEFT_BASH_
   const { env, warnings } = collect({
     ...unixBase(),
     WEFT_BASH_ENV_ALLOW: 'MY_BASH_CUSTOM,OPENAI_API_KEY',
-  });
+  }, undefined, { platform: 'linux' });
 
   assert.equal(env.PATH, '/usr/bin:/bin');
   assert.equal(env.HOME, '/home/weft');
