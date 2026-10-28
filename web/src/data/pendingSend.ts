@@ -1,4 +1,5 @@
 import type { components } from '../../../src/v2/contract.gen';
+import { pendingThreadImages } from '../../../src/v2/views/message-images';
 import type { ConversationSend, ThreadItem } from './store';
 
 type MessageImage = components['schemas']['MessageImage'];
@@ -107,13 +108,14 @@ export function settlePending(
 
 /** Render a pending send exactly like a confirmed user message. */
 export function pendingItem(entry: PendingUser): ThreadItem {
+  const images = pendingThreadImages(entry.images);
   return {
     kind: 'user',
     id: `local:${entry.key}`,
     text: entry.text,
     pathRefs: [],
-    ...(entry.images?.length ? { images: entry.images } : {}),
-  } as ThreadItem;
+    ...(images.length ? { images } : {}),
+  };
 }
 
 /** The「思考中」row belongs under the last user message while the agent has not shown anything. */

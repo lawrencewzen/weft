@@ -53,7 +53,15 @@ export function textOf(content) {
   }).join('');
 }
 
-function imagesOf(content) {
+function decodedBase64Bytes(data) {
+  const text = String(data || '').replace(/\s+/g, '');
+  if (!text || text.length % 4 !== 0) return null;
+  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(text)) return null;
+  const padding = text.endsWith('==') ? 2 : text.endsWith('=') ? 1 : 0;
+  return (text.length / 4) * 3 - padding;
+}
+
+function imageBlocksOf(content) {
   if (!Array.isArray(content)) return [];
   const out = [];
   for (const block of content) {
@@ -61,11 +69,36 @@ function imagesOf(content) {
     const mimeType = typeof block.mimeType === 'string' ? block.mimeType : '';
     const data = typeof block.data === 'string' ? block.data : '';
     if (!mimeType || !data) continue;
-    const image = { mediaType: mimeType, data };
+    const bytes = decodedBase64Bytes(data);
+    if (bytes == null) continue;
+    const image = { mediaType: mimeType, data, bytes };
     if (typeof block.name === 'string' && block.name.trim()) image.name = block.name.trim();
     out.push(image);
   }
   return out;
+}
+
+/** Metadata only. present() / old GET must not carry base64. */
+function imagesOf(content) {
+  return imageBlocksOf(content).map((image, index) => {
+    const meta = { index, mediaType: image.mediaType, bytes: image.bytes };
+    if (image.name) meta.name = image.name;
+    return meta;
+  });
+}
+
+/** Full image (with data) for GET /messages/{id}/images/{index}. Index matches imagesOf. */
+export function findUserMessageImage(entries, messageId, index) {
+  const n = Number(index);
+  if (!Number.isInteger(n) || n < 0) return null;
+  const want = String(messageId ?? '');
+  if (!want) return null;
+  for (const entry of entries || []) {
+    if (entry?.kind !== 'pi.user') continue;
+    if (String(entry.id) !== want) continue;
+    return imageBlocksOf(entry.model?.[0]?.content)[n] || null;
+  }
+  return null;
 }
 
 function toolBody({ id, name, status, input, output, path, added, removed }) {

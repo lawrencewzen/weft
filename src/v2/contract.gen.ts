@@ -810,6 +810,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/conversations/{id}/messages/{messageId}/images/{index}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 取用户消息里的一张图片
+         * @description 从对话记录里取出这张图的原始字节。`messageId` 与 ThreadItemUser.id 一致，`index` 与 ThreadUserImage.index 一致。
+         *     对话记录里的图片不会变，响应带 Cache-Control: private, max-age=31536000, immutable 和 ETag。找不到 404。
+         */
+        get: operations["getConversationMessageImage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/conversations/{id}/stop": {
         parameters: {
             query?: never;
@@ -960,7 +981,7 @@ export interface components {
             /** @description 幂等键。缺省时服务端生成。同一个 requestId 重复提交返回同一个 runId。 */
             requestId?: string;
         };
-        /** @description 一条用户消息里的一张图片。 */
+        /** @description 发送时的一张图片。对话视图里不出现这个对象。 */
         MessageImage: {
             /** @enum {string} */
             mediaType: "image/png" | "image/jpeg" | "image/gif" | "image/webp";
@@ -968,6 +989,19 @@ export interface components {
             data: string;
             /** @description 原始文件名，仅供显示 */
             name?: string;
+        };
+        /** @description 对话视图里的一张用户图片。只有元数据，不含 base64。 */
+        ThreadUserImage: {
+            /** @description 这条用户消息里的第几张图，和取图接口的 index 一致 */
+            index: number;
+            /** @enum {string} */
+            mediaType: "image/png" | "image/jpeg" | "image/gif" | "image/webp";
+            /** @description 原始文件名，仅供显示 */
+            name?: string;
+            /** @description 解码后的字节数，不含图片数据本身 */
+            bytes: number;
+            /** @description 取这张图的地址。正式快照是 GET /api/v2/conversations/{id}/messages/{messageId}/images/{index}。 乐观上屏还没有服务端地址时可以是 data: 或 blob: URL。 */
+            url: string;
         };
         ContinueRequest: {
             /** @description 幂等键。缺省时服务端生成。同一个 requestId 重复提交返回同一个 runId。 */
@@ -1151,8 +1185,8 @@ export interface components {
             /** @description Markdown 原文 */
             text: string;
             pathRefs: components["schemas"]["PathRef"][];
-            /** @description 这条用户消息里的图片。没有则省略。 */
-            images?: components["schemas"]["MessageImage"][];
+            /** @description 这条用户消息里的图片元数据。没有则省略。不含图片数据。 */
+            images?: components["schemas"]["ThreadUserImage"][];
         };
         /** @description 助手回复。空文字的助手消息不进入对话流。 */
         ThreadItemAssistant: {
@@ -4847,6 +4881,75 @@ export interface operations {
             };
             /** @description 请求体过大（含图片的消息上限约 44MB） */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 客户端错误 */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 服务端错误 */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+        };
+    };
+    getConversationMessageImage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 对话 id */
+                id: string;
+                /** @description 用户消息 id，与 thread 里 user 项的 id 相同 */
+                messageId: string;
+                /** @description 这条消息里的第几张图 */
+                index: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 原始图片字节 */
+            200: {
+                headers: {
+                    /** @description private, max-age=31536000, immutable */
+                    "Cache-Control"?: string;
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/png": string;
+                    "image/jpeg": string;
+                    "image/gif": string;
+                    "image/webp": string;
+                };
+            };
+            /** @description 未授权 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 对话、消息或这张图不存在 */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

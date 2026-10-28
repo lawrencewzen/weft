@@ -75,6 +75,11 @@ export type Steer = {
   images?: components['schemas']['MessageImage'][];
 };
 
+export type StoredMessageImage = {
+  mediaType: components['schemas']['ThreadUserImage']['mediaType'];
+  bytes: Uint8Array;
+};
+
 export type RunHandle = {
   id: string;
   cancelled: boolean;
@@ -129,6 +134,8 @@ export type MockDb = {
   /** loginId → polls answered so far (device-code demo becomes `done` on the 2nd poll). */
   grokPolls: Map<string, number>;
   seq: number;
+  /** `${cid}\\t${messageId}\\t${index}` → raw bytes for GET .../images/{index}. */
+  messageImages: Map<string, StoredMessageImage>;
 };
 
 export type EntityValue = object | ((lang: Lang) => object);

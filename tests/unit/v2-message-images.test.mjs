@@ -6,10 +6,13 @@ import {
   assembleUserContent,
   decodedBase64Bytes,
   extractMessageImages,
+  conversationImageUrl,
   imageDisplayName,
   parseSendImages,
+  pendingThreadImages,
   redactSendBody,
   redactUserContent,
+  toThreadUserImages,
 } from '../../src/v2/views/message-images.ts';
 
 const PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
@@ -83,6 +86,19 @@ test('redact helpers never keep the raw base64 in logs', () => {
   const contentDump = JSON.stringify(redactUserContent(content));
   assert.equal(contentDump.includes(PNG), false);
   assert.match(contentDump, /redacted/);
+});
+
+test('toThreadUserImages drops base64 and points at the image GET', () => {
+  const converted = toThreadUserImages([image()], 'c1', 'u1');
+  assert.equal(converted.length, 1);
+  assert.equal(converted[0].index, 0);
+  assert.equal(converted[0].name, 'shot.png');
+  assert.equal(converted[0].url, conversationImageUrl('c1', 'u1', 0));
+  assert.equal(Object.hasOwn(converted[0], 'data'), false);
+  assert.equal(JSON.stringify(converted).includes(PNG), false);
+  const pending = pendingThreadImages([image()]);
+  assert.equal(pending[0].url.startsWith('data:image/png;base64,'), true);
+  assert.equal(Object.hasOwn(pending[0], 'data'), false);
 });
 
 test('imageDisplayName falls back to a typed filename', () => {

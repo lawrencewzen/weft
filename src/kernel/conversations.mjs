@@ -17,6 +17,7 @@ import {
   baselinesFromEntries,
   createMapContext,
   mapHarnessBatch,
+  findUserMessageImage,
   messagesFromEntries,
   statusFromSubmission,
 } from './events.mjs';
@@ -530,6 +531,13 @@ export async function openConversationKernel({
         if (err.code === 'E_TOO_LARGE') return { status: 200, body: { path: filePath, error: '文件过大' } };
         throw err;
       }
+    },
+    async getMessageImage(cid, messageId, index) {
+      const conv = await store.getConversation(cid);
+      if (!conv?.harnessId) return null;
+      const view = await readView(conv.harnessId);
+      if (!view) return null;
+      return findUserMessageImage(view.entries, messageId, index);
     },
     async present(conv, { includeMessages = false } = {}) {
       if (!conv?.harnessId) {

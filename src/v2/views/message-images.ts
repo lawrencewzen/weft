@@ -19,6 +19,15 @@ export type MessageImage = {
   name?: string;
 };
 
+/** Thread / SSE 里的图片：只有元数据和取图地址，不含 base64。 */
+export type ThreadUserImage = {
+  index: number;
+  mediaType: ImageMediaType;
+  name?: string;
+  bytes: number;
+  url: string;
+};
+
 export type ImageContent = {
   type: 'image';
   data: string;
@@ -199,7 +208,10 @@ export function redactSendBody(body: Record<string, unknown> | null | undefined)
   };
 }
 
-export function imageDisplayName(image: Pick<MessageImage, 'mediaType' | 'name'>, index = 0): string {
+export function imageDisplayName(
+  image: { mediaType: string; name?: string },
+  index = 0,
+): string {
   if (image.name && image.name.trim()) return image.name.trim();
   const ext = image.mediaType === 'image/jpeg' ? 'jpg' : (image.mediaType.split('/')[1] || 'png');
   return index ? `image-${index + 1}.${ext}` : `image.${ext}`;
@@ -207,4 +219,73 @@ export function imageDisplayName(image: Pick<MessageImage, 'mediaType' | 'name'>
 
 export function imageDataUrl(image: Pick<MessageImage, 'mediaType' | 'data'>): string {
   return `data:${image.mediaType};base64,${image.data}`;
+}
+
+export function conversationImageUrl(conversationId: string, messageId: string, index: number): string {
+  return `/api/v2/conversations/${encodeURIComponent(conversationId)}/messages/${encodeURIComponent(messageId)}/images/${index}`;
+}
+
+type ImageMetaInput = {
+  mediaType?: unknown;
+  mimeType?: unknown;
+  name?: unknown;
+  bytes?: unknown;
+  data?: unknown;
+  index?: unknown;
+};
+
+export function toThreadUserImage(
+  image: ImageMetaInput | null | undefined,
+  index: number,
+  url: string,
+): ThreadUserImage | null {
+  if (!image) return null;
+  const mediaType = normalizeMediaType(image.mediaType ?? image.mimeType);
+  if (!mediaType) return null;
+  const resolvedIndex = Number.isInteger(image.index) ? Number(image.index) : index;
+  let bytes: number | null = null;
+  if (typeof image.bytes === 'number' && Number.isFinite(image.bytes) && image.bytes >= 0) {
+    bytes = Math.trunc(image.bytes);
+  } else if (typeof image.data === 'string') {
+    bytes = decodedBase64Bytes(image.data);
+  }
+  const out: ThreadUserImage = {
+    index: resolvedIndex,
+    mediaType,
+    bytes: bytes ?? 0,
+    url,
+  };
+  if (typeof image.name === 'string' && image.name.trim()) out.name = image.name.trim();
+  return out;
+}
+
+export function toThreadUserImages(
+  images: readonly ImageMetaInput[] | null | undefined,
+  conversationId: string,
+  messageId: string,
+): ThreadUserImage[] {
+  if (!Array.isArray(images) || !images.length) return [];
+  const out: ThreadUserImage[] = [];
+  for (let i = 0; i < images.length; i += 1) {
+    const index = Number.isInteger(images[i]?.index) ? Number(images[i].index) : i;
+    const converted = toThreadUserImage(
+      images[i],
+      index,
+      conversationImageUrl(conversationId, messageId, index),
+    );
+    if (converted) out.push(converted);
+  }
+  return out;
+}
+
+/** Optimistic pending bubbles: same metadata shape, url is a local data URL. */
+export function pendingThreadImages(images: readonly MessageImage[] | null | undefined): ThreadUserImage[] {
+  if (!Array.isArray(images) || !images.length) return [];
+  const out: ThreadUserImage[] = [];
+  for (let i = 0; i < images.length; i += 1) {
+    const image = images[i];
+    const converted = toThreadUserImage(image, i, imageDataUrl(image));
+    if (converted) out.push(converted);
+  }
+  return out;
 }

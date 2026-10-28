@@ -422,6 +422,49 @@ test('GET /api/v2/events conversation snapshot matches GET /api/v2/conversations
   }
 });
 
+const PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+
+test('conversation topic snapshot does not carry image base64', { timeout: 40_000 }, async () => {
+  const srv = await startServer({
+    token: TOKEN,
+    env: { WEFT_LLM: 'faux', WEFT_FAUX_TEXT: 'saw-image' },
+  });
+  try {
+    const discovery = await readDiscovery(srv.dataDir);
+    const { conv } = await openConversation(srv.base);
+    const session = await openEvents({
+      port: srv.port,
+      token: discovery.token,
+      topics: `conversation:${conv.id}`,
+      lang: 'zh',
+    });
+    await waitEvents(session, (list) => list.some((ev) => ev.event === 'snapshot'));
+    const sent = await postV2(srv.base, `/api/v2/conversations/${conv.id}/messages`, discovery.token, {
+      text: '看图',
+      images: [{ mediaType: 'image/png', data: PNG, name: 'shot.png' }],
+    });
+    assert.equal(sent.status, 202, sent.text);
+    const events = await waitEvents(session, (list) => {
+      const store = applyEvents(list);
+      const items = [...store.values()].filter((value) => value?.kind === 'user' && value.images?.length);
+      return items.length > 0;
+    });
+    session.close();
+    const dump = JSON.stringify(events);
+    assert.equal(dump.includes(PNG), false);
+    assert.equal(/[A-Za-z0-9+/]{80,}={0,2}/.test(dump), false);
+    const reconstructed = snapshotFromStore(applyEvents(events), conv.id);
+    const user = reconstructed.items.find((item) => item.kind === 'user' && item.images?.length);
+    assert.ok(user);
+    assert.equal(user.images[0].name, 'shot.png');
+    assert.equal(Object.hasOwn(user.images[0], 'data'), false);
+    assert.match(user.images[0].url, /\/images\/0$/);
+    assertPushedEntities(events.filter((ev) => ev.event !== 'heartbeat'));
+  } finally {
+    await stopServer(srv);
+  }
+});
+
 async function startScriptServer(turns, extraEnv = {}) {
   const dataDir = await mkdtemp(path.join(tmpdir(), 'piw-v2-topic-'));
   const script = path.join(dataDir, 'script.json');

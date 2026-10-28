@@ -119,6 +119,10 @@ const v2 = createV2Runtime({
   async getConversation(id) {
     return (await store.getConversation(id)) || null;
   },
+  async getMessageImage(conversationId, messageId, index) {
+    if (!kernelApi) return null;
+    return kernelApi.getMessageImage(conversationId, messageId, index);
+  },
   async getWorkspace(id) {
     return (await store.getWorkspace(id)) || null;
   },

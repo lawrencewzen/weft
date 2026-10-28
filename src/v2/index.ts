@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { SECURITY_HEADERS } from '../core/auth.mjs';
 import { formatSSE } from '../core/sse.mjs';
@@ -46,7 +46,9 @@ import {
 } from './views/conversation.ts';
 import {
   assembleUserContent,
+  decodedBase64Bytes,
   MESSAGE_BODY_MAX_BYTES,
+  normalizeMediaType,
   parseSendImages,
 } from './views/message-images.ts';
 import {
@@ -155,6 +157,16 @@ export type WorkspaceRow = {
 };
 
 export type GetConversation = (id: string) => Promise<ConversationRow | null | undefined>;
+export type MessageImageRecord = {
+  mediaType?: unknown;
+  data?: unknown;
+  name?: unknown;
+};
+export type GetMessageImage = (
+  conversationId: string,
+  messageId: string,
+  index: number,
+) => Promise<MessageImageRecord | null | undefined>;
 export type GetWorkspace = (id: string) => Promise<WorkspaceRow | null | undefined>;
 export type PostMessage = (
   conv: ConversationRow,
@@ -256,6 +268,32 @@ function sendV2(
 
 function unauthorized(res: ServerResponse, requestPath: string, method: string): void {
   sendV2(res, requestPath, method, 401, { error: 'unauthorized', code: 'E_UNAUTHORIZED' } satisfies V2Error);
+}
+
+const IMAGE_CACHE_CONTROL = 'private, max-age=31536000, immutable';
+
+function imageEtag(buf: Buffer): string {
+  return `"${createHash('sha256').update(buf).digest('hex')}"`;
+}
+
+function sendImageBytes(req: IncomingMessage, res: ServerResponse, mediaType: string, buf: Buffer): void {
+  const etag = imageEtag(buf);
+  const headers: Record<string, string> = {
+    ...SECURITY_HEADERS,
+    'content-type': mediaType,
+    'cache-control': IMAGE_CACHE_CONTROL,
+    etag,
+    'Weft-Protocol': PROTOCOL_VERSION,
+  };
+  const noneMatch = String(req.headers['if-none-match'] || '');
+  if (noneMatch && noneMatch.split(',').map((part) => part.trim()).includes(etag)) {
+    res.writeHead(304, headers);
+    res.end();
+    return;
+  }
+  headers['content-length'] = String(buf.length);
+  res.writeHead(200, headers);
+  res.end(buf);
 }
 
 async function readObjectBody(
@@ -447,6 +485,7 @@ export function createV2Handler(opts: {
   trackConnection: IdleWatcher['trackConnection'];
   loadConversation?: LoadConversation;
   getConversation?: GetConversation;
+  getMessageImage?: GetMessageImage;
   getWorkspace?: GetWorkspace;
   postMessage?: PostMessage;
   stopConversation?: StopConversationFn;
@@ -931,6 +970,36 @@ export function createV2Handler(opts: {
       return true;
     }
 
+    const imageMatch = /^\/api\/v2\/conversations\/([^/]+)\/messages\/([^/]+)\/images\/([^/]+)$/.exec(pathname);
+    if (method === 'GET' && imageMatch) {
+      const id = decodeURIComponent(imageMatch[1]);
+      const messageId = decodeURIComponent(imageMatch[2]);
+      const indexRaw = decodeURIComponent(imageMatch[3]);
+      const index = Number(indexRaw);
+      if (!Number.isInteger(index) || index < 0 || String(index) !== indexRaw) {
+        sendV2(res, pathname, method, 404, { error: 'not found' } satisfies V2Error);
+        return true;
+      }
+      if (!opts.getMessageImage) {
+        sendV2(res, pathname, method, 500, { error: 'kernel not ready', code: 'E_INTERNAL' } satisfies V2Error);
+        return true;
+      }
+      try {
+        const image = await opts.getMessageImage(id, messageId, index);
+        const mediaType = normalizeMediaType(image?.mediaType);
+        const data = typeof image?.data === 'string' ? image.data : '';
+        if (!image || !mediaType || !data || decodedBase64Bytes(data) == null) {
+          sendV2(res, pathname, method, 404, { error: 'not found' } satisfies V2Error);
+          return true;
+        }
+        sendImageBytes(req, res, mediaType, Buffer.from(data.replace(/\s+/g, ''), 'base64'));
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'load image failed';
+        sendV2(res, pathname, method, 500, { error: message, code: 'E_INTERNAL' } satisfies V2Error);
+      }
+      return true;
+    }
+
     const messagesMatch = /^\/api\/v2\/conversations\/([^/]+)\/messages$/.exec(pathname);
     const continueMatch = /^\/api\/v2\/conversations\/([^/]+)\/continue$/.exec(pathname);
     if (method === 'POST' && (messagesMatch || continueMatch)) {
@@ -1240,6 +1309,7 @@ export function createV2Runtime(opts: {
   onRestart?: () => void;
   loadConversation?: LoadConversation;
   getConversation?: GetConversation;
+  getMessageImage?: GetMessageImage;
   getWorkspace?: GetWorkspace;
   postMessage?: PostMessage;
   stopConversation?: StopConversationFn;
@@ -1363,6 +1433,7 @@ export function createV2Runtime(opts: {
     trackConnection: idle.trackConnection,
     loadConversation: opts.loadConversation,
     getConversation: opts.getConversation,
+    getMessageImage: opts.getMessageImage,
     getWorkspace: opts.getWorkspace,
     postMessage: opts.postMessage,
     stopConversation: opts.stopConversation,

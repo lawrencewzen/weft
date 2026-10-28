@@ -53,7 +53,12 @@ import type {
   WorkspaceDirs,
 } from './types';
 
-export type MockReply = { status: number; body: unknown };
+export type MockReply = {
+  status: number;
+  body?: unknown;
+  bytes?: Uint8Array;
+  headers?: Record<string, string>;
+};
 
 const SERVICE_VERSION = '0.1.0-prototype';
 const STARTED_AT = Date.now();
@@ -1187,6 +1192,28 @@ export function handleMockRequest(db: MockDb, hub: MockHub, rawUrl: string, init
     if (method === 'PATCH') return patchConversation(db, hub, conv, body);
   }
 
+  const imageMatch = /^\/api\/v2\/conversations\/([^/]+)\/messages\/([^/]+)\/images\/([^/]+)$/.exec(path);
+  if (imageMatch && method === 'GET') {
+    const cid = decodeURIComponent(imageMatch[1]);
+    const messageId = decodeURIComponent(imageMatch[2]);
+    const indexRaw = decodeURIComponent(imageMatch[3]);
+    const index = Number(indexRaw);
+    if (!Number.isInteger(index) || index < 0 || String(index) !== indexRaw) {
+      return fail(404, 'not found');
+    }
+    const stored = db.messageImages.get(`${cid}\t${messageId}\t${index}`);
+    if (!stored) return fail(404, 'not found');
+    return {
+      status: 200,
+      bytes: stored.bytes,
+      headers: {
+        'content-type': stored.mediaType,
+        'cache-control': 'private, max-age=31536000, immutable',
+        etag: `"${stored.bytes.length}-${stored.mediaType}"`,
+      },
+    };
+  }
+
   const msgMatch = /^\/api\/v2\/conversations\/([^/]+)\/messages$/.exec(path);
   if (msgMatch && method === 'POST') {
     const cid = decodeURIComponent(msgMatch[1]);
@@ -1243,8 +1270,16 @@ export function handleMockRequest(db: MockDb, hub: MockHub, rawUrl: string, init
 /** Everything the prototype serves, wrapped in a real `Response`. */
 export function mockResponse(db: MockDb, hub: MockHub, rawUrl: string, init?: RequestInit): Response {
   const reply = handleMockRequest(db, hub, rawUrl, init);
+  if (reply.bytes) {
+    const copy = new ArrayBuffer(reply.bytes.byteLength);
+    new Uint8Array(copy).set(reply.bytes);
+    return new Response(copy, {
+      status: reply.status,
+      headers: reply.headers,
+    });
+  }
   return new Response(JSON.stringify(reply.body), {
     status: reply.status,
-    headers: { 'content-type': 'application/json; charset=utf-8' },
+    headers: { 'content-type': 'application/json; charset=utf-8', ...reply.headers },
   });
 }
