@@ -1052,7 +1052,13 @@ export function handleMockRequest(db: MockDb, hub: MockHub, rawUrl: string, init
       for (const conv of db.conversations.values()) {
         if (conv.view.workspaceId !== workspaceId) continue;
         const change = conv.changes.find((row) => row.path === saved.path);
-        const next = { path: saved.path, added: saved.added, removed: saved.removed, error: null };
+        const next = {
+          path: saved.path,
+          added: saved.added,
+          removed: saved.removed,
+          error: null,
+          by: change?.by ?? null,
+        };
         if (change) {
           change.added = next.added;
           change.removed = next.removed;

@@ -4978,6 +4978,36 @@ components:
           items:
             $ref: "#/components/schemas/ToolCall"
       description: GET /api/v2/conversations/{id}/subagents/{agentId} 的响应。
+    ChangeByMain:
+      type: object
+      additionalProperties: false
+      required:
+        - kind
+      properties:
+        kind:
+          type: string
+          enum:
+            - main
+      description: 最后一次 write/edit 这个文件的是主 Agent。
+    ChangeBySubagent:
+      type: object
+      additionalProperties: false
+      required:
+        - kind
+        - agentId
+        - name
+      properties:
+        kind:
+          type: string
+          enum:
+            - subagent
+        agentId:
+          type: string
+          description: 子 Agent id，形如 `<cid>:sub:<子对话 id>`
+        name:
+          type: string
+          description: 子 Agent 名。前端显示成「子 · <name>」
+      description: 最后一次 write/edit 这个文件的是某个子 Agent。
     Change:
       type: object
       additionalProperties: false
@@ -4986,6 +5016,7 @@ components:
         - added
         - removed
         - error
+        - by
       properties:
         path:
           type: string
@@ -4999,6 +5030,12 @@ components:
           oneOf:
             - type: "null"
             - type: string
+        by:
+          description: 最后一次 write/edit 这个文件的是谁。主 Agent 和子 Agent 都改过时取最后一次。只被 bash 等非 write/edit 工具改、拿不到归属时为 null
+          oneOf:
+            - type: "null"
+            - $ref: "#/components/schemas/ChangeByMain"
+            - $ref: "#/components/schemas/ChangeBySubagent"
       description: 对话右栏变更列表的一项。SSE conversation 主题里 entity=change，id 为 path。
     DiffLine:
       type: object

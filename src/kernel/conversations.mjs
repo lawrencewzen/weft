@@ -14,13 +14,14 @@ import { formatSSE } from '../core/sse.mjs';
 import { contextWindowForConversation } from '../core/model-sources.mjs';
 import { presentContext } from '../core/usage.mjs';
 import {
-  baselinesFromEntries,
   createMapContext,
   mapHarnessBatch,
+  mergeFileChanges,
   findUserMessageImage,
   findUserMessagePaste,
   messagesFromEntries,
   statusFromSubmission,
+  writesFromEntries,
 } from './events.mjs';
 import { latestCallUsage } from './usage.mjs';
 import { createScriptFloorExtension, installDemo } from './faux-script.mjs';
@@ -435,11 +436,50 @@ export async function openConversationKernel({
     return read.text;
   }
 
+  async function agentCwd(harnessId) {
+    if (harnessId == null) return '';
+    try {
+      const handle = await harness.conversation(harnessId, context);
+      if (!handle) return '';
+      const agent = await handle.agent(context);
+      return typeof agent?.cwd === 'string' ? agent.cwd : '';
+    } catch {
+      return '';
+    }
+  }
+
+  /**
+   * Baselines for the conversation plus descendant sub-agents (recursive).
+   * Same path: earliest write/edit is `before`; last write/edit sets `by`.
+   * A child in a different cwd (worktree) is skipped unless its files still
+   * sit under this conversation's workspace — see rebaseChangePath.
+   */
   async function baselinesFor(cid) {
     const conv = await store.getConversation(cid);
     if (!conv?.harnessId) return [];
-    const transcript = await readTranscript(conv.harnessId);
-    return baselinesFromEntries(transcript.entries);
+    const workspacePath = conv.workspacePath || (await agentCwd(conv.harnessId)) || '';
+    const sources = [];
+    const mainTranscript = await readTranscript(conv.harnessId);
+    sources.push({
+      writer: { kind: 'main' },
+      workspacePath: (await agentCwd(conv.harnessId)) || workspacePath,
+      writes: writesFromEntries(mainTranscript.entries),
+    });
+    const descendants = await subagents.listDescendants(conv);
+    for (const agent of descendants) {
+      const childCwd = await agentCwd(agent.harnessId);
+      const transcript = await readTranscript(agent.harnessId);
+      sources.push({
+        writer: {
+          kind: 'subagent',
+          agentId: agent.id,
+          name: agent.name,
+        },
+        workspacePath: childCwd || workspacePath,
+        writes: writesFromEntries(transcript.entries),
+      });
+    }
+    return mergeFileChanges(sources, { workspacePath });
   }
 
   async function createConversation(fields) {
@@ -515,6 +555,7 @@ export async function openConversationKernel({
             added: baseline.added ?? 0,
             removed: baseline.removed ?? 0,
             toolCallId: baseline.toolCallId,
+            by: baseline.by ?? null,
             error: '文件过大',
           });
           continue;
@@ -529,6 +570,7 @@ export async function openConversationKernel({
               added: baseline.added ?? 0,
               removed: baseline.removed ?? 0,
               toolCallId: baseline.toolCallId,
+              by: baseline.by ?? null,
               error: '文件过大',
             });
             continue;
@@ -546,6 +588,7 @@ export async function openConversationKernel({
           added: diff.added,
           removed: diff.removed,
           toolCallId: baseline.toolCallId,
+          by: baseline.by ?? null,
         });
       }
       return rows;

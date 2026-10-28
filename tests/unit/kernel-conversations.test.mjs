@@ -12,8 +12,11 @@ import {
   findUserMessageImage,
   findUserMessagePaste,
   mapHarnessBatch,
+  mergeFileChanges,
   messagesFromEntries,
+  rebaseChangePath,
   statusFromSubmission,
+  writesFromEntries,
 } from '../../src/kernel/events.mjs';
 import { killChild, request as serverRequest, startServer, stopServer } from './_server.mjs';
 
@@ -360,6 +363,29 @@ test('a tool call without a result is still a running tool message', () => {
   assert.equal(tool.tool.input.command, 'sleep 3');
 });
 
+function toolResult({
+  id = 1,
+  toolCallId = 'c',
+  toolName = 'write',
+  filePath,
+  before = '',
+  after = '',
+  added = 1,
+  removed = 0,
+  timestamp,
+}) {
+  return {
+    id,
+    kind: 'pi.tool-result',
+    model: [{
+      toolCallId,
+      toolName,
+      timestamp,
+      details: { path: filePath, before, after, added, removed },
+    }],
+  };
+}
+
 test('the first write of a path is the diff baseline', () => {
   const rows = baselinesFromEntries([
     {
@@ -374,6 +400,179 @@ test('the first write of a path is the diff baseline', () => {
   assert.equal(rows.length, 1);
   assert.equal(rows[0].before, '');
   assert.equal(rows[0].toolCallId, 'a');
+});
+
+test('rebaseChangePath keeps files under the main workspace and drops another worktree', () => {
+  assert.equal(rebaseChangePath('a.txt', '/ws', '/ws'), 'a.txt');
+  assert.equal(rebaseChangePath('nested/a.txt', '/ws', '/ws'), 'nested/a.txt');
+  assert.equal(rebaseChangePath('a.txt', '/ws/sub', '/ws'), 'sub/a.txt');
+  assert.equal(rebaseChangePath('secret.txt', '/other-tree', '/ws'), null);
+});
+
+test('mergeFileChanges: only the main Agent wrote', () => {
+  const rows = mergeFileChanges([{
+    writer: { kind: 'main' },
+    workspacePath: '/ws',
+    writes: writesFromEntries([toolResult({ filePath: 'a.txt', after: 'one', timestamp: 1 })]),
+  }], { workspacePath: '/ws' });
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].path, 'a.txt');
+  assert.equal(rows[0].before, '');
+  assert.deepEqual(rows[0].by, { kind: 'main' });
+});
+
+test('mergeFileChanges: only a sub-agent wrote', () => {
+  const rows = mergeFileChanges([{
+    writer: { kind: 'subagent', agentId: 'c1:sub:9', name: 'scout' },
+    workspacePath: '/ws',
+    writes: writesFromEntries([toolResult({ filePath: 'child.txt', after: 'from-child', timestamp: 1 })]),
+  }], { workspacePath: '/ws' });
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].path, 'child.txt');
+  assert.equal(rows[0].before, '');
+  assert.deepEqual(rows[0].by, { kind: 'subagent', agentId: 'c1:sub:9', name: 'scout' });
+});
+
+test('mergeFileChanges: main then sub on the same file — earliest baseline, last writer', () => {
+  const rows = mergeFileChanges([
+    {
+      writer: { kind: 'main' },
+      workspacePath: '/ws',
+      writes: writesFromEntries([
+        toolResult({
+          id: 10,
+          toolCallId: 'm',
+          filePath: 'shared.txt',
+          before: '',
+          after: 'from-main',
+          timestamp: 10,
+        }),
+      ]),
+    },
+    {
+      writer: { kind: 'subagent', agentId: 'c1:sub:9', name: 'scout' },
+      workspacePath: '/ws',
+      writes: writesFromEntries([
+        toolResult({
+          id: 20,
+          toolCallId: 's',
+          toolName: 'edit',
+          filePath: 'shared.txt',
+          before: 'from-main',
+          after: 'from-main\nfrom-child',
+          timestamp: 20,
+        }),
+      ]),
+    },
+  ], { workspacePath: '/ws' });
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].before, '');
+  assert.equal(rows[0].toolCallId, 'm');
+  assert.deepEqual(rows[0].by, { kind: 'subagent', agentId: 'c1:sub:9', name: 'scout' });
+});
+
+test('mergeFileChanges: sub then main on the same file — last writer is main', () => {
+  const rows = mergeFileChanges([
+    {
+      writer: { kind: 'main' },
+      workspacePath: '/ws',
+      writes: writesFromEntries([
+        toolResult({
+          id: 20,
+          toolCallId: 'm',
+          toolName: 'edit',
+          filePath: 'shared.txt',
+          before: 'from-child',
+          after: 'from-child\nfrom-main',
+          timestamp: 20,
+        }),
+      ]),
+    },
+    {
+      writer: { kind: 'subagent', agentId: 'c1:sub:9', name: 'scout' },
+      workspacePath: '/ws',
+      writes: writesFromEntries([
+        toolResult({
+          id: 10,
+          toolCallId: 's',
+          filePath: 'shared.txt',
+          before: '',
+          after: 'from-child',
+          timestamp: 10,
+        }),
+      ]),
+    },
+  ], { workspacePath: '/ws' });
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].before, '');
+  assert.equal(rows[0].toolCallId, 's');
+  assert.deepEqual(rows[0].by, { kind: 'main' });
+});
+
+test('mergeFileChanges: sub-agent in another workspace is ignored', () => {
+  const rows = mergeFileChanges([
+    {
+      writer: { kind: 'main' },
+      workspacePath: '/ws',
+      writes: writesFromEntries([toolResult({ filePath: 'keep.txt', after: 'keep' })]),
+    },
+    {
+      writer: { kind: 'subagent', agentId: 'c1:sub:2', name: 'other-tree' },
+      workspacePath: '/other-tree',
+      writes: writesFromEntries([toolResult({ filePath: 'secret.txt', after: 'nope' })]),
+    },
+  ], { workspacePath: '/ws' });
+  assert.deepEqual(rows.map((row) => row.path), ['keep.txt']);
+  assert.deepEqual(rows[0].by, { kind: 'main' });
+});
+
+test('mergeFileChanges: bash-only file has by null', () => {
+  const rows = mergeFileChanges([{
+    writer: { kind: 'main' },
+    workspacePath: '/ws',
+    writes: writesFromEntries([
+      toolResult({ toolName: 'bash', filePath: 'out.txt', after: 'x', timestamp: 1 }),
+    ]),
+  }], { workspacePath: '/ws' });
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].path, 'out.txt');
+  assert.equal(rows[0].by, null);
+});
+
+test('mergeFileChanges: without timestamps, interleaved entryIds follow sourceIndex', () => {
+  const rows = mergeFileChanges([
+    {
+      writer: { kind: 'main' },
+      workspacePath: '/ws',
+      writes: writesFromEntries([
+        toolResult({
+          id: 99,
+          toolCallId: 'm',
+          filePath: 'shared.txt',
+          before: '',
+          after: 'from-main',
+        }),
+      ]),
+    },
+    {
+      writer: { kind: 'subagent', agentId: 'c1:sub:9', name: 'scout' },
+      workspacePath: '/ws',
+      writes: writesFromEntries([
+        toolResult({
+          id: 1,
+          toolCallId: 's',
+          toolName: 'edit',
+          filePath: 'shared.txt',
+          before: 'from-main',
+          after: 'from-child',
+        }),
+      ]),
+    },
+  ], { workspacePath: '/ws' });
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].before, '');
+  assert.equal(rows[0].toolCallId, 'm');
+  assert.deepEqual(rows[0].by, { kind: 'subagent', agentId: 'c1:sub:9', name: 'scout' });
 });
 
 test('kernel path: faux turn pushes live events, and a new connection starts at the current status', { timeout: 30000 }, async () => {

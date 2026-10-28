@@ -652,6 +652,36 @@ export function createSubagentHost({
     }
   }
 
+  /**
+   * Recursive child roster for the main conversation's change list.
+   * Nested sub-agents (a child that itself delegates) are included.
+   * Ids stay `<cid>:sub:<harness conversation id>` on the main cid.
+   */
+  async function listDescendants(conv) {
+    const seen = new Set();
+    const out = [];
+    if (!conv?.id || conv.harnessId == null) return out;
+    seen.add(Number(conv.harnessId));
+    async function walk(harnessId) {
+      const { meta, order } = await collectChildren({ id: conv.id, harnessId });
+      for (const key of order) {
+        const entry = meta.get(key);
+        if (!entry?.conversationId) continue;
+        const childKey = Number(entry.conversationId);
+        if (seen.has(childKey)) continue;
+        seen.add(childKey);
+        out.push({
+          id: `${conv.id}:sub:${entry.conversationId}`,
+          name: entry.name || String(entry.conversationId),
+          harnessId: entry.conversationId,
+        });
+        await walk(entry.conversationId);
+      }
+    }
+    await walk(conv.harnessId);
+    return out;
+  }
+
   async function listSubagents(conv) {
     const { meta, order } = await collectChildren(conv);
     const generations = order.length === 0 ? new Map() : await harness.commit(async (tx) => {
@@ -761,6 +791,7 @@ export function createSubagentHost({
     prepareChild,
     onChild,
     listSubagents,
+    listDescendants,
     subagentDigest,
     subagentDigests,
     async seed(rows) {

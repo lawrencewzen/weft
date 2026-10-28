@@ -189,7 +189,21 @@ test('changeView normalizes win32 separators and maps error', () => {
   assert.equal(view.added, 2);
   assert.equal(view.removed, 1);
   assert.equal(view.error, null);
+  assert.equal(view.by, null);
   assert.equal(changeView({ path: 'a.txt', error: '文件过大' }).error, '文件过大');
+});
+
+test('changeView maps main and sub-agent by', () => {
+  assert.deepEqual(changeView({ path: 'a.txt', added: 1, by: { kind: 'main' } }).by, { kind: 'main' });
+  assert.deepEqual(
+    changeView({
+      path: 'b.txt',
+      added: 1,
+      by: { kind: 'subagent', agentId: 'c1:sub:9', name: 'scout' },
+    }).by,
+    { kind: 'subagent', agentId: 'c1:sub:9', name: 'scout' },
+  );
+  assert.equal(changeView({ path: 'c.txt', by: { kind: 'subagent', name: 'x' } }).by, null);
 });
 
 test('in-process: change entities upsert and remove with notify', async () => {
@@ -387,6 +401,7 @@ test('tool-edit snapshot has relative change; save back matches old changes', { 
     assert.equal(live.path.includes('\\'), false);
     assert.equal(live.error, null);
     assert.equal(live.added > 0, true);
+    assert.deepEqual(live.by, { kind: 'main' });
 
     const oldChanges = await request(srv.base, 'GET', `/api/conversations/${conv.id}/changes`, undefined, TOKEN);
     assert.equal(oldChanges.status, 200, JSON.stringify(oldChanges.body));
@@ -495,6 +510,153 @@ test('structured diff covers new file, deleted content, and too-large', { timeou
     assert.equal(largeChecked.ok, true, JSON.stringify(largeChecked.errors));
     assert.equal(large.body.tooLarge, true);
     assert.deepEqual(large.body.hunks, []);
+  } finally {
+    await stopServer(srv);
+  }
+});
+
+function subagentsOf(body) {
+  return (body?.agents || []).filter((agent) => String(agent.id || '').includes(':sub:'));
+}
+
+test('only a sub-agent write appears on the main conversation change list', { timeout: 60_000 }, async () => {
+  const dataDir = await mkdtemp(path.join(tmpdir(), 'piw-v2-chg-sub-'));
+  const script = path.join(dataDir, 'script.json');
+  await writeFile(script, JSON.stringify({
+    turns: [
+      { tool: 'delegate', args: { task: 'Write child.txt with CHILD_FILE' } },
+      { text: 'parent-done' },
+      { when: 'Write child.txt', tool: 'write', args: { path: 'child.txt', content: 'CHILD_FILE\n' }, id: 'cw' },
+      { when: 'Write child.txt', text: 'wrote child' },
+    ],
+  }));
+  const srv = await startServer({
+    dataDir,
+    token: TOKEN,
+    env: { WEFT_LLM: 'faux', WEFT_FAUX_SCRIPT: script, WEFT_RETRY_MAX: '2' },
+  });
+  try {
+    const discovery = await readDiscovery(srv.dataDir);
+    const { ws, conv } = await openConversation(srv.base);
+    const session = await openEvents({
+      port: srv.port,
+      token: discovery.token,
+      topics: `conversation:${conv.id}`,
+    });
+    await waitEvents(session, (list) => list.some((ev) => ev.event === 'snapshot'));
+    const sent = await request(srv.base, 'POST', `/api/conversations/${conv.id}/messages`, { text: 'go' }, TOKEN);
+    assert.equal(sent.status, 202, JSON.stringify(sent.body));
+    const done = await waitFinished(srv.base, conv.id);
+    assert.equal(done.status, 'done', JSON.stringify(done));
+
+    await waitEvents(session, (list) => changeFromEvents(list, 'child.txt') != null);
+    const live = changeFromEvents(session.events, 'child.txt');
+    assertSchema('Change', live);
+    assert.equal(live.path, 'child.txt');
+    assert.equal(live.by?.kind, 'subagent');
+    assert.match(String(live.by?.agentId || ''), /:sub:/);
+    assert.equal(typeof live.by?.name, 'string');
+    assert.equal(live.by.name.length > 0, true);
+
+    const oldChanges = await request(srv.base, 'GET', `/api/conversations/${conv.id}/changes`, undefined, TOKEN);
+    assert.equal(oldChanges.status, 200, JSON.stringify(oldChanges.body));
+    assert.equal(oldChanges.body.length, 1, JSON.stringify(oldChanges.body));
+    const row = oldChanges.body.find((item) => posixPath(item.path) === 'child.txt');
+    assert.ok(row, JSON.stringify(oldChanges.body));
+    assert.equal(row.by?.kind, 'subagent');
+    assert.equal(row.by.agentId, live.by.agentId);
+    assert.equal(row.by.name, live.by.name);
+    const child = subagentsOf(done).find((agent) => agent.id === row.by.agentId);
+    assert.ok(child, JSON.stringify(done.agents));
+    assert.equal(await readFile(path.join(ws.path, 'child.txt'), 'utf8'), 'CHILD_FILE\n');
+    session.close();
+  } finally {
+    await stopServer(srv);
+  }
+});
+
+test('main then sub-agent on the same file: earliest baseline, last writer; revert restores it', { timeout: 60_000 }, async () => {
+  const dataDir = await mkdtemp(path.join(tmpdir(), 'piw-v2-chg-both-'));
+  const script = path.join(dataDir, 'script.json');
+  await writeFile(script, JSON.stringify({
+    turns: [
+      { tool: 'write', args: { path: 'shared.txt', content: 'from-main\n' }, id: 'mw' },
+      { tool: 'delegate', args: { task: 'Edit shared.txt to add from-child' } },
+      { text: 'parent-done' },
+      {
+        when: 'Edit shared.txt',
+        tool: 'edit',
+        args: { path: 'shared.txt', edits: [{ oldText: 'from-main', newText: 'from-main\nfrom-child' }] },
+        id: 'ce',
+      },
+      { when: 'Edit shared.txt', text: 'edited' },
+    ],
+  }));
+  const srv = await startServer({
+    dataDir,
+    token: TOKEN,
+    env: { WEFT_LLM: 'faux', WEFT_FAUX_SCRIPT: script, WEFT_RETRY_MAX: '2' },
+  });
+  try {
+    const discovery = await readDiscovery(srv.dataDir);
+    const { ws, conv } = await openConversation(srv.base);
+    const session = await openEvents({
+      port: srv.port,
+      token: discovery.token,
+      topics: `conversation:${conv.id}`,
+    });
+    await waitEvents(session, (list) => list.some((ev) => ev.event === 'snapshot'));
+    const sent = await request(srv.base, 'POST', `/api/conversations/${conv.id}/messages`, { text: 'go' }, TOKEN);
+    assert.equal(sent.status, 202, JSON.stringify(sent.body));
+    const done = await waitFinished(srv.base, conv.id);
+    assert.equal(done.status, 'done', JSON.stringify(done));
+    assert.equal(await readFile(path.join(ws.path, 'shared.txt'), 'utf8'), 'from-main\nfrom-child\n');
+
+    await waitEvents(session, (list) => {
+      const ch = changeFromEvents(list, 'shared.txt');
+      return ch != null && ch.by?.kind === 'subagent';
+    });
+    const live = changeFromEvents(session.events, 'shared.txt');
+    assertSchema('Change', live);
+    assert.equal(live.by?.kind, 'subagent');
+
+    const oldChanges = await request(srv.base, 'GET', `/api/conversations/${conv.id}/changes`, undefined, TOKEN);
+    assert.equal(oldChanges.status, 200, JSON.stringify(oldChanges.body));
+    assert.equal(oldChanges.body.length, 1, JSON.stringify(oldChanges.body));
+    const row = oldChanges.body[0];
+    assert.equal(posixPath(row.path), 'shared.txt');
+    assert.equal(row.by?.kind, 'subagent');
+    assert.equal(row.by.agentId, live.by.agentId);
+
+    const oldDiff = await request(srv.base, 'GET', `/api/conversations/${conv.id}/diff?path=${encodeURIComponent('shared.txt')}`, undefined, TOKEN);
+    assert.equal(oldDiff.status, 200, JSON.stringify(oldDiff.body));
+    assert.equal(oldDiff.body.before, '');
+    assert.equal(oldDiff.body.after, 'from-main\nfrom-child\n');
+
+    const gotFile = await getV2(srv.base, `/api/v2/workspaces/${ws.id}/files?path=${encodeURIComponent('shared.txt')}`, discovery.token);
+    assert.equal(gotFile.status, 200, gotFile.text);
+    const saved = await sendV2(srv.base, 'PUT', `/api/v2/workspaces/${ws.id}/files`, discovery.token, {
+      path: 'shared.txt',
+      text: oldDiff.body.before ?? '',
+      baseVersion: gotFile.body.version,
+    });
+    assert.equal(saved.status, 200, saved.text);
+    assert.equal(await readFile(path.join(ws.path, 'shared.txt'), 'utf8'), '');
+
+    await waitEvents(session, (list) => {
+      const ch = changeFromEvents(list, 'shared.txt');
+      if (!ch) return true;
+      return ch.added === 0 && ch.removed === 0;
+    });
+    session.close();
+
+    const afterOld = await request(srv.base, 'GET', `/api/conversations/${conv.id}/changes`, undefined, TOKEN);
+    assert.equal(afterOld.status, 200, JSON.stringify(afterOld.body));
+    const afterNote = afterOld.body.find((item) => posixPath(item.path) === 'shared.txt');
+    if (afterNote) {
+      assert.equal(afterNote.added, 0);
+      assert.equal(afterNote.removed, 0);
+    }
   } finally {
     await stopServer(srv);
   }

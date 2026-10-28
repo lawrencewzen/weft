@@ -370,7 +370,8 @@ function applyEditChange(db: MockDb, conv: MockConv, hub: MockHub, tool: MockToo
   if (!path) return;
   const diff = editDiffFor(path);
   const existing = conv.changes.find((row) => row.path === path);
-  const change: Change = existing || { path, added: 0, removed: 0, error: null };
+  const change: Change = existing || { path, added: 0, removed: 0, error: null, by: { kind: 'main' } };
+  change.by = { kind: 'main' };
   change.added += diff.added;
   change.removed += diff.removed;
   if (!existing) conv.changes.push(change);
