@@ -1,28 +1,38 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Lang } from '../data/lang';
-import { conversationPath, navigate } from '../data/nav';
-import { subagentTimeText } from '../data/subagentTime';
+import { conversationPath, navigate, subagentPath } from '../data/nav';
+import {
+  subagentDotLive,
+  subagentTimeText,
+} from '../data/subagentTime';
 import { useSubagent } from '../data/useSubagent';
+import type { Subagent } from '../data/store';
 import { t } from '../i18n';
-import { Composer } from './Composer';
-import { DemoModelBadge } from './DemoModelBadge';
-import { LeftOpenButton, RightToggle } from './RightToggle';
+import { SubagentDot } from './SubagentOverview';
+import { SubagentSteer } from './SubagentSteer';
 import { Thread } from './Thread';
 
 type Props = {
   cid: string;
   agentId: string;
+  agents: Subagent[];
   lang: Lang;
-  demo?: boolean;
-  onOpenLeft?: () => void;
 };
+
+function statusKey(status: Subagent['status']): 'status_running' | 'status_waiting' | 'status_failed' | 'status_stopped' | 'status_done' | 'status_idle' {
+  if (status === 'running') return 'status_running';
+  if (status === 'stuck' || status === 'waiting') return 'status_waiting';
+  if (status === 'failed') return 'status_failed';
+  if (status === 'stopped') return 'status_stopped';
+  if (status === 'done') return 'status_done';
+  return 'status_idle';
+}
 
 export function SubagentPane({
   cid,
   agentId,
+  agents,
   lang,
-  demo = false,
-  onOpenLeft,
 }: Props) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -32,91 +42,146 @@ export function SubagentPane({
   const { subagent, items, toolsById, missing, actions } = useSubagent(cid, agentId);
   const [stickNonce, setStickNonce] = useState(0);
   const bumpStick = useCallback(() => setStickNonce((n) => n + 1), []);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    setMenuOpen(false);
+  }, [agentId]);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onPointer = (event: PointerEvent) => {
+      const node = menuRef.current;
+      if (node && event.target instanceof Node && node.contains(event.target)) return;
+      setMenuOpen(false);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setMenuOpen(false);
+    };
+    window.addEventListener('pointerdown', onPointer);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('pointerdown', onPointer);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [menuOpen]);
 
   const back = useCallback(() => {
     navigate(conversationPath(cid));
   }, [cid]);
 
+  const pick = useCallback((id: string) => {
+    setMenuOpen(false);
+    if (id === agentId) return;
+    navigate(subagentPath(cid, id));
+  }, [agentId, cid]);
+
   if (missing) {
     return (
-      <main className="col-center" data-testid="next-subagent-view">
-        <header className="next-status">
-          <div className="next-status-inner">
-            <LeftOpenButton lang={lang} onOpen={onOpenLeft} />
-            <h1 className="top-title">{t(lang, 'home_title')}</h1>
-            <div className="top-right"><RightToggle lang={lang} /></div>
-          </div>
-        </header>
-        <div className="thread-empty">
+      <div className="sa-detail" data-testid="next-subagent-view">
+        <nav className="sa-crumb" aria-label={t(lang, 'tab_subagents')}>
+          <button
+            type="button"
+            className="sa-crumb-back"
+            data-testid="next-subagent-back"
+            onClick={back}
+          >
+            {t(lang, 'tab_subagents')}
+          </button>
+        </nav>
+        <div className="sa-detail-empty">
           <p className="next-error" data-testid="next-error">{t(lang, 'missing_subagent')}</p>
         </div>
-      </main>
+      </div>
     );
   }
 
   if (!subagent) {
     return (
-      <main className="col-center" data-testid="next-subagent-view">
-        <header className="next-status">
-          <div className="next-status-inner">
-            <LeftOpenButton lang={lang} onOpen={onOpenLeft} />
-            <p>{t(lang, 'loading')}</p>
-            <div className="top-right"><RightToggle lang={lang} /></div>
-          </div>
-        </header>
-      </main>
+      <div className="sa-detail" data-testid="next-subagent-view">
+        <p className="sa-detail-empty">{t(lang, 'loading')}</p>
+      </div>
     );
   }
 
   const live = subagent.status === 'running' || subagent.status === 'stuck';
-  const statusKey = subagent.status === 'running' ? 'status_running'
-    : subagent.status === 'stuck' ? 'status_waiting'
-      : subagent.status === 'waiting' ? 'status_waiting'
-        : subagent.status === 'failed' ? 'status_failed'
-          : subagent.status === 'stopped' ? 'status_stopped'
-            : subagent.status === 'done' ? 'status_done'
-              : 'status_idle';
+  const title = subagent.title || subagent.name;
   const time = subagentTimeText(subagent, lang, now);
-  const run = {
-    status: live ? 'running' as const : subagent.status === 'failed' ? 'failed' as const : 'idle' as const,
-    startedAt: subagent.startedAt,
-    pendingText: subagent.currentAction,
-    canSend: live,
-    canStop: live,
-    lockedReason: null,
-    error: null,
-  };
+  const list = agents.length ? agents : [subagent];
 
   return (
-    <main className="col-center" data-testid="next-subagent-view">
-      <header className="next-status" data-testid="next-status">
-        <div className="next-status-inner">
-          <div className="pending-line">
-            <LeftOpenButton lang={lang} onOpen={onOpenLeft} />
-            <button
-              type="button"
-              className="subagent-back"
-              data-testid="next-subagent-back"
-              onClick={back}
-            >
-              {t(lang, 'subagent_back')}
-            </button>
-            {live ? <span className="run-spin" aria-hidden="true"><span /></span> : null}
-            <span className="top-title">{subagent.title || subagent.name}</span>
-            {demo ? <DemoModelBadge lang={lang} testId="next-demo-model-badge" /> : null}
-            <span className="status-pill" data-testid="next-run-status" data-status={subagent.status}>
-              {t(lang, statusKey)}
-            </span>
-            {time ? (
-              <span className="pending-elapsed" data-testid="next-subagent-time">{time}</span>
-            ) : null}
-          </div>
-          <div className="top-right">
-            <RightToggle lang={lang} />
-          </div>
+    <div className="sa-detail" data-testid="next-subagent-view">
+      <div className="sa-detail-head">
+        <nav
+          className="sa-crumb"
+          aria-label={t(lang, 'tab_subagents')}
+          ref={menuRef}
+        >
+          <button
+            type="button"
+            className="sa-crumb-back"
+            data-testid="next-subagent-back"
+            onClick={back}
+          >
+            {t(lang, 'tab_subagents')}
+          </button>
+          <span className="sa-crumb-sep" aria-hidden="true">›</span>
+          <button
+            type="button"
+            className="sa-crumb-current"
+            data-testid="next-subagent-switch"
+            aria-label={t(lang, 'subagent_switch')}
+            aria-expanded={menuOpen}
+            onClick={() => setMenuOpen((open) => !open)}
+          >
+            <span className="sa-crumb-sum">{title}</span>
+            <span className="sa-crumb-caret" aria-hidden="true">▾</span>
+          </button>
+          {menuOpen ? (
+            <div className="sa-switch-menu" data-testid="next-subagent-menu" role="listbox">
+              {list.map((agent) => {
+                const selected = agent.id === agentId;
+                const sum = agent.title || agent.name;
+                const meta = subagentTimeText(agent, lang, now);
+                return (
+                  <button
+                    key={agent.id}
+                    type="button"
+                    className={`sa-switch-item${selected ? ' is-selected' : ''}`}
+                    data-testid="next-subagent-menu-item"
+                    data-agent-id={agent.id}
+                    role="option"
+                    aria-selected={selected}
+                    onClick={() => pick(agent.id)}
+                  >
+                    <SubagentDot status={agent.status} />
+                    <span className="sa-switch-sum">{sum}</span>
+                    {meta ? <span className="sa-switch-meta">{meta}</span> : null}
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
+        </nav>
+        <div className="sa-detail-title">
+          <span className="sa-badge">{t(lang, 'subagent_badge')}</span>
+          <span className="sa-detail-name">{subagent.name || title}</span>
+          <span
+            className={`sa-detail-status${subagentDotLive(subagent.status) ? ' is-live' : ''}`}
+            data-testid="next-subagent-status"
+            data-status={subagent.status}
+          >
+            {t(lang, statusKey(subagent.status))}
+          </span>
+          {time ? (
+            <span className="sa-detail-time" data-testid="next-subagent-time">{time}</span>
+          ) : null}
         </div>
-      </header>
+      </div>
       <Thread
+        className="sa-detail-thread"
+        testId="next-subagent-thread"
         items={items}
         toolsById={toolsById}
         lang={lang}
@@ -125,16 +190,14 @@ export function SubagentPane({
         stickNonce={stickNonce}
         conversationId={cid}
       />
-      <Composer
+      <SubagentSteer
         lang={lang}
-        run={run}
-        demo={demo}
-        conversationId={cid}
-        showModelControls={false}
+        name={subagent.name || title}
+        live={live}
         onSend={actions.send}
         onStop={actions.stop}
         onSent={bumpStick}
       />
-    </main>
+    </div>
   );
 }

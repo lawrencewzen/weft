@@ -11,7 +11,6 @@ import type { components } from '../../../src/v2/contract.gen';
 import { Composer } from './Composer';
 import { LeftOpenButton, RightToggle } from './RightToggle';
 import { StatusBar } from './StatusBar';
-import { SubagentPane } from './SubagentPane';
 import { Thread } from './Thread';
 
 type ConversationView = components['schemas']['ConversationView'];
@@ -19,7 +18,6 @@ type Workspace = components['schemas']['Workspace'];
 
 type Props = {
   cid?: string | null;
-  agentId?: string | null;
   workspaceId?: string | null;
   workspace?: Workspace | null;
   lang: Lang;
@@ -54,7 +52,6 @@ function draftView(workspaceId: string, lang: Lang): ConversationView {
 
 export function CenterPane({
   cid,
-  agentId,
   workspaceId,
   workspace = null,
   lang,
@@ -87,18 +84,6 @@ export function CenterPane({
     if (!refreshId) return;
     void refreshWorkspaceGit(refreshId).catch(() => {});
   }, [refreshId, cid]);
-
-  if (cid && agentId) {
-    return (
-      <SubagentPane
-        cid={cid}
-        agentId={agentId}
-        lang={lang}
-        demo={demo}
-        onOpenLeft={onOpenLeft}
-      />
-    );
-  }
 
   if (isDraft && workspaceId) {
     const draft = draftView(workspaceId, lang);
