@@ -1,10 +1,12 @@
 // Execution environment for one conversation workspace.
 // Wraps official NodeExecutionEnv and applies resolveInWorkspace to every
-// file path. Command cwd is kept inside that workspace. No scheduler.
+// file path. Command cwd is kept inside that workspace. Agent exec uses the
+// official inheritEnv: false + env allow-list (see bash-env.mjs). No scheduler.
 import { realpath } from 'node:fs/promises';
 import { NodeExecutionEnv } from '@earendil-works/pi-durable/env/node';
 import { ExecutionError, FileError, err, ok } from '@earendil-works/pi-durable/env';
 import { resolveInWorkspace } from '../core/paths.mjs';
+import { bashChildEnv } from './bash-env.mjs';
 
 const UTF8_OUTPUT = 'try { [Console]::OutputEncoding=[System.Text.Encoding]::UTF8 } catch {}';
 const POWERSHELL_ARGS = ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command'];
@@ -209,7 +211,12 @@ export class WorkspaceExecutionEnv {
     if (!cwd.ok) {
       return err(new ExecutionError('spawn_error', cwd.error.message, cwd.error));
     }
-    const next = { ...options, cwd: cwd.value };
+    const next = {
+      ...options,
+      cwd: cwd.value,
+      inheritEnv: false,
+      env: bashChildEnv(process.env, options?.env),
+    };
     if (typeof command !== 'string') {
       return this.inner.exec(command, next, context);
     }

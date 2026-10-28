@@ -147,7 +147,7 @@ export async function openConversationKernel({
     models,
     registry,
     settings,
-    env: async ({ cwd }) => (cwd ? createWorkspaceEnv({ cwd }) : undefined),
+    env: async ({ cwd }) => (cwd ? createWorkspaceEnv({ cwd }) : undefined), // main Agent and sub-agents; bash env allow-list lives here
   });
   const { harness, context } = kernel;
 

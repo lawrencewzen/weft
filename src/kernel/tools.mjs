@@ -12,6 +12,7 @@ import {
   createWriteTool,
 } from '@earendil-works/pi-durable/tools';
 import { diffStats, splitLines } from '../core/diff.mjs';
+import { applyBashEnvAllowlist } from './bash-env.mjs';
 import { EXT_WORKSPACE } from './ids.mjs';
 
 const DETAIL_CAP = 1024 * 1024;
@@ -262,7 +263,11 @@ const workspaceToolList = [
   withIntent(withReplay(withFileChangeDetails(withLegacyEditArgs(createEditTool())), 'unsafe')),
   withIntent(createLsTool()),
   withIntent(createGrepTool()),
-  withIntent(withReplay(withDefaultTimeout(createBashTool()), 'unsafe')),
+  withIntent(withReplay(withDefaultTimeout(createBashTool({
+    prepare(execution) {
+      applyBashEnvAllowlist(execution);
+    },
+  })), 'unsafe')),
 ];
 
 export function workspaceTools() {
