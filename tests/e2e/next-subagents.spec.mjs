@@ -475,8 +475,8 @@ test('opening a sub-agent keeps the parent lightweight; tree rails are unclipped
     expect(lastV.y + lastV.height).toBeGreaterThanOrEqual(lastRow.y + 11);
     expect(lastV.y + lastV.height).toBeLessThan(lastRow.y + lastRow.height);
     expect(Math.abs((firstV.y + firstV.height) - lastV.y)).toBeLessThanOrEqual(1.5);
-    expect(firstH.width).toBeGreaterThanOrEqual(8);
-    expect(firstH.width).toBeLessThanOrEqual(10);
+    expect(firstH.width).toBeGreaterThanOrEqual(12);
+    expect(firstH.width).toBeLessThanOrEqual(14);
 
     await rows.nth(1).click();
     await expect(page).toHaveURL(new RegExp(`/c/${conv.id}/a/`));
