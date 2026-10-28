@@ -22,6 +22,16 @@ export function quotePwshLiteral(value) {
   return `'${String(value).replaceAll("'", "''")}'`;
 }
 
+/**
+ * Windows Terminal treats `;` as a command separator (new-tab / split-pane)
+ * even when the path is a single argv element (`wt.exe -d <dir>`). Escape
+ * each `;` as `\;` per the WT command-line docs so a workspace folder named
+ * like `a ; new-tab …` cannot spawn extra commands.
+ */
+export function escapeWtArg(value) {
+  return String(value).replaceAll(';', '\\;');
+}
+
 function darwinApp(env) {
   const raw = String(env?.WEFT_TERMINAL_APP ?? '').trim();
   return raw || 'Terminal';
@@ -40,7 +50,7 @@ export function terminalLaunches(dir, {
   }
   if (platform === 'win32') {
     return [
-      { command: 'wt.exe', args: ['-d', dir] },
+      { command: 'wt.exe', args: ['-d', escapeWtArg(dir)] },
       {
         command: 'cmd.exe',
         args: [

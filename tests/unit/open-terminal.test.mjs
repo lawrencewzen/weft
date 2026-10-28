@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import {
   quotePwshLiteral,
+  escapeWtArg,
   terminalLaunches,
   openInSystemTerminal,
 } from '../../src/core/open-terminal.mjs';
@@ -76,6 +77,23 @@ test('windows prefers wt.exe -d, then cmd /c start "" powershell with LiteralPat
     assert.equal(typeof launches[1].args[launches[1].args.length - 1], 'string');
     assert.ok(Array.isArray(launches[1].args));
   }
+});
+
+test('windows wt.exe escapes semicolons in the directory as one argv; powershell LiteralPath keeps them', () => {
+  const dir = 'C:\\w\\a ; new-tab calc';
+  assert.equal(escapeWtArg(dir), 'C:\\w\\a \\; new-tab calc');
+  const launches = terminalLaunches(dir, { platform: 'win32', env: {} });
+  assert.equal(launches[0].command, 'wt.exe');
+  assert.equal(launches[0].args.length, 2);
+  assert.deepEqual(launches[0].args, ['-d', 'C:\\w\\a \\; new-tab calc']);
+  assert.equal(launches[0].args.includes('new-tab'), false);
+  assert.equal(launches[1].command, 'cmd.exe');
+  assert.equal(
+    launches[1].args[launches[1].args.length - 1],
+    `Set-Location -LiteralPath ${quotePwshLiteral(dir)}`,
+  );
+  assert.equal(launches[1].args[launches[1].args.length - 1].includes('; new-tab calc'), true);
+  assert.equal(launches[1].args[launches[1].args.length - 1].includes('\\;'), false);
 });
 
 test('linux tries x-terminal-emulator then gnome-terminal --working-directory', () => {
