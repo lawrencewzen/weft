@@ -197,12 +197,18 @@ test('other conversation chip expands by subscribing and collapses by unsubscrib
       expect.arrayContaining([`conversation:${aId}`, `conversation:${bId}`]),
     );
 
-    await chipB.click();
+    // Clicking orbit does not toggle
+    await chipB.getByTestId('next-subagent-orbit').click();
+    await expect(chipB).toHaveAttribute('aria-expanded', 'true');
+
+    // Clicking toggle chevron toggles collapse/expand
+    const toggleB = chipB.getByTestId('next-subagent-toggle');
+    await toggleB.click();
     await expect(chipB).toHaveAttribute('aria-expanded', 'false');
     await expect.poll(async () => lastTopics(page), { timeout: 10000 }).not.toContain(`conversation:${bId}`);
     await expect.poll(async () => lastTopics(page)).toContain(`conversation:${aId}`);
 
-    await chipB.click();
+    await toggleB.click();
     await expect(chipB).toHaveAttribute('aria-expanded', 'true');
     await expect(treeOf(page, bId).getByTestId('next-subagent-row')).toHaveCount(1, { timeout: 15000 });
     await expect.poll(async () => lastTopics(page), { timeout: 10000 }).toEqual(
@@ -335,9 +341,10 @@ test('expanding conversation A then opening B leaves A expanded', async ({ page 
     await waitSubagentRow(page, aId);
     const chipA = convRow(page, aId).getByTestId('next-subagent-chip');
     await expect(chipA).toHaveAttribute('aria-expanded', 'true');
-    await chipA.click();
+    const toggleA = chipA.getByTestId('next-subagent-toggle');
+    await toggleA.click();
     await expect(chipA).toHaveAttribute('aria-expanded', 'false');
-    await chipA.click();
+    await toggleA.click();
     await expect(chipA).toHaveAttribute('aria-expanded', 'true');
 
     await convRow(page, bId).click();
@@ -391,7 +398,7 @@ test('finished sub-agent trees start closed, show a check, and use the name when
     await expect(chip).toHaveAttribute('aria-expanded', 'false');
     await expect(treeOf(page, conv.id)).not.toHaveClass(/is-open/);
 
-    await chip.click();
+    await chip.getByTestId('next-subagent-toggle').click();
     await expect(chip).toHaveAttribute('aria-expanded', 'true');
     const doneRow = treeOf(page, conv.id).getByTestId('next-subagent-row').first();
     await expect(doneRow).toBeVisible();

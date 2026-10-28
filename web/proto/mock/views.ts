@@ -20,15 +20,16 @@ export function summaryOf(conv: MockConv): ConversationSummary {
     status: view.status,
     runningAgents: (view.status === 'running' ? 1 : 0) + live,
     subagents: conv.subagents.length ? { total: conv.subagents.length, live } : null,
-    archived: false,
+    archived: Boolean(conv.archived),
   };
 }
 
 function workspaceValue(ws: MockDb['workspaces'][number], rows: MockConv[]): object {
+  const activeRows = rows.filter((conv) => !conv.archived);
   return {
     ...ws,
-    conversationCount: rows.length,
-    runningCount: rows.filter((conv) => conv.view.status === 'running').length,
+    conversationCount: activeRows.length,
+    runningCount: activeRows.filter((conv) => conv.view.status === 'running').length,
   };
 }
 

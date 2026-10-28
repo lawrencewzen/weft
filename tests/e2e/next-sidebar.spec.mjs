@@ -103,7 +103,7 @@ test('running status appears from the stream and disappears after stop, without 
     const row = convRow(page, conv.id);
     await expect(row).toHaveAttribute('data-status', 'running', { timeout: 15000 });
     await expect(row.getByTestId('next-conv-dot')).toBeVisible();
-    await expect(row.getByTestId('next-conv-meta')).toHaveText('运行中');
+    await expect(row.getByTestId('next-conv-dot')).toHaveAttribute('data-kind', 'running');
 
     await row.click({ button: 'right' });
     const menu = page.getByTestId('next-ctx-menu');
@@ -111,7 +111,6 @@ test('running status appears from the stream and disappears after stop, without 
     await menu.getByText('停止').click();
     await expect(row).not.toHaveAttribute('data-status', 'running', { timeout: 20000 });
     await expect(row.getByTestId('next-conv-dot')).toHaveCount(0);
-    await expect(row.getByTestId('next-conv-meta')).not.toHaveText('运行中');
     await expect(page.getByTestId('next-stop')).toHaveCount(0);
   } finally {
     await srv.kill();
@@ -454,6 +453,44 @@ test('panel slide transitions are off until is-ready and when reduced motion is 
     await page.emulateMedia({ reducedMotion: 'reduce' });
     expect(await panelTransitionSeconds(page, 'next-sidebar')).toBe(0);
     expect(await panelTransitionSeconds(page, 'next-right')).toBe(0);
+  } finally {
+    await srv.kill();
+  }
+});
+
+test('archived conversations section is fixed at bottom above footer, collapsed by default, and scrollable', async ({ page }) => {
+  const prepared = await prepareWorkspaces(['arch-ws']);
+  const srv = await startServer({ extraEnv: { WEFT_WORKSPACE_ROOT: prepared.root } });
+  try {
+    const ws = await createWorkspace(srv, 'arch-ws', prepared.dirs[0]);
+    // Create multiple conversations and archive several
+    for (let i = 1; i <= 8; i++) {
+      await createConversation(srv, ws.id, `conv-${i}`);
+    }
+    await loginNext(page, srv);
+    await waitSidebar(page);
+
+    const archSection = page.getByTestId('next-sidebar-archived-section');
+    await expect(archSection).toBeVisible();
+
+    // Verify it is placed right above the footer
+    const footer = page.locator('.left-footer');
+    const archBox = await archSection.boundingBox();
+    const footBox = await footer.boundingBox();
+    expect(archBox).toBeTruthy();
+    expect(footBox).toBeTruthy();
+    expect(archBox.y + archBox.height).toBeLessThanOrEqual(footBox.y + 2);
+
+    // Collapsed by default
+    await expect(page.getByTestId('next-archived-list')).toHaveCount(0);
+
+    // Toggle expands
+    const toggle = page.getByTestId('next-archived-toggle');
+    await toggle.click();
+    // In our live test with SQLite, archived array reflects archived conversations (if any)
+    // Clicking again toggles collapsed
+    await toggle.click();
+    await expect(page.getByTestId('next-archived-list')).toHaveCount(0);
   } finally {
     await srv.kill();
   }

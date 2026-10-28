@@ -86,13 +86,13 @@ test('prototype runs from file:// with mock data, no network and no console erro
   const websiteNode = page.getByTestId('next-ws-node').filter({ hasText: 'website' });
   const websiteToggle = websiteNode.getByTestId('next-ws-toggle');
   await expect(websiteToggle).toHaveAttribute('aria-expanded', 'false');
+  await websiteNode.hover();
   await expect(websiteNode.locator('.ws-node-count')).toHaveText('1 运行中');
   const richRow = page.locator('[data-testid=next-conv-row][data-id="c-rich"]');
   await expect(richRow).toHaveAttribute('data-status', 'running');
   await expect(richRow.getByTestId('next-conv-dot')).toHaveAttribute('data-kind', 'running');
-  await expect(richRow.getByTestId('next-conv-meta')).toHaveText('运行中');
-  await expect(page.locator('[data-testid=next-conv-row][data-id="c-tests"]').getByTestId('next-conv-meta')).toHaveText('等待确认');
-  await expect(page.locator('[data-testid=next-conv-row][data-id="c-scripts"]').getByTestId('next-conv-meta')).toHaveText('失败');
+  await expect(page.locator('[data-testid=next-conv-row][data-id="c-tests"]').getByTestId('next-conv-dot')).toHaveAttribute('data-kind', 'waiting');
+  await expect(page.locator('[data-testid=next-conv-row][data-id="c-scripts"]').getByTestId('next-conv-dot')).toHaveAttribute('data-kind', 'failed');
   await expect(page.getByTestId('next-service-dot')).toHaveClass(/is-ok/);
   await websiteToggle.click();
   await expect(websiteToggle).toHaveAttribute('aria-expanded', 'true');
@@ -220,4 +220,55 @@ test('sidebar appearance toggle persists across reload', async ({ page }) => {
   expect(pageErrors, 'page has no uncaught errors').toEqual([]);
   expect(consoleErrors, 'page has no console errors').toEqual([]);
   expect(external, 'page makes no external requests').toEqual([]);
+});
+
+test('sidebar archived section is fixed at bottom above footer, expands, and shows archived conversations', async ({ page }) => {
+  expect(
+    fs.existsSync(protoFile),
+    'prototype build missing: run `npm run build:proto` first',
+  ).toBe(true);
+
+  await page.goto(pathToFileURL(protoFile).href);
+  await expect(page.getByTestId('next-sidebar')).toBeVisible();
+
+  const archSection = page.getByTestId('next-sidebar-archived-section');
+  await expect(archSection).toBeVisible();
+
+  // Positioned above left-footer
+  const footer = page.locator('.left-footer');
+  const archBox = await archSection.boundingBox();
+  const footBox = await footer.boundingBox();
+  expect(archBox).toBeTruthy();
+  expect(footBox).toBeTruthy();
+  expect(archBox.y + archBox.height).toBeLessThanOrEqual(footBox.y + 2);
+
+  // Default collapsed
+  await expect(page.getByTestId('next-archived-list')).toHaveCount(0);
+  await expect(page.getByTestId('next-archived-count')).toHaveText('2');
+
+  // Toggle open
+  const toggle = page.getByTestId('next-archived-toggle');
+  await toggle.click();
+  const list = page.getByTestId('next-archived-list');
+  await expect(list).toBeVisible();
+  const rows = list.getByTestId('next-conv-row');
+  await expect(rows).toHaveCount(2);
+  await expect(rows.first()).toContainText('重构旧版本迁移脚本');
+  await expect(rows.last()).toContainText('初版官网设计草稿');
+
+  // Max-height and scrollable CSS check
+  const overflow = await list.evaluate((el) => {
+    const s = getComputedStyle(el);
+    return { maxHeight: s.maxHeight, overflowY: s.overflowY };
+  });
+  expect(overflow.maxHeight).toBe('180px');
+  expect(['auto', 'scroll']).toContain(overflow.overflowY);
+
+  // Click an archived conversation to select it
+  await rows.first().click();
+  await expect(page).toHaveURL(/#\/c\/c-arch-1$/);
+
+  // Toggle closed
+  await toggle.click();
+  await expect(page.getByTestId('next-archived-list')).toHaveCount(0);
 });

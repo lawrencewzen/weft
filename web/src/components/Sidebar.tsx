@@ -17,7 +17,6 @@ import {
 } from '../data/prefs';
 import { useSession } from '../data/session';
 import {
-  conversationMeta,
   conversationStatusKind,
   deleteOpenRecord,
   hasLiveSubagents,
@@ -102,12 +101,13 @@ export function Sidebar({
   onRemoveWorkspace,
   onNewWorkspace,
 }: Props) {
-  const { groups } = useWorkspaces();
+  const { groups, archived } = useWorkspaces();
   const { store, status, setExtraConversationIds } = useSession();
   const { tab, setTab, showFiles, openInTerminal } = useRightPane();
   const now = useNow(1_000);
   const [openMap, setOpenMap] = useState<OpenRecord>(() => readWorkspaceOpen());
   const [treeRecorded, setTreeRecorded] = useState<OpenRecord>(() => readSubagentTrees());
+  const [archivedOpen, setArchivedOpen] = useState(false);
   const [menu, setMenu] = useState<MenuState | null>(null);
   const [dark, setDark] = useState(() => effectiveAppearance() === 'dark');
   const serviceOk = status === 'connected';
@@ -413,7 +413,6 @@ export function Sidebar({
                 <div className="ws-node-children">
                   {group.conversations.map((conv) => {
                     const isCurrent = conv.id === activeConversationId;
-                    const meta = conversationMeta(conv, lang, now);
                     const kind = conversationStatusKind(conv.status);
                     const counts = conv.subagents;
                     const agents = store.subagents(conv.id);
@@ -465,18 +464,11 @@ export function Sidebar({
                               live={chipLive}
                               total={chipTotal}
                               collapsed={collapsed}
+                              agents={agents}
                               lang={lang}
                               onToggle={toggleTree}
                             />
                           ) : null}
-                          <span
-                            className={`conv-node-meta ${meta.cls}`.trim()}
-                            data-testid="next-conv-meta"
-                            data-rel-time={meta.ts ? 'true' : undefined}
-                            data-ts={meta.ts ? String(meta.ts) : undefined}
-                          >
-                            {meta.text}
-                          </span>
                         </div>
                         {showTree ? (
                           <SubagentTree
@@ -502,6 +494,54 @@ export function Sidebar({
             );
           })}
         </div>
+      </div>
+      <div className="sidebar-archived-section" data-testid="next-sidebar-archived-section">
+        <div
+          className="tproj sidebar-archived-header"
+          data-testid="next-archived-toggle"
+          onClick={() => setArchivedOpen((prev) => !prev)}
+        >
+          <svg
+            className="ws-chev"
+            viewBox="0 0 12 12"
+            aria-hidden="true"
+            style={{ transform: archivedOpen ? 'rotate(90deg)' : 'rotate(0deg)' }}
+          >
+            <path d="M4.5 3l3 3-3 3" />
+          </svg>
+          <span className="sidebar-archived-title">{t(lang, 'archived_label')}</span>
+          <span className="sidebar-archived-count" data-testid="next-archived-count">
+            {archived.length}
+          </span>
+        </div>
+        {archivedOpen ? (
+          <div
+            className="sidebar-archived-list"
+            data-testid="next-archived-list"
+          >
+            {archived.map((conv) => {
+              const isCurrent = conv.id === activeConversationId;
+              return (
+                <div
+                  key={conv.id}
+                  className={`conv-node-header sidebar-archived-row${isCurrent ? ' conv-active' : ''}`}
+                  data-testid="next-conv-row"
+                  data-id={conv.id}
+                  data-status={conv.status}
+                  data-ws-id={conv.workspaceId}
+                  title={conv.title || ''}
+                  onClick={() => openConversation(conv.workspaceId, conv.id)}
+                  onContextMenu={(ev) => openMenu(ev, conversationItems(conv.workspaceId, conv), conv.title || '')}
+                >
+                  <span className="conv-status-slot" />
+                  <span className="conv-node-title">
+                    {conv.title || t(lang, 'default_conversation_title')}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        ) : null}
       </div>
       <div className="left-footer">
         <button

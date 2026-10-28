@@ -54,6 +54,7 @@ function conversation(input: {
   diffs?: Record<string, MockConv['diffs'][string]>;
   subagents?: Subagent[];
   status?: ConversationView['status'];
+  archived?: boolean;
 }): MockConv {
   const tools = input.tools || {};
   return {
@@ -77,6 +78,7 @@ function conversation(input: {
     changes: input.changes || [],
     diffs: input.diffs || {},
     subagents: input.subagents || [],
+    archived: input.archived ?? false,
     run: null,
     requestRuns: new Map(),
   };
@@ -606,6 +608,36 @@ function siteTwo(now: number): MockConv {
   });
 }
 
+function archivedOne(now: number): MockConv {
+  return conversation({
+    id: 'c-arch-1',
+    workspaceId: 'ws-weft',
+    title: '重构旧版本迁移脚本',
+    updatedAt: now - 14 * DAY,
+    used: 18_400,
+    items: [
+      user('arch1-u1', '把 v1 的迁移逻辑写个文档归档。'),
+      assistant('arch1-a1', '已将 v1 迁移脚本文档归档到 docs/archive/migration-v1.md。'),
+    ],
+    archived: true,
+  });
+}
+
+function archivedTwo(now: number): MockConv {
+  return conversation({
+    id: 'c-arch-2',
+    workspaceId: 'ws-website',
+    title: '初版官网设计草稿',
+    updatedAt: now - 30 * DAY,
+    used: 12_100,
+    items: [
+      user('arch2-u1', '最初的 landing page 草稿留一份备份。'),
+      assistant('arch2-a1', '已在 design/v1/ 留存归档。'),
+    ],
+    archived: true,
+  });
+}
+
 const PROVIDERS: Provider[] = [
   {
     id: 'demo',
@@ -688,6 +720,8 @@ export function createSeed(now: number): MockDb {
     gitConversation(now),
     siteOne(now),
     siteTwo(now),
+    archivedOne(now),
+    archivedTwo(now),
   ];
   const workspaces: Workspace[] = [
     workspace({
@@ -720,7 +754,7 @@ export function createSeed(now: number): MockDb {
     }),
   ];
   for (const ws of workspaces) {
-    const rows = conversations.filter((conv) => conv.view.workspaceId === ws.id);
+    const rows = conversations.filter((conv) => conv.view.workspaceId === ws.id && !conv.archived);
     ws.conversationCount = rows.length;
     ws.runningCount = rows.filter((conv) => conv.view.status === 'running').length;
   }
