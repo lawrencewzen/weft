@@ -1,4 +1,6 @@
-import type { Diff, DiffHunk } from './api';
+import type { Change, Diff, DiffHunk } from './api';
+import type { Lang } from './lang';
+import { t } from '../i18n';
 
 export type DiffOp = 'ctx' | 'add' | 'del';
 
@@ -89,4 +91,44 @@ export function diffTotals(list: Array<{ added: number; removed: number }>): { a
 
 export function changeSignature(change: { path: string; added: number; removed: number; error?: string | null }): string {
   return `${change.path}\t${change.added}\t${change.removed}\t${change.error ?? ''}`;
+}
+
+export type ChangeBy = NonNullable<Change['by']>;
+
+/** Extract the display name of a subagent, falling back to the last segment of agentId. */
+export function subagentDisplayName(agentId: string, name?: string | null): string {
+  const trimmed = typeof name === 'string' ? name.trim() : '';
+  if (trimmed) return trimmed;
+  const rawId = typeof agentId === 'string' ? agentId : '';
+  const last = rawId.split(':').filter(Boolean).pop();
+  return last || rawId;
+}
+
+/**
+ * Format the attribution text for a file change header.
+ * - main -> "主 Agent" / "Main agent"
+ * - subagent -> "子 · <name>" / "Sub · <name>" (falls back to the last segment of agentId if name is empty)
+ * - null / missing -> null (do not display)
+ */
+export function formatChangeBy(
+  by: Change['by'] | null | undefined,
+  lang: Lang = 'zh',
+): string | null {
+  if (!by) return null;
+  if (by.kind === 'main') {
+    return t(lang, 'change_by_main');
+  }
+  if (by.kind === 'subagent') {
+    const name = subagentDisplayName(by.agentId, by.name);
+    return t(lang, 'change_by_subagent', { name });
+  }
+  return null;
+}
+
+/** Full name / title of the subagent responsible for this change, for hover tooltips. */
+export function changeByTitle(
+  by: Change['by'] | null | undefined,
+): string | undefined {
+  if (!by || by.kind !== 'subagent') return undefined;
+  return subagentDisplayName(by.agentId, by.name);
 }

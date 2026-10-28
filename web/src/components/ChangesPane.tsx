@@ -1,7 +1,9 @@
-import { useState, type MouseEvent } from 'react';
+import { useState, type KeyboardEvent, type MouseEvent } from 'react';
 import type { Lang } from '../data/lang';
-import { flattenDiff } from '../data/diffView';
+import { changeByTitle, flattenDiff, formatChangeBy } from '../data/diffView';
+import { navigate, subagentPath } from '../data/nav';
 import { useRightPane } from '../data/rightPaneContext';
+import { useSession } from '../data/session';
 import { t } from '../i18n';
 import { CtxMenu, type CtxMenuItem } from './CtxMenu';
 
@@ -15,6 +17,7 @@ type MenuState = { x: number; y: number; path: string };
 
 export function ChangesPane({ lang }: { lang: Lang }) {
   const {
+    conversationId: rightCid,
     visibleChanges,
     totals,
     openPaths,
@@ -23,6 +26,8 @@ export function ChangesPane({ lang }: { lang: Lang }) {
     openFile,
     copyPath,
   } = useRightPane();
+  const session = useSession();
+  const cid = rightCid || session?.conversationId || '';
   const [menu, setMenu] = useState<MenuState | null>(null);
 
   function onCtx(ev: MouseEvent, path: string) {
@@ -53,6 +58,26 @@ export function ChangesPane({ lang }: { lang: Lang }) {
       {visibleChanges.map((change) => {
         const open = openPaths.has(change.path);
         const diff = diffs[change.path];
+        const by = change.by;
+        const byLabel = formatChangeBy(by, lang);
+        const byTitle = changeByTitle(by);
+        const isSubagent = by?.kind === 'subagent';
+        const subagentId = by?.kind === 'subagent' ? by.agentId : null;
+
+        function onSubagentClick(ev: MouseEvent | KeyboardEvent) {
+          ev.stopPropagation();
+          if (cid && subagentId) {
+            navigate(subagentPath(cid, subagentId));
+          }
+        }
+
+        function onSubagentKeyDown(ev: KeyboardEvent) {
+          if (ev.key === 'Enter' || ev.key === ' ') {
+            ev.preventDefault();
+            onSubagentClick(ev);
+          }
+        }
+
         return (
           <div
             key={change.path}
@@ -69,6 +94,20 @@ export function ChangesPane({ lang }: { lang: Lang }) {
             >
               {CHEV}
               <span className="changed-file-path">{change.path}</span>
+              {byLabel ? (
+                <span
+                  className={`changed-file-by${isSubagent ? ' is-subagent' : ''}`}
+                  data-testid="next-change-by"
+                  data-by-kind={change.by?.kind}
+                  title={byTitle}
+                  role={isSubagent ? 'button' : undefined}
+                  tabIndex={isSubagent ? 0 : undefined}
+                  onClick={isSubagent ? onSubagentClick : undefined}
+                  onKeyDown={isSubagent ? onSubagentKeyDown : undefined}
+                >
+                  {byLabel}
+                </span>
+              ) : null}
               <span className="stat-add">+{change.added}</span>
               <span className="stat-del">−{change.removed}</span>
             </div>

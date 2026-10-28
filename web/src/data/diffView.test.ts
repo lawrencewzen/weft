@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
+  changeByTitle,
   changeHasDiff,
   changeSignature,
   diffTotals,
   flattenDiff,
+  formatChangeBy,
   numberDiffLines,
+  subagentDisplayName,
 } from './diffView';
 import type { Diff } from './api';
 
@@ -103,5 +106,44 @@ describe('change list helpers', () => {
     expect(diffTotals([{ added: 2, removed: 1 }, { added: 3, removed: 4 }])).toEqual({ added: 5, removed: 5 });
     expect(changeSignature({ path: 'a.md', added: 1, removed: 0, error: null }))
       .not.toBe(changeSignature({ path: 'a.md', added: 2, removed: 0, error: null }));
+  });
+});
+
+describe('formatChangeBy', () => {
+  it('formats main agent attribution in zh and en', () => {
+    expect(formatChangeBy({ kind: 'main' }, 'zh')).toBe('主 Agent');
+    expect(formatChangeBy({ kind: 'main' }, 'en')).toBe('Main agent');
+  });
+
+  it('formats subagent attribution with name in zh and en', () => {
+    const sub = { kind: 'subagent' as const, agentId: 'c1:sub:sa-1', name: 'sub-load-order' };
+    expect(formatChangeBy(sub, 'zh')).toBe('子 · sub-load-order');
+    expect(formatChangeBy(sub, 'en')).toBe('Sub · sub-load-order');
+  });
+
+  it('falls back to the last segment of agentId when subagent name is empty or whitespace', () => {
+    const emptyName = { kind: 'subagent' as const, agentId: 'c1:sub:sa-2', name: '' };
+    expect(formatChangeBy(emptyName, 'zh')).toBe('子 · sa-2');
+    expect(formatChangeBy(emptyName, 'en')).toBe('Sub · sa-2');
+
+    const spacesName = { kind: 'subagent' as const, agentId: 'c1:sub:worker-1', name: '   ' };
+    expect(formatChangeBy(spacesName, 'zh')).toBe('子 · worker-1');
+
+    const bareId = { kind: 'subagent' as const, agentId: 'standalone-agent', name: '' };
+    expect(formatChangeBy(bareId, 'zh')).toBe('子 · standalone-agent');
+    expect(subagentDisplayName('standalone-agent', '')).toBe('standalone-agent');
+  });
+
+  it('returns null when by is null, undefined, or missing kind', () => {
+    expect(formatChangeBy(null, 'zh')).toBeNull();
+    expect(formatChangeBy(undefined, 'zh')).toBeNull();
+    expect(formatChangeBy({ kind: 'other' } as unknown as { kind: 'main' }, 'zh')).toBeNull();
+  });
+
+  it('provides hover title for subagent (full name) and undefined for main/null', () => {
+    expect(changeByTitle({ kind: 'subagent', agentId: 'c1:sub:sa-1', name: 'sub-load-order' })).toBe('sub-load-order');
+    expect(changeByTitle({ kind: 'subagent', agentId: 'c1:sub:sa-2', name: '' })).toBe('sa-2');
+    expect(changeByTitle({ kind: 'main' })).toBeUndefined();
+    expect(changeByTitle(null)).toBeUndefined();
   });
 });

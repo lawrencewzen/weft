@@ -19,6 +19,26 @@ test('diff, file tree, preview, save and the 409 conflict demo', async ({ page }
     'web/src/components/ChangesPane.tsx',
   );
 
+  const changesPaneRow = page.locator('[data-testid=next-change-row][data-path="web/src/components/ChangesPane.tsx"]');
+  const diffViewRow = page.locator('[data-testid=next-change-row][data-path="web/src/data/diffView.ts"]');
+  const testRow = page.locator('[data-testid=next-change-row][data-path="web/src/data/store.test.ts"]');
+  const storeRow = page.locator('[data-testid=next-change-row][data-path="web/src/data/store.ts"]');
+
+  // Attribution: main agent displays "主 Agent", subagent displays "子 · <name>".
+  await expect(changesPaneRow.getByTestId('next-change-by')).toHaveText('子 · sub-load-order');
+  await expect(changesPaneRow.getByTestId('next-change-by')).toHaveAttribute('title', 'sub-load-order');
+  await expect(diffViewRow.getByTestId('next-change-by')).toHaveText('主 Agent');
+  await expect(testRow.getByTestId('next-change-by')).toHaveText('子 · sub-delta-test');
+  await expect(testRow.getByTestId('next-change-by')).toHaveAttribute('title', 'sub-delta-test');
+  await expect(storeRow.getByTestId('next-change-by')).toHaveText('主 Agent');
+
+  // Clicking subagent attribution opens the subagent view without collapsing the file diff.
+  await changesPaneRow.getByTestId('next-change-by').click();
+  await expect(page).toHaveURL(/#\/c\/c-rich\/a\/c-rich(?::|%3A)sub(?::|%3A)sa-1$/);
+  await expect(page.getByTestId('next-subagent-view')).toBeVisible();
+  await page.getByTestId('next-right-tab-changes').click();
+  await expect(changesPaneRow.getByTestId('next-diff')).toBeVisible();
+
   // Right tabs container is aligned to the left, immediately following the collapse button.
   await expect(page.locator('.right-tabs-bar')).toHaveCSS('justify-content', 'flex-start');
   await expect.poll(async () => {
@@ -28,9 +48,6 @@ test('diff, file tree, preview, save and the 409 conflict demo', async ({ page }
     const gap = tabsNavBox.x - (collapseBox.x + collapseBox.width);
     return gap >= 0 && gap <= 8;
   }).toBe(true);
-
-  const testRow = page.locator('[data-testid=next-change-row][data-path="web/src/data/store.test.ts"]');
-  const storeRow = page.locator('[data-testid=next-change-row][data-path="web/src/data/store.ts"]');
 
   // Changes default to expanded (<= 8 files, <= 300 lines) with diff lines visible.
   await expect(page.getByTestId('next-diff')).toHaveCount(4);
@@ -90,6 +107,7 @@ test('diff, file tree, preview, save and the 409 conflict demo', async ({ page }
   await page.getByTestId('next-right-tab-changes').click();
   const readmeChange = page.locator('[data-testid=next-change-row][data-path="README.md"]');
   await expect(readmeChange).toBeVisible();
+  await expect(readmeChange.getByTestId('next-change-by')).toHaveCount(0);
   await expect(readmeChange.getByTestId('next-diff-line').first()).toBeVisible();
   await expect.poll(async () => readmeChange.locator('[data-op=add]').count()).toBeGreaterThan(0);
   await page.getByTestId('next-right-tab-files').click();
@@ -134,6 +152,7 @@ test('a simulated edit lands in the changes list with its diff', async ({ page }
 
   await expect(page.getByTestId('next-change-row')).toHaveCount(1);
   await expect(page.getByTestId('next-change-row').first()).toHaveAttribute('data-path', 'web/src/data/store.ts');
+  await expect(page.getByTestId('next-change-row').first().getByTestId('next-change-by')).toHaveText('主 Agent');
   // Edit change defaults to expanded
   await expect(page.getByTestId('next-diff-line').first()).toBeVisible();
   expect(await page.locator('[data-testid=next-diff-line][data-op=add]').count()).toBeGreaterThan(0);
