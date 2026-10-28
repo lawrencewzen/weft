@@ -94,10 +94,24 @@ test('panels slide transition and monotonicity for left and right panels', async
 
     // 3. Right panel collapse & expand
     await expect(page.getByTestId('next-right-collapse')).toBeVisible();
-    await page.getByTestId('next-right-collapse').click();
-    await expect(page.getByTestId('next-right-toggle')).toBeVisible();
+    const collapseRightPromise = page.getByTestId('next-right-collapse').click();
+    const collapseRightSamples = await samplePositions(
+      page,
+      '[data-testid="next-right-toggle"]',
+      '.top-title',
+      400,
+      20,
+    );
+    await collapseRightPromise;
 
-    // 展开右栏按钮贴右边（距中间栏右边 12±2px）
+    // 展开右栏按钮平移时 x 单调向右移动（允许 1px 抖动）
+    for (let i = 1; i < collapseRightSamples.length; i++) {
+      if (collapseRightSamples[i].lx != null && collapseRightSamples[i - 1].lx != null) {
+        expect(collapseRightSamples[i].lx).toBeGreaterThanOrEqual(collapseRightSamples[i - 1].lx - 1);
+      }
+    }
+
+    // 展开右栏按钮最终贴右边（距中间栏右边 12±2px）
     const rightMargin = await page.evaluate(() => {
       const center = document.querySelector('[data-testid="next-center"]');
       const rb = document.querySelector('[data-testid="next-right-toggle"]');
@@ -107,7 +121,9 @@ test('panels slide transition and monotonicity for left and right panels', async
     expect(rightMargin).toBeGreaterThanOrEqual(10);
     expect(rightMargin).toBeLessThanOrEqual(14);
 
-    await page.getByTestId('next-right-toggle').click();
+    const expandRightPromise = page.getByTestId('next-right-toggle').click();
+    await page.waitForTimeout(300);
+    await expandRightPromise;
     await expect(page.getByTestId('next-right-collapse')).toBeVisible();
   } finally {
     await srv.kill();
