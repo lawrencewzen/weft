@@ -454,6 +454,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/workspaces/{id}/open-terminal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 在系统终端中打开目录
+         * @description 在本机打开系统自带的终端，cwd 为工作区内的目录。浏览器和服务都在 127.0.0.1，服务端直接 spawn 本机终端程序。
+         *     body.path 是相对工作区的路径，缺省为工作区根。必须通过 resolveInWorkspace，且必须是已存在的目录。
+         *     越界或不是目录时 400 E_PATH。用 spawn 的参数数组，detached、stdio ignore、unref，绝不拼接 shell 字符串。
+         *     macOS：`open -a Terminal <dir>`；环境变量 WEFT_TERMINAL_APP 可换成 iTerm 等。
+         *     Windows：优先 `wt.exe -d <dir>`；没有则 `cmd /c start "" powershell.exe -NoExit -Command Set-Location -LiteralPath <dir>`。
+         *     Linux：`x-terminal-emulator`，否则 `gnome-terminal --working-directory=<dir>`；都没有 501。
+         *     找不到程序时返回明确错误。测试用 WEFT_TERMINAL_MOCK 跳过真正拉起窗口。
+         */
+        post: operations["openWorkspaceTerminal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/workspaces/{id}": {
         parameters: {
             query?: never;
@@ -1566,6 +1592,18 @@ export interface components {
         WorkspaceRemoved: {
             /** @constant */
             removed: true;
+        };
+        /** @description POST /api/v2/workspaces/{id}/open-terminal 的请求体。 */
+        OpenTerminalRequest: {
+            /** @description 相对工作区的目录。缺省或空字符串表示工作区根。 */
+            path?: string;
+        };
+        /** @description POST /api/v2/workspaces/{id}/open-terminal 成功。 */
+        OpenTerminalResult: {
+            /** @constant */
+            opened: true;
+            /** @description 可选提示。原型会带「已在系统终端中打开（原型不会真的打开）」；真服务端省略，由客户端显示默认文案。 */
+            message?: string;
         };
         /** @description 工作区里还有运行中的对话。 */
         WorkspaceBusy: {
@@ -3586,6 +3624,90 @@ export interface operations {
             };
             /** @description 工作区不存在 */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 客户端错误 */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 服务端错误 */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+        };
+    };
+    openWorkspaceTerminal: {
+        parameters: {
+            query?: {
+                /** @description 错误文案语言，缺省 zh */
+                lang?: "zh" | "en";
+            };
+            header?: never;
+            path: {
+                /** @description 工作区 id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["OpenTerminalRequest"];
+            };
+        };
+        responses: {
+            /** @description 已请求打开系统终端 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpenTerminalResult"];
+                };
+            };
+            /** @description 路径越界或不是目录（E_PATH） */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 未授权 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 工作区不存在 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 找不到可用的终端程序（E_NO_TERMINAL） */
+            501: {
                 headers: {
                     [name: string]: unknown;
                 };

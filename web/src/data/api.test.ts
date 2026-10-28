@@ -15,6 +15,7 @@ import {
   getSnapshot,
   getWorkspaceFile,
   getWorkspaceTree,
+  openWorkspaceTerminal,
   isConflictError,
   isUnauthenticatedError,
   refreshWorkspaceGit,
@@ -225,6 +226,29 @@ describe('api client', () => {
     await expect(refreshWorkspaceGit('w/1')).resolves.toEqual(gitWs);
     expect(fetchMock.mock.calls[0][0]).toBe('/api/v2/workspaces/w%2F1/git/refresh');
     expect(fetchMock.mock.calls[0][1]).toMatchObject({ method: 'POST' });
+  });
+
+  it('posts open-terminal with an optional relative path', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse(200, { opened: true }))
+      .mockResolvedValueOnce(jsonResponse(200, { opened: true, message: 'ok' }))
+      .mockResolvedValueOnce(jsonResponse(400, { error: '路径超出工作区', code: 'E_PATH' }, 'Bad Request'));
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(openWorkspaceTerminal('w/1')).resolves.toEqual({ opened: true });
+    await expect(openWorkspaceTerminal('w/1', 'src')).resolves.toEqual({ opened: true, message: 'ok' });
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/v2/workspaces/w%2F1/open-terminal');
+    expect(fetchMock.mock.calls[0][1]).toMatchObject({ method: 'POST', body: '{}' });
+    expect(fetchMock.mock.calls[1][1]).toMatchObject({
+      method: 'POST',
+      body: JSON.stringify({ path: 'src' }),
+    });
+    await expect(openWorkspaceTerminal('w1', '../secret')).rejects.toSatisfy((err: unknown) => {
+      expect(err).toBeInstanceOf(ApiError);
+      expect((err as ApiError).status).toBe(400);
+      expect((err as ApiError).code).toBe('E_PATH');
+      expect((err as ApiError).message).toBe('路径超出工作区');
+      return true;
+    });
   });
 
   it('loads tree, file, and diff through v2 endpoints and encodes the path query', async () => {

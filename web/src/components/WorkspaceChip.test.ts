@@ -132,6 +132,30 @@ describe('WorkspaceChip', () => {
     expect(onNew).toHaveBeenCalledTimes(1);
   });
 
+  it('opens a project menu on right-click with open-in-terminal', async () => {
+    const onOpenTerminal = vi.fn();
+    const onCopyPath = vi.fn();
+    await render(createElement(WorkspaceChip, {
+      lang: 'zh',
+      selectedId: 'w1',
+      canSwitch: false,
+      onPick: vi.fn(),
+      onNew: vi.fn(),
+      onOpenTerminal,
+      onCopyPath,
+    }));
+    const trigger = host!.querySelector<HTMLButtonElement>('[data-testid=next-ws-chip]');
+    await act(async () => {
+      trigger?.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 40, clientY: 80 }));
+    });
+    const menu = host!.querySelector('[data-testid=next-ctx-menu]');
+    expect(menu).toBeTruthy();
+    const openItem = host!.querySelector<HTMLButtonElement>('[data-action=open-terminal]');
+    expect(openItem?.textContent).toContain('在终端中打开');
+    await act(async () => { openItem?.click(); });
+    expect(onOpenTerminal).toHaveBeenCalledTimes(1);
+  });
+
   it('renders the draft hero picker with the same workspace options', async () => {
     const onPick = vi.fn();
     await render(createElement(WorkspaceChip, {

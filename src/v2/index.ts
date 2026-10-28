@@ -30,6 +30,7 @@ import { attachSubagentTopic, type LoadSubagent } from './stream/subagent-topic.
 import { createStuckWatch } from './stream/stuck-watch.ts';
 import { attachExtensionsTopic } from './stream/extensions-topic.ts';
 import { handleExtensionsApi, loadExtensionsSnapshot, type ExtensionsHost } from './http/extensions.ts';
+import { handleOpenTerminalApi } from './http/open-terminal.ts';
 import {
   diffView,
   findKernelChange,
@@ -103,6 +104,7 @@ type GitTestResult = components['schemas']['GitTestResult'];
 type GitProjectList = components['schemas']['GitProjectList'];
 type GitBranchList = components['schemas']['GitBranchList'];
 type OkId = components['schemas']['OkId'];
+type OpenTerminalResult = components['schemas']['OpenTerminalResult'];
 type V2JsonBody =
   | ServiceInfo
   | WebCode
@@ -142,7 +144,8 @@ type V2JsonBody =
   | GitTestResult
   | GitProjectList
   | GitBranchList
-  | OkId;
+  | OkId
+  | OpenTerminalResult;
 
 export type ConversationRow = {
   id?: unknown;
@@ -657,6 +660,19 @@ export function createV2Handler(opts: {
       }
       return true;
     }
+
+    if (await handleOpenTerminalApi({
+      req,
+      res,
+      url,
+      pathname,
+      method,
+      sendV2: (response, requestPath, requestMethod, status, body) => {
+        sendV2(response, requestPath, requestMethod, status, body as V2JsonBody);
+      },
+      readObjectBody,
+      getWorkspace: opts.getWorkspace,
+    })) return true;
 
     const gitRefreshMatch = /^\/api\/v2\/workspaces\/([^/]+)\/git\/refresh$/.exec(pathname);
     if (method === 'POST' && gitRefreshMatch) {

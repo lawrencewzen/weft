@@ -15,6 +15,7 @@ import {
   getWorkspaceFile,
   getWorkspaceTree,
   isConflictError,
+  openWorkspaceTerminal,
   saveWorkspaceFile,
   type Diff,
   type FileContent,
@@ -78,6 +79,7 @@ export type RightPaneValue = {
   saveFile: (overwrite?: boolean) => Promise<void>;
   reloadFile: () => Promise<void>;
   copyPath: (path: string) => void;
+  openInTerminal: (relPath?: string, targetWorkspaceId?: string) => Promise<void>;
 };
 
 const RightPaneContext = createContext<RightPaneValue | null>(null);
@@ -427,6 +429,20 @@ export function RightPaneProvider({
     void copyText(path).then((ok) => onToast(t(lang, ok ? 'copied' : 'err_copy')));
   }, [lang, onToast]);
 
+  const openInTerminal = useCallback(async (relPath?: string, targetWorkspaceId?: string) => {
+    const id = targetWorkspaceId || wsId;
+    if (!id) {
+      onToast(t(lang, 'open_terminal_fail'));
+      return;
+    }
+    try {
+      const result = await openWorkspaceTerminal(id, relPath);
+      onToast(result.message || t(lang, 'open_terminal_ok'));
+    } catch (err) {
+      onToast(err instanceof Error ? err.message : t(lang, 'open_terminal_fail'));
+    }
+  }, [wsId, lang, onToast]);
+
   const value = useMemo<RightPaneValue>(() => ({
     open,
     setOpen,
@@ -464,11 +480,12 @@ export function RightPaneProvider({
     saveFile,
     reloadFile,
     copyPath,
+    openInTerminal,
   }), [
     open, setOpen, tab, setTab, selectedSubagentId, width, persistWidth, hasChanges, totals, visibleChanges,
     openPaths, toggleChange, diffs, openFile, openChangeDiff, openTerminal, selectedCommandId, showFiles, tree, treeTruncated,
     treeReady, expandedDirs, toggleDirectory, activeFilePath, fileTargetLine, file, fileBusy,
-    editorMode, draftText, saveState, saveFile, reloadFile, copyPath,
+    editorMode, draftText, saveState, saveFile, reloadFile, copyPath, openInTerminal,
   ]);
 
   return <RightPaneContext.Provider value={value}>{children}</RightPaneContext.Provider>;

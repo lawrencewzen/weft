@@ -37,6 +37,7 @@ import { useRightPane } from '../data/rightPaneContext';
 import type { components } from '../../../src/v2/contract.gen';
 import { formatElapsed, t } from '../i18n';
 import { writeActiveWorkspace } from '../data/layout';
+import { useRightPane } from '../data/rightPaneContext';
 import { ContextBanner, ContextChip } from './ContextChip';
 import { DemoModelBadge } from './DemoModelBadge';
 import { ModelChip } from './ModelChip';
@@ -162,6 +163,7 @@ export function Composer({
   const imagesRef = useRef(images);
   imagesRef.current = images;
   const { providers, defaultModel, ready: providersReady } = useProviders();
+  const { openInTerminal, copyPath } = useRightPane();
   const groups = useMemo(() => groupComposerModels(providers, defaultModel), [providers, defaultModel]);
   const available = hasAvailableModels(providers);
   const selected = useMemo(() => resolveComposerSelection({
@@ -662,6 +664,10 @@ export function Composer({
                       navigate(draftPath(id), { replace: true });
                     }}
                     onNew={() => onNewWorkspace?.()}
+                    onOpenTerminal={workspaceId
+                      ? () => { void openInTerminal(undefined, workspaceId); }
+                      : undefined}
+                    onCopyPath={copyPath}
                   />
                   {demo ? <DemoModelBadge lang={lang} testId="next-demo-model-chip" /> : null}
                 </div>
