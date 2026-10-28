@@ -2,20 +2,25 @@ import { describe, expect, it } from 'vitest';
 import type { Vendor } from './providerWizard';
 import {
   blankWizard,
+  brandChipLabel,
   brandFilters,
   buildCreateBody,
   buildPatchBody,
   buildTestDraftBody,
   canAdvance,
   canFinish,
+  COMING_SOON_VENDOR_IDS,
   defaultWay,
   filterVendors,
   formatContextWindow,
   GROK_VENDOR,
   GROK_VENDOR_ID,
   hostOf,
+  isComingSoonVendor,
   isMaskedApiKey,
+  presentVendors,
   shouldDiscardDraftOnCancel,
+  vendorProtocolName,
   waysForVendor,
   withGrokVendor,
   wizardFromProvider,
@@ -58,14 +63,44 @@ describe('provider wizard', () => {
 
   it('offers account login only for Grok, and ACP as disabled', () => {
     expect(waysForVendor(GROK_VENDOR)).toEqual([
-      { id: 'account', enabled: true },
-      { id: 'agent', enabled: false },
+      { id: 'account', enabled: true, product: 'Grok Build' },
+      { id: 'agent', enabled: false, product: 'Grok' },
     ]);
     expect(defaultWay(GROK_VENDOR)).toBe('account');
-    expect(waysForVendor(deepseek).map((item) => item.id)).toEqual(['api_key', 'custom_endpoint', 'agent']);
+    expect(waysForVendor(deepseek).map((item) => item.id)).toEqual([
+      'account', 'api_key', 'agent', 'custom_endpoint',
+    ]);
+    expect(waysForVendor(deepseek).find((item) => item.id === 'account')).toEqual({
+      id: 'account', enabled: false, product: null,
+    });
     expect(waysForVendor(deepseek).find((item) => item.id === 'agent')?.enabled).toBe(false);
-    expect(waysForVendor(custom)[0]).toEqual({ id: 'custom_endpoint', enabled: true });
+    expect(waysForVendor({ ...deepseek, id: 'anthropic', name: 'Anthropic' }).find((item) => item.id === 'account')).toEqual({
+      id: 'account', enabled: false, product: 'Claude Code',
+    });
+    expect(waysForVendor(custom).find((item) => item.id === 'custom_endpoint')).toEqual({
+      id: 'custom_endpoint', enabled: true,
+    });
+    expect(defaultWay(custom)).toBe('custom_endpoint');
     expect(defaultWay(ollama)).toBe('api_key');
+  });
+
+  it('presents 14 design vendors plus Grok Build, with coming-soon extras', () => {
+    const list = presentVendors([deepseek, custom]);
+    expect(list.find((item) => item.id === GROK_VENDOR_ID)?.name).toBe('Grok Build');
+    expect(list.map((item) => item.id)).toEqual([
+      'anthropic', 'openai', 'gemini', 'xai', 'grok', 'qwen',
+      'github-copilot', 'kiro', 'deepseek', 'moonshot', 'zhipu',
+      'openrouter', 'ollama', 'lmstudio', 'custom',
+    ]);
+    expect(list.find((item) => item.id === 'gemini')?.name).toBe('Google');
+    expect(list.find((item) => item.id === 'qwen')?.name).toBe('阿里云 · 通义');
+    expect(list.find((item) => item.id === 'custom')?.name).toBe('自定义地址');
+    expect(list.find((item) => item.id === 'deepseek')?.baseUrl).toBe(deepseek.baseUrl);
+    expect([...COMING_SOON_VENDOR_IDS]).toEqual(['github-copilot', 'kiro', 'lmstudio']);
+    expect(isComingSoonVendor('kiro')).toBe(true);
+    expect(isComingSoonVendor(deepseek)).toBe(false);
+    expect(vendorProtocolName({ ...deepseek, id: 'anthropic' })).toBe('Anthropic 协议');
+    expect(brandChipLabel('OpenAI')).toBe('GPT');
   });
 
   it('blocks next until the current step is satisfied', () => {
@@ -176,6 +211,7 @@ describe('provider wizard', () => {
   it('filters vendors and formats helpers', () => {
     expect(filterVendors([deepseek, GROK_VENDOR], 'grok').map((item) => item.id)).toEqual(['grok']);
     expect(filterVendors([deepseek], 'claude')).toEqual([]);
+    expect(filterVendors(presentVendors([]), 'claude').map((item) => item.id)).toContain('anthropic');
     expect(hostOf('https://api.deepseek.com/v1')).toBe('api.deepseek.com');
     expect(formatContextWindow(200_000)).toBe('200K');
     expect(formatContextWindow(1_000_000)).toBe('1M');
@@ -184,7 +220,11 @@ describe('provider wizard', () => {
       { id: 'b', displayName: 'B', brand: 'Claude', contextWindow: 1, contextWindowCustom: false },
       { id: 'c', displayName: 'C', brand: 'Grok', contextWindow: 1, contextWindowCustom: false },
       { id: 'd', displayName: 'D', brand: null, contextWindow: 1, contextWindowCustom: false },
-    ]).map((item) => item.id)).toEqual(['Claude', 'Grok']);
+      { id: 'e', displayName: 'E', brand: 'OpenAI', contextWindow: 1, contextWindowCustom: false },
+    ]).map((item) => item.id)).toEqual(['Claude', 'OpenAI', 'Grok']);
+    expect(brandFilters([
+      { id: 'e', displayName: 'E', brand: 'OpenAI', contextWindow: 1, contextWindowCustom: false },
+    ])[0].name).toBe('GPT');
   });
 
   it('starts an edit wizard on step 2 with the masked key', () => {

@@ -2,6 +2,20 @@ import xai from '../../public/vendor/brand-icons/xai.svg?raw';
 import grok from '../../public/vendor/brand-icons/grok.svg?raw';
 import openai from '../../public/vendor/brand-icons/openai.svg?raw';
 import anthropic from '../../public/vendor/brand-icons/anthropic.svg?raw';
+import gemini from '../../public/vendor/brand-icons/gemini.svg?raw';
+import qwen from '../../public/vendor/brand-icons/qwen.svg?raw';
+import githubcopilot from '../../public/vendor/brand-icons/githubcopilot.svg?raw';
+import kiro from '../../public/vendor/brand-icons/kiro.svg?raw';
+import deepseek from '../../public/vendor/brand-icons/deepseek.svg?raw';
+import moonshot from '../../public/vendor/brand-icons/moonshot.svg?raw';
+import kimi from '../../public/vendor/brand-icons/kimi.svg?raw';
+import zhipu from '../../public/vendor/brand-icons/zhipu.svg?raw';
+import openrouter from '../../public/vendor/brand-icons/openrouter.svg?raw';
+import ollama from '../../public/vendor/brand-icons/ollama.svg?raw';
+import lmstudio from '../../public/vendor/brand-icons/lmstudio.svg?raw';
+import mistral from '../../public/vendor/brand-icons/mistral.svg?raw';
+import meta from '../../public/vendor/brand-icons/meta.svg?raw';
+import google from '../../public/vendor/brand-icons/google.svg?raw';
 
 /**
  * Only the brand icons the prototype data actually shows are bundled; inlining
@@ -12,6 +26,21 @@ const ICONS: Record<string, string> = {
   grok,
   openai,
   anthropic,
+  claude: anthropic,
+  gemini,
+  qwen,
+  githubcopilot,
+  kiro,
+  deepseek,
+  moonshot,
+  kimi,
+  zhipu,
+  openrouter,
+  ollama,
+  lmstudio,
+  mistral,
+  meta,
+  google,
 };
 
 function dataUri(raw: string): string {

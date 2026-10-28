@@ -135,6 +135,18 @@ test('add provider: failed 401, then pass, pick two models, default, rename, del
   await openProviders(page);
 
   await page.getByTestId('next-provider-add').click();
+  await expect(page.getByTestId('next-vendor-card')).toHaveCount(15);
+  await expect(page.locator('[data-testid=next-vendor-card][data-vendor=github-copilot]')).toBeDisabled();
+  await expect(page.locator('[data-testid=next-vendor-card][data-vendor=kiro]')).toBeDisabled();
+  await expect(page.locator('[data-testid=next-vendor-card][data-vendor=lmstudio]')).toBeDisabled();
+  await page.locator('[data-testid=next-vendor-card][data-vendor=anthropic]').click();
+  await page.getByRole('button', { name: '下一步' }).click();
+  await expect(page.getByTestId('next-way-account')).toBeDisabled();
+  await expect(page.getByTestId('next-way-account')).toContainText('账号登录 · Claude Code');
+  await expect(page.getByTestId('next-way-account')).toContainText('即将支持');
+  await expect(page.getByTestId('next-way-agent')).toContainText('ACP Agent · Claude Code');
+  await page.getByRole('button', { name: '上一步' }).click();
+
   await page.locator('[data-testid=next-vendor-card][data-vendor=custom]').click();
   await expect(page.getByTestId('next-settings')).toContainText('已选');
   await page.getByRole('button', { name: '下一步' }).click();
@@ -142,6 +154,8 @@ test('add provider: failed 401, then pass, pick two models, default, rename, del
   await expect(page.getByTestId('next-way-custom_endpoint')).toBeVisible();
   await expect(page.getByTestId('next-way-custom_endpoint')).toContainText('兼容 OpenAI 协议的网关');
   await expect(page.getByTestId('next-way-custom_endpoint')).not.toContainText('兼容 OpenAI 兼容');
+  await expect(page.getByTestId('next-way-account')).toBeDisabled();
+  await expect(page.getByTestId('next-way-account')).toContainText('即将支持');
   await expect(page.getByTestId('next-way-agent')).toBeDisabled();
   await expect(page.getByTestId('next-way-agent')).toContainText('即将支持');
 
@@ -158,7 +172,8 @@ test('add provider: failed 401, then pass, pick two models, default, rename, del
 
   const rows = page.getByTestId('next-model-row');
   await expect(page.getByTestId('next-provider-crumb')).toBeVisible();
-  await expect(page.locator('.next-settings-crumb')).toContainText('自定义');
+  await expect(page.locator('.next-settings-crumb')).toContainText('添加');
+  await expect(page.locator('.ns-wizard-heading h2')).toContainText('自定义');
   await expect(rows).toHaveCount(2, { timeout: 15000 });
   await expect(page.getByTestId('next-model-filter').first()).toBeVisible();
   await expect(page.getByPlaceholder('搜索模型名或 ID')).toBeVisible();
@@ -211,15 +226,15 @@ test('Grok device-code login uses the test double and reaches the model step', a
   await page.locator('[data-testid=next-vendor-card][data-vendor=grok]').click();
   await page.getByRole('button', { name: '下一步' }).click();
   await expect(page.getByTestId('next-grok-code')).toHaveText('WXYZ-1234', { timeout: 15000 });
-  await expect(page.getByText('①')).toBeVisible();
-  await expect(page.getByText('已在浏览器打开')).toBeVisible();
+  await expect(page.getByText('第 1 步 · 已完成')).toBeVisible();
+  await expect(page.getByText('已经在默认浏览器里打开了')).toBeVisible();
   await expect(page.getByRole('button', { name: '重新打开 ↗' })).toBeVisible();
-  await expect(page.getByText('②')).toBeVisible();
+  await expect(page.getByText('第 2 步 · 现在做这一步')).toBeVisible();
   await expect(page.getByRole('button', { name: '复制', exact: true })).toBeVisible();
-  await expect(page.getByText('③')).toBeVisible();
+  await expect(page.getByText('第 3 步')).toBeVisible();
   await expect(page.getByText('等你确认，这里会自动往下走')).toBeVisible();
-  await expect(page.getByText('登录后')).toBeVisible();
-  await expect(page.getByText('遇到问题')).toBeVisible();
+  await expect(page.getByRole('heading', { name: '登录后' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '遇到问题' })).toBeVisible();
   await expect(page.getByRole('button', { name: /等待登录/ })).toBeDisabled();
   await expect(page.getByTestId('next-model-row')).toBeVisible({ timeout: 20000 });
   await page.getByTestId('next-model-row').locator('.ns-switch').click();

@@ -58,6 +58,7 @@ test('providers: wizard, failing probe, Grok device login, default and context w
 
   // Step 1 vendor → step 2 key + probe → step 3 models.
   await page.getByTestId('next-provider-add').click();
+  await expect(page.getByTestId('next-vendor-card')).toHaveCount(15);
   await page.locator('[data-testid=next-vendor-card][data-vendor="openai"]').click();
   await page.locator('.ns-foot-acts .ns-btn-primary').click();
 

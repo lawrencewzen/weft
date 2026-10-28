@@ -192,20 +192,11 @@ export function ProviderPage({ lang, onToast, onConfirm, providersNavSeq = 0 }: 
                 {statusLabel(provider, lang)}
               </div>
               <div className="ns-provider-acts">
-                <button
-                  type="button"
-                  className="ns-btn"
-                  data-testid="next-provider-edit"
-                  onClick={() => {
-                    const matched = vendorForProvider(provider, vendors);
-                    const next = wizardFromProvider(provider);
-                    if (matched) next.vendorId = matched.id;
-                    setView({ kind: 'wizard', state: next });
-                  }}
-                >
-                  {t(lang, 'provider_edit')}
-                </button>
-                {grok ? (
+                {kind === 'bad' && !grok ? (
+                  <button type="button" className="ns-btn" onClick={() => { void retry(provider); }}>
+                    {t(lang, 'provider_retry')}
+                  </button>
+                ) : grok && (kind === 'warn' || kind === 'bad') ? (
                   <button
                     type="button"
                     className="ns-btn"
@@ -220,16 +211,57 @@ export function ProviderPage({ lang, onToast, onConfirm, providersNavSeq = 0 }: 
                   >
                     {t(lang, 'provider_relogin')}
                   </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="ns-btn"
+                    data-testid="next-provider-edit"
+                    onClick={() => {
+                      const matched = vendorForProvider(provider, vendors);
+                      const next = wizardFromProvider(provider);
+                      if (matched) next.vendorId = matched.id;
+                      if (grok) next.step = 3;
+                      setView({ kind: 'wizard', state: next });
+                    }}
+                  >
+                    {t(lang, 'provider_edit')}
+                  </button>
+                )}
+                {kind === 'bad' && !grok ? (
+                  <button
+                    type="button"
+                    className="ns-btn ns-btn-ghost"
+                    data-testid="next-provider-edit"
+                    onClick={() => {
+                      const matched = vendorForProvider(provider, vendors);
+                      const next = wizardFromProvider(provider);
+                      if (matched) next.vendorId = matched.id;
+                      setView({ kind: 'wizard', state: next });
+                    }}
+                  >
+                    {t(lang, 'provider_edit')}
+                  </button>
                 ) : null}
-                {provider.status !== 'ok' && provider.status !== 'untested' && !grok ? (
-                  <button type="button" className="ns-btn" onClick={() => { void retry(provider); }}>
-                    {t(lang, 'provider_retry')}
+                {grok && kind !== 'warn' && kind !== 'bad' ? (
+                  <button
+                    type="button"
+                    className="ns-btn ns-btn-ghost"
+                    onClick={() => {
+                      const next = wizardFromProvider(provider);
+                      next.vendorId = 'grok';
+                      next.way = 'account';
+                      next.step = 2;
+                      next.probeOk = false;
+                      setView({ kind: 'wizard', state: next });
+                    }}
+                  >
+                    {t(lang, 'provider_relogin')}
                   </button>
                 ) : null}
                 {!grok ? (
                   <button
                     type="button"
-                    className="ns-btn"
+                    className="ns-btn ns-btn-ghost"
                     data-testid="next-provider-delete"
                     onClick={() => { void remove(provider); }}
                   >
@@ -255,16 +287,12 @@ export function ProviderPage({ lang, onToast, onConfirm, providersNavSeq = 0 }: 
           >
             {defaultEntry ? (
               <>
-                <span className="ns-icon-box"><BrandIcon brand={defaultEntry.model.brand} size={16} /></span>
-                <span className="ns-default-btn-main">
-                  <b>{defaultEntry.model.displayName}</b>
-                  <span>{t(lang, 'provider_from', { name: defaultEntry.source.name })}</span>
-                </span>
+                <BrandIcon brand={defaultEntry.model.brand} size={14} />
+                <span className="ns-default-name">{defaultEntry.model.displayName}</span>
+                <span className="ns-default-from">{t(lang, 'provider_from', { name: defaultEntry.source.name })}</span>
               </>
             ) : (
-              <span className="ns-default-btn-main">
-                <b>{t(lang, 'provider_default_empty')}</b>
-              </span>
+              <span className="ns-default-name">{t(lang, 'provider_default_empty')}</span>
             )}
             <span className="ns-caret">▾</span>
           </button>
@@ -280,7 +308,7 @@ export function ProviderPage({ lang, onToast, onConfirm, providersNavSeq = 0 }: 
                     onClick={() => { void setDefault(source.id, model.id); }}
                   >
                     <BrandIcon brand={model.brand} size={14} />
-                    <span className="ns-default-btn-main">
+                    <span className="ns-pop-main">
                       <b>{model.displayName}</b>
                       <span>{model.id} · {formatContextWindow(model.contextWindow)} · {source.name}</span>
                     </span>
