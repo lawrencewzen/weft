@@ -438,12 +438,10 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.6; backgroun
 .col-divider:hover::before { background: var(--hover-a); }
 .col-divider.is-active { background: var(--ink); }
 
-.top-left-open { display: none; }
-.next-shell.left-closed-settled .top-left-open { display: inline-flex; }
+.top-left-open { display: inline-flex; }
 
 .top-right { display: flex; align-items: center; gap: 6px; flex-shrink: 0; font-size: 12px; }
-.top-right-open { display: none; }
-.next-shell.right-closed-settled .top-right-open { display: inline-flex; }
+.top-right-open { display: inline-flex; }
 .top-right-dot { position: absolute; top: 5px; right: 4px; width: 6px; height: 6px; border-radius: 50%; background: var(--run); border: 1.5px solid var(--bg); box-sizing: content-box; }
 .top-right-dot:not(.is-on) { display: none; }
 

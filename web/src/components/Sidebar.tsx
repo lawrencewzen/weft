@@ -34,6 +34,7 @@ import {
   type Subagent,
   type Workspace,
 } from '../data/store';
+import { useLeftPanel } from '../data/leftPanelContext';
 import { useRightPane } from '../data/rightPaneContext';
 import { useWorkspaces } from '../data/useWorkspaces';
 import { t } from '../i18n';
@@ -95,6 +96,7 @@ export function Sidebar({
   const { groups, archived } = useWorkspaces();
   const { store, status, setExtraConversationIds } = useSession();
   const { tab, setTab, showFiles, openInTerminal } = useRightPane();
+  const { toggleLeft, sbBtnOp } = useLeftPanel();
   const [openMap, setOpenMap] = useState<OpenRecord>(() => readWorkspaceOpen());
   const [treeRecorded, setTreeRecorded] = useState<OpenRecord>(() => readSubagentTrees());
   const [archivedOpen, setArchivedOpen] = useState(false);
@@ -330,7 +332,15 @@ export function Sidebar({
           data-testid="next-left-collapse"
           title={t(lang, 'collapse_sidebar')}
           aria-label={t(lang, 'collapse_sidebar')}
-          onClick={onCollapse}
+          style={{
+            opacity: sbBtnOp,
+            pointerEvents: sbBtnOp ? 'auto' : 'none',
+            visibility: sbBtnOp ? 'visible' : 'hidden',
+          }}
+          onClick={() => {
+            if (toggleLeft) toggleLeft();
+            else onCollapse();
+          }}
         >
           <span className="ico-panel ico-panel-left" aria-hidden="true" />
         </button>
