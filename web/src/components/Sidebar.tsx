@@ -123,7 +123,6 @@ export function Sidebar({
     const extra: string[] = [];
     for (const group of groups) {
       for (const conv of group.conversations) {
-        if (conv.id === activeConversationId) continue;
         const live = hasLiveSubagents(conv.subagents, store.subagents(conv.id));
         if (subagentTreeIsOpen(conv.id, treeRecorded, live)) extra.push(conv.id);
       }
@@ -133,7 +132,7 @@ export function Sidebar({
       if (prev.length === extra.length && prev.every((id, i) => id === extra[i])) return prev;
       return extra;
     });
-  }, [groups, treeRecorded, activeConversationId, setExtraConversationIds, store]);
+  }, [groups, treeRecorded, setExtraConversationIds, store]);
 
   const persistOpen = useCallback((next: OpenRecord) => {
     setOpenMap(next);

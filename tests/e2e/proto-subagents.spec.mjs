@@ -172,3 +172,85 @@ test('subagent tab overview, breadcrumb switcher, and deep link', async ({ page 
 
   expectClean(state);
 });
+
+test('switching between conversations never flashes loading or empty thread, subagent tree never flashes loading', async ({ page }) => {
+  const state = await openProto(page);
+
+  // c-rich starts open and has subagents
+  const richRow = page.locator('[data-testid=next-conv-row][data-id="c-rich"]');
+  const gitRow = page.locator('[data-testid=next-conv-row][data-id="c-git"]');
+  await expect(richRow).toBeVisible();
+  await expect(gitRow).toBeVisible();
+
+  // First visit c-rich then c-git so both have been viewed once
+  await richRow.click();
+  await expect(page).toHaveURL(/#\/c\/c-rich$/);
+  await expect(page.locator('.msg-group')).not.toHaveCount(0);
+
+  await gitRow.click();
+  await expect(page).toHaveURL(/#\/c\/c-git$/);
+  await expect(page.locator('.msg-group')).not.toHaveCount(0);
+
+  // Ensure c-rich's subagent tree is open
+  const richTree = page.locator('[data-testid=next-subagent-tree][data-conv-id="c-rich"]');
+  await expect(richTree).toHaveClass(/is-open/);
+
+  // Start continuous frame sampling via requestAnimationFrame
+  await page.evaluate(() => {
+    window.__frameViolations = [];
+    window.__frameSampleCount = 0;
+    window.__samplingActive = true;
+    function check() {
+      if (!window.__samplingActive) return;
+      window.__frameSampleCount += 1;
+
+      // 1. Top bar: never shows "加载中" or "Loading"
+      const topHeading = document.querySelector('.top-heading');
+      if (topHeading) {
+        const text = topHeading.textContent || '';
+        if (/加载中|Loading/i.test(text)) {
+          window.__frameViolations.push(`top heading showed loading: "${text}"`);
+        }
+      }
+
+      // 2. .subagent-tree-loading never appears
+      if (document.querySelector('.subagent-tree-loading')) {
+        window.__frameViolations.push('.subagent-tree-loading element was present in DOM');
+      }
+
+      // 3. Middle pane message count: when on viewed conversations (c-rich or c-git), message count is never 0
+      const hash = location.hash || '';
+      if (hash.includes('c-rich') || hash.includes('c-git')) {
+        const msgCount = document.querySelectorAll('.msg-group').length;
+        if (msgCount === 0) {
+          window.__frameViolations.push(`center pane message count was 0 while on ${hash}`);
+        }
+      }
+
+      requestAnimationFrame(check);
+    }
+    requestAnimationFrame(check);
+  });
+
+  // Switch back and forth 3 times
+  for (let i = 0; i < 3; i++) {
+    await richRow.click();
+    await expect(page).toHaveURL(/#\/c\/c-rich$/);
+    await gitRow.click();
+    await expect(page).toHaveURL(/#\/c\/c-git$/);
+  }
+
+  // Stop sampling and verify violations
+  const { violations, sampleCount } = await page.evaluate(() => {
+    window.__samplingActive = false;
+    return {
+      violations: window.__frameViolations || [],
+      sampleCount: window.__frameSampleCount || 0,
+    };
+  });
+
+  expect(sampleCount).toBeGreaterThan(10);
+  expect(violations).toEqual([]);
+
+  expectClean(state);
+});
