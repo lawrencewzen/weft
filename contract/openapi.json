@@ -3941,7 +3941,7 @@
       "post": {
         "operationId": "postConversationMessage",
         "summary": "向对话发消息",
-        "description": "运行中再发就是插话（Pi Durable `whenBusy: steer`）。\n`text` 去掉首尾空白后，若没有 `images` 则不能为空。只有图片没有文字也可以发送。\n`requestId` 缺省时服务端生成；同一个 requestId 重复请求返回同一个 runId。\n",
+        "description": "空闲时发出去就是新一轮。运行中再发：默认 `mode: steer` 插话（Pi Durable `whenBusy: steer`，\n当前工具批次结束后写入对话）；`mode: queue` 排队（`whenBusy: followUp`，本轮结束后才作为新消息执行）。\n`text` 去掉首尾空白后，若没有 `images` 则不能为空。只有图片没有文字也可以发送。\n`requestId` 缺省时服务端生成；同一个 requestId 重复请求返回同一个 runId。\n",
         "security": [
           {
             "bearerAuth": []
@@ -4024,6 +4024,103 @@
           },
           "413": {
             "description": "请求体过大（含图片的消息上限约 44MB）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "客户端错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "服务端错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/conversations/{id}/messages/{requestId}": {
+      "delete": {
+        "operationId": "withdrawConversationMessage",
+        "summary": "撤回还在排队、没写进对话的提交",
+        "description": "只能撤回 Pi Durable inbox 里还没写成对话条目的输入（插话或排队），走 `Harness.abortSubmission`。\n已经写进对话的返回 409。找不到这条提交返回 404。\n",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "对话 id"
+          },
+          {
+            "name": "requestId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "发送时带的幂等键（POST 请求体的 requestId）"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "已从队列撤回",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WithdrawAccepted"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "未授权",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "对话或这条提交不存在",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "已经写进对话，不能撤回",
             "content": {
               "application/json": {
                 "schema": {
@@ -4835,6 +4932,14 @@
           "requestId": {
             "type": "string",
             "description": "幂等键。缺省时服务端生成。同一个 requestId 重复提交返回同一个 runId。"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "steer",
+              "queue"
+            ],
+            "description": "运行中再发时的处理方式。缺省为 steer（插话，`whenBusy: steer`）。\nqueue 排队到本轮结束后再作为新消息执行（`whenBusy: followUp`）。空闲时两种都会立刻开始新一轮。\n"
           }
         }
       },
@@ -4939,6 +5044,20 @@
           "stopping": {
             "type": "boolean",
             "description": "始终为 true。"
+          }
+        }
+      },
+      "WithdrawAccepted": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "ok"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "const": true,
+            "description": "始终为 true。撤回成功。"
           }
         }
       },
@@ -6848,7 +6967,7 @@
             "items": {
               "$ref": "#/components/schemas/ConversationSend"
             },
-            "description": "本进程内经 POST .../messages 与 .../continue 发出的提交，按先后顺序，最多保留最近 20 条。\n前端用 requestId 找到自己那条乐观上屏的消息落在哪个 entry 上，据此收回。只在写入它们的服务进程内存在。\n"
+            "description": "本进程内经 POST .../messages 与 .../continue 发出的提交，按先后顺序，最多保留最近 20 条。\n前端用 requestId 找到自己那条乐观上屏的消息落在哪个 entry 上，据此收回。\n还没写进对话的条目带 mode 和 text，供输入框显示排队小条、对话里显示「已插话」。\n只在写入它们的服务进程内存在。\n"
           }
         },
         "description": "一个对话的视图。摘要字段加上模型、运行状态、上下文和对话流顺序。"
@@ -6880,6 +6999,18 @@
           "dropped": {
             "type": "boolean",
             "description": "这条输入被撤回、丢弃或提交失败，对话里不会再有对应条目（只在 entryId 为 null 时有意义）。\n服务端查到 entryId 之后就不再回查提交记录，所以 entryId 不为 null 时该值可能仍是 false。\n"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "steer",
+              "queue"
+            ],
+            "description": "发送时的处理方式。steer 插话，queue 排队。缺省按 steer 显示。\n还没写进对话时前端靠这个决定气泡下的「已插话」还是输入框里的排队小条。\n"
+          },
+          "text": {
+            "type": "string",
+            "description": "发送时的文字，供排队小条和刷新后重建「已插话」气泡。没有则为空字符串。"
           }
         },
         "description": "一次发送在对话里的落点，供前端按 requestId 收回乐观上屏的消息。"

@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
   countUserText,
+  hydratePendingFromSends,
   pendingItem,
+  queueChips,
   settlePending,
+  threadPending,
   waitingForAgent,
   PENDING_TIMEOUT_MS,
   type PendingUser,
@@ -171,6 +174,31 @@ describe('settlePending by text and timeout', () => {
 describe('pendingItem', () => {
   it('renders as a normal user message with a local id', () => {
     expect(pendingItem(sent)).toMatchObject({ kind: 'user', id: 'local:r1', text: '改一下圆角' });
+  });
+});
+
+describe('queue vs steer pending', () => {
+  it('keeps queue chips out of the thread and lists them separately', () => {
+    const queued: PendingUser = { key: 'q1', text: '稍后改主题', baseline: 0, doneAt: 1000, mode: 'queue' };
+    const steered: PendingUser = { key: 's1', text: '插一句', baseline: 0, doneAt: 1000, mode: 'steer' };
+    const sends = [
+      { requestId: 'q1', entryId: null, dropped: false, mode: 'queue' as const, text: '稍后改主题' },
+      { requestId: 's1', entryId: null, dropped: false, mode: 'steer' as const, text: '插一句' },
+    ];
+    const kept = settlePending([queued, steered], [], { sends, now: 1000 });
+    expect(threadPending(kept).map((row) => row.key)).toEqual(['s1']);
+    expect(queueChips(kept, sends)).toEqual([{ requestId: 'q1', text: '稍后改主题' }]);
+    expect(pendingItem(steered)).toMatchObject({ steered: true, id: 'local:s1' });
+  });
+
+  it('rebuilds inbox rows from sends after a refresh', () => {
+    const sends = [
+      { requestId: 'q1', entryId: null, dropped: false, mode: 'queue' as const, text: '排队文字' },
+      { requestId: 's1', entryId: null, dropped: false, mode: 'steer' as const, text: '已插话' },
+    ];
+    const hydrated = hydratePendingFromSends([], sends);
+    expect(threadPending(hydrated).map((row) => row.text)).toEqual(['已插话']);
+    expect(queueChips(hydrated, sends)).toEqual([{ requestId: 'q1', text: '排队文字' }]);
   });
 });
 

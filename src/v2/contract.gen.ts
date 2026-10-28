@@ -800,12 +800,34 @@ export interface paths {
         put?: never;
         /**
          * 向对话发消息
-         * @description 运行中再发就是插话（Pi Durable `whenBusy: steer`）。
+         * @description 空闲时发出去就是新一轮。运行中再发：默认 `mode: steer` 插话（Pi Durable `whenBusy: steer`，
+         *     当前工具批次结束后写入对话）；`mode: queue` 排队（`whenBusy: followUp`，本轮结束后才作为新消息执行）。
          *     `text` 去掉首尾空白后，若没有 `images` 则不能为空。只有图片没有文字也可以发送。
          *     `requestId` 缺省时服务端生成；同一个 requestId 重复请求返回同一个 runId。
          */
         post: operations["postConversationMessage"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/conversations/{id}/messages/{requestId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * 撤回还在排队、没写进对话的提交
+         * @description 只能撤回 Pi Durable inbox 里还没写成对话条目的输入（插话或排队），走 `Harness.abortSubmission`。
+         *     已经写进对话的返回 409。找不到这条提交返回 404。
+         */
+        delete: operations["withdrawConversationMessage"];
         options?: never;
         head?: never;
         patch?: never;
@@ -981,6 +1003,12 @@ export interface components {
             images?: components["schemas"]["MessageImage"][];
             /** @description 幂等键。缺省时服务端生成。同一个 requestId 重复提交返回同一个 runId。 */
             requestId?: string;
+            /**
+             * @description 运行中再发时的处理方式。缺省为 steer（插话，`whenBusy: steer`）。
+             *     queue 排队到本轮结束后再作为新消息执行（`whenBusy: followUp`）。空闲时两种都会立刻开始新一轮。
+             * @enum {string}
+             */
+            mode?: "steer" | "queue";
         };
         /** @description 发送时的一张图片。对话视图里不出现这个对象。 */
         MessageImage: {
@@ -1015,6 +1043,13 @@ export interface components {
         StopAccepted: {
             /** @description 始终为 true。 */
             stopping: boolean;
+        };
+        WithdrawAccepted: {
+            /**
+             * @description 始终为 true。撤回成功。
+             * @constant
+             */
+            ok: true;
         };
         SubagentMessageAccepted: {
             /** @description 始终为 true。 */
@@ -1560,7 +1595,9 @@ export interface components {
             itemIds: string[];
             /**
              * @description 本进程内经 POST .../messages 与 .../continue 发出的提交，按先后顺序，最多保留最近 20 条。
-             *     前端用 requestId 找到自己那条乐观上屏的消息落在哪个 entry 上，据此收回。只在写入它们的服务进程内存在。
+             *     前端用 requestId 找到自己那条乐观上屏的消息落在哪个 entry 上，据此收回。
+             *     还没写进对话的条目带 mode 和 text，供输入框显示排队小条、对话里显示「已插话」。
+             *     只在写入它们的服务进程内存在。
              */
             sends?: components["schemas"]["ConversationSend"][];
         };
@@ -1578,6 +1615,14 @@ export interface components {
              *     服务端查到 entryId 之后就不再回查提交记录，所以 entryId 不为 null 时该值可能仍是 false。
              */
             dropped: boolean;
+            /**
+             * @description 发送时的处理方式。steer 插话，queue 排队。缺省按 steer 显示。
+             *     还没写进对话时前端靠这个决定气泡下的「已插话」还是输入框里的排队小条。
+             * @enum {string}
+             */
+            mode?: "steer" | "queue";
+            /** @description 发送时的文字，供排队小条和刷新后重建「已插话」气泡。没有则为空字符串。 */
+            text?: string;
         };
         /** @description GET /api/v2/conversations/{id} 的响应。客户端按 itemIds 画对话流，按 toolIds 取工具行。 */
         ConversationSnapshot: {
@@ -4897,6 +4942,76 @@ export interface operations {
             };
             /** @description 请求体过大（含图片的消息上限约 44MB） */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 客户端错误 */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 服务端错误 */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+        };
+    };
+    withdrawConversationMessage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 对话 id */
+                id: string;
+                /** @description 发送时带的幂等键（POST 请求体的 requestId） */
+                requestId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 已从队列撤回 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WithdrawAccepted"];
+                };
+            };
+            /** @description 未授权 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 对话或这条提交不存在 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 已经写进对话，不能撤回 */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

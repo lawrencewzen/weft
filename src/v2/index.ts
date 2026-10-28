@@ -168,11 +168,16 @@ export type GetMessageImage = (
   index: number,
 ) => Promise<MessageImageRecord | null | undefined>;
 export type GetWorkspace = (id: string) => Promise<WorkspaceRow | null | undefined>;
+export type SendMode = 'steer' | 'queue';
 export type PostMessage = (
   conv: ConversationRow,
   text: string,
-  opts?: { requestId?: string; content?: unknown },
+  opts?: { requestId?: string; content?: unknown; mode?: SendMode },
 ) => Promise<{ status: number; body?: { runId?: unknown } }>;
+export type WithdrawMessageFn = (
+  cid: string,
+  requestId: string,
+) => Promise<{ status: number; body?: { ok?: true; error?: unknown; code?: unknown } }>;
 export type StopConversationFn = (id: string) => Promise<{ status: number }>;
 export type ListWorkspacesFn = () => Promise<WorkspaceRow[]>;
 export type ListConversationsFn = (workspaceId: string) => Promise<ConversationRow[]>;
@@ -327,6 +332,14 @@ function requestIdFrom(body: Record<string, unknown>): { ok: true; value?: strin
   if (typeof body.requestId !== 'string') return { ok: false };
   const value = body.requestId.trim();
   return value ? { ok: true, value } : { ok: true };
+}
+
+function sendModeFrom(body: Record<string, unknown>): { ok: true; value: SendMode } | { ok: false } {
+  if (!Object.prototype.hasOwnProperty.call(body, 'mode') || body.mode == null || body.mode === '') {
+    return { ok: true, value: 'steer' };
+  }
+  if (body.mode === 'steer' || body.mode === 'queue') return { ok: true, value: body.mode };
+  return { ok: false };
 }
 
 function workspaceIdOf(conv: { workspaceId?: unknown } | null | undefined): string {
@@ -488,6 +501,7 @@ export function createV2Handler(opts: {
   getMessageImage?: GetMessageImage;
   getWorkspace?: GetWorkspace;
   postMessage?: PostMessage;
+  withdrawMessage?: WithdrawMessageFn;
   stopConversation?: StopConversationFn;
   listWorkspaces?: ListWorkspacesFn;
   listConversations?: ListConversationsFn;
@@ -1071,8 +1085,17 @@ export function createV2Handler(opts: {
         sendV2(res, pathname, method, 500, { error: 'kernel not ready', code: 'E_INTERNAL' } satisfies V2Error);
         return true;
       }
+      let mode: SendMode = 'steer';
+      if (messagesMatch) {
+        const parsedMode = sendModeFrom(body);
+        if (!parsedMode.ok) {
+          sendV2(res, pathname, method, 400, { error: 'invalid mode', code: 'E_BAD_REQUEST' } satisfies V2Error);
+          return true;
+        }
+        mode = parsedMode.value;
+      }
       try {
-        const posted = await opts.postMessage(conv, text, { requestId, content });
+        const posted = await opts.postMessage(conv, text, { requestId, content, mode });
         if (posted.status === 404) {
           sendV2(res, pathname, method, 404, { error: 'not found' } satisfies V2Error);
           return true;
@@ -1086,9 +1109,51 @@ export function createV2Handler(opts: {
           } satisfies V2Error);
           return true;
         }
+        opts.notifyConversation?.(id);
         sendV2(res, pathname, method, 202, { runId: String(runId) } satisfies RunAccepted);
       } catch (err) {
         const message = err instanceof Error ? err.message : 'send failed';
+        sendV2(res, pathname, method, 500, { error: message, code: 'E_INTERNAL' } satisfies V2Error);
+      }
+      return true;
+    }
+
+    const withdrawMatch = /^\/api\/v2\/conversations\/([^/]+)\/messages\/([^/]+)$/.exec(pathname);
+    if (method === 'DELETE' && withdrawMatch) {
+      const id = decodeURIComponent(withdrawMatch[1]);
+      const requestId = decodeURIComponent(withdrawMatch[2]);
+      if (!requestId) {
+        sendV2(res, pathname, method, 404, { error: 'not found' } satisfies V2Error);
+        return true;
+      }
+      if (!opts.withdrawMessage) {
+        sendV2(res, pathname, method, 500, { error: 'kernel not ready', code: 'E_INTERNAL' } satisfies V2Error);
+        return true;
+      }
+      try {
+        const withdrawn = await opts.withdrawMessage(id, requestId);
+        if (withdrawn.status === 404) {
+          sendV2(res, pathname, method, 404, { error: 'not found' } satisfies V2Error);
+          return true;
+        }
+        if (withdrawn.status === 409) {
+          sendV2(res, pathname, method, 409, {
+            error: 'already landed',
+            code: 'E_ALREADY_LANDED',
+          } satisfies V2Error);
+          return true;
+        }
+        if (withdrawn.status !== 200) {
+          sendV2(res, pathname, method, withdrawn.status >= 400 ? withdrawn.status : 500, {
+            error: 'withdraw failed',
+            code: 'E_INTERNAL',
+          } satisfies V2Error);
+          return true;
+        }
+        opts.notifyConversation?.(id);
+        sendV2(res, pathname, method, 200, { ok: true } satisfies components['schemas']['WithdrawAccepted']);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'withdraw failed';
         sendV2(res, pathname, method, 500, { error: message, code: 'E_INTERNAL' } satisfies V2Error);
       }
       return true;
@@ -1327,6 +1392,7 @@ export function createV2Runtime(opts: {
   getMessageImage?: GetMessageImage;
   getWorkspace?: GetWorkspace;
   postMessage?: PostMessage;
+  withdrawMessage?: WithdrawMessageFn;
   stopConversation?: StopConversationFn;
   subscribeConversation?: (cid: string, fn: (ev: KernelEvent) => void) => () => void;
   listWorkspaces?: ListWorkspacesFn;
@@ -1451,6 +1517,7 @@ export function createV2Runtime(opts: {
     getMessageImage: opts.getMessageImage,
     getWorkspace: opts.getWorkspace,
     postMessage: opts.postMessage,
+    withdrawMessage: opts.withdrawMessage,
     stopConversation: opts.stopConversation,
     listWorkspaces: opts.listWorkspaces,
     listConversations: opts.listConversations,

@@ -300,7 +300,7 @@ function richConversation(now: number, threads: Map<string, MockSubThread>): Moc
     [STORE_EDIT.id]: STORE_EDIT,
     [EDIT_TEST_RUN.id]: EDIT_TEST_RUN,
   };
-  return conversation({
+  const rich = conversation({
     id: 'c-rich',
     workspaceId: 'ws-weft',
     title: '重构会话列表的加载逻辑',
@@ -413,6 +413,30 @@ function richConversation(now: number, threads: Map<string, MockSubThread>): Moc
       .map((thread) => thread.view),
     status: 'running',
   });
+  rich.view.run = {
+    status: 'running',
+    startedAt: now - 42_000,
+    pendingText: '正在编辑 public/app.css',
+    canSend: true,
+    canStop: true,
+    lockedReason: null,
+    error: null,
+  };
+  rich.pending = { zh: '正在编辑 public/app.css', en: 'Editing public/app.css' };
+  rich.run = {
+    id: 'run-seed-rich',
+    cancelled: false,
+    steers: [],
+    followUps: [{ requestId: 'seed-queue-1', text: '顺便把深色模式也检查一下' }],
+  };
+  rich.view.sends = [{
+    requestId: 'seed-queue-1',
+    entryId: null,
+    dropped: false,
+    mode: 'queue',
+    text: '顺便把深色模式也检查一下',
+  }];
+  return rich;
 }
 
 function testsConversation(now: number): MockConv {

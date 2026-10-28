@@ -573,7 +573,7 @@ export async function replyInSubThread(
   thread.view.currentAction = '正在按你的补充修改';
   thread.view.lastActivityAt = Date.now();
   publishSubagentEntity(db, hub, thread);
-  const run: RunHandle = { id: nextId(db, 'subrun'), cancelled: false, steers: [] };
+  const run: RunHandle = { id: nextId(db, 'subrun'), cancelled: false, steers: [], followUps: [] };
   thread.run = run;
   await sleep(700);
   if (run.cancelled || thread.view.status !== 'running') {

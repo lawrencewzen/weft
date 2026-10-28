@@ -39,18 +39,22 @@ test('prototype runs from file:// with mock data, no network and no console erro
   // Seeded rich history: markdown, tool groups, a failed tool, path chips, model name, git info.
   await expect(page).toHaveURL(/#\/c\/c-rich$/);
   await expect(page.getByTestId('next-status')).toContainText('重构会话列表的加载逻辑');
-  await expect(page.getByTestId('next-composer-input')).toHaveAttribute('placeholder', '描述任务');
+  await expect(page.getByTestId('next-composer-input')).toHaveAttribute('placeholder', '补充说明……');
   await expect(page.getByTestId('next-composer-attach')).toBeVisible();
-  await expect(page.getByTestId('next-composer-newline')).toHaveCount(0);
-  await page.getByTestId('next-composer-input').fill('把空对话的输入框固定到底部');
-  await expect(page.getByTestId('next-composer-newline')).toHaveText('Shift+Enter 换行');
-  await page.getByTestId('next-composer-input').fill('');
-  await expect(page.getByTestId('next-composer-newline')).toHaveCount(0);
+  await expect(page.getByTestId('next-composer-run')).toBeVisible();
+  await expect(page.getByTestId('next-queue-chip')).toContainText('深色模式');
+  await expect(page.getByTestId('next-composer-newline')).toHaveText('Enter 插话 · Alt+Enter 排队');
   await page.locator('[data-testid=next-conv-row][data-id="c-docs"]').click();
   await expect(page.getByTestId('next-context-banner')).toBeVisible();
   await expect(page.getByTestId('next-context-chip')).toHaveClass(/is-warn/);
   await expect(page.getByTestId('next-context-chip')).toHaveText('86%');
   await expect(page.getByTestId('next-context-new')).toBeVisible();
+  await expect(page.getByTestId('next-composer-input')).toHaveAttribute('placeholder', '描述任务');
+  await expect(page.getByTestId('next-composer-newline')).toHaveCount(0);
+  await page.getByTestId('next-composer-input').fill('把空对话的输入框固定到底部');
+  await expect(page.getByTestId('next-composer-newline')).toHaveText('Shift+Enter 换行');
+  await page.getByTestId('next-composer-input').fill('');
+  await expect(page.getByTestId('next-composer-newline')).toHaveCount(0);
   await page.locator('[data-testid=next-conv-row][data-id="c-rich"]').click();
   await expect(page.getByTestId('next-tool-group')).toHaveCount(2);
   await expect(page.getByTestId('next-message-chip').first()).toContainText('Grok 4.6');

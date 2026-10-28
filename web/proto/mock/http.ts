@@ -12,7 +12,7 @@ import {
   recomputeContext,
   touch,
 } from './db';
-import { continueConversation, sendMessage, stopConversation } from './run';
+import { continueConversation, sendMessage, stopConversation, withdrawMessage } from './run';
 import { parseSendImages } from '../../../src/v2/views/message-images';
 import { replyInSubThread, stopSubThread, subagentKey } from './subagents';
 import { branchesOf, tokenFails } from './extensions';
@@ -1229,9 +1229,24 @@ export function handleMockRequest(db: MockDb, hub: MockHub, rawUrl: string, init
     const requestId = typeof body.requestId === 'string' && body.requestId
       ? body.requestId
       : nextId(db, 'req');
-    const result = sendMessage(db, conv, hub, text, requestId, parsedImages.images);
+    const mode = body.mode === 'queue' ? 'queue' : body.mode === 'steer' || body.mode == null || body.mode === ''
+      ? 'steer'
+      : null;
+    if (mode == null) return fail(400, 'invalid mode', 'E_BAD_REQUEST');
+    const result = sendMessage(db, conv, hub, text, requestId, parsedImages.images, mode);
     if (!result.ok) return fail(result.status, result.error);
     return accepted({ runId: result.runId });
+  }
+  const withdrawMatch = /^\/api\/v2\/conversations\/([^/]+)\/messages\/([^/]+)$/.exec(path);
+  if (withdrawMatch && method === 'DELETE') {
+    const cid = decodeURIComponent(withdrawMatch[1]);
+    const requestId = decodeURIComponent(withdrawMatch[2]);
+    const conv = getConv(db, cid);
+    if (!conv) return fail(404, '对话不存在');
+    const result = withdrawMessage(db, conv, hub, requestId);
+    if (result === 'missing') return fail(404, 'not found');
+    if (result === 'landed') return fail(409, 'already landed', 'E_ALREADY_LANDED');
+    return ok({ ok: true });
   }
   const stopMatch = /^\/api\/v2\/conversations\/([^/]+)\/stop$/.exec(path);
   if (stopMatch && method === 'POST') {

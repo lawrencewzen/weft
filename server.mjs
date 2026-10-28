@@ -130,6 +130,10 @@ const v2 = createV2Runtime({
     if (!kernelApi) return { status: 500, body: { error: 'kernel not ready' } };
     return kernelApi.postMessage(conv, text, opts);
   },
+  async withdrawMessage(cid, requestId) {
+    if (!kernelApi) return { status: 500, body: { error: 'kernel not ready' } };
+    return kernelApi.withdrawMessage(cid, requestId);
+  },
   async stopConversation(id) {
     if (!kernelApi) return { status: 500, body: { error: 'kernel not ready' } };
     return kernelApi.stopConversation(id);

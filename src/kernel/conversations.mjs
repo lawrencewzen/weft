@@ -65,7 +65,7 @@ export function kernelSettings(env = process.env) {
  * them up by requestId, so the ids it minted for us are kept here. Display-only, bounded,
  * per process: it exists to retract the optimistic message on screen, never to drive work.
  */
-const SEND_LOOKUP_MS = 250;
+const SEND_LOOKUP_MS = 0;
 const SEND_KEEP_MS = 5 * 60_000;
 const SEND_KEEP_ROWS = 20;
 
@@ -78,9 +78,28 @@ function recentSendsFor(sends, cid, now = Date.now()) {
   return rows;
 }
 
-function rememberSend(sends, cid, requestId, submissionId, now = Date.now()) {
+/** Map the v2 send `mode` onto Pi Durable `whenBusy`. Unknown values are steer. */
+export function whenBusyForMode(mode) {
+  return mode === 'queue' ? 'followUp' : 'steer';
+}
+
+function sendModeOf(mode) {
+  return mode === 'queue' ? 'queue' : 'steer';
+}
+
+function rememberSend(sends, cid, requestId, submissionId, extra = {}, now = Date.now()) {
   const rows = recentSendsFor(sends, cid, now);
-  rows.push({ requestId, submissionId, entryId: null, dropped: false, at: now, checkedAt: 0 });
+  const entryId = extra.entryId == null || extra.entryId === '' ? null : String(extra.entryId);
+  rows.push({
+    requestId,
+    submissionId,
+    entryId,
+    dropped: extra.dropped === true,
+    at: now,
+    checkedAt: entryId ? now : 0,
+    mode: sendModeOf(extra.mode),
+    text: typeof extra.text === 'string' ? extra.text : '',
+  });
   while (rows.length > SEND_KEEP_ROWS) rows.shift();
   sends.set(cid, rows);
 }
@@ -223,9 +242,28 @@ export async function openConversationKernel({
           else row.dropped = record?.status === 'done' || record?.status === 'unanswered';
         }
       }
-      out.push({ requestId: row.requestId, entryId: row.entryId || null, dropped: row.dropped === true });
+      out.push({
+        requestId: row.requestId,
+        entryId: row.entryId || null,
+        dropped: row.dropped === true,
+        mode: sendModeOf(row.mode),
+        text: typeof row.text === 'string' ? row.text : '',
+      });
     }
     return out;
+  }
+
+  function restoreLastSubmission(cid, conv, rows, withdrawnSubmissionId) {
+    if (Number(conv?.lastSubmissionId) !== Number(withdrawnSubmissionId)) {
+      return Promise.resolve();
+    }
+    const remaining = rows.filter((row) => (
+      !row.dropped && Number(row.submissionId) !== Number(withdrawnSubmissionId)
+    ));
+    const prev = remaining[remaining.length - 1];
+    return store.updateConversation(cid, {
+      lastSubmissionId: prev ? prev.submissionId : conv.lastSubmissionId,
+    });
   }
 
   async function readTranscript(harnessId) {
@@ -575,15 +613,72 @@ export async function openConversationKernel({
       const given = typeof options.requestId === 'string' ? options.requestId.trim() : '';
       const requestId = given || prepared?.requestId || randomUUID();
       const content = options.content !== undefined ? options.content : text;
+      const mode = sendModeOf(options.mode);
       const submission = await conversation.submit({
         type: 'input',
         content,
         requestId,
-        whenBusy: 'steer',
+        whenBusy: whenBusyForMode(mode),
       }, context);
-      rememberSend(sends, current.id, requestId, submission.id);
+      let entryId = null;
+      try {
+        const record = await submission.status(context);
+        if (record?.entry != null && record.entry !== '') entryId = String(record.entry);
+      } catch {
+        entryId = null;
+      }
+      rememberSend(sends, current.id, requestId, submission.id, {
+        mode,
+        text: typeof text === 'string' ? text : '',
+        entryId,
+      });
       await store.updateConversation(current.id, { lastSubmissionId: submission.id });
       return { status: 202, body: { runId: String(submission.id), status: 'running' } };
+    },
+    async withdrawMessage(cid, requestId) {
+      const id = typeof cid === 'string' ? cid.trim() : '';
+      const rid = typeof requestId === 'string' ? requestId.trim() : '';
+      if (!id || !rid) return { status: 404, body: { error: 'not found' } };
+      const conv = await store.getConversation(id);
+      if (!conv) return { status: 404, body: { error: 'not found' } };
+      const rows = recentSendsFor(sends, id);
+      const row = rows.find((item) => item.requestId === rid);
+      if (!row) return { status: 404, body: { error: 'not found' } };
+      if (!row.entryId && !row.dropped) {
+        const handle = await harness.submission(row.submissionId, context);
+        if (handle) {
+          const record = await handle.status(context);
+          const entry = record?.entry == null ? '' : String(record.entry);
+          if (entry) row.entryId = entry;
+          else if (record?.status === 'done' || record?.status === 'unanswered') row.dropped = true;
+        }
+      }
+      if (row.entryId) {
+        return { status: 409, body: { error: 'already landed', code: 'E_ALREADY_LANDED' } };
+      }
+      if (row.dropped) return { status: 404, body: { error: 'not found' } };
+      const result = await harness.abortSubmission(
+        row.submissionId,
+        context,
+        conv.harnessId == null ? undefined : conv.harnessId,
+      );
+      if (result === 'not_found') return { status: 404, body: { error: 'not found' } };
+      if (result === 'already_placed' || result === 'settled') {
+        const handle = await harness.submission(row.submissionId, context);
+        if (handle) {
+          const record = await handle.status(context);
+          const entry = record?.entry == null ? '' : String(record.entry);
+          if (entry) row.entryId = entry;
+        }
+        if (row.entryId) {
+          return { status: 409, body: { error: 'already landed', code: 'E_ALREADY_LANDED' } };
+        }
+        row.dropped = true;
+        return { status: 409, body: { error: 'already landed', code: 'E_ALREADY_LANDED' } };
+      }
+      row.dropped = true;
+      await restoreLastSubmission(id, conv, rows, row.submissionId);
+      return { status: 200, body: { ok: true } };
     },
     async patchConversation(cid, body) {
       const conv = await store.getConversation(cid);

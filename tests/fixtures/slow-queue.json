@@ -1,0 +1,10 @@
+{
+  "turns": [
+    { "text": "step 1", "delayMs": 2500, "tool": "write", "args": { "path": "a.txt", "content": "a\n" } },
+    { "delayMs": 4000, "tool": "write", "args": { "path": "b.txt", "content": "b\n" } },
+    { "text": "done" },
+    { "text": "still going", "delayMs": 8000 },
+    { "delayMs": 3000, "tool": "write", "args": { "path": "c.txt", "content": "c\n" } },
+    { "text": "ok" }
+  ]
+}

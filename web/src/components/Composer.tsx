@@ -30,10 +30,12 @@ import {
   type ResolvedModel,
 } from '../data/composerModel';
 import type { Lang } from '../data/lang';
-import { draftPath, navigate, openSettings } from '../data/nav';
+import { draftPath, navigate, openSettings, subagentPath } from '../data/nav';
+import type { QueueChip, SendMode } from '../data/pendingSend';
 import { useProviders } from '../data/useProviders';
+import { useRightPane } from '../data/rightPaneContext';
 import type { components } from '../../../src/v2/contract.gen';
-import { t } from '../i18n';
+import { formatElapsed, t } from '../i18n';
 import { writeActiveWorkspace } from '../data/layout';
 import { ContextBanner, ContextChip } from './ContextChip';
 import { DemoModelBadge } from './DemoModelBadge';
@@ -42,6 +44,7 @@ import { WorkspaceChip } from './WorkspaceChip';
 import { createSendRequest, errorMessage } from './sendRequest';
 
 type RunState = components['schemas']['RunState'];
+type Subagent = components['schemas']['Subagent'];
 
 type Props = {
   lang: Lang;
@@ -57,9 +60,13 @@ type Props = {
   onDraftModel?: (model: ResolvedModel) => void;
   showModelControls?: boolean;
   onNewWorkspace?: () => void;
-  onSend: (text: string, requestId: string, images?: MessageImage[]) => Promise<unknown>;
+  onSend: (text: string, requestId: string, images?: MessageImage[], mode?: SendMode) => Promise<unknown>;
   onStop: () => Promise<unknown>;
   onSent?: () => void;
+  queue?: QueueChip[];
+  onWithdrawQueue?: (requestId: string) => Promise<unknown>;
+  subagents?: Subagent[];
+  step?: number;
 };
 
 const FALLBACK_CONTEXT: ContextUsage = { used: 0, window: 128000, percent: 0, level: 'ok' };
@@ -96,6 +103,28 @@ function hintText(lang: Lang, hint: ComposerHint): string {
   return t(lang, 'attach_outside', { name: hint.name || '' });
 }
 
+function isApplePlatform(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  const platform = navigator.platform || '';
+  const ua = navigator.userAgent || '';
+  return /Mac|iPhone|iPad|iPod/.test(platform) || /Mac OS X/.test(ua);
+}
+
+function stripSubagentSuffix(text: string): string {
+  return text.replace(/\s+·\s+\d+\s+(个子 Agent|sub-agents)\s*$/i, '').trim();
+}
+
+function liveSubagents(agents: readonly Subagent[] | undefined): Subagent[] {
+  return (agents || []).filter((agent) => agent.status === 'running' || agent.status === 'stuck');
+}
+
+function subagentMeta(agent: Subagent, lang: Lang, now: number): string {
+  if (agent.currentAction) return agent.currentAction;
+  if (agent.progress) return t(lang, 'composer_run_step', { n: agent.progress.step });
+  if (agent.startedAt != null) return formatElapsed(now - agent.startedAt);
+  return '';
+}
+
 export function Composer({
   lang,
   run,
@@ -113,6 +142,10 @@ export function Composer({
   onSend,
   onStop,
   onSent,
+  queue = [],
+  onWithdrawQueue,
+  subagents = [],
+  step = 1,
 }: Props) {
   const [draft, setDraft] = useState('');
   const [images, setImages] = useState<ImageAttachment[]>([]);
@@ -147,7 +180,14 @@ export function Composer({
   const canSend = hasPayload && !locked;
   const stopMode = run.canStop && !hasPayload;
   const showBanner = showModelControls && !noModel && contextIsWarn(context.level);
-  const showNewline = Boolean(draft) && !stopMode;
+  const running = run.status === 'running';
+  const showSteerHint = running;
+  const showNewline = showSteerHint || (Boolean(draft) && !stopMode);
+  const liveAgents = useMemo(() => liveSubagents(subagents), [subagents]);
+  const [subPop, setSubPop] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
+  const { setTab } = useRightPane();
+  const popRef = useRef<HTMLDivElement>(null);
   const placeholder = noModel
     ? t(lang, 'composer_placeholder_no_model')
     : run.status === 'running'
@@ -168,6 +208,28 @@ export function Composer({
   useEffect(() => {
     resize();
   }, [draft]);
+
+  useEffect(() => {
+    if (!running) return;
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [running]);
+
+  useEffect(() => {
+    if (!subPop) return;
+    function onDoc(event: MouseEvent) {
+      if (popRef.current && !popRef.current.contains(event.target as Node)) setSubPop(false);
+    }
+    function onKey(event: globalThis.KeyboardEvent) {
+      if (event.key === 'Escape') setSubPop(false);
+    }
+    document.addEventListener('mousedown', onDoc);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDoc);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [subPop]);
 
   const addImageFiles = useCallback(async (files: File[]) => {
     if (!files.length) return;
@@ -232,7 +294,7 @@ export function Composer({
     }
   }, [addImageFiles, addProjectFile, workspaceId, workspacePath]);
 
-  async function submit(text = draft.trim()) {
+  async function submit(text = draft.trim(), mode?: SendMode) {
     let payload = text;
     for (const ref of fileRefs) payload = insertFileRef(payload, ref.path);
     payload = payload.trim();
@@ -251,7 +313,7 @@ export function Composer({
     imagesRef.current = [];
     requestAnimationFrame(resize);
     try {
-      await onSend(sentText, requestId, imagePayload.length ? imagePayload : undefined);
+      await onSend(sentText, requestId, imagePayload.length ? imagePayload : undefined, mode);
       req.current.succeed();
       sentImages.forEach(revokePreview);
       onSent?.();
@@ -276,9 +338,14 @@ export function Composer({
 
   function onKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
     if (event.key !== 'Enter') return;
-    if (event.nativeEvent.isComposing || event.keyCode === 229 || event.shiftKey || event.altKey) return;
+    if (event.nativeEvent.isComposing || event.keyCode === 229 || event.shiftKey) return;
+    if (event.altKey) {
+      event.preventDefault();
+      if (running) void submit(draft.trim(), 'queue');
+      return;
+    }
     event.preventDefault();
-    void submit();
+    void submit(draft.trim(), running ? 'steer' : undefined);
   }
 
   const pickModel = useCallback(async (option: ComposerModelOption) => {
@@ -392,7 +459,7 @@ export function Composer({
     noModel ? 'is-no-model' : '',
     showBanner ? 'is-ctx-warn' : '',
     dragging ? 'is-drop' : '',
-    images.length || fileRefs.length ? 'is-tagged' : '',
+    images.length || fileRefs.length || queue.length || running ? 'is-tagged' : '',
   ].filter(Boolean).join(' ');
 
   return (
@@ -408,8 +475,95 @@ export function Composer({
         >
           {showBanner ? <ContextBanner lang={lang} context={context} onNewChat={openNewChat} /> : null}
           <div className="composer-body">
-            {images.length || fileRefs.length ? (
+            {running ? (
+              <div className="composer-run" data-testid="next-composer-run">
+                <span className="composer-run-now">
+                  <span className="composer-run-dot" aria-hidden="true" />
+                  <span className="composer-run-action">
+                    {stripSubagentSuffix(run.pendingText || t(lang, 'pending_thinking'))}
+                  </span>
+                  <span className="composer-run-meta">
+                    {t(lang, 'composer_run_step', { n: Math.max(1, step) })}
+                    {' · '}
+                    {formatElapsed(now - (run.startedAt ?? now))}
+                  </span>
+                </span>
+                {liveAgents.length ? (
+                  <div className="composer-run-subs" ref={popRef}>
+                    <button
+                      type="button"
+                      className="composer-sub-chip"
+                      data-testid="next-composer-subs"
+                      aria-expanded={subPop}
+                      onClick={() => setSubPop((open) => !open)}
+                    >
+                      {t(lang, 'composer_subs_running', { n: liveAgents.length })}
+                      <span className="composer-sub-caret" aria-hidden="true">{subPop ? '▴' : '▸'}</span>
+                    </button>
+                    {subPop ? (
+                      <div className="composer-sub-pop" data-testid="next-composer-sub-pop" role="menu">
+                        <div className="composer-sub-pop-h">{t(lang, 'composer_subs_header')}</div>
+                        {liveAgents.map((agent) => (
+                          <button
+                            key={agent.id}
+                            type="button"
+                            className="composer-sub-row"
+                            data-testid="next-composer-sub-row"
+                            role="menuitem"
+                            onClick={() => {
+                              if (!conversationId) return;
+                              setSubPop(false);
+                              setTab('subagents');
+                              navigate(subagentPath(conversationId, agent.id));
+                            }}
+                          >
+                            <span
+                              className={`composer-sub-dot${agent.status === 'stuck' ? ' is-stuck' : ''}`}
+                              aria-hidden="true"
+                            />
+                            <span className="composer-sub-title">{agent.title || agent.name}</span>
+                            <span className="composer-sub-meta">{subagentMeta(agent, lang, now)}</span>
+                          </button>
+                        ))}
+                        <div className="composer-sub-pop-f">{t(lang, 'composer_subs_footer')}</div>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+            {queue.length || images.length || fileRefs.length ? (
               <div className="composer-tags" data-testid="next-composer-tags">
+                {queue.map((item) => (
+                  <span key={item.requestId} className="composer-queue" data-testid="next-queue-chip">
+                    <span className="composer-queue-label">{t(lang, 'composer_queue_label')}</span>
+                    <span className="composer-queue-text">{item.text}</span>
+                    <button
+                      type="button"
+                      className="composer-queue-edit"
+                      data-testid="next-queue-edit"
+                      onClick={() => {
+                        void (async () => {
+                          await onWithdrawQueue?.(item.requestId);
+                          setDraft(item.text);
+                          requestAnimationFrame(resize);
+                          area.current?.focus();
+                        })();
+                      }}
+                    >
+                      {t(lang, 'composer_queue_edit')}
+                    </button>
+                    <button
+                      type="button"
+                      className="composer-queue-x"
+                      data-testid="next-queue-dismiss"
+                      aria-label={t(lang, 'composer_queue_remove')}
+                      onClick={() => { void onWithdrawQueue?.(item.requestId); }}
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
                 {images.map((item) => (
                   <span key={item.id} className="composer-tag" data-testid="next-attach-image">
                     <img className="composer-tag-thumb" src={item.previewUrl} alt="" />
@@ -531,7 +685,11 @@ export function Composer({
               <div className="composer-actions">
                 {showNewline ? (
                   <span className="composer-newline" data-testid="next-composer-newline">
-                    {t(lang, 'composer_newline_hint')}
+                    {showSteerHint
+                      ? t(lang, 'composer_steer_hint', {
+                        mod: isApplePlatform() ? t(lang, 'composer_mod_option') : t(lang, 'composer_mod_alt'),
+                      })
+                      : t(lang, 'composer_newline_hint')}
                   </span>
                 ) : null}
                 {showModelControls && !noModel ? (
@@ -563,7 +721,7 @@ export function Composer({
                     title={noWorkspace ? t(lang, 'composer_need_workspace') : t(lang, 'send_title')}
                     aria-label={t(lang, 'btn_send')}
                     disabled={locked || busy || !canSend}
-                    onClick={() => { void submit(); }}
+                    onClick={() => { void submit(draft.trim(), running ? 'steer' : undefined); }}
                   >
                     {SEND_ICON}
                   </button>

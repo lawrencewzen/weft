@@ -6,6 +6,8 @@ import { writeActiveWorkspace } from '../data/layout';
 import { draftPath, navigate } from '../data/nav';
 import { useConversation, useDraftSend } from '../data/useConversation';
 import { usePendingSend, waitingForAgent } from '../data/usePendingSend';
+import { useSession } from '../data/session';
+import type { ThreadItem } from '../data/store';
 import { t } from '../i18n';
 import type { components } from '../../../src/v2/contract.gen';
 import { Composer } from './Composer';
@@ -25,6 +27,16 @@ type Props = {
   onOpenLeft?: () => void;
   onNewWorkspace?: () => void;
 };
+
+function runStep(items: readonly ThreadItem[]): number {
+  let n = 0;
+  for (let i = items.length - 1; i >= 0; i -= 1) {
+    const item = items[i];
+    if (item.kind === 'user' && !String(item.id).startsWith('local:')) break;
+    if (item.kind === 'tool_group') n += item.toolIds.length;
+  }
+  return Math.max(1, n);
+}
 
 const DRAFT_RUN: ConversationView['run'] = {
   status: 'idle',
@@ -61,12 +73,14 @@ export function CenterPane({
 }: Props) {
   const isDraft = !cid && Boolean(workspaceId);
   const { conversation, items, toolsById, changes, missing, actions } = useConversation(cid);
+  const { store } = useSession();
+  const agents = cid ? store.subagents(cid) : [];
   const pickDraftWorkspace = useCallback((id: string) => {
     writeActiveWorkspace(id);
     navigate(draftPath(id), { replace: true });
   }, []);
   // 乐观发送：回车即上屏，服务端按 requestId → entry 收回（草稿页直接跳转，暂不接）
-  const optimistic = usePendingSend(items, actions.send, conversation?.sends);
+  const optimistic = usePendingSend(items, actions.send, conversation?.sends, cid ?? null);
   const shownItems = useMemo(
     () => (optimistic.pending.length ? [...items, ...optimistic.pending] : items),
     [items, optimistic.pending],
@@ -191,6 +205,7 @@ export function CenterPane({
           changes={changes}
         />
         <Composer
+          key={cid || 'draft'}
           lang={lang}
           run={conversation.run}
           demo={demo}
@@ -203,6 +218,13 @@ export function CenterPane({
           onSend={optimistic.send}
           onStop={actions.stop}
           onSent={bumpStick}
+          queue={optimistic.queue}
+          onWithdrawQueue={async (requestId) => {
+            await actions.withdraw(requestId);
+            optimistic.dropLocal(requestId);
+          }}
+          subagents={agents}
+          step={runStep(items)}
         />
     </main>
   );

@@ -69,7 +69,14 @@ export function sendsView(value: unknown): ConversationSend[] {
     const requestId = typeof row.requestId === 'string' ? row.requestId : '';
     if (!requestId) continue;
     const entryId = row.entryId == null ? '' : String(row.entryId);
-    out.push({ requestId, entryId: entryId || null, dropped: row.dropped === true });
+    const send: ConversationSend = {
+      requestId,
+      entryId: entryId || null,
+      dropped: row.dropped === true,
+    };
+    if (row.mode === 'queue' || row.mode === 'steer') send.mode = row.mode;
+    if (typeof row.text === 'string') send.text = row.text;
+    out.push(send);
   }
   return out;
 }
