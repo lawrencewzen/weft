@@ -25,6 +25,7 @@ export type ThreadMessage = {
   stopReason?: unknown;
   streaming?: unknown;
   tool?: ToolLike;
+  images?: components['schemas']['MessageImage'][];
 };
 
 export type ThreadSubagent = {
@@ -185,12 +186,14 @@ export async function buildThread(
         });
         continue;
       }
-      items.push({
+      const userItem: components['schemas']['ThreadItemUser'] = {
         kind: 'user',
         id: messageId(m),
         text: messageText(m),
         pathRefs: await pathRefsFor(m.text, { workspacePath, exists }),
-      });
+      };
+      if (Array.isArray(m.images) && m.images.length) userItem.images = m.images;
+      items.push(userItem);
       continue;
     }
 

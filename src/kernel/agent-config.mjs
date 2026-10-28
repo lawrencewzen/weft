@@ -24,7 +24,8 @@ export function autoTitleFromText(currentTitle, text) {
   const cur = currentTitle == null ? '' : String(currentTitle);
   if (cur !== '' && cur !== DEFAULT_TITLE) return undefined;
   if (isAutoContinueText(text)) return undefined;
-  return String(text ?? '').slice(0, 48);
+  const title = String(text ?? '').trim().slice(0, 48);
+  return title || undefined;
 }
 
 /**
@@ -264,7 +265,9 @@ export function createAgentHost({
     async prepareSend(conv, text) {
       let next = conv;
       const title = autoTitleFromText(next.title, text);
-      if (title !== undefined) next = await store.updateConversation(next.id, { title });
+      if (title !== undefined && String(title).trim()) {
+        next = await store.updateConversation(next.id, { title });
+      }
       remember(next);
       await configure(next);
       return { requestId: randomUUID(), conversation: next };

@@ -69,7 +69,11 @@ type PlainItem = Exclude<ThreadItem, { kind: 'tool_group' }>;
 
 export type MockItem = PlainItem | MockGroup;
 
-export type Steer = { requestId: string; text: string };
+export type Steer = {
+  requestId: string;
+  text: string;
+  images?: components['schemas']['MessageImage'][];
+};
 
 export type RunHandle = {
   id: string;

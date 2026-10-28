@@ -102,6 +102,19 @@ describe('api client', () => {
     expect(init.body).toBe(JSON.stringify({ text: 'hello', requestId: '00000000-0000-4000-8000-000000000001' }));
   });
 
+  it('includes images on sendMessage when provided', async () => {
+    vi.spyOn(crypto, 'randomUUID').mockReturnValue('00000000-0000-4000-8000-000000000009');
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(202, { runId: 'run-img' }));
+    vi.stubGlobal('fetch', fetchMock);
+    const images = [{ mediaType: 'image/png' as const, data: 'AAAA', name: 'shot.png' }];
+    await expect(sendMessage('c1', '', 'held-img', images)).resolves.toEqual({ runId: 'run-img' });
+    expect(JSON.parse(String(fetchMock.mock.calls[0][1].body))).toEqual({
+      text: '',
+      requestId: 'held-img',
+      images,
+    });
+  });
+
   it('posts continue with a generated requestId and fetches tool output', async () => {
     vi.spyOn(crypto, 'randomUUID').mockReturnValue('00000000-0000-4000-8000-000000000002');
     const fetchMock = vi.fn()

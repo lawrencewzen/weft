@@ -30,7 +30,9 @@ export function useSubagent(cid: string, agentId: string): SubagentState {
   const missing = store.isMissing(topic);
   const lastAssistantText = store.lastAssistantText(topic);
 
-  const send = useCallback((text: string) => sendSubagentMessage(cid, agentId, text), [cid, agentId]);
+  const send = useCallback((text: string, _requestId?: string) => (
+    sendSubagentMessage(cid, agentId, text)
+  ), [cid, agentId]);
   const stop = useCallback(() => stopSubagent(cid, agentId), [cid, agentId]);
   const loadToolOutput = useCallback((toolId: string) => toolOutput(cid, toolId), [cid]);
 

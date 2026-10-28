@@ -204,6 +204,25 @@ test('only the last visible length reply is truncated', async () => {
   ]).id, 'a2');
 });
 
+test('user images copy onto the thread item and stay valid', async () => {
+  const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+  const thread = await buildThread([
+    {
+      id: 'u-img',
+      role: 'user',
+      text: '看图',
+      images: [{ mediaType: 'image/png', data: png, name: 'shot.png' }],
+    },
+    { id: 'u-only', role: 'user', text: '', images: [{ mediaType: 'image/jpeg', data: png }] },
+  ], { exists: none });
+  assertValidThread(thread, 'user-images');
+  assert.equal(thread.items[0].kind, 'user');
+  assert.equal(thread.items[0].images[0].name, 'shot.png');
+  assert.equal(thread.items[1].kind, 'user');
+  assert.equal(thread.items[1].text, '');
+  assert.equal(thread.items[1].images.length, 1);
+});
+
 test('running marks only the last tool group live', async () => {
   const first = tool('r1', 'read', { path: 'a.js' });
   const last = tool('w1', 'write', { path: 'b.js', status: 'running' });

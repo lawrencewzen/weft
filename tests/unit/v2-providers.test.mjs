@@ -74,6 +74,7 @@ test('providerView masks the key, sets brand, and maps status + zh/en statusText
   assert.equal(ok.models[0].id, 'gpt-4o');
   assert.equal(ok.models[0].brand, 'OpenAI');
   assert.equal(ok.models[0].contextWindowCustom, false);
+  assert.equal(typeof ok.models[0].images, 'boolean');
 
   const noKey = providerView(source({ apiKey: '' }), { lang: 'zh' });
   assert.equal(sourceBlockReason(source({ apiKey: '' })), 'no_key');

@@ -800,7 +800,8 @@ export interface paths {
         /**
          * 向对话发消息
          * @description 运行中再发就是插话（Pi Durable `whenBusy: steer`）。
-         *     `text` 去掉首尾空白后不能为空。`requestId` 缺省时服务端生成；同一个 requestId 重复请求返回同一个 runId。
+         *     `text` 去掉首尾空白后，若没有 `images` 则不能为空。只有图片没有文字也可以发送。
+         *     `requestId` 缺省时服务端生成；同一个 requestId 重复请求返回同一个 runId。
          */
         post: operations["postConversationMessage"];
         delete?: never;
@@ -952,10 +953,21 @@ export interface components {
             exiting: boolean;
         };
         SendMessageRequest: {
-            /** @description 用户输入。服务端去掉首尾空白后不能为空。 */
-            text: string;
+            /** @description 用户输入。去掉首尾空白后，若没有 images 则不能为空。 */
+            text?: string;
+            /** @description 内联图片。data 是不带 data URL 前缀的标准 base64，mediaType 为 png / jpeg / gif / webp。 单张解码后不超过 5MB，一条最多 6 张。选内联而不是先上传再拿 id，是因为 Pi Durable 的 UserInput 原生就是 TextContent | ImageContent，图片进对话记录后刷新才能再显示。 */
+            images?: components["schemas"]["MessageImage"][];
             /** @description 幂等键。缺省时服务端生成。同一个 requestId 重复提交返回同一个 runId。 */
             requestId?: string;
+        };
+        /** @description 一条用户消息里的一张图片。 */
+        MessageImage: {
+            /** @enum {string} */
+            mediaType: "image/png" | "image/jpeg" | "image/gif" | "image/webp";
+            /** @description 原始字节的标准 base64，不含 data: 前缀。日志里不得打印。 */
+            data: string;
+            /** @description 原始文件名，仅供显示 */
+            name?: string;
         };
         ContinueRequest: {
             /** @description 幂等键。缺省时服务端生成。同一个 requestId 重复提交返回同一个 runId。 */
@@ -1139,6 +1151,8 @@ export interface components {
             /** @description Markdown 原文 */
             text: string;
             pathRefs: components["schemas"]["PathRef"][];
+            /** @description 这条用户消息里的图片。没有则省略。 */
+            images?: components["schemas"]["MessageImage"][];
         };
         /** @description 助手回复。空文字的助手消息不进入对话流。 */
         ThreadItemAssistant: {
@@ -1253,6 +1267,8 @@ export interface components {
             contextWindow: number;
             /** @description true 表示用户手动覆盖 */
             contextWindowCustom: boolean;
+            /** @description 模型目录 input 含 image 时为 true。前端据此决定是否允许贴图。 */
+            images: boolean;
         };
         /** @description 模型来源的视图。响应和日志都不含明文 API key。 */
         Provider: {
@@ -4793,7 +4809,7 @@ export interface operations {
                     "application/json": components["schemas"]["RunAccepted"];
                 };
             };
-            /** @description 空文字或请求体无效 */
+            /** @description 空文字且没有图片，或图片超限 / 格式不对 */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -4822,6 +4838,15 @@ export interface operations {
             };
             /** @description 对话没有工作区 */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 请求体过大（含图片的消息上限约 44MB） */
+            413: {
                 headers: {
                     [name: string]: unknown;
                 };

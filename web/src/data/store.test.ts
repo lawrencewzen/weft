@@ -573,6 +573,7 @@ describe('workspace selectors', () => {
               brand: 'DeepSeek',
               contextWindow: 128000,
               contextWindowCustom: false,
+              images: false,
             }],
             isDefault: true,
           } as EntityRef['value'],

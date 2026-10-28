@@ -407,7 +407,13 @@ function drainSteers(db: MockDb, conv: MockConv, hub: MockHub, run: RunHandle): 
   const taken = run.steers.splice(0, run.steers.length);
   for (const steer of taken) {
     const id = nextId(db, 'u');
-    const item: ThreadItem = { kind: 'user', id, text: steer.text, pathRefs: [] };
+    const item: ThreadItem = {
+      kind: 'user',
+      id,
+      text: steer.text,
+      pathRefs: [],
+      ...(steer.images?.length ? { images: steer.images } : {}),
+    };
     conv.items.push(item);
     conv.view.itemIds.push(id);
     const send = conv.view.sends?.find((row) => row.requestId === steer.requestId);
@@ -635,22 +641,26 @@ export type SendResult =
   | { ok: true; runId: string }
   | { ok: false; status: number; error: string };
 
+type UserImages = Extract<ThreadItem, { kind: 'user' }>['images'];
+
 export function sendMessage(
   db: MockDb,
   conv: MockConv,
   hub: MockHub,
   text: string,
   requestId: string,
+  images?: UserImages,
 ): SendResult {
   const known = conv.view.sends?.find((row) => row.requestId === requestId);
   if (known) {
     return { ok: true, runId: conv.requestRuns.get(requestId) || '' };
   }
+  const imageList = images?.length ? images : undefined;
   const sends = conv.view.sends ?? (conv.view.sends = []);
   if (conv.run && conv.view.run.status === 'running') {
     sends.push({ requestId, entryId: null, dropped: false });
     trimSends(conv);
-    conv.run.steers.push({ requestId, text });
+    conv.run.steers.push({ requestId, text, ...(imageList ? { images: imageList } : {}) });
     conv.requestRuns.set(requestId, conv.run.id);
     touch(conv);
     publishConversationView(conv, hub);
@@ -658,13 +668,21 @@ export function sendMessage(
     return { ok: true, runId: conv.run.id };
   }
   const id = nextId(db, 'u');
-  const item: ThreadItem = { kind: 'user', id, text, pathRefs: [] };
+  const item: ThreadItem = {
+    kind: 'user',
+    id,
+    text,
+    pathRefs: [],
+    ...(imageList ? { images: imageList } : {}),
+  };
   conv.items.push(item);
   conv.view.itemIds.push(id);
   sends.push({ requestId, entryId: id, dropped: false });
   trimSends(conv);
   if (conv.items.filter((row) => row.kind === 'user').length === 1 && conv.view.title === '新对话') {
-    conv.view.title = titleFrom(text);
+    conv.view.title = text.trim()
+      ? titleFrom(text)
+      : (imageList?.[0]?.name ? imageList[0].name.replace(/\.[^.]+$/, '') : '图片');
   }
   touch(conv);
   publishItem(conv, hub, item);

@@ -21,6 +21,7 @@ export type ComposerModelOption = {
   contextWindow: number;
   contextWindowCustom: boolean;
   isDefault: boolean;
+  images: boolean;
 };
 
 export type ComposerModelGroup = {
@@ -61,6 +62,7 @@ function optionOf(
     contextWindow: model.contextWindow,
     contextWindowCustom: Boolean(model.contextWindowCustom),
     isDefault: sameModel(defaultModel, { providerId: provider.id, modelId: model.id }),
+    images: Boolean(model.images),
   };
 }
 
@@ -126,6 +128,7 @@ export function resolveComposerSelection(opts: {
     contextWindow: 0,
     contextWindowCustom: false,
     isDefault: sameModel(opts.defaultModel, ref),
+    images: false,
   };
 }
 

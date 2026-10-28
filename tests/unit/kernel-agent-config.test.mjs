@@ -41,6 +41,7 @@ test('autoTitleFromText still skips auto-continue text', () => {
   assert.equal(isAutoContinueText('[auto-continue] more'), true);
   assert.equal(autoTitleFromText('New conversation', '[auto-continue] more'), undefined);
   assert.equal(autoTitleFromText('New conversation', 'hello world'), 'hello world');
+  assert.equal(autoTitleFromText('New conversation', '   '), undefined);
 });
 
 test('new conversation: empty instructions, all tools, enabled skills, Agent name', { timeout: 30000 }, async () => {

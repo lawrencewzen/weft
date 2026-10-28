@@ -1,10 +1,14 @@
+import type { components } from '../../../src/v2/contract.gen';
 import type { ConversationSend, ThreadItem } from './store';
+
+type MessageImage = components['schemas']['MessageImage'];
 
 /** One user message that is on screen but not yet confirmed by the server thread. */
 export type PendingUser = {
   /** React key / dedupe key from the send requestId. */
   key: string;
   text: string;
+  images?: MessageImage[];
   /** How many server items already had this exact text when we sent it. */
   baseline: number;
   /** When POST /messages resolved, or null while it is still in flight. */
@@ -108,6 +112,7 @@ export function pendingItem(entry: PendingUser): ThreadItem {
     id: `local:${entry.key}`,
     text: entry.text,
     pathRefs: [],
+    ...(entry.images?.length ? { images: entry.images } : {}),
   } as ThreadItem;
 }
 

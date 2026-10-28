@@ -53,6 +53,21 @@ export function textOf(content) {
   }).join('');
 }
 
+function imagesOf(content) {
+  if (!Array.isArray(content)) return [];
+  const out = [];
+  for (const block of content) {
+    if (!block || block.type !== 'image') continue;
+    const mimeType = typeof block.mimeType === 'string' ? block.mimeType : '';
+    const data = typeof block.data === 'string' ? block.data : '';
+    if (!mimeType || !data) continue;
+    const image = { mediaType: mimeType, data };
+    if (typeof block.name === 'string' && block.name.trim()) image.name = block.name.trim();
+    out.push(image);
+  }
+  return out;
+}
+
 function toolBody({ id, name, status, input, output, path, added, removed }) {
   const tool = { id, name, status };
   if (input !== undefined) tool.input = input;
@@ -308,6 +323,8 @@ export function messagesFromEntries(entries) {
       if (entry.kind === 'pi.user') {
         const kind = kindOfUserText(text);
         if (kind) msg.kind = kind;
+        const images = imagesOf(entry.model?.[0]?.content);
+        if (images.length) msg.images = images;
       }
       if (entry.kind === 'pi.assistant') {
         const model = assistantModelName(entry);

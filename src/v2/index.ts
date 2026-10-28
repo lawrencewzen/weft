@@ -45,6 +45,11 @@ import {
   type LoadConversation,
 } from './views/conversation.ts';
 import {
+  assembleUserContent,
+  MESSAGE_BODY_MAX_BYTES,
+  parseSendImages,
+} from './views/message-images.ts';
+import {
   readWorkspaceFile,
   saveWorkspaceFile,
   workspaceTreeView,
@@ -154,7 +159,7 @@ export type GetWorkspace = (id: string) => Promise<WorkspaceRow | null | undefin
 export type PostMessage = (
   conv: ConversationRow,
   text: string,
-  opts?: { requestId?: string },
+  opts?: { requestId?: string; content?: unknown },
 ) => Promise<{ status: number; body?: { runId?: unknown } }>;
 export type StopConversationFn = (id: string) => Promise<{ status: number }>;
 export type ListWorkspacesFn = () => Promise<WorkspaceRow[]>;
@@ -258,10 +263,11 @@ async function readObjectBody(
   res: ServerResponse,
   pathname: string,
   method: string,
+  maxBytes = 1_000_000,
 ): Promise<Record<string, unknown> | null> {
   let raw: unknown;
   try {
-    raw = await readJsonBody(req);
+    raw = await readJsonBody(req, maxBytes);
   } catch (err) {
     const status = Number((err as { status?: number })?.status) || 400;
     const message = status === 413 ? 'payload too large' : 'invalid JSON';
@@ -302,13 +308,13 @@ async function workspaceReady(
   return ws.removedAt == null;
 }
 
-async function readJsonBody(req: IncomingMessage): Promise<unknown> {
+async function readJsonBody(req: IncomingMessage, maxBytes = 1_000_000): Promise<unknown> {
   const chunks: Buffer[] = [];
   let size = 0;
   for await (const chunk of req) {
     const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
     size += buf.length;
-    if (size > 1_000_000) {
+    if (size > maxBytes) {
       const err = new Error('payload too large');
       (err as Error & { status?: number }).status = 413;
       throw err;
@@ -929,7 +935,13 @@ export function createV2Handler(opts: {
     const continueMatch = /^\/api\/v2\/conversations\/([^/]+)\/continue$/.exec(pathname);
     if (method === 'POST' && (messagesMatch || continueMatch)) {
       const id = decodeURIComponent((messagesMatch || continueMatch)![1]);
-      const body = await readObjectBody(req, res, pathname, method);
+      const body = await readObjectBody(
+        req,
+        res,
+        pathname,
+        method,
+        messagesMatch ? MESSAGE_BODY_MAX_BYTES : 1_000_000,
+      );
       if (!body) return true;
       const parsedId = requestIdFrom(body);
       if (!parsedId.ok) {
@@ -937,18 +949,29 @@ export function createV2Handler(opts: {
         return true;
       }
       let text: string;
+      let content: unknown;
       if (continueMatch) {
         text = MANUAL_CONTINUE_TEXT;
+        content = text;
       } else {
         if (body.text != null && typeof body.text !== 'string') {
           sendV2(res, pathname, method, 400, { error: 'text required', code: 'E_BAD_REQUEST' } satisfies V2Error);
           return true;
         }
         text = String(body.text ?? '').trim();
-        if (!text) {
+        const parsedImages = parseSendImages(body.images);
+        if (!parsedImages.ok) {
+          sendV2(res, pathname, method, 400, {
+            error: parsedImages.error,
+            code: parsedImages.code,
+          } satisfies V2Error);
+          return true;
+        }
+        if (!text && parsedImages.images.length === 0) {
           sendV2(res, pathname, method, 400, { error: 'text required', code: 'E_BAD_REQUEST' } satisfies V2Error);
           return true;
         }
+        content = assembleUserContent(text, parsedImages.images);
       }
       let conv: ConversationRow | null | undefined = null;
       try {
@@ -980,7 +1003,7 @@ export function createV2Handler(opts: {
         return true;
       }
       try {
-        const posted = await opts.postMessage(conv, text, { requestId });
+        const posted = await opts.postMessage(conv, text, { requestId, content });
         if (posted.status === 404) {
           sendV2(res, pathname, method, 404, { error: 'not found' } satisfies V2Error);
           return true;

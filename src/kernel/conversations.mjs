@@ -566,9 +566,10 @@ export async function openConversationKernel({
       }
       const given = typeof options.requestId === 'string' ? options.requestId.trim() : '';
       const requestId = given || prepared?.requestId || randomUUID();
+      const content = options.content !== undefined ? options.content : text;
       const submission = await conversation.submit({
         type: 'input',
-        content: text,
+        content,
         requestId,
         whenBusy: 'steer',
       }, context);

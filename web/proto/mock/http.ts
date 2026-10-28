@@ -13,6 +13,7 @@ import {
   touch,
 } from './db';
 import { continueConversation, sendMessage, stopConversation } from './run';
+import { parseSendImages } from '../../../src/v2/views/message-images';
 import { replyInSubThread, stopSubThread, subagentKey } from './subagents';
 import { branchesOf, tokenFails } from './extensions';
 import {
@@ -130,6 +131,10 @@ const MODEL_NAMES: Record<string, { name: string; brand: string | null; window: 
   'local-model': { name: 'Local Model', brand: null, window: 32_000 },
 };
 
+function mockModelSupportsImages(modelId: string): boolean {
+  return !/code-fast|coder|local-model|deepseek-chat/i.test(modelId);
+}
+
 function modelRows(ids: string[], fallbackBrand: string | null): Provider['models'] {
   const seen = new Set<string>();
   const out: Provider['models'] = [];
@@ -144,6 +149,7 @@ function modelRows(ids: string[], fallbackBrand: string | null): Provider['model
       brand: meta?.brand || fallbackBrand,
       contextWindow: meta?.window || 128_000,
       contextWindowCustom: false,
+      images: mockModelSupportsImages(modelId),
     });
   }
   return out;
@@ -1186,12 +1192,17 @@ export function handleMockRequest(db: MockDb, hub: MockHub, rawUrl: string, init
     const cid = decodeURIComponent(msgMatch[1]);
     const conv = getConv(db, cid);
     if (!conv) return fail(404, '对话不存在');
+    if (body.text != null && typeof body.text !== 'string') {
+      return fail(400, '消息不能为空', 'E_BAD_REQUEST');
+    }
     const text = String(body.text ?? '').trim();
-    if (!text) return fail(400, '消息不能为空', 'E_BAD_REQUEST');
+    const parsedImages = parseSendImages(body.images);
+    if (!parsedImages.ok) return fail(400, parsedImages.error, parsedImages.code);
+    if (!text && parsedImages.images.length === 0) return fail(400, '消息不能为空', 'E_BAD_REQUEST');
     const requestId = typeof body.requestId === 'string' && body.requestId
       ? body.requestId
       : nextId(db, 'req');
-    const result = sendMessage(db, conv, hub, text, requestId);
+    const result = sendMessage(db, conv, hub, text, requestId, parsedImages.images);
     if (!result.ok) return fail(result.status, result.error);
     return accepted({ runId: result.runId });
   }

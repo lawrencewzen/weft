@@ -8,9 +8,11 @@ import {
   type SendEntry,
   type PendingUser,
 } from './pendingSend';
+import type { components } from '../../../src/v2/contract.gen';
 import type { ThreadItem } from './store';
 
-type Send = (text: string, requestId: string) => Promise<unknown>;
+type MessageImage = components['schemas']['MessageImage'];
+type Send = (text: string, requestId: string, images?: MessageImage[]) => Promise<unknown>;
 
 /**
  * Optimistic send: the user message goes on screen before the request resolves, and the
@@ -57,17 +59,18 @@ export function usePendingSend(items: readonly ThreadItem[], send: Send, sends?:
     return () => clearTimeout(timer);
   }, [pending]);
 
-  const sendWithPending = useCallback(async (text: string, requestId: string) => {
+  const sendWithPending = useCallback(async (text: string, requestId: string, images?: MessageImage[]) => {
     const key = requestId || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const entry: PendingUser = {
       key,
       text,
+      images,
       baseline: countUserText(itemsRef.current, text),
       doneAt: null,
     };
     setPending((prev) => [...prev, entry]);
     try {
-      const result = await send(text, requestId);
+      const result = await send(text, requestId, images);
       setPending((prev) => prev.map((item) => (
         item.key === key ? { ...item, doneAt: Date.now() } : item
       )));

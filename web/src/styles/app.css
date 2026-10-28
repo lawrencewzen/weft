@@ -612,6 +612,19 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.6; backgroun
 .msg-side-user { align-self: flex-end; max-width: 80%; }
 .msg-side-user .msg-header { display: none; }
 .msg-group[data-role="user"] .msg-body { background: var(--line2); padding: 10px 16px; border-radius: 18px; text-wrap: pretty; font-size: 15px; line-height: 1.6; }
+.msg-user-images { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+.msg-user-image {
+  width: 132px; height: 132px; padding: 0; border: 1px solid var(--line); border-radius: 12px;
+  overflow: hidden; background: var(--sub); cursor: zoom-in;
+}
+.msg-user-image img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.img-lightbox {
+  position: fixed; inset: 0; z-index: 80; border: none; padding: 24px;
+  background: var(--scrim); display: flex; align-items: center; justify-content: center; cursor: zoom-out;
+}
+.img-lightbox img {
+  max-width: min(90vw, 1200px); max-height: 90vh; border-radius: 12px; box-shadow: var(--shadow-overlay);
+}
 .msg-header { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--faint); }
 .msg-sender { color: var(--faint); font-weight: 400; }
 .msg-chip {
@@ -881,6 +894,7 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.6; backgroun
 .center-composer { flex-shrink: 0; padding: 0 0 18px; }
 .composer-stack { display: flex; flex-direction: column; }
 .composer-box {
+  position: relative;
   background: var(--panel); border: 1px solid var(--line); border-radius: 18px; box-shadow: var(--shadow-pop);
   padding: 0; display: flex; flex-direction: column;
 }
@@ -888,10 +902,15 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.6; backgroun
   border-color: var(--bd3);
   box-shadow: 0 0 0 3px var(--hover-a), var(--shadow-pop);
 }
+.composer-box.is-drop {
+  border: 1.5px dashed var(--drop);
+  box-shadow: 0 0 0 4px var(--drop-ring), var(--shadow-pop);
+}
 .composer-body {
   padding: 16px 12px 10px 18px; display: flex; flex-direction: column; gap: 12px;
 }
 .composer-box.is-ctx-warn .composer-body { padding: 14px 12px 10px 18px; }
+.composer-box.is-tagged .composer-body { padding: 12px 12px 10px 18px; gap: 10px; }
 .composer-textarea {
   border: none; outline: none; resize: none; font-family: inherit; font-size: 15px; line-height: 1.65;
   height: 44px; min-height: 44px; max-height: 200px; overflow-y: auto;
@@ -907,7 +926,35 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.6; backgroun
 }
 .composer-attach svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
 .composer-attach:hover { background: var(--hover); }
+.composer-attach:disabled { cursor: not-allowed; opacity: .5; }
 .composer-divider { width: 1px; height: 16px; background: var(--line); margin: 0 6px; flex-shrink: 0; }
+.composer-tags { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.composer-tag {
+  height: 30px; display: inline-flex; align-items: center; gap: 8px;
+  padding: 0 6px 0 4px; border-radius: 8px; border: 1px solid var(--line);
+  font-size: 12px; color: var(--ink2); max-width: 100%; min-width: 0;
+}
+.composer-tag.is-file { padding: 0 6px 0 10px; gap: 6px; font-family: var(--mono); }
+.composer-tag-thumb {
+  width: 22px; height: 22px; border-radius: 5px; object-fit: cover; background: var(--bd2); flex-shrink: 0;
+}
+.composer-tag-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 180px; }
+.composer-tag-size { color: var(--mute); flex-shrink: 0; }
+.composer-tag-x {
+  width: 18px; height: 18px; border: none; background: transparent; color: var(--mute);
+  font-size: 13px; padding: 0; cursor: pointer; flex-shrink: 0; line-height: 1;
+}
+.composer-tag-x:hover { color: var(--ink); }
+.composer-hint { font-size: 12px; color: var(--warn-ink); min-width: 0; }
+.composer-drop {
+  position: absolute; inset: 0; border-radius: 17px; z-index: 5;
+  background: var(--drop-bg); display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 6px; color: var(--drop-ink);
+  pointer-events: none;
+}
+.composer-drop svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.composer-drop-title { font-size: 14px; font-weight: 600; }
+.composer-drop-hint { font-size: 12px; color: var(--drop-mute); }
 .demo-model-badge { font-size: 11px; padding: 1px 7px; border-radius: 6px; border: 1px dashed var(--bd2); color: var(--mute); white-space: nowrap; flex-shrink: 0; }
 .composer-lock, .composer-error { font-size: 12px; color: var(--mute); min-width: 0; }
 .composer-error { color: var(--err-ink); display: flex; align-items: center; gap: 8px; }

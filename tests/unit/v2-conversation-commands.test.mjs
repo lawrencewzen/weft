@@ -395,3 +395,54 @@ test('POST /messages on a conversation without a workspace is 409 E_NO_WORKSPACE
     await stopServer(srv);
   }
 });
+
+const PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+
+test('POST /messages accepts images, image-only, and rejects over-limit payloads', { timeout: 40_000 }, async () => {
+  const srv = await startServer({
+    token: TOKEN,
+    env: { WEFT_LLM: 'faux', WEFT_FAUX_TEXT: 'saw-image' },
+  });
+  try {
+    const discovery = await readDiscovery(srv.dataDir);
+    const { conv } = await openConversation(srv.base, 'img');
+    const sent = await postV2(srv.base, `/api/v2/conversations/${conv.id}/messages`, discovery.token, {
+      text: '看图',
+      images: [{ mediaType: 'image/png', data: PNG, name: 'shot.png' }],
+    });
+    assert.equal(sent.status, 202, sent.text);
+    assertChecked(`/api/v2/conversations/${conv.id}/messages`, 'POST', 202, sent.body);
+    assert.equal(srv.logs().includes(PNG), false, 'server logs must not print image bytes');
+
+    const snap = await waitV2(srv.base, conv.id, discovery.token, (body) => (
+      (body.items || []).some((item) => item.kind === 'user' && item.images?.length)
+    ));
+    const user = snap.body.items.find((item) => item.kind === 'user' && item.images?.length);
+    assert.equal(user.text, '看图');
+    assert.equal(user.images[0].name, 'shot.png');
+    assert.equal(user.images[0].data, PNG);
+
+    const { conv: only } = await openConversation(srv.base, 'img-only');
+    const imageOnly = await postV2(srv.base, `/api/v2/conversations/${only.id}/messages`, discovery.token, {
+      images: [{ mediaType: 'image/png', data: PNG }],
+    });
+    assert.equal(imageOnly.status, 202, imageOnly.text);
+
+    const tooMany = await postV2(srv.base, `/api/v2/conversations/${conv.id}/messages`, discovery.token, {
+      text: 'x',
+      images: Array.from({ length: 7 }, () => ({ mediaType: 'image/png', data: PNG })),
+    });
+    assert.equal(tooMany.status, 400, tooMany.text);
+    assert.equal(tooMany.body.code, 'E_BAD_REQUEST');
+
+    const oversize = 'A'.repeat(Math.ceil((5 * 1024 * 1024 + 1) / 3) * 4);
+    const large = await postV2(srv.base, `/api/v2/conversations/${conv.id}/messages`, discovery.token, {
+      images: [{ mediaType: 'image/png', data: oversize }],
+    });
+    assert.equal(large.status, 400, large.text);
+    assert.equal(large.body.code, 'E_TOO_LARGE');
+    assert.equal(srv.logs().includes(oversize), false);
+  } finally {
+    await stopServer(srv);
+  }
+});

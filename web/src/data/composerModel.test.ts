@@ -26,6 +26,7 @@ function model(id: string, extra?: Partial<Provider['models'][number]>): Provide
     brand: extra?.brand ?? null,
     contextWindow: extra?.contextWindow ?? 128000,
     contextWindowCustom: extra?.contextWindowCustom ?? false,
+    images: extra?.images ?? false,
   };
 }
 
@@ -67,11 +68,17 @@ describe('composer model grouping', () => {
     expect(groups[0].models.map((item) => item.modelId)).toEqual(['grok-4.6', 'grok-4']);
     expect(groups[0].models[0].isDefault).toBe(true);
     expect(groups[0].models[0].displayName).toBe('Grok 4.6');
+    expect(groups[0].models[0].images).toBe(false);
     expect(groups[0].models[1].isDefault).toBe(false);
     expect(groups[1].mixedBrands).toBe(true);
     expect(groups[1].providerBrand).toBe('openrouter');
     expect(hasAvailableModels([empty])).toBe(false);
     expect(hasAvailableModels([chip, empty])).toBe(true);
+  });
+
+  it('copies the catalog images flag onto composer options', () => {
+    const vision = provider('src-v', 'Vision', [model('gpt-4o', { images: true })]);
+    expect(groupComposerModels([vision], null)[0].models[0].images).toBe(true);
   });
 
   it('marks the selected option with provider + model id, not display name', () => {

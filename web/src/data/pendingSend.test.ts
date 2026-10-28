@@ -9,8 +9,8 @@ import {
 } from './pendingSend';
 import type { ThreadItem } from './store';
 
-function user(id: string, text: string): ThreadItem {
-  return { kind: 'user', id, text, pathRefs: [] };
+function user(id: string, text: string, images?: PendingUser['images']): ThreadItem {
+  return { kind: 'user', id, text, pathRefs: [], ...(images?.length ? { images } : {}) };
 }
 
 function report(id: string, name: string, body: string): ThreadItem {
@@ -29,6 +29,18 @@ function assistant(id: string, text: string): ThreadItem {
 }
 
 const sent: PendingUser = { key: 'r1', text: '改一下圆角', baseline: 0, doneAt: 1000 };
+
+describe('pendingItem images', () => {
+  it('copies images onto the optimistic user bubble', () => {
+    const images = [{ mediaType: 'image/png' as const, data: 'AAAA', name: 'shot.png' }];
+    expect(pendingItem({ key: 'r1', text: '', images, baseline: 0, doneAt: null })).toMatchObject({
+      kind: 'user',
+      id: 'local:r1',
+      text: '',
+      images,
+    });
+  });
+});
 
 describe('countUserText', () => {
   it('counts only user items with the same trimmed text', () => {

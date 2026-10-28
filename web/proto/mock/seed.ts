@@ -602,6 +602,7 @@ const PROVIDERS: Provider[] = [
         brand: 'xai',
         contextWindow: DEFAULT_WINDOW,
         contextWindowCustom: false,
+        images: true,
       },
       {
         id: 'grok-4',
@@ -609,6 +610,7 @@ const PROVIDERS: Provider[] = [
         brand: 'xai',
         contextWindow: 128_000,
         contextWindowCustom: false,
+        images: true,
       },
       {
         id: 'grok-code-fast',
@@ -616,6 +618,7 @@ const PROVIDERS: Provider[] = [
         brand: 'xai',
         contextWindow: 256_000,
         contextWindowCustom: false,
+        images: false,
       },
     ],
     isDefault: true,

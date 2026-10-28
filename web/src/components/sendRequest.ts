@@ -6,10 +6,11 @@ export function createSendRequest(generate: () => string = () => crypto.randomUU
     current(): string | null {
       return id;
     },
-    begin(nextText: string): string {
-      if (id && text === nextText) return id;
+    begin(nextText: string, extra = ''): string {
+      const key = extra ? `${nextText}\n${extra}` : nextText;
+      if (id && text === key) return id;
       id = generate();
-      text = nextText;
+      text = key;
       return id;
     },
     succeed(): void {
