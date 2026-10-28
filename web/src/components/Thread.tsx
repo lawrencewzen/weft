@@ -33,6 +33,8 @@ type Props = {
   draftWorkspaceName?: string | null;
   onPickWorkspace?: (workspaceId: string) => void;
   onNewWorkspace?: () => void;
+  className?: string;
+  testId?: string;
 };
 
 function DraftHero({
@@ -88,6 +90,8 @@ export function Thread({
   draftWorkspaceName = null,
   onPickWorkspace,
   onNewWorkspace,
+  className,
+  testId = 'next-thread',
 }: Props) {
   const { providers } = useProviders();
   const scroller = useRef<HTMLDivElement>(null);
@@ -117,7 +121,12 @@ export function Thread({
   ].filter(Boolean).join(' ');
 
   return (
-    <div className="center-thread" data-testid="next-thread" ref={scroller} onScroll={onScroll}>
+    <div
+      className={['center-thread', className].filter(Boolean).join(' ')}
+      data-testid={testId}
+      ref={scroller}
+      onScroll={onScroll}
+    >
       <div className={innerClass}>
         {empty ? (
           isDraft ? (

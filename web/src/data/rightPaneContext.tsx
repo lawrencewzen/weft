@@ -46,6 +46,7 @@ export type RightPaneValue = {
   setOpen: (open: boolean) => void;
   tab: RightTab;
   setTab: (tab: RightTab) => void;
+  selectedSubagentId: string | null;
   width: number;
   setWidth: (width: number) => void;
   persistWidth: (width: number) => void;
@@ -89,6 +90,7 @@ function toolDoneKey(tools: Record<string, ToolCall>): string {
 
 type Props = {
   conversationId: string | null;
+  agentId?: string | null;
   workspaceId: string | null;
   lang: Lang;
   onToast: (message: string) => void;
@@ -97,6 +99,7 @@ type Props = {
 
 export function RightPaneProvider({
   conversationId,
+  agentId = null,
   workspaceId,
   lang,
   onToast,
@@ -108,8 +111,12 @@ export function RightPaneProvider({
   // identity on every render and every effect that depends on them re-runs.
   const storeVersion = useSyncExternalStore(store.subscribe, store.getVersion);
 
-  const [open, setOpenState] = useState(() => defaultRightOpen(window.innerWidth));
-  const [tab, setTabState] = useState<RightTab>(() => readRightTab());
+  const [open, setOpenState] = useState(() => (
+    agentId ? true : defaultRightOpen(window.innerWidth)
+  ));
+  const [tab, setTabState] = useState<RightTab>(() => (
+    agentId ? 'subagents' : readRightTab()
+  ));
   const [width, setWidth] = useState(() => readRightWidth());
   const [openPaths, setOpenPaths] = useState<Set<string>>(() => new Set());
   const [diffs, setDiffs] = useState<Record<string, Diff | 'loading' | 'error'>>({});
@@ -170,6 +177,15 @@ export function RightPaneProvider({
     writeRightTab(next);
     setOpen(true);
   }, [setOpen]);
+
+  const selectedSubagentId = agentId || null;
+
+  useEffect(() => {
+    if (!agentId) return;
+    setTabState('subagents');
+    writeRightTab('subagents');
+    setOpen(true);
+  }, [cid, agentId, setOpen]);
 
   const persistWidth = useCallback((next: number) => {
     writeRightWidth(next);
@@ -407,6 +423,7 @@ export function RightPaneProvider({
     setOpen,
     tab,
     setTab,
+    selectedSubagentId,
     width,
     setWidth,
     persistWidth,
@@ -437,7 +454,7 @@ export function RightPaneProvider({
     reloadFile,
     copyPath,
   }), [
-    open, setOpen, tab, setTab, width, persistWidth, hasChanges, totals, visibleChanges,
+    open, setOpen, tab, setTab, selectedSubagentId, width, persistWidth, hasChanges, totals, visibleChanges,
     openPaths, toggleChange, diffs, openFile, openChangeDiff, showFiles, tree, treeTruncated,
     treeReady, expandedDirs, toggleDirectory, activeFilePath, fileTargetLine, file, fileBusy,
     editorMode, draftText, saveState, saveFile, reloadFile, copyPath,

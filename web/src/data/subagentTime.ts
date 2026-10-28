@@ -94,3 +94,23 @@ export function subagentActionText(agent: Pick<Subagent, 'status' | 'currentActi
   if (action && progress) return `${action} · ${progress}`;
   return action || progress;
 }
+
+/** Overview / switcher row: live agents show the current action; others leave the line empty. */
+export function subagentOverviewNow(agent: Pick<Subagent, 'status' | 'currentAction' | 'progress'>): string {
+  return subagentActionText(agent);
+}
+
+export type SubagentDotKind = 'running' | 'stuck' | 'waiting' | 'done' | 'stopped' | 'failed';
+
+export function subagentDotStatus(status: SubagentStatus | string): SubagentDotKind {
+  if (status === 'failed') return 'failed';
+  if (status === 'done') return 'done';
+  if (status === 'stopped') return 'stopped';
+  if (status === 'stuck') return 'stuck';
+  if (status === 'waiting') return 'waiting';
+  return 'running';
+}
+
+export function subagentDotLive(status: SubagentStatus | string): boolean {
+  return status === 'running' || status === 'stuck';
+}

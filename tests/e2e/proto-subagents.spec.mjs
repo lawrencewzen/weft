@@ -59,29 +59,42 @@ test('seeded subagent tree, report cards, messages and stop', async ({ page }) =
   await answered.getByTestId('next-subagent-report-summary').click();
   await expect(answered.getByTestId('next-subagent-report-body')).toContainText('text.delta');
 
-  // Opening the running subagent shows its own thread and composer.
+  // Opening the running subagent shows its process in the right pane; center stays the main chat.
+  const title = await page.locator('.col-center .top-title').innerText();
   await page.getByTestId('next-subagent-row').first().click();
   await expect(page).toHaveURL(/\/a\//);
-  await expect(page.getByTestId('next-subagent-view')).toBeVisible();
-  await expect(page.getByTestId('next-run-status')).toContainText('运行中');
-  await expect(page.getByTestId('next-tool-group')).toHaveCount(1);
+  await expect(page.getByTestId('next-center')).toBeVisible();
+  await expect(page.locator('.col-center .top-title')).toHaveText(title);
+  await expect(page.getByTestId('next-right-tab-subagents')).toHaveClass(/active/);
+  await expect(page.getByTestId('next-right-tab-subagents')).toContainText('5');
+  const view = page.getByTestId('next-subagent-view');
+  await expect(view).toBeVisible();
+  await expect(view.getByTestId('next-subagent-status')).toContainText('运行中');
+  await expect(view.getByTestId('next-tool-group')).toHaveCount(1);
 
-  await page.getByTestId('next-composer-input').fill('顺便核对一下 diff 的行号');
-  await page.getByTestId('next-send').click();
-  await expect(page.getByTestId('next-item-user').last()).toContainText('diff 的行号');
-  await expect(page.getByTestId('next-stop')).toBeVisible({ timeout: 10_000 });
+  await page.getByTestId('next-subagent-input').fill('顺便核对一下 diff 的行号');
+  await page.getByTestId('next-subagent-send').click();
+  await expect(view.getByTestId('next-item-user').last()).toContainText('diff 的行号');
+  await expect(page.getByTestId('next-subagent-stop')).toBeVisible({ timeout: 10_000 });
   await page.waitForTimeout(500);
-  await page.getByTestId('next-stop').click();
-  await expect(page.getByTestId('next-stop')).toHaveCount(0);
-  await expect(page.getByTestId('next-run-status')).toContainText('已停止');
+  await page.getByTestId('next-subagent-stop').click();
+  await expect(page.getByTestId('next-subagent-stop')).toHaveCount(0);
+  await expect(view.getByTestId('next-subagent-status')).toContainText('已停止');
 
-  // Back to the parent conversation; the failed report opens its subagent view.
+  // Breadcrumb returns to the overview; the failed report opens its detail in the right pane.
   await page.getByTestId('next-subagent-back').click();
   await expect(page).toHaveURL(/#\/c\/c-rich$/);
+  await expect(page.getByTestId('next-subagent-overview')).toBeVisible();
+  await expect(page.getByTestId('next-subagent-card')).toHaveCount(5);
   await failed.getByTestId('next-report-open').click();
   await expect(page.getByTestId('next-subagent-view')).toBeVisible();
-  await expect(page.getByTestId('next-run-status')).toContainText('失败');
-  await expect(page.getByTestId('next-tool-row-status').first()).toContainText('失败');
+  await expect(page.getByTestId('next-subagent-view').getByTestId('next-subagent-status')).toContainText('失败');
+  await expect(page.getByTestId('next-subagent-view').getByTestId('next-tool-row-status').first()).toContainText('失败');
+
+  await page.locator('[data-testid=next-conv-row][data-id="c-rich"]').click();
+  await expect(page.getByTestId('next-right-tab-changes')).toHaveClass(/active/);
+  await expect(page.getByTestId('next-subagent-view')).toHaveCount(0);
+  await expect(page.getByTestId('next-subagent-overview')).toHaveCount(0);
 
   expectClean(state);
 });
@@ -105,11 +118,48 @@ test('a message spawns a subagent and its report lands in the thread', async ({ 
   await page.getByTestId('next-subagent-report-summary').last().click();
   await expect(page.getByTestId('next-subagent-report-body').last()).toContainText('变更列表');
 
-  // The report opens the subagent's own thread and it is finished there.
+  // The report opens the subagent's thread in the right pane; the main chat stays.
   await page.getByTestId('next-report-open').last().click();
+  await expect(page.getByTestId('next-center')).toBeVisible();
   await expect(page.getByTestId('next-subagent-view')).toBeVisible();
-  await expect(page.getByTestId('next-run-status')).toContainText('完成');
-  await expect(page.getByTestId('next-markdown').last()).toContainText('变更列表');
+  await expect(page.getByTestId('next-subagent-view').getByTestId('next-subagent-status')).toContainText('完成');
+  await expect(page.getByTestId('next-subagent-view').getByTestId('next-markdown').last()).toContainText('变更列表');
+
+  expectClean(state);
+});
+
+test('subagent tab overview, breadcrumb switcher, and deep link', async ({ page }) => {
+  const state = await openProto(page);
+
+  await expect(page.getByTestId('next-right-tab-subagents')).toBeVisible();
+  await page.getByTestId('next-right-tab-subagents').click();
+  await expect(page.getByTestId('next-subagent-overview')).toBeVisible();
+  await expect(page.getByTestId('next-center')).toBeVisible();
+  await expect(page.getByTestId('next-subagent-card')).toHaveCount(5);
+
+  await page.getByTestId('next-subagent-card').nth(1).click();
+  await expect(page).toHaveURL(/\/a\//);
+  await expect(page.getByTestId('next-subagent-view')).toBeVisible();
+  await expect(page.getByTestId('next-subagent-switch')).toBeVisible();
+  await page.getByTestId('next-subagent-switch').click();
+  await expect(page.getByTestId('next-subagent-menu')).toBeVisible();
+  const items = page.getByTestId('next-subagent-menu-item');
+  await expect(items).toHaveCount(5);
+  const targetId = await items.nth(2).getAttribute('data-agent-id');
+  await items.nth(2).click();
+  await expect.poll(() => decodeURIComponent(page.url())).toMatch(new RegExp(`/a/${targetId}$`));
+  await expect(page.getByTestId('next-subagent-menu')).toHaveCount(0);
+  await expect(page.getByTestId('next-center')).toBeVisible();
+
+  await page.locator('[data-testid=next-conv-row][data-id="c-tests"]').click();
+  await expect(page.getByTestId('next-right-tab-changes')).toHaveClass(/active/);
+  await expect(page.getByTestId('next-right-tab-subagents')).toHaveCount(0);
+
+  await page.evaluate(() => { window.location.hash = '#/c/c-rich/a/c-rich:sub:sa-1'; });
+  await expect(page.getByTestId('next-subagent-view')).toBeVisible();
+  await expect(page.getByTestId('next-subagent-view')).toContainText('核对 store.ts');
+  await expect(page.getByTestId('next-center')).toBeVisible();
+  await expect(page.getByTestId('next-right-tab-subagents')).toHaveClass(/active/);
 
   expectClean(state);
 });

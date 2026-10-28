@@ -104,7 +104,7 @@ export function Sidebar({
 }: Props) {
   const { groups } = useWorkspaces();
   const { store, status, setExtraConversationIds } = useSession();
-  const { showFiles } = useRightPane();
+  const { tab, setTab, showFiles } = useRightPane();
   const now = useNow(1_000);
   const [openMap, setOpenMap] = useState<OpenRecord>(() => readWorkspaceOpen());
   const [treeRecorded, setTreeRecorded] = useState<OpenRecord>(() => readSubagentTrees());
@@ -179,8 +179,9 @@ export function Sidebar({
   const openSubagent = useCallback((cid: string, agentId: string) => {
     const group = groups.find((item) => item.conversations.some((conv) => conv.id === cid));
     if (group) writeActiveWorkspace(group.workspace.id);
+    setTab('subagents');
     navigate(subagentPath(cid, agentId));
-  }, [groups]);
+  }, [groups, setTab]);
 
   const isOpen = useCallback((wsId: string, isActive: boolean) => (
     workspaceIsOpen(wsId, isActive, openMap)
@@ -199,8 +200,9 @@ export function Sidebar({
 
   const openConversation = useCallback((wsId: string, cid: string) => {
     writeActiveWorkspace(wsId);
+    if (tab === 'subagents') setTab('changes');
     navigate(conversationPath(cid));
-  }, []);
+  }, [setTab, tab]);
 
   const copy = useCallback(async (text: string) => {
     const ok = await copyText(text);

@@ -105,11 +105,13 @@ export function persistRightOpen(open: boolean, viewportWidth: number): void {
   if (!isRightOverlayWidth(viewportWidth)) writePref(LS_RIGHT_OPEN, open);
 }
 
-export type RightTab = 'changes' | 'files';
+export type RightTab = 'changes' | 'files' | 'subagents';
+
+const RIGHT_TABS = new Set<RightTab>(['changes', 'files', 'subagents']);
 
 export function readRightTab(): RightTab {
   const raw = storage()?.getItem(LS_RIGHT_TAB);
-  return raw === 'files' ? 'files' : 'changes';
+  return RIGHT_TABS.has(raw as RightTab) ? (raw as RightTab) : 'changes';
 }
 
 export function writeRightTab(tab: RightTab): void {

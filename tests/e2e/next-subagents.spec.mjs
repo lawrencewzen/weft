@@ -234,38 +234,45 @@ test('clicking a row opens the sub-agent view; send and stop work; refresh keeps
     expect(agentId).toBeTruthy();
     await row.click();
     await expect(page).toHaveURL(new RegExp(`/c/${conv.id}/a/`));
+    await expect(page.getByTestId('next-center')).toBeVisible();
     await expect(page.getByTestId('next-subagent-view')).toBeVisible();
-    await expect(page.getByTestId('next-subagent-back')).toHaveText('返回主对话');
+    await expect(page.getByTestId('next-right-tab-subagents')).toHaveClass(/active/);
+    await expect(page.getByTestId('next-subagent-back')).toHaveText('子 Agent');
     await expect(page.locator(`[data-testid=next-subagent-row][data-agent-id="${agentId}"]`)).toHaveClass(/is-active/);
     await expect(page.getByTestId('next-demo-model-badge')).toBeVisible();
-    await expect(page.getByTestId('next-thread')).toContainText(HOLD);
-    await expect(page.getByTestId('next-composer-input')).toBeVisible();
-    await expect(page.getByTestId('next-stop')).toBeVisible({ timeout: 15000 });
+    await expect(page.getByTestId('next-subagent-thread')).toContainText(HOLD);
+    await expect(page.getByTestId('next-subagent-input')).toBeVisible();
+    await expect(page.getByTestId('next-subagent-stop')).toBeVisible({ timeout: 15000 });
 
     const posted = page.waitForResponse((res) => (
       res.request().method() === 'POST'
       && /\/api\/v2\/conversations\/[^/]+\/subagents\/[^/]+\/messages$/.test(new URL(res.url()).pathname)
     ), { timeout: 15000 });
-    await page.getByTestId('next-composer-input').fill(STEER);
-    await page.getByTestId('next-send').click();
+    await page.getByTestId('next-subagent-input').fill(STEER);
+    await page.getByTestId('next-subagent-send').click();
     const sendRes = await posted;
     expect(sendRes.status(), await sendRes.text()).toBe(202);
-    await expect(page.getByTestId('next-composer-input')).toHaveValue('');
+    await expect(page.getByTestId('next-subagent-input')).toHaveValue('');
     await expect(page.getByTestId('next-composer-error')).toHaveCount(0);
-    await expect(page.getByTestId('next-thread')).toContainText(STEER, { timeout: 25000 });
-    await expect(page.getByTestId('next-stop')).toBeVisible({ timeout: 10000 });
-    await page.getByTestId('next-stop').click();
-    await expect(page.getByTestId('next-run-status')).toHaveText(/已停止|Stopped/i, { timeout: 20000 });
+    await expect(page.getByTestId('next-subagent-thread')).toContainText(STEER, { timeout: 25000 });
+    await expect(page.getByTestId('next-subagent-stop')).toBeVisible({ timeout: 10000 });
+    await page.getByTestId('next-subagent-stop').click();
+    await expect(page.getByTestId('next-subagent-status')).toHaveText(/已停止|Stopped/i, { timeout: 20000 });
 
     await page.reload();
+    await expect(page.getByTestId('next-center')).toBeVisible({ timeout: 20000 });
     await expect(page.getByTestId('next-subagent-view')).toBeVisible({ timeout: 20000 });
-    await expect(page.getByTestId('next-thread')).toContainText(HOLD);
-    await expect(page.getByTestId('next-thread')).toContainText(STEER);
-    await expect(page.getByTestId('next-run-status')).toHaveText(/已停止|Stopped|完成|Done/i);
+    await expect(page.getByTestId('next-subagent-thread')).toContainText(HOLD);
+    await expect(page.getByTestId('next-subagent-thread')).toContainText(STEER);
+    await expect(page.getByTestId('next-subagent-status')).toHaveText(/已停止|Stopped|完成|Done/i);
 
     await page.getByTestId('next-subagent-back').click();
     await expect(page).toHaveURL(new RegExp(`/c/${conv.id}$`));
+    await expect(page.getByTestId('next-subagent-overview')).toBeVisible();
+    await convRow(page, conv.id).click();
+    await expect(page.getByTestId('next-right-tab-changes')).toHaveClass(/active/);
     await expect(page.getByTestId('next-subagent-view')).toHaveCount(0);
+    await expect(page.getByTestId('next-subagent-overview')).toHaveCount(0);
   } finally {
     await srv.kill();
   }
@@ -292,11 +299,13 @@ test('report open jumps to the matching sub-agent; missing sub-agent shows an er
     await expect(openBtn).toBeVisible();
     await openBtn.click();
     await expect(page).toHaveURL(new RegExp(`/c/${conv.id}/a/`));
+    await expect(page.getByTestId('next-center')).toBeVisible();
     await expect(page.getByTestId('next-subagent-view')).toBeVisible();
-    await expect(page.getByTestId('next-status')).toContainText(new RegExp(`${REPORT_NAME}|${REPORT_MSG}`));
-    await expect(page.getByTestId('next-thread')).toContainText(REPORT_TEXT, { timeout: 15000 });
+    await expect(page.getByTestId('next-subagent-view')).toContainText(new RegExp(`${REPORT_NAME}|${REPORT_MSG}`));
+    await expect(page.getByTestId('next-subagent-thread')).toContainText(REPORT_TEXT, { timeout: 15000 });
 
     await page.goto(`${srv.url}/c/${encodeURIComponent(conv.id)}/a/does-not-exist`);
+    await expect(page.getByTestId('next-center')).toBeVisible();
     await expect(page.getByTestId('next-subagent-view')).toBeVisible();
     await expect(page.getByTestId('next-error')).toHaveText('子 Agent 不存在');
   } finally {
@@ -466,7 +475,9 @@ test('opening a sub-agent keeps the parent lightweight; tree rails are unclipped
 
     await rows.nth(1).click();
     await expect(page).toHaveURL(new RegExp(`/c/${conv.id}/a/`));
+    await expect(page.getByTestId('next-center')).toBeVisible();
     await expect(page.getByTestId('next-subagent-view')).toBeVisible();
+    await expect(page.getByTestId('next-right-tab-subagents')).toHaveClass(/active/);
     await expect(node).not.toHaveClass(/conv-active/);
     await expect(node).toHaveClass(/conv-child-active/);
     await expect(convRow(page, conv.id)).toHaveClass(/is-child-active/);
@@ -476,6 +487,7 @@ test('opening a sub-agent keeps the parent lightweight; tree rails are unclipped
     await convRow(page, conv.id).click();
     await expect(page).toHaveURL(new RegExp(`/c/${conv.id}$`));
     await expect(page.getByTestId('next-subagent-view')).toHaveCount(0);
+    await expect(page.getByTestId('next-right-tab-changes')).toHaveClass(/active/);
     await expect(node).toHaveClass(/conv-active/);
     await expect(node).not.toHaveClass(/conv-child-active/);
     await expect(convRow(page, conv.id)).not.toHaveClass(/is-child-active/);

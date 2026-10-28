@@ -4,6 +4,9 @@ import {
   progressLabel,
   stripActionMarks,
   subagentActionText,
+  subagentDotLive,
+  subagentDotStatus,
+  subagentOverviewNow,
   subagentTimeText,
   subagentTreeTimeText,
   subagentTreeVisual,
@@ -84,5 +87,19 @@ describe('subagent time text', () => {
       status: 'running',
       currentAction: '正在读取 `src/workflow/index.ts`',
     }))).toBe('正在读取 src/workflow/index.ts');
+  });
+
+  it('overview second line is the live action; dots follow status', () => {
+    expect(subagentOverviewNow(agent({
+      status: 'running',
+      currentAction: '运行 npm test',
+    }))).toBe('运行 npm test');
+    expect(subagentOverviewNow(agent({ status: 'done', currentAction: 'x' }))).toBe('');
+    expect(subagentDotStatus('stuck')).toBe('stuck');
+    expect(subagentDotStatus('waiting')).toBe('waiting');
+    expect(subagentDotLive('running')).toBe(true);
+    expect(subagentDotLive('stuck')).toBe(true);
+    expect(subagentDotLive('waiting')).toBe(false);
+    expect(subagentDotLive('done')).toBe(false);
   });
 });

@@ -106,6 +106,7 @@ export function AppShell({ route, lang, demo = false, service, settingsPage = nu
     : viewRoute.name === 'subagent'
       ? viewRoute.conversationId
       : null;
+  const activeAgentId = viewRoute.name === 'subagent' ? viewRoute.agentId : null;
   const draftWorkspaceId = viewRoute.name === 'draft' ? viewRoute.workspaceId : null;
   const workspaceId = draftWorkspaceId
     || groups.find((group) => group.conversations.some((conv) => conv.id === activeConversationId))?.workspace.id
@@ -120,6 +121,7 @@ export function AppShell({ route, lang, demo = false, service, settingsPage = nu
   return (
     <RightPaneProvider
       conversationId={activeConversationId}
+      agentId={activeAgentId}
       workspaceId={workspaceId}
       lang={lang}
       onToast={showToast}
@@ -372,7 +374,6 @@ function AppShellLayout({
           // 草稿里记住的“已创建对话”（useDraftSend）只在这一次草稿访问内有效。
           key={draftWorkspaceId ? 'draft' : 'conversation'}
           cid={activeConversationId}
-          agentId={activeAgentId}
           workspaceId={draftWorkspaceId}
           workspace={workspace || null}
           lang={lang}
