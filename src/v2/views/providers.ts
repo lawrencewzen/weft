@@ -16,6 +16,7 @@ import { redactAuthText } from '../../core/grok-auth.mjs';
 import { maskApiKey } from '../../core/settings.mjs';
 import type { components } from '../contract.gen.ts';
 import type { Lang } from '../phrases/index.ts';
+import { modelSupportsImages } from '../../kernel/model-catalog.mjs';
 import { brandIcons, brandIdOf } from './brand.ts';
 import {
   classifyProbeFailure,
@@ -150,12 +151,16 @@ export function providerModelsView(source: SourceLike): ProviderModel[] {
     if (typeof raw !== 'string') continue;
     const id = raw.trim();
     if (!id) continue;
+    const catalogUrl = source.kind === 'grok' || source.id === GROK_SOURCE_ID
+      ? 'https://api.x.ai/v1'
+      : (effectiveBaseUrl(source) || String(source.baseUrl || ''));
     out.push({
       id,
       displayName: icons.displayName(id),
       brand: brandIdOf(icons.brandForModel(id)),
       contextWindow: contextWindowForModel(source, id),
       contextWindowCustom: Object.prototype.hasOwnProperty.call(windows, id),
+      images: modelSupportsImages(id, catalogUrl),
     });
   }
   return out;

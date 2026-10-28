@@ -9,6 +9,7 @@ import { parseSSE } from '../../src/core/sse.mjs';
 import {
   baselinesFromEntries,
   createMapContext,
+  findUserMessageImage,
   mapHarnessBatch,
   messagesFromEntries,
   statusFromSubmission,
@@ -176,6 +177,48 @@ test('a snapshot asks the client to refetch instead of replaying rows', () => {
   assert.equal(mapped.refresh, true);
   assert.deepEqual(mapped.events, []);
   assert.equal(ctx.liveId, null);
+});
+
+test('user images in messagesFromEntries are metadata without base64', () => {
+  const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+  const { messages } = messagesFromEntries([
+    {
+      id: 'u-img',
+      kind: 'pi.user',
+      model: [{
+        role: 'user',
+        content: [
+          { type: 'text', text: '看图' },
+          { type: 'image', data: png, mimeType: 'image/png', name: 'shot.png' },
+        ],
+      }],
+    },
+  ]);
+  const user = messages.find((message) => message.id === 'u-img');
+  assert.equal(user.role, 'user');
+  assert.equal(user.images.length, 1);
+  assert.equal(user.images[0].index, 0);
+  assert.equal(user.images[0].mediaType, 'image/png');
+  assert.equal(user.images[0].name, 'shot.png');
+  assert.ok(user.images[0].bytes > 0);
+  assert.equal(Object.hasOwn(user.images[0], 'data'), false);
+  assert.equal(JSON.stringify(messages).includes(png), false);
+  const found = findUserMessageImage([
+    {
+      id: 'u-img',
+      kind: 'pi.user',
+      model: [{
+        role: 'user',
+        content: [
+          { type: 'text', text: '看图' },
+          { type: 'image', data: png, mimeType: 'image/png', name: 'shot.png' },
+        ],
+      }],
+    },
+  ], 'u-img', 0);
+  assert.equal(found.data, png);
+  assert.equal(found.mediaType, 'image/png');
+  assert.equal(findUserMessageImage([], 'u-img', 0), null);
 });
 
 test('assistant messages carry the stored model name', () => {

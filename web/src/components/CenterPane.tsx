@@ -120,6 +120,7 @@ export function CenterPane({
           draftModel={draftModel}
           onDraftModel={setDraftModel}
           onNewWorkspace={onNewWorkspace}
+          workspacePath={workspace?.path}
           onSend={draftActions.send}
           onStop={draftActions.stop}
           onSent={bumpStick}
@@ -198,6 +199,7 @@ export function CenterPane({
           model={conversation.model}
           context={conversation.context}
           onNewWorkspace={onNewWorkspace}
+          workspacePath={workspace?.path}
           onSend={optimistic.send}
           onStop={actions.stop}
           onSent={bumpStick}

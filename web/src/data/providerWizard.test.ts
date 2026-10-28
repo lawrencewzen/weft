@@ -216,14 +216,14 @@ describe('provider wizard', () => {
     expect(formatContextWindow(200_000)).toBe('200K');
     expect(formatContextWindow(1_000_000)).toBe('1M');
     expect(brandFilters([
-      { id: 'a', displayName: 'A', brand: 'Claude', contextWindow: 1, contextWindowCustom: false },
-      { id: 'b', displayName: 'B', brand: 'Claude', contextWindow: 1, contextWindowCustom: false },
-      { id: 'c', displayName: 'C', brand: 'Grok', contextWindow: 1, contextWindowCustom: false },
-      { id: 'd', displayName: 'D', brand: null, contextWindow: 1, contextWindowCustom: false },
-      { id: 'e', displayName: 'E', brand: 'OpenAI', contextWindow: 1, contextWindowCustom: false },
+      { id: 'a', displayName: 'A', brand: 'Claude', contextWindow: 1, contextWindowCustom: false, images: false },
+      { id: 'b', displayName: 'B', brand: 'Claude', contextWindow: 1, contextWindowCustom: false, images: false },
+      { id: 'c', displayName: 'C', brand: 'Grok', contextWindow: 1, contextWindowCustom: false, images: false },
+      { id: 'd', displayName: 'D', brand: null, contextWindow: 1, contextWindowCustom: false, images: false },
+      { id: 'e', displayName: 'E', brand: 'OpenAI', contextWindow: 1, contextWindowCustom: false, images: false },
     ]).map((item) => item.id)).toEqual(['Claude', 'OpenAI', 'Grok']);
     expect(brandFilters([
-      { id: 'e', displayName: 'E', brand: 'OpenAI', contextWindow: 1, contextWindowCustom: false },
+      { id: 'e', displayName: 'E', brand: 'OpenAI', contextWindow: 1, contextWindowCustom: false, images: false },
     ])[0].name).toBe('GPT');
   });
 
@@ -240,7 +240,7 @@ describe('provider wizard', () => {
       status: 'ok',
       statusText: '',
       lastTestedAt: 1,
-      models: [{ id: 'deepseek-chat', displayName: 'DeepSeek Chat', brand: 'DeepSeek', contextWindow: 128000, contextWindowCustom: false }],
+      models: [{ id: 'deepseek-chat', displayName: 'DeepSeek Chat', brand: 'DeepSeek', contextWindow: 128000, contextWindowCustom: false, images: false }],
       isDefault: false,
     });
     expect(state.mode).toBe('edit');

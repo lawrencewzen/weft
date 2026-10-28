@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { SECURITY_HEADERS } from '../core/auth.mjs';
 import { formatSSE } from '../core/sse.mjs';
@@ -44,6 +44,13 @@ import {
   toolOutputView,
   type LoadConversation,
 } from './views/conversation.ts';
+import {
+  assembleUserContent,
+  decodedBase64Bytes,
+  MESSAGE_BODY_MAX_BYTES,
+  normalizeMediaType,
+  parseSendImages,
+} from './views/message-images.ts';
 import {
   readWorkspaceFile,
   saveWorkspaceFile,
@@ -150,11 +157,21 @@ export type WorkspaceRow = {
 };
 
 export type GetConversation = (id: string) => Promise<ConversationRow | null | undefined>;
+export type MessageImageRecord = {
+  mediaType?: unknown;
+  data?: unknown;
+  name?: unknown;
+};
+export type GetMessageImage = (
+  conversationId: string,
+  messageId: string,
+  index: number,
+) => Promise<MessageImageRecord | null | undefined>;
 export type GetWorkspace = (id: string) => Promise<WorkspaceRow | null | undefined>;
 export type PostMessage = (
   conv: ConversationRow,
   text: string,
-  opts?: { requestId?: string },
+  opts?: { requestId?: string; content?: unknown },
 ) => Promise<{ status: number; body?: { runId?: unknown } }>;
 export type StopConversationFn = (id: string) => Promise<{ status: number }>;
 export type ListWorkspacesFn = () => Promise<WorkspaceRow[]>;
@@ -253,15 +270,42 @@ function unauthorized(res: ServerResponse, requestPath: string, method: string):
   sendV2(res, requestPath, method, 401, { error: 'unauthorized', code: 'E_UNAUTHORIZED' } satisfies V2Error);
 }
 
+const IMAGE_CACHE_CONTROL = 'private, max-age=31536000, immutable';
+
+function imageEtag(buf: Buffer): string {
+  return `"${createHash('sha256').update(buf).digest('hex')}"`;
+}
+
+function sendImageBytes(req: IncomingMessage, res: ServerResponse, mediaType: string, buf: Buffer): void {
+  const etag = imageEtag(buf);
+  const headers: Record<string, string> = {
+    ...SECURITY_HEADERS,
+    'content-type': mediaType,
+    'cache-control': IMAGE_CACHE_CONTROL,
+    etag,
+    'Weft-Protocol': PROTOCOL_VERSION,
+  };
+  const noneMatch = String(req.headers['if-none-match'] || '');
+  if (noneMatch && noneMatch.split(',').map((part) => part.trim()).includes(etag)) {
+    res.writeHead(304, headers);
+    res.end();
+    return;
+  }
+  headers['content-length'] = String(buf.length);
+  res.writeHead(200, headers);
+  res.end(buf);
+}
+
 async function readObjectBody(
   req: IncomingMessage,
   res: ServerResponse,
   pathname: string,
   method: string,
+  maxBytes = 1_000_000,
 ): Promise<Record<string, unknown> | null> {
   let raw: unknown;
   try {
-    raw = await readJsonBody(req);
+    raw = await readJsonBody(req, maxBytes);
   } catch (err) {
     const status = Number((err as { status?: number })?.status) || 400;
     const message = status === 413 ? 'payload too large' : 'invalid JSON';
@@ -302,13 +346,13 @@ async function workspaceReady(
   return ws.removedAt == null;
 }
 
-async function readJsonBody(req: IncomingMessage): Promise<unknown> {
+async function readJsonBody(req: IncomingMessage, maxBytes = 1_000_000): Promise<unknown> {
   const chunks: Buffer[] = [];
   let size = 0;
   for await (const chunk of req) {
     const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
     size += buf.length;
-    if (size > 1_000_000) {
+    if (size > maxBytes) {
       const err = new Error('payload too large');
       (err as Error & { status?: number }).status = 413;
       throw err;
@@ -441,6 +485,7 @@ export function createV2Handler(opts: {
   trackConnection: IdleWatcher['trackConnection'];
   loadConversation?: LoadConversation;
   getConversation?: GetConversation;
+  getMessageImage?: GetMessageImage;
   getWorkspace?: GetWorkspace;
   postMessage?: PostMessage;
   stopConversation?: StopConversationFn;
@@ -925,11 +970,47 @@ export function createV2Handler(opts: {
       return true;
     }
 
+    const imageMatch = /^\/api\/v2\/conversations\/([^/]+)\/messages\/([^/]+)\/images\/([^/]+)$/.exec(pathname);
+    if (method === 'GET' && imageMatch) {
+      const id = decodeURIComponent(imageMatch[1]);
+      const messageId = decodeURIComponent(imageMatch[2]);
+      const indexRaw = decodeURIComponent(imageMatch[3]);
+      const index = Number(indexRaw);
+      if (!Number.isInteger(index) || index < 0 || String(index) !== indexRaw) {
+        sendV2(res, pathname, method, 404, { error: 'not found' } satisfies V2Error);
+        return true;
+      }
+      if (!opts.getMessageImage) {
+        sendV2(res, pathname, method, 500, { error: 'kernel not ready', code: 'E_INTERNAL' } satisfies V2Error);
+        return true;
+      }
+      try {
+        const image = await opts.getMessageImage(id, messageId, index);
+        const mediaType = normalizeMediaType(image?.mediaType);
+        const data = typeof image?.data === 'string' ? image.data : '';
+        if (!image || !mediaType || !data || decodedBase64Bytes(data) == null) {
+          sendV2(res, pathname, method, 404, { error: 'not found' } satisfies V2Error);
+          return true;
+        }
+        sendImageBytes(req, res, mediaType, Buffer.from(data.replace(/\s+/g, ''), 'base64'));
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'load image failed';
+        sendV2(res, pathname, method, 500, { error: message, code: 'E_INTERNAL' } satisfies V2Error);
+      }
+      return true;
+    }
+
     const messagesMatch = /^\/api\/v2\/conversations\/([^/]+)\/messages$/.exec(pathname);
     const continueMatch = /^\/api\/v2\/conversations\/([^/]+)\/continue$/.exec(pathname);
     if (method === 'POST' && (messagesMatch || continueMatch)) {
       const id = decodeURIComponent((messagesMatch || continueMatch)![1]);
-      const body = await readObjectBody(req, res, pathname, method);
+      const body = await readObjectBody(
+        req,
+        res,
+        pathname,
+        method,
+        messagesMatch ? MESSAGE_BODY_MAX_BYTES : 1_000_000,
+      );
       if (!body) return true;
       const parsedId = requestIdFrom(body);
       if (!parsedId.ok) {
@@ -937,18 +1018,29 @@ export function createV2Handler(opts: {
         return true;
       }
       let text: string;
+      let content: unknown;
       if (continueMatch) {
         text = MANUAL_CONTINUE_TEXT;
+        content = text;
       } else {
         if (body.text != null && typeof body.text !== 'string') {
           sendV2(res, pathname, method, 400, { error: 'text required', code: 'E_BAD_REQUEST' } satisfies V2Error);
           return true;
         }
         text = String(body.text ?? '').trim();
-        if (!text) {
+        const parsedImages = parseSendImages(body.images);
+        if (!parsedImages.ok) {
+          sendV2(res, pathname, method, 400, {
+            error: parsedImages.error,
+            code: parsedImages.code,
+          } satisfies V2Error);
+          return true;
+        }
+        if (!text && parsedImages.images.length === 0) {
           sendV2(res, pathname, method, 400, { error: 'text required', code: 'E_BAD_REQUEST' } satisfies V2Error);
           return true;
         }
+        content = assembleUserContent(text, parsedImages.images);
       }
       let conv: ConversationRow | null | undefined = null;
       try {
@@ -980,7 +1072,7 @@ export function createV2Handler(opts: {
         return true;
       }
       try {
-        const posted = await opts.postMessage(conv, text, { requestId });
+        const posted = await opts.postMessage(conv, text, { requestId, content });
         if (posted.status === 404) {
           sendV2(res, pathname, method, 404, { error: 'not found' } satisfies V2Error);
           return true;
@@ -1217,6 +1309,7 @@ export function createV2Runtime(opts: {
   onRestart?: () => void;
   loadConversation?: LoadConversation;
   getConversation?: GetConversation;
+  getMessageImage?: GetMessageImage;
   getWorkspace?: GetWorkspace;
   postMessage?: PostMessage;
   stopConversation?: StopConversationFn;
@@ -1340,6 +1433,7 @@ export function createV2Runtime(opts: {
     trackConnection: idle.trackConnection,
     loadConversation: opts.loadConversation,
     getConversation: opts.getConversation,
+    getMessageImage: opts.getMessageImage,
     getWorkspace: opts.getWorkspace,
     postMessage: opts.postMessage,
     stopConversation: opts.stopConversation,

@@ -3941,7 +3941,7 @@
       "post": {
         "operationId": "postConversationMessage",
         "summary": "向对话发消息",
-        "description": "运行中再发就是插话（Pi Durable `whenBusy: steer`）。\n`text` 去掉首尾空白后不能为空。`requestId` 缺省时服务端生成；同一个 requestId 重复请求返回同一个 runId。\n",
+        "description": "运行中再发就是插话（Pi Durable `whenBusy: steer`）。\n`text` 去掉首尾空白后，若没有 `images` 则不能为空。只有图片没有文字也可以发送。\n`requestId` 缺省时服务端生成；同一个 requestId 重复请求返回同一个 runId。\n",
         "security": [
           {
             "bearerAuth": []
@@ -3983,7 +3983,7 @@
             }
           },
           "400": {
-            "description": "空文字或请求体无效",
+            "description": "空文字且没有图片，或图片超限 / 格式不对",
             "content": {
               "application/json": {
                 "schema": {
@@ -4014,6 +4014,145 @@
           },
           "409": {
             "description": "对话没有工作区",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "请求体过大（含图片的消息上限约 44MB）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "客户端错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "服务端错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/conversations/{id}/messages/{messageId}/images/{index}": {
+      "get": {
+        "operationId": "getConversationMessageImage",
+        "summary": "取用户消息里的一张图片",
+        "description": "从对话记录里取出这张图的原始字节。`messageId` 与 ThreadItemUser.id 一致，`index` 与 ThreadUserImage.index 一致。\n对话记录里的图片不会变，响应带 Cache-Control: private, max-age=31536000, immutable 和 ETag。找不到 404。\n",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "对话 id"
+          },
+          {
+            "name": "messageId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "用户消息 id，与 thread 里 user 项的 id 相同"
+          },
+          {
+            "name": "index",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "description": "这条消息里的第几张图"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "原始图片字节",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "private, max-age=31536000, immutable"
+              },
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "image/png": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "image/jpeg": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "image/gif": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "image/webp": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "未授权",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "对话、消息或这张图不存在",
             "content": {
               "application/json": {
                 "schema": {
@@ -4680,19 +4819,92 @@
       "SendMessageRequest": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "text"
-        ],
         "properties": {
           "text": {
             "type": "string",
-            "description": "用户输入。服务端去掉首尾空白后不能为空。"
+            "description": "用户输入。去掉首尾空白后，若没有 images 则不能为空。"
+          },
+          "images": {
+            "type": "array",
+            "maxItems": 6,
+            "description": "内联图片。data 是不带 data URL 前缀的标准 base64，mediaType 为 png / jpeg / gif / webp。 单张解码后不超过 5MB，一条最多 6 张。选内联而不是先上传再拿 id，是因为 Pi Durable 的 UserInput 原生就是 TextContent | ImageContent，图片进对话记录后刷新才能再显示。\n",
+            "items": {
+              "$ref": "#/components/schemas/MessageImage"
+            }
           },
           "requestId": {
             "type": "string",
             "description": "幂等键。缺省时服务端生成。同一个 requestId 重复提交返回同一个 runId。"
           }
         }
+      },
+      "MessageImage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "mediaType",
+          "data"
+        ],
+        "properties": {
+          "mediaType": {
+            "type": "string",
+            "enum": [
+              "image/png",
+              "image/jpeg",
+              "image/gif",
+              "image/webp"
+            ]
+          },
+          "data": {
+            "type": "string",
+            "description": "原始字节的标准 base64，不含 data: 前缀。日志里不得打印。"
+          },
+          "name": {
+            "type": "string",
+            "description": "原始文件名，仅供显示"
+          }
+        },
+        "description": "发送时的一张图片。对话视图里不出现这个对象。"
+      },
+      "ThreadUserImage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "index",
+          "mediaType",
+          "bytes",
+          "url"
+        ],
+        "properties": {
+          "index": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "这条用户消息里的第几张图，和取图接口的 index 一致"
+          },
+          "mediaType": {
+            "type": "string",
+            "enum": [
+              "image/png",
+              "image/jpeg",
+              "image/gif",
+              "image/webp"
+            ]
+          },
+          "name": {
+            "type": "string",
+            "description": "原始文件名，仅供显示"
+          },
+          "bytes": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "解码后的字节数，不含图片数据本身"
+          },
+          "url": {
+            "type": "string",
+            "description": "取这张图的地址。正式快照是 GET /api/v2/conversations/{id}/messages/{messageId}/images/{index}。 乐观上屏还没有服务端地址时可以是 data: 或 blob: URL。\n"
+          }
+        },
+        "description": "对话视图里的一张用户图片。只有元数据，不含 base64。"
       },
       "ContinueRequest": {
         "type": "object",
@@ -5284,6 +5496,13 @@
             "items": {
               "$ref": "#/components/schemas/PathRef"
             }
+          },
+          "images": {
+            "type": "array",
+            "description": "这条用户消息里的图片元数据。没有则省略。不含图片数据。",
+            "items": {
+              "$ref": "#/components/schemas/ThreadUserImage"
+            }
           }
         },
         "description": "用户消息。"
@@ -5634,7 +5853,8 @@
           "displayName",
           "brand",
           "contextWindow",
-          "contextWindowCustom"
+          "contextWindowCustom",
+          "images"
         ],
         "properties": {
           "id": {
@@ -5662,6 +5882,10 @@
           "contextWindowCustom": {
             "type": "boolean",
             "description": "true 表示用户手动覆盖"
+          },
+          "images": {
+            "type": "boolean",
+            "description": "模型目录 input 含 image 时为 true。前端据此决定是否允许贴图。"
           }
         },
         "description": "Provider 上的一个可用模型。"

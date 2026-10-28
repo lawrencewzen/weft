@@ -30,6 +30,24 @@ function assistant(id: string, text: string): ThreadItem {
 
 const sent: PendingUser = { key: 'r1', text: '改一下圆角', baseline: 0, doneAt: 1000 };
 
+describe('pendingItem images', () => {
+  it('copies images onto the optimistic user bubble as metadata with a local url', () => {
+    const images = [{ mediaType: 'image/png' as const, data: 'AAAA', name: 'shot.png' }];
+    expect(pendingItem({ key: 'r1', text: '', images, baseline: 0, doneAt: null })).toMatchObject({
+      kind: 'user',
+      id: 'local:r1',
+      text: '',
+      images: [{
+        index: 0,
+        mediaType: 'image/png',
+        name: 'shot.png',
+        bytes: 3,
+        url: 'data:image/png;base64,AAAA',
+      }],
+    });
+  });
+});
+
 describe('countUserText', () => {
   it('counts only user items with the same trimmed text', () => {
     const items = [user('1', '改一下圆角'), user('2', ' 改一下圆角 '), assistant('3', '改一下圆角')];

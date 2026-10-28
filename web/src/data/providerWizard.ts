@@ -511,6 +511,7 @@ export function modelsFromIds(ids: readonly string[]): ProviderModel[] {
     brand: null,
     contextWindow: 0,
     contextWindowCustom: false,
+    images: false,
   }));
 }
 

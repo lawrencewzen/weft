@@ -800,9 +800,31 @@ export interface paths {
         /**
          * 向对话发消息
          * @description 运行中再发就是插话（Pi Durable `whenBusy: steer`）。
-         *     `text` 去掉首尾空白后不能为空。`requestId` 缺省时服务端生成；同一个 requestId 重复请求返回同一个 runId。
+         *     `text` 去掉首尾空白后，若没有 `images` 则不能为空。只有图片没有文字也可以发送。
+         *     `requestId` 缺省时服务端生成；同一个 requestId 重复请求返回同一个 runId。
          */
         post: operations["postConversationMessage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/conversations/{id}/messages/{messageId}/images/{index}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 取用户消息里的一张图片
+         * @description 从对话记录里取出这张图的原始字节。`messageId` 与 ThreadItemUser.id 一致，`index` 与 ThreadUserImage.index 一致。
+         *     对话记录里的图片不会变，响应带 Cache-Control: private, max-age=31536000, immutable 和 ETag。找不到 404。
+         */
+        get: operations["getConversationMessageImage"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -952,10 +974,34 @@ export interface components {
             exiting: boolean;
         };
         SendMessageRequest: {
-            /** @description 用户输入。服务端去掉首尾空白后不能为空。 */
-            text: string;
+            /** @description 用户输入。去掉首尾空白后，若没有 images 则不能为空。 */
+            text?: string;
+            /** @description 内联图片。data 是不带 data URL 前缀的标准 base64，mediaType 为 png / jpeg / gif / webp。 单张解码后不超过 5MB，一条最多 6 张。选内联而不是先上传再拿 id，是因为 Pi Durable 的 UserInput 原生就是 TextContent | ImageContent，图片进对话记录后刷新才能再显示。 */
+            images?: components["schemas"]["MessageImage"][];
             /** @description 幂等键。缺省时服务端生成。同一个 requestId 重复提交返回同一个 runId。 */
             requestId?: string;
+        };
+        /** @description 发送时的一张图片。对话视图里不出现这个对象。 */
+        MessageImage: {
+            /** @enum {string} */
+            mediaType: "image/png" | "image/jpeg" | "image/gif" | "image/webp";
+            /** @description 原始字节的标准 base64，不含 data: 前缀。日志里不得打印。 */
+            data: string;
+            /** @description 原始文件名，仅供显示 */
+            name?: string;
+        };
+        /** @description 对话视图里的一张用户图片。只有元数据，不含 base64。 */
+        ThreadUserImage: {
+            /** @description 这条用户消息里的第几张图，和取图接口的 index 一致 */
+            index: number;
+            /** @enum {string} */
+            mediaType: "image/png" | "image/jpeg" | "image/gif" | "image/webp";
+            /** @description 原始文件名，仅供显示 */
+            name?: string;
+            /** @description 解码后的字节数，不含图片数据本身 */
+            bytes: number;
+            /** @description 取这张图的地址。正式快照是 GET /api/v2/conversations/{id}/messages/{messageId}/images/{index}。 乐观上屏还没有服务端地址时可以是 data: 或 blob: URL。 */
+            url: string;
         };
         ContinueRequest: {
             /** @description 幂等键。缺省时服务端生成。同一个 requestId 重复提交返回同一个 runId。 */
@@ -1139,6 +1185,8 @@ export interface components {
             /** @description Markdown 原文 */
             text: string;
             pathRefs: components["schemas"]["PathRef"][];
+            /** @description 这条用户消息里的图片元数据。没有则省略。不含图片数据。 */
+            images?: components["schemas"]["ThreadUserImage"][];
         };
         /** @description 助手回复。空文字的助手消息不进入对话流。 */
         ThreadItemAssistant: {
@@ -1253,6 +1301,8 @@ export interface components {
             contextWindow: number;
             /** @description true 表示用户手动覆盖 */
             contextWindowCustom: boolean;
+            /** @description 模型目录 input 含 image 时为 true。前端据此决定是否允许贴图。 */
+            images: boolean;
         };
         /** @description 模型来源的视图。响应和日志都不含明文 API key。 */
         Provider: {
@@ -4793,7 +4843,7 @@ export interface operations {
                     "application/json": components["schemas"]["RunAccepted"];
                 };
             };
-            /** @description 空文字或请求体无效 */
+            /** @description 空文字且没有图片，或图片超限 / 格式不对 */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -4822,6 +4872,84 @@ export interface operations {
             };
             /** @description 对话没有工作区 */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 请求体过大（含图片的消息上限约 44MB） */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 客户端错误 */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 服务端错误 */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+        };
+    };
+    getConversationMessageImage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 对话 id */
+                id: string;
+                /** @description 用户消息 id，与 thread 里 user 项的 id 相同 */
+                messageId: string;
+                /** @description 这条消息里的第几张图 */
+                index: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 原始图片字节 */
+            200: {
+                headers: {
+                    /** @description private, max-age=31536000, immutable */
+                    "Cache-Control"?: string;
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/png": string;
+                    "image/jpeg": string;
+                    "image/gif": string;
+                    "image/webp": string;
+                };
+            };
+            /** @description 未授权 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 对话、消息或这张图不存在 */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

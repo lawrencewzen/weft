@@ -99,6 +99,7 @@ export async function conversationSnapshot({
   const thread = await buildThread(messages, {
     lang,
     workspacePath: presented?.workspacePath == null ? '' : String(presented.workspacePath),
+    conversationId: presented?.id == null ? '' : String(presented.id),
     subagents: agents,
     running: run.status === 'running',
     exists,

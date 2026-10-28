@@ -177,11 +177,21 @@ function conversationPath(cid: string, suffix = ''): string {
   return `/api/v2/conversations/${encodeURIComponent(cid)}${suffix}`;
 }
 
-export function sendMessage(cid: string, text: string, requestId?: string): Promise<RunAccepted> {
+export function sendMessage(
+  cid: string,
+  text: string,
+  requestId?: string,
+  images?: components['schemas']['MessageImage'][],
+): Promise<RunAccepted> {
   const id = requestId ?? crypto.randomUUID();
+  const body: { text: string; requestId: string; images?: components['schemas']['MessageImage'][] } = {
+    text,
+    requestId: id,
+  };
+  if (images?.length) body.images = images;
   return requestJson<RunAccepted>(conversationPath(cid, '/messages'), {
     method: 'POST',
-    body: JSON.stringify({ text, requestId: id }),
+    body: JSON.stringify(body),
   });
 }
 

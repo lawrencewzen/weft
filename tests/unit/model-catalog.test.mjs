@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { catalogContextWindow, catalogMaxTokens, lookupModelCatalog } from '../../src/kernel/model-catalog.mjs';
+import { catalogContextWindow, catalogMaxTokens, lookupModelCatalog, modelSupportsImages } from '../../src/kernel/model-catalog.mjs';
 
 test('lookup prefers same id and hostname, then a unique id', () => {
   const flash = lookupModelCatalog('deepseek-flash', 'https://api.deepseek.com/v1');
@@ -31,4 +31,11 @@ test('lookup prefers same id and hostname, then a unique id', () => {
   const grokOnXai = lookupModelCatalog('grok-4.6', 'https://api.x.ai/v1');
   assert.equal(grokOnXai?.id, 'grok-4.6');
   assert.equal(grokOnXai.contextWindow, 500000);
+});
+
+test('modelSupportsImages uses catalog input and Grok empty baseUrl fallback', () => {
+  assert.equal(modelSupportsImages('deepseek-flash', 'https://api.deepseek.com/v1'), true);
+  assert.equal(modelSupportsImages('grok-4.6', 'https://api.x.ai/v1'), true);
+  assert.equal(modelSupportsImages('grok-4.6', ''), true);
+  assert.equal(modelSupportsImages('not-a-real-model', 'https://api.openai.com/v1'), false);
 });

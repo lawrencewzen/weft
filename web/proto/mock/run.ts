@@ -14,6 +14,8 @@ import {
 import { mockDiff } from './repo';
 import { SPAWN_TITLE, appendReport, createSubThread, runSubagent } from './subagents';
 import { conversationGroupId } from './views';
+import { decodedBase64Bytes, imageDataUrl } from '../../../src/v2/views/message-images';
+import type { components } from '../../../src/v2/contract.gen';
 import type {
   Bilingual,
   Change,
@@ -25,6 +27,36 @@ import type {
   RunHandle,
   ThreadItem,
 } from './types';
+
+type SendImage = components['schemas']['MessageImage'];
+type ThreadUserImage = components['schemas']['ThreadUserImage'];
+
+function attachThreadImages(
+  db: MockDb,
+  cid: string,
+  messageId: string,
+  images?: SendImage[],
+): ThreadUserImage[] | undefined {
+  if (!images?.length) return undefined;
+  const out: ThreadUserImage[] = [];
+  for (let i = 0; i < images.length; i += 1) {
+    const image = images[i];
+    const bytes = decodedBase64Bytes(image.data) ?? 0;
+    db.messageImages.set(`${cid}\t${messageId}\t${i}`, {
+      mediaType: image.mediaType,
+      bytes: Uint8Array.from(atob(image.data.replace(/\s+/g, '')), (ch) => ch.charCodeAt(0)),
+    });
+    const row: ThreadUserImage = {
+      index: i,
+      mediaType: image.mediaType,
+      bytes,
+      url: imageDataUrl(image),
+    };
+    if (image.name) row.name = image.name;
+    out.push(row);
+  }
+  return out;
+}
 
 const THINK_MS = 520;
 const TOOL_MS = 420;
@@ -407,7 +439,14 @@ function drainSteers(db: MockDb, conv: MockConv, hub: MockHub, run: RunHandle): 
   const taken = run.steers.splice(0, run.steers.length);
   for (const steer of taken) {
     const id = nextId(db, 'u');
-    const item: ThreadItem = { kind: 'user', id, text: steer.text, pathRefs: [] };
+    const images = attachThreadImages(db, conv.view.id, id, steer.images);
+    const item: ThreadItem = {
+      kind: 'user',
+      id,
+      text: steer.text,
+      pathRefs: [],
+      ...(images ? { images } : {}),
+    };
     conv.items.push(item);
     conv.view.itemIds.push(id);
     const send = conv.view.sends?.find((row) => row.requestId === steer.requestId);
@@ -641,16 +680,18 @@ export function sendMessage(
   hub: MockHub,
   text: string,
   requestId: string,
+  images?: SendImage[],
 ): SendResult {
   const known = conv.view.sends?.find((row) => row.requestId === requestId);
   if (known) {
     return { ok: true, runId: conv.requestRuns.get(requestId) || '' };
   }
+  const imageList = images?.length ? images : undefined;
   const sends = conv.view.sends ?? (conv.view.sends = []);
   if (conv.run && conv.view.run.status === 'running') {
     sends.push({ requestId, entryId: null, dropped: false });
     trimSends(conv);
-    conv.run.steers.push({ requestId, text });
+    conv.run.steers.push({ requestId, text, ...(imageList ? { images: imageList } : {}) });
     conv.requestRuns.set(requestId, conv.run.id);
     touch(conv);
     publishConversationView(conv, hub);
@@ -658,13 +699,22 @@ export function sendMessage(
     return { ok: true, runId: conv.run.id };
   }
   const id = nextId(db, 'u');
-  const item: ThreadItem = { kind: 'user', id, text, pathRefs: [] };
+  const threadImages = attachThreadImages(db, conv.view.id, id, imageList);
+  const item: ThreadItem = {
+    kind: 'user',
+    id,
+    text,
+    pathRefs: [],
+    ...(threadImages ? { images: threadImages } : {}),
+  };
   conv.items.push(item);
   conv.view.itemIds.push(id);
   sends.push({ requestId, entryId: id, dropped: false });
   trimSends(conv);
   if (conv.items.filter((row) => row.kind === 'user').length === 1 && conv.view.title === '新对话') {
-    conv.view.title = titleFrom(text);
+    conv.view.title = text.trim()
+      ? titleFrom(text)
+      : (imageList?.[0]?.name ? imageList[0].name.replace(/\.[^.]+$/, '') : '图片');
   }
   touch(conv);
   publishItem(conv, hub, item);

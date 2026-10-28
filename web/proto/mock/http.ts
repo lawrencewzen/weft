@@ -13,6 +13,7 @@ import {
   touch,
 } from './db';
 import { continueConversation, sendMessage, stopConversation } from './run';
+import { parseSendImages } from '../../../src/v2/views/message-images';
 import { replyInSubThread, stopSubThread, subagentKey } from './subagents';
 import { branchesOf, tokenFails } from './extensions';
 import {
@@ -52,7 +53,12 @@ import type {
   WorkspaceDirs,
 } from './types';
 
-export type MockReply = { status: number; body: unknown };
+export type MockReply = {
+  status: number;
+  body?: unknown;
+  bytes?: Uint8Array;
+  headers?: Record<string, string>;
+};
 
 const SERVICE_VERSION = '0.1.0-prototype';
 const STARTED_AT = Date.now();
@@ -130,6 +136,10 @@ const MODEL_NAMES: Record<string, { name: string; brand: string | null; window: 
   'local-model': { name: 'Local Model', brand: null, window: 32_000 },
 };
 
+function mockModelSupportsImages(modelId: string): boolean {
+  return !/code-fast|coder|local-model|deepseek-chat/i.test(modelId);
+}
+
 function modelRows(ids: string[], fallbackBrand: string | null): Provider['models'] {
   const seen = new Set<string>();
   const out: Provider['models'] = [];
@@ -144,6 +154,7 @@ function modelRows(ids: string[], fallbackBrand: string | null): Provider['model
       brand: meta?.brand || fallbackBrand,
       contextWindow: meta?.window || 128_000,
       contextWindowCustom: false,
+      images: mockModelSupportsImages(modelId),
     });
   }
   return out;
@@ -1181,17 +1192,44 @@ export function handleMockRequest(db: MockDb, hub: MockHub, rawUrl: string, init
     if (method === 'PATCH') return patchConversation(db, hub, conv, body);
   }
 
+  const imageMatch = /^\/api\/v2\/conversations\/([^/]+)\/messages\/([^/]+)\/images\/([^/]+)$/.exec(path);
+  if (imageMatch && method === 'GET') {
+    const cid = decodeURIComponent(imageMatch[1]);
+    const messageId = decodeURIComponent(imageMatch[2]);
+    const indexRaw = decodeURIComponent(imageMatch[3]);
+    const index = Number(indexRaw);
+    if (!Number.isInteger(index) || index < 0 || String(index) !== indexRaw) {
+      return fail(404, 'not found');
+    }
+    const stored = db.messageImages.get(`${cid}\t${messageId}\t${index}`);
+    if (!stored) return fail(404, 'not found');
+    return {
+      status: 200,
+      bytes: stored.bytes,
+      headers: {
+        'content-type': stored.mediaType,
+        'cache-control': 'private, max-age=31536000, immutable',
+        etag: `"${stored.bytes.length}-${stored.mediaType}"`,
+      },
+    };
+  }
+
   const msgMatch = /^\/api\/v2\/conversations\/([^/]+)\/messages$/.exec(path);
   if (msgMatch && method === 'POST') {
     const cid = decodeURIComponent(msgMatch[1]);
     const conv = getConv(db, cid);
     if (!conv) return fail(404, '对话不存在');
+    if (body.text != null && typeof body.text !== 'string') {
+      return fail(400, '消息不能为空', 'E_BAD_REQUEST');
+    }
     const text = String(body.text ?? '').trim();
-    if (!text) return fail(400, '消息不能为空', 'E_BAD_REQUEST');
+    const parsedImages = parseSendImages(body.images);
+    if (!parsedImages.ok) return fail(400, parsedImages.error, parsedImages.code);
+    if (!text && parsedImages.images.length === 0) return fail(400, '消息不能为空', 'E_BAD_REQUEST');
     const requestId = typeof body.requestId === 'string' && body.requestId
       ? body.requestId
       : nextId(db, 'req');
-    const result = sendMessage(db, conv, hub, text, requestId);
+    const result = sendMessage(db, conv, hub, text, requestId, parsedImages.images);
     if (!result.ok) return fail(result.status, result.error);
     return accepted({ runId: result.runId });
   }
@@ -1232,8 +1270,16 @@ export function handleMockRequest(db: MockDb, hub: MockHub, rawUrl: string, init
 /** Everything the prototype serves, wrapped in a real `Response`. */
 export function mockResponse(db: MockDb, hub: MockHub, rawUrl: string, init?: RequestInit): Response {
   const reply = handleMockRequest(db, hub, rawUrl, init);
+  if (reply.bytes) {
+    const copy = new ArrayBuffer(reply.bytes.byteLength);
+    new Uint8Array(copy).set(reply.bytes);
+    return new Response(copy, {
+      status: reply.status,
+      headers: reply.headers,
+    });
+  }
   return new Response(JSON.stringify(reply.body), {
     status: reply.status,
-    headers: { 'content-type': 'application/json; charset=utf-8' },
+    headers: { 'content-type': 'application/json; charset=utf-8', ...reply.headers },
   });
 }

@@ -5,6 +5,7 @@ import type { components } from '../contract.gen.ts';
 import { isPromptUserMessage } from './continuation.ts';
 import { parseSubagentReport } from './subagent-report.ts';
 import { extractPathRefs, type ExtractPathRefsOptions } from './path-refs.ts';
+import { toThreadUserImages } from './message-images.ts';
 import {
   toolCallView,
   toolGroupKey,
@@ -25,6 +26,14 @@ export type ThreadMessage = {
   stopReason?: unknown;
   streaming?: unknown;
   tool?: ToolLike;
+  images?: Array<{
+    index?: unknown;
+    mediaType?: unknown;
+    mimeType?: unknown;
+    name?: unknown;
+    bytes?: unknown;
+    data?: unknown;
+  }>;
 };
 
 export type ThreadSubagent = {
@@ -36,6 +45,7 @@ export type ThreadSubagent = {
 export type BuildThreadOptions = {
   lang?: Lang;
   workspacePath?: string;
+  conversationId?: string;
   subagents?: ThreadSubagent[];
   running?: boolean;
   exists?: ExtractPathRefsOptions['exists'];
@@ -97,6 +107,7 @@ export async function buildThread(
   {
     lang = 'zh',
     workspacePath = '',
+    conversationId = '',
     subagents = [],
     running = false,
     exists,
@@ -185,12 +196,15 @@ export async function buildThread(
         });
         continue;
       }
-      items.push({
+      const userItem: components['schemas']['ThreadItemUser'] = {
         kind: 'user',
         id: messageId(m),
         text: messageText(m),
         pathRefs: await pathRefsFor(m.text, { workspacePath, exists }),
-      });
+      };
+      const images = toThreadUserImages(m.images, conversationId, messageId(m));
+      if (images.length) userItem.images = images;
+      items.push(userItem);
       continue;
     }
 

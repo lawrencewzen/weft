@@ -100,6 +100,10 @@ test('contract path templates cover the four command routes', () => {
     matchContractPath('/api/v2/conversations/abc-123/tools/t1/output'),
     '/api/v2/conversations/{id}/tools/{toolId}/output',
   );
+  assert.equal(
+    matchContractPath('/api/v2/conversations/abc-123/messages/u1/images/0'),
+    '/api/v2/conversations/{id}/messages/{messageId}/images/{index}',
+  );
 });
 
 test('POST /messages 202 then snapshot has the user item and a reply', { timeout: 40_000 }, async () => {
@@ -391,6 +395,88 @@ test('POST /messages on a conversation without a workspace is 409 E_NO_WORKSPACE
     assert.equal(sent.status, 409, sent.text);
     assertChecked(`/api/v2/conversations/${conv.id}/messages`, 'POST', 409, sent.body);
     assert.equal(sent.body.code, 'E_NO_WORKSPACE');
+  } finally {
+    await stopServer(srv);
+  }
+});
+
+const PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+
+test('POST /messages accepts images, image-only, and rejects over-limit payloads', { timeout: 40_000 }, async () => {
+  const srv = await startServer({
+    token: TOKEN,
+    env: { WEFT_LLM: 'faux', WEFT_FAUX_TEXT: 'saw-image' },
+  });
+  try {
+    const discovery = await readDiscovery(srv.dataDir);
+    const { conv } = await openConversation(srv.base, 'img');
+    const sent = await postV2(srv.base, `/api/v2/conversations/${conv.id}/messages`, discovery.token, {
+      text: '看图',
+      images: [{ mediaType: 'image/png', data: PNG, name: 'shot.png' }],
+    });
+    assert.equal(sent.status, 202, sent.text);
+    assertChecked(`/api/v2/conversations/${conv.id}/messages`, 'POST', 202, sent.body);
+    assert.equal(srv.logs().includes(PNG), false, 'server logs must not print image bytes');
+
+    const snap = await waitV2(srv.base, conv.id, discovery.token, (body) => (
+      (body.items || []).some((item) => item.kind === 'user' && item.images?.length)
+    ));
+    const user = snap.body.items.find((item) => item.kind === 'user' && item.images?.length);
+    assert.equal(user.text, '看图');
+    assert.equal(user.images[0].name, 'shot.png');
+    assert.equal(user.images[0].index, 0);
+    assert.equal(user.images[0].mediaType, 'image/png');
+    assert.equal(Object.hasOwn(user.images[0], 'data'), false);
+    assert.equal(JSON.stringify(snap.body).includes(PNG), false);
+    assert.match(user.images[0].url, new RegExp(`/api/v2/conversations/${conv.id}/messages/${user.id}/images/0$`));
+
+    const imageGet = await fetch(srv.base + user.images[0].url, {
+      headers: { authorization: `Bearer ${discovery.token}` },
+    });
+    const imageBytes = Buffer.from(await imageGet.arrayBuffer());
+    assert.equal(imageGet.status, 200, imageBytes.toString('utf8').slice(0, 200));
+    assert.equal(imageGet.headers.get('content-type'), 'image/png');
+    assert.equal(imageGet.headers.get('cache-control'), 'private, max-age=31536000, immutable');
+    assert.ok(imageGet.headers.get('etag'));
+    assert.equal(imageBytes.toString('base64'), PNG);
+
+    const missing = await getV2(srv.base, `/api/v2/conversations/${conv.id}/messages/${user.id}/images/9`, discovery.token);
+    assert.equal(missing.status, 404, missing.text);
+    assertChecked(`/api/v2/conversations/${conv.id}/messages/${user.id}/images/9`, 'GET', 404, missing.body);
+
+    const noAuth = await fetch(srv.base + user.images[0].url);
+    assert.equal(noAuth.status, 401);
+    const noAuthBody = await noAuth.json();
+    assertChecked(user.images[0].url, 'GET', 401, noAuthBody);
+
+    const oldGet = await request(srv.base, 'GET', `/api/conversations/${conv.id}`, null, TOKEN);
+    assert.equal(oldGet.status, 200, JSON.stringify(oldGet.body));
+    assert.equal(JSON.stringify(oldGet.body).includes(PNG), false);
+    const oldUser = (oldGet.body.messages || []).find((row) => row.role === 'user' && row.images?.length);
+    assert.ok(oldUser);
+    assert.equal(Object.hasOwn(oldUser.images[0], 'data'), false);
+    assert.equal(oldUser.images[0].mediaType, 'image/png');
+
+    const { conv: only } = await openConversation(srv.base, 'img-only');
+    const imageOnly = await postV2(srv.base, `/api/v2/conversations/${only.id}/messages`, discovery.token, {
+      images: [{ mediaType: 'image/png', data: PNG }],
+    });
+    assert.equal(imageOnly.status, 202, imageOnly.text);
+
+    const tooMany = await postV2(srv.base, `/api/v2/conversations/${conv.id}/messages`, discovery.token, {
+      text: 'x',
+      images: Array.from({ length: 7 }, () => ({ mediaType: 'image/png', data: PNG })),
+    });
+    assert.equal(tooMany.status, 400, tooMany.text);
+    assert.equal(tooMany.body.code, 'E_BAD_REQUEST');
+
+    const oversize = 'A'.repeat(Math.ceil((5 * 1024 * 1024 + 1) / 3) * 4);
+    const large = await postV2(srv.base, `/api/v2/conversations/${conv.id}/messages`, discovery.token, {
+      images: [{ mediaType: 'image/png', data: oversize }],
+    });
+    assert.equal(large.status, 400, large.text);
+    assert.equal(large.body.code, 'E_TOO_LARGE');
+    assert.equal(srv.logs().includes(oversize), false);
   } finally {
     await stopServer(srv);
   }

@@ -17,6 +17,7 @@ import {
   baselinesFromEntries,
   createMapContext,
   mapHarnessBatch,
+  findUserMessageImage,
   messagesFromEntries,
   statusFromSubmission,
 } from './events.mjs';
@@ -531,6 +532,13 @@ export async function openConversationKernel({
         throw err;
       }
     },
+    async getMessageImage(cid, messageId, index) {
+      const conv = await store.getConversation(cid);
+      if (!conv?.harnessId) return null;
+      const view = await readView(conv.harnessId);
+      if (!view) return null;
+      return findUserMessageImage(view.entries, messageId, index);
+    },
     async present(conv, { includeMessages = false } = {}) {
       if (!conv?.harnessId) {
         return { ...conv, status: 'idle', messages: includeMessages ? [] : undefined, sends: [] };
@@ -566,9 +574,10 @@ export async function openConversationKernel({
       }
       const given = typeof options.requestId === 'string' ? options.requestId.trim() : '';
       const requestId = given || prepared?.requestId || randomUUID();
+      const content = options.content !== undefined ? options.content : text;
       const submission = await conversation.submit({
         type: 'input',
-        content: text,
+        content,
         requestId,
         whenBusy: 'steer',
       }, context);

@@ -69,7 +69,16 @@ type PlainItem = Exclude<ThreadItem, { kind: 'tool_group' }>;
 
 export type MockItem = PlainItem | MockGroup;
 
-export type Steer = { requestId: string; text: string };
+export type Steer = {
+  requestId: string;
+  text: string;
+  images?: components['schemas']['MessageImage'][];
+};
+
+export type StoredMessageImage = {
+  mediaType: components['schemas']['ThreadUserImage']['mediaType'];
+  bytes: Uint8Array;
+};
 
 export type RunHandle = {
   id: string;
@@ -125,6 +134,8 @@ export type MockDb = {
   /** loginId → polls answered so far (device-code demo becomes `done` on the 2nd poll). */
   grokPolls: Map<string, number>;
   seq: number;
+  /** `${cid}\\t${messageId}\\t${index}` → raw bytes for GET .../images/{index}. */
+  messageImages: Map<string, StoredMessageImage>;
 };
 
 export type EntityValue = object | ((lang: Lang) => object);

@@ -55,6 +55,28 @@ export function catalogMaxTokens(entry) {
   return Number.isInteger(n) && n > 0 ? n : null;
 }
 
+/** True when the catalog lists `image` as an input modality. */
+export function catalogSupportsImages(entry) {
+  return Array.isArray(entry?.input) && entry.input.includes('image');
+}
+
+/**
+ * Look up whether (model id, source baseUrl) accepts images.
+ * Grok sources store an empty baseUrl; fall back to the xAI catalog host.
+ */
+export function modelSupportsImages(modelId, baseUrl) {
+  const id = typeof modelId === 'string' ? modelId.trim() : '';
+  if (!id) return false;
+  const url = typeof baseUrl === 'string' ? baseUrl.trim() : '';
+  const direct = lookupModelCatalog(id, url);
+  if (direct) return catalogSupportsImages(direct);
+  if (!url) {
+    const xai = lookupModelCatalog(id, 'https://api.x.ai/v1');
+    if (xai) return catalogSupportsImages(xai);
+  }
+  return false;
+}
+
 /** Compact catalog snapshot for provider fingerprints. */
 export function catalogFingerprint(modelId, baseUrl) {
   const entry = lookupModelCatalog(modelId, baseUrl);
