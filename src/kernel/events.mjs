@@ -175,6 +175,23 @@ function diffOf(result) {
   };
 }
 
+function toolDelta(ev) {
+  const output = ev?.output;
+  if (!output || typeof output !== 'object') return null;
+  const toolId = ev.toolCallId == null ? '' : String(ev.toolCallId);
+  if (!toolId) return null;
+  const data = { toolId, toolName: ev.toolName || '' };
+  if (typeof output.set === 'string') {
+    data.set = output.set;
+    return { event: 'tool.delta', data };
+  }
+  if (typeof output.append === 'string' && output.append) data.append = output.append;
+  const trim = Number(output.trimStart);
+  if (Number.isFinite(trim) && trim > 0) data.trimStart = trim;
+  if (data.append == null && data.trimStart == null) return null;
+  return { event: 'tool.delta', data };
+}
+
 function toolEnd(ev, ctx) {
   const args = ctx.toolInputs.get(ev.toolCallId) || {};
   const result = ev.entry?.model?.[0];
@@ -277,6 +294,11 @@ export function mapHarnessBatch(batch, ctx) {
           }),
         },
       });
+      continue;
+    }
+    if (ev.type === 'tool_execution_update') {
+      const mapped = toolDelta(ev);
+      if (mapped) events.push(mapped);
       continue;
     }
     if (ev.type === 'tool_execution_end') {

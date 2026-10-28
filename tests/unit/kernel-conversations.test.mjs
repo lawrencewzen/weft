@@ -158,6 +158,52 @@ test('harness batches map onto the contract events', () => {
   assert.equal(names.includes('usage_changed'), false);
 });
 
+test('harness tool_execution_update maps onto tool.delta', () => {
+  const ctx = createMapContext();
+  const { events } = mapHarnessBatch([
+    { type: 'tool_execution_start', toolCallId: 'bash-1', toolName: 'bash', args: { command: 'seq' } },
+    {
+      type: 'tool_execution_update',
+      toolCallId: 'bash-1',
+      toolName: 'bash',
+      output: { append: 'one\n' },
+    },
+    {
+      type: 'tool_execution_update',
+      toolCallId: 'bash-1',
+      toolName: 'bash',
+      output: { trimStart: 4, append: 'two\n' },
+    },
+    {
+      type: 'tool_execution_update',
+      toolCallId: 'bash-1',
+      toolName: 'bash',
+      output: { set: 'two\nthree\n' },
+    },
+    { type: 'tool_execution_update', toolCallId: 'bash-1', toolName: 'bash' },
+    {
+      type: 'tool_execution_end',
+      toolCallId: 'bash-1',
+      toolName: 'bash',
+      entry: {
+        kind: 'pi.tool-result',
+        model: [{
+          role: 'toolResult',
+          toolCallId: 'bash-1',
+          toolName: 'bash',
+          content: [{ type: 'text', text: 'two\nthree\n' }],
+          isError: false,
+        }],
+      },
+    },
+  ], ctx);
+  const names = events.map((ev) => ev.event);
+  assert.deepEqual(names, ['tool.start', 'tool.delta', 'tool.delta', 'tool.delta', 'tool.end']);
+  assert.deepEqual(events[1].data, { toolId: 'bash-1', toolName: 'bash', append: 'one\n' });
+  assert.deepEqual(events[2].data, { toolId: 'bash-1', toolName: 'bash', append: 'two\n', trimStart: 4 });
+  assert.deepEqual(events[3].data, { toolId: 'bash-1', toolName: 'bash', set: 'two\nthree\n' });
+});
+
 test('status is the last submission record', () => {
   assert.deepEqual(statusFromSubmission({ status: 'queued' }), { status: 'running' });
   assert.deepEqual(statusFromSubmission({ status: 'placed' }), { status: 'running' });

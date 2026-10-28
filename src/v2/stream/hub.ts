@@ -14,7 +14,9 @@ export type UpsertValue = object | ((lang: string) => object);
 export type PublishEvent =
   | { event: 'upsert'; entity: string; id: string; value: UpsertValue }
   | { event: 'remove'; entity: string; id: string }
-  | { event: 'text.delta'; itemId: string; offset: number; append: string };
+  | { event: 'text.delta'; itemId: string; offset: number; append: string }
+  | { event: 'tool.delta'; toolId: string; set: string }
+  | { event: 'tool.delta'; toolId: string; offset: number; append: string; trimStart?: number };
 
 export type SseFrame = {
   id?: number;
@@ -66,7 +68,7 @@ type BufferedEvent =
   | {
     seq: number;
     topic: string;
-    event: 'remove' | 'text.delta';
+    event: 'remove' | 'text.delta' | 'tool.delta';
     data: object;
   };
 
@@ -313,6 +315,24 @@ export function createEventHub(opts: {
         event: 'remove',
         data: { topic, entity: event.entity, id: event.id },
       };
+    }
+    if (event.event === 'tool.delta') {
+      if ('set' in event) {
+        return {
+          seq: nextSeq,
+          topic,
+          event: 'tool.delta',
+          data: { topic, toolId: event.toolId, set: event.set },
+        };
+      }
+      const data: { topic: string; toolId: string; offset: number; append: string; trimStart?: number } = {
+        topic,
+        toolId: event.toolId,
+        offset: event.offset,
+        append: event.append,
+      };
+      if (event.trimStart) data.trimStart = event.trimStart;
+      return { seq: nextSeq, topic, event: 'tool.delta', data };
     }
     return {
       seq: nextSeq,

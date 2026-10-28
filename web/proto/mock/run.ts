@@ -8,6 +8,7 @@ import {
   publishSummary,
   publishTextDelta,
   publishTool,
+  publishToolDelta,
   recomputeContext,
   touch,
 } from './db';
@@ -281,6 +282,29 @@ function buildTool(db: MockDb, plan: PlannedTool): MockTool {
   };
 }
 
+async function streamBash(
+  conv: MockConv,
+  hub: MockHub,
+  run: RunHandle,
+  tool: MockTool,
+): Promise<void> {
+  const lines = tool.output.split('\n');
+  let text = '';
+  tool.preview = '';
+  tool.liveText = '';
+  tool.truncated = true;
+  publishTool(conv, hub, tool, conversationGroupId(conv, tool.id));
+  for (const line of lines) {
+    if (run.cancelled) return;
+    const chunk = text ? `\n${line}` : line;
+    const offset = text.length;
+    text += chunk;
+    tool.liveText = text;
+    publishToolDelta(conv, hub, tool.id, { offset, append: chunk });
+    await sleep(70);
+  }
+}
+
 function finishTool(tool: MockTool): void {
   tool.status = 'done';
   if (tool.kind === 'read') {
@@ -294,7 +318,10 @@ function finishTool(tool: MockTool): void {
     return;
   }
   if (tool.kind === 'bash') {
-    tool.preview = tool.output.split('\n').slice(0, 5).join('\n');
+    tool.liveText = tool.output;
+    const lines = tool.output.split('\n');
+    tool.preview = lines.slice(0, 5).join('\n');
+    tool.truncated = lines.length > 5;
     tool.hint = { zh: `退出码 0 · ${tool.totalLines} 行`, en: `exit 0 · ${tool.totalLines} lines` };
     return;
   }
@@ -481,7 +508,11 @@ async function runTool(
   }
   publishTool(conv, hub, tool, conversationGroupId(conv, tool.id));
   setPending(conv, hub, runningLine(tool));
-  await sleep(TOOL_MS);
+  if (tool.kind === 'bash') {
+    await streamBash(conv, hub, run, tool);
+  } else {
+    await sleep(TOOL_MS);
+  }
   if (run.cancelled) return;
   finishTool(tool);
   if (tool.kind === 'edit') applyEditChange(db, conv, hub, tool);

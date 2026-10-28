@@ -108,6 +108,9 @@ describe('layout prefs', () => {
     writeRightTab('subagents');
     expect(readRightTab()).toBe('subagents');
     expect(mem.getItem(LS_RIGHT_TAB)).toBe('subagents');
+    writeRightTab('term');
+    expect(readRightTab()).toBe('term');
+    expect(mem.getItem(LS_RIGHT_TAB)).toBe('term');
     expect(mem.getItem(LS_RIGHT_OPEN)).toBeNull();
   });
 

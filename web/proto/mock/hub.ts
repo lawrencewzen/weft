@@ -8,7 +8,9 @@ export type Entity = { entity: string; id: string; value: EntityValue };
 export type PublishEvent =
   | { event: 'upsert'; entity: string; id: string; value: EntityValue }
   | { event: 'remove'; entity: string; id: string }
-  | { event: 'text.delta'; itemId: string; offset: number; append: string };
+  | { event: 'text.delta'; itemId: string; offset: number; append: string }
+  | { event: 'tool.delta'; toolId: string; set: string }
+  | { event: 'tool.delta'; toolId: string; offset: number; append: string; trimStart?: number };
 
 export type Sender = (event: string, data: object) => void;
 
@@ -46,6 +48,19 @@ export function createHub(read: TopicReader): MockHub {
     }
     if (event.event === 'remove') {
       return { event: 'remove', data: { topic, entity: event.entity, id: event.id } };
+    }
+    if (event.event === 'tool.delta') {
+      if ('set' in event) {
+        return { event: 'tool.delta', data: { topic, toolId: event.toolId, set: event.set } };
+      }
+      const data: { topic: string; toolId: string; offset: number; append: string; trimStart?: number } = {
+        topic,
+        toolId: event.toolId,
+        offset: event.offset,
+        append: event.append,
+      };
+      if (event.trimStart) data.trimStart = event.trimStart;
+      return { event: 'tool.delta', data };
     }
     return {
       event: 'text.delta',

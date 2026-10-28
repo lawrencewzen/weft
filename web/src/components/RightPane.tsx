@@ -1,14 +1,17 @@
-import { useSyncExternalStore } from 'react';
+import { useEffect, useMemo, useSyncExternalStore } from 'react';
+import { agentCommands } from '../data/agentCommands';
 import type { Lang } from '../data/lang';
 import { conversationPath, navigate } from '../data/nav';
 import type { RightTab } from '../data/layout';
 import { useRightPane } from '../data/rightPaneContext';
 import { useSession } from '../data/session';
+import { subagentTopic } from '../data/store';
 import { t } from '../i18n';
 import { ChangesPane } from './ChangesPane';
 import { FileBrowser } from './FileBrowser';
 import { SubagentOverview } from './SubagentOverview';
 import { SubagentPane } from './SubagentPane';
+import { TerminalPane } from './TerminalPane';
 
 type Props = {
   lang: Lang;
@@ -25,15 +28,35 @@ export function RightPane({ lang, workspaceLabel }: Props) {
     hasChanges,
     selectedSubagentId,
   } = useRightPane();
-  const { store, conversationId } = useSession();
-  useSyncExternalStore(store.subscribe, store.getVersion);
+  const { store, conversationId, retainTopic, releaseTopic } = useSession();
+  const storeVersion = useSyncExternalStore(store.subscribe, store.getVersion);
   const agents = conversationId ? store.subagents(conversationId) : [];
+  const commands = useMemo(
+    () => (conversationId ? agentCommands(store, conversationId, agents) : []),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- store is stable; storeVersion tracks writes
+    [store, conversationId, agents, storeVersion],
+  );
+  const runningCount = commands.filter((row) => row.running).length;
+  const showTermTab = commands.length > 0;
   const showSubagentsTab = agents.length > 0 || Boolean(selectedSubagentId);
   const effectiveTab: RightTab = tab === 'subagents' && showSubagentsTab
     ? 'subagents'
-    : tab === 'files'
-      ? 'files'
-      : 'changes';
+    : tab === 'term' && showTermTab
+      ? 'term'
+      : tab === 'files'
+        ? 'files'
+        : 'changes';
+
+  const agentKey = agents.map((agent) => agent.id).join('\n');
+  useEffect(() => {
+    if (!conversationId) return;
+    const list = store.subagents(conversationId);
+    const topics = list.map((agent) => subagentTopic(conversationId, agent.id));
+    for (const topic of topics) retainTopic(topic);
+    return () => {
+      for (const topic of topics) releaseTopic(topic);
+    };
+  }, [conversationId, agentKey, retainTopic, releaseTopic, store]);
 
   function onSubagentsTab() {
     if (selectedSubagentId && conversationId) {
@@ -76,6 +99,18 @@ export function RightPane({ lang, workspaceLabel }: Props) {
           >
             <span>{t(lang, 'tab_file')}</span>
           </button>
+          {showTermTab ? (
+            <button
+              type="button"
+              className={`tab-btn${effectiveTab === 'term' ? ' active' : ''}`}
+              data-testid="next-right-tab-term"
+              title={t(lang, 'tab_term_title')}
+              onClick={() => setTab('term')}
+            >
+              <span>{t(lang, 'tab_term')}</span>
+              {runningCount > 0 ? <span className="tab-count">{runningCount}</span> : null}
+            </button>
+          ) : null}
           {showSubagentsTab ? (
             <button
               type="button"
@@ -112,6 +147,8 @@ export function RightPane({ lang, workspaceLabel }: Props) {
           />
         ) : effectiveTab === 'subagents' && conversationId ? (
           <SubagentOverview cid={conversationId} agents={agents} lang={lang} />
+        ) : effectiveTab === 'term' ? (
+          <TerminalPane lang={lang} />
         ) : effectiveTab === 'files' ? (
           <FileBrowser lang={lang} workspaceLabel={workspaceLabel} />
         ) : (

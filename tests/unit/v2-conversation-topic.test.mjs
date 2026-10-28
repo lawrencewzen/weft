@@ -72,6 +72,8 @@ function assertPushedEntities(events) {
       assertSchema('RemoveEvent', ev.data);
     } else if (ev.event === 'text.delta') {
       assertSchema('TextDeltaEvent', ev.data);
+    } else if (ev.event === 'tool.delta') {
+      assertSchema('ToolDeltaEvent', ev.data);
     }
   }
 }
@@ -96,6 +98,17 @@ function applyEvents(events, store = new Map()) {
       if (!item || typeof item.text !== 'string') continue;
       const offset = Number(ev.data.offset) || 0;
       item.text = `${item.text.slice(0, offset)}${ev.data.append || ''}`;
+    } else if (ev.event === 'tool.delta') {
+      const tool = store.get(entityKey('tool', ev.data.toolId));
+      if (!tool || !tool.output) continue;
+      let text = typeof tool.output.text === 'string' ? tool.output.text : '';
+      if (typeof ev.data.set === 'string') text = ev.data.set;
+      else {
+        if (ev.data.trimStart) text = text.slice(Number(ev.data.trimStart) || 0);
+        const offset = Number(ev.data.offset) || 0;
+        if (offset === text.length) text += ev.data.append || '';
+      }
+      tool.output = { ...tool.output, text };
     }
   }
   return store;
@@ -1144,6 +1157,95 @@ test('in-process: 300-message conversation, 20 recomputes stay under a loose bou
     const upserts = frames.filter((frame) => frame.event === 'upsert').length;
     assert.equal(upserts, 0, `unexpected upserts after snapshot: ${upserts}`);
     assert.equal(elapsed < 1500, true, `20 recomputes took ${elapsed.toFixed(1)}ms`);
+    session.close();
+  } finally {
+    topic.dispose();
+    hub.dispose();
+  }
+});
+
+test('in-process: tool.delta throttles, trimStart, set, and skips unknown tools', async () => {
+  const hub = createEventHub({ heartbeatMs: 60_000, protocolVersion: PROTOCOL_VERSION });
+  const listeners = new Set();
+  const data = {
+    presented: presentedFixture({ status: 'running' }),
+    subagents: [],
+    modelTarget: null,
+    window: 128000,
+  };
+  const topic = attachConversationTopic(hub, {
+    loadConversation: async (id) => (id === 'c1' ? data : null),
+    subscribe: (_cid, fn) => {
+      listeners.add(fn);
+      return () => listeners.delete(fn);
+    },
+    coalesceMs: 20,
+    log() {},
+  });
+  try {
+    const frames = [];
+    const session = hub.connect({
+      topics: ['conversation:c1'],
+      lang: 'zh',
+      send: (frame) => frames.push(frame),
+    });
+    await session.ready;
+    const emit = (ev) => {
+      for (const fn of listeners) fn(ev);
+    };
+
+    emit({ event: 'tool.delta', data: { toolId: 'ghost', append: 'nope' } });
+    await sleep(40);
+    assert.equal(frames.some((frame) => frame.event === 'tool.delta'), false, JSON.stringify(frames));
+    assert.equal(frames.some((frame) => frame.event === 'upsert' && frame.data.entity === 'tool'), false);
+
+    data.presented = presentedFixture({
+      status: 'running',
+      messages: [
+        { id: 'u1', role: 'user', text: 'run' },
+        {
+          id: 't1',
+          role: 'tool',
+          tool: {
+            id: 'bash-1',
+            name: 'bash',
+            status: 'running',
+            input: { command: 'npm test' },
+          },
+        },
+      ],
+    });
+    emit({
+      event: 'tool.start',
+      data: { tool: { id: 'bash-1', name: 'bash', status: 'running', input: { command: 'npm test' } } },
+    });
+    await sleep(60);
+
+    emit({ event: 'tool.delta', data: { toolId: 'bash-1', append: 'aa' } });
+    emit({ event: 'tool.delta', data: { toolId: 'bash-1', append: 'bb' } });
+    await sleep(160);
+    let deltas = frames.filter((frame) => frame.event === 'tool.delta');
+    assert.equal(deltas.length >= 1, true, JSON.stringify(deltas));
+    assert.equal(deltas[0].data.toolId, 'bash-1');
+    assert.equal(deltas[0].data.append, 'aabb');
+    assert.equal(deltas[0].data.offset, 0);
+    assertSchema('ToolDeltaEvent', deltas[0].data);
+
+    emit({ event: 'tool.delta', data: { toolId: 'bash-1', trimStart: 2, append: 'cc' } });
+    await sleep(160);
+    deltas = frames.filter((frame) => frame.event === 'tool.delta');
+    const trimmed = deltas[deltas.length - 1];
+    assert.equal(trimmed.data.trimStart, 2);
+    assert.equal(trimmed.data.append, 'cc');
+    assert.equal(trimmed.data.offset, 2);
+
+    emit({ event: 'tool.delta', data: { toolId: 'bash-1', set: 'zz' } });
+    await sleep(80);
+    deltas = frames.filter((frame) => frame.event === 'tool.delta');
+    const replaced = deltas.find((frame) => frame.data.set === 'zz');
+    assert.ok(replaced, JSON.stringify(deltas));
+    assert.equal(replaced.data.append, undefined);
+    assertPushedEntities(frames.filter((frame) => frame.event !== 'heartbeat'));
     session.close();
   } finally {
     topic.dispose();

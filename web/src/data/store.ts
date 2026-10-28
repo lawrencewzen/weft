@@ -13,6 +13,7 @@ export type SnapshotEvent = components['schemas']['SnapshotEvent'];
 export type UpsertEvent = components['schemas']['UpsertEvent'];
 export type RemoveEvent = components['schemas']['RemoveEvent'];
 export type TextDeltaEvent = components['schemas']['TextDeltaEvent'];
+export type ToolDeltaEvent = components['schemas']['ToolDeltaEvent'];
 export type EntityRef = components['schemas']['EntityRef'];
 export type Provider = components['schemas']['Provider'];
 export type ProviderDefaults = components['schemas']['ProviderDefaults'];
@@ -47,6 +48,47 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 function itemText(value: Record<string, unknown>): string | null {
   if (value.kind != null && value.kind !== 'assistant') return null;
   return typeof value.text === 'string' ? value.text : '';
+}
+
+type ToolLive = { text: string; stale: boolean };
+
+/** Apply one `tool.delta` onto a local retained window. Same mismatch rules as text.delta. */
+export function applyToolDeltaText(
+  current: string,
+  event: Pick<ToolDeltaEvent, 'set' | 'offset' | 'append' | 'trimStart'>,
+): { text: string; stale: boolean; changed: boolean } {
+  if (typeof event.set === 'string') {
+    return { text: event.set, stale: false, changed: event.set !== current };
+  }
+  const append = typeof event.append === 'string' ? event.append : '';
+  const offset = event.offset ?? 0;
+  const trim = event.trimStart ?? 0;
+  if (
+    append
+    && offset + append.length === current.length
+    && current.slice(offset) === append
+  ) {
+    return { text: current, stale: false, changed: false };
+  }
+  let next = current;
+  if (trim > 0) next = current.slice(trim);
+  if (offset === next.length) {
+    return { text: next + append, stale: false, changed: true };
+  }
+  if (
+    offset >= 0
+    && offset + append.length <= next.length
+    && next.slice(offset, offset + append.length) === append
+  ) {
+    return { text: current, stale: false, changed: false };
+  }
+  return { text: current, stale: true, changed: false };
+}
+
+function outputTextOf(value: Record<string, unknown>): string | null {
+  const output = asRecord(value.output);
+  if (!output || typeof output.text !== 'string') return null;
+  return output.text;
 }
 
 export function conversationTopic(cid: string): string {
@@ -101,6 +143,8 @@ export type EntityStore = {
   applyUpsert(event: UpsertEvent): void;
   applyRemove(event: RemoveEvent): void;
   applyTextDelta(event: TextDeltaEvent): void;
+  applyToolDelta(event: ToolDeltaEvent): void;
+  toolLiveText(toolId: string): string | undefined;
   conversation(cid: string): ConversationView | undefined;
   items(cid: string): ThreadItem[];
   tool(toolId: string): ToolCall | undefined;
@@ -137,6 +181,7 @@ export function createEntityStore(): EntityStore {
   const missing = new Set<string>();
   const seenTopics = new Set<string>();
   const staleItems = new Set<string>();
+  const toolLives = new Map<string, ToolLive>();
   const listeners = new Set<Listener>();
   let version = 0;
 
@@ -150,6 +195,7 @@ export function createEntityStore(): EntityStore {
     const idKey = entityIdKey(rec.entity, rec.id);
     if (byEntityId.get(idKey) === rec) byEntityId.delete(idKey);
     if (rec.entity === 'item') staleItems.delete(rec.id);
+    if (rec.entity === 'tool') toolLives.delete(rec.id);
   }
 
   function put(rec: StoredEntity): void {
@@ -159,10 +205,18 @@ export function createEntityStore(): EntityStore {
       prev.value = rec.value;
       byEntityId.set(entityIdKey(rec.entity, rec.id), prev);
       if (rec.entity === 'item') staleItems.delete(rec.id);
+      if (rec.entity === 'tool') {
+        const text = outputTextOf(rec.value);
+        if (text != null) toolLives.set(rec.id, { text, stale: false });
+      }
       return;
     }
     entities.set(key, rec);
     byEntityId.set(entityIdKey(rec.entity, rec.id), rec);
+    if (rec.entity === 'tool') {
+      const text = outputTextOf(rec.value);
+      if (text != null) toolLives.set(rec.id, { text, stale: false });
+    }
   }
 
   function dropTopic(topic: string): void {
@@ -201,6 +255,14 @@ export function createEntityStore(): EntityStore {
       if (rec) return rec;
     }
     return byEntityId.get(entityIdKey('item', itemId));
+  }
+
+  function findTool(topic: string | undefined, toolId: string): StoredEntity | undefined {
+    if (topic) {
+      const rec = get(topic, 'tool', toolId);
+      if (rec) return rec;
+    }
+    return byEntityId.get(entityIdKey('tool', toolId));
   }
 
   return {
@@ -262,6 +324,32 @@ export function createEntityStore(): EntityStore {
       }
       staleItems.add(rec.id);
       notify();
+    },
+
+    applyToolDelta(event) {
+      const toolId = event.toolId;
+      if (!toolId) return;
+      let live = toolLives.get(toolId);
+      if (!live) {
+        const rec = findTool(event.topic, toolId);
+        const seed = rec ? outputTextOf(rec.value) : null;
+        live = { text: seed ?? '', stale: false };
+        toolLives.set(toolId, live);
+      }
+      if (live.stale) return;
+      const result = applyToolDeltaText(live.text, event);
+      if (result.stale) {
+        live.stale = true;
+        notify();
+        return;
+      }
+      if (!result.changed) return;
+      live.text = result.text;
+      notify();
+    },
+
+    toolLiveText(toolId) {
+      return toolLives.get(toolId)?.text;
     },
 
     conversation(cid) {

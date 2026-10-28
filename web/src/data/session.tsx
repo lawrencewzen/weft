@@ -56,6 +56,7 @@ export function SessionProvider({
     onUpsert: (event) => store.applyUpsert(event),
     onRemove: (event) => store.applyRemove(event),
     onTextDelta: (event) => store.applyTextDelta(event),
+    onToolDelta: (event) => store.applyToolDelta(event),
   }), [store]);
 
   const setExtraConversationIds = useCallback((ids: string[] | ((prev: string[]) => string[])) => {

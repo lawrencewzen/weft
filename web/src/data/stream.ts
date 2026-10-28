@@ -4,6 +4,7 @@ export type SnapshotEvent = components['schemas']['SnapshotEvent'];
 export type UpsertEvent = components['schemas']['UpsertEvent'];
 export type RemoveEvent = components['schemas']['RemoveEvent'];
 export type TextDeltaEvent = components['schemas']['TextDeltaEvent'];
+export type ToolDeltaEvent = components['schemas']['ToolDeltaEvent'];
 export type HeartbeatEvent = components['schemas']['HeartbeatEvent'];
 
 export type StreamStatus = 'connecting' | 'connected' | 'reconnecting';
@@ -14,6 +15,7 @@ export type StreamListeners = {
   onUpsert?: (event: UpsertEvent) => void;
   onRemove?: (event: RemoveEvent) => void;
   onTextDelta?: (event: TextDeltaEvent) => void;
+  onToolDelta?: (event: ToolDeltaEvent) => void;
   onHeartbeat?: (event: HeartbeatEvent) => void;
 };
 
@@ -86,6 +88,11 @@ export function createStream(listeners: StreamListeners = {}): EventStream {
       if (gen !== generation) return;
       const data = parseData<TextDeltaEvent>(ev.data);
       if (data) listeners.onTextDelta?.(data);
+    });
+    es.addEventListener('tool.delta', (ev: MessageEvent<string>) => {
+      if (gen !== generation) return;
+      const data = parseData<ToolDeltaEvent>(ev.data);
+      if (data) listeners.onToolDelta?.(data);
     });
     es.addEventListener('heartbeat', (ev: MessageEvent<string>) => {
       if (gen !== generation) return;

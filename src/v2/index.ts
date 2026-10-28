@@ -1133,7 +1133,22 @@ export function createV2Handler(opts: {
         sendV2(res, pathname, method, 404, { error: 'not found' } satisfies V2Error);
         return true;
       }
-      const tool = findPresentedTool(loaded.presented, toolId);
+      let tool = findPresentedTool(loaded.presented, toolId);
+      if (!tool && opts.loadSubagent) {
+        const agents = Array.isArray(loaded.subagents) ? loaded.subagents : [];
+        for (const agent of agents) {
+          const agentId = agent?.id == null ? '' : String(agent.id);
+          if (!agentId) continue;
+          try {
+            const child = await opts.loadSubagent(id, agentId);
+            tool = findPresentedTool({ messages: child?.messages }, toolId);
+          } catch (err) {
+            console.error(`WEFT_V2_TOOL_OUTPUT ${id} ${agentId}`, err);
+            continue;
+          }
+          if (tool) break;
+        }
+      }
       if (!tool) {
         sendV2(res, pathname, method, 404, { error: 'not found' } satisfies V2Error);
         return true;

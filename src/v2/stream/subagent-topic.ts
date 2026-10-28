@@ -14,9 +14,20 @@ import {
   normalizeLang,
   type Entity,
   type EventHub,
+  type PublishEvent,
   type SnapshotPayload,
 } from './hub.ts';
 import type { StuckWatch } from './stuck-watch.ts';
+import {
+  applyKernelToolDelta,
+  clearToolLiveTimer,
+  createToolLive,
+  deltaFromLive,
+  markPublished,
+  overlayToolLives,
+  TOOL_DELTA_MS,
+  type ToolLive,
+} from './tool-delta.ts';
 
 export const SUBAGENT_PREFIX = 'subagent:';
 
@@ -47,6 +58,7 @@ type TopicKey = string;
 type TopicState = {
   lastZh: Map<EntityKey, object>;
   lastEn: Map<EntityKey, object>;
+  toolLives: Map<string, ToolLive>;
   pathCache: Map<string, { value: boolean; at: number }>;
   pending: KernelEvent[];
   timer: ReturnType<typeof setTimeout> | null;
@@ -86,6 +98,11 @@ function parseKey(key: EntityKey): { entity: string; id: string } {
 
 function jsonEq(a: unknown, b: unknown): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  if (value && typeof value === 'object' && !Array.isArray(value)) return value as Record<string, unknown>;
+  return {};
 }
 
 export function entitiesFromSubagentSnapshot(snap: SubagentSnapshot): Entity[] {
@@ -143,6 +160,7 @@ export function attachSubagentTopic(hub: EventHub, opts: SubagentTopicOpts = {})
       state = {
         lastZh: new Map(),
         lastEn: new Map(),
+        toolLives: new Map(),
         pathCache: new Map(),
         pending: [],
         timer: null,
@@ -162,7 +180,10 @@ export function attachSubagentTopic(hub: EventHub, opts: SubagentTopicOpts = {})
 
   function dropState(key: TopicKey): void {
     const state = states.get(key);
-    if (state) clearTimer(state);
+    if (state) {
+      clearTimer(state);
+      for (const live of state.toolLives.values()) clearToolLiveTimer(live);
+    }
     states.delete(key);
   }
 
@@ -191,14 +212,15 @@ export function attachSubagentTopic(hub: EventHub, opts: SubagentTopicOpts = {})
     return loaded;
   }
 
-  function assembleSnapshot(
+  async function assembleSnapshot(
     cid: string,
     agentId: string,
     lang: 'zh' | 'en',
     loaded: LoadedSubagent,
+    overlayTools = false,
   ): Promise<SubagentSnapshot> {
     const workspacePath = loaded.presented?.workspacePath == null ? '' : String(loaded.presented.workspacePath);
-    return subagentSnapshot({
+    const snap = await subagentSnapshot({
       presented: loaded.presented,
       agent: loaded.agent,
       messages: Array.isArray(loaded.messages) ? loaded.messages : [],
@@ -207,6 +229,10 @@ export function attachSubagentTopic(hub: EventHub, opts: SubagentTopicOpts = {})
       stuckAfterMs,
       exists: existsFor(topicKey(cid, agentId), workspacePath),
     });
+    if (!overlayTools) return snap;
+    const state = states.get(topicKey(cid, agentId));
+    if (!state?.toolLives.size) return snap;
+    return { ...snap, tools: overlayToolLives(snap.tools, state.toolLives) };
   }
 
   async function snapshotsFor(
@@ -239,7 +265,7 @@ export function attachSubagentTopic(hub: EventHub, opts: SubagentTopicOpts = {})
     }
     const loaded = await loadTopicSource(parsed.cid, parsed.agentId);
     if (!loaded) return { entities: [], missing: [topic] };
-    const snap = await assembleSnapshot(parsed.cid, parsed.agentId, wantEn ? 'en' : 'zh', loaded);
+    const snap = await assembleSnapshot(parsed.cid, parsed.agentId, wantEn ? 'en' : 'zh', loaded, true);
     return { entities: entitiesFromSubagentSnapshot(snap) };
   }
 
@@ -346,10 +372,113 @@ export function attachSubagentTopic(hub: EventHub, opts: SubagentTopicOpts = {})
     enqueue(cid, first, fn);
   }
 
-  function onKernelEvent(cid: string, ev: KernelEvent): void {
+  function knownTool(state: TopicState, toolId: string): boolean {
+    const key = entityKey('tool', toolId);
+    return state.lastZh.has(key) || state.lastEn.has(key);
+  }
+
+  function ownerOfTool(cid: string, toolId: string): string | null {
+    const agentIds = topicsByCid.get(cid);
+    if (!agentIds) return null;
+    for (const agentId of agentIds) {
+      if (knownTool(stateOf(topicKey(cid, agentId)), toolId)) return agentId;
+    }
+    return null;
+  }
+
+  function seedToolLive(state: TopicState, toolId: string): ToolLive {
+    const existing = state.toolLives.get(toolId);
+    if (existing) return existing;
+    const prev = (state.lastZh.get(entityKey('tool', toolId))
+      ?? state.lastEn.get(entityKey('tool', toolId))) as ToolCall | undefined;
+    const output = prev?.output;
+    const seed = output && typeof output.text === 'string' ? output.text : '';
+    const live = createToolLive(seed);
+    state.toolLives.set(toolId, live);
+    return live;
+  }
+
+  function publishToolDelta(
+    cid: string,
+    agentId: string,
+    payload: PublishEvent & { event: 'tool.delta' },
+  ): void {
+    hub.publish(topicOf(cid, agentId), payload);
+  }
+
+  function flushToolLive(cid: string, agentId: string, toolId: string): void {
+    const state = states.get(topicKey(cid, agentId));
+    if (!state) return;
+    const live = state.toolLives.get(toolId);
+    if (!live) return;
+    clearToolLiveTimer(live);
+    const payload = deltaFromLive(live);
+    if (!payload) return;
+    markPublished(live);
+    if ('set' in payload) {
+      publishToolDelta(cid, agentId, { event: 'tool.delta', toolId, set: payload.set });
+      return;
+    }
+    publishToolDelta(cid, agentId, {
+      event: 'tool.delta',
+      toolId,
+      offset: payload.offset,
+      append: payload.append,
+      ...(payload.trimStart ? { trimStart: payload.trimStart } : {}),
+    });
+  }
+
+  function scheduleToolFlush(cid: string, agentId: string, toolId: string): void {
+    if (disposed || !kernelUnsubs.has(cid)) return;
+    const state = states.get(topicKey(cid, agentId));
+    const live = state?.toolLives.get(toolId);
+    if (!live || live.timer) return;
+    live.timer = setTimeout(() => {
+      live.timer = null;
+      enqueue(cid, agentId, () => {
+        flushToolLive(cid, agentId, toolId);
+      });
+    }, TOOL_DELTA_MS);
+    live.timer.unref?.();
+  }
+
+  async function handleToolDelta(cid: string, data: Record<string, unknown>): Promise<void> {
+    if (disposed || !kernelUnsubs.has(cid)) return;
+    const agentIds = topicsByCid.get(cid);
+    if (!agentIds?.size) return;
+    for (const agentId of [...agentIds]) await flushPending(cid, agentId);
+    const toolId = typeof data.toolId === 'string' ? data.toolId : '';
+    if (!toolId) return;
+    const agentId = ownerOfTool(cid, toolId);
+    if (!agentId) return;
+    const live = seedToolLive(stateOf(topicKey(cid, agentId)), toolId);
+    applyKernelToolDelta(live, data);
+    if (typeof data.set === 'string') {
+      clearToolLiveTimer(live);
+      markPublished(live);
+      publishToolDelta(cid, agentId, { event: 'tool.delta', toolId, set: live.text });
+      return;
+    }
+    scheduleToolFlush(cid, agentId, toolId);
+  }
+
+  async function processKernelEvent(cid: string, ev: KernelEvent): Promise<void> {
     const agentIds = topicsByCid.get(cid);
     if (!agentIds) return;
-    for (const agentId of agentIds) {
+    const event = String(ev?.event || '');
+    const data = asRecord(ev?.data);
+    if (event === 'tool.delta') {
+      await handleToolDelta(cid, data);
+      return;
+    }
+    if (event === 'tool.end') {
+      const toolId = String(asRecord(data.tool).id || '');
+      if (toolId) {
+        const agentId = ownerOfTool(cid, toolId);
+        if (agentId) flushToolLive(cid, agentId, toolId);
+      }
+    }
+    for (const agentId of [...agentIds]) {
       const state = stateOf(topicKey(cid, agentId));
       state.pending.push(ev);
       if (state.timer) continue;
@@ -359,6 +488,10 @@ export function attachSubagentTopic(hub: EventHub, opts: SubagentTopicOpts = {})
       }, coalesceMs);
       state.timer.unref?.();
     }
+  }
+
+  function onKernelEvent(cid: string, ev: KernelEvent): void {
+    enqueueCid(cid, () => processKernelEvent(cid, ev));
   }
 
   function retainKernel(cid: string): void {
