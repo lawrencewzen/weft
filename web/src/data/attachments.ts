@@ -131,8 +131,119 @@ export function insertFileRef(text: string, relPath: string): string {
 
 export function removeFileRef(text: string, relPath: string): string {
   if (!relPath) return text;
-  const token = `@${relPath}`;
-  return text.split(token).join('').replace(/[ \t]{2,}/g, ' ').replace(/ +\n/g, '\n');
+  const normPath = relPath.replaceAll('\\', '/');
+  const token = `@${normPath}`;
+  if (!text.includes(token)) return text;
+  const cleaned = text
+    .split(token)
+    .join('')
+    .replace(/[ \t]{2,}/g, ' ')
+    .replace(/ +\n/g, '\n')
+    .replace(/^[ \t]+|[ \t]+$/gm, '');
+  if (!cleaned.trim()) return '';
+  return cleaned;
+}
+
+export type AtTrigger = {
+  query: string;
+  atIndex: number;
+  cursorIndex: number;
+};
+
+export function matchAtTrigger(text: string, cursorIndex: number): AtTrigger | null {
+  if (cursorIndex < 1 || cursorIndex > text.length) return null;
+  const beforeCursor = text.slice(0, cursorIndex);
+  const match = /(?:^|\s)@([^\s@]*)$/.exec(beforeCursor);
+  if (!match) return null;
+  const atIndex = match.index + (match[0].startsWith('@') ? 0 : 1);
+  return {
+    query: match[1],
+    atIndex,
+    cursorIndex,
+  };
+}
+
+export function filterAtFiles(files: readonly string[], query: string, limit = 6): string[] {
+  const q = String(query || '').trim().toLowerCase();
+  if (!q) {
+    return files.slice(0, limit);
+  }
+  const result: string[] = [];
+  for (const file of files) {
+    if (file.toLowerCase().includes(q)) {
+      result.push(file);
+      if (result.length >= limit) break;
+    }
+  }
+  return result;
+}
+
+export function splitFilePath(filePath: string): { name: string; dir: string } {
+  const normalized = filePath.replaceAll('\\', '/');
+  const k = normalized.lastIndexOf('/');
+  if (k >= 0) {
+    return {
+      name: normalized.slice(k + 1),
+      dir: normalized.slice(0, k + 1),
+    };
+  }
+  return {
+    name: normalized,
+    dir: '',
+  };
+}
+
+export function applyAtSelection(
+  text: string,
+  filePath: string,
+  trigger: Pick<AtTrigger, 'atIndex' | 'cursorIndex'>,
+): { text: string; nextCursor: number } {
+  const normPath = filePath.replaceAll('\\', '/');
+  const before = text.slice(0, trigger.atIndex);
+  const after = text.slice(trigger.cursorIndex);
+  const inserted = `@${normPath} `;
+  return {
+    text: before + inserted + after,
+    nextCursor: before.length + inserted.length,
+  };
+}
+
+export function isFileRefInText(text: string, filePath: string): boolean {
+  const p = filePath.replaceAll('\\', '/').trim();
+  if (!p) return false;
+  const token = `@${p}`;
+  const normalized = ` ${text.replace(/\s+/g, ' ')} `;
+  return normalized.includes(` ${token} `);
+}
+
+export function stepAtActiveIndex(
+  currentIndex: number,
+  total: number,
+  direction: 'down' | 'up',
+): number {
+  if (total <= 0) return 0;
+  if (direction === 'down') {
+    return (currentIndex + 1) % total;
+  }
+  return (currentIndex - 1 + total) % total;
+}
+
+export function shouldResetAtActiveIndex(
+  prevQuery: string | null,
+  currentQuery: string | null,
+  isOpening: boolean,
+): boolean {
+  if (isOpening) return true;
+  if (currentQuery === null) return false;
+  return prevQuery !== currentQuery;
+}
+
+export function resolveAtSelection(
+  matchedFiles: readonly string[],
+  activeIndex: number,
+): string | null {
+  if (matchedFiles.length === 0) return null;
+  return matchedFiles[activeIndex] ?? matchedFiles[0] ?? null;
 }
 
 export function fromFileUrl(value: string): string | null {
