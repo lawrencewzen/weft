@@ -2,6 +2,7 @@
 // Dialogue state lives in the Harness. This module records the conversation
 // index, maps watchEvents onto the connected SSE clients, and reads diffs
 // back out of tool-result entries.
+import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { readFile, stat } from 'node:fs/promises';
 import { setTimeout as sleep } from 'node:timers/promises';
@@ -395,7 +396,16 @@ export async function openConversationKernel({
   }
 
   async function readWorkspaceText(workspacePath, filePath) {
-    const abs = await resolveInWorkspace(workspacePath, filePath);
+    let abs;
+    try {
+      abs = await resolveInWorkspace(workspacePath, filePath);
+    } catch (err) {
+      if (err?.code === 'E_SANDBOX' && (path.isAbsolute(filePath) || /^[A-Za-z]:[\\/]/.test(filePath))) {
+        abs = filePath;
+      } else {
+        throw err;
+      }
+    }
     try {
       const info = await stat(abs);
       if (info.size > DETAIL_CAP) {
@@ -406,6 +416,9 @@ export async function openConversationKernel({
       return { missing: false, text: await readFile(abs, 'utf8') };
     } catch (err) {
       if (err.code === 'ENOENT') return { missing: true, text: '' };
+      if (abs === filePath) {
+        return { missing: false, text: undefined };
+      }
       throw err;
     }
   }
@@ -421,7 +434,15 @@ export async function openConversationKernel({
   }
 
   async function diskText(workspacePath, filePath, baseline) {
-    let read = await readWorkspaceText(workspacePath, filePath);
+    let read;
+    try {
+      read = await readWorkspaceText(workspacePath, filePath);
+    } catch (err) {
+      if (err?.code === 'E_TOO_LARGE') throw err;
+      if (baseline) return undefined;
+      throw err;
+    }
+    if (read.text === undefined) return undefined;
     if (!read.missing || !baseline || !storedSnapshotDiffers(baseline)) return read.text;
     // Windows (and AV) can briefly report ENOENT after write/edit returns.
     // Retry only for a missing file whose tool snapshot still has a diff; an
@@ -430,7 +451,11 @@ export async function openConversationKernel({
     const delayMs = process.platform === 'win32' ? 25 : 10;
     for (let i = 0; i < retries; i++) {
       await sleep(delayMs);
-      read = await readWorkspaceText(workspacePath, filePath);
+      try {
+        read = await readWorkspaceText(workspacePath, filePath);
+      } catch {
+        return undefined;
+      }
       if (!read.missing) return read.text;
     }
     return read.text;
@@ -594,23 +619,24 @@ export async function openConversationKernel({
       return rows;
     },
     async diff(cid, filePath) {
-      const baseline = (await baselinesFor(cid)).find((row) => row.path === filePath);
+      const want = String(filePath ?? '').replaceAll('\\', '/');
+      const baseline = (await baselinesFor(cid)).find((row) => String(row.path ?? '').replaceAll('\\', '/') === want);
       if (!baseline) return { status: 404, body: { error: 'no diff' } };
-      if (baseline.oversized) return { status: 200, body: { path: filePath, error: '文件过大' } };
+      if (baseline.oversized) return { status: 200, body: { path: baseline.path, error: '文件过大' } };
       const workspacePath = await workspacePathFor(cid);
       try {
-        const disk = await diskText(workspacePath, filePath, baseline);
+        const disk = await diskText(workspacePath, baseline.path, baseline);
         return {
           status: 200,
           body: liveDiff({
-            path: filePath,
+            path: baseline.path,
             before: baseline.before ?? '',
             storedAfter: baseline.after ?? '',
             diskText: disk,
           }),
         };
       } catch (err) {
-        if (err.code === 'E_TOO_LARGE') return { status: 200, body: { path: filePath, error: '文件过大' } };
+        if (err.code === 'E_TOO_LARGE') return { status: 200, body: { path: baseline.path, error: '文件过大' } };
         throw err;
       }
     },

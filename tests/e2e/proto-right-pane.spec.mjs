@@ -13,10 +13,10 @@ test('diff, file tree, preview, save and the 409 conflict demo', async ({ page }
   const state = await openProto(page);
 
   // Seeded changes (main Agent and sub-agent), sorted by path.
-  await expect(page.getByTestId('next-change-row')).toHaveCount(4);
+  await expect(page.getByTestId('next-change-row')).toHaveCount(8);
   await expect(page.getByTestId('next-change-row').first()).toHaveAttribute(
     'data-path',
-    'web/src/components/ChangesPane.tsx',
+    '/Users/lawrence/.config/weft/notes.md',
   );
 
   const changesPaneRow = page.locator('[data-testid=next-change-row][data-path="web/src/components/ChangesPane.tsx"]');
@@ -50,7 +50,7 @@ test('diff, file tree, preview, save and the 409 conflict demo', async ({ page }
   }).toBe(true);
 
   // Changes default to expanded (<= 8 files, <= 300 lines) with diff lines visible.
-  await expect(page.getByTestId('next-diff')).toHaveCount(4);
+  await expect(page.getByTestId('next-diff')).toHaveCount(8);
   await expect(page.getByTestId('next-diff-line').first()).toBeVisible();
   expect(await testRow.locator('[data-testid=next-diff-line][data-op=add]').count()).toBeGreaterThan(0);
   const added = testRow.locator('[data-testid=next-diff-line][data-op=add]').first();
@@ -80,7 +80,7 @@ test('diff, file tree, preview, save and the 409 conflict demo', async ({ page }
   expect([...perPath.values()].every((count) => count === 1)).toBe(true);
 
   // The thread change-summary opens the same file in the right pane without a new fetch.
-  await expect(page.getByTestId('next-change-summary-row')).toHaveCount(4);
+  await expect(page.getByTestId('next-change-summary-row')).toHaveCount(5);
   await page.locator('[data-testid=next-change-summary-row][data-path="web/src/data/store.ts"]').click();
   await expect(
     page.locator('[data-testid=next-change-row][data-path="web/src/data/store.ts"]').getByTestId('next-diff'),
@@ -103,11 +103,14 @@ test('diff, file tree, preview, save and the 409 conflict demo', async ({ page }
     .filter((row) => row.method === 'PUT' && row.url.includes('/files')).length);
   expect(savedVersion).toBe(1);
 
-  // The saved file shows up in the changes tab with a real line diff (expanded by default).
+  // The saved file shows up in the changes tab with a real line diff (collapsed by default when > 8 files).
   await page.getByTestId('next-right-tab-changes').click();
   const readmeChange = page.locator('[data-testid=next-change-row][data-path="README.md"]');
   await expect(readmeChange).toBeVisible();
   await expect(readmeChange.getByTestId('next-change-by')).toHaveCount(0);
+  await expect(readmeChange).not.toHaveClass(/is-open/); // 9 个文件，默认收起
+  await readmeChange.locator('.changed-file-pill').click();
+  await expect(readmeChange).toHaveClass(/is-open/);
   await expect(readmeChange.getByTestId('next-diff-line').first()).toBeVisible();
   await expect.poll(async () => readmeChange.locator('[data-op=add]').count()).toBeGreaterThan(0);
   await page.getByTestId('next-right-tab-files').click();

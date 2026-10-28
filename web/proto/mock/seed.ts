@@ -382,8 +382,12 @@ function richConversation(now: number, threads: Map<string, MockSubThread>): Moc
     changes: [
       { path: 'web/src/data/store.ts', added: 8, removed: 3, error: null, by: { kind: 'main' } },
       { path: 'web/src/data/store.test.ts', added: 12, removed: 0, error: null, by: { kind: 'subagent', agentId: 'c-rich:sub:sa-2', name: 'sub-delta-test' } },
-      { path: 'web/src/data/diffView.ts', added: 4, removed: 1, error: null, by: { kind: 'main' } },
-      { path: 'web/src/components/ChangesPane.tsx', added: 6, removed: 2, error: null, by: { kind: 'subagent', agentId: 'c-rich:sub:sa-1', name: 'sub-load-order' } },
+      { path: 'web/src/data/diffView.ts', added: 16, removed: 4, error: null, by: { kind: 'main' } },
+      { path: 'web/src/components/ChangesPane.tsx', added: 24, removed: 6, error: null, by: { kind: 'subagent', agentId: 'c-rich:sub:sa-1', name: 'sub-load-order' } },
+      { path: 'web/src/components/Thread.tsx', added: 6, removed: 2, error: null, by: { kind: 'main' } },
+      { path: 'web/src/styles/app.css', added: 4, removed: 1, error: null, by: { kind: 'main' } },
+      { path: 'web/src/data/pendingSend.ts', added: 2, removed: 1, error: null, by: { kind: 'main' } },
+      { path: '/Users/lawrence/.config/weft/notes.md', added: 1, removed: 1, error: null, by: { kind: 'main' } },
     ],
     diffs: {
       'web/src/data/store.ts': mockDiff('web/src/data/store.ts', [
@@ -471,6 +475,57 @@ function richConversation(now: number, threads: Map<string, MockSubThread>): Moc
             { op: 'del', text: '    <div className="changes-pane">' },
             { op: 'add', text: '    <div className="changes-pane" data-testid="next-changes-pane">' },
             { op: 'add', text: '      {/* by: 子 · sub-load-order */}' },
+          ],
+        },
+      ]),
+      'web/src/components/Thread.tsx': mockDiff('web/src/components/Thread.tsx', [
+        {
+          oldStart: 240,
+          newStart: 240,
+          lines: [
+            { op: 'ctx', text: '        {!empty && changes.length ? (' },
+            { op: 'del', text: '          <ChangeSummary changes={changes} lang={lang} />' },
+            { op: 'del', text: '        ) : null}' },
+            { op: 'add', text: '          <ChangeSummary changes={changes} lang={lang} />' },
+            { op: 'add', text: '        ) : null}' },
+            { op: 'add', text: '        {/* redesigned summary */}' },
+            { op: 'add', text: '        {/* 10-28 */}' },
+            { op: 'add', text: '        {/* scrollable */}' },
+            { op: 'add', text: '        {/* tag */}' },
+          ],
+        },
+      ]),
+      'web/src/styles/app.css': mockDiff('web/src/styles/app.css', [
+        {
+          oldStart: 840,
+          newStart: 840,
+          lines: [
+            { op: 'del', text: '.change-summary { padding: 10px; }' },
+            { op: 'add', text: '.change-summary { border-radius: 12px; }' },
+            { op: 'add', text: '.change-summary-head { height: 40px; }' },
+            { op: 'add', text: '.change-summary-row { height: 30px; }' },
+            { op: 'add', text: '.change-summary-more { height: 32px; }' },
+          ],
+        },
+      ]),
+      'web/src/data/pendingSend.ts': mockDiff('web/src/data/pendingSend.ts', [
+        {
+          oldStart: 1,
+          newStart: 1,
+          lines: [
+            { op: 'del', text: 'export const PENDING_TIMEOUT = 1000;' },
+            { op: 'add', text: 'export const PENDING_TIMEOUT = 2000;' },
+            { op: 'add', text: '// updated timeout' },
+          ],
+        },
+      ]),
+      '/Users/lawrence/.config/weft/notes.md': mockDiff('/Users/lawrence/.config/weft/notes.md', [
+        {
+          oldStart: 1,
+          newStart: 1,
+          lines: [
+            { op: 'del', text: '# old user notes' },
+            { op: 'add', text: '# updated user notes' },
           ],
         },
       ]),

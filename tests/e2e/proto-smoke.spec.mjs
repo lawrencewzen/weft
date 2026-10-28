@@ -68,9 +68,12 @@ test('prototype runs from file:// with mock data, no network and no console erro
   await expect(page.locator('.task-list-item.is-done')).toHaveCount(2);
   await expect(page.locator('.md-path').first()).toBeVisible();
   await expect(page.getByTestId('next-change-summary')).toBeVisible();
-  await expect(page.getByTestId('next-change-summary-row')).toHaveCount(4);
-  await expect(page.getByTestId('next-change-summary')).toContainText('web/src/data/store.ts');
-  await expect(page.getByTestId('next-change-summary')).toContainText('+8');
+  await expect(page.getByTestId('next-change-summary-row')).toHaveCount(5);
+  const storeSummaryRow = page.locator('[data-testid=next-change-summary-row][data-path="web/src/data/store.ts"]');
+  await expect(storeSummaryRow).toBeVisible();
+  await expect(storeSummaryRow.locator('.change-summary-row-name')).toHaveText('store.ts');
+  await expect(storeSummaryRow.locator('.change-summary-row-dir')).toContainText('web/src/data/');
+  await expect(storeSummaryRow.locator('.change-summary-row-add')).toHaveText('+8');
   // Tool groups start collapsed; expanding shows read/search/bash/edit rows.
   await expect(page.getByTestId('next-tool-row').first()).not.toBeVisible();
   await page.getByTestId('next-tool-group-summary').first().click();
