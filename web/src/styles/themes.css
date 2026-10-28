@@ -67,4 +67,6 @@
   --sa-check: color-mix(in oklch, var(--ok) 70%, var(--bd3));
   --sa-run: var(--run);
   --sa-stuck: var(--wait);
+  --run-ink: var(--ok-ink);
+  --wait-ink: var(--warn-ink);
 }

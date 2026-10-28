@@ -90,10 +90,6 @@ a:hover { text-decoration: underline; }
   from { background: color-mix(in oklch, var(--ok) 18%, transparent); }
   to { background: transparent; }
 }
-@keyframes sa-action-in {
-  from { opacity: 0; transform: translateY(4px); }
-  to { opacity: 1; transform: none; }
-}
 @keyframes sa-arc-spin { to { transform: rotate(360deg); } }
 
 body { font-family: var(--font); font-size: inherit; line-height: 1.6; background: var(--bg); color: var(--ink); }
@@ -213,22 +209,24 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.6; backgroun
 .ws-chev path { fill: none; stroke: var(--faint); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
 .ws-tree-node.is-open > .ws-node-header .ws-chev { transform: rotate(90deg); }
 .ws-node-title { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.ws-node-count { font-size: 11px; font-weight: 400; color: var(--faint); white-space: nowrap; }
+.ws-node-count { font-size: 11px; font-weight: 400; color: var(--faint); white-space: nowrap; opacity: 0; transition: opacity .12s; }
 .ws-node-count.is-running { color: var(--run-ink); }
 .ws-node-header .btn-icon-xs { font-weight: 400; }
 .ws-node-more { color: var(--faint); }
-.ws-node-header .ws-node-more, .ws-node-header .ws-node-add { opacity: 0; }
+.ws-node-header .ws-node-more, .ws-node-header .ws-node-add { opacity: 0; transition: opacity .12s; }
+.ws-node-header:hover .ws-node-count,
 .ws-node-header:hover .ws-node-more, .ws-node-header:hover .ws-node-add,
+.ws-node-header:focus-within .ws-node-count,
 .ws-node-header:focus-within .ws-node-more, .ws-node-header:focus-within .ws-node-add,
 .ws-tree-node.ws-active > .ws-node-header .ws-node-add { opacity: 1; }
 .ws-node-children { display: flex; flex-direction: column; gap: 1px; }
 .ws-tree-node:not(.is-open) > .ws-node-children { display: none; }
 
 .conv-node-header, .draft-row {
-  display: flex; align-items: center; gap: 8px; height: 30px; border-radius: 7px; cursor: pointer; font-size: 13px;
+  display: flex; align-items: center; gap: 6px; height: 30px; border-radius: 7px; cursor: pointer; font-size: 13px;
   min-width: 0; overflow: hidden; flex-wrap: nowrap;
 }
-.conv-node-header { padding: 0 8px 0 10px; }
+.conv-node-header { padding: 0 8px 0 26px; }
 .draft-row { padding: 0 8px 0 24px; }
 .conv-node-header:hover, .draft-row:hover { background: var(--hover); }
 .conv-tree-node.conv-active > .conv-node-header, .draft-row.is-active { background: var(--sel); }
@@ -241,9 +239,9 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.6; backgroun
 .conv-status-dot {
   width: 6px; height: 6px; border-radius: 50%;
 }
-.conv-status-dot.is-running { background: var(--run); animation: conv-dot-pulse 1.8s ease-out infinite; }
-.conv-status-dot.is-waiting { background: var(--wait); }
-.conv-status-dot.is-stuck { background: var(--wait); }
+.conv-status-dot.is-running { background: var(--sa-run); animation: conv-dot-pulse 1.8s ease-out infinite; }
+.conv-status-dot.is-waiting { background: var(--sa-stuck); }
+.conv-status-dot.is-stuck { background: var(--sa-stuck); }
 .conv-status-dot.is-failed { background: var(--fail); }
 .conv-node-title { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .conv-node-meta { font-size: 11px; color: var(--faint); white-space: nowrap; flex-shrink: 0; }
@@ -251,27 +249,61 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.6; backgroun
 .conv-node-meta.is-waiting { color: var(--wait-ink); }
 .conv-node-meta.is-failed { color: var(--fail); }
 .conv-tree-node { min-width: 0; overflow: hidden; }
-.subagent-chip {
-  display: inline-flex; align-items: center; gap: 3px; height: 18px; padding: 0 5px; margin: 0;
-  border: none; border-radius: 5px; background: transparent; color: var(--mute);
-  font-size: 11px; line-height: 1; cursor: pointer; flex-shrink: 0; white-space: nowrap;
+
+@keyframes saOrbit {
+  to { transform: rotate(360deg); }
 }
-.subagent-chip:hover { background: var(--bd2); }
-.subagent-chip.is-live { color: var(--run-ink); }
-.subagent-chip-icon { width: 11px; height: 11px; flex-shrink: 0; display: block; }
-.subagent-chip-count { font-variant-numeric: tabular-nums; }
+
+.subagent-chip-cluster {
+  display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0;
+}
+.subagent-orbit-wrap {
+  display: inline-flex; align-items: center; gap: 5px; height: 20px;
+  cursor: default; flex-shrink: 0;
+}
+.subagent-orbit-stage {
+  position: relative; width: 18px; height: 18px; display: block; flex-shrink: 0;
+}
+.subagent-orbit-core {
+  position: absolute; left: 7px; top: 7px; width: 4px; height: 4px; border-radius: 50%;
+  background: #8fae9b; transition: background .6s ease;
+}
+.subagent-orbit-ring {
+  position: absolute; inset: 0;
+  animation-name: saOrbit;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+.subagent-orbit-dot {
+  position: absolute; left: 7.5px; top: 0; width: 3px; height: 3px; border-radius: 50%;
+  transition: background .7s ease, opacity .7s ease;
+}
+.subagent-chip-count {
+  font-size: 11px; font-variant-numeric: tabular-nums; transition: color .6s ease;
+}
+.subagent-toggle-btn {
+  width: 20px; height: 20px; margin: -2px -4px -2px -2px; padding: 0;
+  border: none; background: transparent; border-radius: 5px;
+  display: inline-flex; align-items: center; justify-content: center;
+  cursor: pointer; flex-shrink: 0;
+}
+.subagent-toggle-btn:hover { background: var(--bd2); }
+.subagent-toggle-icon {
+  width: 11px; height: 11px; transition: transform .3s cubic-bezier(.3,.8,.3,1); display: block;
+}
+
 .subagent-tree-wrap {
   display: grid; grid-template-rows: 0fr; min-width: 0; overflow: hidden;
-  transition: grid-template-rows .45s ease;
+  transition: grid-template-rows .45s cubic-bezier(.3,.8,.3,1);
 }
 .subagent-tree-wrap.is-open { grid-template-rows: 1fr; }
 .subagent-tree-clip { overflow: hidden; min-height: 0; min-width: 0; }
 .subagent-tree {
   --subagent-tree-line: var(--bd2);
-  --subagent-tree-gutter: 9px;
-  --subagent-tree-mid: 13px;
+  --subagent-tree-gutter: 13px;
+  --subagent-tree-mid: 14px;
   position: relative; display: flex; flex-direction: column; gap: 0; min-width: 0;
-  overflow: visible; padding: 2px 0 0 16px;
+  overflow: visible; padding: 2px 0 0 32px;
 }
 .subagent-tree-loading { padding: 4px 8px 4px 12px; font-size: 12px; line-height: 1.4; color: var(--faint); }
 .subagent-tree-row-shell {
@@ -287,7 +319,7 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.6; backgroun
   background: var(--subagent-tree-line); overflow: visible; border-radius: 0;
 }
 .subagent-tree-stem {
-  position: absolute; left: 16px; top: 0; width: 1px; height: 2px;
+  position: absolute; left: 32px; top: 0; width: 1px; height: 2px;
 }
 .subagent-tree-v, .subagent-tree-h {
   position: absolute; left: 0;
@@ -304,15 +336,34 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.6; backgroun
 .subagent-tree-row {
   position: relative; display: flex; flex-direction: column; justify-content: center; align-items: stretch;
   gap: 0; min-width: 0; max-width: 100%; overflow: hidden;
-  min-height: 26px; padding: 3px 8px 3px 22px; border-radius: 6px; font-size: 12.5px; line-height: 1.4;
+  height: 28px; min-height: 28px; margin-left: 16px; padding: 0 8px 0 6px; border-radius: 6px; font-size: 12.5px; line-height: 1.4;
   color: var(--ink3); cursor: pointer; background: transparent;
-  transition: background-color .45s ease, color .45s ease;
+  transition: background-color .12s ease, color .12s ease;
 }
-.subagent-tree-row[data-visual="done"] { color: var(--mute); }
+.subagent-tree-row[data-visual="done"], .subagent-tree-row.done { color: var(--mute); }
 .subagent-tree-row-shell.is-entering .subagent-tree-row { animation: subagent-row-enter .6s ease; }
 .subagent-tree-row.is-just-ended { animation: subagent-row-ended 1.6s ease; }
-.subagent-tree-row:hover { background: var(--hover); }
-.subagent-tree-row.is-active { background: var(--sel); color: var(--ink); }
+.subagent-tree-row:hover { background: var(--hover-a); }
+.subagent-tree-row.is-active, .subagent-tree-row.on { background: transparent; color: var(--ink); font-weight: 500; }
+
+/* Bottom archived block */
+.sidebar-archived-section {
+  flex-shrink: 0; border-top: 1px solid var(--hover); padding: 6px 8px;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.sidebar-archived-header {
+  display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 8px;
+  border-radius: 7px; cursor: pointer; font-size: 13px; color: var(--mute);
+}
+.sidebar-archived-header:hover { background: var(--hover); }
+.sidebar-archived-title { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sidebar-archived-count { font-size: 11px; color: var(--faint); white-space: nowrap; }
+.sidebar-archived-list {
+  max-height: 180px; overflow-y: auto; overflow-x: hidden; display: flex; flex-direction: column; gap: 2px;
+}
+.sidebar-archived-row {
+  color: var(--mute);
+}
 .subagent-status-icon {
   width: 12px; height: 12px; flex-shrink: 0; display: block; overflow: visible;
 }
@@ -354,23 +405,6 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.6; backgroun
 .subagent-tree-line { display: flex; align-items: center; gap: 7px; min-width: 0; }
 .subagent-tree-summary {
   flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-.subagent-tree-time {
-  flex-shrink: 0; font-family: var(--mono); font-size: 11px; color: var(--mute); white-space: nowrap;
-  transition: color .6s ease;
-}
-.subagent-tree-time:empty { display: none; }
-.subagent-tree-time.is-idle { color: var(--wait-ink); }
-.subagent-tree-action-slot {
-  display: grid; grid-template-rows: 0fr;
-  transition: grid-template-rows .55s ease;
-}
-.subagent-tree-action-slot.is-open { grid-template-rows: 1fr; }
-.subagent-tree-action-clip { overflow: hidden; min-height: 0; }
-.subagent-tree-action {
-  font-size: 11.5px; color: var(--mute); line-height: 1.4; padding-left: 19px;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  animation: sa-action-in .4s ease;
 }
 .subagent-back {
   flex-shrink: 0; border: none; background: none; padding: 0;
@@ -542,12 +576,10 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.6; backgroun
   .sa-arc,
   .subagent-tree-row-shell.is-entering .subagent-tree-row-grow,
   .subagent-tree-row-shell.is-entering .subagent-tree-row,
-  .subagent-tree-row.is-just-ended,
-  .subagent-tree-action {
+  .subagent-tree-row.is-just-ended {
     animation: none !important;
   }
   .subagent-tree-wrap,
-  .subagent-tree-action-slot,
   .sa-check,
   .sa-stop,
   .sa-fail {

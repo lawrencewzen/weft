@@ -125,10 +125,8 @@ test('spawning a sub-agent shows a sidebar row and chip; running time ticks', as
     await expect(convRow(page, conv.id).getByTestId('next-subagent-chip')).toBeVisible();
     await expect(convRow(page, conv.id).getByTestId('next-subagent-chip')).toHaveClass(/is-live/);
     await expect(row).toHaveAttribute('data-status', /running|waiting|stuck/);
-    const time = row.getByTestId('next-subagent-time');
-    await expect(time).toHaveText(/\d{2}:\d{2}/, { timeout: 10000 });
-    const first = (await time.textContent() || '').trim();
-    await expect.poll(async () => (await time.textContent() || '').trim(), { timeout: 4000 }).not.toBe(first);
+    await expect(row.getByTestId('next-subagent-time')).toHaveCount(0);
+    await expect(row.getByTestId('next-subagent-action')).toHaveCount(0);
     expect(csp, 'page console has no CSP errors').toEqual([]);
   } finally {
     await srv.kill();
@@ -156,8 +154,8 @@ test('short WEFT_SUBAGENT_STUCK_MS turns the row stuck with idle time without re
     await sendNext(page, '请派子代理');
     const row = await waitSubagentRow(page, conv.id);
     await expect(row).toHaveAttribute('data-status', 'stuck', { timeout: 20000 });
-    await expect(row.getByTestId('next-subagent-time')).toContainText('静默');
-    await expect(row.getByTestId('next-subagent-time')).toHaveClass(/is-idle/);
+    await expect(row.getByTestId('next-subagent-time')).toHaveCount(0);
+    await expect(row.getByTestId('next-subagent-action')).toHaveCount(0);
   } finally {
     await srv.kill();
   }
@@ -197,12 +195,18 @@ test('other conversation chip expands by subscribing and collapses by unsubscrib
       expect.arrayContaining([`conversation:${aId}`, `conversation:${bId}`]),
     );
 
-    await chipB.click();
+    // Clicking orbit does not toggle
+    await chipB.getByTestId('next-subagent-orbit').click();
+    await expect(chipB).toHaveAttribute('aria-expanded', 'true');
+
+    // Clicking toggle chevron toggles collapse/expand
+    const toggleB = chipB.getByTestId('next-subagent-toggle');
+    await toggleB.click();
     await expect(chipB).toHaveAttribute('aria-expanded', 'false');
     await expect.poll(async () => lastTopics(page), { timeout: 10000 }).not.toContain(`conversation:${bId}`);
     await expect.poll(async () => lastTopics(page)).toContain(`conversation:${aId}`);
 
-    await chipB.click();
+    await toggleB.click();
     await expect(chipB).toHaveAttribute('aria-expanded', 'true');
     await expect(treeOf(page, bId).getByTestId('next-subagent-row')).toHaveCount(1, { timeout: 15000 });
     await expect.poll(async () => lastTopics(page), { timeout: 10000 }).toEqual(
@@ -335,9 +339,10 @@ test('expanding conversation A then opening B leaves A expanded', async ({ page 
     await waitSubagentRow(page, aId);
     const chipA = convRow(page, aId).getByTestId('next-subagent-chip');
     await expect(chipA).toHaveAttribute('aria-expanded', 'true');
-    await chipA.click();
+    const toggleA = chipA.getByTestId('next-subagent-toggle');
+    await toggleA.click();
     await expect(chipA).toHaveAttribute('aria-expanded', 'false');
-    await chipA.click();
+    await toggleA.click();
     await expect(chipA).toHaveAttribute('aria-expanded', 'true');
 
     await convRow(page, bId).click();
@@ -391,7 +396,7 @@ test('finished sub-agent trees start closed, show a check, and use the name when
     await expect(chip).toHaveAttribute('aria-expanded', 'false');
     await expect(treeOf(page, conv.id)).not.toHaveClass(/is-open/);
 
-    await chip.click();
+    await chip.getByTestId('next-subagent-toggle').click();
     await expect(chip).toHaveAttribute('aria-expanded', 'true');
     const doneRow = treeOf(page, conv.id).getByTestId('next-subagent-row').first();
     await expect(doneRow).toBeVisible();
@@ -470,8 +475,8 @@ test('opening a sub-agent keeps the parent lightweight; tree rails are unclipped
     expect(lastV.y + lastV.height).toBeGreaterThanOrEqual(lastRow.y + 11);
     expect(lastV.y + lastV.height).toBeLessThan(lastRow.y + lastRow.height);
     expect(Math.abs((firstV.y + firstV.height) - lastV.y)).toBeLessThanOrEqual(1.5);
-    expect(firstH.width).toBeGreaterThanOrEqual(8);
-    expect(firstH.width).toBeLessThanOrEqual(10);
+    expect(firstH.width).toBeGreaterThanOrEqual(12);
+    expect(firstH.width).toBeLessThanOrEqual(14);
 
     await rows.nth(1).click();
     await expect(page).toHaveURL(new RegExp(`/c/${conv.id}/a/`));

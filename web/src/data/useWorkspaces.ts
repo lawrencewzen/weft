@@ -1,6 +1,7 @@
 import { useMemo, useSyncExternalStore } from 'react';
 import { useSession } from './session';
 import {
+  archivedConversations,
   groupWorkspaces,
   latestConversation,
   type WorkspaceGroup,
@@ -11,6 +12,7 @@ export type WorkspacesState = {
   workspaces: Workspace[];
   conversations: ConversationSummary[];
   groups: WorkspaceGroup[];
+  archived: ConversationSummary[];
   latest: ConversationSummary | undefined;
   ready: boolean;
   status: ReturnType<typeof useSession>['status'];
@@ -26,6 +28,10 @@ export function useWorkspaces(): WorkspacesState {
     () => groupWorkspaces(workspaces, conversations),
     [workspaces, conversations],
   );
+  const archived = useMemo(
+    () => archivedConversations(conversations),
+    [conversations],
+  );
   const latest = useMemo(() => latestConversation(conversations), [conversations]);
-  return { workspaces, conversations, groups, latest, ready, status };
+  return { workspaces, conversations, groups, archived, latest, ready, status };
 }

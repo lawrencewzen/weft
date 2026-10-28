@@ -99,6 +99,7 @@ export type MockConv = {
   changes: Change[];
   diffs: Record<string, Diff>;
   subagents: Subagent[];
+  archived?: boolean;
   run: RunHandle | null;
   /** requestId → runId, so a retried POST stays idempotent. */
   requestRuns: Map<string, string>;

@@ -13,35 +13,43 @@ test('seeded subagent tree, report cards, messages and stop', async ({ page }) =
   const state = await openProto(page);
 
   // c-rich carries five subagents: running, stuck, done, waiting and failed.
-  // A tree with a live agent starts open; the chip toggles it closed and open.
+  // A tree with a live agent starts open; clicking the orbit does not toggle, clicking the toggle chevron toggles it.
   const chip = page.getByTestId('next-subagent-chip').first();
   await expect(chip).toBeVisible();
   await expect(chip).toContainText('3/5');
   const tree = page.getByTestId('next-subagent-tree').first();
   await expect(tree).toHaveClass(/is-open/);
   await expect(page.getByTestId('next-subagent-row')).toHaveCount(5);
-  await chip.click();
+
+  // Requirement 3: Orbit animation is non-clickable (clicking does not collapse list)
+  const orbit = chip.getByTestId('next-subagent-orbit');
+  await orbit.click();
+  await expect(tree).toHaveClass(/is-open/);
+
+  // Separate toggle button collapses and expands list
+  const toggleBtn = chip.getByTestId('next-subagent-toggle');
+  await toggleBtn.click();
   await expect(tree).not.toHaveClass(/is-open/);
-  await chip.click();
+  await toggleBtn.click();
   await expect(tree).toHaveClass(/is-open/);
   await expect(page.getByTestId('next-subagent-row').evaluateAll(
     (rows) => rows.map((row) => row.dataset.status),
   )).resolves.toEqual(['running', 'stuck', 'done', 'waiting', 'failed']);
-  await expect(page.getByTestId('next-subagent-action').first()).toHaveText(/正在读取 web\/src\/data\/store\.ts/);
-  await expect(page.getByTestId('next-subagent-action').first()).not.toHaveText(/`/);
-  await expect(page.getByTestId('next-subagent-row').nth(1).getByTestId('next-subagent-time')).toContainText('静默');
+  await expect(page.getByTestId('next-subagent-action')).toHaveCount(0);
+  await expect(page.getByTestId('next-subagent-time')).toHaveCount(0);
 
   // Non-current conversation: chip only until clicked; current tree stays open when leaving.
   const docsChip = page.locator('[data-testid=next-conv-row][data-id="c-docs"]').getByTestId('next-subagent-chip');
   await expect(docsChip).toHaveText(/3/);
   await expect(docsChip).not.toHaveClass(/is-live/);
-  await expect(docsChip).toHaveAttribute('aria-expanded', 'false');
-  await docsChip.click();
-  await expect(docsChip).toHaveAttribute('aria-expanded', 'true');
+  const docsToggle = docsChip.getByTestId('next-subagent-toggle');
+  await expect(docsToggle).toHaveAttribute('aria-expanded', 'false');
+  await docsToggle.click();
+  await expect(docsToggle).toHaveAttribute('aria-expanded', 'true');
   const docsTree = page.locator('[data-testid=next-subagent-tree][data-conv-id="c-docs"]');
   await expect(docsTree.getByTestId('next-subagent-row')).toHaveCount(3);
   await expect(docsTree.getByTestId('next-subagent-row').first()).toHaveAttribute('data-visual', 'done');
-  await expect(docsTree.getByTestId('next-subagent-time').first()).toHaveText('');
+  await expect(docsTree.getByTestId('next-subagent-time')).toHaveCount(0);
 
   await page.locator('[data-testid=next-conv-row][data-id="c-tests"]').click();
   await expect(page).toHaveURL(/#\/c\/c-tests$/);

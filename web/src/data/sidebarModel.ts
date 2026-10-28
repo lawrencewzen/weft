@@ -38,6 +38,10 @@ export function latestConversation(conversations: ConversationSummary[]): Conver
   return sortConversations(live)[0];
 }
 
+export function archivedConversations(conversations: ConversationSummary[]): ConversationSummary[] {
+  return sortConversations(conversations.filter((conv) => conv.archived));
+}
+
 export function conversationStatusKind(status: string | undefined): 'running' | 'waiting' | 'failed' | '' {
   if (status === 'running') return 'running';
   if (status === 'waiting') return 'waiting';

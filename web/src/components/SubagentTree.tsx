@@ -3,8 +3,6 @@ import type { Lang } from '../data/lang';
 import {
   isEndedSubagentStatus,
   isLiveSubagentStatus,
-  subagentActionText,
-  subagentTreeTimeText,
   subagentTreeVisual,
 } from '../data/subagentTime';
 import type { Subagent } from '../data/store';
@@ -25,29 +23,12 @@ const STATUS_ICON = (
   </svg>
 );
 
-const CHIP_ICON = (
-  <svg
-    className="subagent-chip-icon"
-    viewBox="0 0 16 16"
-    width="11"
-    height="11"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.5"
-    aria-hidden="true"
-  >
-    <circle cx="4" cy="3.5" r="1.6" />
-    <circle cx="4" cy="12.5" r="1.6" />
-    <circle cx="12" cy="7" r="1.6" />
-    <path d="M4 5v6M4 8.5c0-1.5 2-1.5 6.4-1.5" />
-  </svg>
-);
-
 export function SubagentChip({
   convId,
   live,
   total,
   collapsed,
+  agents = [],
   lang,
   onToggle,
 }: {
@@ -55,28 +36,111 @@ export function SubagentChip({
   live: number;
   total: number;
   collapsed: boolean;
+  agents?: Subagent[];
   lang: Lang;
   onToggle: (convId: string) => void;
 }) {
   if (total <= 0) return null;
   const label = live > 0 ? `${live}/${total}` : String(total);
+  const open = !collapsed;
+  const loaderTitle = live > 0
+    ? t(lang, 'subagent_live_title', { live, total })
+    : t(lang, 'subagent_ended_title', { total });
+  const toggleTitle = open
+    ? t(lang, 'subagent_collapse')
+    : t(lang, 'subagent_expand_n', { count: total });
+
+  const count = agents.length > 0 ? agents.length : total;
+  const orbitDots = Array.from({ length: count }, (_, k) => {
+    const a = agents[k];
+    const visual = a ? subagentTreeVisual(a.status) : (k < live ? 'running' : 'done');
+    const on = visual === 'running' || visual === 'stuck';
+    const color = visual === 'running' ? 'var(--sa-run)' : visual === 'stuck' ? 'var(--sa-stuck)' : 'var(--sa-check)';
+    const op = on ? 1 : 0.55;
+    const play = on ? 'running' : 'paused';
+    const dur = `${1.6 + k * 0.45}s`;
+    const delay = `${-k * 0.37}s`;
+    const top = k % 2 ? '1px' : '0px';
+    return { color, op, play, dur, delay, top };
+  });
+
   return (
-    <button
-      type="button"
-      className={`subagent-chip${live ? ' is-live' : ''}`}
+    <span
+      className={`subagent-chip-cluster${live > 0 ? ' is-live' : ''}`}
       data-testid="next-subagent-chip"
       data-conv-id={convId}
-      aria-expanded={collapsed ? 'false' : 'true'}
-      aria-label={t(lang, collapsed ? 'subagent_tree_expand' : 'subagent_tree_collapse')}
-      onClick={(ev) => {
-        ev.preventDefault();
-        ev.stopPropagation();
-        onToggle(convId);
-      }}
+      aria-expanded={open ? 'true' : 'false'}
+      onClick={(ev) => ev.stopPropagation()}
     >
-      {CHIP_ICON}
-      <span className="subagent-chip-count">{label}</span>
-    </button>
+      <span
+        className="subagent-orbit-wrap"
+        data-testid="next-subagent-orbit"
+        title={loaderTitle}
+      >
+        <span className="subagent-orbit-stage" aria-hidden="true">
+          <span
+            className="subagent-orbit-core"
+            style={{ background: live > 0 ? 'var(--sa-run)' : 'var(--sa-check)' }}
+          />
+          {orbitDots.map((d, k) => (
+            <span
+              key={k}
+              className="subagent-orbit-ring"
+              style={{
+                animationDuration: d.dur,
+                animationDelay: d.delay,
+                animationPlayState: d.play as 'running' | 'paused',
+              }}
+            >
+              <span
+                className="subagent-orbit-dot"
+                style={{
+                  top: d.top,
+                  background: d.color,
+                  opacity: d.op,
+                }}
+              />
+            </span>
+          ))}
+        </span>
+        <span
+          className="subagent-chip-count"
+          style={{ color: live > 0 ? 'var(--run-ink)' : 'var(--faint)' }}
+        >
+          {label}
+        </span>
+      </span>
+      <button
+        type="button"
+        className="subagent-toggle-btn"
+        data-testid="next-subagent-toggle"
+        data-conv-id={convId}
+        title={toggleTitle}
+        aria-label={toggleTitle}
+        aria-expanded={open ? 'true' : 'false'}
+        onClick={(ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          onToggle(convId);
+        }}
+      >
+        <svg
+          className="subagent-toggle-icon"
+          viewBox="0 0 12 12"
+          aria-hidden="true"
+          style={{ transform: open ? 'rotate(90deg)' : 'rotate(0deg)' }}
+        >
+          <path
+            d="M4.5 3l3 3-3 3"
+            fill="none"
+            stroke="var(--mute)"
+            strokeWidth="1.6"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      </button>
+    </span>
   );
 }
 
@@ -136,7 +200,6 @@ export function SubagentTree({
   loading,
   activeAgentId,
   lang,
-  now,
   onOpen,
   onMenu,
 }: {
@@ -146,7 +209,6 @@ export function SubagentTree({
   loading?: boolean;
   activeAgentId: string | null;
   lang: Lang;
-  now: number;
   onOpen: (cid: string, agentId: string) => void;
   onMenu: (ev: MouseEvent, agent: Subagent) => void;
 }) {
@@ -161,7 +223,7 @@ export function SubagentTree({
       data-conv-id={convId}
     >
       <div className="subagent-tree-clip">
-        <div className="subagent-tree">
+        <div className="subagent-tree tkids">
           {loading && !agents.length ? (
             <div className="subagent-tree-loading">{t(lang, 'loading')}</div>
           ) : (
@@ -172,8 +234,6 @@ export function SubagentTree({
               {agents.map((agent, index) => {
             const last = index === agents.length - 1;
             const visual = subagentTreeVisual(agent.status);
-            const time = subagentTreeTimeText(agent, lang, now);
-            const action = subagentActionText(agent);
             const entering = !entered.has(agent.id);
             const ended = justEnded.has(agent.id);
             const active = activeAgentId === agent.id;
@@ -181,6 +241,7 @@ export function SubagentTree({
               entering ? 'is-entering' : '',
               ended ? 'is-just-ended' : '',
             ].filter(Boolean).join(' ');
+            const isDone = visual === 'done';
             return (
               <div
                 key={agent.id}
@@ -196,7 +257,9 @@ export function SubagentTree({
                     <div
                       className={[
                         'subagent-tree-row',
-                        active ? 'is-active' : '',
+                        'tkid',
+                        active ? 'is-active on' : '',
+                        isDone ? 'done' : '',
                         visual === 'stuck' ? 'is-stuck' : '',
                         ended ? 'is-just-ended' : '',
                       ].filter(Boolean).join(' ')}
@@ -213,26 +276,11 @@ export function SubagentTree({
                         onMenu(ev, agent);
                       }}
                     >
-                      <div className="subagent-tree-line">
+                      <div className="subagent-tree-line trow">
                         {STATUS_ICON}
-                        <span className="subagent-tree-summary" data-testid="next-subagent-summary">
+                        <span className="subagent-tree-summary tt" data-testid="next-subagent-summary">
                           {agent.title || agent.name}
                         </span>
-                        <span
-                          className={`subagent-tree-time${agent.status === 'stuck' ? ' is-idle' : ''}`}
-                          data-testid="next-subagent-time"
-                        >
-                          {time}
-                        </span>
-                      </div>
-                      <div className={`subagent-tree-action-slot${action ? ' is-open' : ''}`}>
-                        <div className="subagent-tree-action-clip">
-                          {action ? (
-                            <div className="subagent-tree-action" data-testid="next-subagent-action">
-                              {action}
-                            </div>
-                          ) : null}
-                        </div>
                       </div>
                     </div>
                   </div>
