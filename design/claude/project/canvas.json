@@ -1,62 +1,365 @@
 {
   "v": 3,
-  "createdOnFiles": {"v": 1, "at": "2026-10-27T05:30:00Z"},
+  "createdOnFiles": {
+    "v": 1,
+    "at": "2026-10-27T05:30:00Z"
+  },
   "title": "Weft 定稿原型",
-  "launch": {"view": "canvas", "page": "overview"},
+  "launch": {
+    "view": "focused",
+    "file": "Weft.dc.html"
+  },
   "pages": [
-    {"id": "overview", "name": "总览 · 工作台"},
-    {"id": "layout", "name": "中间栏宽度"},
-    {"id": "sidebar", "name": "侧栏对话树"},
-    {"id": "composer", "name": "输入框"},
-    {"id": "thread", "name": "消息与 Markdown"},
-    {"id": "subagents", "name": "子 Agent 与右栏"},
-    {"id": "provider", "name": "Provider 设置"}
+    {
+      "id": "overview",
+      "name": "总览 · 工作台"
+    },
+    {
+      "id": "layout",
+      "name": "中间栏宽度"
+    },
+    {
+      "id": "sidebar",
+      "name": "侧栏对话树"
+    },
+    {
+      "id": "composer",
+      "name": "输入框"
+    },
+    {
+      "id": "thread",
+      "name": "消息与 Markdown"
+    },
+    {
+      "id": "subagents",
+      "name": "子 Agent 与右栏"
+    },
+    {
+      "id": "provider",
+      "name": "Provider 设置"
+    }
   ],
   "boards": {
-    "Main.dc.html": {"x": 0, "y": 0, "w": 1440, "h": 900, "title": "工作台（可交互，pi-work 原型 v19）", "page": "overview", "is_interactive": true, "expand": "fill"},
-    "Proto.dc.html": {"x": 0, "y": 0, "w": 1720, "h": 1000, "title": "可交互模板（宽度定稿规则）", "page": "layout", "is_interactive": true, "expand": "fill"},
-    "Final-1440.dc.html": {"x": 0, "y": 1400, "w": 1440, "h": 1000, "title": "定稿 · 1440 屏幕", "page": "layout", "is_interactive": true},
-    "Final.dc.html": {"x": 1520, "y": 1400, "w": 1720, "h": 1000, "title": "定稿 · 1720 屏幕", "page": "layout", "is_interactive": true},
-    "Final-1920.dc.html": {"x": 3320, "y": 1400, "w": 1920, "h": 1000, "title": "定稿 · 1920 屏幕", "page": "layout", "is_interactive": true},
-    "Final-wide.dc.html": {"x": 5320, "y": 1400, "w": 1720, "h": 1000, "title": "定稿 · 右栏收起", "page": "layout", "is_interactive": true},
-    "Final-thread.dc.html": {"x": 7120, "y": 1400, "w": 1720, "h": 1000, "title": "定稿 · 有对话", "page": "layout", "is_interactive": true},
-    "Final-closed.dc.html": {"x": 8920, "y": 1400, "w": 1720, "h": 1000, "title": "定稿 · 两侧收起（不变宽）", "page": "layout", "is_interactive": true},
-    "Final-drag.dc.html": {"x": 10720, "y": 1400, "w": 1720, "h": 1000, "title": "定稿 · 侧栏拖宽到 340 / 600", "page": "layout", "is_interactive": true},
-    "Final-min.dc.html": {"x": 12520, "y": 1400, "w": 1720, "h": 1000, "title": "定稿 · 侧栏拖到 380 / 720（到下限）", "page": "layout", "is_interactive": true},
-    "Width.dc.html": {"x": 0, "y": 2800, "w": 1720, "h": 1000, "title": "宽度组件（上面各张定稿图引用它）", "page": "layout", "is_interactive": true},
-    "Tree-A.dc.html": {"x": 0, "y": 0, "w": 1000, "h": 780, "title": "定稿 · 安静列表（三种状态）", "page": "sidebar"},
-    "C2-input.dc.html": {"x": 0, "y": 0, "w": 1080, "h": 1900, "title": "定稿 · 输入相关（空闲 / 编辑 / @ 文件 / 模型菜单）", "page": "composer"},
-    "C2-state.dc.html": {"x": 1160, "y": 0, "w": 1080, "h": 1900, "title": "定稿 · 运行和异常（排队插话 / 上下文快满 / 拖放 / 无模型）", "page": "composer"},
-    "Model-brand.dc.html": {"x": 2320, "y": 0, "w": 1080, "h": 1900, "title": "定稿 · 模型图标和品牌名", "page": "composer"},
-    "MD-Mix.dc.html": {"x": 0, "y": 0, "w": 1080, "h": 1900, "title": "定稿 · 融合稿（阅读型 + 路径标签和 $ 提示符）", "page": "thread"},
-    "MD-A-dark.dc.html": {"x": 1160, "y": 0, "w": 1080, "h": 1900, "title": "深色参考", "page": "thread"},
-    "Subagents.dc.html": {"x": 0, "y": 0, "w": 1280, "h": 780, "title": "定稿 · 子 Agent 界面（可交互，右栏方案 5）", "page": "subagents", "is_interactive": true},
-    "Loaders.dc.html": {"x": 1360, "y": 0, "w": 1280, "h": 720, "title": "子 Agent 状态图标的过渡动画（对话行的轨道动画已被侧栏安静列表取代，只参考下排状态图标）", "page": "subagents", "is_interactive": true},
-    "Provider-list.dc.html": {"x": 0, "y": 0, "w": 1200, "h": 860, "title": "Provider 列表", "page": "provider"},
-    "Provider-1.dc.html": {"x": 1280, "y": 0, "w": 1200, "h": 860, "title": "① 选厂商", "page": "provider"},
-    "Provider-2-way.dc.html": {"x": 2560, "y": 0, "w": 1200, "h": 860, "title": "② 选接入方式（可点）", "page": "provider", "is_interactive": true},
-    "Provider-2.dc.html": {"x": 3840, "y": 0, "w": 1200, "h": 860, "title": "② A · 填 API Key 并测试", "page": "provider"},
-    "Provider-login.dc.html": {"x": 5120, "y": 0, "w": 1200, "h": 860, "title": "② B · 账号登录（Grok Build）", "page": "provider"},
-    "Provider-3.dc.html": {"x": 6400, "y": 0, "w": 1200, "h": 860, "title": "③ 选模型", "page": "provider"}
+    "Main.dc.html": {
+      "x": 0,
+      "y": 0,
+      "w": 1440,
+      "h": 900,
+      "title": "工作台原稿（pi-work v19，部分区域已被定稿取代）",
+      "page": "overview",
+      "is_interactive": true,
+      "expand": "fill"
+    },
+    "Proto.dc.html": {
+      "x": 0,
+      "y": 0,
+      "w": 1720,
+      "h": 1000,
+      "title": "可交互模板（宽度定稿规则）",
+      "page": "layout",
+      "is_interactive": true,
+      "expand": "fill"
+    },
+    "Final-1440.dc.html": {
+      "x": 0,
+      "y": 1400,
+      "w": 1440,
+      "h": 1000,
+      "title": "定稿 · 1440 屏幕",
+      "page": "layout",
+      "is_interactive": true
+    },
+    "Final.dc.html": {
+      "x": 1520,
+      "y": 1400,
+      "w": 1720,
+      "h": 1000,
+      "title": "定稿 · 1720 屏幕",
+      "page": "layout",
+      "is_interactive": true
+    },
+    "Final-1920.dc.html": {
+      "x": 3320,
+      "y": 1400,
+      "w": 1920,
+      "h": 1000,
+      "title": "定稿 · 1920 屏幕",
+      "page": "layout",
+      "is_interactive": true
+    },
+    "Final-wide.dc.html": {
+      "x": 5320,
+      "y": 1400,
+      "w": 1720,
+      "h": 1000,
+      "title": "定稿 · 右栏收起",
+      "page": "layout",
+      "is_interactive": true
+    },
+    "Final-thread.dc.html": {
+      "x": 7120,
+      "y": 1400,
+      "w": 1720,
+      "h": 1000,
+      "title": "定稿 · 有对话",
+      "page": "layout",
+      "is_interactive": true
+    },
+    "Final-closed.dc.html": {
+      "x": 8920,
+      "y": 1400,
+      "w": 1720,
+      "h": 1000,
+      "title": "定稿 · 两侧收起（不变宽）",
+      "page": "layout",
+      "is_interactive": true
+    },
+    "Final-drag.dc.html": {
+      "x": 10720,
+      "y": 1400,
+      "w": 1720,
+      "h": 1000,
+      "title": "定稿 · 侧栏拖宽到 340 / 600",
+      "page": "layout",
+      "is_interactive": true
+    },
+    "Final-min.dc.html": {
+      "x": 12520,
+      "y": 1400,
+      "w": 1720,
+      "h": 1000,
+      "title": "定稿 · 侧栏拖到 380 / 720（到下限）",
+      "page": "layout",
+      "is_interactive": true
+    },
+    "Width.dc.html": {
+      "x": 0,
+      "y": 2800,
+      "w": 1720,
+      "h": 1000,
+      "title": "宽度组件（上面各张定稿图引用它）",
+      "page": "layout",
+      "is_interactive": true
+    },
+    "Tree-A.dc.html": {
+      "x": 0,
+      "y": 0,
+      "w": 1000,
+      "h": 780,
+      "title": "定稿 · 安静列表（三种状态）",
+      "page": "sidebar"
+    },
+    "C2-input.dc.html": {
+      "x": 0,
+      "y": 0,
+      "w": 1080,
+      "h": 1900,
+      "title": "定稿 · 输入相关（空闲 / 编辑 / @ 文件 / 模型菜单）",
+      "page": "composer"
+    },
+    "C2-state.dc.html": {
+      "x": 1160,
+      "y": 0,
+      "w": 1080,
+      "h": 1900,
+      "title": "定稿 · 运行和异常（排队插话 / 上下文快满 / 拖放 / 无模型）",
+      "page": "composer"
+    },
+    "Model-brand.dc.html": {
+      "x": 2320,
+      "y": 0,
+      "w": 1080,
+      "h": 1900,
+      "title": "定稿 · 模型图标和品牌名",
+      "page": "composer"
+    },
+    "MD-Mix.dc.html": {
+      "x": 0,
+      "y": 0,
+      "w": 1080,
+      "h": 1900,
+      "title": "定稿 · 融合稿（阅读型 + 路径标签和 $ 提示符）",
+      "page": "thread"
+    },
+    "MD-A-dark.dc.html": {
+      "x": 1160,
+      "y": 0,
+      "w": 1080,
+      "h": 1900,
+      "title": "深色参考",
+      "page": "thread"
+    },
+    "Subagents.dc.html": {
+      "x": 0,
+      "y": 0,
+      "w": 1280,
+      "h": 780,
+      "title": "定稿 · 子 Agent 界面（可交互，右栏方案 5）",
+      "page": "subagents",
+      "is_interactive": true
+    },
+    "Loaders.dc.html": {
+      "x": 1360,
+      "y": 0,
+      "w": 1280,
+      "h": 720,
+      "title": "子 Agent 状态图标的过渡动画（对话行的轨道动画已被侧栏安静列表取代，只参考下排状态图标）",
+      "page": "subagents",
+      "is_interactive": true
+    },
+    "Provider-list.dc.html": {
+      "x": 0,
+      "y": 0,
+      "w": 1200,
+      "h": 860,
+      "title": "Provider 列表",
+      "page": "provider"
+    },
+    "Provider-1.dc.html": {
+      "x": 1280,
+      "y": 0,
+      "w": 1200,
+      "h": 860,
+      "title": "① 选厂商",
+      "page": "provider"
+    },
+    "Provider-2-way.dc.html": {
+      "x": 2560,
+      "y": 0,
+      "w": 1200,
+      "h": 860,
+      "title": "② 选接入方式（可点）",
+      "page": "provider",
+      "is_interactive": true
+    },
+    "Provider-2.dc.html": {
+      "x": 3840,
+      "y": 0,
+      "w": 1200,
+      "h": 860,
+      "title": "② A · 填 API Key 并测试",
+      "page": "provider"
+    },
+    "Provider-login.dc.html": {
+      "x": 5120,
+      "y": 0,
+      "w": 1200,
+      "h": 860,
+      "title": "② B · 账号登录（Grok Build）",
+      "page": "provider"
+    },
+    "Provider-3.dc.html": {
+      "x": 6400,
+      "y": 0,
+      "w": 1200,
+      "h": 860,
+      "title": "③ 选模型",
+      "page": "provider"
+    },
+    "Weft.dc.html": {
+      "x": 0,
+      "y": -1100,
+      "w": 1440,
+      "h": 900,
+      "title": "完整原型（汇总所有定稿，可操作）",
+      "page": "overview",
+      "is_interactive": true,
+      "expand": "fill"
+    }
   },
   "order": [
+    "Weft.dc.html",
     "Main.dc.html",
-    "Proto.dc.html", "Final-1440.dc.html", "Final.dc.html", "Final-1920.dc.html", "Final-wide.dc.html", "Final-thread.dc.html", "Final-closed.dc.html", "Final-drag.dc.html", "Final-min.dc.html", "Width.dc.html",
+    "Proto.dc.html",
+    "Final-1440.dc.html",
+    "Final.dc.html",
+    "Final-1920.dc.html",
+    "Final-wide.dc.html",
+    "Final-thread.dc.html",
+    "Final-closed.dc.html",
+    "Final-drag.dc.html",
+    "Final-min.dc.html",
+    "Width.dc.html",
     "Tree-A.dc.html",
-    "C2-input.dc.html", "C2-state.dc.html", "Model-brand.dc.html",
-    "MD-Mix.dc.html", "MD-A-dark.dc.html",
-    "Subagents.dc.html", "Loaders.dc.html",
-    "Provider-list.dc.html", "Provider-1.dc.html", "Provider-2-way.dc.html", "Provider-2.dc.html", "Provider-login.dc.html", "Provider-3.dc.html"
+    "C2-input.dc.html",
+    "C2-state.dc.html",
+    "Model-brand.dc.html",
+    "MD-Mix.dc.html",
+    "MD-A-dark.dc.html",
+    "Subagents.dc.html",
+    "Loaders.dc.html",
+    "Provider-list.dc.html",
+    "Provider-1.dc.html",
+    "Provider-2-way.dc.html",
+    "Provider-2.dc.html",
+    "Provider-login.dc.html",
+    "Provider-3.dc.html"
   ],
   "notes": {
-    "overview": {"x": 0, "y": -300, "text": "Weft 定稿原型：整体工作台", "kind": "title1", "maxW": 1440, "page": "overview"},
-    "override": {"x": 1520, "y": 0, "w": 520, "page": "overview", "fill": "orange", "text": "工作台画于 10-24，之后这些区域另有定稿，以对应页面为准：\n· 中间栏宽度 → 「中间栏宽度」页（两侧 48px，上限 屏幕−800，下限 560，空对话输入框置底）\n· 侧栏对话树 → 「侧栏对话树」页（安静列表，去掉 ⌘N 和「N 个 Agent」文字）\n· 输入框 → 「输入框」页（C 打磨版 + 模型品牌图标）\n· 消息排版 → 「消息与 Markdown」页（融合稿）\n· 子 Agent 和右栏顶部 → 「子 Agent 与右栏」页（方案 5：变更 / 文件 / 终端 / 子 Agent N）\n· 设置里的「模型」→ 「Provider 设置」页"},
-    "layout": {"x": 0, "y": -300, "text": "中间栏宽度：两侧留 48px；上限 = 屏幕 − 800（收起侧栏不变宽），下限 560px；空对话输入框在底部", "kind": "title1", "maxW": 14240, "page": "layout"},
-    "sidebar": {"x": 0, "y": -300, "text": "侧栏对话树：安静列表", "kind": "title1", "maxW": 1000, "page": "sidebar"},
-    "composer": {"x": 0, "y": -300, "text": "输入框：C 打磨版 + 模型品牌图标", "kind": "title1", "maxW": 3400, "page": "composer"},
-    "thread": {"x": 0, "y": -300, "text": "消息排版：融合稿", "kind": "title1", "maxW": 2240, "page": "thread"},
-    "subagents": {"x": 0, "y": -300, "text": "子 Agent：侧栏轨道 + 右栏方案 5", "kind": "title1", "maxW": 2640, "page": "subagents"},
-    "provider": {"x": 0, "y": -300, "text": "Provider：选厂商 → 选接入方式 → 填 Key 或登录 → 选模型", "kind": "title1", "maxW": 7600, "page": "provider"}
+    "overview": {
+      "x": 0,
+      "y": -1400,
+      "text": "Weft 定稿原型：上面是汇总后的完整原型，下面是工作台原稿",
+      "kind": "title1",
+      "maxW": 1440,
+      "page": "overview"
+    },
+    "override": {
+      "x": 1520,
+      "y": 0,
+      "w": 520,
+      "page": "overview",
+      "fill": "orange",
+      "text": "工作台画于 10-24，之后这些区域另有定稿，以对应页面为准：\n· 中间栏宽度 → 「中间栏宽度」页（两侧 48px，上限 屏幕−800，下限 560，空对话输入框置底）\n· 侧栏对话树 → 「侧栏对话树」页（安静列表，去掉 ⌘N 和「N 个 Agent」文字）\n· 输入框 → 「输入框」页（C 打磨版 + 模型品牌图标）\n· 消息排版 → 「消息与 Markdown」页（融合稿）\n· 子 Agent 和右栏顶部 → 「子 Agent 与右栏」页（方案 5：变更 / 文件 / 终端 / 子 Agent N）\n· 设置里的「模型」→ 「Provider 设置」页"
+    },
+    "layout": {
+      "x": 0,
+      "y": -300,
+      "text": "中间栏宽度：两侧留 48px；上限 = 屏幕 − 800（收起侧栏不变宽），下限 560px；空对话输入框在底部",
+      "kind": "title1",
+      "maxW": 14240,
+      "page": "layout"
+    },
+    "sidebar": {
+      "x": 0,
+      "y": -300,
+      "text": "侧栏对话树：安静列表",
+      "kind": "title1",
+      "maxW": 1000,
+      "page": "sidebar"
+    },
+    "composer": {
+      "x": 0,
+      "y": -300,
+      "text": "输入框：C 打磨版 + 模型品牌图标",
+      "kind": "title1",
+      "maxW": 3400,
+      "page": "composer"
+    },
+    "thread": {
+      "x": 0,
+      "y": -300,
+      "text": "消息排版：融合稿",
+      "kind": "title1",
+      "maxW": 2240,
+      "page": "thread"
+    },
+    "subagents": {
+      "x": 0,
+      "y": -300,
+      "text": "子 Agent：侧栏轨道 + 右栏方案 5",
+      "kind": "title1",
+      "maxW": 2640,
+      "page": "subagents"
+    },
+    "provider": {
+      "x": 0,
+      "y": -300,
+      "text": "Provider：选厂商 → 选接入方式 → 填 Key 或登录 → 选模型",
+      "kind": "title1",
+      "maxW": 7600,
+      "page": "provider"
+    }
   },
   "designSystems": []
 }
