@@ -119,7 +119,8 @@ test('a message spawns a subagent and its report lands in the thread', async ({ 
   // The subagent appears in the sidebar while it runs, then reports back.
   await expect(page.getByTestId('next-subagent-chip').last()).toBeVisible({ timeout: 20_000 });
   await expect(page.getByTestId('next-item-subagent-report').last()).toBeVisible({ timeout: 40_000 });
-  await expect(page.getByTestId('next-run-status')).toHaveText('完成', { timeout: 40_000 });
+  await expect(page.getByTestId('next-stop')).toHaveCount(0, { timeout: 40_000 });
+  await expect(page.getByTestId('next-send')).toBeVisible();
   const cid = page.url().split('/c/')[1];
   await expect(page.locator(`[data-testid=next-conv-row][data-id="${cid}"]`)).toHaveCount(1);
 

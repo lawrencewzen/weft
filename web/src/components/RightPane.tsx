@@ -23,7 +23,8 @@ export function RightPane({ lang, workspaceLabel }: Props) {
     tab,
     setTab,
     open,
-    setOpen,
+    toggleRight,
+    rpBtnOp,
     totals,
     hasChanges,
     selectedSubagentId,
@@ -74,6 +75,23 @@ export function RightPane({ lang, workspaceLabel }: Props) {
     >
       <div className="col-panel-inner">
       <header className="right-tabs-bar">
+        <button
+          type="button"
+          className="icon-btn next-right-collapse-btn"
+          data-testid="next-right-collapse"
+          title={t(lang, 'collapse_panel')}
+          aria-label={t(lang, 'collapse_panel')}
+          style={{
+            opacity: rpBtnOp,
+            pointerEvents: rpBtnOp ? 'auto' : 'none',
+            visibility: rpBtnOp ? 'visible' : 'hidden',
+            marginRight: 4,
+            flexShrink: 0,
+          }}
+          onClick={toggleRight}
+        >
+          <span className="ico-panel ico-panel-right" aria-hidden="true" />
+        </button>
         <nav className="tabs-nav">
           <button
             type="button"
@@ -124,18 +142,6 @@ export function RightPane({ lang, workspaceLabel }: Props) {
             </button>
           ) : null}
         </nav>
-        <div className="tabs-actions">
-          <button
-            type="button"
-            className="icon-btn"
-            data-testid="next-right-collapse"
-            title={t(lang, 'collapse_panel')}
-            aria-label={t(lang, 'collapse_panel')}
-            onClick={() => setOpen(false)}
-          >
-            <span className="ico-panel ico-panel-right" aria-hidden="true" />
-          </button>
-        </div>
       </header>
       <div className="right-viewport">
         {effectiveTab === 'subagents' && conversationId && selectedSubagentId ? (

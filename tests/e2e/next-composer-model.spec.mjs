@@ -111,7 +111,7 @@ test('model chip stays usable while a run is busy', async ({ page }) => {
     await createProviderModels(srv);
     await openNextChat(page, srv, conv.id);
     await sendNext(page, 'run');
-    await expect(page.getByTestId('next-run-status')).toContainText(/运行|Running/i);
+    await expect(page.getByTestId('next-stop')).toBeVisible();
 
     await openModelMenu(page);
     await modelOption(page, 'grok-4').click();

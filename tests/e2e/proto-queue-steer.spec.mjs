@@ -126,7 +126,8 @@ test('prototype Enter steers, Alt+Enter queues, withdraw and edit work', async (
   await page.getByTestId('next-queue-dismiss').click();
   await expect(page.getByTestId('next-queue-chip')).toHaveCount(0);
 
-  await expect(page.getByTestId('next-run-status')).toHaveText('完成', { timeout: 40_000 });
+  await expect(page.getByTestId('next-stop')).toHaveCount(0, { timeout: 40_000 });
+  await expect(page.getByTestId('next-send')).toBeVisible();
   await expect(page.getByTestId('next-item-user').filter({ hasText: '排队这条' })).toHaveCount(0);
   await expectClean(state);
 });

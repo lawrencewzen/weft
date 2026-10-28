@@ -135,8 +135,10 @@ export function CenterPane({
       <main className="col-center" data-testid="next-center">
         <header className="next-status">
           <div className="next-status-inner">
-            <LeftOpenButton lang={lang} onOpen={onOpenLeft} />
-            <h1 className="top-title">{t(lang, 'home_title')}</h1>
+            <div className="top-heading">
+              <LeftOpenButton lang={lang} onOpen={onOpenLeft} />
+              <h1 className="top-title" style={{ color: 'var(--faint)' }}>{t(lang, 'home_title')}</h1>
+            </div>
             <div className="top-right"><RightToggle lang={lang} /></div>
           </div>
         </header>
@@ -152,8 +154,10 @@ export function CenterPane({
       <main className="col-center" data-testid="next-center">
         <header className="next-status">
           <div className="next-status-inner">
-            <LeftOpenButton lang={lang} onOpen={onOpenLeft} />
-            {cid ? <p>{t(lang, 'loading')}</p> : <h1 className="top-title">{t(lang, 'home_title')}</h1>}
+            <div className="top-heading">
+              <LeftOpenButton lang={lang} onOpen={onOpenLeft} />
+              {cid ? <p>{t(lang, 'loading')}</p> : <h1 className="top-title" style={{ color: 'var(--faint)' }}>{t(lang, 'home_title')}</h1>}
+            </div>
             <div className="top-right"><RightToggle lang={lang} /></div>
           </div>
         </header>

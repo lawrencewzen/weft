@@ -3,19 +3,14 @@ import { removeWorkspace } from '../data/api';
 import type { Lang } from '../data/lang';
 import {
   clampNum,
-  defaultLeftOpen,
   defaultRightOpen,
   isOverlayWidth,
   isRightOverlayWidth,
-  LEFT_OVERLAY_MAX,
   LEFT_W_DEFAULT,
   LEFT_W_MAX,
   LEFT_W_MIN,
-  LS_LEFT_OPEN,
-  persistLeftOpen,
   readActiveWorkspace,
   readLeftWidth,
-  readPref,
   RIGHT_OVERLAY_MAX,
   RIGHT_W_DEFAULT,
   RIGHT_W_MAX,
@@ -23,7 +18,8 @@ import {
   writeActiveWorkspace,
   writeLeftWidth,
 } from '../data/layout';
-import { useClosedSettled, usePanelMotionReady } from '../data/panelMotion';
+import { usePanelMotionReady } from '../data/panelMotion';
+import { LeftPanelProvider, useLeftPanel } from '../data/leftPanelContext';
 import { RightPaneProvider, useRightPane } from '../data/rightPaneContext';
 import { conversationPath, draftPath, navigate, rememberSettingsBehind } from '../data/nav';
 import { latestConversation, pickDraftWorkspace } from '../data/sidebarModel';
@@ -33,7 +29,6 @@ import type { SettingsPage } from '../data/providerWizard';
 import type { AppRoute } from '../route';
 import { CenterPane } from './CenterPane';
 import { ConfirmDialog, type ConfirmOpts } from './ConfirmDialog';
-import { DemoModelBadge } from './DemoModelBadge';
 import { RightPane } from './RightPane';
 import { LeftOpenButton, RightToggle } from './RightToggle';
 import { SettingsOverlay } from './settings/SettingsOverlay';
@@ -119,27 +114,29 @@ export function AppShell({ route, lang, demo = false, service, settingsPage = nu
   }, []);
 
   return (
-    <RightPaneProvider
-      conversationId={activeConversationId}
-      agentId={activeAgentId}
-      workspaceId={workspaceId}
-      lang={lang}
-      onToast={showToast}
-    >
-      <AppShellLayout
-        route={viewRoute}
+    <LeftPanelProvider>
+      <RightPaneProvider
+        conversationId={activeConversationId}
+        agentId={activeAgentId}
+        workspaceId={workspaceId}
         lang={lang}
-        demo={demo}
-        service={service}
-        settingsPage={settingsPage}
-        toast={toast}
         onToast={showToast}
-        workspaces={workspaces}
-        conversations={conversations}
-        groups={groups}
-        ready={ready}
-      />
-    </RightPaneProvider>
+      >
+        <AppShellLayout
+          route={viewRoute}
+          lang={lang}
+          demo={demo}
+          service={service}
+          settingsPage={settingsPage}
+          toast={toast}
+          onToast={showToast}
+          workspaces={workspaces}
+          conversations={conversations}
+          groups={groups}
+          ready={ready}
+        />
+      </RightPaneProvider>
+    </LeftPanelProvider>
   );
 }
 
@@ -171,12 +168,9 @@ function AppShellLayout({
   ready,
 }: LayoutProps) {
   const right = useRightPane();
-  const [leftOpen, setLeftOpen] = useState(() => defaultLeftOpen(window.innerWidth));
+  const { leftOpen, setLeftOpen, dragging, setDragging } = useLeftPanel();
   const [leftW, setLeftW] = useState(() => readLeftWidth());
-  const [dragging, setDragging] = useState(false);
   const motionReady = usePanelMotionReady();
-  const leftClosedSettled = useClosedSettled(leftOpen, motionReady);
-  const rightClosedSettled = useClosedSettled(right.open, motionReady);
   const [confirm, setConfirm] = useState<{
     opts: ConfirmOpts;
     resolve: (ok: boolean) => void;
@@ -209,12 +203,6 @@ function AppShellLayout({
   useEffect(() => {
     const onResize = () => {
       const vw = window.innerWidth;
-      if (lastWidth.current > LEFT_OVERLAY_MAX && vw <= LEFT_OVERLAY_MAX) {
-        setLeftOpen(false);
-      }
-      if (lastWidth.current <= LEFT_OVERLAY_MAX && vw > LEFT_OVERLAY_MAX) {
-        setLeftOpen(readPref(LS_LEFT_OPEN, true));
-      }
       if (lastWidth.current >= RIGHT_OVERLAY_MAX && vw < RIGHT_OVERLAY_MAX) {
         right.setOpen(false);
       }
@@ -226,11 +214,6 @@ function AppShellLayout({
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
   }, [right]);
-
-  const setOpen = useCallback((open: boolean) => {
-    setLeftOpen(open);
-    persistLeftOpen(open, window.innerWidth);
-  }, []);
 
   const askConfirm = useCallback((opts: ConfirmOpts) => {
     return new Promise<boolean>((resolve) => {
@@ -302,7 +285,7 @@ function AppShellLayout({
     const target = ev.target as HTMLElement;
     if (!target.closest?.('.col-center')) return;
     if (overlayKeepOpen(target)) return;
-    if (isOverlayWidth(window.innerWidth) && leftOpen) setOpen(false);
+    if (isOverlayWidth(window.innerWidth) && leftOpen) setLeftOpen(false);
     if (isRightOverlayWidth(window.innerWidth) && right.open) right.setOpen(false);
   }
 
@@ -310,9 +293,7 @@ function AppShellLayout({
     'next-shell',
     motionReady ? 'is-ready' : '',
     !leftOpen ? 'left-closed' : '',
-    leftClosedSettled ? 'left-closed-settled' : '',
     !right.open ? 'right-closed' : '',
-    rightClosedSettled ? 'right-closed-settled' : '',
     dragging ? 'is-dragging' : '',
   ].filter(Boolean).join(' ');
 
@@ -335,7 +316,7 @@ function AppShellLayout({
         activeConversationId={activeConversationId}
         activeAgentId={activeAgentId}
         draftWorkspaceId={draftWorkspaceId}
-        onCollapse={() => setOpen(false)}
+        onCollapse={() => setLeftOpen(false)}
         onToast={onToast}
         onConfirm={askConfirm}
         onRemoveWorkspace={onRemoveWorkspace}
@@ -356,9 +337,10 @@ function AppShellLayout({
         <main className="col-center" data-testid="next-center">
           <header className="next-status">
             <div className="next-status-inner">
-              <LeftOpenButton lang={lang} onOpen={() => setOpen(true)} />
-              <h1 className="top-title">{t(lang, 'home_title')}</h1>
-              {demo ? <DemoModelBadge lang={lang} testId="next-demo-model-badge" /> : null}
+              <div className="top-heading">
+                <LeftOpenButton lang={lang} onOpen={() => setLeftOpen(true)} />
+                <h1 className="top-title" style={{ color: 'var(--faint)' }}>{t(lang, 'home_title')}</h1>
+              </div>
               <div className="top-right">
                 <RightToggle lang={lang} />
               </div>
@@ -378,7 +360,7 @@ function AppShellLayout({
           workspace={workspace || null}
           lang={lang}
           demo={demo}
-          onOpenLeft={() => setOpen(true)}
+          onOpenLeft={() => setLeftOpen(true)}
           onNewWorkspace={() => setWsDialog(true)}
         />
       )}

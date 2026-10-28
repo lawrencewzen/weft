@@ -90,14 +90,13 @@ async function writeScript(dir, name, turns) {
   return file;
 }
 
-test('demo model badges appear beside the title and under the composer', async ({ page }) => {
+test('demo model badges appear under the composer and not in the header', async ({ page }) => {
   const prepared = await prepareWorkspaces(['repo']);
   const srv = await startServer({ extraEnv: { WEFT_WORKSPACE_ROOT: prepared.root } });
   try {
     const { conv } = await openWorkspaceConversation(srv, 'demo', prepared.dirs[0]);
     await openNextChat(page, srv, conv.id);
-    await expect(page.getByTestId('next-demo-model-badge')).toBeVisible();
-    await expect(page.getByTestId('next-demo-model-badge')).toHaveText('演示模型');
+    await expect(page.getByTestId('next-demo-model-badge')).toHaveCount(0);
     await expect(page.getByTestId('next-demo-model-chip')).toBeVisible();
     await expect(page.getByTestId('next-demo-model-chip')).toHaveText('演示模型');
   } finally {
@@ -119,7 +118,6 @@ test('spawning a sub-agent shows a sidebar row and chip; running time ticks', as
   try {
     const { conv } = await openWorkspaceConversation(srv, 'demo', prepared.dirs[0]);
     await openNextChat(page, srv, conv.id);
-    await expect(page.getByTestId('next-demo-model-badge')).toBeVisible();
     await sendNext(page, '请派子代理');
     const row = await waitSubagentRow(page, conv.id);
     await expect(convRow(page, conv.id).getByTestId('next-subagent-chip')).toBeVisible();
@@ -243,7 +241,6 @@ test('clicking a row opens the sub-agent view; send and stop work; refresh keeps
     await expect(page.getByTestId('next-right-tab-subagents')).toHaveClass(/active/);
     await expect(page.getByTestId('next-subagent-back')).toHaveText('子 Agent');
     await expect(page.locator(`[data-testid=next-subagent-row][data-agent-id="${agentId}"]`)).toHaveClass(/is-active/);
-    await expect(page.getByTestId('next-demo-model-badge')).toBeVisible();
     await expect(page.getByTestId('next-subagent-thread')).toContainText(HOLD);
     await expect(page.getByTestId('next-subagent-input')).toBeVisible();
     await expect(page.getByTestId('next-subagent-stop')).toBeVisible({ timeout: 15000 });

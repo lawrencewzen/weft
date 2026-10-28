@@ -113,7 +113,8 @@ test('a simulated edit lands in the changes list with its diff', async ({ page }
   await page.getByTestId('next-new-chat').click();
   await page.getByTestId('next-composer-input').fill('改一下 web/src/data/store.ts 里的 items 顺序');
   await page.getByTestId('next-send').click();
-  await expect(page.getByTestId('next-run-status')).toHaveText('完成', { timeout: 40_000 });
+  await expect(page.getByTestId('next-stop')).toHaveCount(0, { timeout: 40_000 });
+  await expect(page.getByTestId('next-send')).toBeVisible();
 
   await expect(page.getByTestId('next-change-row')).toHaveCount(1);
   await expect(page.getByTestId('next-change-row').first()).toHaveAttribute('data-path', 'web/src/data/store.ts');

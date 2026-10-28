@@ -28,6 +28,7 @@ import { defaultExpanded, dirPaths, expandAncestors, isMarkdownPath, toggleDir }
 import type { Lang } from './lang';
 import {
   defaultRightOpen,
+  isRightOverlayWidth,
   persistRightOpen,
   readRightTab,
   readRightWidth,
@@ -45,6 +46,14 @@ const TREE_REFRESH_MS = 300;
 export type RightPaneValue = {
   open: boolean;
   setOpen: (open: boolean) => void;
+  toggleRight: () => void;
+  rightOpening: boolean;
+  rbDx: number;
+  rbAnim: boolean;
+  rbTr: string;
+  rightBtnOp: number;
+  rightBtnPe: 'auto' | 'none';
+  rpBtnOp: number;
   tab: RightTab;
   setTab: (tab: RightTab) => void;
   selectedSubagentId: string | null;
@@ -172,10 +181,64 @@ export function RightPaneProvider({
   const draftRef = useRef(draftText);
   draftRef.current = draftText;
 
+  const [rightOpening, setRightOpening] = useState(false);
+  const [rbDx, setRbDx] = useState(0);
+  const [rbAnim, setRbAnim] = useState(false);
+  const rbDxRef = useRef(0);
+  const rightTimer = useRef<number | null>(null);
+
   const setOpen = useCallback((next: boolean) => {
     setOpenState(next);
-    persistRightOpen(next, window.innerWidth);
+    setRightOpening(false);
+    setRbAnim(false);
+    setRbDx(0);
+    persistRightOpen(next, typeof window !== 'undefined' ? window.innerWidth : 1440);
   }, []);
+
+  const toggleRight = useCallback(() => {
+    if (typeof window !== 'undefined' && isRightOverlayWidth(window.innerWidth)) {
+      setOpen(!open);
+      return;
+    }
+    const closing = open;
+    if (closing) {
+      const rb = document.querySelector<HTMLElement>('[data-testid="next-right-collapse"]')
+        || document.querySelector<HTMLElement>('aside [title="收起右栏"]');
+      const hb = document.querySelector<HTMLElement>('[data-testid="next-right-toggle"]')
+        || document.querySelector<HTMLElement>('[title="展开右栏"]');
+      if (rb && hb) {
+        rbDxRef.current = Math.round(rb.getBoundingClientRect().left - (hb.getBoundingClientRect().left - (rbDxRef.current || 0)));
+      }
+    }
+    const dx = rbDxRef.current || 50;
+    if (closing) {
+      setOpenState(false);
+      persistRightOpen(false, typeof window !== 'undefined' ? window.innerWidth : 1440);
+      setRightOpening(false);
+      setRbAnim(false);
+      setRbDx(dx);
+      if (typeof window !== 'undefined') {
+        window.requestAnimationFrame(() => {
+          window.requestAnimationFrame(() => {
+            setRbAnim(true);
+            setRbDx(0);
+          });
+        });
+      }
+    } else {
+      setOpenState(true);
+      persistRightOpen(true, typeof window !== 'undefined' ? window.innerWidth : 1440);
+      setRightOpening(true);
+      setRbAnim(true);
+      setRbDx(dx);
+    }
+    if (rightTimer.current) window.clearTimeout(rightTimer.current);
+    rightTimer.current = window.setTimeout(() => {
+      if (!closing) {
+        setRightOpening(false);
+      }
+    }, 230);
+  }, [open, setOpen]);
 
   const setTab = useCallback((next: RightTab) => {
     setTabState(next);
@@ -443,9 +506,23 @@ export function RightPaneProvider({
     }
   }, [wsId, lang, onToast]);
 
+  const isRightOverlay = typeof window !== 'undefined' ? isRightOverlayWidth(window.innerWidth) : false;
+  const rightBtnOp = !open || rightOpening || isRightOverlay ? 1 : 0;
+  const rightBtnPe: 'auto' | 'none' = (!open || isRightOverlay) ? 'auto' : 'none';
+  const rpBtnOp = open && (!rightOpening || isRightOverlay) ? 1 : 0;
+  const rbTr = rbAnim ? 'transform .22s cubic-bezier(.3,.8,.3,1)' : 'none';
+
   const value = useMemo<RightPaneValue>(() => ({
     open,
     setOpen,
+    toggleRight,
+    rightOpening,
+    rbDx,
+    rbAnim,
+    rbTr,
+    rightBtnOp,
+    rightBtnPe,
+    rpBtnOp,
     tab,
     setTab,
     selectedSubagentId,
@@ -482,7 +559,8 @@ export function RightPaneProvider({
     copyPath,
     openInTerminal,
   }), [
-    open, setOpen, tab, setTab, selectedSubagentId, width, persistWidth, hasChanges, totals, visibleChanges,
+    open, setOpen, toggleRight, rightOpening, rbDx, rbAnim, rbTr, rightBtnOp, rightBtnPe, rpBtnOp,
+    tab, setTab, selectedSubagentId, width, persistWidth, hasChanges, totals, visibleChanges,
     openPaths, toggleChange, diffs, openFile, openChangeDiff, openTerminal, selectedCommandId, showFiles, tree, treeTruncated,
     treeReady, expandedDirs, toggleDirectory, activeFilePath, fileTargetLine, file, fileBusy,
     editorMode, draftText, saveState, saveFile, reloadFile, copyPath, openInTerminal,

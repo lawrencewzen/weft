@@ -92,7 +92,7 @@ test('FL-2 files tab opens the written markdown', async ({ page }) => {
     await (await revealFile(page, 'notes/today.md')).click();
     await expect(page.getByTestId('next-file-view')).toContainText('QA-FILE-1');
     await expect(page.getByTestId('next-file-open-editor')).toHaveCount(1);
-    await expect(page.locator('.tabs-actions')).not.toContainText(/编辑|Edit/);
+    await expect(page.locator('.right-tabs-bar')).not.toContainText(/编辑|Edit/);
   } finally {
     await srv.kill();
   }

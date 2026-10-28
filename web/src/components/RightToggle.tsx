@@ -1,24 +1,47 @@
 import { t } from '../i18n';
+import { useLeftPanel } from '../data/leftPanelContext';
 import { useRightPane } from '../data/rightPaneContext';
 import type { Lang } from '../data/lang';
 
 export function LeftOpenButton({ lang, onOpen }: { lang: Lang; onOpen?: () => void }) {
+  const { toggleLeft, leftSlotW, leftSlotM, leftSlotTr, leftBtnOp, leftBtnPe, lbDx, lbTr } = useLeftPanel();
   return (
-    <button
-      type="button"
-      className="icon-btn top-left-open"
-      data-testid="next-left-open"
-      title={t(lang, 'expand_sidebar')}
-      aria-label={t(lang, 'expand_sidebar')}
-      onClick={onOpen}
+    <div
+      className="top-left-slot"
+      style={{
+        width: leftSlotW,
+        marginRight: leftSlotM,
+        flexShrink: 0,
+        transition: leftSlotTr,
+        overflow: 'visible',
+      }}
     >
-      <span className="ico-panel ico-panel-left" aria-hidden="true" />
-    </button>
+      <button
+        type="button"
+        className="icon-btn top-left-open"
+        data-testid="next-left-open"
+        title={t(lang, 'expand_sidebar')}
+        aria-label={t(lang, 'expand_sidebar')}
+        style={{
+          opacity: leftBtnOp,
+          pointerEvents: leftBtnPe,
+          transform: `translateX(${lbDx}px)`,
+          transition: lbTr,
+          visibility: leftBtnOp ? 'visible' : 'hidden',
+        }}
+        onClick={() => {
+          if (toggleLeft) toggleLeft();
+          else onOpen?.();
+        }}
+      >
+        <span className="ico-panel ico-panel-left" aria-hidden="true" />
+      </button>
+    </div>
   );
 }
 
 export function RightToggle({ lang }: { lang: Lang }) {
-  const { open, setOpen, hasChanges } = useRightPane();
+  const { open, toggleRight, rbDx, rbTr, rightBtnOp, rightBtnPe, hasChanges } = useRightPane();
   return (
     <button
       type="button"
@@ -27,7 +50,14 @@ export function RightToggle({ lang }: { lang: Lang }) {
       title={t(lang, 'expand_panel')}
       aria-label={t(lang, 'expand_panel')}
       aria-pressed={open}
-      onClick={() => setOpen(!open)}
+      style={{
+        opacity: rightBtnOp,
+        pointerEvents: rightBtnPe,
+        transform: `translateX(${rbDx}px)`,
+        transition: rbTr,
+        visibility: rightBtnOp ? 'visible' : 'hidden',
+      }}
+      onClick={toggleRight}
     >
       <span className="ico-panel ico-panel-right" aria-hidden="true" />
       <span

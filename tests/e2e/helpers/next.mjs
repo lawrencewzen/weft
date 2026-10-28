@@ -41,18 +41,37 @@ export async function sendNext(page, text) {
 }
 
 export function runStatus(page) {
-  return page.getByTestId('next-run-status');
+  const url = page.url();
+  const match = url.match(/\/c\/([^/?#]+)/);
+  if (match) {
+    const id = decodeURIComponent(match[1]);
+    return page.locator(`[data-testid="next-conv-row"][data-id="${id}"]`);
+  }
+  return page.locator('[data-testid="next-conv-row"].conv-active, [data-testid="next-conv-row"]').first();
 }
 
 export async function waitRunDone(page, timeout = 30000) {
-  await expect(runStatus(page)).toHaveText(/完成|Done/i, { timeout });
+  await expect(page.getByTestId('next-stop')).toHaveCount(0, { timeout });
+  await expect(page.getByTestId('next-send')).toBeVisible();
+  const row = runStatus(page);
+  if (await row.count() > 0) {
+    await expect(row).not.toHaveAttribute('data-status', 'running', { timeout });
+  }
+  // 避免断流重试期间短暂变为 done 又变回 running 的抖动
+  await page.waitForTimeout(300);
   await expect(page.getByTestId('next-stop')).toHaveCount(0);
   await expect(page.getByTestId('next-send')).toBeVisible();
+  if (await row.count() > 0) {
+    await expect(row).not.toHaveAttribute('data-status', 'running');
+  }
 }
 
 export async function waitRunStopped(page, timeout = 20000) {
-  await expect(runStatus(page)).toHaveText(/已停止|Stopped/i, { timeout });
-  await expect(page.getByTestId('next-stop')).toHaveCount(0);
+  await expect(page.getByTestId('next-stop')).toHaveCount(0, { timeout });
+  const row = runStatus(page);
+  if (await row.count() > 0) {
+    await expect(row).toHaveAttribute('data-status', /stopped|idle/, { timeout });
+  }
 }
 
 export async function apiV2(srv, method, apiPath, body) {
