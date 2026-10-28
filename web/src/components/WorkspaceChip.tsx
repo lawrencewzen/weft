@@ -15,14 +15,8 @@ type Props = {
 };
 
 const FOLDER_ICON = (
-  <svg viewBox="0 0 12 12" width="13" height="13" aria-hidden="true">
-    <path
-      d="M1.5 3.2c0-.6.4-1 1-1h2.3l1 1.2h3.7c.6 0 1 .4 1 1v4.4c0 .6-.4 1-1 1h-7c-.6 0-1-.4-1-1z"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.1"
-      strokeLinejoin="round"
-    />
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
+    <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
   </svg>
 );
 

@@ -129,6 +129,12 @@ test('deleting the only provider shows the no-model state', async ({ page }) => 
   await expect(page.getByTestId('next-no-model')).toBeVisible();
   await expect(page.getByTestId('next-no-model-connect')).toBeVisible();
   await expect(page.getByTestId('next-composer-input')).toBeDisabled();
+  await expect(page.getByTestId('next-composer-input')).toHaveAttribute(
+    'placeholder',
+    /先接入一个模型|Connect a model/,
+  );
+  await expect(page.getByTestId('next-composer-attach')).toHaveCount(0);
+  await expect(page.getByTestId('next-send')).toBeDisabled();
   await page.getByTestId('next-no-model-connect').click();
   await expect(page.getByTestId('next-settings')).toBeVisible();
   await expect(page.getByTestId('next-provider-add')).toBeVisible();

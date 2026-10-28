@@ -458,7 +458,7 @@ function docsConversation(now: number, threads: Map<string, MockSubThread>): Moc
     workspaceId: 'ws-weft',
     title: '把架构文档的图补上',
     updatedAt: now - 3 * HOUR,
-    used: 6_400,
+    used: 172_000,
     model: { sourceId: 'demo', modelId: 'grok-code-fast', label: 'Grok Code Fast' },
     subagents: [...threads.values()]
       .filter((thread) => thread.view.parentConversationId === 'c-docs')
