@@ -51,7 +51,7 @@ test('prototype runs from file:// with mock data, no network and no console erro
   await expect(page.getByTestId('next-context-chip')).toHaveClass(/is-warn/);
   await expect(page.getByTestId('next-context-chip')).toHaveText('86%');
   await expect(page.getByTestId('next-context-new')).toBeVisible();
-  await expect(page.getByTestId('next-composer-input')).toHaveAttribute('placeholder', '描述任务');
+  await expect(page.getByTestId('next-composer-input')).toHaveAttribute('placeholder', '描述任务，@ 引用文件');
   await expect(page.getByTestId('next-composer-newline')).toHaveCount(0);
   await page.getByTestId('next-composer-input').fill('把空对话的输入框固定到底部');
   await expect(page.getByTestId('next-composer-newline')).toHaveText('Shift+Enter 换行');
@@ -82,9 +82,16 @@ test('prototype runs from file:// with mock data, no network and no console erro
       .getByTestId('next-tool-row-added'),
   ).toContainText('+8');
 
-  // Workspace rows expand/collapse in place.
+  // Workspace rows expand/collapse in place. Project add '+' only visible on hover.
   const websiteNode = page.getByTestId('next-ws-node').filter({ hasText: 'website' });
   const websiteToggle = websiteNode.getByTestId('next-ws-toggle');
+  const websiteAdd = websiteNode.getByTestId('next-ws-add');
+  expect(await websiteAdd.evaluate((el) => getComputedStyle(el).opacity)).toBe('0');
+  await websiteNode.locator('.ws-node-header').hover();
+  expect(await websiteAdd.evaluate((el) => getComputedStyle(el).opacity)).toBe('1');
+  const weftNode = page.getByTestId('next-ws-node').filter({ hasText: 'weft' });
+  const weftAdd = weftNode.getByTestId('next-ws-add');
+  expect(await weftAdd.evaluate((el) => getComputedStyle(el).opacity)).toBe('0');
   await expect(websiteToggle).toHaveAttribute('aria-expanded', 'false');
   await websiteNode.hover();
   await expect(websiteNode.locator('.ws-node-count')).toHaveText('1 运行中');
@@ -114,6 +121,15 @@ test('prototype runs from file:// with mock data, no network and no console erro
   await expect(page.getByTestId('next-draft-hero-ws')).toHaveCSS('font-size', '28px');
   await expect(page.getByTestId('next-draft-hint')).toContainText('要在');
   await expect(page.getByTestId('next-ws-chip')).toContainText('weft');
+
+  // New chat right pane has changes, files, and term tabs.
+  await expect(page.getByTestId('next-right-tab-changes')).toBeVisible();
+  await expect(page.getByTestId('next-right-tab-files')).toBeVisible();
+  await expect(page.getByTestId('next-right-tab-term')).toBeVisible();
+  await page.getByTestId('next-right-tab-term').click();
+  await expect(page.getByTestId('next-term-pane')).toContainText('暂无终端');
+  await page.getByTestId('next-right-tab-changes').click();
+
   // The draft workspace chip really retargets the conversation.
   await page.getByTestId('next-ws-chip').click();
   await expect(page.getByTestId('next-ws-chip-menu')).toBeVisible();
@@ -205,6 +221,12 @@ test('sidebar appearance toggle persists across reload', async ({ page }) => {
   await page.getByTestId('next-appearance-toggle').click();
   await expect(page.locator('html')).toHaveAttribute('data-theme', /dark$/);
   expect(await page.evaluate(() => localStorage.getItem('weft_appearance'))).toBe('dark');
+
+  // Dark mode Grok icon has invert filter (not black)
+  const grokIcon = page.locator('.assistant-message-author-badge .brand-icon img, .model-chip .brand-icon img').first();
+  await expect(grokIcon).toBeVisible();
+  const filter = await grokIcon.evaluate((el) => getComputedStyle(el).filter);
+  expect(filter).toContain('invert');
 
   await page.reload();
   await expect(page.getByTestId('next-appearance-toggle')).toBeVisible();

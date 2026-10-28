@@ -322,13 +322,41 @@ export function RightPaneProvider({
     if (tab === 'files' && wsId) void loadTree(wsId);
   }, [wsId]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const seenChangePaths = useRef<Set<string>>(new Set());
+
   useEffect(() => {
+    seenChangePaths.current = new Set();
     setOpenPaths(new Set());
     setDiffs({});
     sigRef.current = {};
     seenDone.current = '';
     setSelectedCommandId(null);
   }, [cid]);
+
+  useEffect(() => {
+    if (!cid || visibleChanges.length === 0) return;
+    const newChanges = visibleChanges.filter((c) => !seenChangePaths.current.has(c.path));
+    if (newChanges.length === 0) return;
+
+    for (const c of newChanges) {
+      seenChangePaths.current.add(c.path);
+    }
+
+    // 超过 8 个文件或单文件超过 300 行的默认收起，避免卡顿
+    if (visibleChanges.length > 8) return;
+
+    const toExpand = newChanges
+      .filter((c) => (c.added + c.removed) <= 300)
+      .map((c) => c.path);
+
+    if (toExpand.length > 0) {
+      setOpenPaths((prev) => {
+        const next = new Set(prev);
+        for (const p of toExpand) next.add(p);
+        return next;
+      });
+    }
+  }, [cid, visibleChanges]);
 
   useEffect(() => {
     if (tab !== 'files' || !wsId) return;

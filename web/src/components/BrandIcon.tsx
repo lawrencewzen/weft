@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { brandIconUrl } from '../data/composerModel';
+import { brandIconUrl, isColorBrand } from '../data/composerModel';
 
-export { brandIconUrl };
+export { brandIconUrl, isColorBrand };
 
 const CUBE = (
   <svg viewBox="0 0 16 16" aria-hidden="true" className="brand-icon-cube">
@@ -15,17 +15,19 @@ type Props = {
   size?: number;
   alt?: string;
   className?: string;
+  isColor?: boolean;
 };
 
-export function BrandIcon({ brand, size = 16, alt = '', className = '' }: Props) {
+export function BrandIcon({ brand, size = 16, alt = '', className = '', isColor }: Props) {
   const url = brandIconUrl(brand);
   const [failed, setFailed] = useState(false);
   useEffect(() => { setFailed(false); }, [url]);
   const showImg = Boolean(url) && !failed;
+  const colored = isColor ?? isColorBrand(brand);
 
   return (
     <span
-      className={`brand-icon ${className}`.trim()}
+      className={`brand-icon ${colored ? 'is-color' : 'is-mono'} ${className}`.trim()}
       style={{ width: size, height: size }}
       title={alt || undefined}
     >

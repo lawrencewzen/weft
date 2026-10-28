@@ -19,9 +19,16 @@ test('diff, file tree, preview, save and the 409 conflict demo', async ({ page }
     'web/src/data/store.test.ts',
   );
 
-  // A change opens as a structured diff with line numbers.
-  await page.getByTestId('next-change-row').first().locator('.changed-file-pill').click();
-  await expect(page.getByTestId('next-diff')).toBeVisible();
+  // Right tabs container is aligned to the left, immediately following the collapse button.
+  const collapseBox = await page.getByTestId('next-right-collapse').boundingBox();
+  const tabsNavBox = await page.locator('.tabs-nav').boundingBox();
+  expect(collapseBox).toBeTruthy();
+  expect(tabsNavBox).toBeTruthy();
+  expect(tabsNavBox.x).toBeGreaterThan(collapseBox.x);
+  expect(tabsNavBox.x - (collapseBox.x + collapseBox.width)).toBeLessThanOrEqual(8);
+
+  // Changes default to expanded (<= 8 files, <= 300 lines) with diff lines visible.
+  await expect(page.getByTestId('next-diff')).toHaveCount(2);
   await expect(page.getByTestId('next-diff-line').first()).toBeVisible();
   expect(await page.locator('[data-testid=next-diff-line][data-op=add]').count()).toBeGreaterThan(0);
   const added = page.locator('[data-testid=next-diff-line][data-op=add]').first();
@@ -29,11 +36,16 @@ test('diff, file tree, preview, save and the 409 conflict demo', async ({ page }
   await expect(added.locator('.code')).toContainText('createEntityStore');
 
   // The second change has removals too.
-  await page.getByTestId('next-change-row').nth(1).locator('.changed-file-pill').click();
   const storeDiff = page.getByTestId('next-change-row').nth(1).getByTestId('next-diff');
   await expect(storeDiff).toBeVisible();
   await expect.poll(async () => storeDiff.locator('[data-op=del]').count()).toBeGreaterThan(0);
   expect(await storeDiff.locator('[data-op=add]').count()).toBeGreaterThan(0);
+
+  // File pill can be clicked to collapse and re-expand.
+  await page.getByTestId('next-change-row').first().locator('.changed-file-pill').click();
+  await expect(page.getByTestId('next-change-row').first().getByTestId('next-diff')).toHaveCount(0);
+  await page.getByTestId('next-change-row').first().locator('.changed-file-pill').click();
+  await expect(page.getByTestId('next-change-row').first().getByTestId('next-diff')).toBeVisible();
 
   // A fast answer must not make the diff effect re-request the same file.
   const diffRequests = (await state.requests())
@@ -69,11 +81,10 @@ test('diff, file tree, preview, save and the 409 conflict demo', async ({ page }
     .filter((row) => row.method === 'PUT' && row.url.includes('/files')).length);
   expect(savedVersion).toBe(1);
 
-  // The saved file shows up in the changes tab with a real line diff.
+  // The saved file shows up in the changes tab with a real line diff (expanded by default).
   await page.getByTestId('next-right-tab-changes').click();
   const readmeChange = page.locator('[data-testid=next-change-row][data-path="README.md"]');
   await expect(readmeChange).toBeVisible();
-  await readmeChange.locator('.changed-file-pill').click();
   await expect(readmeChange.getByTestId('next-diff-line').first()).toBeVisible();
   await expect.poll(async () => readmeChange.locator('[data-op=add]').count()).toBeGreaterThan(0);
   await page.getByTestId('next-right-tab-files').click();
@@ -118,7 +129,7 @@ test('a simulated edit lands in the changes list with its diff', async ({ page }
 
   await expect(page.getByTestId('next-change-row')).toHaveCount(1);
   await expect(page.getByTestId('next-change-row').first()).toHaveAttribute('data-path', 'web/src/data/store.ts');
-  await page.getByTestId('next-change-row').first().locator('.changed-file-pill').click();
+  // Edit change defaults to expanded
   await expect(page.getByTestId('next-diff-line').first()).toBeVisible();
   expect(await page.locator('[data-testid=next-diff-line][data-op=add]').count()).toBeGreaterThan(0);
   expect(await page.locator('[data-testid=next-diff-line][data-op=del]').count()).toBeGreaterThan(0);

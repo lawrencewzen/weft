@@ -8,6 +8,7 @@ import {
   contextWindowOptions,
   conversationToResolved,
   findComposerModel,
+  isColorBrand,
   groupComposerModels,
   hasAvailableModels,
   isSelectedOption,
@@ -179,6 +180,10 @@ describe('brand helpers', () => {
     expect(brandIconUrl('Claude')).toBe('/vendor/brand-icons/anthropic.svg');
     expect(brandIconUrl(null)).toBeNull();
     expect(brandIconUrl('../etc/passwd')).toBeNull();
+    expect(isColorBrand('grok')).toBe(false);
+    expect(isColorBrand('openai')).toBe(false);
+    expect(isColorBrand('claude-color')).toBe(true);
+    expect(isColorBrand('lobehub')).toBe(true);
     expect(conversationToResolved({ sourceId: 'p', modelId: 'm', label: 'm' })).toEqual({
       providerId: 'p',
       modelId: 'm',

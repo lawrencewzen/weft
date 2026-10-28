@@ -67,8 +67,8 @@ test('FL-1 write shows in the changes diff', async ({ page }) => {
     await page.getByTestId('next-right-tab-changes').click();
     const row = page.locator('[data-testid=next-change-row][data-path="notes/today.md"]');
     await expect(row).toBeVisible({ timeout: 15000 });
-    await row.locator('.changed-file-pill').click();
     const diff = page.locator('[data-testid=next-diff][data-path="notes/today.md"]');
+    // Changes default to expanded (<= 8 files, <= 300 lines), so diff is visible without clicking.
     await expect(diff).toBeVisible();
     await expect(diff).toContainText('今日');
     await expect(diff).toContainText('QA-FILE-1');
@@ -128,7 +128,6 @@ test('FL-3 markdown edit save survives reload and updates the diff', async ({ pa
     await page.getByTestId('next-right-tab-changes').click();
     const row = page.locator('[data-testid=next-change-row][data-path="notes/today.md"]');
     await expect(row).toBeVisible();
-    await row.locator('.changed-file-pill').click();
     await expect(page.getByTestId('next-diff')).toContainText('QA-EDIT-2');
     await expect(row.locator('.stat-add')).not.toHaveText('+0');
   } finally {

@@ -160,16 +160,14 @@ describe('RightPaneProvider diff effect', () => {
     }));
 
     await renderProvider(store, 'c1');
-    await act(async () => {
-      latest?.toggleChange('web/src/data/store.ts');
-    });
-    expect(calls).toBe(1);
+    // Changes default to expanded (<= 8 files, <= 300 lines), so each file initiates 1 diff request on mount.
+    expect(calls).toBe(2);
 
     // An unrelated store upsert re-runs the effect while the diff is loading.
     await act(async () => {
       store.bump();
     });
-    expect(calls).toBe(1);
+    expect(calls).toBe(2);
 
     await act(async () => {
       for (const settle of resolve.splice(0)) settle();
@@ -180,6 +178,42 @@ describe('RightPaneProvider diff effect', () => {
     await act(async () => {
       store.bump();
     });
-    expect(calls).toBe(1);
+    expect(calls).toBe(2);
+  });
+
+  it('default-expands diffs for <= 8 files with <= 300 changed lines', async () => {
+    const store = fakeStore(CHANGES);
+    await renderProvider(store, 'c1');
+    expect(latest?.openPaths.has('web/src/data/store.ts')).toBe(true);
+    expect(latest?.openPaths.has('web/src/data/store.test.ts')).toBe(true);
+
+    // Clicking file pill collapses it
+    await act(async () => {
+      latest?.toggleChange('web/src/data/store.ts');
+    });
+    expect(latest?.openPaths.has('web/src/data/store.ts')).toBe(false);
+  });
+
+  it('defaults to collapsed when visibleChanges > 8 files', async () => {
+    const manyChanges: Change[] = Array.from({ length: 9 }, (_, i) => ({
+      path: `file-${i}.ts`,
+      added: 5,
+      removed: 2,
+      error: null,
+    }));
+    const store = fakeStore(manyChanges);
+    await renderProvider(store, 'c1');
+    expect(latest?.openPaths.size).toBe(0);
+  });
+
+  it('defaults to collapsed for a single file with > 300 lines', async () => {
+    const bigChanges: Change[] = [
+      { path: 'small.ts', added: 10, removed: 5, error: null },
+      { path: 'big.ts', added: 250, removed: 60, error: null }, // 310 > 300
+    ];
+    const store = fakeStore(bigChanges);
+    await renderProvider(store, 'c1');
+    expect(latest?.openPaths.has('small.ts')).toBe(true);
+    expect(latest?.openPaths.has('big.ts')).toBe(false);
   });
 });
