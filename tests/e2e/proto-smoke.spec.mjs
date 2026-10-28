@@ -58,7 +58,7 @@ test('prototype runs from file:// with mock data, no network and no console erro
   await page.getByTestId('next-composer-input').fill('');
   await expect(page.getByTestId('next-composer-newline')).toHaveCount(0);
   await page.locator('[data-testid=next-conv-row][data-id="c-rich"]').click();
-  await expect(page.getByTestId('next-tool-group')).toHaveCount(2);
+  await expect(page.getByTestId('next-tool-group')).toHaveCount(3);
   await expect(page.getByTestId('next-message-chip').first()).toContainText('Grok 4.6');
   await expect(page.getByTestId('next-composer-git-branch')).toHaveText('main');
   await expect(page.getByTestId('next-composer-git-ins')).toHaveText('+42');
