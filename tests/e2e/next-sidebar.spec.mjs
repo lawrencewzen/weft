@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { test, expect } from '@playwright/test';
 import { api, prepareWorkspaces, startServer } from './helpers/server.mjs';
-import { loginNext } from './helpers/next.mjs';
+import { loginNext, sendNext, waitRunDone } from './helpers/next.mjs';
 
 test.use({ locale: 'zh-CN', viewport: { width: 1440, height: 900 } });
 test.describe.configure({ timeout: 90_000 });
@@ -527,8 +527,8 @@ test('switching between conversations never flashes loading or empty thread, sub
     // Visit conv1, send message to trigger faux script that spawns subagent
     await page.goto(`${srv.url}/c/${encodeURIComponent(conv1.id)}`);
     await expect(page.getByTestId('next-composer-input')).toBeVisible();
-    await page.getByTestId('next-composer-input').fill('spawn subagent');
-    await page.getByTestId('next-composer-send').click();
+    await sendNext(page, 'spawn subagent');
+    await waitRunDone(page);
 
     // Wait for subagent row and message to appear in conv1
     const tree1 = page.locator(`[data-testid=next-subagent-tree][data-conv-id="${conv1.id}"]`);
@@ -540,8 +540,8 @@ test('switching between conversations never flashes loading or empty thread, sub
     await convRow(page, conv2.id).click();
     await expect(page).toHaveURL(new RegExp(`/c/${conv2.id}$`));
     await expect(page.getByTestId('next-composer-input')).toBeVisible();
-    await page.getByTestId('next-composer-input').fill('hello plain');
-    await page.getByTestId('next-composer-send').click();
+    await sendNext(page, 'hello plain');
+    await waitRunDone(page);
     await expect(page.locator('.msg-group')).not.toHaveCount(0);
 
     // Both conv1 and conv2 have now been visited and have messages.
