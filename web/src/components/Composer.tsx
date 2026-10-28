@@ -29,14 +29,16 @@ import {
   type ContextUsage,
   type ResolvedModel,
 } from '../data/composerModel';
+import { formatComposerGitTitle, type GitStatus } from '../data/gitBar';
 import type { Lang } from '../data/lang';
-import { draftPath, navigate, openSettings, subagentPath } from '../data/nav';
+import { draftPath, navigate, openSettings } from '../data/nav';
 import type { QueueChip, SendMode } from '../data/pendingSend';
 import { useProviders } from '../data/useProviders';
-import { useRightPane } from '../data/rightPaneContext';
+import { useWorkspaces } from '../data/useWorkspaces';
 import type { components } from '../../../src/v2/contract.gen';
-import { formatElapsed, t } from '../i18n';
+import { t } from '../i18n';
 import { writeActiveWorkspace } from '../data/layout';
+import { useRightPane } from '../data/rightPaneContext';
 import { ContextBanner, ContextChip } from './ContextChip';
 import { DemoModelBadge } from './DemoModelBadge';
 import { ModelChip } from './ModelChip';
@@ -44,7 +46,6 @@ import { WorkspaceChip } from './WorkspaceChip';
 import { createSendRequest, errorMessage } from './sendRequest';
 
 type RunState = components['schemas']['RunState'];
-type Subagent = components['schemas']['Subagent'];
 
 type Props = {
   lang: Lang;
@@ -65,8 +66,7 @@ type Props = {
   onSent?: () => void;
   queue?: QueueChip[];
   onWithdrawQueue?: (requestId: string) => Promise<unknown>;
-  subagents?: Subagent[];
-  step?: number;
+  git?: GitStatus | null;
 };
 
 const FALLBACK_CONTEXT: ContextUsage = { used: 0, window: 128000, percent: 0, level: 'ok' };
@@ -95,34 +95,36 @@ const DROP_ICON = (
   </svg>
 );
 
+const GIT_BRANCH_ICON = (
+  <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
+    <circle cx="4" cy="3.5" r="1.6" />
+    <circle cx="4" cy="12.5" r="1.6" />
+    <circle cx="12" cy="5" r="1.6" />
+    <path d="M4 5v6M12 6.6c0 3-4 2.2-8 4.4" />
+  </svg>
+);
+
+const PLUS_IMAGE_ICON = (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
+    <rect x="3" y="4" width="18" height="16" rx="2" />
+    <circle cx="9" cy="10" r="1.8" />
+    <path d="M21 16l-5-5-8 8" />
+  </svg>
+);
+
+const PLUS_AT_ICON = (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
+    <circle cx="12" cy="12" r="4" />
+    <path d="M16 12v1.5a2.5 2.5 0 0 0 5 0V12a9 9 0 1 0-3.5 7.1" />
+  </svg>
+);
+
 function hintText(lang: Lang, hint: ComposerHint): string {
   if (hint.kind === 'too_large') return t(lang, 'attach_too_large', { name: hint.name || '' });
   if (hint.kind === 'too_many') return t(lang, 'attach_too_many', { n: IMAGE_MAX_COUNT });
   if (hint.kind === 'bad_type') return t(lang, 'attach_bad_type', { name: hint.name || '' });
   if (hint.kind === 'no_vision') return t(lang, 'attach_no_vision');
   return t(lang, 'attach_outside', { name: hint.name || '' });
-}
-
-function isApplePlatform(): boolean {
-  if (typeof navigator === 'undefined') return false;
-  const platform = navigator.platform || '';
-  const ua = navigator.userAgent || '';
-  return /Mac|iPhone|iPad|iPod/.test(platform) || /Mac OS X/.test(ua);
-}
-
-function stripSubagentSuffix(text: string): string {
-  return text.replace(/\s+·\s+\d+\s+(个子 Agent|sub-agents)\s*$/i, '').trim();
-}
-
-function liveSubagents(agents: readonly Subagent[] | undefined): Subagent[] {
-  return (agents || []).filter((agent) => agent.status === 'running' || agent.status === 'stuck');
-}
-
-function subagentMeta(agent: Subagent, lang: Lang, now: number): string {
-  if (agent.currentAction) return agent.currentAction;
-  if (agent.progress) return t(lang, 'composer_run_step', { n: agent.progress.step });
-  if (agent.startedAt != null) return formatElapsed(now - agent.startedAt);
-  return '';
 }
 
 export function Composer({
@@ -144,8 +146,7 @@ export function Composer({
   onSent,
   queue = [],
   onWithdrawQueue,
-  subagents = [],
-  step = 1,
+  git: propGit,
 }: Props) {
   const [draft, setDraft] = useState('');
   const [images, setImages] = useState<ImageAttachment[]>([]);
@@ -155,6 +156,9 @@ export function Composer({
   const [hint, setHint] = useState<ComposerHint | null>(null);
   const [focused, setFocused] = useState(false);
   const [dragging, setDragging] = useState(false);
+  const [plusOpen, setPlusOpen] = useState(false);
+  const plusMenuRef = useRef<HTMLDivElement>(null);
+  const plusBtnRef = useRef<HTMLButtonElement>(null);
   const req = useRef(createSendRequest());
   const area = useRef<HTMLTextAreaElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -162,7 +166,12 @@ export function Composer({
   const imagesRef = useRef(images);
   imagesRef.current = images;
   const { providers, defaultModel, ready: providersReady } = useProviders();
-  const { openInTerminal, copyPath, setTab } = useRightPane();
+  const { openInTerminal, copyPath } = useRightPane();
+  const { workspaces } = useWorkspaces();
+  const currentWorkspace = workspaces.find((ws) => ws.id === workspaceId) || null;
+  const git = propGit !== undefined ? propGit : (currentWorkspace?.git ?? null);
+  const totalDiff = (git?.insertions || 0) + (git?.deletions || 0);
+  const hasDiff = totalDiff > 0;
   const groups = useMemo(() => groupComposerModels(providers, defaultModel), [providers, defaultModel]);
   const available = hasAvailableModels(providers);
   const selected = useMemo(() => resolveComposerSelection({
@@ -182,12 +191,7 @@ export function Composer({
   const stopMode = run.canStop && !hasPayload;
   const showBanner = showModelControls && !noModel && contextIsWarn(context.level);
   const running = run.status === 'running';
-  const showSteerHint = running;
-  const showNewline = showSteerHint || (Boolean(draft) && !stopMode);
-  const liveAgents = useMemo(() => liveSubagents(subagents), [subagents]);
-  const [subPop, setSubPop] = useState(false);
-  const [now, setNow] = useState(() => Date.now());
-  const popRef = useRef<HTMLDivElement>(null);
+  const showNewline = !running && Boolean(draft.trim());
   const placeholder = noModel
     ? t(lang, 'composer_placeholder_no_model')
     : run.status === 'running'
@@ -210,26 +214,28 @@ export function Composer({
   }, [draft]);
 
   useEffect(() => {
-    if (!running) return;
-    const timer = window.setInterval(() => setNow(Date.now()), 1000);
-    return () => window.clearInterval(timer);
-  }, [running]);
-
-  useEffect(() => {
-    if (!subPop) return;
-    function onDoc(event: MouseEvent) {
-      if (popRef.current && !popRef.current.contains(event.target as Node)) setSubPop(false);
+    if (!plusOpen) return;
+    function onDocClick(event: MouseEvent) {
+      if (
+        plusMenuRef.current?.contains(event.target as Node) ||
+        plusBtnRef.current?.contains(event.target as Node)
+      ) {
+        return;
+      }
+      setPlusOpen(false);
     }
     function onKey(event: globalThis.KeyboardEvent) {
-      if (event.key === 'Escape') setSubPop(false);
+      if (event.key === 'Escape') {
+        setPlusOpen(false);
+      }
     }
-    document.addEventListener('mousedown', onDoc);
+    document.addEventListener('mousedown', onDocClick);
     document.addEventListener('keydown', onKey);
     return () => {
-      document.removeEventListener('mousedown', onDoc);
+      document.removeEventListener('mousedown', onDocClick);
       document.removeEventListener('keydown', onKey);
     };
-  }, [subPop]);
+  }, [plusOpen]);
 
   const addImageFiles = useCallback(async (files: File[]) => {
     if (!files.length) return;
@@ -337,6 +343,11 @@ export function Composer({
   }
 
   function onKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if (event.key === 'Escape' && plusOpen) {
+      event.preventDefault();
+      setPlusOpen(false);
+      return;
+    }
     if (event.key !== 'Enter') return;
     if (event.nativeEvent.isComposing || event.keyCode === 229 || event.shiftKey) return;
     if (event.altKey) {
@@ -386,6 +397,29 @@ export function Composer({
       return;
     }
     fileInput.current?.click();
+  }
+
+  function pickImages() {
+    setPlusOpen(false);
+    openAttach();
+  }
+
+  function insertFileAt() {
+    setPlusOpen(false);
+    const el = area.current;
+    if (el) {
+      const start = el.selectionStart ?? draft.length;
+      const end = el.selectionEnd ?? draft.length;
+      const next = draft.slice(0, start) + '@' + draft.slice(end);
+      setDraft(next);
+      requestAnimationFrame(() => {
+        el.focus();
+        el.setSelectionRange(start + 1, start + 1);
+        resize();
+      });
+    } else {
+      setDraft((cur) => cur + '@');
+    }
   }
 
   function removeImage(id: string) {
@@ -459,7 +493,7 @@ export function Composer({
     noModel ? 'is-no-model' : '',
     showBanner ? 'is-ctx-warn' : '',
     dragging ? 'is-drop' : '',
-    images.length || fileRefs.length || queue.length || running ? 'is-tagged' : '',
+    images.length || fileRefs.length || queue.length ? 'is-tagged' : '',
   ].filter(Boolean).join(' ');
 
   return (
@@ -475,63 +509,6 @@ export function Composer({
         >
           {showBanner ? <ContextBanner lang={lang} context={context} onNewChat={openNewChat} /> : null}
           <div className="composer-body">
-            {running ? (
-              <div className="composer-run" data-testid="next-composer-run">
-                <span className="composer-run-now">
-                  <span className="composer-run-dot" aria-hidden="true" />
-                  <span className="composer-run-action">
-                    {stripSubagentSuffix(run.pendingText || t(lang, 'pending_thinking'))}
-                  </span>
-                  <span className="composer-run-meta">
-                    {t(lang, 'composer_run_step', { n: Math.max(1, step) })}
-                    {' · '}
-                    {formatElapsed(now - (run.startedAt ?? now))}
-                  </span>
-                </span>
-                {liveAgents.length ? (
-                  <div className="composer-run-subs" ref={popRef}>
-                    <button
-                      type="button"
-                      className="composer-sub-chip"
-                      data-testid="next-composer-subs"
-                      aria-expanded={subPop}
-                      onClick={() => setSubPop((open) => !open)}
-                    >
-                      {t(lang, 'composer_subs_running', { n: liveAgents.length })}
-                      <span className="composer-sub-caret" aria-hidden="true">{subPop ? '▴' : '▸'}</span>
-                    </button>
-                    {subPop ? (
-                      <div className="composer-sub-pop" data-testid="next-composer-sub-pop" role="menu">
-                        <div className="composer-sub-pop-h">{t(lang, 'composer_subs_header')}</div>
-                        {liveAgents.map((agent) => (
-                          <button
-                            key={agent.id}
-                            type="button"
-                            className="composer-sub-row"
-                            data-testid="next-composer-sub-row"
-                            role="menuitem"
-                            onClick={() => {
-                              if (!conversationId) return;
-                              setSubPop(false);
-                              setTab('subagents');
-                              navigate(subagentPath(conversationId, agent.id));
-                            }}
-                          >
-                            <span
-                              className={`composer-sub-dot${agent.status === 'stuck' ? ' is-stuck' : ''}`}
-                              aria-hidden="true"
-                            />
-                            <span className="composer-sub-title">{agent.title || agent.name}</span>
-                            <span className="composer-sub-meta">{subagentMeta(agent, lang, now)}</span>
-                          </button>
-                        ))}
-                        <div className="composer-sub-pop-f">{t(lang, 'composer_subs_footer')}</div>
-                      </div>
-                    ) : null}
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
             {queue.length || images.length || fileRefs.length ? (
               <div className="composer-tags" data-testid="next-composer-tags">
                 {queue.map((item) => (
@@ -560,7 +537,7 @@ export function Composer({
                       aria-label={t(lang, 'composer_queue_remove')}
                       onClick={() => { void onWithdrawQueue?.(item.requestId); }}
                     >
-                      ×
+                      &times;
                     </button>
                   </span>
                 ))}
@@ -568,7 +545,7 @@ export function Composer({
                   <span key={item.id} className="composer-tag" data-testid="next-attach-image">
                     <img className="composer-tag-thumb" src={item.previewUrl} alt="" />
                     <span className="composer-tag-name">{item.name}</span>
-                    <span className="composer-tag-size">· {formatFileSize(item.size)}</span>
+                    <span className="composer-tag-size">&middot; {formatFileSize(item.size)}</span>
                     <button
                       type="button"
                       className="composer-tag-x"
@@ -576,7 +553,7 @@ export function Composer({
                       aria-label={t(lang, 'attach_remove', { name: item.name })}
                       onClick={() => removeImage(item.id)}
                     >
-                      ×
+                      &times;
                     </button>
                   </span>
                 ))}
@@ -590,7 +567,7 @@ export function Composer({
                       aria-label={t(lang, 'attach_remove', { name: item.path })}
                       onClick={() => removeFile(item.path)}
                     >
-                      ×
+                      &times;
                     </button>
                   </span>
                 ))}
@@ -630,14 +607,53 @@ export function Composer({
                 <div className="composer-chips">
                   {allowAttach ? (
                     <>
+                      {plusOpen ? (
+                        <div
+                          ref={plusMenuRef}
+                          className="composer-plus-menu"
+                          data-testid="next-composer-plus-menu"
+                          role="menu"
+                        >
+                          <button
+                            type="button"
+                            className="composer-plus-item"
+                            data-testid="next-composer-plus-image"
+                            role="menuitem"
+                            onClick={pickImages}
+                          >
+                            <span className="composer-plus-icon">{PLUS_IMAGE_ICON}</span>
+                            <span className="composer-plus-text">
+                              <span className="composer-plus-label">{t(lang, 'composer_plus_image')}</span>
+                              <span className="composer-plus-hint">{t(lang, 'composer_plus_image_hint')}</span>
+                            </span>
+                          </button>
+                          <button
+                            type="button"
+                            className="composer-plus-item"
+                            data-testid="next-composer-plus-at"
+                            role="menuitem"
+                            onClick={insertFileAt}
+                          >
+                            <span className="composer-plus-icon">{PLUS_AT_ICON}</span>
+                            <span className="composer-plus-text">
+                              <span className="composer-plus-label">{t(lang, 'composer_plus_at')}</span>
+                              <span className="composer-plus-hint">{t(lang, 'composer_plus_at_hint')}</span>
+                            </span>
+                          </button>
+                        </div>
+                      ) : null}
                       <button
+                        ref={plusBtnRef}
                         type="button"
-                        className="composer-attach"
+                        className={`composer-attach${plusOpen ? ' is-open' : ''}`}
                         data-testid="next-composer-attach"
                         aria-label={t(lang, 'composer_attach')}
                         title={t(lang, 'composer_attach')}
+                        aria-expanded={plusOpen}
                         disabled={locked}
-                        onClick={openAttach}
+                        onClick={() => {
+                          if (!locked) setPlusOpen((open) => !open);
+                        }}
                       >
                         {PLUS_ICON}
                       </button>
@@ -667,6 +683,34 @@ export function Composer({
                       : undefined}
                     onCopyPath={copyPath}
                   />
+                  {git?.branch ? (
+                    <button
+                      type="button"
+                      className="composer-git-chip"
+                      data-testid="next-composer-git"
+                      title={formatComposerGitTitle(lang, git)}
+                    >
+                      {GIT_BRANCH_ICON}
+                      <span className="composer-git-branch" data-testid="next-composer-git-branch">
+                        {git.branch}
+                      </span>
+                      {hasDiff ? (
+                        <>
+                          <span className="composer-git-ins" data-testid="next-composer-git-ins">
+                            +{git.insertions || 0}
+                          </span>
+                          <span className="composer-git-del" data-testid="next-composer-git-del">
+                            {"−" + (git.deletions || 0)}
+                          </span>
+                        </>
+                      ) : null}
+                      {git.ahead != null && git.ahead > 0 ? (
+                        <span className="composer-git-ahead" data-testid="next-composer-git-ahead">
+                          {"↑" + git.ahead}
+                        </span>
+                      ) : null}
+                    </button>
+                  ) : null}
                   {demo ? <DemoModelBadge lang={lang} testId="next-demo-model-chip" /> : null}
                 </div>
               )}
@@ -689,11 +733,7 @@ export function Composer({
               <div className="composer-actions">
                 {showNewline ? (
                   <span className="composer-newline" data-testid="next-composer-newline">
-                    {showSteerHint
-                      ? t(lang, 'composer_steer_hint', {
-                        mod: isApplePlatform() ? t(lang, 'composer_mod_option') : t(lang, 'composer_mod_alt'),
-                      })
-                      : t(lang, 'composer_newline_hint')}
+                    {t(lang, 'composer_newline_hint')}
                   </span>
                 ) : null}
                 {showModelControls && !noModel ? (
