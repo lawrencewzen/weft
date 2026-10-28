@@ -90,10 +90,6 @@ a:hover { text-decoration: underline; }
   from { background: color-mix(in oklch, var(--ok) 18%, transparent); }
   to { background: transparent; }
 }
-@keyframes sa-action-in {
-  from { opacity: 0; transform: translateY(4px); }
-  to { opacity: 1; transform: none; }
-}
 @keyframes sa-arc-spin { to { transform: rotate(360deg); } }
 
 body { font-family: var(--font); font-size: inherit; line-height: 1.6; background: var(--bg); color: var(--ink); }
@@ -243,10 +239,10 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.6; backgroun
 .conv-status-dot {
   width: 6px; height: 6px; border-radius: 50%;
 }
-.conv-status-dot.is-running { background: #2e8c5a; animation: conv-dot-pulse 1.8s ease-out infinite; }
-.conv-status-dot.is-waiting { background: #c98a16; }
-.conv-status-dot.is-stuck { background: #c98a16; }
-.conv-status-dot.is-failed { background: #c2412d; }
+.conv-status-dot.is-running { background: var(--sa-run); animation: conv-dot-pulse 1.8s ease-out infinite; }
+.conv-status-dot.is-waiting { background: var(--sa-stuck); }
+.conv-status-dot.is-stuck { background: var(--sa-stuck); }
+.conv-status-dot.is-failed { background: var(--fail); }
 .conv-node-title { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .conv-node-meta { font-size: 11px; color: var(--faint); white-space: nowrap; flex-shrink: 0; }
 .conv-node-meta.is-running { color: var(--run-ink); }
@@ -409,23 +405,6 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.6; backgroun
 .subagent-tree-line { display: flex; align-items: center; gap: 7px; min-width: 0; }
 .subagent-tree-summary {
   flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-.subagent-tree-time {
-  flex-shrink: 0; font-family: var(--mono); font-size: 11px; color: var(--mute); white-space: nowrap;
-  transition: color .6s ease;
-}
-.subagent-tree-time:empty { display: none; }
-.subagent-tree-time.is-idle { color: var(--wait-ink); }
-.subagent-tree-action-slot {
-  display: grid; grid-template-rows: 0fr;
-  transition: grid-template-rows .55s ease;
-}
-.subagent-tree-action-slot.is-open { grid-template-rows: 1fr; }
-.subagent-tree-action-clip { overflow: hidden; min-height: 0; }
-.subagent-tree-action {
-  font-size: 11.5px; color: var(--mute); line-height: 1.4; padding-left: 19px;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  animation: sa-action-in .4s ease;
 }
 .subagent-back {
   flex-shrink: 0; border: none; background: none; padding: 0;
@@ -597,12 +576,10 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.6; backgroun
   .sa-arc,
   .subagent-tree-row-shell.is-entering .subagent-tree-row-grow,
   .subagent-tree-row-shell.is-entering .subagent-tree-row,
-  .subagent-tree-row.is-just-ended,
-  .subagent-tree-action {
+  .subagent-tree-row.is-just-ended {
     animation: none !important;
   }
   .subagent-tree-wrap,
-  .subagent-tree-action-slot,
   .sa-check,
   .sa-stop,
   .sa-fail {

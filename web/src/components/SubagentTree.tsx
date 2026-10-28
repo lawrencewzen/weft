@@ -3,8 +3,6 @@ import type { Lang } from '../data/lang';
 import {
   isEndedSubagentStatus,
   isLiveSubagentStatus,
-  subagentActionText,
-  subagentTreeTimeText,
   subagentTreeVisual,
 } from '../data/subagentTime';
 import type { Subagent } from '../data/store';
@@ -57,7 +55,7 @@ export function SubagentChip({
     const a = agents[k];
     const visual = a ? subagentTreeVisual(a.status) : (k < live ? 'running' : 'done');
     const on = visual === 'running' || visual === 'stuck';
-    const color = visual === 'running' ? '#2e8c5a' : visual === 'stuck' ? '#c98a16' : '#8fae9b';
+    const color = visual === 'running' ? 'var(--sa-run)' : visual === 'stuck' ? 'var(--sa-stuck)' : 'var(--sa-check)';
     const op = on ? 1 : 0.55;
     const play = on ? 'running' : 'paused';
     const dur = `${1.6 + k * 0.45}s`;
@@ -82,7 +80,7 @@ export function SubagentChip({
         <span className="subagent-orbit-stage" aria-hidden="true">
           <span
             className="subagent-orbit-core"
-            style={{ background: live > 0 ? '#2e8c5a' : '#8fae9b' }}
+            style={{ background: live > 0 ? 'var(--sa-run)' : 'var(--sa-check)' }}
           />
           {orbitDots.map((d, k) => (
             <span
@@ -107,7 +105,7 @@ export function SubagentChip({
         </span>
         <span
           className="subagent-chip-count"
-          style={{ color: live > 0 ? '#2a7a4f' : 'var(--faint)' }}
+          style={{ color: live > 0 ? 'var(--run-ink)' : 'var(--faint)' }}
         >
           {label}
         </span>
@@ -202,7 +200,6 @@ export function SubagentTree({
   loading,
   activeAgentId,
   lang,
-  now,
   onOpen,
   onMenu,
 }: {
@@ -212,7 +209,6 @@ export function SubagentTree({
   loading?: boolean;
   activeAgentId: string | null;
   lang: Lang;
-  now: number;
   onOpen: (cid: string, agentId: string) => void;
   onMenu: (ev: MouseEvent, agent: Subagent) => void;
 }) {
@@ -238,8 +234,6 @@ export function SubagentTree({
               {agents.map((agent, index) => {
             const last = index === agents.length - 1;
             const visual = subagentTreeVisual(agent.status);
-            const time = subagentTreeTimeText(agent, lang, now);
-            const action = subagentActionText(agent);
             const entering = !entered.has(agent.id);
             const ended = justEnded.has(agent.id);
             const active = activeAgentId === agent.id;
@@ -287,21 +281,6 @@ export function SubagentTree({
                         <span className="subagent-tree-summary tt" data-testid="next-subagent-summary">
                           {agent.title || agent.name}
                         </span>
-                        <span
-                          className={`subagent-tree-time ttm${agent.status === 'stuck' ? ' is-idle' : ''}`}
-                          data-testid="next-subagent-time"
-                        >
-                          {time}
-                        </span>
-                      </div>
-                      <div className={`subagent-tree-action-slot${action ? ' is-open' : ''}`}>
-                        <div className="subagent-tree-action-clip">
-                          {action ? (
-                            <div className="subagent-tree-action" data-testid="next-subagent-action">
-                              {action}
-                            </div>
-                          ) : null}
-                        </div>
                       </div>
                     </div>
                   </div>

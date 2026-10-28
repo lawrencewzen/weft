@@ -125,10 +125,8 @@ test('spawning a sub-agent shows a sidebar row and chip; running time ticks', as
     await expect(convRow(page, conv.id).getByTestId('next-subagent-chip')).toBeVisible();
     await expect(convRow(page, conv.id).getByTestId('next-subagent-chip')).toHaveClass(/is-live/);
     await expect(row).toHaveAttribute('data-status', /running|waiting|stuck/);
-    const time = row.getByTestId('next-subagent-time');
-    await expect(time).toHaveText(/\d{2}:\d{2}/, { timeout: 10000 });
-    const first = (await time.textContent() || '').trim();
-    await expect.poll(async () => (await time.textContent() || '').trim(), { timeout: 4000 }).not.toBe(first);
+    await expect(row.getByTestId('next-subagent-time')).toHaveCount(0);
+    await expect(row.getByTestId('next-subagent-action')).toHaveCount(0);
     expect(csp, 'page console has no CSP errors').toEqual([]);
   } finally {
     await srv.kill();
@@ -156,8 +154,8 @@ test('short WEFT_SUBAGENT_STUCK_MS turns the row stuck with idle time without re
     await sendNext(page, '请派子代理');
     const row = await waitSubagentRow(page, conv.id);
     await expect(row).toHaveAttribute('data-status', 'stuck', { timeout: 20000 });
-    await expect(row.getByTestId('next-subagent-time')).toContainText('静默');
-    await expect(row.getByTestId('next-subagent-time')).toHaveClass(/is-idle/);
+    await expect(row.getByTestId('next-subagent-time')).toHaveCount(0);
+    await expect(row.getByTestId('next-subagent-action')).toHaveCount(0);
   } finally {
     await srv.kill();
   }

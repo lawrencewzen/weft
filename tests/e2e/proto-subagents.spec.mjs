@@ -35,9 +35,8 @@ test('seeded subagent tree, report cards, messages and stop', async ({ page }) =
   await expect(page.getByTestId('next-subagent-row').evaluateAll(
     (rows) => rows.map((row) => row.dataset.status),
   )).resolves.toEqual(['running', 'stuck', 'done', 'waiting', 'failed']);
-  await expect(page.getByTestId('next-subagent-action').first()).toHaveText(/正在读取 web\/src\/data\/store\.ts/);
-  await expect(page.getByTestId('next-subagent-action').first()).not.toHaveText(/`/);
-  await expect(page.getByTestId('next-subagent-row').nth(1).getByTestId('next-subagent-time')).toContainText('静默');
+  await expect(page.getByTestId('next-subagent-action')).toHaveCount(0);
+  await expect(page.getByTestId('next-subagent-time')).toHaveCount(0);
 
   // Non-current conversation: chip only until clicked; current tree stays open when leaving.
   const docsChip = page.locator('[data-testid=next-conv-row][data-id="c-docs"]').getByTestId('next-subagent-chip');
@@ -50,7 +49,7 @@ test('seeded subagent tree, report cards, messages and stop', async ({ page }) =
   const docsTree = page.locator('[data-testid=next-subagent-tree][data-conv-id="c-docs"]');
   await expect(docsTree.getByTestId('next-subagent-row')).toHaveCount(3);
   await expect(docsTree.getByTestId('next-subagent-row').first()).toHaveAttribute('data-visual', 'done');
-  await expect(docsTree.getByTestId('next-subagent-time').first()).toHaveText('');
+  await expect(docsTree.getByTestId('next-subagent-time')).toHaveCount(0);
 
   await page.locator('[data-testid=next-conv-row][data-id="c-tests"]').click();
   await expect(page).toHaveURL(/#\/c\/c-tests$/);

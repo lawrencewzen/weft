@@ -80,15 +80,6 @@ const SUN_ICON = (
   </svg>
 );
 
-function useNow(ms: number): number {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const timer = window.setInterval(() => setNow(Date.now()), ms);
-    return () => window.clearInterval(timer);
-  }, [ms]);
-  return now;
-}
-
 export function Sidebar({
   lang,
   collapsed = false,
@@ -104,7 +95,6 @@ export function Sidebar({
   const { groups, archived } = useWorkspaces();
   const { store, status, setExtraConversationIds } = useSession();
   const { tab, setTab, showFiles, openInTerminal } = useRightPane();
-  const now = useNow(1_000);
   const [openMap, setOpenMap] = useState<OpenRecord>(() => readWorkspaceOpen());
   const [treeRecorded, setTreeRecorded] = useState<OpenRecord>(() => readSubagentTrees());
   const [archivedOpen, setArchivedOpen] = useState(false);
@@ -478,7 +468,6 @@ export function Sidebar({
                             loading={loadingOther}
                             activeAgentId={isCurrent ? activeAgentId : null}
                             lang={lang}
-                            now={now}
                             onOpen={openSubagent}
                             onMenu={(ev, agent) => openMenu(ev, subagentItems(conv.id, agent), agent.title || agent.name)}
                           />
