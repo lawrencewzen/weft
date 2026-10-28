@@ -147,7 +147,7 @@ test('subagent tab overview, breadcrumb switcher, and deep link', async ({ page 
   await expect(items).toHaveCount(5);
   const targetId = await items.nth(2).getAttribute('data-agent-id');
   await items.nth(2).click();
-  await expect(page).toHaveURL(new RegExp(`/a/${targetId}$`));
+  await expect.poll(() => decodeURIComponent(page.url())).toMatch(new RegExp(`/a/${targetId}$`));
   await expect(page.getByTestId('next-subagent-menu')).toHaveCount(0);
   await expect(page.getByTestId('next-center')).toBeVisible();
 
