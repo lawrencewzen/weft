@@ -86,12 +86,16 @@ test('prototype runs from file:// with mock data, no network and no console erro
   const websiteNode = page.getByTestId('next-ws-node').filter({ hasText: 'website' });
   const websiteToggle = websiteNode.getByTestId('next-ws-toggle');
   const websiteAdd = websiteNode.getByTestId('next-ws-add');
-  expect(await websiteAdd.evaluate((el) => getComputedStyle(el).opacity)).toBe('0');
+  await expect(websiteAdd).toHaveCSS('opacity', '0');
   await websiteNode.locator('.ws-node-header').hover();
-  expect(await websiteAdd.evaluate((el) => getComputedStyle(el).opacity)).toBe('1');
+  await expect(websiteAdd).toHaveCSS('opacity', '1');
+
   const weftNode = page.getByTestId('next-ws-node').filter({ hasText: 'weft' });
   const weftAdd = weftNode.getByTestId('next-ws-add');
-  expect(await weftAdd.evaluate((el) => getComputedStyle(el).opacity)).toBe('0');
+  await expect(weftAdd).toHaveCSS('opacity', '0');
+  await weftNode.locator('.ws-node-header').hover();
+  await expect(weftAdd).toHaveCSS('opacity', '1');
+
   await expect(websiteToggle).toHaveAttribute('aria-expanded', 'false');
   await websiteNode.hover();
   await expect(websiteNode.locator('.ws-node-count')).toHaveText('1 运行中');
@@ -225,8 +229,7 @@ test('sidebar appearance toggle persists across reload', async ({ page }) => {
   // Dark mode Grok icon has invert filter (not black)
   const grokIcon = page.locator('.assistant-message-author-badge .brand-icon img, .model-chip .brand-icon img').first();
   await expect(grokIcon).toBeVisible();
-  const filter = await grokIcon.evaluate((el) => getComputedStyle(el).filter);
-  expect(filter).toContain('invert');
+  await expect(grokIcon).toHaveCSS('filter', /invert/);
 
   await page.reload();
   await expect(page.getByTestId('next-appearance-toggle')).toBeVisible();

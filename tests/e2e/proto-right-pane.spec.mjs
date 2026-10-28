@@ -20,12 +20,14 @@ test('diff, file tree, preview, save and the 409 conflict demo', async ({ page }
   );
 
   // Right tabs container is aligned to the left, immediately following the collapse button.
-  const collapseBox = await page.getByTestId('next-right-collapse').boundingBox();
-  const tabsNavBox = await page.locator('.tabs-nav').boundingBox();
-  expect(collapseBox).toBeTruthy();
-  expect(tabsNavBox).toBeTruthy();
-  expect(tabsNavBox.x).toBeGreaterThan(collapseBox.x);
-  expect(tabsNavBox.x - (collapseBox.x + collapseBox.width)).toBeLessThanOrEqual(8);
+  await expect(page.locator('.right-tabs-bar')).toHaveCSS('justify-content', 'flex-start');
+  await expect.poll(async () => {
+    const collapseBox = await page.getByTestId('next-right-collapse').boundingBox();
+    const tabsNavBox = await page.locator('.tabs-nav').boundingBox();
+    if (!collapseBox || !tabsNavBox) return false;
+    const gap = tabsNavBox.x - (collapseBox.x + collapseBox.width);
+    return gap >= 0 && gap <= 8;
+  }).toBe(true);
 
   // Changes default to expanded (<= 8 files, <= 300 lines) with diff lines visible.
   await expect(page.getByTestId('next-diff')).toHaveCount(2);
