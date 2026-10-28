@@ -17,8 +17,9 @@ test('Enter steers a running turn; Alt+Enter queues until the turn ends', async 
     const { conv } = await openWorkspaceConversation(srv, 'steer', ws);
     await openNextChat(page, srv, conv.id);
     await sendNext(page, 'run');
-    await expect(page.getByTestId('next-composer-run')).toBeVisible();
-    await expect(page.getByTestId('next-composer-newline')).toContainText('Enter 插话');
+    await expect(page.getByTestId('next-stop')).toBeVisible();
+    await expect(page.getByTestId('next-composer-run')).toHaveCount(0);
+    await expect(page.getByTestId('next-composer-newline')).toHaveCount(0);
 
     const input = page.getByTestId('next-composer-input');
     await input.fill('插一句');

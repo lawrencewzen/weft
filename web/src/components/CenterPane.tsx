@@ -6,8 +6,6 @@ import { writeActiveWorkspace } from '../data/layout';
 import { draftPath, navigate } from '../data/nav';
 import { useConversation, useDraftSend } from '../data/useConversation';
 import { usePendingSend, waitingForAgent } from '../data/usePendingSend';
-import { useSession } from '../data/session';
-import type { ThreadItem } from '../data/store';
 import { t } from '../i18n';
 import type { components } from '../../../src/v2/contract.gen';
 import { Composer } from './Composer';
@@ -27,16 +25,6 @@ type Props = {
   onOpenLeft?: () => void;
   onNewWorkspace?: () => void;
 };
-
-function runStep(items: readonly ThreadItem[]): number {
-  let n = 0;
-  for (let i = items.length - 1; i >= 0; i -= 1) {
-    const item = items[i];
-    if (item.kind === 'user' && !String(item.id).startsWith('local:')) break;
-    if (item.kind === 'tool_group') n += item.toolIds.length;
-  }
-  return Math.max(1, n);
-}
 
 const DRAFT_RUN: ConversationView['run'] = {
   status: 'idle',
@@ -73,8 +61,6 @@ export function CenterPane({
 }: Props) {
   const isDraft = !cid && Boolean(workspaceId);
   const { conversation, items, toolsById, changes, missing, actions } = useConversation(cid);
-  const { store } = useSession();
-  const agents = cid ? store.subagents(cid) : [];
   const pickDraftWorkspace = useCallback((id: string) => {
     writeActiveWorkspace(id);
     navigate(draftPath(id), { replace: true });
@@ -135,6 +121,7 @@ export function CenterPane({
           onDraftModel={setDraftModel}
           onNewWorkspace={onNewWorkspace}
           workspacePath={workspace?.path}
+          git={workspace?.git ?? null}
           onSend={draftActions.send}
           onStop={draftActions.stop}
           onSent={bumpStick}
@@ -215,6 +202,7 @@ export function CenterPane({
           context={conversation.context}
           onNewWorkspace={onNewWorkspace}
           workspacePath={workspace?.path}
+          git={workspace?.git ?? null}
           onSend={optimistic.send}
           onStop={actions.stop}
           onSent={bumpStick}
@@ -223,8 +211,6 @@ export function CenterPane({
             await actions.withdraw(requestId);
             optimistic.dropLocal(requestId);
           }}
-          subagents={agents}
-          step={runStep(items)}
         />
     </main>
   );

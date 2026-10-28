@@ -911,57 +911,6 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.6; backgroun
 }
 .composer-box.is-ctx-warn .composer-body { padding: 14px 12px 10px 18px; }
 .composer-box.is-tagged .composer-body { padding: 12px 12px 10px 18px; gap: 10px; }
-.composer-run {
-  display: flex; align-items: center; justify-content: space-between; gap: 8px;
-  font-size: 12px; color: var(--ink3); min-width: 0;
-}
-.composer-run-now {
-  display: flex; align-items: center; gap: 8px; min-width: 0;
-}
-.composer-run-dot {
-  width: 7px; height: 7px; border-radius: 50%; background: var(--sa-run); flex-shrink: 0;
-  animation: tpulse 1.8s ease-out infinite;
-}
-.composer-run-action {
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;
-}
-.composer-run-meta {
-  color: var(--mute); white-space: nowrap; font-variant-numeric: tabular-nums; flex-shrink: 0;
-}
-.composer-run-subs { position: relative; flex-shrink: 0; }
-.composer-sub-chip {
-  height: 24px; display: inline-flex; align-items: center; gap: 6px;
-  padding: 0 10px; border-radius: 999px; border: none;
-  background: var(--ok-bg); color: var(--ok-ink); font-size: 12px; font-family: inherit;
-  cursor: pointer; white-space: nowrap;
-}
-.composer-sub-caret { font-size: 9px; }
-.composer-sub-pop {
-  position: absolute; right: 0; bottom: calc(100% + 8px); z-index: 6;
-  width: 380px; max-width: min(380px, 70vw);
-  background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.09);
-  padding: 6px; display: flex; flex-direction: column; font-size: 13px;
-}
-.composer-sub-pop-h { padding: 6px 8px 4px; font-size: 11px; color: var(--mute); }
-.composer-sub-row {
-  display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 8px;
-  border: none; background: transparent; color: inherit; font: inherit; text-align: left;
-  cursor: pointer; width: 100%;
-}
-.composer-sub-row:hover { background: var(--hover); }
-.composer-sub-dot {
-  width: 7px; height: 7px; border-radius: 50%; background: var(--sa-run); flex-shrink: 0;
-}
-.composer-sub-dot.is-stuck { background: var(--sa-stuck); }
-.composer-sub-title {
-  flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.composer-sub-meta { font-size: 12px; color: var(--mute); white-space: nowrap; flex-shrink: 0; }
-.composer-sub-pop-f {
-  border-top: 1px solid var(--line2); margin: 4px 6px 0; padding: 8px 4px 4px;
-  font-size: 12px; color: var(--ink3);
-}
 .composer-queue {
   height: 28px; display: inline-flex; align-items: center; gap: 8px;
   padding: 0 6px 0 10px; border-radius: 8px; background: var(--line2);
@@ -983,11 +932,6 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.6; backgroun
 .msg-steer-hint {
   margin-top: 4px; font-size: 12px; color: var(--mute); text-align: right;
 }
-@keyframes tpulse {
-  0% { box-shadow: 0 0 0 0 color-mix(in oklch, var(--sa-run) 45%, transparent); }
-  70% { box-shadow: 0 0 0 6px transparent; }
-  100% { box-shadow: 0 0 0 0 transparent; }
-}
 .composer-textarea {
   border: none; outline: none; resize: none; font-family: inherit; font-size: 15px; line-height: 1.65;
   height: 44px; min-height: 44px; max-height: 200px; overflow-y: auto;
@@ -997,13 +941,43 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.6; backgroun
 .composer-textarea:disabled { cursor: not-allowed; }
 .composer-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .composer-chips { display: flex; align-items: center; gap: 2px; font-size: 13px; color: var(--ink3); min-width: 0; flex: 1; }
+.composer-plus-menu {
+  position: absolute; left: 10px; bottom: 52px; z-index: 70;
+  width: 260px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.09); padding: 6px; display: flex; flex-direction: column;
+  font-size: 13px; box-sizing: border-box;
+}
+.composer-plus-item {
+  display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: none; border-radius: 8px;
+  background: transparent; color: var(--ink); font: inherit; font-size: 13px; cursor: pointer; text-align: left;
+  width: 100%; box-sizing: border-box;
+}
+.composer-plus-item:hover { background: var(--hover); }
+.composer-plus-icon {
+  width: 18px; display: flex; justify-content: center; align-items: center; color: var(--ink3); flex-shrink: 0;
+}
+.composer-plus-text { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.composer-plus-label { line-height: 1.4; color: var(--ink); }
+.composer-plus-hint { font-size: 11.5px; color: var(--mute); line-height: 1.35; }
+
 .composer-attach {
   width: 32px; height: 32px; border-radius: 8px; border: none; background: transparent; color: var(--ink3);
   display: inline-flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; padding: 0;
 }
 .composer-attach svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
-.composer-attach:hover { background: var(--hover); }
+.composer-attach:hover, .composer-attach.is-open { background: var(--hover); }
 .composer-attach:disabled { cursor: not-allowed; opacity: .5; }
+.composer-git-chip {
+  height: 32px; display: inline-flex; align-items: center; gap: 6px; padding: 0 8px; border: none;
+  background: transparent; border-radius: 8px; font-size: 13px; color: var(--ink3); font-family: inherit;
+  cursor: pointer; white-space: nowrap; min-width: 0; flex-shrink: 0;
+}
+.composer-git-chip:hover { background: var(--hover); }
+.composer-git-chip svg { flex-shrink: 0; }
+.composer-git-branch { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.composer-git-ins { font-family: var(--mono); font-size: 12px; color: var(--add-ink); }
+.composer-git-del { font-family: var(--mono); font-size: 12px; color: var(--del-ink); }
+.composer-git-ahead { font-family: var(--mono); font-size: 12px; color: var(--mute); }
 .composer-divider { width: 1px; height: 16px; background: var(--line); margin: 0 6px; flex-shrink: 0; }
 .composer-tags { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .composer-tag {

@@ -41,9 +41,11 @@ test('prototype runs from file:// with mock data, no network and no console erro
   await expect(page.getByTestId('next-status')).toContainText('重构会话列表的加载逻辑');
   await expect(page.getByTestId('next-composer-input')).toHaveAttribute('placeholder', '补充说明……');
   await expect(page.getByTestId('next-composer-attach')).toBeVisible();
-  await expect(page.getByTestId('next-composer-run')).toBeVisible();
+  await expect(page.getByTestId('next-composer-run')).toHaveCount(0);
   await expect(page.getByTestId('next-queue-chip')).toContainText('深色模式');
-  await expect(page.getByTestId('next-composer-newline')).toHaveText('Enter 插话 · Alt+Enter 排队');
+  await expect(page.getByTestId('next-composer-newline')).toHaveCount(0);
+  await expect(page.getByTestId('next-composer-git')).toBeVisible();
+  await expect(page.getByTestId('next-composer-git-branch')).toHaveText('main');
   await page.locator('[data-testid=next-conv-row][data-id="c-docs"]').click();
   await expect(page.getByTestId('next-context-banner')).toBeVisible();
   await expect(page.getByTestId('next-context-chip')).toHaveClass(/is-warn/);
