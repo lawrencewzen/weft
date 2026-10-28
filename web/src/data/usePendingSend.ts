@@ -27,16 +27,27 @@ type Send = (text: string, requestId: string, images?: MessageImage[], mode?: Se
  * leaves the screen in the same render that shows the server item, so the two are never
  * visible together.
  */
-export function usePendingSend(items: readonly ThreadItem[], send: Send, sends?: readonly SendEntry[] | null) {
+export function usePendingSend(
+  items: readonly ThreadItem[],
+  send: Send,
+  sends?: readonly SendEntry[] | null,
+  conversationId: string | null = null,
+) {
   const [pending, setPending] = useState<PendingUser[]>([]);
+  const [boundId, setBoundId] = useState(conversationId);
+  if (boundId !== conversationId) {
+    setBoundId(conversationId);
+    setPending([]);
+  }
+  const local = boundId === conversationId ? pending : [];
   const itemsRef = useRef<readonly ThreadItem[]>(items);
   itemsRef.current = items;
   const sendsRef = useRef<readonly SendEntry[] | null>(sends ?? null);
   sendsRef.current = sends ?? null;
 
   const merged = useMemo(
-    () => hydratePendingFromSends(pending, sends ?? null),
-    [pending, sends],
+    () => hydratePendingFromSends(local, sends ?? null),
+    [local, sends],
   );
 
   // Show only what the server has not caught up with yet; the stored list is pruned after.
@@ -46,12 +57,12 @@ export function usePendingSend(items: readonly ThreadItem[], send: Send, sends?:
   );
 
   useEffect(() => {
-    if (shown.length !== pending.length) setPending(shown);
-  }, [shown, pending]);
+    if (shown.length !== local.length) setPending(shown);
+  }, [shown, local]);
 
   // Last resort for a send the server does not report at all; a queued one is kept.
   useEffect(() => {
-    const waits = pending
+    const waits = local
       .filter((entry) => entry.doneAt != null)
       .map((entry) => Math.max(0, entry.doneAt! + PENDING_TIMEOUT_MS - Date.now()));
     if (!waits.length) return;
@@ -67,7 +78,7 @@ export function usePendingSend(items: readonly ThreadItem[], send: Send, sends?:
       });
     }, Math.min(...waits) + 10);
     return () => clearTimeout(timer);
-  }, [pending]);
+  }, [local]);
 
   const sendWithPending = useCallback(async (
     text: string,

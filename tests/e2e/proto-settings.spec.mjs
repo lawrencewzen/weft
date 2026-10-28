@@ -129,6 +129,11 @@ test('deleting the only provider shows the no-model state', async ({ page }) => 
   await page.locator('.next-settings-close').click();
   await expect(page.getByTestId('next-no-model')).toBeVisible();
   await expect(page.getByTestId('next-no-model-connect')).toBeVisible();
+  // c-rich is seeded running (T51-7), so the round button is Stop. The idle
+  // no-model send control is on c-docs.
+  await page.locator('[data-testid=next-conv-row][data-id="c-docs"]').click();
+  await expect(page.getByTestId('next-no-model')).toBeVisible();
+  await expect(page.getByTestId('next-no-model-connect')).toBeVisible();
   await expect(page.getByTestId('next-composer-input')).toBeDisabled();
   await expect(page.getByTestId('next-composer-input')).toHaveAttribute(
     'placeholder',

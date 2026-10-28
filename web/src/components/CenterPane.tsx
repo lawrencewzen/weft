@@ -80,7 +80,7 @@ export function CenterPane({
     navigate(draftPath(id), { replace: true });
   }, []);
   // 乐观发送：回车即上屏，服务端按 requestId → entry 收回（草稿页直接跳转，暂不接）
-  const optimistic = usePendingSend(items, actions.send, conversation?.sends);
+  const optimistic = usePendingSend(items, actions.send, conversation?.sends, cid ?? null);
   const shownItems = useMemo(
     () => (optimistic.pending.length ? [...items, ...optimistic.pending] : items),
     [items, optimistic.pending],
@@ -205,6 +205,7 @@ export function CenterPane({
           changes={changes}
         />
         <Composer
+          key={cid || 'draft'}
           lang={lang}
           run={conversation.run}
           demo={demo}
