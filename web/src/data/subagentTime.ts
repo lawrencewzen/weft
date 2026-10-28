@@ -70,16 +70,26 @@ export function subagentTimeText(agent: Pick<Subagent, 'status' | 'startedAt' | 
   return formatMmSs(now - started);
 }
 
-/** Sidebar tree: done does not write 完成 (T33). */
+/** Sidebar tree: done does not write 完成 (T33); stuck uses 「静默」. */
 export function subagentTreeTimeText(agent: Pick<Subagent, 'status' | 'startedAt' | 'lastActivityAt'>, lang: Lang, now = Date.now()): string {
-  if ((agent.status || '') === 'done') return '';
+  const st = agent.status || '';
+  if (st === 'done') return '';
+  if (st === 'stuck') {
+    const last = finiteTs(agent.lastActivityAt);
+    const clock = last ? formatMmSs(now - last) : '';
+    return clock ? t(lang, 'subagent_silent_for', { time: clock }) : '';
+  }
   return subagentTimeText(agent, lang, now);
+}
+
+export function stripActionMarks(text: string): string {
+  return text.replace(/`+/g, '').replace(/\s+/g, ' ').trim();
 }
 
 export function subagentActionText(agent: Pick<Subagent, 'status' | 'currentAction' | 'progress'>): string {
   const st = agent.status || 'waiting';
   if (st !== 'running' && st !== 'stuck') return '';
-  const action = String(agent.currentAction || '').replace(/\s+/g, ' ').trim();
+  const action = stripActionMarks(String(agent.currentAction || ''));
   const progress = progressLabel(agent.progress);
   if (action && progress) return `${action} · ${progress}`;
   return action || progress;

@@ -12,21 +12,42 @@ test.describe.configure({ timeout: 120_000 });
 test('seeded subagent tree, report cards, messages and stop', async ({ page }) => {
   const state = await openProto(page);
 
-  // c-rich carries four subagents: running, done, waiting and failed.
+  // c-rich carries five subagents: running, stuck, done, waiting and failed.
   // A tree with a live agent starts open; the chip toggles it closed and open.
   const chip = page.getByTestId('next-subagent-chip').first();
   await expect(chip).toBeVisible();
-  await expect(chip).toContainText('2/4');
+  await expect(chip).toContainText('3/5');
   const tree = page.getByTestId('next-subagent-tree').first();
   await expect(tree).toHaveClass(/is-open/);
-  await expect(page.getByTestId('next-subagent-row')).toHaveCount(4);
+  await expect(page.getByTestId('next-subagent-row')).toHaveCount(5);
   await chip.click();
   await expect(tree).not.toHaveClass(/is-open/);
   await chip.click();
   await expect(tree).toHaveClass(/is-open/);
   await expect(page.getByTestId('next-subagent-row').evaluateAll(
     (rows) => rows.map((row) => row.dataset.status),
-  )).resolves.toEqual(['running', 'done', 'waiting', 'failed']);
+  )).resolves.toEqual(['running', 'stuck', 'done', 'waiting', 'failed']);
+  await expect(page.getByTestId('next-subagent-action').first()).toHaveText(/正在读取 web\/src\/data\/store\.ts/);
+  await expect(page.getByTestId('next-subagent-action').first()).not.toHaveText(/`/);
+  await expect(page.getByTestId('next-subagent-row').nth(1).getByTestId('next-subagent-time')).toContainText('静默');
+
+  // Non-current conversation: chip only until clicked; current tree stays open when leaving.
+  const docsChip = page.locator('[data-testid=next-conv-row][data-id="c-docs"]').getByTestId('next-subagent-chip');
+  await expect(docsChip).toHaveText(/3/);
+  await expect(docsChip).not.toHaveClass(/is-live/);
+  await expect(docsChip).toHaveAttribute('aria-expanded', 'false');
+  await docsChip.click();
+  await expect(docsChip).toHaveAttribute('aria-expanded', 'true');
+  const docsTree = page.locator('[data-testid=next-subagent-tree][data-conv-id="c-docs"]');
+  await expect(docsTree.getByTestId('next-subagent-row')).toHaveCount(3);
+  await expect(docsTree.getByTestId('next-subagent-row').first()).toHaveAttribute('data-visual', 'done');
+  await expect(docsTree.getByTestId('next-subagent-time').first()).toHaveText('');
+
+  await page.locator('[data-testid=next-conv-row][data-id="c-tests"]').click();
+  await expect(page).toHaveURL(/#\/c\/c-tests$/);
+  await expect(tree).toHaveClass(/is-open/);
+  await page.locator('[data-testid=next-conv-row][data-id="c-rich"]').click();
+  await expect(page).toHaveURL(/#\/c\/c-rich$/);
 
   // Two report cards: one answered, one failed.
   await expect(page.getByTestId('next-item-subagent-report')).toHaveCount(2);

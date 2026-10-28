@@ -80,9 +80,9 @@ describe('sidebarModel', () => {
     expect(conversationStatusKind('idle')).toBe('');
     expect(conversationStatusKind('running')).toBe('running');
     expect(conversationMeta(conv('c', 'w', { status: 'running', runningAgents: 1 }), 'zh').text).toBe('运行中');
-    expect(conversationMeta(conv('c', 'w', { status: 'running', runningAgents: 3 }), 'zh').text).toBe('3 个 Agent 运行中');
+    expect(conversationMeta(conv('c', 'w', { status: 'running', runningAgents: 3 }), 'zh').text).toBe('运行中');
     expect(conversationMeta(conv('c', 'w', { status: 'waiting' }), 'zh')).toMatchObject({
-      text: '等待中',
+      text: '等待确认',
       cls: 'is-waiting',
     });
     expect(conversationMeta(conv('c', 'w', { status: 'failed' }), 'zh').cls).toBe('is-failed');

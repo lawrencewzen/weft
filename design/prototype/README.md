@@ -50,11 +50,12 @@ open design/prototype/index.html    # macOS；Windows 直接双击
 
 ### 子 Agent
 
-预置对话 `c-rich` 有 4 个子 Agent，侧栏对话行上的 chip 显示 `2/4`（运行中 + 等待算 live）：
+预置对话 `c-rich` 有 5 个子 Agent，侧栏对话行上的 chip 显示 `3/5`（运行中 + 卡住 + 等待算 live）。对话本身是「运行中」；`c-tests` 是「等待确认」，`c-scripts` 是「失败」，收起的 `website` 工作区显示「1 运行中」。`c-docs` 有 3 个已完成的子 Agent，角标只显示 `3`，点开会展开树。
 
 | 状态 | 标题 |
 | --- | --- |
 | 运行中 | 核对 store.ts 的加载顺序 |
+| 卡住 | 核对 Git 工作树状态 |
 | 完成 | 补 text.delta 偏移的用例 |
 | 等待 | 等主 Agent 确认文档口径 |
 | 失败 | 跑 Windows 上的启动脚本 |

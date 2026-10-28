@@ -156,7 +156,7 @@ test('short WEFT_SUBAGENT_STUCK_MS turns the row stuck with idle time without re
     await sendNext(page, '请派子代理');
     const row = await waitSubagentRow(page, conv.id);
     await expect(row).toHaveAttribute('data-status', 'stuck', { timeout: 20000 });
-    await expect(row.getByTestId('next-subagent-time')).toContainText('无动作');
+    await expect(row.getByTestId('next-subagent-time')).toContainText('静默');
     await expect(row.getByTestId('next-subagent-time')).toHaveClass(/is-idle/);
   } finally {
     await srv.kill();

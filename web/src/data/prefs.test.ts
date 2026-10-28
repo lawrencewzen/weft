@@ -18,6 +18,7 @@ import {
   readStoredLang,
   readThemeFamily,
   themeAttr,
+  toggleAppearance,
   writeAppearance,
   writeFontSize,
   writeStoredLang,
@@ -126,6 +127,20 @@ describe('prefs keys and values match the old UI', () => {
     expect(themeAttr('claude', 'dark')).toBe('claude-dark');
     expect(effectiveAppearance('light')).toBe('light');
     expect(effectiveAppearance('dark')).toBe('dark');
+  });
+
+  it('toggles the stored appearance between light and dark', () => {
+    const mem = new MemoryStorage();
+    installStorage(mem);
+    writeAppearance('light');
+    expect(toggleAppearance()).toBe('dark');
+    expect(readAppearance()).toBe('dark');
+    expect(toggleAppearance()).toBe('light');
+    expect(readAppearance()).toBe('light');
+    writeAppearance('system');
+    expect(effectiveAppearance()).toBe('light');
+    expect(toggleAppearance()).toBe('dark');
+    expect(readAppearance()).toBe('dark');
   });
 });
 

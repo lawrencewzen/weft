@@ -52,13 +52,9 @@ export function conversationMeta(
 ): ConversationMeta {
   const st = conv.status || 'idle';
   if (st === 'running') {
-    const n = Number(conv.runningAgents) || 0;
-    return {
-      text: n > 1 ? t(lang, 'agents_running_count', { n }) : t(lang, 'status_running'),
-      cls: 'is-running',
-    };
+    return { text: t(lang, 'status_running'), cls: 'is-running' };
   }
-  if (st === 'waiting') return { text: t(lang, 'status_waiting'), cls: 'is-waiting' };
+  if (st === 'waiting') return { text: t(lang, 'sidebar_status_waiting'), cls: 'is-waiting' };
   if (st === 'failed') return { text: t(lang, 'status_failed'), cls: 'is-failed' };
   return {
     text: conv.updatedAt ? formatRelativeTime(lang, conv.updatedAt, now) : '',

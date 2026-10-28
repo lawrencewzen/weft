@@ -10,6 +10,11 @@ import {
   writeWorkspaceOpen,
 } from '../data/layout';
 import { conversationPath, draftPath, navigate, openSettings, subagentPath } from '../data/nav';
+import {
+  effectiveAppearance,
+  subscribePrefs,
+  toggleAppearance,
+} from '../data/prefs';
 import { useSession } from '../data/session';
 import {
   conversationMeta,
@@ -63,6 +68,19 @@ const CHEV = (
   </svg>
 );
 
+const MOON_ICON = (
+  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" aria-hidden="true">
+    <path d="M11.8 8.6A5 5 0 0 1 5.4 2.2a5 5 0 1 0 6.4 6.4z" />
+  </svg>
+);
+
+const SUN_ICON = (
+  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" aria-hidden="true">
+    <circle cx="7" cy="7" r="2.6" />
+    <path d="M7 1.2v1.4M7 11.4v1.4M1.2 7h1.4M11.4 7h1.4M2.9 2.9l1 1M10.1 10.1l1 1M2.9 11.1l1-1M10.1 3.9l1-1" />
+  </svg>
+);
+
 function useNow(ms: number): number {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -85,12 +103,18 @@ export function Sidebar({
   onNewWorkspace,
 }: Props) {
   const { groups } = useWorkspaces();
-  const { store, setExtraConversationIds } = useSession();
+  const { store, status, setExtraConversationIds } = useSession();
   const { showFiles } = useRightPane();
   const now = useNow(1_000);
   const [openMap, setOpenMap] = useState<OpenRecord>(() => readWorkspaceOpen());
   const [treeRecorded, setTreeRecorded] = useState<OpenRecord>(() => readSubagentTrees());
   const [menu, setMenu] = useState<MenuState | null>(null);
+  const [dark, setDark] = useState(() => effectiveAppearance() === 'dark');
+  const serviceOk = status === 'connected';
+
+  useEffect(() => subscribePrefs(() => {
+    setDark(effectiveAppearance() === 'dark');
+  }), []);
 
   const activeWorkspaceId = useMemo(() => {
     if (draftWorkspaceId) return draftWorkspaceId;
@@ -482,6 +506,26 @@ export function Sidebar({
         >
           {t(lang, 'settings_short')}
         </button>
+        <span className="foot-right">
+          <span
+            className={`foot-status-dot${serviceOk ? ' is-ok' : ''}`}
+            data-testid="next-service-dot"
+            data-ok={serviceOk ? 'true' : 'false'}
+            title={t(lang, serviceOk ? 'service_ok' : 'service_reconnecting')}
+            aria-label={t(lang, serviceOk ? 'service_ok' : 'service_reconnecting')}
+          />
+          <button
+            type="button"
+            className="foot-appearance"
+            data-testid="next-appearance-toggle"
+            title={t(lang, dark ? 'appearance_to_light' : 'appearance_to_dark')}
+            aria-label={t(lang, dark ? 'appearance_to_light' : 'appearance_to_dark')}
+            aria-pressed={dark ? 'true' : 'false'}
+            onClick={() => toggleAppearance()}
+          >
+            {dark ? SUN_ICON : MOON_ICON}
+          </button>
+        </span>
       </div>
       </div>
       {menu ? (
