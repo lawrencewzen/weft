@@ -18,20 +18,35 @@ textarea::placeholder{color:var(--faint)}
 @keyframes ring{0%{transform:scale(.6);opacity:.6}100%{transform:scale(2.4);opacity:0}}
 @keyframes spin{to{transform:rotate(360deg)}}
 @keyframes blink{50%{opacity:0}}
+.mdcode{font-family:var(--mono);font-size:.86em;color:var(--ink2);background:var(--sub2);border:1px solid var(--line);padding:1px 6px;border-radius:6px;white-space:nowrap}
+.mdpath{display:inline-flex;align-items:center;gap:4px;padding:0 6px 0 5px;line-height:22px;vertical-align:1px;cursor:pointer;color:var(--ink)}
+.mdpath svg{color:var(--faint);flex-shrink:0}.mdpath .ln{color:var(--faint)}.mdpath:hover{background:var(--line2);border-color:var(--bd3)}
+.mdcard{margin:2px 0 4px;border:1px solid var(--line);border-radius:12px;background:var(--sub);overflow:hidden}
+.mdbar{display:flex;align-items:center;justify-content:space-between;height:36px;padding:0 8px 0 16px;font-size:12px;color:var(--mute)}
+.mdcopy{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 8px;border:none;border-radius:6px;background:transparent;color:var(--mute);font-size:12px;font-family:inherit;cursor:pointer}
+.mdcopy:hover{background:var(--line2);color:var(--ink)}
+.mdcard pre{margin:0;padding:2px 16px 16px;overflow-x:auto;font-family:var(--mono);font-size:13px;line-height:1.7;color:var(--ink);white-space:pre}
+.mdpr{color:var(--faint2);user-select:none}
+@keyframes btnIn{from{opacity:0}to{opacity:1}}
+@keyframes saOrbit{to{transform:rotate(360deg)}}
+@keyframes saSpin{to{transform:rotate(360deg)}}
 @keyframes tpulse{0%{box-shadow:0 0 0 0 rgba(46,140,90,.35)}70%{box-shadow:0 0 0 5px rgba(46,140,90,0)}100%{box-shadow:0 0 0 0 rgba(46,140,90,0)}}
 .tdot{width:6px;height:6px;border-radius:50%}
 .tdot.run{background:#2e8c5a;animation:tpulse 1.8s ease-out infinite}.tdot.wait{background:#c98a16}.tdot.fail{background:#c2412d}
 .tmeta{font-size:11px;color:var(--mute);white-space:nowrap;flex-shrink:0}.tmeta.run{color:#2a7a4f}.tmeta.wait{color:#9a6a0e}.tmeta.fail{color:#b13a28}
-.tchip{display:inline-flex;align-items:center;gap:3px;height:18px;padding:0 5px;border-radius:5px;font-size:11px;color:var(--mute);flex-shrink:0;border:none;background:transparent;cursor:pointer;font-family:inherit}
-.tchip:hover{background:var(--bd2)}.tchip.run{color:#2a7a4f}.tchip.open{background:var(--bd2)}
-.tkids{position:relative;display:flex;flex-direction:column;margin-left:16px}
-.tkid{position:relative;display:flex;flex-direction:column;justify-content:center;min-height:26px;padding:3px 8px 3px 22px;border-radius:6px;font-size:12.5px;color:var(--ink3);cursor:pointer}
-.tkid:hover{background:var(--hover)}
-.tkid::before{content:'';position:absolute;left:5px;top:0;bottom:0;border-left:1px solid var(--bd2)}
-.tkid.last::before{bottom:auto;height:13px}
-.tkid::after{content:'';position:absolute;left:5px;top:13px;width:9px;border-top:1px solid var(--bd2)}
-.tkid.done{color:var(--mute)}.tkid.on{background:var(--sel);color:var(--ink)}
-.trow{display:flex;align-items:center;gap:7px;min-width:0}
+.tchip{display:inline-flex;align-items:center;gap:3px;height:20px;padding:0 3px 0 6px;border-radius:6px;font-size:11px;color:var(--mute);flex-shrink:0;border:1px solid transparent;background:transparent;cursor:pointer;font-family:inherit;transition:background .12s,border-color .12s}
+.tchip .tcv{width:10px;height:10px;transition:transform .15s;opacity:.8}
+.tchip.open .tcv{transform:rotate(90deg)}
+.tchip:hover{background:var(--panel);border-color:var(--bd2)}.tchip.run{color:#2a7a4f}
+.tkids{position:relative;margin-left:32px;display:flex;flex-direction:column}
+.tkid{position:relative;display:flex;flex-direction:column;justify-content:center;height:28px;margin-left:16px;padding:0 8px 0 6px;border-radius:6px;font-size:12.5px;color:var(--ink3);cursor:pointer;transition:background .12s}
+.tkid::before{content:'';position:absolute;left:-16px;top:0;bottom:0;border-left:1px solid var(--bd2)}
+.tkid:last-child::before{bottom:50%}
+.tkid::after{content:'';position:absolute;left:-16px;top:50%;width:13px;border-top:1px solid var(--bd2)}
+.tkid:hover{background:var(--hover-a)}
+.tproj .thov{opacity:0;transition:opacity .12s}.tproj:hover .thov{opacity:1}
+.tkid.done{color:var(--mute)}.tkid.on{color:var(--ink);font-weight:500}
+.trow{display:flex;align-items:center;gap:6px;min-width:0}
 .tt{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .tspin{width:10px;height:10px;border-radius:50%;border:1.5px solid var(--bd2);border-top-color:#2e8c5a;animation:spin .9s linear infinite;flex-shrink:0;margin:0 1px;box-sizing:border-box}
 .tspin.stuck{border-top-color:#c98a16;animation-duration:2.8s}
@@ -41,11 +56,11 @@ textarea::placeholder{color:var(--faint)}
 </helmet>
 <div onClick="{{ closeMenu }}" onContextMenu="{{ closeMenu }}" style="position:relative;display:flex;height:100vh;min-height:560px;overflow:hidden;background:var(--bg);color:var(--ink);font-family:var(--font);font-size:14px;line-height:1.6;transition:background .2s;user-select:{{ userSelect }};cursor:{{ rootCursor }}">
 
-  <sc-if value="{{ leftShown }}" hint-placeholder-val="{{ true }}">
-    <aside onContextMenu="{{ sidebarMenu }}" style="width:{{ leftWpx }};flex-shrink:0;background:var(--side);display:flex;flex-direction:column;position:{{ leftPos }};top:0;bottom:0;left:0;z-index:30;box-shadow:{{ leftShadow }}">
+  <div aria-hidden="{{ leftHidden }}" style="width:{{ leftOuterW }};flex-shrink:0;overflow:hidden;position:{{ leftPos }};top:0;bottom:0;left:0;z-index:30;box-shadow:{{ leftShadow }};transition:{{ panelTrans }}">
+    <aside onContextMenu="{{ sidebarMenu }}" style="width:{{ leftWpx }};height:100%;background:var(--side);display:flex;flex-direction:column;transform:{{ leftTx }};transition:{{ panelTxTrans }}">
       <div style="display:flex;align-items:center;gap:6px;height:52px;padding:0 8px 0 12px;box-sizing:border-box;flex-shrink:0">
         <div style="flex:1;min-width:0;display:flex;justify-content:center;align-items:center;height:32px;box-sizing:border-box;background:var(--panel);border:1px solid var(--line);border-radius:8px;font-size:13px;cursor:pointer" style-hover="background:var(--panel-h)" onClick="{{ newTop }}">新对话</div>
-        <div onClick="{{ toggleLeft }}" title="收起侧栏 ⌘B" style="width:30px;height:30px;border-radius:7px;display:flex;align-items:center;justify-content:center;cursor:pointer" style-hover="background:var(--hover)">
+        <div onClick="{{ toggleLeft }}" title="收起侧栏" style="opacity:{{ sbBtnOp }};width:30px;height:30px;border-radius:7px;display:flex;align-items:center;justify-content:center;cursor:pointer" style-hover="background:var(--hover)">
           <span style="width:15px;height:12px;border:1.5px solid var(--mute);border-radius:3px;box-sizing:border-box;position:relative;display:block"><span style="position:absolute;left:3px;top:0;bottom:0;width:1.5px;background:var(--mute)"></span></span>
         </div>
       </div>
@@ -53,12 +68,12 @@ textarea::placeholder{color:var(--faint)}
         <div style="display:flex;justify-content:space-between;padding:6px 8px;font-size:12px;color:var(--faint)"><span>项目</span><span style="cursor:pointer">+</span></div>
         <sc-for list="{{ projects }}" as="p" hint-placeholder-count="3">
           <div style="display:flex;flex-direction:column;gap:1px">
-            <div onClick="{{ p.toggle }}" onContextMenu="{{ p.ctx }}" style="display:flex;align-items:center;gap:6px;height:30px;padding:0 8px;border-radius:7px;cursor:pointer;font-weight:600;font-size:13px" style-hover="background:var(--hover)">
+            <div class="tproj" onClick="{{ p.toggle }}" onContextMenu="{{ p.ctx }}" style="display:flex;align-items:center;gap:6px;height:30px;padding:0 8px;border-radius:7px;cursor:pointer;font-weight:600;font-size:13px" style-hover="background:var(--hover)">
               <svg width="12" height="12" viewBox="0 0 12 12" style="flex-shrink:0;transition:transform .15s;transform:rotate({{ p.rot }})"><path d="M4.5 3l3 3-3 3" fill="none" stroke="var(--faint)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path></svg>
               <span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ p.name }}</span>
-              <span style="font-size:11px;font-weight:400;color:{{ p.countColor }};white-space:nowrap">{{ p.count }}</span>
-              <span onClick="{{ p.more }}" title="更多" style="width:22px;height:22px;border-radius:5px;display:flex;align-items:center;justify-content:center;color:var(--faint);font-weight:400;flex-shrink:0" style-hover="background:var(--bd2);color:var(--ink)">⋯</span>
-              <span onClick="{{ p.newChat }}" title="{{ p.newTitle }}" style="width:22px;height:22px;border-radius:5px;display:flex;align-items:center;justify-content:center;color:var(--mute);font-size:15px;font-weight:400;flex-shrink:0" style-hover="background:var(--bd2);color:var(--ink)">+</span>
+              <span class="thov" style="font-size:11px;font-weight:400;color:var(--faint);white-space:nowrap">{{ p.count }}</span>
+              <span class="thov" onClick="{{ p.more }}" title="更多" style="width:22px;height:22px;border-radius:5px;display:flex;align-items:center;justify-content:center;color:var(--faint);font-weight:400;flex-shrink:0" style-hover="background:var(--bd2);color:var(--ink)">⋯</span>
+              <span class="thov" onClick="{{ p.newChat }}" title="{{ p.newTitle }}" style="width:22px;height:22px;border-radius:5px;display:flex;align-items:center;justify-content:center;color:var(--mute);font-size:15px;font-weight:400;flex-shrink:0" style-hover="background:var(--bd2);color:var(--ink)">+</span>
             </div>
             <sc-if value="{{ p.hasDraft }}" hint-placeholder-val="{{ false }}">
               <div onClick="{{ p.openDraft }}" style="display:flex;align-items:center;gap:9px;padding:6px 8px 6px 24px;border-radius:7px;cursor:pointer;background:{{ p.draftBg }};font-size:13px" style-hover="background:var(--hover)">
@@ -69,51 +84,69 @@ textarea::placeholder{color:var(--faint)}
             <sc-if value="{{ p.open }}" hint-placeholder-val="{{ true }}">
               <sc-for list="{{ p.convos }}" as="c" hint-placeholder-count="2">
                 <div style="display:flex;flex-direction:column;gap:1px">
-                <div onClick="{{ c.select }}" onContextMenu="{{ c.ctx }}" style="display:flex;align-items:center;gap:8px;height:30px;padding:0 8px 0 10px;border-radius:7px;cursor:pointer;background:{{ c.bg }};font-size:13px" style-hover="background:var(--hover)">
+                <div onClick="{{ c.select }}" onContextMenu="{{ c.ctx }}" title="{{ c.title }}" style="display:flex;align-items:center;gap:6px;height:30px;padding:0 8px 0 26px;border-radius:7px;cursor:pointer;background:{{ c.bg }};font-size:13px" style-hover="background:var(--hover)">
                   <span style="width:12px;display:flex;justify-content:center;flex-shrink:0"><sc-if value="{{ c.showDot }}" hint-placeholder-val="{{ false }}"><span class="tdot {{ c.dotCls }}"></span></sc-if></span>
                   <span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:{{ c.weight }}">{{ c.title }}</span>
                   <sc-if value="{{ c.hasSubs }}" hint-placeholder-val="{{ false }}">
-                    <button type="button" class="tchip {{ c.chipCls }}" onClick="{{ c.toggleSubs }}" title="{{ c.subsTitle }}" aria-label="{{ c.subsTitle }}"><svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="4" cy="3.5" r="1.6"></circle><circle cx="4" cy="12.5" r="1.6"></circle><circle cx="12" cy="7" r="1.6"></circle><path d="M4 5v6M4 8.5c0-1.5 2-1.5 6.4-1.5"></path></svg>{{ c.chipText }}</button>
+                    <span title="{{ c.loaderTitle }}" style="display:flex;align-items:center;gap:5px;height:20px;cursor:default;flex-shrink:0">
+                      <span aria-hidden="true" style="position:relative;width:18px;height:18px;display:block">
+                        <span style="position:absolute;left:7px;top:7px;width:4px;height:4px;border-radius:50%;background:{{ c.coreColor }};transition:background .6s"></span>
+                        <sc-for list="{{ c.orbit }}" as="d" hint-placeholder-count="3">
+                          <span style="position:absolute;inset:0;animation:saOrbit {{ d.dur }} linear infinite;animation-delay:{{ d.delay }};animation-play-state:{{ d.play }}">
+                            <span style="position:absolute;left:7.5px;top:{{ d.top }};width:3px;height:3px;border-radius:50%;background:{{ d.color }};opacity:{{ d.op }};transition:background .7s,opacity .7s"></span>
+                          </span>
+                        </sc-for>
+                      </span>
+                      <span style="font-size:11px;color:{{ c.countColor }};font-variant-numeric:tabular-nums;transition:color .6s">{{ c.chipText }}</span>
+                    </span>
+                    <button type="button" onClick="{{ c.toggleSubs }}" title="{{ c.subsTitle }}" aria-label="{{ c.subsTitle }}" style="width:20px;height:20px;margin:-2px -4px -2px -2px;padding:0;border:none;background:transparent;border-radius:5px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0" style-hover="background:var(--bd2)"><svg width="11" height="11" viewBox="0 0 12 12" aria-hidden="true" style="transition:transform .3s cubic-bezier(.3,.8,.3,1);transform:rotate({{ c.subsRot }})"><path d="M4.5 3l3 3-3 3" fill="none" stroke="var(--mute)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path></svg></button>
                   </sc-if>
-                  <span class="tmeta {{ c.metaCls }}">{{ c.meta }}</span>
                 </div>
-                <sc-if value="{{ c.subsOpen }}" hint-placeholder-val="{{ false }}">
+                <div style="display:grid;grid-template-rows:{{ c.subsRows }};transition:grid-template-rows .45s cubic-bezier(.3,.8,.3,1)"><div style="overflow:hidden;min-height:0">
                   <div class="tkids">
                     <sc-for list="{{ c.subs }}" as="s" hint-placeholder-count="3">
-                      <div class="tkid {{ s.cls }}" onClick="{{ s.open }}" onContextMenu="{{ s.ctx }}" title="{{ s.title }}">
+                      <div class="tkid {{ s.cls }}" onClick="{{ s.open }}" onContextMenu="{{ s.ctx }}" title="{{ s.tip }}">
                         <div class="trow">
-                          <sc-if value="{{ s.isDone }}" hint-placeholder-val="{{ false }}"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true" style="flex-shrink:0;display:block"><path d="M3 6.3l2 2 4-4.3" fill="none" stroke="#8fae9b" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path></svg></sc-if>
-                          <sc-if value="{{ s.isStopped }}" hint-placeholder-val="{{ false }}"><span style="width:12px;height:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><span style="width:7px;height:7px;border-radius:2px;background:var(--bd3)"></span></span></sc-if>
-                          <sc-if value="{{ s.isLive }}" hint-placeholder-val="{{ true }}"><span class="tspin {{ s.spinCls }}"></span></sc-if>
+                          <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true" style="flex-shrink:0;overflow:visible">
+                            <circle cx="6" cy="6" r="4.5" fill="none" stroke="var(--bd2)" stroke-width="1.4" style="opacity:{{ s.trackOp }};transition:opacity .5s"></circle>
+                            <g style="transform-origin:6px 6px;animation:saSpin {{ s.spinDur }} linear infinite;opacity:{{ s.arcOp }};transition:opacity .45s">
+                              <circle cx="6" cy="6" r="4.5" fill="none" stroke="{{ s.arcColor }}" stroke-width="1.6" stroke-linecap="round" stroke-dasharray="9 19.3" style="transition:stroke .8s"></circle>
+                            </g>
+                            <circle cx="6" cy="6" r="5" fill="#8fae9b" style="transform-box:fill-box;transform-origin:center;transform:scale({{ s.doneScale }});transition:transform .5s cubic-bezier(.3,1.6,.5,1)"></circle>
+                            <path d="M3.6 6.2l1.7 1.6 3.1-3.4" fill="none" stroke="var(--side)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="8" stroke-dashoffset="{{ s.checkOff }}" style="transition:stroke-dashoffset .45s .2s ease-out"></path>
+                            <rect x="4.2" y="4.2" width="3.6" height="3.6" rx=".8" fill="var(--faint)" style="opacity:{{ s.stopOp }};transition:opacity .5s"></rect>
+                          </svg>
                           <span class="tt">{{ s.task }}</span>
                           <sc-if value="{{ s.hasTime }}" hint-placeholder-val="{{ true }}"><span class="ttm {{ s.spinCls }}">{{ s.time }}</span></sc-if>
                         </div>
                         <sc-if value="{{ s.hasAct }}" hint-placeholder-val="{{ false }}"><div class="tact">{{ s.act }}</div></sc-if>
                       </div>
                     </sc-for>
-                  </div>
-                </sc-if>
+                  </div></div></div>
                 </div>
               </sc-for>
             </sc-if>
           </div>
         </sc-for>
-        <div onClick="{{ toggleArchived }}" style="display:flex;align-items:center;gap:6px;padding:6px 8px;margin-top:10px;border-radius:7px;cursor:pointer;font-size:13px;color:var(--mute)" style-hover="background:var(--hover)">
+      </div>
+      <div style="flex-shrink:0;border-top:1px solid var(--hover);padding:6px 8px;display:flex;flex-direction:column;gap:2px">
+        <div class="tproj" onClick="{{ toggleArchived }}" style="display:flex;align-items:center;gap:6px;height:30px;padding:0 8px;border-radius:7px;cursor:pointer;font-size:13px;color:var(--mute)" style-hover="background:var(--hover)">
           <svg width="12" height="12" viewBox="0 0 12 12" style="flex-shrink:0;transition:transform .15s;transform:rotate({{ archivedRot }})"><path d="M4.5 3l3 3-3 3" fill="none" stroke="var(--faint)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path></svg><span style="flex:1">已归档</span><span style="font-size:11px;color:var(--faint)">{{ archivedCount }}</span>
         </div>
         <sc-if value="{{ archivedOpen }}" hint-placeholder-val="{{ false }}">
+        <div style="max-height:180px;overflow:auto;display:flex;flex-direction:column;gap:2px">
           <sc-for list="{{ archivedList }}" as="c" hint-placeholder-count="2">
-            <div onClick="{{ c.select }}" onContextMenu="{{ c.ctx }}" style="display:flex;align-items:center;gap:9px;padding:6px 8px 6px 24px;border-radius:7px;cursor:pointer;background:{{ c.bg }};font-size:13px;color:var(--mute)" style-hover="background:var(--hover)">
-              <span style="width:7px;height:7px;border-radius:50%;border:1.5px solid var(--bd2);box-sizing:border-box;flex-shrink:0"></span>
+            <div onClick="{{ c.select }}" onContextMenu="{{ c.ctx }}" title="{{ c.title }}" style="display:flex;align-items:center;gap:6px;height:30px;padding:0 8px 0 26px;border-radius:7px;cursor:pointer;background:{{ c.bg }};font-size:13px;color:var(--mute)" style-hover="background:var(--hover)">
+              <span style="width:12px;flex-shrink:0"></span>
               <span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ c.title }}</span>
-              <span style="font-size:11px;color:var(--faint);white-space:nowrap">{{ c.meta }}</span>
             </div>
           </sc-for>
+        </div>
         </sc-if>
       </div>
-      <div style="padding:10px 16px;border-top:1px solid var(--hover);display:flex;justify-content:space-between;font-size:12px;color:var(--mute)"><span style="display:flex;align-items:center;gap:10px"><a href="Provider-list.dc.html" style="color:var(--mute);text-decoration:none;padding:2px 6px;margin:-2px -6px;border-radius:5px" style-hover="background:var(--hover);color:var(--ink)">设置</a><span title="服务正常" style="width:7px;height:7px;border-radius:50%;background:#2e8c5a"></span></span><span style="display:flex;align-items:center;gap:8px;min-width:0"><sc-if value="{{ wsMulti }}" hint-placeholder-val="{{ true }}"><span onClick="{{ wsMenu }}" title="切换工作区" style="display:flex;align-items:center;gap:4px;min-width:0;padding:2px 6px;margin:-2px 0;border-radius:5px;cursor:pointer;white-space:nowrap" style-hover="background:var(--hover);color:var(--ink)"><span style="overflow:hidden;text-overflow:ellipsis">{{ wsShort }}</span><span style="font-size:9px;color:var(--faint)">▾</span></span></sc-if><span onClick="{{ toggleMode }}" title="{{ modeTitle }}" style="width:24px;height:24px;margin:-4px -6px -4px 0;border-radius:6px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--mute)" style-hover="background:var(--hover);color:var(--ink)"><sc-if value="{{ isDarkMode }}" hint-placeholder-val="{{ false }}"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><circle cx="7" cy="7" r="2.6"></circle><path d="M7 1.2v1.4M7 11.4v1.4M1.2 7h1.4M11.4 7h1.4M2.9 2.9l1 1M10.1 10.1l1 1M2.9 11.1l1-1M10.1 3.9l1-1"></path></svg></sc-if><sc-if value="{{ isLightMode }}" hint-placeholder-val="{{ true }}"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"><path d="M11.8 8.6A5 5 0 0 1 5.4 2.2a5 5 0 1 0 6.4 6.4z"></path></svg></sc-if></span></span></div>
+      <div style="padding:10px 16px;border-top:1px solid var(--hover);display:flex;justify-content:space-between;font-size:12px;color:var(--mute)"><span style="display:flex;align-items:center;gap:10px"><a href="Provider-list.dc.html" style="color:var(--mute);text-decoration:none;padding:2px 6px;margin:-2px -6px;border-radius:5px" style-hover="background:var(--hover);color:var(--ink)">设置</a><span title="服务正常" style="width:7px;height:7px;border-radius:50%;background:#2e8c5a"></span></span><span style="display:flex;align-items:center;gap:8px;min-width:0"><span onClick="{{ toggleMode }}" title="{{ modeTitle }}" style="width:24px;height:24px;margin:-4px -6px -4px 0;border-radius:6px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--mute)" style-hover="background:var(--hover);color:var(--ink)"><sc-if value="{{ isDarkMode }}" hint-placeholder-val="{{ false }}"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><circle cx="7" cy="7" r="2.6"></circle><path d="M7 1.2v1.4M7 11.4v1.4M1.2 7h1.4M11.4 7h1.4M2.9 2.9l1 1M10.1 10.1l1 1M2.9 11.1l1-1M10.1 3.9l1-1"></path></svg></sc-if><sc-if value="{{ isLightMode }}" hint-placeholder-val="{{ true }}"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"><path d="M11.8 8.6A5 5 0 0 1 5.4 2.2a5 5 0 1 0 6.4 6.4z"></path></svg></sc-if></span></span></div>
     </aside>
-  </sc-if>
+  </div>
   <sc-if value="{{ leftDivider }}" hint-placeholder-val="{{ true }}">
     <div onMouseDown="{{ dragLeft }}" onDoubleClick="{{ resetLeft }}" title="拖动调整宽度，双击复位" style="width:1px;flex-shrink:0;position:relative;z-index:10;background:{{ leftLine }};cursor:col-resize">
       <div style="position:absolute;top:0;bottom:0;left:-4px;right:-4px;cursor:col-resize" style-hover="background:var(--hover-a)"></div>
@@ -123,21 +156,18 @@ textarea::placeholder{color:var(--faint)}
   <main style="flex:1;min-width:0;display:flex;flex-direction:column;background:var(--bg)">
     <header style="height:52px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:0 12px">
       <div style="display:flex;align-items:center;gap:8px;min-width:0">
-        <sc-if value="{{ leftClosed }}" hint-placeholder-val="{{ false }}">
-          <div onClick="{{ toggleLeft }}" title="展开侧栏 ⌘B" style="width:30px;height:30px;border-radius:7px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0" style-hover="background:var(--line2)">
+        <div style="width:{{ leftSlotW }};margin-right:{{ leftSlotM }};flex-shrink:0;transition:{{ leftSlotTr }}">
+          <div onClick="{{ toggleLeft }}" title="展开侧栏" style="position:relative;z-index:40;opacity:{{ leftBtnOp }};pointer-events:{{ leftBtnPe }};transform:translateX({{ lbDx }}px);transition:{{ lbTr }};width:30px;height:30px;border-radius:7px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0" style-hover="background:var(--line2)">
             <span style="width:15px;height:12px;border:1.5px solid var(--mute);border-radius:3px;box-sizing:border-box;position:relative;display:block"><span style="position:absolute;left:3px;top:0;bottom:0;width:1.5px;background:var(--mute)"></span></span>
           </div>
-        </sc-if>
+        </div>
         <div style="display:flex;align-items:baseline;gap:10px;min-width:0;padding-left:8px">
           <span style="font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:{{ headerColor }}">{{ headerTitle }}</span>
-          <sc-if value="{{ hasWt }}" hint-placeholder-val="{{ true }}">
-            <span title="在独立 worktree 中运行" style="display:flex;align-items:center;gap:5px;padding:1px 8px;border-radius:6px;background:var(--line2);font-size:12px;white-space:nowrap;align-self:center"><svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="var(--ink3)" stroke-width="1.3"><circle cx="3" cy="2.5" r="1.3"></circle><circle cx="3" cy="9.5" r="1.3"></circle><circle cx="9" cy="4" r="1.3"></circle><path d="M3 3.8v4.4M9 5.3c0 2-2 2.2-6 3"></path></svg><span style="font-family:var(--mono);font-size:11.5px">{{ wtBranch }}</span><span style="color:var(--faint)">← {{ wtBase }}</span></span>
-          </sc-if>
         </div>
       </div>
       <sc-if value="{{ headerTools }}" hint-placeholder-val="{{ false }}">
       <div style="display:flex;align-items:center;gap:4px;flex-shrink:0;font-size:12px">
-        <div onClick="{{ toggleRight }}" title="展开面板：变更 / 文件 / 终端 ⌘J" style="position:relative;width:30px;height:30px;border-radius:7px;display:flex;align-items:center;justify-content:center;cursor:pointer" style-hover="background:var(--line2)">
+        <div onClick="{{ toggleRight }}" title="展开右栏" style="opacity:{{ rightBtnOp }};pointer-events:{{ rightBtnPe }};transform:translateX({{ rbDx }}px);transition:{{ rbTr }};position:relative;z-index:40;width:30px;height:30px;border-radius:7px;display:flex;align-items:center;justify-content:center;cursor:pointer" style-hover="background:var(--line2)">
           <span style="position:absolute;top:5px;right:4px;width:6px;height:6px;border-radius:50%;background:oklch(0.64 0.13 150);border:1.5px solid var(--bg)"></span>
           <span style="width:15px;height:12px;border:1.5px solid var(--mute);border-radius:3px;box-sizing:border-box;position:relative;display:block"><span style="position:absolute;right:4px;top:0;bottom:0;width:1.5px;background:var(--mute)"></span></span>
         </div>
@@ -151,7 +181,7 @@ textarea::placeholder{color:var(--faint)}
       <div style="width:min(calc(100% - 32px),max(560px,min(calc(100% - 96px),calc(100vw - 800px))));max-width:100%;margin:0 auto;font-size:15px;line-height:1.75;padding:20px 0;display:flex;flex-direction:column;gap:18px">
         <div style="align-self:flex-end;max-width:80%;background:var(--line2);padding:10px 16px;border-radius:18px;text-wrap:pretty">把读书笔记按年份整理到子文件夹里，再更新一下 index.md 的目录。</div>
         <div style="display:flex;flex-direction:column;gap:12px">
-          <div style="font-family:var(--mono);font-size:11px;color:var(--faint)">grok-build</div>
+          <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--faint)"><svg width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4l7.5 10.5L4 20h2.2l6.4-4.9L17.6 20H20l-7.6-10.6L19.6 4h-2.2l-5.7 4.4L6.4 4z" fill="currentColor"></path></svg>Grok 4.6</div>
           <div style="text-wrap:pretty">notes 不是 Git 仓库，我会在每次改动前存一个检查点，需要时可以撤回到任一检查点。</div>
           <div style="display:flex;flex-direction:column;gap:2px;font-size:13px;color:var(--mute)">
             <sc-for list="{{ cpSteps }}" as="s" hint-placeholder-count="5">
@@ -171,7 +201,21 @@ textarea::placeholder{color:var(--faint)}
           <div style="text-wrap:pretty">{{ notesReply }}</div>
         </div>
         <sc-for list="{{ sent }}" as="m" hint-placeholder-count="0">
-          <sc-if value="{{ m.isUser }}" hint-placeholder-val="{{ false }}"><div style="align-self:flex-end;max-width:80%;background:var(--line2);padding:10px 16px;border-radius:18px;text-wrap:pretty;white-space:pre-wrap">{{ m.text }}</div></sc-if>
+          <sc-if value="{{ m.isUser }}" hint-placeholder-val="{{ false }}"><div style="align-self:flex-end;max-width:80%;display:flex;flex-direction:column;align-items:flex-end;gap:6px;min-width:0">
+            <sc-if value="{{ m.hasFiles }}" hint-placeholder-val="{{ false }}"><div style="display:flex;flex-wrap:wrap;justify-content:flex-end;gap:6px">
+              <sc-for list="{{ m.files }}" as="a" hint-placeholder-count="1"><span style="height:26px;display:inline-flex;align-items:center;gap:6px;padding:0 8px;border-radius:7px;border:1px solid var(--line);font-size:12px;color:var(--ink3);font-family:var(--mono)">{{ a.name }}<span style="color:var(--mute);font-family:var(--font)">{{ a.size }}</span></span></sc-for>
+            </div></sc-if>
+            <sc-for list="{{ m.pastes }}" as="b" hint-placeholder-count="0">
+              <div style="width:min(560px,100%);border:1px solid var(--line);border-radius:12px;background:var(--panel);overflow:hidden;display:flex;flex-direction:column">
+                <div style="padding:10px 14px;font-family:var(--mono);font-size:12px;line-height:18px;color:var(--ink3);white-space:pre;overflow:{{ b.ov }};max-height:{{ b.maxH }};-webkit-mask-image:{{ b.mask }}">{{ b.text }}</div>
+                <div onClick="{{ b.toggle }}" style="display:flex;align-items:center;gap:8px;padding:6px 14px;border-top:1px solid var(--line2);font-size:12px;color:var(--mute);cursor:pointer" style-hover="background:var(--hover)">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 10h16M4 14h10M4 18h7"></path></svg>
+                  <span style="flex:1">粘贴的文字 · {{ b.lines }} 行</span><span style="color:var(--ink3)">{{ b.label }}</span>
+                </div>
+              </div>
+            </sc-for>
+            <sc-if value="{{ m.hasText }}" hint-placeholder-val="{{ true }}"><div style="background:var(--line2);padding:10px 16px;border-radius:18px;text-wrap:pretty;white-space:pre-wrap">{{ m.text }}</div></sc-if>
+          </div></sc-if>
           <sc-if value="{{ m.isAgent }}" hint-placeholder-val="{{ false }}"><div style="display:flex;flex-direction:column;gap:6px"><span style="font-family:var(--mono);font-size:11px;color:var(--faint)">{{ modelName }}</span><div style="text-wrap:pretty">{{ m.text }}</div></div></sc-if>
           <sc-if value="{{ m.isTyping }}" hint-placeholder-val="{{ false }}"><div style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--faint)"><span style="width:10px;height:10px;border-radius:50%;border:1.5px solid var(--line);border-top-color:var(--accent);box-sizing:border-box;animation:spin .9s linear infinite;display:block"></span>思考中</div></sc-if>
         </sc-for>
@@ -183,7 +227,7 @@ textarea::placeholder{color:var(--faint)}
       <div style="width:min(calc(100% - 32px),max(560px,min(calc(100% - 96px),calc(100vw - 800px))));max-width:100%;margin:0 auto;font-size:15px;line-height:1.75;padding:20px 0;display:flex;flex-direction:column;gap:18px">
         <div style="align-self:flex-end;max-width:80%;background:var(--line2);padding:10px 16px;border-radius:18px;text-wrap:pretty">给 CLI 加 --json 输出，所有子命令都要支持，再补上测试。</div>
         <div style="display:flex;flex-direction:column;gap:12px">
-          <div style="font-family:var(--mono);font-size:11px;color:var(--faint)">grok-build</div>
+          <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--faint)"><svg width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4l7.5 10.5L4 20h2.2l6.4-4.9L17.6 20H20l-7.6-10.6L19.6 4h-2.2l-5.7 4.4L6.4 4z" fill="currentColor"></path></svg>Grok 4.6</div>
           <div style="display:flex;flex-direction:column;gap:5px;font-size:13px;color:var(--mute)">
             <div style="display:flex;gap:10px"><span style="color:var(--ok)">✓</span>创建 worktree <span style="font-family:var(--mono);font-size:12px;color:var(--ink2)">~/.pi-work/wt/reverse-json-output</span></div>
             <div style="display:flex;gap:10px"><span style="color:var(--ok)">✓</span>读取 <span style="font-family:var(--mono);font-size:12px;color:var(--ink2)">src/cli/index.ts</span> 等 8 个文件</div>
@@ -211,7 +255,21 @@ textarea::placeholder{color:var(--faint)}
           <sc-if value="{{ apDone }}" hint-placeholder-val="{{ false }}"><div style="text-wrap:pretty">{{ apReply }}</div></sc-if>
         </div>
         <sc-for list="{{ sent }}" as="m" hint-placeholder-count="0">
-          <sc-if value="{{ m.isUser }}" hint-placeholder-val="{{ false }}"><div style="align-self:flex-end;max-width:80%;background:var(--line2);padding:10px 16px;border-radius:18px;text-wrap:pretty;white-space:pre-wrap">{{ m.text }}</div></sc-if>
+          <sc-if value="{{ m.isUser }}" hint-placeholder-val="{{ false }}"><div style="align-self:flex-end;max-width:80%;display:flex;flex-direction:column;align-items:flex-end;gap:6px;min-width:0">
+            <sc-if value="{{ m.hasFiles }}" hint-placeholder-val="{{ false }}"><div style="display:flex;flex-wrap:wrap;justify-content:flex-end;gap:6px">
+              <sc-for list="{{ m.files }}" as="a" hint-placeholder-count="1"><span style="height:26px;display:inline-flex;align-items:center;gap:6px;padding:0 8px;border-radius:7px;border:1px solid var(--line);font-size:12px;color:var(--ink3);font-family:var(--mono)">{{ a.name }}<span style="color:var(--mute);font-family:var(--font)">{{ a.size }}</span></span></sc-for>
+            </div></sc-if>
+            <sc-for list="{{ m.pastes }}" as="b" hint-placeholder-count="0">
+              <div style="width:min(560px,100%);border:1px solid var(--line);border-radius:12px;background:var(--panel);overflow:hidden;display:flex;flex-direction:column">
+                <div style="padding:10px 14px;font-family:var(--mono);font-size:12px;line-height:18px;color:var(--ink3);white-space:pre;overflow:{{ b.ov }};max-height:{{ b.maxH }};-webkit-mask-image:{{ b.mask }}">{{ b.text }}</div>
+                <div onClick="{{ b.toggle }}" style="display:flex;align-items:center;gap:8px;padding:6px 14px;border-top:1px solid var(--line2);font-size:12px;color:var(--mute);cursor:pointer" style-hover="background:var(--hover)">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 10h16M4 14h10M4 18h7"></path></svg>
+                  <span style="flex:1">粘贴的文字 · {{ b.lines }} 行</span><span style="color:var(--ink3)">{{ b.label }}</span>
+                </div>
+              </div>
+            </sc-for>
+            <sc-if value="{{ m.hasText }}" hint-placeholder-val="{{ true }}"><div style="background:var(--line2);padding:10px 16px;border-radius:18px;text-wrap:pretty;white-space:pre-wrap">{{ m.text }}</div></sc-if>
+          </div></sc-if>
           <sc-if value="{{ m.isAgent }}" hint-placeholder-val="{{ false }}"><div style="display:flex;flex-direction:column;gap:6px"><span style="font-family:var(--mono);font-size:11px;color:var(--faint)">{{ modelName }}</span><div style="text-wrap:pretty">{{ m.text }}</div></div></sc-if>
           <sc-if value="{{ m.isTyping }}" hint-placeholder-val="{{ false }}"><div style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--faint)"><span style="width:10px;height:10px;border-radius:50%;border:1.5px solid var(--line);border-top-color:var(--accent);box-sizing:border-box;animation:spin .9s linear infinite;display:block"></span>思考中</div></sc-if>
         </sc-for>
@@ -224,7 +282,7 @@ textarea::placeholder{color:var(--faint)}
         <div style="align-self:flex-end;max-width:80%;background:var(--line2);padding:10px 16px;border-radius:18px;text-wrap:pretty;white-space:pre-wrap">{{ gUser }}</div>
         <sc-if value="{{ gIsLive }}" hint-placeholder-val="{{ false }}">
           <div style="display:flex;flex-direction:column;gap:12px">
-            <div style="font-family:var(--mono);font-size:11px;color:var(--faint)">grok-build</div>
+            <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--faint)"><svg width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4l7.5 10.5L4 20h2.2l6.4-4.9L17.6 20H20l-7.6-10.6L19.6 4h-2.2l-5.7 4.4L6.4 4z" fill="currentColor"></path></svg>Grok 4.6</div>
             <div style="display:flex;flex-direction:column;gap:5px;font-size:13px;color:var(--mute)">
               <sc-for list="{{ gSteps }}" as="s" hint-placeholder-count="2">
                 <div style="display:flex;gap:10px;align-items:center;color:{{ s.color }}">
@@ -242,7 +300,21 @@ textarea::placeholder{color:var(--faint)}
           <div style="display:flex;flex-direction:column;gap:6px"><span style="font-family:var(--mono);font-size:11px;color:var(--faint)">{{ modelName }}</span><div style="text-wrap:pretty">{{ gPastReply }}</div></div>
         </sc-if>
         <sc-for list="{{ sent }}" as="m" hint-placeholder-count="0">
-          <sc-if value="{{ m.isUser }}" hint-placeholder-val="{{ false }}"><div style="align-self:flex-end;max-width:80%;background:var(--line2);padding:10px 16px;border-radius:18px;text-wrap:pretty;white-space:pre-wrap">{{ m.text }}</div></sc-if>
+          <sc-if value="{{ m.isUser }}" hint-placeholder-val="{{ false }}"><div style="align-self:flex-end;max-width:80%;display:flex;flex-direction:column;align-items:flex-end;gap:6px;min-width:0">
+            <sc-if value="{{ m.hasFiles }}" hint-placeholder-val="{{ false }}"><div style="display:flex;flex-wrap:wrap;justify-content:flex-end;gap:6px">
+              <sc-for list="{{ m.files }}" as="a" hint-placeholder-count="1"><span style="height:26px;display:inline-flex;align-items:center;gap:6px;padding:0 8px;border-radius:7px;border:1px solid var(--line);font-size:12px;color:var(--ink3);font-family:var(--mono)">{{ a.name }}<span style="color:var(--mute);font-family:var(--font)">{{ a.size }}</span></span></sc-for>
+            </div></sc-if>
+            <sc-for list="{{ m.pastes }}" as="b" hint-placeholder-count="0">
+              <div style="width:min(560px,100%);border:1px solid var(--line);border-radius:12px;background:var(--panel);overflow:hidden;display:flex;flex-direction:column">
+                <div style="padding:10px 14px;font-family:var(--mono);font-size:12px;line-height:18px;color:var(--ink3);white-space:pre;overflow:{{ b.ov }};max-height:{{ b.maxH }};-webkit-mask-image:{{ b.mask }}">{{ b.text }}</div>
+                <div onClick="{{ b.toggle }}" style="display:flex;align-items:center;gap:8px;padding:6px 14px;border-top:1px solid var(--line2);font-size:12px;color:var(--mute);cursor:pointer" style-hover="background:var(--hover)">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 10h16M4 14h10M4 18h7"></path></svg>
+                  <span style="flex:1">粘贴的文字 · {{ b.lines }} 行</span><span style="color:var(--ink3)">{{ b.label }}</span>
+                </div>
+              </div>
+            </sc-for>
+            <sc-if value="{{ m.hasText }}" hint-placeholder-val="{{ true }}"><div style="background:var(--line2);padding:10px 16px;border-radius:18px;text-wrap:pretty;white-space:pre-wrap">{{ m.text }}</div></sc-if>
+          </div></sc-if>
           <sc-if value="{{ m.isAgent }}" hint-placeholder-val="{{ false }}"><div style="display:flex;flex-direction:column;gap:6px"><span style="font-family:var(--mono);font-size:11px;color:var(--faint)">{{ modelName }}</span><div style="text-wrap:pretty">{{ m.text }}</div></div></sc-if>
           <sc-if value="{{ m.isTyping }}" hint-placeholder-val="{{ false }}"><div style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--faint)"><span style="width:10px;height:10px;border-radius:50%;border:1.5px solid var(--line);border-top-color:var(--accent);box-sizing:border-box;animation:spin .9s linear infinite;display:block"></span>思考中</div></sc-if>
         </sc-for>
@@ -254,7 +326,7 @@ textarea::placeholder{color:var(--faint)}
       <div style="width:min(calc(100% - 32px),max(560px,min(calc(100% - 96px),calc(100vw - 800px))));max-width:100%;margin:0 auto;font-size:15px;line-height:1.75;padding:20px 0;display:flex;flex-direction:column;gap:18px">
         <div onContextMenu="{{ msgMenu }}" style="align-self:flex-end;max-width:80%;background:var(--line2);padding:10px 16px;border-radius:18px;text-wrap:pretty">登录接口偶尔会超时，帮我查一下原因并修复，改完跑一下测试和压测，顺便更新 CHANGELOG。</div>
         <div onContextMenu="{{ msgMenu }}" style="display:flex;flex-direction:column;gap:12px">
-          <div style="font-family:var(--mono);font-size:11px;color:var(--faint)">grok-build</div>
+          <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--faint)"><svg width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4l7.5 10.5L4 20h2.2l6.4-4.9L17.6 20H20l-7.6-10.6L19.6 4h-2.2l-5.7 4.4L6.4 4z" fill="currentColor"></path></svg>Grok 4.6</div>
           <div style="display:flex;flex-direction:column;gap:5px;font-size:13px;color:var(--mute)">
             <div style="display:flex;gap:10px"><span style="color:var(--ok)">✓</span>创建 worktree <span style="font-family:var(--mono);font-size:12px;color:var(--ink2)">~/.pi-work/wt/reverse-fix-login</span></div>
             <div style="display:flex;gap:10px"><span style="color:var(--ok)">✓</span>复制 .env · npm install 18s</div>
@@ -276,7 +348,9 @@ textarea::placeholder{color:var(--faint)}
               </div>
             </sc-if>
           </div>
-          <div style="text-wrap:pretty">原因找到了：<code style="font-family:var(--mono);font-size:12.5px;background:var(--line2);padding:1px 5px;border-radius:4px">refreshToken()</code> 每次请求都新建一个 Redis 连接，并发高时连接池耗尽，请求排队直到 30 秒超时。我改成复用单例连接，并给 Redis 调用加了 3 秒超时和一次重试。</div>
+          <div style="text-wrap:pretty">原因找到了：<code class="mdcode">refreshToken()</code> 每次请求都新建一个 Redis 连接，并发高时连接池耗尽，请求排队直到 30 秒超时。我改成复用单例连接，并给 Redis 调用加了 3 秒超时和一次重试。改动在 <code class="mdcode mdpath"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"></path><path d="M14 3v5h5"></path></svg>src/api/auth.ts<span class="ln">:18</span></code> 和 <code class="mdcode mdpath"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"></path><path d="M14 3v5h5"></path></svg>src/lib/redis.ts</code>。</div>
+          <div class="mdcard"><div class="mdbar"><span>bash</span><button type="button" class="mdcopy"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"></rect><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"></path></svg>复制</button></div><pre><code><span class="mdpr">$ </span>npm test -- auth.spec.ts
+<span class="mdpr">$ </span>k6 run scripts/login.js</code></pre></div>
           <div style="text-wrap:pretty">接下来同时做三件事，分给 3 个子 Agent：</div>
           <div style="display:flex;flex-direction:column;background:var(--panel);border:1px solid var(--hover);border-radius:12px;padding:4px">
             <sc-for list="{{ msgChips }}" as="s" hint-placeholder-count="3">
@@ -300,11 +374,25 @@ textarea::placeholder{color:var(--faint)}
         </div>
 
         <sc-for list="{{ sent }}" as="m" hint-placeholder-count="0">
-          <sc-if value="{{ m.isUser }}" hint-placeholder-val="{{ false }}"><div style="align-self:flex-end;max-width:80%;background:var(--line2);padding:10px 16px;border-radius:18px;text-wrap:pretty;white-space:pre-wrap">{{ m.text }}</div></sc-if>
+          <sc-if value="{{ m.isUser }}" hint-placeholder-val="{{ false }}"><div style="align-self:flex-end;max-width:80%;display:flex;flex-direction:column;align-items:flex-end;gap:6px;min-width:0">
+            <sc-if value="{{ m.hasFiles }}" hint-placeholder-val="{{ false }}"><div style="display:flex;flex-wrap:wrap;justify-content:flex-end;gap:6px">
+              <sc-for list="{{ m.files }}" as="a" hint-placeholder-count="1"><span style="height:26px;display:inline-flex;align-items:center;gap:6px;padding:0 8px;border-radius:7px;border:1px solid var(--line);font-size:12px;color:var(--ink3);font-family:var(--mono)">{{ a.name }}<span style="color:var(--mute);font-family:var(--font)">{{ a.size }}</span></span></sc-for>
+            </div></sc-if>
+            <sc-for list="{{ m.pastes }}" as="b" hint-placeholder-count="0">
+              <div style="width:min(560px,100%);border:1px solid var(--line);border-radius:12px;background:var(--panel);overflow:hidden;display:flex;flex-direction:column">
+                <div style="padding:10px 14px;font-family:var(--mono);font-size:12px;line-height:18px;color:var(--ink3);white-space:pre;overflow:{{ b.ov }};max-height:{{ b.maxH }};-webkit-mask-image:{{ b.mask }}">{{ b.text }}</div>
+                <div onClick="{{ b.toggle }}" style="display:flex;align-items:center;gap:8px;padding:6px 14px;border-top:1px solid var(--line2);font-size:12px;color:var(--mute);cursor:pointer" style-hover="background:var(--hover)">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 10h16M4 14h10M4 18h7"></path></svg>
+                  <span style="flex:1">粘贴的文字 · {{ b.lines }} 行</span><span style="color:var(--ink3)">{{ b.label }}</span>
+                </div>
+              </div>
+            </sc-for>
+            <sc-if value="{{ m.hasText }}" hint-placeholder-val="{{ true }}"><div style="background:var(--line2);padding:10px 16px;border-radius:18px;text-wrap:pretty;white-space:pre-wrap">{{ m.text }}</div></sc-if>
+          </div></sc-if>
           <sc-if value="{{ m.isAgent }}" hint-placeholder-val="{{ false }}"><div style="display:flex;flex-direction:column;gap:6px"><span style="font-family:var(--mono);font-size:11px;color:var(--faint)">{{ modelName }}</span><div style="text-wrap:pretty">{{ m.text }}</div></div></sc-if>
           <sc-if value="{{ m.isTyping }}" hint-placeholder-val="{{ false }}"><div style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--faint)"><span style="width:10px;height:10px;border-radius:50%;border:1.5px solid var(--line);border-top-color:var(--accent);box-sizing:border-box;animation:spin .9s linear infinite;display:block"></span>思考中</div></sc-if>
         </sc-for>
-        <sc-if value="{{ running }}" hint-placeholder-val="{{ true }}">
+        <sc-if value="{{ threadThinking }}" hint-placeholder-val="{{ false }}">
           <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--mute);min-width:0">
             <span style="width:12px;height:12px;border-radius:50%;border:1.5px solid var(--line);border-top-color:var(--accent);box-sizing:border-box;animation:spin .9s linear infinite;flex-shrink:0"></span>
             <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;background:linear-gradient(90deg,var(--mute) 0%,var(--mute) 40%,var(--faint2) 50%,var(--mute) 60%,var(--mute) 100%);background-size:200% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:shimmer 2.2s linear infinite">{{ pendingText }}</span>
@@ -361,19 +449,16 @@ textarea::placeholder{color:var(--faint)}
               <span onClick="{{ newTop }}" style="padding:4px 10px;border:1px solid #e8c98f;border-radius:7px;background:#fff;color:#5c3a05;cursor:pointer;white-space:nowrap">新开对话接着做</span>
             </div>
           </sc-if>
-          <sc-if value="{{ cRunning }}" hint-placeholder-val="{{ false }}">
-            <div style="display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--ink3);min-width:0">
-              <span style="width:6px;height:6px;border-radius:50%;background:#2e8c5a;flex-shrink:0;animation:tpulse 1.8s ease-out infinite"></span>
-              <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0">{{ cNow }}</span>
-              <span style="color:var(--faint);white-space:nowrap;font-variant-numeric:tabular-nums">· {{ cStep }} · {{ elapsed }}</span>
+          <sc-if value="{{ cHasSubs }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink3);min-width:0">
               <span style="flex:1"></span>
               <sc-if value="{{ cHasSubs }}" hint-placeholder-val="{{ true }}">
-                <span onClick="{{ cToggleSubPop }}" style="display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:999px;background:var(--ok-bg);color:#2a7a4f;cursor:pointer;white-space:nowrap">{{ cSubLabel }} <span style="font-size:9px">▸</span></span>
+                <button type="button" onClick="{{ cToggleSubPop }}" aria-expanded="{{ cSubPopStr }}" style="height:24px;display:inline-flex;align-items:center;gap:6px;padding:0 10px;border-radius:999px;border:none;background:#eaf4ee;color:#245a3a;font-size:12px;font-family:inherit;cursor:pointer;white-space:nowrap">{{ cSubLabel }} <span style="font-size:9px">{{ cSubCaret }}</span></button>
               </sc-if>
             </div>
           </sc-if>
           <sc-if value="{{ cSubPop }}" hint-placeholder-val="{{ false }}">
-            <div style="position:absolute;right:12px;bottom:calc(100% + 8px);z-index:6;width:390px;background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.09);padding:6px;display:flex;flex-direction:column;font-size:13px">
+            <div style="position:absolute;right:12px;bottom:calc(100% + 8px);z-index:6;width:380px;background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.09);padding:6px;display:flex;flex-direction:column;font-size:13px">
               <div style="padding:6px 8px 4px;font-size:11px;color:var(--mute)">后台子 Agent</div>
               <sc-for list="{{ cSubList }}" as="a" hint-placeholder-count="2">
                 <div onClick="{{ a.open }}" style="display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:8px;cursor:pointer" style-hover="background:var(--hover)">
@@ -395,10 +480,18 @@ textarea::placeholder{color:var(--faint)}
                 </span>
               </sc-for>
               <sc-for list="{{ cAttach }}" as="f" hint-placeholder-count="1">
-                <span style="height:30px;display:inline-flex;align-items:center;gap:8px;padding:0 6px 0 4px;border-radius:8px;border:1px solid var(--line);font-size:12px;color:var(--ink3);font-family:{{ f.font }}">
-                  <sc-if value="{{ f.isImg }}" hint-placeholder-val="{{ true }}"><span style="width:22px;height:22px;border-radius:5px;background:#dcdcd8"></span></sc-if>
-                  <sc-if value="{{ f.isFile }}" hint-placeholder-val="{{ false }}"><span style="width:4px"></span></sc-if>
-                  {{ f.name }}<span style="color:var(--mute);font-family:var(--font)">{{ f.size }}</span>
+                <span onClick="{{ f.peek }}" title="{{ f.tip }}" style="position:relative;cursor:{{ f.cursor }};max-width:320px;height:30px;display:inline-flex;align-items:center;gap:8px;padding:0 6px 0 4px;border-radius:8px;border:1px solid var(--line);font-size:12px;color:var(--ink3);font-family:{{ f.font }}">
+                  <sc-if value="{{ f.hasThumb }}" hint-placeholder-val="{{ false }}"><img src="{{ f.thumb }}" alt="" style="width:22px;height:22px;border-radius:5px;object-fit:cover;display:block"></sc-if>
+                  <sc-if value="{{ f.noThumbImg }}" hint-placeholder-val="{{ true }}"><span style="width:22px;height:22px;border-radius:5px;background:#dcdcd8"></span></sc-if>
+                  <sc-if value="{{ f.isFile }}" hint-placeholder-val="{{ false }}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--mute)" stroke-width="1.6" aria-hidden="true" style="margin-left:4px"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"></path><path d="M14 3v5h5"></path></svg></sc-if>
+                  <sc-if value="{{ f.isPaste }}" hint-placeholder-val="{{ false }}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--mute)" stroke-width="1.6" stroke-linecap="round" aria-hidden="true" style="margin-left:4px;flex-shrink:0"><path d="M4 6h16M4 10h16M4 14h10M4 18h7"></path></svg></sc-if>
+                  <span style="min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ f.name }}</span><span style="color:var(--mute);font-family:var(--font);white-space:nowrap">{{ f.size }}</span>
+                  <sc-if value="{{ f.peekOpen }}" hint-placeholder-val="{{ false }}">
+                    <span onClick="{{ f.stop }}" style="position:absolute;left:0;bottom:calc(100% + 6px);z-index:7;width:440px;background:var(--panel);border:1px solid var(--line);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.09);display:flex;flex-direction:column;cursor:default;font-family:var(--font)">
+                      <span style="display:block;padding:10px 12px 0;font-family:var(--mono);font-size:12px;line-height:18px;color:var(--ink3);white-space:pre;overflow:hidden;max-height:144px;-webkit-mask-image:linear-gradient(#000 60%,transparent)">{{ f.head }}</span>
+                      <span style="display:flex;align-items:center;gap:8px;padding:8px 12px;border-top:1px solid var(--line2);font-size:12px;color:var(--mute)"><span style="flex:1">{{ f.more }}</span><span onClick="{{ f.expand }}" style="cursor:pointer;color:var(--ink3);padding:2px 6px;margin:-2px -6px;border-radius:5px" style-hover="background:var(--hover)">放回输入框</span></span>
+                    </span>
+                  </sc-if>
                   <button type="button" aria-label="移除" onClick="{{ f.remove }}" style="width:18px;height:18px;border:none;background:transparent;color:var(--mute);cursor:pointer;padding:0;font-size:13px">×</button>
                 </span>
               </sc-for>
@@ -419,15 +512,32 @@ textarea::placeholder{color:var(--faint)}
           <textarea value="{{ draftText }}" onChange="{{ draftInput }}" onKeyDown="{{ cKey }}" onPaste="{{ cPaste }}" onFocus="{{ cFocus }}" onBlur="{{ cBlur }}" placeholder="{{ cPlaceholder }}" style="border:none;outline:none;resize:none;font:inherit;font-size:15px;line-height:1.6;height:{{ cTaH }};background:transparent;color:var(--ink);padding:0"></textarea>
           <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
             <div style="display:flex;align-items:center;gap:2px;min-width:0">
-              <button type="button" aria-label="添加附件" onClick="{{ cAddAttach }}" style="width:32px;height:32px;border-radius:8px;border:none;background:transparent;color:var(--ink3);display:flex;align-items:center;justify-content:center;cursor:pointer" style-hover="background:var(--hover)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg></button>
+              <input type="file" accept="image/png,image/jpeg,image/gif,image/webp" multiple ref="{{ cImgInput }}" onChange="{{ cPicked }}" style="display:none">
+              <input type="file" multiple ref="{{ cFileInput }}" onChange="{{ cPicked }}" style="display:none">
+              <sc-if value="{{ cPlusOpen }}" hint-placeholder-val="{{ false }}">
+                <div style="position:absolute;left:10px;bottom:52px;z-index:7;width:260px;background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.09);padding:6px;display:flex;flex-direction:column;font-size:13px">
+                  <sc-for list="{{ cPlusItems }}" as="m" hint-placeholder-count="3">
+                    <button type="button" onClick="{{ m.run }}" style="display:flex;align-items:center;gap:10px;padding:8px 10px;border:none;border-radius:8px;background:transparent;color:var(--ink);font:inherit;font-size:13px;cursor:pointer;text-align:left" style-hover="background:var(--hover)">
+                      <span style="width:18px;display:flex;justify-content:center;color:var(--ink3)">
+                        <sc-if value="{{ m.isImg }}" hint-placeholder-val="{{ false }}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"></rect><circle cx="9" cy="10" r="1.8"></circle><path d="M21 16l-5-5-8 8"></path></svg></sc-if>
+                        <sc-if value="{{ m.isFile }}" hint-placeholder-val="{{ false }}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"></path><path d="M14 3v5h5"></path></svg></sc-if>
+                        <sc-if value="{{ m.isAt }}" hint-placeholder-val="{{ false }}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M16 12v1.5a2.5 2.5 0 0 0 5 0V12a9 9 0 1 0-3.5 7.1"></path></svg></sc-if>
+                      </span>
+                      <span style="flex:1;display:flex;flex-direction:column"><span>{{ m.label }}</span><span style="font-size:11.5px;color:var(--mute)">{{ m.hint }}</span></span>
+                    </button>
+                  </sc-for>
+                </div>
+              </sc-if>
+              <button type="button" aria-label="添加附件" aria-expanded="{{ cPlusOpenStr }}" onClick="{{ cTogglePlus }}" style="width:32px;height:32px;border-radius:8px;border:none;background:{{ cPlusBg }};color:var(--ink3);display:flex;align-items:center;justify-content:center;cursor:pointer" style-hover="background:var(--hover)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg></button>
               <span style="width:1px;height:16px;background:var(--line);margin:0 6px"></span>
               <button type="button" onClick="{{ modelMenu }}" style="height:32px;display:inline-flex;align-items:center;gap:6px;padding:0 8px;border:none;background:transparent;border-radius:8px;font-size:13px;color:var(--ink);font-family:inherit;cursor:pointer" style-hover="background:var(--hover)"><svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4l7.5 10.5L4 20h2.2l6.4-4.9L17.6 20H20l-7.6-10.6L19.6 4h-2.2l-5.7 4.4L6.4 4z" fill="currentColor"></path></svg>{{ modelName }} <span style="font-size:10px;color:var(--mute)">▾</span></button>
               <button type="button" onClick="{{ projChipMenu }}" title="{{ projChipPath }}" style="height:32px;display:inline-flex;align-items:center;gap:6px;padding:0 8px;border:none;background:transparent;border-radius:8px;font-size:13px;color:var(--ink3);font-family:inherit;cursor:pointer;white-space:nowrap" style-hover="background:var(--hover)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg>{{ projChipName }}</button>
+              <button type="button" title="{{ cGitTitle }}" style="height:32px;display:inline-flex;align-items:center;gap:6px;padding:0 8px;border:none;background:transparent;border-radius:8px;font-size:13px;color:var(--ink3);font-family:inherit;cursor:pointer;white-space:nowrap;min-width:0" style-hover="background:var(--hover)"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="4" cy="3.5" r="1.6"></circle><circle cx="4" cy="12.5" r="1.6"></circle><circle cx="12" cy="5" r="1.6"></circle><path d="M4 5v6M12 6.6c0 3-4 2.2-8 4.4"></path></svg><span style="max-width:200px;overflow:hidden;text-overflow:ellipsis">{{ cGitBranch }}</span><sc-if value="{{ cGitHasDiff }}" hint-placeholder-val="{{ true }}"><span style="font-family:var(--mono);font-size:12px;color:oklch(0.55 0.13 150)">+{{ cGitAdd }}</span><span style="font-family:var(--mono);font-size:12px;color:oklch(0.55 0.15 25)">−{{ cGitDel }}</span></sc-if><sc-if value="{{ cGitHasAhead }}" hint-placeholder-val="{{ true }}"><span style="font-family:var(--mono);font-size:12px;color:var(--mute)">↑{{ cGitAhead }}</span></sc-if></button>
             </div>
             <div style="display:flex;align-items:center;gap:8px">
               <sc-if value="{{ cHasHint }}" hint-placeholder-val="{{ false }}"><span style="font-size:12px;color:var(--mute);white-space:nowrap">{{ cHint }}</span></sc-if>
               <button type="button" onClick="{{ ctxMenu }}" onDoubleClick="{{ cToggleHot }}" title="{{ ctxTitle }}（双击演示上下文快满）" style="height:32px;display:inline-flex;align-items:center;gap:6px;padding:0 8px;border:none;background:transparent;border-radius:8px;font-size:12px;color:{{ cPctColor }};font-family:inherit;font-variant-numeric:tabular-nums;cursor:pointer;font-weight:{{ cPctWeight }}" style-hover="background:var(--hover)"><svg width="16" height="16" viewBox="0 0 14 14" style="transform:rotate(-90deg);flex-shrink:0" aria-hidden="true"><circle cx="7" cy="7" r="5.5" fill="none" stroke="var(--line)" stroke-width="2"></circle><circle cx="7" cy="7" r="5.5" fill="none" stroke="{{ ctxRingColor }}" stroke-width="2" stroke-dasharray="{{ ctxDash }}" stroke-linecap="round"></circle></svg>{{ ctxUsedPct }}</button>
-              <sc-if value="{{ showStop }}" hint-placeholder-val="{{ false }}"><button type="button" aria-label="停止" onClick="{{ stopAll }}" style="width:34px;height:34px;border-radius:50%;border:none;background:var(--accent);display:flex;align-items:center;justify-content:center;cursor:pointer"><span style="width:10px;height:10px;border-radius:2px;background:var(--on-accent)"></span></button></sc-if>
+              <sc-if value="{{ showStop }}" hint-placeholder-val="{{ false }}"><button type="button" aria-label="停止（Esc）" onClick="{{ stopAll }}" style="width:34px;height:34px;border-radius:50%;border:none;background:var(--accent);color:var(--on-accent);display:flex;align-items:center;justify-content:center;cursor:pointer"><svg width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3" fill="currentColor"></rect></svg></button></sc-if>
               <sc-if value="{{ showSend }}" hint-placeholder-val="{{ true }}"><button type="button" aria-label="发送" onClick="{{ cSend }}" style="width:34px;height:34px;border-radius:50%;border:none;background:{{ cSendBg }};color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:background .15s"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"></path></svg></button></sc-if>
             </div>
           </div>
@@ -436,39 +546,26 @@ textarea::placeholder{color:var(--faint)}
     </div>
     </sc-if>
     <sc-if value="{{ isNew }}" hint-placeholder-val="{{ false }}">
-      <div style="flex:1;min-height:0;overflow:auto;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px 24px 72px;gap:22px">
-        <div style="font-size:24px;font-weight:600;display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:center">要在<span onClick="{{ pickProject }}" style="display:flex;align-items:center;gap:6px;padding:2px 10px;border-radius:8px;background:var(--line2);cursor:pointer" style-hover="background:var(--line)">{{ newProjName }}<span style="font-size:11px;color:var(--mute)">▾</span></span>里做什么？</div>
-        <div style="width:min(calc(100% - 32px),max(560px,min(calc(100% - 96px),calc(100vw - 800px))));display:flex;flex-direction:column;gap:12px">
-          <div style="background:var(--panel);border:1px solid var(--line);border-radius:18px;box-shadow:0 6px 24px rgba(0,0,0,.05);display:flex;flex-direction:column;font-size:12.5px">
-            <div style="display:flex;align-items:center;gap:6px;padding:10px 12px;flex-wrap:wrap">
-              <sc-if value="{{ newGit }}" hint-placeholder-val="{{ true }}">
-                <span onClick="{{ branchMenu }}" style="display:flex;align-items:center;gap:6px;padding:4px 10px;border-radius:8px;background:var(--side);cursor:pointer" style-hover="background:var(--hover)"><sc-if value="{{ wtOn }}" hint-placeholder-val="{{ false }}"><span style="color:var(--faint)">基于</span></sc-if><svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="var(--mute)" stroke-width="1.3"><circle cx="3" cy="2.5" r="1.3"></circle><circle cx="3" cy="9.5" r="1.3"></circle><circle cx="9" cy="4" r="1.3"></circle><path d="M3 3.8v4.4M9 5.3c0 2-2 2.2-6 3"></path></svg><span style="font-family:var(--mono);font-size:12px">{{ baseBranch }}</span><span style="font-family:var(--mono);font-size:11.5px;color:oklch(0.6 0.12 70)">{{ baseDirty }}</span><span style="font-family:var(--mono);font-size:11.5px;color:var(--faint)">{{ baseAhead }}</span><span style="font-size:10px;color:var(--faint)">▾</span></span>
-              </sc-if>
-              <sc-if value="{{ newNoGit }}" hint-placeholder-val="{{ false }}">
-                <span style="padding:4px 10px;border-radius:8px;border:1px dashed var(--bd2);color:var(--mute)">不是 Git 仓库</span>
-              </sc-if>
-              <sc-if value="{{ newGit }}" hint-placeholder-val="{{ true }}"><span style="margin-left:auto;font-size:12.5px;color:var(--faint)">在新 worktree 中运行</span></sc-if>
-              <sc-if value="{{ newNoGit }}" hint-placeholder-val="{{ false }}"><span style="margin-left:auto;font-size:12.5px;color:var(--faint)">直接修改，自动存检查点</span></sc-if>
+      <div style="flex:1;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px 24px 40px;gap:14px;text-align:center">
+        <div style="font-size:28px;font-weight:600;display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:center">要在<button type="button" onClick="{{ pickProject }}" style="display:inline-flex;align-items:center;gap:8px;padding:3px 12px;border-radius:8px;background:var(--line2);border:none;font:inherit;font-size:28px;font-weight:600;color:var(--ink);cursor:pointer" style-hover="background:var(--line)">{{ newProjName }}<span style="font-size:11px;color:var(--mute)">▾</span></button>里做什么？</div>
+        <p style="margin:0;font-size:13px;color:var(--mute)">Agent 会在 {{ newProjName }} 这个目录里工作。</p>
+      </div>
+      <div style="flex-shrink:0;padding:0 0 18px">
+        <div style="width:min(calc(100% - 32px),max(560px,min(calc(100% - 96px),calc(100vw - 800px))));max-width:100%;margin:0 auto;background:var(--panel);border:1px solid var(--line);border-radius:18px;box-shadow:0 6px 24px rgba(0,0,0,.05);padding:12px 12px 10px 18px;box-sizing:border-box;display:flex;flex-direction:column;gap:10px">
+          <textarea aria-label="输入消息" value="{{ newText }}" onChange="{{ newInput }}" onKeyDown="{{ newKey }}" placeholder="描述任务，@ 引用文件，/ 命令" style="border:none;outline:none;resize:none;font:inherit;font-size:15px;line-height:1.6;height:44px;background:transparent;color:var(--ink);padding:0"></textarea>
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+            <div style="display:flex;align-items:center;gap:2px;min-width:0">
+              <button type="button" aria-label="添加附件" style="width:32px;height:32px;border-radius:8px;border:none;background:transparent;color:var(--ink3);display:flex;align-items:center;justify-content:center;cursor:pointer" style-hover="background:var(--hover)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg></button>
+              <span style="width:1px;height:16px;background:var(--line);margin:0 6px"></span>
+              <button type="button" onClick="{{ modelMenu }}" style="height:32px;display:inline-flex;align-items:center;gap:6px;padding:0 8px;border:none;background:transparent;border-radius:8px;font-size:13px;color:var(--ink);font-family:inherit;cursor:pointer" style-hover="background:var(--hover)"><svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4l7.5 10.5L4 20h2.2l6.4-4.9L17.6 20H20l-7.6-10.6L19.6 4h-2.2l-5.7 4.4L6.4 4z" fill="currentColor"></path></svg>{{ modelName }} <span style="font-size:10px;color:var(--mute)">▾</span></button>
+              <button type="button" onClick="{{ pickProject }}" style="height:32px;display:inline-flex;align-items:center;gap:6px;padding:0 8px;border:none;background:transparent;border-radius:8px;font-size:13px;color:var(--ink3);font-family:inherit;cursor:pointer" style-hover="background:var(--hover)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg>{{ newProjName }}</button>
+              <button type="button" title="当前分支 main，没有未提交的改动" style="height:32px;display:inline-flex;align-items:center;gap:6px;padding:0 8px;border:none;background:transparent;border-radius:8px;font-size:13px;color:var(--ink3);font-family:inherit;cursor:pointer;white-space:nowrap" style-hover="background:var(--hover)"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="4" cy="3.5" r="1.6"></circle><circle cx="4" cy="12.5" r="1.6"></circle><circle cx="12" cy="5" r="1.6"></circle><path d="M4 5v6M12 6.6c0 3-4 2.2-8 4.4"></path></svg>main</button>
             </div>
-            <sc-if value="{{ wtOn }}" hint-placeholder-val="{{ false }}">
-              <div style="display:grid;grid-template-columns:84px minmax(0,1fr);gap:10px 12px;padding:12px 14px;background:var(--bg);border-top:1px solid var(--line3);align-items:center">
-                <span style="color:var(--faint)">新分支</span><span style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="font-family:var(--mono);font-size:12px;padding:3px 8px;border:1px solid var(--line);border-radius:6px;background:var(--panel)">agent/new-task</span><span style="color:var(--faint);font-size:11.5px">发送后根据任务自动命名</span></span>
-                <span style="color:var(--faint)">未提交改动</span><span style="display:flex;align-items:center;gap:4px"><span onClick="{{ carryNo }}" style="padding:2px 9px;border-radius:6px;cursor:pointer;background:{{ carryNoBg }};border:{{ carryNoBorder }}">不带入</span><span onClick="{{ carryYes }}" style="padding:2px 9px;border-radius:6px;cursor:pointer;background:{{ carryYesBg }};border:{{ carryYesBorder }}">带入 2 处</span></span>
-                <span style="color:var(--faint)">准备环境</span><span style="display:flex;flex-direction:column;gap:3px"><span style="display:flex;gap:8px;align-items:center"><span style="width:13px;height:13px;border-radius:3px;background:var(--accent);color:var(--on-accent);font-size:9px;display:flex;align-items:center;justify-content:center">✓</span>复制 <span style="font-family:var(--mono);font-size:12px">.env</span></span><span style="display:flex;gap:8px;align-items:center"><span style="width:13px;height:13px;border-radius:3px;background:var(--accent);color:var(--on-accent);font-size:9px;display:flex;align-items:center;justify-content:center">✓</span>运行 <span style="font-family:var(--mono);font-size:12px">{{ newSetupFirst }}</span><span onClick="{{ openProjSettings }}" style="color:var(--faint);font-size:11.5px;cursor:pointer;text-decoration:underline;text-underline-offset:3px" style-hover="color:var(--ink)">来自项目设置</span></span></span>
-              </div>
-            </sc-if>
-            <textarea value="{{ newText }}" onChange="{{ newInput }}" onKeyDown="{{ newKey }}" placeholder="描述任务，@ 引用文件，/ 使用命令" style="border:none;border-top:1px solid var(--line3);outline:none;resize:none;font:inherit;font-size:14px;height:64px;background:transparent;color:var(--ink);padding:14px 16px 6px"></textarea>
-            <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 10px 10px 12px;gap:12px">
-              <div style="display:flex;align-items:center;gap:2px;font-size:12px;color:var(--ink3)">
-                <span style="display:flex;align-items:center;gap:4px;padding:4px 8px;border-radius:6px;background:var(--side);font-family:var(--mono);font-size:11.5px;color:var(--ink);cursor:pointer" onClick="{{ modelMenu }}">{{ modelName }}<span style="font-size:10px;color:var(--faint)">▾</span></span>
-              </div>
-              <div style="display:flex;align-items:center;gap:12px">
-                <span onClick="{{ ctxMenu }}" title="{{ newCtxTitle }}" style="display:flex;align-items:center;gap:6px;padding:4px 8px;margin-right:-4px;border-radius:6px;font-family:var(--mono);font-size:11px;color:var(--faint);white-space:nowrap;cursor:pointer" style-hover="background:var(--side);color:var(--ink3)"><svg width="14" height="14" viewBox="0 0 14 14"><circle cx="7" cy="7" r="5.5" fill="none" stroke="var(--line)" stroke-width="2"></circle></svg>已用 0% · 剩 100% · {{ ctxMax }}</span>
-                <span onClick="{{ startNew }}" title="发送" style="width:30px;height:30px;border-radius:50%;background:{{ newSendBg }};color:var(--on-accent);display:flex;align-items:center;justify-content:center;cursor:pointer">↑</span>
-              </div>
+            <div style="display:flex;align-items:center;gap:8px">
+              <span style="height:32px;display:inline-flex;align-items:center;gap:6px;padding:0 8px;font-size:12px;color:var(--mute)"><svg width="16" height="16" viewBox="0 0 14 14" style="transform:rotate(-90deg)" aria-hidden="true"><circle cx="7" cy="7" r="5.5" fill="none" stroke="var(--line)" stroke-width="2"></circle></svg>0%</span>
+              <button type="button" aria-label="发送" onClick="{{ startNew }}" style="width:34px;height:34px;border-radius:50%;border:none;background:{{ newSendBg }};color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"></path></svg></button>
             </div>
           </div>
-          <div style="font-size:12px;color:var(--mute);text-align:center;text-wrap:pretty;line-height:1.6">{{ newHint }}<sc-if value="{{ newNoGit }}" hint-placeholder-val="{{ false }}"><span style="color:var(--ink);text-decoration:underline;text-underline-offset:3px;cursor:pointer;margin-left:6px">初始化 Git 仓库</span></sc-if></div>
         </div>
       </div>
     </sc-if>
@@ -479,20 +576,21 @@ textarea::placeholder{color:var(--faint)}
       <div style="position:absolute;top:0;bottom:0;left:-4px;right:-4px;cursor:col-resize" style-hover="background:var(--hover-a)"></div>
     </div>
   </sc-if>
-  <sc-if value="{{ rightShown }}" hint-placeholder-val="{{ true }}">
-    <aside style="width:{{ rightWpx }};flex-shrink:0;background:var(--panel);display:flex;flex-direction:column;position:{{ rightPos }};top:0;bottom:0;right:0;z-index:30;box-shadow:{{ rightShadow }};min-width:0">
-      <div style="height:52px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;padding:0 12px;border-bottom:1px solid var(--line3)">
+  <div aria-hidden="{{ rightHidden }}" style="width:{{ rightOuterW }};flex-shrink:0;overflow:hidden;display:flex;justify-content:flex-end;position:{{ rightPos }};top:0;bottom:0;right:0;z-index:30;box-shadow:{{ rightShadow }};transition:{{ panelTrans }}">
+    <aside style="width:{{ rightWpx }};background:var(--panel);display:flex;flex-direction:column;height:100%;transform:{{ rightTx }};transition:{{ panelTxTrans }};min-width:0">
+      <div style="height:52px;flex-shrink:0;display:flex;align-items:center;justify-content:flex-start;gap:2px;padding:0 12px 0 8px;border-bottom:1px solid var(--line3)">
+        <div onClick="{{ toggleRight }}" title="收起右栏" aria-label="收起右栏" style="opacity:{{ rpBtnOp }};width:30px;height:30px;border-radius:7px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;margin-right:4px" style-hover="background:var(--side)">
+          <span style="width:15px;height:12px;border:1.5px solid var(--mute);border-radius:3px;box-sizing:border-box;position:relative;display:block"><span style="position:absolute;right:4px;top:0;bottom:0;width:1.5px;background:var(--mute)"></span></span>
+        </div>
         <div style="display:flex;align-items:center;gap:2px;font-size:13px;min-width:0;overflow:hidden">
-          <div onClick="{{ tabChanges }}" style="display:flex;gap:6px;align-items:center;height:28px;box-sizing:border-box;padding:0 10px;border-radius:6px;cursor:pointer;background:{{ tChBg }};color:{{ tChColor }};white-space:nowrap;flex-shrink:0" style-hover="color:var(--ink)">变更<span style="font-family:var(--mono);font-size:11px;color:oklch(0.55 0.13 150)">+{{ totalAdd }}</span><span style="font-family:var(--mono);font-size:11px;color:oklch(0.55 0.15 25)">−{{ totalDel }}</span></div>
+          <div onClick="{{ tabChanges }}" style="display:flex;gap:6px;align-items:center;height:28px;box-sizing:border-box;padding:0 10px;border-radius:6px;cursor:pointer;background:{{ tChBg }};color:{{ tChColor }};white-space:nowrap;flex-shrink:0" style-hover="color:var(--ink)">变更<sc-if value="{{ hasChangeFiles }}" hint-placeholder-val="{{ true }}"><span style="font-family:var(--mono);font-size:11px;color:oklch(0.55 0.13 150)">+{{ totalAdd }}</span><span style="font-family:var(--mono);font-size:11px;color:oklch(0.55 0.15 25)">−{{ totalDel }}</span></sc-if></div>
           <div onClick="{{ tabFiles }}" style="display:flex;gap:6px;align-items:center;height:28px;box-sizing:border-box;padding:0 10px;border-radius:6px;cursor:pointer;background:{{ tFiBg }};color:{{ tFiColor }};white-space:nowrap;flex-shrink:0" style-hover="color:var(--ink)">文件</div>
           <div onClick="{{ tabTerm }}" style="display:flex;gap:6px;align-items:center;height:28px;box-sizing:border-box;padding:0 10px;border-radius:6px;cursor:pointer;background:{{ tTeBg }};color:{{ tTeColor }};white-space:nowrap;flex-shrink:0" style-hover="color:var(--ink)">终端</div>
           <sc-if value="{{ hasSubAgents }}" hint-placeholder-val="{{ true }}">
             <div onClick="{{ tabAgentOverview }}" style="display:flex;gap:6px;align-items:center;height:28px;box-sizing:border-box;padding:0 10px;border-radius:6px;cursor:pointer;background:{{ tAgBg }};color:{{ tAgColor }};white-space:nowrap;flex-shrink:0" style-hover="color:var(--ink)">子 Agent<span style="font-size:11px;color:var(--faint)">{{ subAgentCount }}</span></div>
           </sc-if>
         </div>
-        <div onClick="{{ toggleRight }}" title="收起面板 ⌘J" style="width:30px;height:30px;border-radius:7px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0" style-hover="background:var(--side)">
-          <span style="width:15px;height:12px;border:1.5px solid var(--mute);border-radius:3px;box-sizing:border-box;position:relative;display:block"><span style="position:absolute;right:4px;top:0;bottom:0;width:1.5px;background:var(--mute)"></span></span>
-        </div>
+        
       </div>
 
       <sc-if value="{{ isAgentOverview }}" hint-placeholder-val="{{ false }}">
@@ -612,6 +710,8 @@ textarea::placeholder{color:var(--faint)}
       </sc-if>
 
       <sc-if value="{{ isChanges }}" hint-placeholder-val="{{ true }}">
+        <sc-if value="{{ noChangeFiles }}" hint-placeholder-val="{{ false }}"><div style="flex:1;display:flex;align-items:center;justify-content:center;font-size:13px;color:var(--faint)">暂无变更</div></sc-if>
+        <sc-if value="{{ hasChangeFiles }}" hint-placeholder-val="{{ true }}">
         <div style="flex:1;overflow:auto">
           <div style="padding:14px 16px;display:flex;flex-direction:column;gap:2px;border-bottom:1px solid var(--line3)">
             <div style="display:flex;gap:10px;align-items:baseline;font-size:13px"><span style="font-weight:500">{{ fileCountLabel }}</span><span style="font-family:var(--mono);font-size:12px;color:oklch(0.55 0.13 150)">+{{ totalAdd }}</span><span style="font-family:var(--mono);font-size:12px;color:oklch(0.55 0.15 25)">−{{ totalDel }}</span></div>
@@ -636,6 +736,7 @@ textarea::placeholder{color:var(--faint)}
             </div>
           </sc-for>
         </div>
+        </sc-if>
       </sc-if>
 
       <sc-if value="{{ isFiles }}" hint-placeholder-val="{{ false }}">
@@ -683,7 +784,7 @@ textarea::placeholder{color:var(--faint)}
         </div>
       </sc-if>
     </aside>
-  </sc-if>
+  </div>
 
   <sc-if value="{{ isSettings }}" hint-placeholder-val="{{ false }}">
     <div onClick="{{ settingsBack }}" style="position:absolute;inset:0;z-index:80;display:flex;align-items:center;justify-content:center;padding:32px;background:rgba(28,28,30,.32)">
@@ -1141,6 +1242,7 @@ const TERMS = {
 };
 
 const MODELS = ['grok-build', 'grok-mini', 'claude-sonnet-4.5', 'gpt-5'];
+const MODEL_NAME = { 'grok-build': 'Grok 4.6', 'grok-mini': 'Grok 4.6 Mini', 'claude-sonnet-4.5': 'Claude Sonnet 4.5', 'gpt-5': 'OpenAI GPT-5' };
 const RULES0 = [['允许', '运行', 'npm test*', '全局'], ['允许', '运行', 'git status | diff | log*', '全局'], ['询问', '运行', 'git push*', '全局'], ['拒绝', '运行', 'rm -rf *', '全局'], ['拒绝', '写入', '**/.env*', '全局'], ['允许', '写入', 'src/**', '项目 · reverse']]
   .map(([effect, tool, pattern, src], i) => ({ id: 'r' + i, effect, tool, pattern, src }));
 
@@ -1159,11 +1261,11 @@ class Component extends DCLogic {
     vw: window.innerWidth, leftW: 264, rightW: 440,
     leftOpen: window.innerWidth >= 860, rightOpen: window.innerWidth >= 1180,
     tab: 'changes', menu: null, active: 'c1', openProjects: { reverse: true, blog: false, infra: false },
-    archivedOpen: true, archived: ['a1', 'a2'], expanded: null, runOpen: false, dragging: null,
+    archivedOpen: false, archived: ['a1', 'a2'], expanded: null, runOpen: false, dragging: null,
     termTab: 'zsh', file: 'auth', agentTab: null,
     view: 'chat', draft: null, newProj: 'reverse', runMode: 'wt', carry: false, wtModal: false,
     finished: false, toolsOpen: false, merged: null, squash: true, wtList: ['fix', 'json', 'parser'], closedFiles: {}, sec: 134,
-    sent: {}, draftText: '', newText: '', typing: null, userConvos: [], approval: null, stopped: {}, subsClosed: {}, subsOpenOther: {}, agDraft: '', agNotes: {}, model: 'grok-build', ws: '个人', baseBranch: 'main',
+    sent: {}, draftText: '', newText: '', typing: null, userConvos: [], approval: null, stopped: {}, subsClosed: {}, subsOpen: {}, agDraft: '', agNotes: {}, model: 'grok-build', ws: '个人', baseBranch: 'main',
     terms: { zsh: TERMS.zsh }, termInput: '', termN: 1, prevView: 'chat', restored: null,
     sCat: 'agent', sProj: 'reverse', sQuery: '', perm: 'risky', tNest: false, tNotify: true, tClean: true, train: '关闭', sendKey: 'Enter', lang: '简体中文', theme: this.props.theme ?? '石墨', mode: this.props.mode ?? '浅色', subMax: 4,
     defModel: 'grok-build', fastModel: 'grok-mini', compact: '80%', ctxWin: { 'grok-build': '256k', 'grok-mini': '128k', 'claude-sonnet-4.5': '200k', 'gpt-5': '400k' }, subModel: '跟随主 Agent', timeout: '60 分钟', cpKeep: '20 个',
@@ -1194,7 +1296,6 @@ class Component extends DCLogic {
     this._r = () => this.setState({ vw: window.innerWidth });
     this._k = e => {
       if (e.key === 'Escape') this.setState(s => (s.menu ? { menu: null } : s.wtModal ? { wtModal: false } : s.settingsOpen ? { settingsOpen: false } : null));
-      if ((e.metaKey || e.ctrlKey) && e.key === ',') { e.preventDefault(); this.setState(s => ({ settingsOpen: !s.settingsOpen })); }
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'n') { e.preventDefault(); this.setState(s => ({ view: 'new', draft: s.newProj, runMode: s.runDefault[s.newProj] || 'wt' })); }
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'b') { e.preventDefault(); this.setState(s => ({ leftOpen: !s.leftOpen })); }
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'j') { e.preventDefault(); this.setState(s => ({ rightOpen: !s.rightOpen })); }
@@ -1218,13 +1319,15 @@ class Component extends DCLogic {
     if (b && len !== this._tl) b.scrollTop = b.scrollHeight;
     this._tl = len;
   }
-  send(kind) {
+  send(kind, att) {
     const S = this.state, text = S.draftText.trim();
-    if (!text) return;
-    const id = S.active, sh = text.length > 24 ? text.slice(0, 24) + '…' : text;
+    const pastes = (att || []).filter(a => a.kind === 'paste').map(a => ({ text: a.text, lines: a.lines }));
+    const files = (att || []).filter(a => a.kind !== 'paste').map(a => ({ name: a.name, size: a.size || '' }));
+    if (!text && !pastes.length && !files.length) return;
+    const sh0 = text || '这段内容', id = S.active, sh = sh0.length > 24 ? sh0.slice(0, 24) + '…' : sh0;
     const reply = kind === 'main' ? `收到。等子 Agent 的验证结果出来后，我会按「${sh}」继续处理。` : kind === 'notes' ? `好，我按「${sh}」继续调整，改之前会先存检查点。` : `好的，我按「${sh}」来处理。`;
     const push = m => this.setState(s => ({ sent: { ...s.sent, [id]: [...(s.sent[id] || []), m] } }));
-    push({ role: 'user', text });
+    push({ role: 'user', text, pastes, files });
     this.setState({ draftText: '', typing: id });
     setTimeout(() => { this.setState({ typing: null }); push({ role: 'agent', text: reply }); }, 1400);
   }
@@ -1371,24 +1474,33 @@ class Component extends DCLogic {
     const archMenu = c => [M('恢复', { run: () => this.setState(s => ({ archived: s.archived.filter(x => x !== c.id) })) }), M('用这段历史开新对话'), SEP, M('永久删除', { danger: true })];
     const subsView = (c, arch) => {
       const list = !arch && c.id === 'c1' ? AGS.filter(a => a.id !== 'main') : [];
-      if (!list.length) return { hasSubs: false, subsOpen: false, subs: [] };
-      const live = list.filter(a => a.status === 'running').length;
-      const open = c.id === S.active ? !S.subsClosed[c.id] : !!S.subsOpenOther[c.id];
+      if (!list.length) return { hasSubs: false, subsOpen: false, subs: [], subsRows: '0fr' };
+      const vis = a => (a.id === 'test' && S.sec % 60 >= 45 ? 'done' : a.id === 'load' && S.sec % 40 > 26 ? 'stall' : a.status === 'running' ? 'run' : a.status === 'done' ? 'done' : 'stop');
+      const live = list.filter(a => ['run', 'stall'].includes(vis(a))).length;
+      const open = S.subsOpen[c.id] !== undefined ? S.subsOpen[c.id] : live > 0;
       return {
         hasSubs: true, subsOpen: open, chipText: live ? `${live}/${list.length}` : String(list.length),
-        chipCls: (live ? 'run' : '') + (open && c.id !== S.active ? ' open' : ''),
+        subsRows: open ? '1fr' : '0fr', subsRot: open ? '90deg' : '0deg',
+        coreColor: live ? '#2e8c5a' : '#8fae9b', countColor: live ? '#2a7a4f' : 'var(--faint)',
+        loaderTitle: live ? `${live} 个子 Agent 在运行，共 ${list.length} 个` : `${list.length} 个子 Agent 都已结束`,
+        orbit: list.map((a, k) => { const v = vis(a), on = v === 'run' || v === 'stall';
+          return { color: v === 'run' ? '#2e8c5a' : v === 'stall' ? '#c98a16' : '#8fae9b', op: on ? 1 : 0.55, play: on ? 'running' : 'paused',
+            dur: `${1.6 + k * 0.45}s`, delay: `${-k * 0.37}s`, top: k % 2 ? '1px' : '0px' }; }),
+        chipCls: (live ? 'run' : '') + (open ? ' open' : ''),
         subsTitle: open ? '收起子 Agent' : `展开 ${list.length} 个子 Agent`,
-        toggleSubs: e => { e.stopPropagation(); if (c.id === S.active) this.setState(s => ({ subsClosed: { ...s.subsClosed, [c.id]: !s.subsClosed[c.id] } })); else this.setState(s => ({ subsOpenOther: { ...s.subsOpenOther, [c.id]: !s.subsOpenOther[c.id] } })); },
+        toggleSubs: e => { e.stopPropagation(); this.setState(s => ({ subsOpen: { ...s.subsOpen, [c.id]: !open } })); },
         subs: list.map((a, i) => {
-          const run = a.status === 'running', stuck = run && a.id === 'load' && S.sec % 40 > 26, done = a.status === 'done', stopped = a.status === 'stopped';
+          const v = vis(a), run = v === 'run' || v === 'stall', stuck = v === 'stall', done = v === 'done', stopped = v === 'stop';
           const sel = S.active === c.id && S.view === 'chat' && S.rightOpen && S.tab === 'agent' && S.agentTab === a.id;
           const t = a.id === 'test' ? 64 + S.sec : 23 + S.sec;
           return {
             task: DETAIL[a.id].task, title: `${a.name}：${a.now}`,
             cls: [done ? 'done' : '', sel ? 'on' : '', i === list.length - 1 ? 'last' : ''].join(' '),
             isDone: done, isStopped: stopped, isLive: run, spinCls: stuck ? 'stuck' : '',
-            hasTime: run, time: (stuck ? '静默 ' : '') + `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`,
-            hasAct: run && !stuck, act: a.now,
+            trackOp: done ? 0 : 1, arcOp: run ? 1 : 0, arcColor: stuck ? '#c98a16' : '#2e8c5a', spinDur: stuck ? '2.8s' : '0.9s', doneScale: done ? 1 : 0, checkOff: done ? 0 : 8, stopOp: stopped ? 1 : 0,
+            hasTime: false, time: (stuck ? '静默 ' : '') + `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`,
+            hasAct: false, act: { test: '正在运行测试', load: '正在压测登录接口', docs: '正在更新文档' }[a.id] || '正在处理',
+            tip: DETAIL[a.id].task,
             open: () => this.setState({ active: c.id, view: 'chat', rightOpen: true, tab: 'agent', agentTab: a.id }),
             ctx: e => this.openMenu(e, agentMenu(a), `子 Agent · ${a.name}`),
           };
@@ -1410,9 +1522,9 @@ class Component extends DCLogic {
     const projects = PROJ.map(p => {
       const cs = ALL.filter(c => c.p === p.id && !S.archived.includes(c.id));
       const open = !!S.openProjects[p.id], runN = cs.filter(c => c.status === 'running').length;
-      const pMenu = e => this.openMenu(e, [M('新建对话', { key: '⌘N', run: () => goNew(p.id) }), M('复制路径'), M('在终端中打开', { run: () => this.setState({ rightOpen: true, tab: 'term', termTab: 'zsh' }) }), ...(p.noGit ? [M('初始化 Git 仓库')] : [M('管理 worktree', { run: () => this.setState({ wtModal: true }) })]), M('项目设置', { run: () => this.setState(s => ({ settingsOpen: true, sCat: 'project', sProj: p.id })) }), SEP, M('从工作区移除', { danger: true })], p.path);
+      const pMenu = e => this.openMenu(e, [M('新建对话', { run: () => goNew(p.id) }), M('复制路径'), M('在终端中打开', { run: () => this.setState({ rightOpen: true, tab: 'term', termTab: 'zsh' }) }), ...(p.noGit ? [M('初始化 Git 仓库')] : [M('管理 worktree', { run: () => this.setState({ wtModal: true }) })]), M('项目设置', { run: () => this.setState(s => ({ settingsOpen: true, sCat: 'project', sProj: p.id })) }), SEP, M('从工作区移除', { danger: true })], p.path);
       return {
-        hasDraft: S.draft === p.id, draftBg: S.view === 'new' && S.newProj === p.id ? 'var(--sel)' : 'transparent',
+        hasDraft: false, draftBg: S.view === 'new' && S.newProj === p.id ? 'var(--sel)' : 'transparent',
         openDraft: () => goNew(p.id), newChat: e => { e.stopPropagation(); goNew(p.id); }, newTitle: `在 ${p.name} 中新建对话`,
         more: e => pMenu(e),
         name: p.name, open, chevRot: open ? '90deg' : '0deg', rot: open ? '90deg' : '0deg', convos: cs.map(c => convView(c, false)),
@@ -1461,13 +1573,14 @@ class Component extends DCLogic {
 
     const fileMenu = f => [M('引用到输入框', { key: '@' }), M('在文件中查看', { run: () => this.setState({ rightOpen: true, tab: 'files', file: f.key }) }), M('复制路径'), SEP, M('还原此文件的修改', { danger: true })];
     const KIND = { a: { bg: 'var(--ok-bg)', color: 'var(--ok-ink)', sign: '+', signColor: 'oklch(0.55 0.1 150)' }, d: { bg: 'var(--err-bg)', color: 'var(--err-ink)', sign: '−', signColor: 'oklch(0.58 0.12 25)' }, c: { bg: 'transparent', color: 'var(--mute)', sign: '', signColor: 'var(--dis)' } };
-    const changeFiles = FILES.map(f => {
+    const VF = S.view === 'new' ? [] : FILES;
+    const changeFiles = VF.map(f => {
       const open = !S.closedFiles[f.key];
       return { path: f.path, agent: f.agent, add: f.add, del: f.del, open, chevRot: open ? '90deg' : '0deg', rot: open ? '90deg' : '0deg',
         toggle: () => this.setState(s => ({ closedFiles: { ...s.closedFiles, [f.key]: !s.closedFiles[f.key] } })),
         ctx: e => this.openMenu(e, fileMenu(f), f.path), lines: f.lines.map(([k, text]) => ({ ...KIND[k], text })) };
     });
-    const totalAdd = FILES.reduce((n, f) => n + f.add, 0), totalDel = FILES.reduce((n, f) => n + f.del, 0);
+    const totalAdd = VF.reduce((n, f) => n + f.add, 0), totalDel = VF.reduce((n, f) => n + f.del, 0);
 
     const tree = TREE.map(t => ({
       name: t.n, pad: `${8 + t.d * 14}px`, isDir: !!t.dir, chev: t.dir ? '▾' : '', mod: t.mod ? 'M' : '',
@@ -1510,7 +1623,7 @@ class Component extends DCLogic {
     };
     const agentVals = {
       hasAgentTab: false, isAgent: S.tab === 'agent' && !!AG, isAgentOverview: S.tab === 'agent' && !AG,
-      hasSubAgents: true, subAgentCount: String(AGS.filter(a => a.id !== 'main').length),
+      hasSubAgents: S.view !== 'new', subAgentCount: String(AGS.filter(a => a.id !== 'main').length),
       tAgBg: tabB('agent'), tAgColor: tabC('agent'),
       tabAgent: set({ tab: 'agent' }), tabAgentOverview: e => { if (e) e.stopPropagation(); this.setState({ rightOpen: true, tab: 'agent', agentTab: null, agMenu: false }); },
       agSum: D ? D.task : '', agMenuOpen: !!S.agMenu, toggleAgMenu: e => { e.stopPropagation(); this.setState(s => ({ agMenu: !s.agMenu })); },
@@ -1542,7 +1655,12 @@ class Component extends DCLogic {
     };
     const tabBg = t => (S.rightOpen && S.tab === t ? 'var(--line2)' : 'transparent');
 
-    const sentList = (S.sent[S.active] || []).map(m => ({ isUser: m.role === 'user', isAgent: m.role === 'agent', isTyping: false, text: m.text }));
+    const sentList = (S.sent[S.active] || []).map((m, mi) => ({ isUser: m.role === 'user', isAgent: m.role === 'agent', isTyping: false, text: m.text, hasText: !!m.text,
+      hasFiles: !!(m.files && m.files.length), files: m.files || [],
+      // 长粘贴默认收起：只露前 4 行并渐隐，点底栏展开看全文（展开后最高 420px，超出滚动）
+      pastes: (m.pastes || []).map((b, bi) => { const k = `${S.active}:${mi}:${bi}`, open = !!(S.pasteOpen || {})[k];
+        return { text: b.text, lines: b.lines, label: open ? '收起' : '展开', maxH: open ? '420px' : '72px', ov: open ? 'auto' : 'hidden', mask: open ? 'none' : 'linear-gradient(#000 40%,transparent)',
+          toggle: () => this.setState(s => ({ pasteOpen: { ...(s.pasteOpen || {}), [k]: !open } })) }; }) }));
     if (S.typing === S.active) sentList.push({ isUser: false, isAgent: false, isTyping: true, text: '' });
     const gIsUser = kind === 'other' && !!cur.steps;
     const miscVals = {
@@ -1556,7 +1674,7 @@ class Component extends DCLogic {
       newSendBg: S.newText.trim() ? 'var(--accent)' : 'var(--dis)',
       newSetupFirst: (S.setupCmd[NP.id] || '').split('\n')[0] || '（未设置）',
       openProjSettings: e => { e.stopPropagation(); this.setState(s => ({ settingsOpen: true, sCat: 'project', sProj: NP.id })); },
-      modelName: S.model, modelMenu: pickMenu(MODELS, S.model, '模型', o => this.setState({ model: o })),
+      modelName: MODEL_NAME[S.model] || S.model, modelMenu: e => this.openMenu(e, MODELS.map(o => M(MODEL_NAME[o], { key: o === S.model ? '✓' : (S.ctxWin[o] || ''), run: () => this.setState({ model: o }) })), '只对这个对话生效 · 管理模型'),
       wsShort: S.ws, wsMulti: (this.props.multiWs ?? true),
       wsMenu: e => { e.stopPropagation(); this.openMenu(e, [...['个人', '团队 · Acme'].map(o => M(o, { check: S.ws === o, run: () => this.setState({ ws: o }) })), SEP, M('工作区设置…', { run: () => this.setState({ settingsOpen: true, sCat: 'ws' }) })], '工作区'); },
       projChipName: curProj.name, projChipPath: curProj.path,
@@ -1731,66 +1849,92 @@ class Component extends DCLogic {
 
     return {
       userSelect: S.dragging ? 'none' : 'auto', rootCursor: S.dragging ? 'col-resize' : 'auto',
-      closeMenu: () => { if (this.state.menu) this.setState({ menu: null }); },
+      closeMenu: () => { if (this.state.menu || this.state.cPlus || this.state.pastePeek) this.setState({ menu: null, cPlus: false, pastePeek: null }); },
       swallow: e => e.stopPropagation(), swallowCtx: e => { e.preventDefault(); e.stopPropagation(); },
-      leftShown: S.leftOpen, leftClosed: !S.leftOpen, leftWpx: `${S.leftW}px`,
+      leftShown: S.leftOpen, leftClosed: !S.leftOpen && S.leftSettled !== false, leftSlotW: S.leftOpen ? '0px' : '30px', leftSlotM: S.leftOpen ? '-8px' : '0px', leftSlotTr: S.dragging ? 'none' : 'width .22s cubic-bezier(.3,.8,.3,1),margin-right .22s cubic-bezier(.3,.8,.3,1)', leftBtnOp: !S.leftOpen || S.leftOpening ? 1 : 0, leftBtnPe: !S.leftOpen && S.leftSettled !== false ? 'auto' : 'none', sbBtnOp: S.leftOpen && !S.leftOpening ? 1 : 0, lbDx: S.lbDx || 0, lbTr: S.lbAnim && !S.dragging ? 'transform .22s cubic-bezier(.3,.8,.3,1)' : 'none', leftWpx: `${S.leftW}px`,
+      leftOuterW: S.leftOpen ? `${S.leftW}px` : '0px', leftTx: S.leftOpen ? 'translateX(0)' : 'translateX(-100%)', leftHidden: S.leftOpen ? 'false' : 'true',
+      rightOuterW: S.rightOpen ? `${rightOverlay ? Math.min(S.rightW, S.vw - 40) : S.rightW}px` : '0px', rightTx: S.rightOpen ? 'translateX(0)' : 'translateX(100%)', rightHidden: S.rightOpen ? 'false' : 'true',
+      panelTrans: S.dragging ? 'none' : 'width .22s cubic-bezier(.3,.8,.3,1)', panelTxTrans: S.dragging ? 'none' : 'transform .22s cubic-bezier(.3,.8,.3,1)',
       leftPos: leftOverlay ? 'absolute' : 'relative', leftShadow: leftOverlay ? '0 0 40px rgba(0,0,0,.15)' : 'none',
       leftDivider: S.leftOpen && !leftOverlay, leftLine: S.dragging === 'l' ? 'var(--ink)' : 'var(--hover)',
-      headerTools: !S.rightOpen || rightOverlay,
+      headerTools: true, rightBtnOp: !S.rightOpen || S.rightOpening || rightOverlay ? 1 : 0, rpBtnOp: S.rightOpen && (!S.rightOpening || rightOverlay) ? 1 : 0, rbDx: rightOverlay ? 0 : S.rbDx || 0, rbTr: S.rbAnim && !S.dragging ? 'transform .22s cubic-bezier(.3,.8,.3,1)' : 'none', rightBtnPe: (!S.rightOpen && S.rightSettled !== false) || rightOverlay ? 'auto' : 'none',
       rightShown: S.rightOpen, rightWpx: `${rightOverlay ? Math.min(S.rightW, S.vw - 40) : S.rightW}px`,
       rightPos: rightOverlay ? 'absolute' : 'relative', rightShadow: rightOverlay ? '0 0 40px rgba(0,0,0,.15)' : 'none',
       rightDivider: S.rightOpen && !rightOverlay, rightLine: S.dragging === 'r' ? 'var(--ink)' : 'var(--hover)',
       dragLeft: this.drag('l'), dragRight: this.drag('r'), resetLeft: set({ leftW: 264 }), resetRight: set({ rightW: 440 }),
-      toggleLeft: e => { e.stopPropagation(); this.setState(s => ({ leftOpen: !s.leftOpen })); },
-      toggleRight: e => { e.stopPropagation(); this.setState(s => ({ rightOpen: !s.rightOpen })); },
-      sidebarMenu: e => this.openMenu(e, [M('新建对话', { key: '⌘N' }), M('添加项目…'), SEP, M('折叠全部项目', { run: () => this.setState({ openProjects: {} }) }), M('收起侧栏', { run: () => this.setState({ leftOpen: false }) })]),
+      toggleLeft: e => { e.stopPropagation(); const closing = S.leftOpen;
+        // 按钮从侧栏里的位置平移到顶栏（展开时反过来）：dx = 侧栏按钮相对顶栏按钮的水平偏移
+        if (closing) { const sb = document.querySelector('[title="收起侧栏"]'), as = sb && sb.closest('aside'); if (sb && as) this._lbOff = as.getBoundingClientRect().right - sb.getBoundingClientRect().left; }
+        const dx = -Math.round((this._lbOff || 46) + 13);
+        if (closing) { this.setState({ leftOpen: false, leftSettled: false, leftOpening: false, lbAnim: false, lbDx: dx }); requestAnimationFrame(() => requestAnimationFrame(() => this.setState({ lbAnim: true, lbDx: 0 }))); }
+        else this.setState({ leftOpen: true, leftSettled: true, leftOpening: true, lbAnim: true, lbDx: dx }); clearTimeout(this._ls); this._ls = setTimeout(() => this.setState(closing ? { leftSettled: true } : { leftOpening: false }), 230); },
+      toggleRight: e => { e.stopPropagation(); const closing = S.rightOpen;
+        // 和左边一样：按钮从右栏里的位置平移到顶栏右上角，展开时反过来
+        if (closing) { const rb = document.querySelector('aside [title="收起右栏"]'), hb = document.querySelector('[title="展开右栏"]'); if (rb && hb) this._rbDx = Math.round(rb.getBoundingClientRect().left - (hb.getBoundingClientRect().left - (S.rbDx || 0))); }
+        const dx = this._rbDx || 50;
+        if (closing) { this.setState({ rightOpen: false, rightSettled: false, rightOpening: false, rbAnim: false, rbDx: dx }); requestAnimationFrame(() => requestAnimationFrame(() => this.setState({ rbAnim: true, rbDx: 0 }))); }
+        else this.setState({ rightOpen: true, rightSettled: true, rightOpening: true, rbAnim: true, rbDx: dx }); clearTimeout(this._rs); this._rs = setTimeout(() => this.setState(closing ? { rightSettled: true } : { rightOpening: false }), 230); },
+      sidebarMenu: e => this.openMenu(e, [M('新建对话'), M('添加项目…'), SEP, M('折叠全部项目', { run: () => this.setState({ openProjects: {} }) }), M('收起侧栏', { run: () => this.setState({ leftOpen: false }) })]),
       projects, archivedList, archivedOpen: S.archivedOpen, archivedChev: S.archivedOpen ? '▾' : '▸', archivedRot: S.archivedOpen ? '90deg' : '0deg', archivedCount: String(archivedList.length),
       toggleArchived: () => this.setState(s => ({ archivedOpen: !s.archivedOpen })),
-      msgMenu: e => this.openMenu(e, [M('复制', { key: '⌘C' }), M('引用到输入框'), M('从这里重新生成'), SEP, M('从这里分叉新对话')]),
+      msgMenu: e => this.openMenu(e, [M('复制'), M('引用到输入框'), M('从这里重新生成'), SEP, M('从这里分叉新对话')]),
       chBg: tabBg('changes'), fiBg: tabBg('files'), teBg: tabBg('term'),
       openChanges: () => openTab('changes'), openFiles: () => openTab('files'), openTerm: () => openTab('term'),
       openChangesOnly: set({ rightOpen: true, tab: 'changes' }),
       tabChanges: set({ tab: 'changes' }), tabFiles: set({ tab: 'files' }), tabTerm: set({ tab: 'term' }),
       tChBg: tabB('changes'), tFiBg: tabB('files'), tTeBg: tabB('term'), tChColor: tabC('changes'), tFiColor: tabC('files'), tTeColor: tabC('term'),
       isChanges: S.tab === 'changes', isFiles: S.tab === 'files', isTerm: S.tab === 'term',
-      totalAdd, totalDel, fileCountLabel: `${FILES.length} 个文件`, changeFiles,
+      totalAdd, totalDel, fileCountLabel: `${VF.length} 个文件`, changeFiles, hasChangeFiles: VF.length > 0, noChangeFiles: VF.length === 0,
       msgChips: subChips, subChips, agents: subAgents, plan, runOpen: S.runOpen, runChev: S.runOpen ? '▾' : '▴',
       runToggleLabel: S.runOpen ? '收起' : '待办',
       runAgentsLabel: (n => (n ? `· ${n} 个子 Agent 运行中` : '· 子 Agent 已结束'))(AGS.filter(a => a.id !== 'main' && a.status === 'running').length),
       ...agentVals,
       runTitle: '验证修复', runStep: '4/6', elapsed: mmss(S.sec), progressPct: '66%',
       pendingText: (n => (n ? `思考中 · ${n} 个子 Agent` : '思考中'))(AGS.filter(a => a.id !== 'main' && a.status === 'running').length),
+      threadThinking: false,
       composerRadius: S.finished && kind === 'main' ? '0 0 18px 18px' : '18px',
       ...(() => {
         const running = !S.finished && kind === 'main';
-        const focus = !!S.cFocus, q = S.queue || [], att = S.attach || [];
+        const focus = !!S.cFocus, q = S.queue || [];
+        // @ 引用的标签跟着正文走：正文里的 @路径 删掉了，标签也不显示
+        const atIn = (t, n) => (' ' + (t || '') + ' ').includes('@' + n + ' ') || (t || '').endsWith('@' + n);
+        const att = (S.attach || []).filter(f => !f.at || atIn(S.draftText, f.name));
         const subsLive = AGS.filter(a => a.id !== 'main' && a.status === 'running');
         const m = /@([^\s@]*)$/.exec(S.draftText || '');
         const files = Object.values(PATHS).filter(f => !m || f.toLowerCase().includes(m[1].toLowerCase())).slice(0, 6);
         const pctNum = parseInt(String(this.cPct || '0'), 10);
         const hasDraft = !!(S.draftText || '').trim();
         const addAtt = f => this.setState(s => ({ attach: [...(s.attach || []), f] }));
+        const fmt = n => n >= 1048576 ? `· ${(n / 1048576).toFixed(1)} MB` : `· ${Math.max(1, Math.round(n / 1024))} KB`;
+        const fromFile = f => { const img = (f.type || '').startsWith('image/'); return { kind: img ? 'img' : 'file', name: f.name || (img ? '粘贴的图片.png' : '文件'), size: fmt(f.size || 0), thumb: img ? URL.createObjectURL(f) : '' }; };
+        this._imgIn = this._imgIn || React.createRef(); this._fileIn = this._fileIn || React.createRef();
         const pushQueue = () => { const t = (S.draftText || '').trim(); if (!t) return; this.setState(s => ({ queue: [...(s.queue || []), t], draftText: '' })); };
-        const sendNow = () => { if (!(S.draftText || '').trim() && !att.length) return; this.setState({ attach: [] }); this.send(kind); };
+        const sendNow = () => { if (!(S.draftText || '').trim() && !att.length) return; this.setState({ attach: [] }); this.send(kind, att); };
         return {
           cRunning: running, cNow: '正在编辑 src/api/auth.ts', cStep: '第 5 步',
-          cHasSubs: running && subsLive.length > 0, cSubLabel: `${subsLive.length} 个子 Agent 在跑`,
-          cSubPop: running && !!S.cSubPop, cToggleSubPop: e => { e.stopPropagation(); this.setState(s => ({ cSubPop: !s.cSubPop })); },
-          cSubList: subsLive.map(a => ({ task: DETAIL[a.id].task, dot: '#2e8c5a', meta: a.now.length > 18 ? a.now.slice(0, 18) + '…' : a.now,
+          cHasSubs: false, cSubLabel: `${subsLive.length} 个子 Agent 在跑`,
+          cSubPop: false, cSubPopStr: S.cSubPop ? 'true' : 'false', cSubCaret: S.cSubPop ? '▴' : '▾', cToggleSubPop: e => { e.stopPropagation(); this.setState(s => ({ cSubPop: !s.cSubPop })); },
+          cSubList: subsLive.map(a => ({ task: DETAIL[a.id].task, dot: '#2f9e5b', meta: ({ test: '运行测试', load: '压测登录接口' }[a.id] || '处理中') + ' · ' + (t => `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`)(a.id === 'test' ? 64 + S.sec : 23 + S.sec),
             open: e => { e.stopPropagation(); this.setState({ cSubPop: false, rightOpen: true, tab: 'agent', agentTab: a.id }); } })),
           cQueue: q.map((t, i) => ({ text: t, remove: e => { e.stopPropagation(); this.setState(s => ({ queue: s.queue.filter((_, j) => j !== i) })); },
             edit: e => { e.stopPropagation(); this.setState(s => ({ draftText: t, queue: s.queue.filter((_, j) => j !== i) })); } })),
-          cAttach: att.map((f, i) => ({ ...f, isImg: f.kind === 'img', isFile: f.kind !== 'img', font: f.kind === 'img' ? 'var(--font)' : 'var(--mono)',
-            remove: e => { e.stopPropagation(); this.setState(s => ({ attach: s.attach.filter((_, j) => j !== i) })); } })),
+          cAttach: att.map((f, i) => ({ ...f, isImg: f.kind === 'img', isFile: f.kind === 'file', isPaste: f.kind === 'paste',
+            cursor: f.kind === 'paste' ? 'pointer' : 'default', tip: f.kind === 'paste' ? '点开预览' : '',
+            peekOpen: f.kind === 'paste' && S.pastePeek === f, head: f.kind === 'paste' ? f.text.split('\n').slice(0, 8).join('\n') : '',
+            more: f.kind === 'paste' ? `共 ${f.lines} 行，发送时全部带上` : '',
+            peek: e => { if (f.kind !== 'paste') return; e.stopPropagation(); this.setState(s => ({ pastePeek: s.pastePeek === f ? null : f })); },
+            stop: e => e.stopPropagation(),
+            expand: e => { e.stopPropagation(); this.setState(s => ({ pastePeek: null, attach: s.attach.filter(x => x !== f), draftText: (s.draftText || '') + f.text })); }, hasThumb: !!f.thumb, noThumbImg: f.kind === 'img' && !f.thumb, font: f.kind === 'img' ? 'var(--font)' : 'var(--mono)',
+            remove: e => { e.stopPropagation(); this.setState(s => ({ attach: s.attach.filter(x => x !== f), draftText: f.at ? (s.draftText || '').split('@' + f.name).join('').replace(/  +/g, ' ') : s.draftText })); } })),
           cHasChips: q.length > 0 || att.length > 0,
           cAtOpen: !!m && focus, cAtList: files.map((f, i) => {
             const k = f.lastIndexOf('/');
             return { name: f.slice(k + 1), dir: k > 0 ? f.slice(0, k + 1) : '', bg: i === 0 ? 'var(--line2)' : 'transparent',
-              pick: e => { e.preventDefault(); this.setState(s => ({ draftText: s.draftText.replace(/@([^\s@]*)$/, '@' + f + ' '), attach: [...(s.attach || []), { kind: 'file', name: f, size: '' }] })); } };
+              pick: e => { e.preventDefault(); this.setState(s => ({ draftText: s.draftText.replace(/@([^\s@]*)$/, '@' + f + ' '), attach: [...(s.attach || []).filter(x => !(x.at && x.name === f)), { kind: 'file', name: f, size: '', at: true }] })); } };
           }),
           cPlaceholder: running ? '补充说明……' : '描述任务，@ 引用文件，/ 命令',
-          cTaH: hasDraft ? `${Math.min(140, Math.max(26, (S.draftText.split('\n').length) * 24))}px` : (running ? '26px' : '44px'),
-          cHasHint: running || hasDraft, cHint: running ? 'Enter 插话 · ⌥Enter 排队' : 'Shift+Enter 换行',
+          cTaH: hasDraft ? `${Math.min(140, Math.max(44, (S.draftText.split('\n').length) * 24))}px` : '44px',
+          cHasHint: !running && hasDraft, cHint: 'Shift+Enter 换行',
           cBorder: S.cDragging ? '#6b7fd7' : focus ? 'var(--bd3)' : 'var(--line)',
           cShadow: focus ? '0 0 0 3px rgba(26,26,26,.05),0 6px 24px rgba(0,0,0,.05)' : '0 6px 24px rgba(0,0,0,.05)',
           cPad: '12px 12px 10px 18px',
@@ -1798,10 +1942,22 @@ class Component extends DCLogic {
           cSendBg: hasDraft || att.length ? 'var(--accent)' : '#d6d6d3',
           cFocus: () => this.setState({ cFocus: true }), cBlur: () => this.setState({ cFocus: false }),
           cAddAttach: () => addAtt({ kind: 'img', name: '截图.png', size: '· 248 KB' }),
-          cPaste: e => { const items = e.clipboardData && e.clipboardData.items; if (items && [...items].some(it => it.type && it.type.startsWith('image/'))) { e.preventDefault(); addAtt({ kind: 'img', name: '粘贴的图片.png', size: '· 312 KB' }); } },
+          cImgInput: this._imgIn, cFileInput: this._fileIn,
+          cPicked: e => { [...(e.target.files || [])].forEach(f => addAtt(fromFile(f))); e.target.value = ''; },
+          cPlusOpen: !!S.cPlus, cPlusOpenStr: S.cPlus ? 'true' : 'false', cPlusBg: S.cPlus ? 'var(--hover)' : 'transparent',
+          cTogglePlus: e => { e.stopPropagation(); this.setState(st => ({ cPlus: !st.cPlus })); },
+          cPlusItems: [
+            { isImg: true, label: '图片', hint: '从电脑选择，也可以直接粘贴或拖进来', run: e => { e.stopPropagation(); this.setState({ cPlus: false }); this._imgIn.current && this._imgIn.current.click(); } },
+            { isFile: true, label: '文件', hint: '从电脑选择任意文件', run: e => { e.stopPropagation(); this.setState({ cPlus: false }); this._fileIn.current && this._fileIn.current.click(); } },
+            { isAt: true, label: '引用项目里的文件', hint: '按路径引用，不上传内容', run: e => { e.stopPropagation(); this.setState(st => ({ cPlus: false, cFocus: true, draftText: (st.draftText || '') + '@' })); } },
+          ],
+          cPaste: e => { const fs = e.clipboardData && e.clipboardData.files; if (fs && fs.length) { e.preventDefault(); [...fs].forEach(f => addAtt(fromFile(f))); return; }
+            // 长文字（≥ 8 行或 ≥ 800 字）不铺进输入框，收成一个标签，像终端里的 [Pasted text +N lines]
+            const t = e.clipboardData ? e.clipboardData.getData('text/plain') : ''; const n = t ? t.split('\n').length : 0;
+            if (n >= 8 || t.length >= 800) { e.preventDefault(); const first = t.split('\n').find(l => l.trim()) || '粘贴的文字'; addAtt({ kind: 'paste', text: t, lines: n, name: first.trim().slice(0, 28), size: `· ${n} 行` }); } },
           cDragOver: e => { e.preventDefault(); if (!S.cDragging) this.setState({ cDragging: true }); },
           cDragLeave: () => this.setState({ cDragging: false }),
-          cDrop: e => { e.preventDefault(); const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]; this.setState({ cDragging: false }); addAtt({ kind: f && !(f.type || '').startsWith('image/') ? 'file' : 'img', name: f ? f.name : '截图.png', size: f ? `· ${Math.max(1, Math.round(f.size / 1024))} KB` : '' }); },
+          cDrop: e => { e.preventDefault(); const fs = e.dataTransfer && e.dataTransfer.files; this.setState({ cDragging: false }); if (fs && fs.length) [...fs].forEach(f => addAtt(fromFile(f))); },
           cKey: e => {
             if (e.key === 'Escape') { this.setState({ cSubPop: false }); return; }
             if (e.key !== 'Enter' || e.nativeEvent.isComposing || e.shiftKey) return;
@@ -1809,6 +1965,9 @@ class Component extends DCLogic {
             if (running && e.altKey) pushQueue(); else sendNow();
           },
           cSend: () => sendNow(),
+          cGitBranch: hasWt ? wtBranch : S.baseBranch, cGitAdd: totalAdd, cGitDel: totalDel, cGitHasDiff: totalAdd + totalDel > 0,
+          cGitAhead: 3, cGitHasAhead: true,
+          cGitTitle: `分支 ${hasWt ? wtBranch : S.baseBranch} · 未提交 +${totalAdd} −${totalDel} · 领先远端 3 个提交`,
         };
       })(),
       showStop: !S.finished && kind === 'main' && !S.draftText.trim(), showSend: !(!S.finished && kind === 'main' && !S.draftText.trim()),
@@ -1825,7 +1984,7 @@ class Component extends DCLogic {
       tree, previewLines, previewPath: PATHS[S.file] || '', previewNote: modified ? '本次已修改' : '',
       termTabs, termLines: T.lines.map(([color, text, cur]) => ({ color, text, cursor: !!cur })),
       termNote: T.agent ? `由 ${T.owner} 运行，只读。右键可停止。` : '你自己的终端，Agent 不会在这里执行命令。',
-      termMenu: e => this.openMenu(e, [M('复制', { key: '⌘C' }), M('粘贴', { key: '⌘V' }), M('清空', { run: () => this.runCmd('clear') }), SEP, M('新建终端', { run: () => this.addTerm() }), M(T.agent ? '停止此命令' : '关闭此终端', { danger: true })]),
+      termMenu: e => this.openMenu(e, [M('复制'), M('粘贴'), M('清空', { run: () => this.runCmd('clear') }), SEP, M('新建终端', { run: () => this.addTerm() }), M(T.agent ? '停止此命令' : '关闭此终端', { danger: true })]),
       menuOpen: !!S.menu, menuX: S.menu ? `${S.menu.x}px` : '0px', menuY: S.menu ? `${S.menu.y}px` : '0px',
       menuHasTitle: !!(S.menu && S.menu.title), menuTitle: S.menu ? S.menu.title || '' : '',
       menuItems: items.map(m => m.sep ? { sep: true, isItem: false } : { sep: false, isItem: true, label: m.label, key: m.key || '', color: m.danger ? RED : 'var(--ink)', run: ev => { ev.stopPropagation(); m.run && m.run(); this.setState({ menu: null }); } }),
