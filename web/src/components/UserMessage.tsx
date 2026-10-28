@@ -93,6 +93,10 @@ function Lightbox({
   );
 }
 
+function isSteered(item: Item): boolean {
+  return Boolean((item as Item & { steered?: boolean }).steered);
+}
+
 export function UserMessage({ item, lang }: { item: Item; lang: Lang }) {
   const images = item.images || [];
   const [open, setOpen] = useState<ThreadUserImage | null>(null);
@@ -134,6 +138,11 @@ export function UserMessage({ item, lang }: { item: Item; lang: Lang }) {
         />
       ) : null}
       {open ? <Lightbox image={open} lang={lang} onClose={() => setOpen(null)} /> : null}
+      {isSteered(item) ? (
+        <div className="msg-steer-hint" data-testid="next-steer-hint">
+          {t(lang, 'composer_steered')}
+        </div>
+      ) : null}
     </div>
   );
 }

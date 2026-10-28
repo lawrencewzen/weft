@@ -177,22 +177,38 @@ function conversationPath(cid: string, suffix = ''): string {
   return `/api/v2/conversations/${encodeURIComponent(cid)}${suffix}`;
 }
 
+export type SendMode = components['schemas']['SendMessageRequest']['mode'];
+
 export function sendMessage(
   cid: string,
   text: string,
   requestId?: string,
   images?: components['schemas']['MessageImage'][],
+  mode?: SendMode,
 ): Promise<RunAccepted> {
   const id = requestId ?? crypto.randomUUID();
-  const body: { text: string; requestId: string; images?: components['schemas']['MessageImage'][] } = {
+  const body: {
+    text: string;
+    requestId: string;
+    images?: components['schemas']['MessageImage'][];
+    mode?: SendMode;
+  } = {
     text,
     requestId: id,
   };
   if (images?.length) body.images = images;
+  if (mode === 'steer' || mode === 'queue') body.mode = mode;
   return requestJson<RunAccepted>(conversationPath(cid, '/messages'), {
     method: 'POST',
     body: JSON.stringify(body),
   });
+}
+
+export function withdrawMessage(cid: string, requestId: string): Promise<{ ok: true }> {
+  return requestJson<{ ok: true }>(
+    conversationPath(cid, `/messages/${encodeURIComponent(requestId)}`),
+    { method: 'DELETE' },
+  );
 }
 
 export function stop(cid: string): Promise<StopAccepted> {

@@ -1,18 +1,23 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   countUserText,
+  hydratePendingFromSends,
   pendingItem,
+  queueChips,
   settlePending,
+  threadPending,
   waitingForAgent,
   PENDING_TIMEOUT_MS,
   type SendEntry,
   type PendingUser,
+  type SendMode,
+  type QueueChip,
 } from './pendingSend';
 import type { components } from '../../../src/v2/contract.gen';
 import type { ThreadItem } from './store';
 
 type MessageImage = components['schemas']['MessageImage'];
-type Send = (text: string, requestId: string, images?: MessageImage[]) => Promise<unknown>;
+type Send = (text: string, requestId: string, images?: MessageImage[], mode?: SendMode) => Promise<unknown>;
 
 /**
  * Optimistic send: the user message goes on screen before the request resolves, and the
@@ -29,10 +34,15 @@ export function usePendingSend(items: readonly ThreadItem[], send: Send, sends?:
   const sendsRef = useRef<readonly SendEntry[] | null>(sends ?? null);
   sendsRef.current = sends ?? null;
 
+  const merged = useMemo(
+    () => hydratePendingFromSends(pending, sends ?? null),
+    [pending, sends],
+  );
+
   // Show only what the server has not caught up with yet; the stored list is pruned after.
   const shown = useMemo(
-    () => settlePending(pending, items, { sends: sends ?? null, now: Date.now() }),
-    [pending, items, sends],
+    () => settlePending(merged, items, { sends: sends ?? null, now: Date.now() }),
+    [merged, items, sends],
   );
 
   useEffect(() => {
@@ -59,7 +69,12 @@ export function usePendingSend(items: readonly ThreadItem[], send: Send, sends?:
     return () => clearTimeout(timer);
   }, [pending]);
 
-  const sendWithPending = useCallback(async (text: string, requestId: string, images?: MessageImage[]) => {
+  const sendWithPending = useCallback(async (
+    text: string,
+    requestId: string,
+    images?: MessageImage[],
+    mode?: SendMode,
+  ) => {
     const key = requestId || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const entry: PendingUser = {
       key,
@@ -67,10 +82,11 @@ export function usePendingSend(items: readonly ThreadItem[], send: Send, sends?:
       images,
       baseline: countUserText(itemsRef.current, text),
       doneAt: null,
+      mode,
     };
     setPending((prev) => [...prev, entry]);
     try {
-      const result = await send(text, requestId, images);
+      const result = await send(text, requestId, images, mode);
       setPending((prev) => prev.map((item) => (
         item.key === key ? { ...item, doneAt: Date.now() } : item
       )));
@@ -81,9 +97,21 @@ export function usePendingSend(items: readonly ThreadItem[], send: Send, sends?:
     }
   }, [send]);
 
-  const pendingItems = useMemo<ThreadItem[]>(() => shown.map(pendingItem), [shown]);
+  const dropLocal = useCallback((requestId: string) => {
+    setPending((prev) => prev.filter((item) => item.key !== requestId));
+  }, []);
 
-  return { pending: pendingItems, sending: shown.length > 0, send: sendWithPending };
+  const thread = useMemo(() => threadPending(shown), [shown]);
+  const pendingItems = useMemo<ThreadItem[]>(() => thread.map(pendingItem), [thread]);
+  const queued = useMemo<QueueChip[]>(() => queueChips(shown, sends ?? null), [shown, sends]);
+
+  return {
+    pending: pendingItems,
+    queue: queued,
+    sending: thread.length > 0,
+    send: sendWithPending,
+    dropLocal,
+  };
 }
 
 export { waitingForAgent };

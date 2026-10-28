@@ -42,6 +42,19 @@ async function postV2(base, apiPath, token, body = {}) {
   return { status: res.status, body: parsed, text, headers: res.headers };
 }
 
+async function deleteV2(base, apiPath, token) {
+  const res = await fetch(base + apiPath, {
+    method: 'DELETE',
+    headers: {
+      ...(token ? v2Headers(token) : {}),
+    },
+  });
+  const text = await res.text();
+  let parsed = null;
+  try { parsed = text ? JSON.parse(text) : null; } catch { parsed = null; }
+  return { status: res.status, body: parsed, text, headers: res.headers };
+}
+
 async function openConversation(base, title = 'cmd') {
   const ws = await request(base, 'POST', '/api/workspaces', { name: 'v2-cmd' }, TOKEN);
   assert.equal(ws.status, 201, JSON.stringify(ws.body));
@@ -103,6 +116,10 @@ test('contract path templates cover the four command routes', () => {
   assert.equal(
     matchContractPath('/api/v2/conversations/abc-123/messages/u1/images/0'),
     '/api/v2/conversations/{id}/messages/{messageId}/images/{index}',
+  );
+  assert.equal(
+    matchContractPath('/api/v2/conversations/abc-123/messages/req-1'),
+    '/api/v2/conversations/{id}/messages/{requestId}',
   );
 });
 
@@ -477,6 +494,137 @@ test('POST /messages accepts images, image-only, and rejects over-limit payloads
     assert.equal(large.status, 400, large.text);
     assert.equal(large.body.code, 'E_TOO_LARGE');
     assert.equal(srv.logs().includes(oversize), false);
+  } finally {
+    await stopServer(srv);
+  }
+});
+
+test('invalid mode is 400; default mode is steer', { timeout: 40_000 }, async () => {
+  const srv = await startServer({
+    token: TOKEN,
+    env: { WEFT_LLM: 'faux', WEFT_FAUX_TEXT: 'ack-mode' },
+  });
+  try {
+    const discovery = await readDiscovery(srv.dataDir);
+    const { conv } = await openConversation(srv.base, 'mode');
+    const bad = await postV2(srv.base, `/api/v2/conversations/${conv.id}/messages`, discovery.token, {
+      text: 'nope',
+      mode: 'reject',
+    });
+    assert.equal(bad.status, 400, bad.text);
+    assertChecked(`/api/v2/conversations/${conv.id}/messages`, 'POST', 400, bad.body);
+    assert.equal(bad.body.code, 'E_BAD_REQUEST');
+
+    const sent = await postV2(srv.base, `/api/v2/conversations/${conv.id}/messages`, discovery.token, {
+      text: 'hello-mode',
+    });
+    assert.equal(sent.status, 202, sent.text);
+    const snap = await waitV2(srv.base, conv.id, discovery.token, (body) => (
+      body?.conversation?.run?.status === 'idle'
+      && userTexts(body).includes('hello-mode')
+    ));
+    const send = (snap.body.conversation.sends || []).find((row) => row.text === 'hello-mode');
+    assert.ok(send, JSON.stringify(snap.body.conversation.sends));
+    assert.equal(send.mode, 'steer');
+    assert.equal(typeof send.entryId, 'string');
+  } finally {
+    await stopServer(srv);
+  }
+});
+
+test('queue while running stays in sends until the turn ends; withdraw 200 then 409 after land', { timeout: 45_000 }, async () => {
+  const dataDir = await mkdtemp(path.join(tmpdir(), 'weft-v2-queue-'));
+  const script = path.join(dataDir, 'queue.json');
+  await writeFile(script, JSON.stringify({
+    turns: [
+      { text: 'working', delayMs: 1500, tool: 'write', args: { path: 'q.txt', content: 'q\n' } },
+      { text: 'turn-done' },
+    ],
+  }));
+  const srv = await startServer({
+    token: TOKEN,
+    dataDir,
+    env: {
+      WEFT_LLM: 'faux',
+      WEFT_FAUX_SCRIPT: script,
+    },
+  });
+  try {
+    const discovery = await readDiscovery(srv.dataDir);
+    const { conv } = await openConversation(srv.base, 'queue');
+    const first = await postV2(srv.base, `/api/v2/conversations/${conv.id}/messages`, discovery.token, {
+      text: 'first-user',
+    });
+    assert.equal(first.status, 202, first.text);
+    await waitV2(srv.base, conv.id, discovery.token, (body) => body?.conversation?.run?.status === 'running');
+
+    const queuedId = randomUUID();
+    const queued = await postV2(srv.base, `/api/v2/conversations/${conv.id}/messages`, discovery.token, {
+      text: 'queued-later',
+      mode: 'queue',
+      requestId: queuedId,
+    });
+    assert.equal(queued.status, 202, queued.text);
+
+    const mid = await waitV2(srv.base, conv.id, discovery.token, (body) => {
+      const send = (body?.conversation?.sends || []).find((row) => row.requestId === queuedId);
+      return send && send.mode === 'queue' && send.entryId == null && send.dropped === false;
+    });
+    assertChecked(`/api/v2/conversations/${conv.id}`, 'GET', 200, mid.body);
+    assert.equal(userTexts(mid.body).includes('queued-later'), false);
+
+    const unauth = await deleteV2(srv.base, `/api/v2/conversations/${conv.id}/messages/${queuedId}`, undefined);
+    assert.equal(unauth.status, 401, unauth.text);
+    assertChecked(`/api/v2/conversations/${conv.id}/messages/${queuedId}`, 'DELETE', 401, unauth.body);
+
+    const withdrawn = await deleteV2(
+      srv.base,
+      `/api/v2/conversations/${conv.id}/messages/${queuedId}`,
+      discovery.token,
+    );
+    assert.equal(withdrawn.status, 200, withdrawn.text);
+    assertChecked(`/api/v2/conversations/${conv.id}/messages/${queuedId}`, 'DELETE', 200, withdrawn.body);
+    assert.equal(withdrawn.body.ok, true);
+
+    const afterDrop = await waitV2(srv.base, conv.id, discovery.token, (body) => {
+      const send = (body?.conversation?.sends || []).find((row) => row.requestId === queuedId);
+      return send && send.dropped === true && send.entryId == null;
+    });
+    assert.equal(userTexts(afterDrop.body).includes('queued-later'), false);
+
+    const keepId = randomUUID();
+    const keep = await postV2(srv.base, `/api/v2/conversations/${conv.id}/messages`, discovery.token, {
+      text: 'run-after',
+      mode: 'queue',
+      requestId: keepId,
+    });
+    assert.equal(keep.status, 202, keep.text);
+
+    const done = await waitV2(srv.base, conv.id, discovery.token, (body) => (
+      body?.conversation?.run?.status === 'idle'
+      && userTexts(body).includes('first-user')
+      && userTexts(body).includes('run-after')
+    ), 40_000);
+    assert.deepEqual(userTexts(done.body).filter((text) => text === 'queued-later'), []);
+    const landed = (done.body.conversation.sends || []).find((row) => row.requestId === keepId);
+    assert.ok(landed?.entryId, JSON.stringify(done.body.conversation.sends));
+
+    const tooLate = await deleteV2(
+      srv.base,
+      `/api/v2/conversations/${conv.id}/messages/${keepId}`,
+      discovery.token,
+    );
+    assert.equal(tooLate.status, 409, tooLate.text);
+    assertChecked(`/api/v2/conversations/${conv.id}/messages/${keepId}`, 'DELETE', 409, tooLate.body);
+    assert.equal(tooLate.body.code, 'E_ALREADY_LANDED');
+
+    const missing = await deleteV2(
+      srv.base,
+      `/api/v2/conversations/${conv.id}/messages/no-such-request`,
+      discovery.token,
+    );
+    assert.equal(missing.status, 404, missing.text);
+    assertChecked(`/api/v2/conversations/${conv.id}/messages/no-such-request`, 'DELETE', 404, missing.body);
   } finally {
     await stopServer(srv);
   }

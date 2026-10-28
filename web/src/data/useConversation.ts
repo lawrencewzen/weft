@@ -7,7 +7,9 @@ import {
   sendMessage,
   stop as stopApi,
   toolOutput,
+  withdrawMessage as withdrawMessageApi,
   type ResolvedModel,
+  type SendMode,
 } from './api';
 
 type MessageImage = components['schemas']['MessageImage'];
@@ -22,10 +24,11 @@ import {
 } from './store';
 
 export type ConversationActions = {
-  send: (text: string, requestId?: string, images?: MessageImage[]) => Promise<unknown>;
+  send: (text: string, requestId?: string, images?: MessageImage[], mode?: SendMode) => Promise<unknown>;
   stop: () => ReturnType<typeof stopApi>;
   continueRun: (requestId?: string) => ReturnType<typeof continueRunApi>;
   loadToolOutput: (toolId: string) => ReturnType<typeof toolOutput>;
+  withdraw: (requestId: string) => Promise<{ ok: true }>;
 };
 
 export type ConversationState = {
@@ -57,16 +60,17 @@ export function useConversation(cid: string | null | undefined): ConversationSta
   const changes = id ? store.changes(id) : [];
   const missing = Boolean(id) && store.isMissing(conversationTopic(id));
 
-  const send = useCallback((text: string, requestId?: string, images?: MessageImage[]) => (
-    sendMessage(id, text, requestId, images)
+  const send = useCallback((text: string, requestId?: string, images?: MessageImage[], mode?: SendMode) => (
+    sendMessage(id, text, requestId, images, mode)
   ), [id]);
   const stop = useCallback(() => stopApi(id), [id]);
   const continueRun = useCallback((requestId?: string) => continueRunApi(id, requestId), [id]);
   const loadToolOutput = useCallback((toolId: string) => toolOutput(id, toolId), [id]);
+  const withdraw = useCallback((requestId: string) => withdrawMessageApi(id, requestId), [id]);
 
   const actions = useMemo(
-    () => ({ send, stop, continueRun, loadToolOutput }),
-    [send, stop, continueRun, loadToolOutput],
+    () => ({ send, stop, continueRun, loadToolOutput, withdraw }),
+    [send, stop, continueRun, loadToolOutput, withdraw],
   );
 
   return { conversation, items, toolsById, changes, status, missing, actions };
@@ -104,5 +108,6 @@ export function useDraftSend(
     stop: noopStop,
     continueRun: noopContinue,
     loadToolOutput: noopTool,
+    withdraw: () => Promise.resolve({ ok: true as const }),
   }), [send]);
 }

@@ -21,6 +21,7 @@ import {
   removeWorkspace,
   saveWorkspaceFile,
   sendMessage,
+  withdrawMessage,
   sendSubagentMessage,
   stop,
   stopSubagent,
@@ -100,6 +101,25 @@ describe('api client', () => {
     expect(init.method).toBe('POST');
     expect(init.credentials).toBe('same-origin');
     expect(init.body).toBe(JSON.stringify({ text: 'hello', requestId: '00000000-0000-4000-8000-000000000001' }));
+  });
+
+  it('includes mode on sendMessage when provided', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(202, { runId: 'run-q' }));
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(sendMessage('c1', 'later', 'held-q', undefined, 'queue')).resolves.toEqual({ runId: 'run-q' });
+    expect(JSON.parse(String(fetchMock.mock.calls[0][1].body))).toEqual({
+      text: 'later',
+      requestId: 'held-q',
+      mode: 'queue',
+    });
+  });
+
+  it('withdraws a queued send by requestId', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(200, { ok: true }));
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(withdrawMessage('cid/1', 'req/a')).resolves.toEqual({ ok: true });
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/v2/conversations/cid%2F1/messages/req%2Fa');
+    expect((fetchMock.mock.calls[0][1] as RequestInit).method).toBe('DELETE');
   });
 
   it('includes images on sendMessage when provided', async () => {

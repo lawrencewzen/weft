@@ -4,6 +4,8 @@ import type { ConversationSend, ThreadItem } from './store';
 
 type MessageImage = components['schemas']['MessageImage'];
 
+export type SendMode = 'steer' | 'queue';
+
 /** One user message that is on screen but not yet confirmed by the server thread. */
 export type PendingUser = {
   /** React key / dedupe key from the send requestId. */
@@ -14,6 +16,13 @@ export type PendingUser = {
   baseline: number;
   /** When POST /messages resolved, or null while it is still in flight. */
   doneAt: number | null;
+  /** steer = 插话 (thread bubble); queue = 排队 (composer chip only). */
+  mode?: SendMode;
+};
+
+export type QueueChip = {
+  requestId: string;
+  text: string;
 };
 
 /** Where one send landed, as `ConversationView.sends` reports it. */
@@ -98,7 +107,7 @@ export function settlePending(
     const send = byRequest.get(entry.key);
     if (send) {
       if (send.entryId) return !ids.has(send.entryId);
-      // Queued: keep waiting; withdrawn: nothing will appear.
+      // Still in the inbox: keep waiting; withdrawn: nothing will appear.
       return !send.dropped;
     }
     if (byText.has(entry.key)) return false;
@@ -106,16 +115,68 @@ export function settlePending(
   });
 }
 
+export function sendModeOf(send: SendEntry | PendingUser | null | undefined): SendMode {
+  return send?.mode === 'queue' ? 'queue' : 'steer';
+}
+
+/** Queue chips: inbox follow-ups that have not landed and were not withdrawn. */
+export function queueChips(
+  pending: readonly PendingUser[],
+  sends: readonly SendEntry[] | null | undefined,
+): QueueChip[] {
+  const out: QueueChip[] = [];
+  const seen = new Set<string>();
+  for (const send of sends || []) {
+    if (sendModeOf(send) !== 'queue' || send.dropped || send.entryId) continue;
+    seen.add(send.requestId);
+    out.push({ requestId: send.requestId, text: typeof send.text === 'string' ? send.text : '' });
+  }
+  for (const entry of pending) {
+    if (sendModeOf(entry) !== 'queue' || seen.has(entry.key)) continue;
+    out.push({ requestId: entry.key, text: entry.text });
+  }
+  return out;
+}
+
+/**
+ * Rebuild in-flight steers/queues from the server `sends` list (refresh, or
+ * a send that landed in this process before the client stored it).
+ */
+export function hydratePendingFromSends(
+  pending: readonly PendingUser[],
+  sends: readonly SendEntry[] | null | undefined,
+): PendingUser[] {
+  const have = new Set(pending.map((entry) => entry.key));
+  const extra: PendingUser[] = [];
+  for (const send of sends || []) {
+    if (have.has(send.requestId) || send.dropped || send.entryId) continue;
+    extra.push({
+      key: send.requestId,
+      text: typeof send.text === 'string' ? send.text : '',
+      baseline: 0,
+      doneAt: 0,
+      mode: sendModeOf(send),
+    });
+  }
+  return extra.length ? [...pending, ...extra] : pending as PendingUser[];
+}
+
+export function threadPending(pending: readonly PendingUser[]): PendingUser[] {
+  return pending.filter((entry) => sendModeOf(entry) !== 'queue');
+}
+
 /** Render a pending send exactly like a confirmed user message. */
 export function pendingItem(entry: PendingUser): ThreadItem {
   const images = pendingThreadImages(entry.images);
+  const steered = entry.mode === 'steer';
   return {
     kind: 'user',
     id: `local:${entry.key}`,
     text: entry.text,
     pathRefs: [],
     ...(images.length ? { images } : {}),
-  };
+    ...(steered ? { steered: true } : {}),
+  } as ThreadItem;
 }
 
 /** The「思考中」row belongs under the last user message while the agent has not shown anything. */

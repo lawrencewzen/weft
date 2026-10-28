@@ -37,7 +37,13 @@ export function useSubagent(cid: string, agentId: string): SubagentState {
   const loadToolOutput = useCallback((toolId: string) => toolOutput(cid, toolId), [cid]);
 
   const actions = useMemo<ConversationActions>(
-    () => ({ send, stop, continueRun: noopContinue, loadToolOutput }),
+    () => ({
+      send,
+      stop,
+      continueRun: noopContinue,
+      loadToolOutput,
+      withdraw: () => Promise.resolve({ ok: true as const }),
+    }),
     [send, stop, loadToolOutput],
   );
 

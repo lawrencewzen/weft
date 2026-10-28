@@ -25,6 +25,7 @@ import type {
   MockDb,
   MockGroup,
   MockTool,
+  FollowUp,
   RunHandle,
   ThreadItem,
 } from './types';
@@ -598,7 +599,31 @@ async function streamAssistant(
 function finishRun(db: MockDb, conv: MockConv, hub: MockHub): void {
   const run = conv.run;
   if (!run) return;
+  const next = run.followUps.shift();
+  const rest = run.followUps.slice();
   conv.run = null;
+  conv.pending = null;
+  recomputeContext(db, conv, conv.view.context.used + 1_800);
+  if (next && !run.cancelled) {
+    const id = nextId(db, 'u');
+    const images = attachThreadImages(db, conv.view.id, id, next.images);
+    const item: ThreadItem = {
+      kind: 'user',
+      id,
+      text: next.text,
+      pathRefs: [],
+      ...(images ? { images } : {}),
+    };
+    conv.items.push(item);
+    conv.view.itemIds.push(id);
+    const send = conv.view.sends?.find((row) => row.requestId === next.requestId);
+    if (send) send.entryId = id;
+    touch(conv);
+    publishItem(conv, hub, item);
+    const runId = startRun(db, conv, hub, next.text, rest);
+    conv.requestRuns.set(next.requestId, runId);
+    return;
+  }
   conv.view.status = 'idle';
   conv.view.run = {
     status: 'idle',
@@ -609,9 +634,7 @@ function finishRun(db: MockDb, conv: MockConv, hub: MockHub): void {
     lockedReason: null,
     error: null,
   };
-  conv.pending = null;
   touch(conv);
-  recomputeContext(db, conv, conv.view.context.used + 1_800);
   publishConversationView(conv, hub);
   publishSummary(db, hub, conv.view.id);
 }
@@ -680,8 +703,19 @@ function titleFrom(text: string): string {
   return oneLine.length > 28 ? `${oneLine.slice(0, 27)}…` : oneLine || '新对话';
 }
 
-export function startRun(db: MockDb, conv: MockConv, hub: MockHub, text: string): string {
-  const run: RunHandle = { id: nextId(db, 'run'), cancelled: false, steers: [] };
+export function startRun(
+  db: MockDb,
+  conv: MockConv,
+  hub: MockHub,
+  text: string,
+  extraFollowUps: FollowUp[] = [],
+): string {
+  const run: RunHandle = {
+    id: nextId(db, 'run'),
+    cancelled: false,
+    steers: [],
+    followUps: extraFollowUps.slice(),
+  };
   conv.run = run;
   conv.view.status = 'running';
   conv.view.run = {
@@ -712,6 +746,7 @@ export function sendMessage(
   text: string,
   requestId: string,
   images?: SendImage[],
+  mode: 'steer' | 'queue' = 'steer',
 ): SendResult {
   const known = conv.view.sends?.find((row) => row.requestId === requestId);
   if (known) {
@@ -720,9 +755,18 @@ export function sendMessage(
   const imageList = images?.length ? images : undefined;
   const sends = conv.view.sends ?? (conv.view.sends = []);
   if (conv.run && conv.view.run.status === 'running') {
-    sends.push({ requestId, entryId: null, dropped: false });
+    const queued = mode === 'queue';
+    sends.push({
+      requestId,
+      entryId: null,
+      dropped: false,
+      mode: queued ? 'queue' : 'steer',
+      text,
+    });
     trimSends(conv);
-    conv.run.steers.push({ requestId, text, ...(imageList ? { images: imageList } : {}) });
+    const payload = { requestId, text, ...(imageList ? { images: imageList } : {}) };
+    if (queued) conv.run.followUps.push(payload);
+    else conv.run.steers.push(payload);
     conv.requestRuns.set(requestId, conv.run.id);
     touch(conv);
     publishConversationView(conv, hub);
@@ -740,7 +784,7 @@ export function sendMessage(
   };
   conv.items.push(item);
   conv.view.itemIds.push(id);
-  sends.push({ requestId, entryId: id, dropped: false });
+  sends.push({ requestId, entryId: id, dropped: false, mode: 'steer', text });
   trimSends(conv);
   if (conv.items.filter((row) => row.kind === 'user').length === 1 && conv.view.title === '新对话') {
     conv.view.title = text.trim()
@@ -755,16 +799,41 @@ export function sendMessage(
   return { ok: true, runId };
 }
 
+export type WithdrawResult = 'ok' | 'landed' | 'missing';
+
+export function withdrawMessage(
+  db: MockDb,
+  conv: MockConv,
+  hub: MockHub,
+  requestId: string,
+): WithdrawResult {
+  const send = conv.view.sends?.find((row) => row.requestId === requestId);
+  if (!send) return 'missing';
+  if (send.entryId) return 'landed';
+  if (send.dropped) return 'missing';
+  const run = conv.run;
+  if (run) {
+    run.steers = run.steers.filter((row) => row.requestId !== requestId);
+    run.followUps = run.followUps.filter((row) => row.requestId !== requestId);
+  }
+  send.dropped = true;
+  touch(conv);
+  publishConversationView(conv, hub);
+  publishSummary(db, hub, conv.view.id);
+  return 'ok';
+}
+
 /** Stop whatever is running; the async engine notices `cancelled` after its next sleep. */
 export function stopConversation(db: MockDb, conv: MockConv, hub: MockHub): void {
   const run = conv.run;
   if (!run) return;
   run.cancelled = true;
-  for (const steer of run.steers) {
-    const send = conv.view.sends?.find((row) => row.requestId === steer.requestId);
+  for (const pending of [...run.steers, ...run.followUps]) {
+    const send = conv.view.sends?.find((row) => row.requestId === pending.requestId);
     if (send) send.dropped = true;
   }
   run.steers = [];
+  run.followUps = [];
   const live = conv.items.find(
     (item): item is Extract<ThreadItem, { kind: 'assistant' }> => item.kind === 'assistant' && item.id.startsWith('live:'),
   );

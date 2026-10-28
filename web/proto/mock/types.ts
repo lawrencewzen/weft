@@ -76,6 +76,8 @@ export type Steer = {
   images?: components['schemas']['MessageImage'][];
 };
 
+export type FollowUp = Steer;
+
 export type StoredMessageImage = {
   mediaType: components['schemas']['ThreadUserImage']['mediaType'];
   bytes: Uint8Array;
@@ -85,6 +87,7 @@ export type RunHandle = {
   id: string;
   cancelled: boolean;
   steers: Steer[];
+  followUps: FollowUp[];
 };
 
 export type MockConv = {
