@@ -229,7 +229,7 @@ test('creating a workspace from the chip menu selects it for the draft', async (
   }
 });
 
-test('status bar shows the git branch and +/- after a refresh', async ({ page }) => {
+test('composer shows the git branch and +/- after a refresh', async ({ page }) => {
   const prepared = await prepareWorkspaces(['gitws']);
   await gitInitRepo(prepared.dirs[0]);
   const srv = await startServer({
@@ -241,14 +241,14 @@ test('status bar shows the git branch and +/- after a refresh', async ({ page })
     const conv = await createConversation(srv, ws.id, 'git-chat');
     await loginNext(page, srv);
     await page.goto(`${srv.url}/c/${encodeURIComponent(conv.id)}`);
-    await expect(page.getByTestId('next-status-git')).toContainText('gitws');
-    await expect(page.getByTestId('next-status-git-branch')).toHaveText(/main|master/);
+    await expect(page.getByTestId('next-composer-git')).toBeVisible();
+    await expect(page.getByTestId('next-composer-git-branch')).toHaveText(/main|master/);
     await fs.writeFile(path.join(prepared.dirs[0], 'readme.txt'), 'hello\nworld\n');
     await page.getByTestId('next-composer-input').fill('改一下');
     await page.getByTestId('next-send').click();
     await waitRunDone(page);
-    await expect(page.getByTestId('next-status-git-diff')).toBeVisible({ timeout: 20000 });
-    await expect(page.getByTestId('next-status-git-diff')).toContainText('+');
+    await expect(page.getByTestId('next-composer-git-ins')).toBeVisible({ timeout: 20000 });
+    await expect(page.getByTestId('next-composer-git-ins')).toContainText('+');
     const refreshed = await apiV2(srv, 'POST', `/api/v2/workspaces/${ws.id}/git/refresh`, {});
     expect(refreshed.status).toBe(200);
     expect(refreshed.body.git?.insertions).toBeGreaterThan(0);

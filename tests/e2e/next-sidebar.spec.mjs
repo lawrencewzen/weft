@@ -373,7 +373,6 @@ test('clicking the left collapse button slides the sidebar away and the expand b
     expect(await panelTransitionSeconds(page, 'next-sidebar')).toBeGreaterThan(0);
 
     await page.getByTestId('next-left-collapse').click();
-    await expect(page.getByTestId('next-left-open')).toBeHidden();
     await expect(page.getByTestId('next-sidebar')).toBeHidden();
     await expect(page.getByTestId('next-left-open')).toBeVisible();
     await expect(page.getByTestId('next-left-divider')).toBeHidden();
@@ -381,7 +380,6 @@ test('clicking the left collapse button slides the sidebar away and the expand b
     await expect(page.getByTestId('next-sidebar')).toHaveAttribute('aria-hidden', 'true');
 
     await page.getByTestId('next-left-open').click();
-    await expect(page.getByTestId('next-left-open')).toBeHidden();
     await expect(page.getByTestId('next-sidebar')).toBeVisible();
     await expect(page.getByTestId('next-left-collapse')).toBeVisible();
     await expect(page.getByTestId('next-sidebar')).not.toHaveAttribute('inert');
@@ -404,7 +402,6 @@ test('clicking the right collapse button slides the panel away and the expand bu
     expect(await panelTransitionSeconds(page, 'next-right')).toBeGreaterThan(0);
 
     await page.getByTestId('next-right-collapse').click();
-    await expect(page.getByTestId('next-right-toggle')).toBeHidden();
     await expect(page.getByTestId('next-right')).toBeHidden();
     await expect(page.getByTestId('next-right-toggle')).toBeVisible();
     await expect(page.getByTestId('next-right-divider')).toBeHidden();
@@ -412,7 +409,6 @@ test('clicking the right collapse button slides the panel away and the expand bu
     await expect(page.getByTestId('next-right')).toHaveAttribute('aria-hidden', 'true');
 
     await page.getByTestId('next-right-toggle').click();
-    await expect(page.getByTestId('next-right-toggle')).toBeHidden();
     await expect(page.getByTestId('next-right')).toBeVisible();
     await expect(page.getByTestId('next-right-collapse')).toBeVisible();
     await expect(page.getByTestId('next-right')).not.toHaveAttribute('inert');

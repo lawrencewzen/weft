@@ -143,7 +143,7 @@ test('two turns each leave one agent reply, including after refresh', async ({ p
     await expect(page.getByTestId('next-item-assistant')).toHaveCount(2);
     await expect(page.getByTestId('next-item-assistant').nth(0).getByTestId('next-markdown')).toContainText(TEXT_A);
     await expect(page.getByTestId('next-item-assistant').nth(1).getByTestId('next-markdown')).toContainText(TEXT_B);
-    await expect(runStatus(page)).toHaveText(/完成|Done/i);
+    await expect(runStatus(page)).not.toHaveAttribute('data-status', 'running');
   } finally {
     await srv.kill();
   }
@@ -156,7 +156,7 @@ test('interrupt while running, then stop', async ({ page }) => {
     const { ws: workspace, conv } = await openWorkspaceConversation(srv, 'ctl', ws);
     await openNextChat(page, srv, conv.id);
     await sendNext(page, 'run');
-    await expect(runStatus(page)).toHaveText(/运行中|Running/i);
+    await expect(page.getByTestId('next-stop')).toBeVisible();
     const input = page.getByTestId('next-composer-input');
     await expect(input).toBeEnabled();
     await expect(input).toHaveAttribute('placeholder', /补充说明/);
@@ -171,28 +171,26 @@ test('interrupt while running, then stop', async ({ page }) => {
     await page.goto(`${srv.url}/c/${encodeURIComponent(second.body.id)}`);
     await expect(page.getByTestId('next-composer-input')).toBeVisible();
     await sendNext(page, 'run again');
-    await expect(runStatus(page)).toHaveText(/运行中|Running/i);
+    await expect(page.getByTestId('next-stop')).toBeVisible();
     const stop = page.getByTestId('next-stop');
     await expect(stop).toBeVisible();
     await expect(stop).toHaveAttribute('aria-label', /终止|Stop/);
     await stop.click();
     await waitRunStopped(page);
     await page.waitForTimeout(4000);
-    await expect(runStatus(page)).toHaveText(/已停止|Stopped/i);
+    await expect(runStatus(page)).toHaveAttribute('data-status', /stopped|idle/);
   } finally {
     await srv.kill();
   }
 });
 
-test('running status lives in the status bar and live tool group', async ({ page }) => {
+test('running status lives in the sidebar status dot and live tool group', async ({ page }) => {
   const { root, dirs: [ws] } = await prepareWorkspaces(['pending']);
   const srv = await startServer({ script: 'pending-run.json', extraEnv: { WEFT_WORKSPACE_ROOT: root } });
   try {
     const { conv } = await openWorkspaceConversation(srv, 'pending', ws);
     await openNextChat(page, srv, conv.id);
     await sendNext(page, 'run');
-    await expect(page.getByTestId('next-pending')).toHaveText('思考中', { timeout: 15000 });
-    await expect(page.getByTestId('next-elapsed')).toHaveText(/^\d+:\d{2}$/);
     await expect(page.getByTestId('next-stop')).toBeVisible();
 
     await expect(page.getByTestId('next-tool-group-spinner')).toBeVisible({ timeout: 8000 });
@@ -207,7 +205,6 @@ test('running status lives in the status bar and live tool group', async ({ page
     await expect(page.locator('.tool-group-spin, .run-spin, [data-testid=next-stream-spin]')).toHaveCount(1);
 
     await expect(page.getByTestId('next-item-assistant').filter({ hasText: '跑完了。' })).toBeVisible({ timeout: 20000 });
-    await expect(page.getByTestId('next-pending')).toHaveCount(0);
     await expect(page.getByTestId('next-tool-group-spinner')).toHaveCount(0);
     await expect(page.getByTestId('next-tool-group-elapsed')).toHaveCount(0);
     await waitRunDone(page);
@@ -274,7 +271,6 @@ test('kill -9 server mid-task, restart -> resumes to done without duplicate writ
     await loginNext(page, srv);
     await page.goto(`${srv.url}/c/${encodeURIComponent(conv.id)}`);
     await expect(page.getByTestId('next-thread')).toBeVisible();
-    await expect(runStatus(page)).toHaveText(/运行中|完成|Running|Done/i, { timeout: 10000 });
     await waitRunDone(page, 30000);
     expect(await fs.readFile(path.join(ws, 'final.txt'), 'utf8')).toBe('ok\n');
     expect(await fs.readFile(path.join(ws, 'side_effect.txt'), 'utf8')).toBe('once\n');

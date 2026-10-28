@@ -26,7 +26,8 @@ test('prototype terminal tab streams a bash command', async ({ page }) => {
   await page.getByTestId('next-right-tab-term').click();
   await expect(page.getByTestId('next-term-cmd')).toHaveAttribute('data-running', 'true', { timeout: 15000 });
   await expect(page.getByTestId('next-term-body')).toContainText('npm test', { timeout: 15000 });
-  await expect(page.getByTestId('next-run-status')).toHaveText('完成', { timeout: 40000 });
+  await expect(page.getByTestId('next-stop')).toHaveCount(0, { timeout: 40000 });
+  await expect(page.getByTestId('next-send')).toBeVisible();
   await expect(page.getByTestId('next-term-cmd')).toHaveAttribute('data-running', 'false');
   await expect(page.getByTestId('next-term-body')).toContainText('412 tests');
 

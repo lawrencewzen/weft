@@ -37,7 +37,8 @@ test('local directory browse, create, then start a conversation inside it', asyn
   await page.getByTestId('next-send').click();
   await expect(page).toHaveURL(/\/c\/c-\d+/);
   await expect(page.getByTestId('next-item-user')).toContainText('这个工作区里第一条消息');
-  await expect(page.getByTestId('next-run-status')).toHaveText('完成', { timeout: 40_000 });
+  await expect(page.getByTestId('next-stop')).toHaveCount(0, { timeout: 40_000 });
+  await expect(page.getByTestId('next-send')).toBeVisible();
   const wsId = await page.getByTestId('next-ws-node').filter({ hasText: 'playground' }).getAttribute('data-id');
   await expect(page.locator(`[data-testid=next-conv-row][data-ws-id="${wsId}"]`)).toHaveCount(1);
 

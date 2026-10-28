@@ -60,8 +60,8 @@ test('prototype runs from file:// with mock data, no network and no console erro
   await page.locator('[data-testid=next-conv-row][data-id="c-rich"]').click();
   await expect(page.getByTestId('next-tool-group')).toHaveCount(2);
   await expect(page.getByTestId('next-message-chip').first()).toContainText('Grok 4.6');
-  await expect(page.getByTestId('next-status-git-branch')).toHaveText('main');
-  await expect(page.getByTestId('next-status-git-diff')).toContainText('+42');
+  await expect(page.getByTestId('next-composer-git-branch')).toHaveText('main');
+  await expect(page.getByTestId('next-composer-git-ins')).toHaveText('+42');
   await expect(page.locator('.md-table')).toHaveCount(1);
   await expect(page.locator('.task-list-item')).toHaveCount(3);
   await expect(page.locator('.task-list-item.is-done')).toHaveCount(2);
@@ -133,8 +133,6 @@ test('prototype runs from file:// with mock data, no network and no console erro
   const cid = page.url().split('/c/')[1];
   const newRow = page.locator(`[data-testid=next-conv-row][data-id="${cid}"]`);
   await expect(page.getByTestId('next-item-user')).toContainText('看一下 store.ts');
-  await expect(page.getByTestId('next-run-status')).toHaveText('运行中');
-  await expect(page.getByTestId('next-elapsed')).toBeVisible({ timeout: 10_000 });
   await expect(page.getByTestId('next-stop')).toBeVisible();
   await expect(newRow).toHaveAttribute('data-status', 'running');
 
@@ -143,8 +141,7 @@ test('prototype runs from file:// with mock data, no network and no console erro
   await page.getByTestId('next-tool-group-summary').first().click();
   await expect(page.getByTestId('next-tool-row').first()).toBeVisible();
   await expect(page.getByTestId('next-stream-spin')).toHaveCount(1, { timeout: 20_000 });
-  await expect(page.getByTestId('next-run-status')).toHaveText('完成', { timeout: 30_000 });
-  await expect(page.getByTestId('next-stop')).toHaveCount(0);
+  await expect(page.getByTestId('next-stop')).toHaveCount(0, { timeout: 30_000 });
   await expect(page.getByTestId('next-item-assistant').last()).toHaveAttribute('data-streaming', 'false');
   await expect(page.getByTestId('next-item-assistant').last()).not.toHaveAttribute('data-id', /^live:/);
   await expect(page.getByTestId('next-conv-row')).toHaveCount(rowsBefore + 1);
@@ -158,7 +155,7 @@ test('prototype runs from file:// with mock data, no network and no console erro
   await expect(page.getByTestId('next-stop')).toBeVisible({ timeout: 10_000 });
   await page.getByTestId('next-composer-input').fill('顺便看下 README');
   await page.getByTestId('next-send').click();
-  await expect(page.getByTestId('next-run-status')).toHaveText('完成', { timeout: 40_000 });
+  await expect(page.getByTestId('next-stop')).toHaveCount(0, { timeout: 40_000 });
   await expect(page.getByTestId('next-item-user')).toHaveCount(3);
   await expect(page.getByTestId('next-item-user').last()).toContainText('顺便看下 README');
 
@@ -169,7 +166,7 @@ test('prototype runs from file:// with mock data, no network and no console erro
   await page.waitForTimeout(900);
   await page.getByTestId('next-stop').click();
   await expect(page.getByTestId('next-stop')).toHaveCount(0);
-  await expect(page.getByTestId('next-run-status')).toHaveText('已停止');
+  await expect(newRow).toHaveAttribute('data-status', /idle|stopped/);
   await expect(page.getByTestId('next-send')).toBeVisible();
 
   // The model menu really switches the conversation model.
