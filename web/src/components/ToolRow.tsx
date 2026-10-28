@@ -68,7 +68,7 @@ function KindIcon({ kind }: { kind: ToolCall['kind'] }) {
 }
 
 export function ToolRow({ tool, lang, onLoadOutput }: Props) {
-  const { openChangeDiff } = useRightPane();
+  const { openChangeDiff, openTerminal } = useRightPane();
   const realFail = tool.failure === 'real';
   const changeKind = tool.kind === 'write' || tool.kind === 'edit';
   const [toggled, setToggled] = useState<boolean | null>(null);
@@ -140,6 +140,19 @@ export function ToolRow({ tool, lang, onLoadOutput }: Props) {
           </span>
         </div>
         <div className="tool-meta">
+          {tool.kind === 'bash' ? (
+            <button
+              type="button"
+              className="tool-open-term"
+              data-testid="next-tool-open-term"
+              onClick={(event) => {
+                event.stopPropagation();
+                openTerminal(tool.id);
+              }}
+            >
+              {t(lang, 'term_view_in')}
+            </button>
+          ) : null}
           {realFail ? (
             <span className="tool-row-status is-failed" data-testid="next-tool-row-status">{t(lang, 'tool_status_failed')}</span>
           ) : tool.status === 'interrupted' ? (

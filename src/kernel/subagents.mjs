@@ -14,7 +14,7 @@ import {
   LiveDoc,
 } from '@earendil-works/pi-durable';
 import { agentEventData } from '../core/agents.mjs';
-import { textOf } from './events.mjs';
+import { createMapContext, mapHarnessBatch, textOf } from './events.mjs';
 import {
   EXT_SUBAGENTS,
   SUBAGENT_ANCHOR_KIND,
@@ -696,15 +696,40 @@ export function createSubagentHost({
     if (agent) await emitAgent(parentCid, agent);
   }
 
+  function forwardChildTool(parentCid, ev) {
+    if (typeof emit !== 'function' || !ev?.event) return;
+    if (ev.event === 'tool.delta') {
+      void Promise.resolve(emit(parentCid, ev.event, ev.data)).catch((err) => {
+        console.error(`WEFT_KERNEL_SUBAGENT ${err instanceof Error ? err.message : err}`);
+      });
+      return;
+    }
+    if (ev.event !== 'tool.start' && ev.event !== 'tool.end') return;
+    const name = ev.data?.tool?.name;
+    if (name !== 'bash') return;
+    void Promise.resolve(emit(parentCid, ev.event, ev.data)).catch((err) => {
+      console.error(`WEFT_KERNEL_SUBAGENT ${err instanceof Error ? err.message : err}`);
+    });
+  }
+
   async function attach(parentCid, childId) {
     if (closed || childId == null || childWatches.has(childId) || typeof watchEvents !== 'function') return;
     const stream = await watchEvents(harness, childId, context);
     childWatches.set(childId, stream);
+    const mapCtx = createMapContext();
     const run = () => publish(parentCid, childId).catch((err) => {
       console.error(`WEFT_KERNEL_SUBAGENT ${err instanceof Error ? err.message : err}`);
     });
     await run();
-    stream.start(() => run());
+    stream.start((batch) => {
+      run();
+      try {
+        const mapped = mapHarnessBatch(batch, mapCtx);
+        for (const ev of mapped.events) forwardChildTool(parentCid, ev);
+      } catch (err) {
+        console.error(`WEFT_KERNEL_SUBAGENT ${err instanceof Error ? err.message : err}`);
+      }
+    });
   }
 
   function onChild(parentHarnessId, childId) {

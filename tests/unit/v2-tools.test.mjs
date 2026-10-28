@@ -386,6 +386,7 @@ test('bash preview keeps the last 5 lines', () => {
   assert.equal(view.output.truncated, true);
   assert.equal(view.output.preview, 'L26\nL27\nL28\nL29\nL30');
   assert.equal(view.output.totalLines, 30);
+  assert.equal(view.output.text, raw);
 });
 
 test('diff counts fall back to the write output line', () => {

@@ -65,6 +65,8 @@ function assertPushedEntities(events) {
       assertEntityValue(ev.data.entity, ev.data.value);
     } else if (ev.event === 'remove') {
       assertSchema('RemoveEvent', ev.data);
+    } else if (ev.event === 'tool.delta') {
+      assertSchema('ToolDeltaEvent', ev.data);
     }
   }
 }
@@ -621,5 +623,99 @@ test('loadSubagentFromStore uses the store row and listSubagents, not present', 
   assert.equal(loaded.messages[0].id, 'u1');
   assert.equal(Object.hasOwn(loaded.presented, 'messages'), false);
   assert.equal(Object.hasOwn(loaded.presented, 'status'), false);
+});
+
+test('in-process: subagent topic tool.delta throttles, trimStart, set, and skips unknown tools', async () => {
+  const hub = createEventHub({ heartbeatMs: 60_000, protocolVersion: PROTOCOL_VERSION });
+  const listeners = new Set();
+  const agent = {
+    id: 'c1:sub:1',
+    name: '巡查',
+    status: 'running',
+    step: 1,
+    totalSteps: 1,
+    lastActivityAt: Date.now(),
+  };
+  const loaded = {
+    presented: presentedFixture({ status: 'running' }),
+    agent,
+    messages: [{ id: 'u1', role: 'user', text: 'run' }],
+  };
+  const topic = attachSubagentTopic(hub, {
+    loadSubagent: async (cid, agentId) => (
+      cid === 'c1' && agentId === agent.id ? loaded : null
+    ),
+    subscribe: (_cid, fn) => {
+      listeners.add(fn);
+      return () => listeners.delete(fn);
+    },
+    coalesceMs: 20,
+    log() {},
+  });
+  try {
+    const frames = [];
+    const session = hub.connect({
+      topics: [`subagent:c1:${agent.id}`],
+      lang: 'zh',
+      send: (frame) => frames.push(frame),
+    });
+    await session.ready;
+    const emit = (ev) => {
+      for (const fn of listeners) fn(ev);
+    };
+
+    emit({ event: 'tool.delta', data: { toolId: 'ghost', append: 'nope' } });
+    await sleep(40);
+    assert.equal(frames.some((frame) => frame.event === 'tool.delta'), false, JSON.stringify(frames));
+
+    loaded.messages = [
+      { id: 'u1', role: 'user', text: 'run' },
+      {
+        id: 't1',
+        role: 'tool',
+        tool: {
+          id: 'bash-1',
+          name: 'bash',
+          status: 'running',
+          input: { command: 'npm test' },
+        },
+      },
+    ];
+    emit({
+      event: 'tool.start',
+      data: { tool: { id: 'bash-1', name: 'bash', status: 'running', input: { command: 'npm test' } } },
+    });
+    await sleep(60);
+
+    emit({ event: 'tool.delta', data: { toolId: 'bash-1', append: 'aa' } });
+    emit({ event: 'tool.delta', data: { toolId: 'bash-1', append: 'bb' } });
+    await sleep(160);
+    let deltas = frames.filter((frame) => frame.event === 'tool.delta');
+    assert.equal(deltas.length >= 1, true, JSON.stringify(deltas));
+    assert.equal(deltas[0].data.toolId, 'bash-1');
+    assert.equal(deltas[0].data.append, 'aabb');
+    assert.equal(deltas[0].data.offset, 0);
+    assertSchema('ToolDeltaEvent', deltas[0].data);
+
+    emit({ event: 'tool.delta', data: { toolId: 'bash-1', trimStart: 2, append: 'cc' } });
+    await sleep(160);
+    deltas = frames.filter((frame) => frame.event === 'tool.delta');
+    const trimmed = deltas[deltas.length - 1];
+    assert.equal(trimmed.data.trimStart, 2);
+    assert.equal(trimmed.data.append, 'cc');
+    assert.equal(trimmed.data.offset, 2);
+
+    emit({ event: 'tool.delta', data: { toolId: 'bash-1', set: 'zz' } });
+    await sleep(80);
+    deltas = frames.filter((frame) => frame.event === 'tool.delta');
+    const replaced = deltas.find((frame) => frame.data.set === 'zz');
+    assert.ok(replaced, JSON.stringify(deltas));
+    assert.equal(replaced.data.append, undefined);
+    assertPushedEntities(frames.filter((frame) => frame.event !== 'heartbeat'));
+    session.close();
+  } finally {
+    topic.dispose();
+    hub.dispose();
+  }
 });
 

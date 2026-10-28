@@ -18,13 +18,25 @@ import {
   normalizeLang,
   type Entity,
   type EventHub,
+  type PublishEvent,
   type SnapshotPayload,
 } from './hub.ts';
 import type { StuckWatch } from './stuck-watch.ts';
+import {
+  applyKernelToolDelta,
+  clearToolLiveTimer,
+  createToolLive,
+  deltaFromLive,
+  markPublished,
+  overlayToolLives,
+  TOOL_DELTA_MS,
+  type ToolLive,
+} from './tool-delta.ts';
 
 export const CONVERSATION_PREFIX = 'conversation:';
 export const COALESCE_MS = 50;
 export const PATH_CACHE_MS = 2000;
+export { TOOL_DELTA_MS };
 /** After write/edit ends, suppress a first +0 −0 change until disk catches up. */
 export const FRESH_WRITE_MS = 400;
 export const CHANGE_RETRY_MS = 40;
@@ -60,6 +72,7 @@ type EntityKey = string;
 
 type TopicState = {
   lives: Map<string, { text: string }>;
+  toolLives: Map<string, ToolLive>;
   lastZh: Map<EntityKey, object>;
   lastEn: Map<EntityKey, object>;
   pathCache: Map<string, { value: boolean; at: number }>;
@@ -156,27 +169,37 @@ export function entitiesFromSnapshot(snap: TopicSnapshot | ConversationSnapshot)
   return out;
 }
 
-function overlayLive(snap: TopicSnapshot, lives: Map<string, { text: string }>): TopicSnapshot {
-  if (!lives.size) return snap;
-  const itemIds = [...snap.conversation.itemIds];
-  const items = [...snap.items];
-  const have = new Set(itemIds);
-  for (const [id, live] of lives) {
-    if (have.has(id)) {
-      const idx = items.findIndex((item) => item.id === id);
-      if (idx >= 0 && items[idx]?.kind === 'assistant') {
-        items[idx] = { ...items[idx], text: live.text, streaming: true } as ThreadItem;
+function overlayLive(
+  snap: TopicSnapshot,
+  lives: Map<string, { text: string }>,
+  toolLives?: Map<string, ToolLive>,
+): TopicSnapshot {
+  let next = snap;
+  if (lives.size) {
+    const itemIds = [...snap.conversation.itemIds];
+    const items = [...snap.items];
+    const have = new Set(itemIds);
+    for (const [id, live] of lives) {
+      if (have.has(id)) {
+        const idx = items.findIndex((item) => item.id === id);
+        if (idx >= 0 && items[idx]?.kind === 'assistant') {
+          items[idx] = { ...items[idx], text: live.text, streaming: true } as ThreadItem;
+        }
+        continue;
       }
-      continue;
+      items.push(liveAssistant(id, live.text));
+      itemIds.push(id);
     }
-    items.push(liveAssistant(id, live.text));
-    itemIds.push(id);
+    next = {
+      ...snap,
+      items,
+      conversation: { ...snap.conversation, itemIds },
+    };
   }
-  return {
-    ...snap,
-    items,
-    conversation: { ...snap.conversation, itemIds },
-  };
+  if (toolLives?.size) {
+    next = { ...next, tools: overlayToolLives(next.tools, toolLives) };
+  }
+  return next;
 }
 
 function mapsFromSnapshot(snap: TopicSnapshot): Map<EntityKey, object> {
@@ -219,6 +242,7 @@ export function attachConversationTopic(hub: EventHub, opts: ConversationTopicOp
     if (!state) {
       state = {
         lives: new Map(),
+        toolLives: new Map(),
         lastZh: new Map(),
         lastEn: new Map(),
         pathCache: new Map(),
@@ -255,6 +279,7 @@ export function attachConversationTopic(hub: EventHub, opts: ConversationTopicOp
     if (state) {
       clearTimer(state);
       clearChangeRetry(state);
+      for (const live of state.toolLives.values()) clearToolLiveTimer(live);
     }
     states.delete(cid);
   }
@@ -355,6 +380,7 @@ export function attachConversationTopic(hub: EventHub, opts: ConversationTopicOp
     lang: 'zh' | 'en',
     state: TopicState,
     source: TopicSource,
+    overlayTools = false,
   ): Promise<TopicSnapshot> {
     const workspacePath = source.loaded.presented?.workspacePath == null
       ? ''
@@ -373,7 +399,7 @@ export function attachConversationTopic(hub: EventHub, opts: ConversationTopicOp
         stuckAfterMs,
       }),
       changes: overlayLiveChanges(state, lang, source.changeRows),
-    }, state.lives);
+    }, state.lives, overlayTools ? state.toolLives : undefined);
   }
 
   async function snapshotsFor(
@@ -406,7 +432,7 @@ export function attachConversationTopic(hub: EventHub, opts: ConversationTopicOp
     }
     const source = await loadTopicSource(cid, state);
     if (!source) return { entities: [], missing: [topic] };
-    const snap = await assembleSnapshot(cid, wantEn ? 'en' : 'zh', state, source);
+    const snap = await assembleSnapshot(cid, wantEn ? 'en' : 'zh', state, source, true);
     return { entities: entitiesFromSnapshot(snap) };
   }
 
@@ -552,6 +578,80 @@ export function attachConversationTopic(hub: EventHub, opts: ConversationTopicOp
     stateOf(cid).lives.delete(liveItemId(liveId));
   }
 
+  function knownTool(state: TopicState, toolId: string): boolean {
+    const key = entityKey('tool', toolId);
+    return state.lastZh.has(key) || state.lastEn.has(key);
+  }
+
+  function seedToolLive(state: TopicState, toolId: string): ToolLive {
+    const existing = state.toolLives.get(toolId);
+    if (existing) return existing;
+    const prev = (state.lastZh.get(entityKey('tool', toolId))
+      ?? state.lastEn.get(entityKey('tool', toolId))) as ToolCall | undefined;
+    const output = prev?.output;
+    const seed = output && typeof output.text === 'string' ? output.text : '';
+    const live = createToolLive(seed);
+    state.toolLives.set(toolId, live);
+    return live;
+  }
+
+  function publishToolDelta(cid: string, toolId: string, payload: PublishEvent & { event: 'tool.delta' }): void {
+    hub.publish(topicOf(cid), { ...payload, toolId });
+  }
+
+  function flushToolLive(cid: string, toolId: string): void {
+    const state = states.get(cid);
+    if (!state) return;
+    const live = state.toolLives.get(toolId);
+    if (!live) return;
+    clearToolLiveTimer(live);
+    const payload = deltaFromLive(live);
+    if (!payload) return;
+    markPublished(live);
+    if ('set' in payload) {
+      publishToolDelta(cid, toolId, { event: 'tool.delta', toolId, set: payload.set });
+      return;
+    }
+    publishToolDelta(cid, toolId, {
+      event: 'tool.delta',
+      toolId,
+      offset: payload.offset,
+      append: payload.append,
+      ...(payload.trimStart ? { trimStart: payload.trimStart } : {}),
+    });
+  }
+
+  function scheduleToolFlush(cid: string, toolId: string): void {
+    const state = states.get(cid);
+    if (!state || disposed || !kernelUnsubs.has(cid)) return;
+    const live = state.toolLives.get(toolId);
+    if (!live || live.timer) return;
+    live.timer = setTimeout(() => {
+      live.timer = null;
+      enqueue(cid, () => {
+        flushToolLive(cid, toolId);
+      });
+    }, TOOL_DELTA_MS);
+    live.timer.unref?.();
+  }
+
+  async function handleToolDelta(cid: string, data: Record<string, unknown>): Promise<void> {
+    if (disposed || !kernelUnsubs.has(cid)) return;
+    const toolId = typeof data.toolId === 'string' ? data.toolId : '';
+    if (!toolId) return;
+    const state = stateOf(cid);
+    if (!knownTool(state, toolId)) return;
+    const live = seedToolLive(state, toolId);
+    applyKernelToolDelta(live, data);
+    if (typeof data.set === 'string') {
+      clearToolLiveTimer(live);
+      markPublished(live);
+      publishToolDelta(cid, toolId, { event: 'tool.delta', toolId, set: live.text });
+      return;
+    }
+    scheduleToolFlush(cid, toolId);
+  }
+
   async function onKernelEvent(cid: string, ev: KernelEvent): Promise<void> {
     if (disposed || !kernelUnsubs.has(cid)) return;
     const event = String(ev?.event || '');
@@ -564,6 +664,16 @@ export function attachConversationTopic(hub: EventHub, opts: ConversationTopicOp
       if (!messageId || !append) return;
       await handleDelta(cid, messageId, append);
       return;
+    }
+    if (event === 'tool.delta') {
+      await flushPending(cid);
+      await handleToolDelta(cid, data);
+      return;
+    }
+    if (event === 'tool.end') {
+      const tool = asRecord(data.tool);
+      const toolId = typeof tool.id === 'string' ? tool.id : '';
+      if (toolId) flushToolLive(cid, toolId);
     }
     if (event === 'message.done') noteMessageDone(cid, data);
     const state = stateOf(cid);

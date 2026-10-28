@@ -94,6 +94,25 @@ export function publishTextDelta(conv: MockConv, hub: MockHub, itemId: string, o
   hub.publish(conversationTopic(conv.view.id), { event: 'text.delta', itemId, offset, append });
 }
 
+export function publishToolDelta(
+  conv: MockConv,
+  hub: MockHub,
+  toolId: string,
+  payload: { set: string } | { offset: number; append: string; trimStart?: number },
+): void {
+  if ('set' in payload) {
+    hub.publish(conversationTopic(conv.view.id), { event: 'tool.delta', toolId, set: payload.set });
+    return;
+  }
+  hub.publish(conversationTopic(conv.view.id), {
+    event: 'tool.delta',
+    toolId,
+    offset: payload.offset,
+    append: payload.append,
+    ...(payload.trimStart ? { trimStart: payload.trimStart } : {}),
+  });
+}
+
 export function publishWorkspaces(db: MockDb, hub: MockHub): void {
   refreshCounts(db);
   for (const entity of workspacesEntities(db)) {

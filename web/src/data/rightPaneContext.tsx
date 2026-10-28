@@ -58,6 +58,8 @@ export type RightPaneValue = {
   diffs: Record<string, Diff | 'loading' | 'error'>;
   openFile: (path: string, line?: number) => void;
   openChangeDiff: (path: string) => void;
+  openTerminal: (toolId?: string) => void;
+  selectedCommandId: string | null;
   showFiles: () => void;
   tree: FileNode[];
   treeTruncated: boolean;
@@ -131,6 +133,7 @@ export function RightPaneProvider({
   const [editorMode, setEditorMode] = useState<'preview' | 'edit'>('preview');
   const [draftText, setDraftText] = useState('');
   const [saveState, setSaveState] = useState<SaveState>(IDLE_SAVE);
+  const [selectedCommandId, setSelectedCommandId] = useState<string | null>(null);
 
   const cid = conversationId || '';
   const wsId = workspaceId || '';
@@ -259,6 +262,7 @@ export function RightPaneProvider({
     setDiffs({});
     sigRef.current = {};
     seenDone.current = '';
+    setSelectedCommandId(null);
   }, [cid]);
 
   useEffect(() => {
@@ -371,6 +375,11 @@ export function RightPaneProvider({
     });
   }, [setTab]);
 
+  const openTerminal = useCallback((toolId?: string) => {
+    if (toolId) setSelectedCommandId(toolId);
+    setTab('term');
+  }, [setTab]);
+
   const showFiles = useCallback(() => {
     setTab('files');
     if (wsId) void loadTree(wsId);
@@ -435,6 +444,8 @@ export function RightPaneProvider({
     diffs,
     openFile,
     openChangeDiff,
+    openTerminal,
+    selectedCommandId,
     showFiles,
     tree,
     treeTruncated,
@@ -455,7 +466,7 @@ export function RightPaneProvider({
     copyPath,
   }), [
     open, setOpen, tab, setTab, selectedSubagentId, width, persistWidth, hasChanges, totals, visibleChanges,
-    openPaths, toggleChange, diffs, openFile, openChangeDiff, showFiles, tree, treeTruncated,
+    openPaths, toggleChange, diffs, openFile, openChangeDiff, openTerminal, selectedCommandId, showFiles, tree, treeTruncated,
     treeReady, expandedDirs, toggleDirectory, activeFilePath, fileTargetLine, file, fileBusy,
     editorMode, draftText, saveState, saveFile, reloadFile, copyPath,
   ]);

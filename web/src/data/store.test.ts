@@ -267,6 +267,55 @@ describe('entity store', () => {
     expect((store.items(CID)[0] as { text: string }).text).toBe('Hello');
   });
 
+  it('appends tool.delta, applies trimStart and set, and ignores duplicates', () => {
+    const store = createEntityStore();
+    store.applyUpsert({
+      topic: TOPIC,
+      entity: 'tool',
+      id: 'b1',
+      value: { ...tool('b1'), kind: 'bash' } as EntityRef['value'],
+    });
+    store.applyToolDelta({ topic: TOPIC, toolId: 'b1', offset: 0, append: 'aabb' });
+    expect(store.toolLiveText('b1')).toBe('aabb');
+    store.applyToolDelta({ topic: TOPIC, toolId: 'b1', trimStart: 2, offset: 2, append: 'cc' });
+    expect(store.toolLiveText('b1')).toBe('bbcc');
+    store.applyToolDelta({ topic: TOPIC, toolId: 'b1', set: 'zz' });
+    expect(store.toolLiveText('b1')).toBe('zz');
+    const version = store.getVersion();
+    store.applyToolDelta({ topic: TOPIC, toolId: 'b1', set: 'zz' });
+    store.applyToolDelta({ topic: TOPIC, toolId: 'b1', offset: 0, append: 'zz' });
+    expect(store.toolLiveText('b1')).toBe('zz');
+    expect(store.getVersion()).toBe(version);
+  });
+
+  it('keeps tool live text on mismatch until an upsert brings output.text', () => {
+    const store = createEntityStore();
+    store.applyUpsert({
+      topic: TOPIC,
+      entity: 'tool',
+      id: 'b1',
+      value: { ...tool('b1'), kind: 'bash' } as EntityRef['value'],
+    });
+    store.applyToolDelta({ topic: TOPIC, toolId: 'b1', offset: 0, append: 'hello' });
+    store.applyToolDelta({ topic: TOPIC, toolId: 'b1', offset: 99, append: 'x' });
+    expect(store.toolLiveText('b1')).toBe('hello');
+    store.applyToolDelta({ topic: TOPIC, toolId: 'b1', offset: 5, append: '!' });
+    expect(store.toolLiveText('b1')).toBe('hello');
+    store.applyUpsert({
+      topic: TOPIC,
+      entity: 'tool',
+      id: 'b1',
+      value: {
+        ...tool('b1'),
+        kind: 'bash',
+        output: { preview: 'hello', truncated: true, totalLines: 1, text: 'hello world' },
+      } as EntityRef['value'],
+    });
+    expect(store.toolLiveText('b1')).toBe('hello world');
+    store.applyToolDelta({ topic: TOPIC, toolId: 'b1', offset: 11, append: '!' });
+    expect(store.toolLiveText('b1')).toBe('hello world!');
+  });
+
   it('replaces a live streaming item with the official message', () => {
     const store = createEntityStore();
     const liveId = 'live:m1';

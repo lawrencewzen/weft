@@ -96,7 +96,7 @@ export interface paths {
          *     - `subagent`：id 为子 Agent id，值为 Subagent。卡住由服务端判定：kernel 状态为 running 且超过 stuckAfterMs（默认 60000，环境变量 WEFT_SUBAGENT_STUCK_MS）没有活动时 status 为 stuck，到点推送 upsert。
          *     - `change`：id 为相对工作区的路径（统一用 `/`），值为 Change。快照带上当前变更列表。工具结束（write / edit / bash 都可能改文件）或经保存接口写入后随重算更新：变了才 upsert，从列表消失则 remove。不做文件监听。
          *
-         *     快照是 GET /api/v2/conversations/{id} 的 conversation / items / tools，再加上该对话的 subagent 和 change 实体。模型流式输出时先 upsert 一条 `item`，id 以 `live:` 开头、`streaming` 为 true、`text` 为空；随后用 `text.delta` 追加。正式助手消息到来后 remove 这条流式项，再 upsert 正式项和 conversation。
+         *     快照是 GET /api/v2/conversations/{id} 的 conversation / items / tools，再加上该对话的 subagent 和 change 实体。模型流式输出时先 upsert 一条 `item`，id 以 `live:` 开头、`streaming` 为 true、`text` 为空；随后用 `text.delta` 追加。正式助手消息到来后 remove 这条流式项，再 upsert 正式项和 conversation。bash 工具运行中用 `tool.delta` 追加保留窗口（不要复用 `text.delta`）；偏移对不上时客户端丢掉本地缓冲，等下一次 upsert。
          *
          *     主题 `subagent:<cid>:<agentId>`（`<cid>` 为父对话 id，`<agentId>` 为子 Agent id）按前缀动态注册。实体：
          *     - `subagent`：id 为子 Agent id，值为 Subagent
@@ -112,6 +112,7 @@ export interface paths {
          *     - `upsert` → UpsertEvent
          *     - `remove` → RemoveEvent
          *     - `text.delta` → TextDeltaEvent
+         *     - `tool.delta` → ToolDeltaEvent
          *     - `heartbeat` → HeartbeatEvent
          */
         get: operations["getEvents"];
@@ -1104,9 +1105,22 @@ export interface components {
             offset: number;
             append: string;
         };
+        /** @description SSE event=tool.delta 的 data。只用于工具输出（bash 保留窗口）。带 set 时整段替换；否则先按 trimStart 丢掉头部再按 offset 追加。offset 等于当前长度时追加；现有文字从 offset 起已等于 append 时视为已应用、忽略；其他对不上的情况客户端丢掉本地内容，等下一次 upsert。 */
+        ToolDeltaEvent: {
+            topic: string;
+            toolId: string;
+            /** @description 整段替换保留窗口。与 append 互斥 */
+            set?: string;
+            /** @description 追加前的长度（已应用 trimStart 之后）。set 出现时省略 */
+            offset?: number;
+            /** @description 追加的文本。set 出现时省略 */
+            append?: string;
+            /** @description 追加前从窗口头部丢掉的字符数 */
+            trimStart?: number;
+        };
         /** @description SSE event=heartbeat 的 data。不带 id，不进环形缓冲。 */
         HeartbeatEvent: Record<string, never>;
-        /** @description 单条工具调用的视图模型。全文按需拉 GET /api/v2/tools/<id>/output。 */
+        /** @description 单条工具调用的视图模型。全文按需拉 GET /api/v2/conversations/{id}/tools/{toolId}/output。 */
         ToolCall: {
             id: string;
             /** @description 所属工具组 id，由组内第一条调用算出 */
@@ -1141,6 +1155,8 @@ export interface components {
                 preview: string;
                 truncated: boolean;
                 totalLines: number;
+                /** @description Harness 保留的输出窗口（尾部）。运行中的 bash 或预览被截断时带上；省略则预览即全文 */
+                text?: string;
             };
         };
         /** @description 工具组摘要。对应 ThreadItem.tool_group.summary。 */

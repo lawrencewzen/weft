@@ -53,6 +53,7 @@ export type MockTool = {
   truncated: boolean;
   totalLines: number;
   output: string;
+  liveText?: string;
 };
 
 export type MockGroup = {

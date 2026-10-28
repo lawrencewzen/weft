@@ -117,6 +117,7 @@ export function toolValue(tool: MockTool, groupId: string): EntityValue {
         preview: tool.preview,
         truncated: tool.truncated,
         totalLines: tool.totalLines,
+        ...(tool.liveText != null && tool.liveText !== '' ? { text: tool.liveText } : {}),
       },
     };
     return call as unknown as object;

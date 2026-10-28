@@ -802,6 +802,9 @@ export function toolCallView(
       totalLines: outputLineCount(outputText),
     },
   };
+  if (kind === 'bash' && outputText && (clipped.clipped || status === 'running')) {
+    view.output.text = outputText;
+  }
   if (path) view.path = path;
   const exitCode = bashExitCode(tool);
   if (kind === 'bash' && exitCode != null) view.exitCode = exitCode;

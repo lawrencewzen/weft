@@ -1,0 +1,4 @@
+{ "turns": [
+  { "tool": "bash", "args": { "command": "node -e \"const fs=require('fs');let n=0;const id=setInterval(()=>{fs.writeSync(1,'tick-'+n+'\\n');n+=1;if(n>=6)clearInterval(id);},200)\"" } },
+  { "text": "命令跑完了，输出都在终端里。" }
+] }

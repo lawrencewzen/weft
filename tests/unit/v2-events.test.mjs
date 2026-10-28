@@ -395,6 +395,7 @@ test('hub event payloads match contract schemas', () => {
     hub.publish('service', { event: 'upsert', entity: 'service', id: 'self', value: { ok: true } });
     hub.publish('service', { event: 'remove', entity: 'service', id: 'self' });
     hub.publish('chat', { event: 'text.delta', itemId: 'item-1', offset: 0, append: 'hi' });
+    hub.publish('chat', { event: 'tool.delta', toolId: 'bash-1', offset: 0, append: 'out' });
     hub.heartbeat();
   });
 
@@ -403,11 +404,13 @@ test('hub event payloads match contract schemas', () => {
   assert.ok(byEvent.upsert);
   assert.ok(byEvent.remove);
   assert.ok(byEvent['text.delta']);
+  assert.ok(byEvent['tool.delta']);
   assert.ok(byEvent.heartbeat);
   assertSchema('SnapshotEvent', byEvent.snapshot);
   assertSchema('UpsertEvent', byEvent.upsert);
   assertSchema('RemoveEvent', byEvent.remove);
   assertSchema('TextDeltaEvent', byEvent['text.delta']);
+  assertSchema('ToolDeltaEvent', byEvent['tool.delta']);
   assertSchema('HeartbeatEvent', byEvent.heartbeat);
   assertSchema('EntityRef', byEvent.snapshot.entities[0]);
 });
