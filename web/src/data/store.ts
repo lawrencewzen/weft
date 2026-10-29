@@ -45,11 +45,6 @@ function asRecord(value: unknown): Record<string, unknown> | null {
   return value as Record<string, unknown>;
 }
 
-function itemText(value: Record<string, unknown>): string | null {
-  if (value.kind != null && value.kind !== 'assistant') return null;
-  return typeof value.text === 'string' ? value.text : '';
-}
-
 type ToolLive = { text: string; stale: boolean };
 
 /** Apply one `tool.delta` onto a local retained window. Same mismatch rules as text.delta. */
@@ -173,6 +168,9 @@ export type EntityStore = {
   needsFullValue(itemId: string): boolean;
   subscribe(listener: Listener): () => void;
   getVersion(): number;
+  subscribeTopic(topic: string, listener: Listener): () => void;
+  getTopicVersion(topic: string): number;
+  flush(): void;
 };
 
 export type StoreOptions = {
@@ -180,6 +178,28 @@ export type StoreOptions = {
 };
 
 export const DEFAULT_MAX_RETAINED_TOPICS = 8;
+
+type TextBuffer = {
+  chunks: string[];
+  totalLength: number;
+  joinedText: string | null;
+};
+
+function scheduleBatch(cb: () => void): { cancel: () => void } {
+  if (typeof requestAnimationFrame === 'function') {
+    const id = requestAnimationFrame(cb);
+    return { cancel: () => cancelAnimationFrame(id) };
+  }
+  if (typeof queueMicrotask === 'function') {
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) cb();
+    });
+    return { cancel: () => { cancelled = true; } };
+  }
+  const id = setTimeout(cb, 0);
+  return { cancel: () => clearTimeout(id) };
+}
 
 export function createEntityStore(options?: StoreOptions): EntityStore {
   const maxRetainedTopics = options?.maxRetainedTopics ?? DEFAULT_MAX_RETAINED_TOPICS;
@@ -190,15 +210,125 @@ export function createEntityStore(options?: StoreOptions): EntityStore {
   const retainedUnsubscribedTopics = new Map<string, true>();
   const staleItems = new Set<string>();
   const toolLives = new Map<string, ToolLive>();
-  const listeners = new Set<Listener>();
+  const globalListeners = new Set<Listener>();
+  const topicListeners = new Map<string, Set<Listener>>();
   let version = 0;
+  const topicVersions = new Map<string, number>();
 
-  function notify(): void {
-    version += 1;
-    for (const listener of listeners) listener();
+  let dirtyGlobal = false;
+  const dirtyTopics = new Set<string>();
+  let scheduleHandle: { cancel: () => void } | null = null;
+
+  const textBuffers = new Map<string, TextBuffer>();
+
+  const queryCache = {
+    items: new Map<string, ThreadItem[]>(),
+    toolsById: new Map<string, Record<string, ToolCall>>(),
+    changes: new Map<string, Change[]>(),
+    subagents: new Map<string, Subagent[]>(),
+    workspaces: null as Workspace[] | null,
+    summaries: null as ConversationSummary[] | null,
+    providers: null as Provider[] | null,
+    plugins: null as Plugin[] | null,
+    skills: null as Skill[] | null,
+    gitConnections: null as GitConnection[] | null,
+    topicItems: new Map<string, ThreadItem[]>(),
+    toolsByTopic: new Map<string, Record<string, ToolCall>>(),
+  };
+
+  function syncTextBuffers(): void {
+    for (const [id, buf] of textBuffers) {
+      if (buf.joinedText === null) {
+        buf.joinedText = buf.chunks.join('');
+        if (buf.chunks.length > 128) {
+          buf.chunks = [buf.joinedText];
+        }
+        const rec = byEntityId.get(entityIdKey('item', id));
+        if (rec && rec.value.text !== buf.joinedText) {
+          rec.value = { ...rec.value, text: buf.joinedText };
+          queryCache.items.delete(rec.topic);
+          queryCache.topicItems.delete(rec.topic);
+        }
+      }
+    }
+  }
+
+  function flush(): void {
+    if (scheduleHandle) {
+      scheduleHandle.cancel();
+      scheduleHandle = null;
+    }
+    if (!dirtyGlobal && dirtyTopics.size === 0) return;
+
+    syncTextBuffers();
+
+    const topicsToFire = new Set(dirtyTopics);
+    const fireGlobal = dirtyGlobal;
+    dirtyTopics.clear();
+    dirtyGlobal = false;
+
+    if (fireGlobal) version += 1;
+    for (const topic of topicsToFire) {
+      topicVersions.set(topic, (topicVersions.get(topic) ?? 0) + 1);
+    }
+
+    if (fireGlobal) {
+      for (const listener of [...globalListeners]) {
+        listener();
+      }
+    }
+    for (const topic of topicsToFire) {
+      const listeners = topicListeners.get(topic);
+      if (listeners) {
+        for (const listener of [...listeners]) {
+          listener();
+        }
+      }
+    }
+  }
+
+  function markDirty(topic?: string, entity?: string): void {
+    dirtyGlobal = true;
+    if (topic) {
+      dirtyTopics.add(topic);
+      if (entity) dirtyTopics.add(`${topic}#${entity}`);
+    }
+    if (!scheduleHandle) {
+      scheduleHandle = scheduleBatch(flush);
+    }
+  }
+
+  function invalidateCacheFor(rec: StoredEntity): void {
+    if (rec.entity === 'item') {
+      textBuffers.delete(rec.id);
+      queryCache.items.delete(rec.topic);
+      queryCache.topicItems.delete(rec.topic);
+    } else if (rec.entity === 'tool') {
+      queryCache.toolsById.delete(rec.topic);
+      queryCache.toolsByTopic.delete(rec.topic);
+    } else if (rec.entity === 'change') {
+      queryCache.changes.delete(rec.topic);
+    } else if (rec.entity === 'subagent') {
+      queryCache.subagents.delete(rec.topic);
+    } else if (rec.entity === 'workspace') {
+      queryCache.workspaces = null;
+    } else if (rec.entity === 'conversation_summary') {
+      queryCache.summaries = null;
+    } else if (rec.entity === 'provider') {
+      queryCache.providers = null;
+    } else if (rec.entity === 'plugin') {
+      queryCache.plugins = null;
+    } else if (rec.entity === 'skill') {
+      queryCache.skills = null;
+    } else if (rec.entity === 'git_connection') {
+      queryCache.gitConnections = null;
+    } else if (rec.entity === 'conversation') {
+      queryCache.items.delete(conversationTopic(rec.id));
+    }
   }
 
   function forget(rec: StoredEntity): void {
+    invalidateCacheFor(rec);
     entities.delete(entityKey(rec.topic, rec.entity, rec.id));
     const idKey = entityIdKey(rec.entity, rec.id);
     if (byEntityId.get(idKey) === rec) byEntityId.delete(idKey);
@@ -207,6 +337,7 @@ export function createEntityStore(options?: StoreOptions): EntityStore {
   }
 
   function put(rec: StoredEntity): void {
+    invalidateCacheFor(rec);
     const key = entityKey(rec.topic, rec.entity, rec.id);
     const prev = entities.get(key);
     if (prev) {
@@ -228,6 +359,12 @@ export function createEntityStore(options?: StoreOptions): EntityStore {
   }
 
   function dropTopic(topic: string): void {
+    queryCache.items.delete(topic);
+    queryCache.topicItems.delete(topic);
+    queryCache.toolsById.delete(topic);
+    queryCache.toolsByTopic.delete(topic);
+    queryCache.changes.delete(topic);
+    queryCache.subagents.delete(topic);
     for (const rec of [...entities.values()]) {
       if (rec.topic === topic) forget(rec);
     }
@@ -280,6 +417,21 @@ export function createEntityStore(options?: StoreOptions): EntityStore {
     }
   }
 
+  function linkSubagentTopics(entity: string, topic: string, id: string): void {
+    if (entity !== 'subagent') return;
+    if (topic.startsWith('conversation:')) {
+      const cid = topic.slice('conversation:'.length);
+      dirtyTopics.add(subagentTopic(cid, id));
+      dirtyTopics.add(`${subagentTopic(cid, id)}#subagent`);
+    } else if (topic.startsWith('subagent:')) {
+      const parts = topic.split(':');
+      if (parts.length >= 3) {
+        dirtyTopics.add(conversationTopic(parts[1]));
+        dirtyTopics.add(`${conversationTopic(parts[1])}#subagent`);
+      }
+    }
+  }
+
   return {
     applySnapshot(event) {
       const topics = Array.isArray(event.topics) ? event.topics : [];
@@ -287,6 +439,7 @@ export function createEntityStore(options?: StoreOptions): EntityStore {
         dropTopic(topic);
         seenTopics.add(topic);
         retainedUnsubscribedTopics.delete(topic);
+        dirtyTopics.add(topic);
       }
       const listedMissing = new Set(event.missing || []);
       for (const topic of topics) {
@@ -299,8 +452,11 @@ export function createEntityStore(options?: StoreOptions): EntityStore {
         if (!value || !ref.topic || !ref.entity || !ref.id) continue;
         put({ topic: ref.topic, entity: ref.entity, id: ref.id, value });
         missing.delete(ref.topic);
+        dirtyTopics.add(ref.topic);
+        dirtyTopics.add(`${ref.topic}#${ref.entity}`);
+        linkSubagentTopics(ref.entity, ref.topic, ref.id);
       }
-      notify();
+      markDirty();
     },
 
     applyUpsert(event) {
@@ -309,7 +465,8 @@ export function createEntityStore(options?: StoreOptions): EntityStore {
       if (!value || !event.topic || !event.entity || !event.id) return;
       put({ topic: event.topic, entity: event.entity, id: event.id, value });
       missing.delete(event.topic);
-      notify();
+      linkSubagentTopics(event.entity, event.topic, event.id);
+      markDirty(event.topic, event.entity);
     },
 
     applyRemove(event) {
@@ -318,7 +475,8 @@ export function createEntityStore(options?: StoreOptions): EntityStore {
       const rec = get(event.topic, event.entity, event.id);
       if (!rec) return;
       forget(rec);
-      notify();
+      linkSubagentTopics(event.entity, event.topic, event.id);
+      markDirty(event.topic, event.entity);
     },
 
     applyTextDelta(event) {
@@ -326,23 +484,50 @@ export function createEntityStore(options?: StoreOptions): EntityStore {
       const rec = findItem(event.topic, event.itemId);
       if (!rec) return;
       if (staleItems.has(rec.id)) return;
-      const current = itemText(rec.value);
-      if (current == null) return;
+      if (rec.value.kind != null && rec.value.kind !== 'assistant') return;
+
       const append = typeof event.append === 'string' ? event.append : '';
-      const offset = event.offset;
-      if (offset === current.length) {
-        rec.value = { ...rec.value, text: current + append };
-        notify();
+      const offset = event.offset ?? 0;
+
+      let buf = textBuffers.get(rec.id);
+      if (!buf) {
+        const initial = typeof rec.value.text === 'string' ? rec.value.text : '';
+        buf = {
+          chunks: initial ? [initial] : [],
+          totalLength: initial.length,
+          joinedText: initial,
+        };
+        textBuffers.set(rec.id, buf);
+      }
+
+      // Fast path: append at end
+      if (offset === buf.totalLength) {
+        if (append.length === 0) return;
+        buf.chunks.push(append);
+        buf.totalLength += append.length;
+        buf.joinedText = null;
+        queryCache.items.delete(rec.topic);
+        queryCache.topicItems.delete(rec.topic);
+        markDirty(rec.topic, 'item');
         return;
       }
+
+      // Check if duplicate / already present
+      if (buf.joinedText === null) {
+        buf.joinedText = buf.chunks.join('');
+        if (buf.chunks.length > 128) buf.chunks = [buf.joinedText];
+      }
+      const current = buf.joinedText;
       if (
         offset + append.length <= current.length
         && current.slice(offset, offset + append.length) === append
       ) {
         return;
       }
+
+      // Mismatch
       staleItems.add(rec.id);
-      notify();
+      markDirty(rec.topic, 'item');
     },
 
     applyToolDelta(event) {
@@ -350,8 +535,8 @@ export function createEntityStore(options?: StoreOptions): EntityStore {
       const toolId = event.toolId;
       if (!toolId) return;
       let live = toolLives.get(toolId);
+      const rec = findTool(event.topic, toolId);
       if (!live) {
-        const rec = findTool(event.topic, toolId);
         const seed = rec ? outputTextOf(rec.value) : null;
         live = { text: seed ?? '', stale: false };
         toolLives.set(toolId, live);
@@ -360,12 +545,12 @@ export function createEntityStore(options?: StoreOptions): EntityStore {
       const result = applyToolDeltaText(live.text, event);
       if (result.stale) {
         live.stale = true;
-        notify();
+        markDirty(event.topic || rec?.topic, 'tool');
         return;
       }
       if (!result.changed) return;
       live.text = result.text;
-      notify();
+      markDirty(event.topic || rec?.topic, 'tool');
     },
 
     toolLiveText(toolId) {
@@ -381,16 +566,39 @@ export function createEntityStore(options?: StoreOptions): EntityStore {
 
     items(cid) {
       touchRetained(conversationTopic(cid));
-      const convRec = get(conversationTopic(cid), 'conversation', cid)
+      const topic = conversationTopic(cid);
+      const convRec = get(topic, 'conversation', cid)
         ?? byEntityId.get(entityIdKey('conversation', cid));
       const conv = convRec?.value as ConversationView | undefined;
       if (!conv || !Array.isArray(conv.itemIds)) return [];
-      const topic = conversationTopic(cid);
+
+      const cached = queryCache.items.get(topic);
+      if (cached) {
+        let dirty = false;
+        for (const item of cached) {
+          const buf = textBuffers.get(item.id);
+          if (buf && buf.joinedText === null) {
+            dirty = true;
+            break;
+          }
+        }
+        if (!dirty) return cached;
+      }
+
       const out: ThreadItem[] = [];
       for (const id of conv.itemIds) {
         const rec = get(topic, 'item', id) ?? byEntityId.get(entityIdKey('item', id));
-        if (rec) out.push(rec.value as unknown as ThreadItem);
+        if (rec) {
+          const buf = textBuffers.get(rec.id);
+          if (buf && buf.joinedText === null) {
+            buf.joinedText = buf.chunks.join('');
+            if (buf.chunks.length > 128) buf.chunks = [buf.joinedText];
+            rec.value = { ...rec.value, text: buf.joinedText };
+          }
+          out.push(rec.value as unknown as ThreadItem);
+        }
       }
+      queryCache.items.set(topic, out);
       return out;
     },
 
@@ -402,18 +610,23 @@ export function createEntityStore(options?: StoreOptions): EntityStore {
     toolsById(cid) {
       touchRetained(conversationTopic(cid));
       const topic = conversationTopic(cid);
+      const cached = queryCache.toolsById.get(topic);
+      if (cached) return cached;
       const out: Record<string, ToolCall> = {};
       for (const rec of entities.values()) {
         if (rec.topic === topic && rec.entity === 'tool') {
           out[rec.id] = rec.value as unknown as ToolCall;
         }
       }
+      queryCache.toolsById.set(topic, out);
       return out;
     },
 
     changes(cid) {
       touchRetained(conversationTopic(cid));
       const topic = conversationTopic(cid);
+      const cached = queryCache.changes.get(topic);
+      if (cached) return cached;
       const out: Change[] = [];
       for (const rec of entities.values()) {
         if (rec.topic === topic && rec.entity === 'change') {
@@ -421,15 +634,22 @@ export function createEntityStore(options?: StoreOptions): EntityStore {
         }
       }
       out.sort((a, b) => a.path.localeCompare(b.path));
+      queryCache.changes.set(topic, out);
       return out;
     },
 
     workspaces() {
-      return listWorkspaces();
+      if (queryCache.workspaces) return queryCache.workspaces;
+      const out = listWorkspaces();
+      queryCache.workspaces = out;
+      return out;
     },
 
     conversationSummaries() {
-      return listSummaries();
+      if (queryCache.summaries) return queryCache.summaries;
+      const out = listSummaries();
+      queryCache.summaries = out;
+      return out;
     },
 
     conversationsFor(workspaceId) {
@@ -439,12 +659,14 @@ export function createEntityStore(options?: StoreOptions): EntityStore {
     },
 
     providers() {
+      if (queryCache.providers) return queryCache.providers;
       const out: Provider[] = [];
       for (const rec of entities.values()) {
         if (rec.topic === PROVIDERS_TOPIC && rec.entity === 'provider') {
           out.push(rec.value as unknown as Provider);
         }
       }
+      queryCache.providers = out;
       return out;
     },
 
@@ -461,13 +683,16 @@ export function createEntityStore(options?: StoreOptions): EntityStore {
     },
 
     plugins() {
+      if (queryCache.plugins) return queryCache.plugins;
       const out: Plugin[] = [];
       for (const rec of entities.values()) {
         if (rec.topic === EXTENSIONS_TOPIC && rec.entity === 'plugin') {
           out.push(rec.value as unknown as Plugin);
         }
       }
-      return out.sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
+      const sorted = out.sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
+      queryCache.plugins = sorted;
+      return sorted;
     },
 
     plugin(id) {
@@ -477,13 +702,16 @@ export function createEntityStore(options?: StoreOptions): EntityStore {
     },
 
     skills() {
+      if (queryCache.skills) return queryCache.skills;
       const out: Skill[] = [];
       for (const rec of entities.values()) {
         if (rec.topic === EXTENSIONS_TOPIC && rec.entity === 'skill') {
           out.push(rec.value as unknown as Skill);
         }
       }
-      return out.sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
+      const sorted = out.sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
+      queryCache.skills = sorted;
+      return sorted;
     },
 
     skill(id) {
@@ -493,12 +721,14 @@ export function createEntityStore(options?: StoreOptions): EntityStore {
     },
 
     gitConnections() {
+      if (queryCache.gitConnections) return queryCache.gitConnections;
       const out: GitConnection[] = [];
       for (const rec of entities.values()) {
         if (rec.topic === EXTENSIONS_TOPIC && rec.entity === 'git_connection') {
           out.push(rec.value as unknown as GitConnection);
         }
       }
+      queryCache.gitConnections = out;
       return out;
     },
 
@@ -511,12 +741,15 @@ export function createEntityStore(options?: StoreOptions): EntityStore {
     subagents(cid) {
       touchRetained(conversationTopic(cid));
       const topic = conversationTopic(cid);
+      const cached = queryCache.subagents.get(topic);
+      if (cached) return cached;
       const out: Subagent[] = [];
       for (const rec of entities.values()) {
         if (rec.topic === topic && rec.entity === 'subagent') {
           out.push(rec.value as unknown as Subagent);
         }
       }
+      queryCache.subagents.set(topic, out);
       return out;
     },
 
@@ -532,34 +765,51 @@ export function createEntityStore(options?: StoreOptions): EntityStore {
 
     topicItems(topic) {
       touchRetained(topic);
+      const cached = queryCache.topicItems.get(topic);
+      if (cached) {
+        let dirty = false;
+        for (const item of cached) {
+          const buf = textBuffers.get(item.id);
+          if (buf && buf.joinedText === null) {
+            dirty = true;
+            break;
+          }
+        }
+        if (!dirty) return cached;
+      }
       const out: ThreadItem[] = [];
       for (const rec of entities.values()) {
         if (rec.topic === topic && rec.entity === 'item') {
+          const buf = textBuffers.get(rec.id);
+          if (buf && buf.joinedText === null) {
+            buf.joinedText = buf.chunks.join('');
+            if (buf.chunks.length > 128) buf.chunks = [buf.joinedText];
+            rec.value = { ...rec.value, text: buf.joinedText };
+          }
           out.push(rec.value as unknown as ThreadItem);
         }
       }
+      queryCache.topicItems.set(topic, out);
       return out;
     },
 
     toolsByTopic(topic) {
       touchRetained(topic);
+      const cached = queryCache.toolsByTopic.get(topic);
+      if (cached) return cached;
       const out: Record<string, ToolCall> = {};
       for (const rec of entities.values()) {
         if (rec.topic === topic && rec.entity === 'tool') {
           out[rec.id] = rec.value as unknown as ToolCall;
         }
       }
+      queryCache.toolsByTopic.set(topic, out);
       return out;
     },
 
     lastAssistantText(topic) {
       touchRetained(topic);
-      const items = [] as ThreadItem[];
-      for (const rec of entities.values()) {
-        if (rec.topic === topic && rec.entity === 'item') {
-          items.push(rec.value as unknown as ThreadItem);
-        }
-      }
+      const items = this.topicItems(topic);
       for (let i = items.length - 1; i >= 0; i -= 1) {
         const item = items[i];
         if (item && item.kind === 'assistant') {
@@ -593,10 +843,11 @@ export function createEntityStore(options?: StoreOptions): EntityStore {
         dropTopic(oldestTopic);
         seenTopics.delete(oldestTopic);
         missing.delete(oldestTopic);
+        dirtyTopics.add(oldestTopic);
         dropped = true;
       }
 
-      if (dropped) notify();
+      if (dropped) markDirty();
     },
 
     hasTopic(topic) {
@@ -612,14 +863,35 @@ export function createEntityStore(options?: StoreOptions): EntityStore {
     },
 
     subscribe(listener) {
-      listeners.add(listener);
+      globalListeners.add(listener);
       return () => {
-        listeners.delete(listener);
+        globalListeners.delete(listener);
       };
     },
 
     getVersion() {
       return version;
+    },
+
+    subscribeTopic(topic, listener) {
+      let set = topicListeners.get(topic);
+      if (!set) {
+        set = new Set();
+        topicListeners.set(topic, set);
+      }
+      set.add(listener);
+      return () => {
+        set!.delete(listener);
+        if (set!.size === 0) topicListeners.delete(topic);
+      };
+    },
+
+    getTopicVersion(topic) {
+      return topicVersions.get(topic) ?? 0;
+    },
+
+    flush() {
+      flush();
     },
   };
 }

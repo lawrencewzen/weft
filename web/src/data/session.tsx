@@ -31,7 +31,7 @@ export type SessionValue = {
   topics: string[];
 };
 
-const SessionContext = createContext<SessionValue | null>(null);
+export const SessionContext = createContext<SessionValue | null>(null);
 
 type Props = {
   conversationId?: string | null;

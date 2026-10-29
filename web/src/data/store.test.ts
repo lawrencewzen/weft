@@ -821,4 +821,114 @@ describe('workspace selectors', () => {
       expect((store.items('c1')[1] as { text?: string }).text).toBe('new response');
     });
   });
+
+  describe('topic subscriptions and batching (T55-2b)', () => {
+    it('batches multiple changes in the same frame into a single notification', async () => {
+      const store = createEntityStore();
+      const topic = conversationTopic('c1');
+      let globalNotified = 0;
+      let topicNotified = 0;
+
+      store.subscribe(() => { globalNotified++; });
+      store.subscribeTopic(topic, () => { topicNotified++; });
+
+      store.applyUpsert({
+        topic,
+        entity: 'conversation',
+        id: 'c1',
+        value: conv('c1', ['m1']) as EntityRef['value'],
+      });
+      store.applyUpsert({
+        topic,
+        entity: 'item',
+        id: 'm1',
+        value: assistant('m1', '', true) as EntityRef['value'],
+      });
+      for (let i = 0; i < 10; i++) {
+        store.applyTextDelta({
+          topic,
+          itemId: 'm1',
+          offset: i * 2,
+          append: 'ab',
+        });
+      }
+
+      // Before flush: listeners have not fired yet
+      expect(globalNotified).toBe(0);
+      expect(topicNotified).toBe(0);
+
+      // Flush executes pending batched notification synchronously
+      store.flush();
+      expect(globalNotified).toBe(1);
+      expect(topicNotified).toBe(1);
+      expect(store.getTopicVersion(topic)).toBe(1);
+      expect((store.items('c1')[0] as { text: string }).text).toBe('abababababababababab');
+
+      // Subsequent flush without new changes is a no-op
+      store.flush();
+      expect(globalNotified).toBe(1);
+      expect(topicNotified).toBe(1);
+    });
+
+    it('only notifies listeners for modified topics', () => {
+      const store = createEntityStore();
+      const c1Topic = conversationTopic('c1');
+      const c2Topic = conversationTopic('c2');
+      let c1Notified = 0;
+      let c2Notified = 0;
+
+      const unsub1 = store.subscribeTopic(c1Topic, () => { c1Notified++; });
+      const unsub2 = store.subscribeTopic(c2Topic, () => { c2Notified++; });
+
+      store.applyUpsert({
+        topic: c1Topic,
+        entity: 'conversation',
+        id: 'c1',
+        value: conv('c1', []) as EntityRef['value'],
+      });
+      store.flush();
+
+      expect(c1Notified).toBe(1);
+      expect(c2Notified).toBe(0);
+      expect(store.getTopicVersion(c1Topic)).toBe(1);
+      expect(store.getTopicVersion(c2Topic)).toBe(0);
+
+      unsub1();
+      store.applyUpsert({
+        topic: c1Topic,
+        entity: 'conversation',
+        id: 'c1',
+        value: conv('c1', ['m1']) as EntityRef['value'],
+      });
+      store.flush();
+
+      // c1 unsubscribed, so c1Notified remains 1
+      expect(c1Notified).toBe(1);
+      expect(c2Notified).toBe(0);
+
+      unsub2();
+    });
+
+    it('links subagent entity updates between conversation and subagent topics', () => {
+      const store = createEntityStore();
+      const convTop = conversationTopic('c1');
+      const saTop = subagentTopic('c1', 'sa-1');
+      let convNotified = 0;
+      let saNotified = 0;
+
+      store.subscribeTopic(convTop, () => { convNotified++; });
+      store.subscribeTopic(saTop, () => { saNotified++; });
+
+      store.applyUpsert({
+        topic: convTop,
+        entity: 'subagent',
+        id: 'sa-1',
+        value: { id: 'sa-1', name: 'Agent 1', status: 'running' } as EntityRef['value'],
+      });
+      store.flush();
+
+      expect(convNotified).toBe(1);
+      expect(saNotified).toBe(1);
+    });
+  });
 });

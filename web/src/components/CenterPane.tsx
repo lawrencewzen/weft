@@ -5,6 +5,8 @@ import type { Lang } from '../data/lang';
 import { writeActiveWorkspace } from '../data/layout';
 import { draftPath, navigate } from '../data/nav';
 import { useSession } from '../data/session';
+import { WORKSPACES_TOPIC } from '../data/store';
+import { useStoreTopic } from '../data/useStoreTopic';
 import { useConversation, useDraftSend } from '../data/useConversation';
 import { usePendingSend, waitingForAgent } from '../data/usePendingSend';
 import { t } from '../i18n';
@@ -79,10 +81,11 @@ export function CenterPane({
     return () => window.clearTimeout(timer);
   }, [conversation, cid]);
 
+  const wsVersion = useStoreTopic(store, WORKSPACES_TOPIC);
   const summary = useMemo(
     () => (cid ? store.conversationSummaries().find((s) => s.id === cid) : null),
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- store version tracked in useConversation
-    [store, cid, conversation],
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- store version tracked in useConversation and wsVersion
+    [store, cid, conversation, wsVersion],
   );
   const knownTitle = summary?.title || t(lang, 'default_conversation_title');
 

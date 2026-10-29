@@ -58,6 +58,19 @@ function collectFromItems(
   }
 }
 
+export function commandTopics(cid: string, agents: readonly Subagent[] = []): string[] {
+  if (!cid) return [];
+  const topics = [
+    `${conversationTopic(cid)}#subagent`,
+    `${conversationTopic(cid)}#tool`,
+  ];
+  for (const agent of agents) {
+    const child = subagentTopic(cid, agent.id);
+    topics.push(`${child}#item`, `${child}#tool`);
+  }
+  return topics;
+}
+
 /** Bash calls in this conversation: main agent first, then each sub-agent. */
 export function agentCommands(store: EntityStore, cid: string, agents: Subagent[] = []): AgentCommand[] {
   if (!cid) return [];

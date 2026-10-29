@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useSyncExternalStore } from 'react';
+import { useCallback, useMemo, useRef } from 'react';
 import type { components } from '../../../src/v2/contract.gen';
 import {
   continueRun as continueRunApi,
@@ -23,6 +23,7 @@ import {
   type ThreadItem,
   type ToolCall,
 } from './store';
+import { useStoreTopic } from './useStoreTopic';
 
 export type ConversationActions = {
   send: (
@@ -59,8 +60,8 @@ const noopTool = () => Promise.resolve({
 
 export function useConversation(cid: string | null | undefined): ConversationState {
   const { store, status } = useSession();
-  useSyncExternalStore(store.subscribe, store.getVersion);
   const id = cid || '';
+  useStoreTopic(store, id ? conversationTopic(id) : null);
 
   const conversation = id ? store.conversation(id) : undefined;
   const items = id ? store.items(id) : [];
