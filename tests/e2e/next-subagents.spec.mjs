@@ -219,7 +219,12 @@ test('status strip shows sub-agent; stop works; right pane has no subagent tab',
     ), { timeout: 15000 });
     await stopBtn.click();
     const stopRes = await stopped;
-    expect(stopRes.status()).toBe(200);
+    expect([200, 202]).toContain(stopRes.status());
+
+    // Row transitions to ended state: stop button disappears, timer clears, and status is stopped/done
+    await expect(row.getByTestId('next-agents-strip-stop')).toHaveCount(0, { timeout: 20000 });
+    await expect(row).toHaveAttribute('data-status', /stopped|done/, { timeout: 20000 });
+    await expect(row.getByTestId('next-agents-strip-time')).toHaveText('');
 
     await page.reload();
     await expect(page.getByTestId('next-center')).toBeVisible({ timeout: 20000 });
