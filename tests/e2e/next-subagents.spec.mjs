@@ -400,7 +400,8 @@ test('finished sub-agent trees start closed, show a check, and use the name when
     await expect(doneRow).toHaveAttribute('data-status', 'done');
     await expect(doneRow).toHaveAttribute('data-visual', 'done');
     await expect(doneRow.getByTestId('next-subagent-summary')).toHaveText('worker');
-    await expect(doneRow.locator('.sa-check')).toHaveCSS('opacity', '1');
+    await expect(doneRow.getByTestId('status-icon')).toHaveAttribute('data-status', 'done');
+    await expect(doneRow.getByTestId('status-icon')).toHaveClass(/is-calm/);
   } finally {
     await srv.kill();
   }

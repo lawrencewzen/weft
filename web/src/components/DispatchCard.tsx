@@ -9,6 +9,7 @@ import { createSubagentMenuItems } from '../data/subagentMenu';
 import { subagentActionText } from '../data/subagentTime';
 import { t } from '../i18n';
 import { CtxMenu, type CtxMenuItem } from './CtxMenu';
+import { StatusIcon, statusIconFor } from './StatusIcon';
 
 type Props = {
   cid: string;
@@ -33,14 +34,6 @@ function statusLabel(status: Subagent['status'], lang: Lang): string {
     default:
       return t(lang, 'status_running');
   }
-}
-
-function dotClass(status: Subagent['status']): string {
-  const classes = ['dispatch-card-dot'];
-  if (status === 'running') classes.push('is-running');
-  else if (status === 'stuck') classes.push('is-stuck');
-  else if (status === 'failed') classes.push('is-failed');
-  return classes.join(' ');
 }
 
 export function DispatchCard({ cid, agents, lang }: Props) {
@@ -98,7 +91,13 @@ export function DispatchCard({ cid, agents, lang }: Props) {
             }}
             onContextMenu={(ev) => onContextMenu(ev, agent)}
           >
-            <span className={dotClass(agent.status)} data-testid="next-dispatch-dot" aria-hidden="true" />
+            <StatusIcon
+              status={statusIconFor(agent.status) ?? 'running'}
+              size={14}
+              className="dispatch-card-status-icon"
+              lang={lang}
+              aria-hidden="true"
+            />
             <span className="dispatch-card-name" data-testid="next-dispatch-name">{displayName}</span>
             {showTask ? (
               <span className="dispatch-card-task" data-testid="next-dispatch-task">{agent.title}</span>

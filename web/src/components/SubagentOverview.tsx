@@ -2,21 +2,20 @@ import { useEffect, useState } from 'react';
 import type { Lang } from '../data/lang';
 import { navigate, subagentPath } from '../data/nav';
 import {
-  subagentDotLive,
-  subagentDotStatus,
   subagentOverviewNow,
   subagentTimeText,
 } from '../data/subagentTime';
 import type { Subagent } from '../data/store';
 import { t } from '../i18n';
+import { StatusIcon, statusIconFor } from './StatusIcon';
 
 export function SubagentDot({ status }: { status: Subagent['status'] | string }) {
-  const kind = subagentDotStatus(status);
-  const live = subagentDotLive(status);
+  const iconStatus = statusIconFor(status) ?? 'running';
   return (
-    <span
-      className={`sa-dot is-${kind}${live ? ' is-live' : ''}`}
-      data-status={kind}
+    <StatusIcon
+      status={iconStatus}
+      size={14}
+      className="sa-status-icon"
       aria-hidden="true"
     />
   );

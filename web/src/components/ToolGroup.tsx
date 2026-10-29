@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import type { Lang } from '../data/lang';
 import type { ThreadItem, ToolCall } from '../data/store';
 import { formatElapsed, t } from '../i18n';
+import { StatusIcon, type StatusIconType } from './StatusIcon';
 import { ToolRow } from './ToolRow';
 
 const TOOL_GROUP_PREVIEW = 8;
@@ -49,6 +50,7 @@ export function ToolGroup({ item, toolsById, lang, onLoadOutput }: Props) {
   }, [item.live]);
 
   const elapsed = item.live && seenAt != null ? formatElapsed(now - seenAt) : null;
+  const groupStatus: StatusIconType = spinning ? 'running' : realFailed ? 'failed' : 'done';
 
   return (
     <div className={groupClass} data-testid="next-tool-group" data-id={item.id} data-live={item.live ? 'true' : 'false'}>
@@ -59,7 +61,13 @@ export function ToolGroup({ item, toolsById, lang, onLoadOutput }: Props) {
         aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
       >
-        {spinning ? <span className="tool-group-spin" data-testid="next-tool-group-spinner" aria-hidden="true" /> : null}
+        <StatusIcon
+          status={groupStatus}
+          size={14}
+          className={`tool-group-status-icon${spinning ? ' tool-group-spin' : ''}`}
+          lang={lang}
+          aria-hidden="true"
+        />
         <span className="tool-group-text" data-testid="next-tool-group-text">{item.summary.text}{thinking}</span>
         {item.summary.failed > 0 ? (
           <span className="tool-group-fail" data-testid="next-tool-group-fail">
