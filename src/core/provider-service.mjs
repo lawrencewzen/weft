@@ -1032,9 +1032,9 @@ export function createProviderService({
       overrides: {},
       lastTest: { ok: true, at: now() },
     };
-    await upsertEntry(entry);
     if (key) await credentials.modify(id, async () => ({ type: 'api_key', key }));
     await modelsStore.write(id, { models: fetched });
+    await upsertEntry(entry);
     return getProvider(id);
   }
 

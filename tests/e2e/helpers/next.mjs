@@ -1,6 +1,6 @@
 import { expect } from '@playwright/test';
-import { createSqliteStore } from '../../src/store/sqlite.mjs';
 import { api, readDiscovery } from './server.mjs';
+import { startFakeOpenAIServer } from './fake-openai.mjs';
 
 export async function loginNext(page, srv) {
   const discovery = await readDiscovery(srv.dataDir);
@@ -96,47 +96,49 @@ export async function createProviderModels(srv, {
   models = ['grok-4.6', 'grok-4'],
   defaultModel = 'grok-4.6',
   contextWindow,
+  apiKey = 'sk-chip-test-key1',
 } = {}) {
-  const id = 'custom-chip0001';
-  const store = createSqliteStore(srv.dataDir);
-  let savedProvider;
-  try {
-    const cur = await store.getSettings();
-    const modelList = models.map((m) => {
+  const modelEntries = models.map((m) => {
+    if (typeof m === 'string') {
       let displayName = m;
       if (m === 'grok-4.6') displayName = 'Grok 4.6';
       else if (m === 'grok-4') displayName = 'Grok 4';
-      return { id: m, name: displayName };
-    });
-    const overrides = {};
-    if (contextWindow != null) {
-      const names = defaultModel ? [defaultModel] : models;
-      for (const m of names) {
-        overrides[m] = { contextWindow };
-      }
+      return { id: m, name: displayName, context_window: contextWindow ?? 200000 };
     }
-    const entry = {
-      id,
-      kind: 'custom',
-      name,
-      baseUrl: 'http://127.0.0.1:9099/v1',
-      api: 'openai-completions',
-      enabled: models,
-      overrides,
-      lastTest: { ok: true, at: Date.now() },
+    return m;
+  });
+
+  const fake = await startFakeOpenAIServer({ models: modelEntries });
+  if (srv && typeof srv.kill === 'function') {
+    const origKill = srv.kill;
+    srv.kill = async (...args) => {
+      try { await fake.close(); } catch {}
+      return origKill.apply(srv, args);
     };
-    const nextProviders = (cur.providers || []).filter((p) => p.id !== id).concat(entry);
-    const nextSettings = {
-      ...cur,
-      providers: nextProviders,
-      defaultModel: defaultModel ? { providerId: id, modelId: defaultModel } : cur.defaultModel,
-    };
-    await store.replaceSettings(nextSettings);
-    await store.putProviderModels(id, { models: modelList });
-    await store.putProviderCredential(id, { type: 'api_key', key: 'sk-chip-test-key1' });
-    savedProvider = entry;
-  } finally {
-    store.close();
   }
-  return { id, body: savedProvider };
+
+  const created = await apiV2(srv, 'POST', '/api/v2/providers/custom', {
+    name,
+    baseUrl: fake.baseUrl,
+    api: 'openai-completions',
+    apiKey,
+  });
+  expect(created.status, created.text).toBe(200);
+  const id = created.body.provider.id;
+
+  const patchBody = {};
+  if (defaultModel) patchBody.defaultModel = defaultModel;
+  if (contextWindow != null) {
+    patchBody.overrides = {};
+    const names = defaultModel ? [defaultModel] : models.map((m) => (typeof m === 'string' ? m : m.id));
+    for (const modelId of names) {
+      patchBody.overrides[modelId] = { contextWindow };
+    }
+  }
+  if (Object.keys(patchBody).length > 0) {
+    const bound = await apiV2(srv, 'PATCH', `/api/v2/providers/${id}`, patchBody);
+    expect(bound.status, bound.text).toBe(200);
+  }
+
+  return { id, body: created.body.provider, fake, close: () => fake.close() };
 }

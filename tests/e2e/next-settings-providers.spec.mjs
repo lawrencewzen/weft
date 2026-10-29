@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
-import http from 'node:http';
 import { startServer, prepareWorkspaces } from './helpers/server.mjs';
 import { loginNext, openWorkspaceConversation } from './helpers/next.mjs';
+import { startFakeOpenAIServer } from './helpers/fake-openai.mjs';
 
 test.use({ locale: 'zh-CN', viewport: { width: 1440, height: 900 } });
 test.describe.configure({ timeout: 90_000 });
@@ -21,44 +21,16 @@ test.afterEach(async () => {
   }
 });
 
-function startFakeModels({ statusFor } = {}) {
-  const hits = [];
-  const server = http.createServer((req, res) => {
-    const chunks = [];
-    req.on('data', (chunk) => chunks.push(chunk));
-    req.on('end', () => {
-      const authorization = String(req.headers.authorization || '');
-      hits.push({ method: req.method, url: req.url, authorization });
-      const key = authorization.replace(/^Bearer\s+/i, '');
-      const status = statusFor ? statusFor(key) : 200;
-      if (status === 401) {
-        res.writeHead(401, { 'content-type': 'application/json' });
-        res.end(JSON.stringify({ error: { message: 'invalid api key' } }));
-        return;
-      }
-      if (req.url.includes('/chat/completions')) {
-        res.writeHead(200, { 'content-type': 'application/json' });
-        res.end(JSON.stringify({
-          id: 'chatcmpl-1',
-          choices: [{ message: { role: 'assistant', content: 'pong' }, finish_reason: 'stop' }],
-          usage: { prompt_tokens: 5, completion_tokens: 1, total_tokens: 6 },
-        }));
-        return;
-      }
-      res.writeHead(200, { 'content-type': 'application/json' });
-      res.end(JSON.stringify({ data: [{ id: 'alpha-one' }, { id: 'beta-two' }] }));
-    });
+async function startFakeModels({ statusFor } = {}) {
+  const fake = await startFakeOpenAIServer({
+    statusFor,
+    models: [
+      { id: 'alpha-one', name: 'alpha-one' },
+      { id: 'beta-two', name: 'beta-two' },
+    ],
   });
-  return new Promise((resolve) => {
-    server.listen(0, '127.0.0.1', () => {
-      closers.push((done) => server.close(done));
-      const { port } = server.address();
-      resolve({
-        hits,
-        baseUrl: `http://127.0.0.1:${port}/v1`,
-      });
-    });
-  });
+  closers.push((done) => fake.close().then(done, done));
+  return fake;
 }
 
 function attachCspLog(page) {
@@ -150,13 +122,13 @@ test('add provider: failed 401, then pass, pick two models, default, rename, del
   // Step 1: fill form with wrong key -> 401 error
   await page.getByTestId('next-custom-name').fill('Local Fake');
   await page.getByTestId('next-custom-url').fill(fake.baseUrl);
-  await page.getByTestId('next-key-input').fill(WRONG_KEY);
+  await page.getByTestId('next-custom-key').fill(WRONG_KEY);
   await page.locator('.mp-dlg .mp-df .mp-btn.mp-pri').click();
   await expect(page.getByTestId('next-test-result')).toBeVisible();
   await expect(page.getByTestId('next-test-result')).toContainText(/401|鉴权失败|失败|unauthorized/i);
 
   // Step 1: fix key -> pass to step 2
-  await page.getByTestId('next-key-input').fill(RIGHT_KEY);
+  await page.getByTestId('next-custom-key').fill(RIGHT_KEY);
   await page.locator('.mp-dlg .mp-df .mp-btn.mp-pri').click();
 
   // Step 2: select both models and finish
@@ -175,10 +147,10 @@ test('add provider: failed 401, then pass, pick two models, default, rename, del
   await expect(row).toContainText(/2\s*\/\s*2|启用 2/);
 
   // Set default model
-  await page.getByTestId('next-default-model').click();
+  await page.getByTestId('next-provider-default-picker').click();
   await expect(page.locator('.mp-menu')).toBeVisible();
   await page.locator('.mp-menu-i').first().click();
-  await expect(page.getByTestId('next-default-model')).toContainText(/alpha-one|beta-two/);
+  await expect(page.getByTestId('next-provider-default-picker')).toContainText(/alpha-one|beta-two/);
 
   // In-place edit context window
   const modelRow = page.locator('[data-testid=next-model-row][data-model="alpha-one"]');
