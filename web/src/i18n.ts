@@ -1,9 +1,10 @@
 import type { Lang } from './data/lang';
 
 const zh = {
-  home_title: 'Weft（新版，开发中）',
   home_hint: '从侧栏打开一个对话，或访问 /c/<对话 id>',
-  no_workspaces: '点左栏「项目」旁的 + 新建工作区',
+  no_projects: '还没有项目',
+  no_projects_desc: '添加一个本地目录或 Git 仓库后就可以开始对话',
+  add_project: '添加项目',
   missing_conversation: '对话不存在',
   unauthenticated: '请用 weft open 打开新版网页端',
   loading: '加载中…',
@@ -526,9 +527,10 @@ const zh = {
 } as const;
 
 const en: Record<keyof typeof zh, string> = {
-  home_title: 'Weft（新版，开发中）',
   home_hint: 'Open a conversation from the sidebar, or visit /c/<conversation id>',
-  no_workspaces: 'Use + next to Projects to add a workspace',
+  no_projects: 'No projects yet',
+  no_projects_desc: 'Add a local folder or a Git repository to start chatting',
+  add_project: 'Add project',
   missing_conversation: 'Conversation not found',
   unauthenticated: '请用 weft open 打开新版网页端',
   loading: 'Loading…',

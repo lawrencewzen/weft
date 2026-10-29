@@ -82,7 +82,7 @@ export function App() {
     return (
       <div data-testid="next-app">
         <div className="next-home">
-          <h1>{t(lang, 'home_title')}</h1>
+          <h1>{t(lang, 'app_name')}</h1>
           <p className="next-error" data-testid="next-error">{error || UNAUTH}</p>
         </div>
       </div>
@@ -93,7 +93,7 @@ export function App() {
     return (
       <div data-testid="next-app">
         <div className="next-home">
-          <h1>{t(lang, 'home_title')}</h1>
+          <h1>{t(lang, 'app_name')}</h1>
           {error ? <p className="next-error" data-testid="next-error">{error}</p> : <p>{t(lang, 'loading')}</p>}
         </div>
       </div>
