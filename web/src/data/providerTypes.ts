@@ -1,129 +1,39 @@
-export type CustomApiProtocol = 'openai-completions' | 'openai-responses' | 'anthropic-messages';
+import type { components } from '../../../src/v2/contract.gen';
 
-export type ProviderAuth = {
-  type: 'api_key' | 'oauth' | 'env' | 'none';
-  keyTail?: string;
-  account?: string;
-  envVar?: string;
-};
+export type Provider = components['schemas']['Provider'];
+export type ProviderModel = components['schemas']['ProviderModel'];
+export type Model = ProviderModel;
+export type ProviderKind = components['schemas']['ProviderKind'];
+export type ProviderAuth = components['schemas']['ProviderAuth'];
+export type ProviderAuthType = components['schemas']['ProviderAuthType'];
+export type ProviderStatus = components['schemas']['ProviderStatus'];
+export type ProviderStatusState = components['schemas']['ProviderStatusState'];
+export type CustomApi = components['schemas']['CustomApi'];
+export type CustomApiProtocol = CustomApi;
+export type ModelOverridden = components['schemas']['ModelOverridden'];
+export type AvailableProvider = components['schemas']['AvailableProvider'];
+export type Available = AvailableProvider;
+export type LoginSession = components['schemas']['LoginSession'];
+export type LoginSessionEvent = components['schemas']['LoginSessionEvent'];
+export type LoginPrompt = components['schemas']['LoginPrompt'];
+export type LoginPromptOption = components['schemas']['LoginPromptOption'];
+export type ResolvedModel = components['schemas']['ResolvedModel'];
+export type DefaultModel = ResolvedModel | null;
+export type ProvidersSnapshot = components['schemas']['ProvidersSnapshot'];
+export type AvailableProvidersSnapshot = components['schemas']['AvailableProvidersSnapshot'];
+export type ProviderDefaults = components['schemas']['ProviderDefaults'];
+export type ConnectApiKeyRequest = components['schemas']['ConnectApiKeyRequest'];
+export type ConnectEnvRequest = components['schemas']['ConnectEnvRequest'];
+export type ConnectOAuthRequest = components['schemas']['ConnectOAuthRequest'];
+export type ConnectProviderRequest = components['schemas']['ConnectProviderRequest'];
+export type CreateCustomProviderRequest = components['schemas']['CreateCustomProviderRequest'];
+export type CustomProviderRequest = CreateCustomProviderRequest;
+export type PatchProviderRequest = components['schemas']['PatchProviderRequest'];
+export type ModelOverridePatch = components['schemas']['ModelOverridePatch'];
+export type LoginAnswerRequest = components['schemas']['LoginAnswerRequest'];
+export type ProviderEnvelope = components['schemas']['ProviderEnvelope'];
+export type LoginSessionEnvelope = components['schemas']['LoginSessionEnvelope'];
 
-export type ProviderStatusState = 'ok' | 'untested' | 'error' | 'testing';
-
-export type ProviderStatus = {
-  state: ProviderStatusState;
-  testedAt?: number;
-  error?: string;
-};
-
-export type Model = {
-  id: string;
-  name: string;
-  brand: string | null;
-  enabled: boolean;
-  contextWindow: number | null;
-  maxTokens: number | null;
-  images: boolean;
-  reasoning: boolean;
-  overridden: {
-    contextWindow?: boolean;
-    maxTokens?: boolean;
-  };
-};
-
-export type Provider = {
-  id: string;
-  kind: 'builtin' | 'custom';
-  brand: string | null;
-  name: string;
-  api?: CustomApiProtocol;
-  baseUrl?: string;
-  auth: ProviderAuth;
-  status: ProviderStatus;
-  models: Model[];
-};
-
-export type Available = {
-  id: string;
-  name: string;
-  brand?: string | null;
-  authMethods: ('api_key' | 'oauth')[];
-  modelCount: number;
-  popular: boolean;
-  envVar?: string;
-  envDetected: boolean;
-  connected: boolean;
-};
-
-export type LoginSessionEvent =
-  | { type: 'auth_url'; url: string; instructions?: string }
-  | { type: 'device_code'; userCode: string; verificationUri: string }
-  | { type: 'info' | 'progress'; message: string };
-
-export type LoginPromptOption = {
-  id: string;
-  label: string;
-  description?: string;
-};
-
-export type LoginPrompt = {
-  type: 'text' | 'secret' | 'select' | 'manual_code';
-  message: string;
-  placeholder?: string;
-  options?: LoginPromptOption[];
-};
-
-export type LoginSession = {
-  id: string;
-  providerId: string;
-  state: 'pending' | 'prompt' | 'done' | 'error' | 'cancelled';
-  events: LoginSessionEvent[];
-  prompt?: LoginPrompt;
-  error?: string;
-  provider?: Provider;
-};
-
-export type DefaultModel = {
-  providerId: string;
-  modelId: string;
-} | null;
-
-export type GetProvidersResponse = {
-  providers: Provider[];
-  defaultModel: DefaultModel;
-};
-
-export type GetAvailableResponse = {
-  providers: Available[];
-};
-
-export type ConnectApiKeyRequest = {
-  method: 'api_key';
-  apiKey: string;
-};
-
-export type ConnectEnvRequest = {
-  method: 'env';
-};
-
-export type ConnectOAuthRequest = {
-  method: 'oauth';
-};
-
-export type ConnectProviderRequest = ConnectApiKeyRequest | ConnectEnvRequest;
-
-export type CustomProviderRequest = {
-  name: string;
-  baseUrl: string;
-  api: CustomApiProtocol;
-  apiKey?: string;
-};
-
-export type PatchProviderRequest = {
-  enabled?: string[];
-  overrides?: Record<string, { contextWindow?: number | null; maxTokens?: number | null }>;
-  defaultModel?: string | null;
-  name?: string;
-  baseUrl?: string;
-  api?: CustomApiProtocol;
-  apiKey?: string;
-};
+// Helper aliases matching backend responses
+export type GetProvidersResponse = ProvidersSnapshot;
+export type GetAvailableResponse = AvailableProvidersSnapshot;

@@ -110,11 +110,11 @@ export function ModelTable({
       )}
 
       <div className="mp-mt">
-        <span className="mp-mt-h">{t(lang, 'model_th_name')}</span>
-        <span className="mp-mt-h mp-r">{t(lang, 'model_th_context')}</span>
-        <span className="mp-mt-h mp-r">{t(lang, 'model_th_max_tokens')}</span>
-        <span className="mp-mt-h">{t(lang, 'model_th_caps')}</span>
-        <span className="mp-mt-h mp-r mp-last">{t(lang, 'model_th_enabled')}</span>
+        <span className="mp-h">{t(lang, 'model_th_name')}</span>
+        <span className="mp-h mp-r">{t(lang, 'model_th_context')}</span>
+        <span className="mp-h mp-r">{t(lang, 'model_th_max_tokens')}</span>
+        <span className="mp-h">{t(lang, 'model_th_caps')}</span>
+        <span className="mp-h mp-r mp-last">{t(lang, 'model_th_enabled')}</span>
 
         {provider.models.map((m) => {
           const hasCaps = m.images || m.reasoning;

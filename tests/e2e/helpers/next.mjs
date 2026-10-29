@@ -1,4 +1,5 @@
 import { expect } from '@playwright/test';
+import { createSqliteStore } from '../../src/store/sqlite.mjs';
 import { api, readDiscovery } from './server.mjs';
 
 export async function loginNext(page, srv) {
@@ -96,29 +97,46 @@ export async function createProviderModels(srv, {
   defaultModel = 'grok-4.6',
   contextWindow,
 } = {}) {
-  const created = await apiV2(srv, 'POST', '/api/v2/providers', {
-    vendor: 'openai',
-    name,
-    apiKey: 'sk-chip-test-key1',
-    models,
-  });
-  expect(created.status, created.text).toBe(201);
-  const id = created.body.id;
-  if (defaultModel) {
-    const bound = await apiV2(srv, 'PATCH', `/api/v2/providers/${id}`, { defaultModel });
-    expect(bound.status, bound.text).toBe(200);
-  }
-  if (contextWindow != null) {
-    const names = defaultModel ? [defaultModel] : models;
-    for (const modelId of names) {
-      const win = await apiV2(
-        srv,
-        'PUT',
-        `/api/v2/providers/${id}/models/${encodeURIComponent(modelId)}/context-window`,
-        { window: contextWindow },
-      );
-      expect(win.status, win.text).toBe(200);
+  const id = 'custom-chip0001';
+  const store = createSqliteStore(srv.dataDir);
+  let savedProvider;
+  try {
+    const cur = await store.getSettings();
+    const modelList = models.map((m) => {
+      let displayName = m;
+      if (m === 'grok-4.6') displayName = 'Grok 4.6';
+      else if (m === 'grok-4') displayName = 'Grok 4';
+      return { id: m, name: displayName };
+    });
+    const overrides = {};
+    if (contextWindow != null) {
+      const names = defaultModel ? [defaultModel] : models;
+      for (const m of names) {
+        overrides[m] = { contextWindow };
+      }
     }
+    const entry = {
+      id,
+      kind: 'custom',
+      name,
+      baseUrl: 'http://127.0.0.1:9099/v1',
+      api: 'openai-completions',
+      enabled: models,
+      overrides,
+      lastTest: { ok: true, at: Date.now() },
+    };
+    const nextProviders = (cur.providers || []).filter((p) => p.id !== id).concat(entry);
+    const nextSettings = {
+      ...cur,
+      providers: nextProviders,
+      defaultModel: defaultModel ? { providerId: id, modelId: defaultModel } : cur.defaultModel,
+    };
+    await store.replaceSettings(nextSettings);
+    await store.putProviderModels(id, { models: modelList });
+    await store.putProviderCredential(id, { type: 'api_key', key: 'sk-chip-test-key1' });
+    savedProvider = entry;
+  } finally {
+    store.close();
   }
-  return { id, body: created.body };
+  return { id, body: savedProvider };
 }

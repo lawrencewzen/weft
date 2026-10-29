@@ -814,8 +814,13 @@ export function handleMockRequest(db: MockDb, hub: MockHub, rawUrl: string, init
     });
   }
   if (path === '/api/v2/providers/available' && method === 'GET') {
+    const connectedIds = new Set(db.providers.map((p) => p.id));
+    const list = MOCK_AVAILABLE_PROVIDERS.map((item) => ({
+      ...item,
+      connected: connectedIds.has(item.id),
+    }));
     return ok({
-      providers: sortAvailableProviders(MOCK_AVAILABLE_PROVIDERS),
+      providers: sortAvailableProviders(list),
     });
   }
   if (path === '/api/v2/providers/custom' && method === 'POST') {

@@ -69,6 +69,15 @@ export function AddProviderDialog({
     }
   }, [loginSession, step, lang, isCustom, selectedVendor]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose();
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   const popularSet = new Set<string>(POPULAR_PROVIDER_IDS);
@@ -211,7 +220,7 @@ export function AddProviderDialog({
         </div>
 
         <div className="mp-db">
-          {errorMsg && <div className="mp-err">{errorMsg}</div>}
+          {errorMsg && <div className="mp-err" data-testid="next-test-result">{errorMsg}</div>}
 
           {step === 0 && (
             <>
