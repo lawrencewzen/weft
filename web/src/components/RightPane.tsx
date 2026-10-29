@@ -1,11 +1,12 @@
-import { useEffect, useMemo, useSyncExternalStore } from 'react';
+import { useEffect, useMemo } from 'react';
 import { agentCommands } from '../data/agentCommands';
 import type { Lang } from '../data/lang';
 import { conversationPath, navigate } from '../data/nav';
 import type { RightTab } from '../data/layout';
 import { useRightPane } from '../data/rightPaneContext';
 import { useSession } from '../data/session';
-import { subagentTopic } from '../data/store';
+import { conversationTopic, subagentTopic } from '../data/store';
+import { useStoreTopics } from '../data/useStoreTopic';
 import { t } from '../i18n';
 import { ChangesPane } from './ChangesPane';
 import { FileBrowser } from './FileBrowser';
@@ -30,12 +31,16 @@ export function RightPane({ lang, workspaceLabel }: Props) {
     selectedSubagentId,
   } = useRightPane();
   const { store, conversationId, retainTopic, releaseTopic } = useSession();
-  const storeVersion = useSyncExternalStore(store.subscribe, store.getVersion);
+  const subagentTopics = useMemo(() => (
+    conversationId ? [`${conversationTopic(conversationId)}#subagent`, `${conversationTopic(conversationId)}#tool`] : []
+  ), [conversationId]);
+  const storeVersion = useStoreTopics(store, subagentTopics);
   const agents = conversationId ? store.subagents(conversationId) : [];
+  const agentsKey = agents.map((agent) => `${agent.id}:${agent.status}`).join(';');
   const commands = useMemo(
     () => (conversationId ? agentCommands(store, conversationId, agents) : []),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- store is stable; storeVersion tracks writes
-    [store, conversationId, agents, storeVersion],
+    [store, conversationId, agentsKey, storeVersion],
   );
   const runningCount = commands.filter((row) => row.running).length;
   const showSubagentsTab = agents.length > 0 || Boolean(selectedSubagentId);

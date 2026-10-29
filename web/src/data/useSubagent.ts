@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useSyncExternalStore } from 'react';
+import { useCallback, useMemo } from 'react';
 import { sendSubagentMessage, stopSubagent, toolOutput } from './api';
 import { useSession } from './session';
 import {
@@ -7,6 +7,7 @@ import {
   type ThreadItem,
   type ToolCall,
 } from './store';
+import { useStoreTopic } from './useStoreTopic';
 import type { ConversationActions } from './useConversation';
 
 export type SubagentState = {
@@ -22,8 +23,8 @@ const noopContinue = () => Promise.resolve({ runId: '' });
 
 export function useSubagent(cid: string, agentId: string): SubagentState {
   const { store } = useSession();
-  useSyncExternalStore(store.subscribe, store.getVersion);
   const topic = subagentTopic(cid, agentId);
+  useStoreTopic(store, topic);
   const subagent = store.subagent(cid, agentId);
   const items = store.topicItems(topic);
   const toolsById = store.toolsByTopic(topic);

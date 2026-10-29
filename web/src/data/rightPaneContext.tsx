@@ -6,7 +6,6 @@ import {
   useMemo,
   useRef,
   useState,
-  useSyncExternalStore,
   type ReactNode,
 } from 'react';
 import {
@@ -37,7 +36,8 @@ import {
   type RightTab,
 } from './layout';
 import { useSession } from './session';
-import type { Change, ToolCall } from './store';
+import { conversationTopic, type Change, type ToolCall } from './store';
+import { useStoreTopics } from './useStoreTopic';
 import { t } from '../i18n';
 
 const TREE_KINDS = new Set<ToolCall['kind']>(['write', 'edit', 'bash']);
@@ -109,7 +109,7 @@ type Props = {
   workspaceId: string | null;
   lang: Lang;
   onToast: (message: string) => void;
-  children: ReactNode;
+  children?: ReactNode;
 };
 
 export function RightPaneProvider({
@@ -121,10 +121,11 @@ export function RightPaneProvider({
   children,
 }: Props) {
   const { store } = useSession();
-  // The store version is the only thing that can change entities, so it is what
-  // `changes` / `toolsById` are memoized on. Without that, those arrays get a new
-  // identity on every render and every effect that depends on them re-runs.
-  const storeVersion = useSyncExternalStore(store.subscribe, store.getVersion);
+  const cid = conversationId || '';
+  const rightPaneTopics = useMemo(() => (
+    cid ? [`${conversationTopic(cid)}#change`, `${conversationTopic(cid)}#tool`] : []
+  ), [cid]);
+  const storeVersion = useStoreTopics(store, rightPaneTopics);
 
   const [open, setOpenState] = useState(() => (
     agentId ? true : defaultRightOpen(window.innerWidth)
@@ -148,7 +149,6 @@ export function RightPaneProvider({
   const [saveState, setSaveState] = useState<SaveState>(IDLE_SAVE);
   const [selectedCommandId, setSelectedCommandId] = useState<string | null>(null);
 
-  const cid = conversationId || '';
   const wsId = workspaceId || '';
   const changes = useMemo(
     () => (cid ? store.changes(cid) : []),

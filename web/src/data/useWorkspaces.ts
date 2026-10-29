@@ -1,4 +1,4 @@
-import { useMemo, useSyncExternalStore } from 'react';
+import { useMemo } from 'react';
 import { useSession } from './session';
 import {
   archivedConversations,
@@ -7,6 +7,7 @@ import {
   type WorkspaceGroup,
 } from './sidebarModel';
 import { WORKSPACES_TOPIC, type ConversationSummary, type Workspace } from './store';
+import { useStoreTopic } from './useStoreTopic';
 
 export type WorkspacesState = {
   workspaces: Workspace[];
@@ -20,7 +21,7 @@ export type WorkspacesState = {
 
 export function useWorkspaces(): WorkspacesState {
   const { store, status } = useSession();
-  useSyncExternalStore(store.subscribe, store.getVersion);
+  useStoreTopic(store, WORKSPACES_TOPIC);
   const workspaces = store.workspaces();
   const conversations = store.conversationSummaries();
   const ready = store.hasTopic(WORKSPACES_TOPIC);

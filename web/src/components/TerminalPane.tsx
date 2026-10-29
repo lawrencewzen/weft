@@ -1,9 +1,11 @@
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { agentCommands } from '../data/agentCommands';
 import { toolOutput } from '../data/api';
 import type { Lang } from '../data/lang';
 import { useRightPane } from '../data/rightPaneContext';
 import { useSession } from '../data/session';
+import { conversationTopic } from '../data/store';
+import { useStoreTopics } from '../data/useStoreTopic';
 import { t } from '../i18n';
 
 type Props = {
@@ -24,13 +26,17 @@ function commandText(
 export function TerminalPane({ lang }: Props) {
   const { selectedCommandId } = useRightPane();
   const { store, conversationId } = useSession();
-  const storeVersion = useSyncExternalStore(store.subscribe, store.getVersion);
   const cid = conversationId || '';
+  const termTopics = useMemo(() => (
+    cid ? [`${conversationTopic(cid)}#tool`] : []
+  ), [cid]);
+  const storeVersion = useStoreTopics(store, termTopics);
   const agents = cid ? store.subagents(cid) : [];
+  const agentsKey = agents.map((agent) => `${agent.id}:${agent.status}`).join(';');
   const commands = useMemo(
     () => (cid ? agentCommands(store, cid, agents) : []),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- store is stable; storeVersion tracks writes
-    [store, cid, agents, storeVersion],
+    [store, cid, agentsKey, storeVersion],
   );
   const [activeId, setActiveId] = useState<string | null>(selectedCommandId);
   const [fullText, setFullText] = useState<string | null>(null);

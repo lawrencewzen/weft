@@ -1,11 +1,12 @@
-import { useLayoutEffect, useRef, useSyncExternalStore } from 'react';
+import { memo, useLayoutEffect, useMemo, useRef } from 'react';
 import { modelAttribution, type ConversationModel } from '../data/composerModel';
 import { matchDispatchSubagents } from '../data/dispatchCard';
 import type { Lang } from '../data/lang';
 import { useSession } from '../data/session';
 import type { ConversationActions } from '../data/useConversation';
 import { useProviders } from '../data/useProviders';
-import type { Change, ThreadItem, ToolCall } from '../data/store';
+import { subagentTopic, type Change, type ThreadItem, type ToolCall } from '../data/store';
+import { useStoreTopics } from '../data/useStoreTopic';
 import { t } from '../i18n';
 import { AssistantMessage } from './AssistantMessage';
 import { ChangeSummary } from './ChangeSummary';
@@ -38,7 +39,9 @@ type Props = {
   onNewWorkspace?: () => void;
   className?: string;
   testId?: string;
+  onToolGroupRender?: () => void;
 };
+
 
 function DraftHero({
   lang,
@@ -82,60 +85,77 @@ type ToolGroupItemProps = {
   lang: Lang;
   conversationId?: string | null;
   onLoadOutput: (toolId: string) => Promise<{ text: string }>;
+  onRender?: () => void;
 };
 
-function ToolGroupItem({
-  item,
-  toolsById,
-  lang,
-  conversationId,
-  onLoadOutput,
-}: ToolGroupItemProps) {
-  const { store } = useSession();
-  useSyncExternalStore(store.subscribe, store.getVersion);
+export const ToolGroupItem = memo(
+  function ToolGroupItem({
+    item,
+    toolsById,
+    lang,
+    conversationId,
+    onLoadOutput,
+    onRender,
+  }: ToolGroupItemProps) {
+    if (onRender) onRender();
+    const { store } = useSession();
+    const subagents = conversationId
+      ? store.subagents(conversationId).map((agent) => store.subagent(conversationId, agent.id) || agent)
+      : [];
+    const match = matchDispatchSubagents(item, subagents);
+    const matchedTopics = useMemo(() => {
+      if (!conversationId || !match?.subagents.length) return [];
+      return match.subagents.map((agent) => subagentTopic(conversationId, agent.id));
+    }, [conversationId, match?.subagents]);
 
-  const subagents = conversationId
-    ? store.subagents(conversationId).map((agent) => store.subagent(conversationId, agent.id) || agent)
-    : [];
-  const match = matchDispatchSubagents(item, subagents);
+    useStoreTopics(store, matchedTopics);
 
-  if (!match) {
+    if (!match) {
+      return (
+        <ToolGroup
+          item={item}
+          toolsById={toolsById}
+          lang={lang}
+          onLoadOutput={onLoadOutput}
+        />
+      );
+    }
+
+    if (match.allDispatch) {
+      return (
+        <DispatchCard
+          cid={conversationId || ''}
+          agents={match.subagents}
+          lang={lang}
+        />
+      );
+    }
+
     return (
-      <ToolGroup
-        item={item}
-        toolsById={toolsById}
-        lang={lang}
-        onLoadOutput={onLoadOutput}
-      />
+      <div className="tool-dispatch-pair">
+        <ToolGroup
+          item={item}
+          toolsById={toolsById}
+          lang={lang}
+          onLoadOutput={onLoadOutput}
+        />
+        <DispatchCard
+          cid={conversationId || ''}
+          agents={match.subagents}
+          lang={lang}
+        />
+      </div>
     );
-  }
-
-  if (match.allDispatch) {
-    return (
-      <DispatchCard
-        cid={conversationId || ''}
-        agents={match.subagents}
-        lang={lang}
-      />
-    );
-  }
-
-  return (
-    <div className="tool-dispatch-pair">
-      <ToolGroup
-        item={item}
-        toolsById={toolsById}
-        lang={lang}
-        onLoadOutput={onLoadOutput}
-      />
-      <DispatchCard
-        cid={conversationId || ''}
-        agents={match.subagents}
-        lang={lang}
-      />
-    </div>
-  );
-}
+  },
+  (prev, next) => (
+    prev.item === next.item
+    && prev.toolsById === next.toolsById
+    && prev.lang === next.lang
+    && prev.conversationId === next.conversationId
+    && prev.onLoadOutput === next.onLoadOutput
+    && prev.onRender === next.onRender
+  ),
+);
 
 export function Thread({
   items,
@@ -156,6 +176,7 @@ export function Thread({
   onNewWorkspace,
   className,
   testId = 'next-thread',
+  onToolGroupRender,
 }: Props) {
   const { providers } = useProviders();
   const scroller = useRef<HTMLDivElement>(null);
@@ -227,6 +248,7 @@ export function Thread({
                   lang={lang}
                   conversationId={conversationId}
                   onLoadOutput={actions.loadToolOutput}
+                  onRender={onToolGroupRender}
                 />
               );
             }
