@@ -1,6 +1,6 @@
 # Sub-agents
 
-Sub-agents follow Pi Durable's Abort and Subagents section and examples 22 (foreground) and 23 (background). The Harness owns the child conversation, its submission, abort, and restart reuse. Weft configures a self-contained child from the task text only (empty instructions, no role template, no skills) and reads what the tools already committed.
+Sub-agents follow Pi Durable's Abort and Subagents section and examples 22 (foreground) and 23 (background). The Harness owns the child conversation, its submission, abort, and restart reuse. Weft configures a self-contained child from the task text plus fixed no-ask instructions (no role template, no skills) and reads what the tools already committed. The child cannot ask the user questions; if it cannot finish, it ends and reports to the main agent.
 
 A conversation has one main agent (`agents[0]`, `name: 'Agent'`, empty instructions). Extra agents are sub-agent instances spawned with `delegate` / `subagent`, each in its own Harness conversation. The host does not rotate agents in the same chat. The child cannot see the parent conversation or the parent's instructions; everything it needs goes in `task` / `message`.
 
@@ -10,8 +10,8 @@ A conversation has one main agent (`agents[0]`, `name: 'Agent'`, empty instructi
 
 The main agent has dispatch tools plus `skill`. Children are configured with this extension removed, so they cannot spawn further sub-agents or load skills.
 
-- **`delegate`** (example 22, `replay: 'safe'`): parameters `{ task }`. Creates a child owned by `{ kind: 'task', taskId: api.taskId }`, reuses it on rerun with `tx.scanConversations({ ownerTaskId })`, publishes `api.details({ conversationId, name })` (`name` is the first line of `task`, one line, at most 30 characters), submits with `requestId` `subagent:${api.taskId}`, and returns the child's answer. The child is configured with `instructions: ''`, the parent's workspace and plugin tools (no `delegate` / `subagent` / `skill`, and no skills catalog), the copied parent model, and the parent's `cwd`. Aborting only that child returns `[subagent <name> was stopped by the user]` to the caller so the parent turn continues; aborting the caller itself still throws `AbortError`.
-- **`subagent`** (example 23, `replay: 'unsafe'`): `action` is `spawn` / `send` / `wait` / `stop` / `list`. Spawn parameters are `{ name, message }`. Each named child is owned by a background anchor task, so the parent's Esc and idle waits do not stop it. A background reporter delivers the message and posts the answer back to the main conversation as a follow-up. Request IDs keep a restart from sending a message or a report twice. The name → conversation map is the example 23 document, not a separate roster. `[subagent <name> answered, no reply needed]` uses the spawn `name`.
+- **`delegate`** (example 22, `replay: 'safe'`): parameters `{ task }`. Creates a child owned by `{ kind: 'task', taskId: api.taskId }`, reuses it on rerun with `tx.scanConversations({ ownerTaskId })`, publishes `api.details({ conversationId, name })` (`name` is the first line of `task`, one line, at most 30 characters), submits with `requestId` `subagent:${api.taskId}`, and returns the child's answer. The child is configured with fixed no-ask `instructions`, the parent's workspace and plugin tools (no `delegate` / `subagent` / `skill`, and no skills catalog), the copied parent model, and the parent's `cwd`. The last message may start with `STATUS: done` or `STATUS: incomplete`; incomplete reports use the failed format so the main agent can tell the work did not finish, and the marker is stripped from parent-facing text and chip `lastText`. The chip status is `failed` when incomplete. Aborting only that child returns `[subagent <name> was stopped by the user]` to the caller so the parent turn continues; aborting the caller itself still throws `AbortError`.
+- **`subagent`** (example 23, `replay: 'unsafe'`): `action` is `spawn` / `send` / `wait` / `stop` / `list`. Spawn parameters are `{ name, message }`. Each named child is owned by a background anchor task, so the parent's Esc and idle waits do not stop it. A background reporter delivers the message and posts the answer back to the main conversation as a follow-up. Request IDs keep a restart from sending a message or a report twice. The name → conversation map is the example 23 document, not a separate roster. `[subagent <name> answered, no reply needed]` uses the spawn `name`. An incomplete last message (`STATUS: incomplete`) is posted as `[subagent <name> failed: …]` instead; a generation error still uses that failed form.
 
 `POST /api/conversations/:cid/stop` calls `conversation.abort(context, { background: true })`, which also stops background sub-agents.
 
@@ -29,6 +29,7 @@ curl -sS http://127.0.0.1:3000/api/conversations/<cid>
 #   brief is the first user message (the dispatched task)
 #   startedAt / lastActivityAt / endedAt are pi-ai timestamps in ms
 #   endedAt only when done / stopped / failed; currentAction only while running
+#   status is failed when the child ended with STATUS: incomplete
 #   missing timestamps or text omit that field
 
 curl -sS http://127.0.0.1:3000/api/conversations/<cid>/agents/<aid>/messages

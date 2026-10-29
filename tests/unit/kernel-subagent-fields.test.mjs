@@ -9,6 +9,7 @@ import {
   DELEGATE_DESCRIPTION,
   nameFromTask,
   SUBAGENT_DESCRIPTION,
+  SUBAGENT_INSTRUCTIONS,
   TITLE_DESCRIPTION,
 } from '../../src/kernel/subagents.mjs';
 
@@ -96,6 +97,12 @@ test('delegate and subagent tool schemas are self-contained', () => {
   assert.equal(delegate.description, DELEGATE_DESCRIPTION);
   assert.equal(subagent.description, SUBAGENT_DESCRIPTION);
   assert.match(delegate.description, /self-contained/);
+  assert.match(delegate.description, /will not ask questions/);
+  assert.match(delegate.description, /incomplete/);
+  assert.match(SUBAGENT_INSTRUCTIONS, /cannot ask the user questions/);
+  assert.match(SUBAGENT_INSTRUCTIONS, /STATUS: done/);
+  assert.match(SUBAGENT_INSTRUCTIONS, /STATUS: incomplete/);
+  assert.equal(SUBAGENT_INSTRUCTIONS.includes('?'), false);
   assert.equal(/role/i.test(delegate.description), false);
   assert.equal(/agent id/i.test(delegate.description), false);
   assert.equal(/role/i.test(subagent.description), false);
@@ -246,6 +253,19 @@ test('agentEventData passes optional fields for sub-agents and strips currentAct
   assert.equal(stopped.currentAction, undefined);
   assert.equal(stopped.endedAt, 4000);
   assert.equal(stopped.brief, 'Inspect auth.ts');
+
+  const failed = agentEventData({
+    id: 'c:sub:1',
+    name: 'Coder',
+    status: 'failed',
+    step: 2,
+    totalSteps: 2,
+    lastText: 'Need a key',
+    endedAt: 4000,
+  });
+  assert.equal(failed.status, 'failed');
+  assert.equal(failed.endedAt, 4000);
+  assert.equal(failed.currentAction, undefined);
 
   const chip = agentEventData({
     id: 'c:agent:0',
