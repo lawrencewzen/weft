@@ -305,6 +305,8 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.6; backgroun
   font-size: 13.5px; min-width: 0;
 }
 .ws-node-header:hover { background: var(--hover); }
+.ws-chev { width: 12px; height: 12px; flex-shrink: 0; transition: transform .15s; }
+.ws-chev path { fill: none; stroke: var(--faint); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
 .ws-node-title { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 400; color: var(--ink3); }
 .ws-node-count { font-size: 11px; font-weight: 400; color: var(--faint); white-space: nowrap; opacity: 0; transition: opacity .12s; }
 .ws-node-count.is-running { color: var(--run-ink); }
@@ -1980,7 +1982,7 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.6; backgroun
   display: flex; align-items: center; gap: 8px; padding: 9px 16px; background: var(--bg); cursor: pointer; min-width: 0;
 }
 .changed-file-pill:hover { background: var(--sub); }
-.changed-file-pill .ws-chev { transition: transform .15s; }
+.changed-file-pill .ws-chev { width: 12px; height: 12px; flex-shrink: 0; transition: transform .15s; }
 .change-file.is-open .changed-file-pill .ws-chev { transform: rotate(90deg); }
 .changed-file-path { flex: 1; min-width: 0; font-family: var(--mono); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .changed-file-by {
@@ -2025,7 +2027,7 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.6; backgroun
 button.file-tree-row:hover { background: var(--side); }
 .file-tree-row.active { background: var(--line2); }
 .file-tree-row.is-dir { color: var(--ink2); }
-.file-tree-row.is-dir .ws-chev { transition: transform .15s; }
+.file-tree-row.is-dir .ws-chev { width: 12px; height: 12px; flex-shrink: 0; transition: transform .15s; }
 .file-tree-row.is-open .ws-chev { transform: rotate(90deg); }
 .file-tree-name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-family: var(--mono); font-size: 12px; }
 .file-tree-row.is-dir .file-tree-name { font-family: var(--font); font-size: 12.5px; }

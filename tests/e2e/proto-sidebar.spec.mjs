@@ -163,3 +163,50 @@ test('unread conversation has bold styling and clears upon opening', async ({ pa
 
   expectClean(state);
 });
+
+test('right pane changes tab has no oversized svg icons (regression guard against unstyled chevrons)', async ({ page }) => {
+  const state = await openProto(page);
+
+  // Open c-rich conversation
+  const richRow = page.locator('[data-testid=next-conv-row][data-id="c-rich"]');
+  await expect(richRow).toBeVisible();
+  await richRow.click();
+  await expect(page).toHaveURL(/#\/c\/c-rich$/);
+
+  // Ensure right pane changes tab is active
+  const changesTab = page.getByTestId('next-right-tab-changes');
+  await expect(changesTab).toBeVisible();
+  await changesTab.click();
+
+  // Wait for change rows to render
+  const changeRows = page.getByTestId('next-change-row');
+  await expect(changeRows.first()).toBeVisible();
+
+  // Assert no SVG icon on the page has width or height exceeding 40px
+  const oversizedSvgs = await page.evaluate(() => {
+    const svgs = Array.from(document.querySelectorAll('svg'));
+    return svgs
+      .map((svg) => {
+        const rect = svg.getBoundingClientRect();
+        return {
+          className: svg.getAttribute('class') || '',
+          width: Math.round(rect.width),
+          height: Math.round(rect.height),
+          parent: svg.parentElement?.className || '',
+        };
+      })
+      .filter((item) => item.width > 40 || item.height > 40);
+  });
+
+  expect(oversizedSvgs).toEqual([]);
+
+  // Specifically verify the chevron icon in the changed-file-pill has layout width 12px
+  const firstChev = changeRows.first().locator('.changed-file-pill svg.ws-chev');
+  await expect(firstChev).toBeVisible();
+  const chevWidth = await firstChev.evaluate((el) => Number.parseFloat(getComputedStyle(el).width));
+  const chevHeight = await firstChev.evaluate((el) => Number.parseFloat(getComputedStyle(el).height));
+  expect(chevWidth).toBe(12);
+  expect(chevHeight).toBe(12);
+
+  expectClean(state);
+});
