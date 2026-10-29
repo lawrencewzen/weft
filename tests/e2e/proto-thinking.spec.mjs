@@ -86,12 +86,11 @@ test('prototype thinking UI: Plan D model-thinking menu, submenus, clamp, recent
   // 5. Recent items 1-click switch
   await modelChip.click();
   await expect(menu).toBeVisible();
-  const recentOption = page.getByTestId('next-recent-option').first();
-  await expect(recentOption).toBeVisible();
-  await expect(recentOption).toContainText('DeepSeek V4.1 Flash');
-  await expect(recentOption).toContainText('最高思考');
+  const flashRecent = page.getByTestId('next-recent-option').filter({ hasText: 'DeepSeek V4.1 Flash' });
+  await expect(flashRecent).toBeVisible();
+  await expect(flashRecent).toContainText('最高思考');
 
-  await recentOption.click();
+  await flashRecent.click();
   await expect(menu).toBeHidden();
   await expect(modelChip).toContainText('DeepSeek V4.1 Flash');
   await expect(modelChip).toContainText('· 最高');

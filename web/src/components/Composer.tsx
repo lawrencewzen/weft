@@ -558,11 +558,17 @@ export function Composer({
     });
     setDraft(applied.text);
     setCursorPos(applied.nextCursor);
+    if (el) {
+      el.focus();
+      el.setSelectionRange(applied.nextCursor, applied.nextCursor);
+    }
     requestAnimationFrame(() => {
       if (el) {
-        el.focus();
-        el.setSelectionRange(applied.nextCursor, applied.nextCursor);
-        setCursorPos(applied.nextCursor);
+        if (el.value === applied.text) {
+          el.focus();
+          el.setSelectionRange(applied.nextCursor, applied.nextCursor);
+          setCursorPos(applied.nextCursor);
+        }
         resize();
       }
     });
@@ -800,9 +806,13 @@ export function Composer({
       setDraft(next);
       setCursorPos(nextPos);
       setFocused(true);
+      el.focus();
+      el.setSelectionRange(nextPos, nextPos);
       requestAnimationFrame(() => {
-        el.focus();
-        el.setSelectionRange(nextPos, nextPos);
+        if (el.value === next) {
+          el.focus();
+          el.setSelectionRange(nextPos, nextPos);
+        }
         resize();
       });
     } else {
