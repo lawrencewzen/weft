@@ -147,9 +147,12 @@ export function SubagentChip({
 function useEntered(ids: string[]): Set<string> {
   const seen = useRef(new Set<string>());
   const [entered, setEntered] = useState<Set<string>>(() => new Set());
+  const idsKey = ids.join('\0');
   useEffect(() => {
-    const newcomers = ids.filter((id) => !seen.current.has(id));
-    for (const id of ids) seen.current.add(id);
+    if (!idsKey) return;
+    const currentIds = idsKey.split('\0');
+    const newcomers = currentIds.filter((id) => !seen.current.has(id));
+    for (const id of currentIds) seen.current.add(id);
     if (!newcomers.length) return;
     const timer = window.setTimeout(() => {
       setEntered((prev) => {
@@ -159,16 +162,19 @@ function useEntered(ids: string[]): Set<string> {
       });
     }, 50);
     return () => window.clearTimeout(timer);
-  }, [ids.join('\0')]);
+  }, [idsKey]);
   return entered;
 }
 
 function useJustEnded(agents: Subagent[]): Set<string> {
   const prev = useRef(new Map<string, string>());
   const [ended, setEnded] = useState<Set<string>>(() => new Set());
+  const agentsRef = useRef(agents);
+  agentsRef.current = agents;
+  const statusKey = agents.map((agent) => `${agent.id}:${agent.status}`).join('|');
   useEffect(() => {
     const nextEnded = new Set<string>();
-    for (const agent of agents) {
+    for (const agent of agentsRef.current) {
       const last = prev.current.get(agent.id);
       if (last && isLiveSubagentStatus(last) && isEndedSubagentStatus(agent.status)) {
         nextEnded.add(agent.id);
@@ -189,7 +195,7 @@ function useJustEnded(agents: Subagent[]): Set<string> {
       });
     }, 1600);
     return () => window.clearTimeout(timer);
-  }, [agents.map((agent) => `${agent.id}:${agent.status}`).join('|')]);
+  }, [statusKey]);
   return ended;
 }
 

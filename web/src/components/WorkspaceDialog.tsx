@@ -79,8 +79,9 @@ export function WorkspaceDialog({ lang, onClose, onToast, onCreated }: Props) {
     return () => { cancelled = true; };
   }, [lang]);
 
+  const connIdForProjects = conn?.id;
   useEffect(() => {
-    if (!conn) {
+    if (!connIdForProjects) {
       setProjects([]);
       setProjectsError('');
       return;
@@ -88,7 +89,7 @@ export function WorkspaceDialog({ lang, onClose, onToast, onCreated }: Props) {
     let cancelled = false;
     setProjectsLoading(true);
     setProjectsError('');
-    listGitProjects(conn.id, search, lang).then((res) => {
+    listGitProjects(connIdForProjects, search, lang).then((res) => {
       if (cancelled) return;
       setProjects(res.projects || []);
       setProjectsLoading(false);
@@ -99,27 +100,29 @@ export function WorkspaceDialog({ lang, onClose, onToast, onCreated }: Props) {
       setProjectsLoading(false);
     });
     return () => { cancelled = true; };
-  }, [conn?.id, search, lang]);
+  }, [connIdForProjects, search, lang]);
 
+  const selectedProjectId = selected?.id;
+  const selectedDefaultBranch = selected?.defaultBranch;
   useEffect(() => {
-    if (!conn || !selected) {
+    if (!connIdForProjects || !selectedProjectId) {
       setBranches([]);
       setDefaultBranch('');
       return;
     }
     let cancelled = false;
-    listGitBranches(conn.id, selected.id, lang).then((res) => {
+    listGitBranches(connIdForProjects, selectedProjectId, lang).then((res) => {
       if (cancelled) return;
       setBranches(res.branches || []);
-      setDefaultBranch(res.defaultBranch || selected.defaultBranch || '');
+      setDefaultBranch(res.defaultBranch || selectedDefaultBranch || '');
     }).catch(() => {
       if (!cancelled) {
         setBranches([]);
-        setDefaultBranch(selected.defaultBranch || '');
+        setDefaultBranch(selectedDefaultBranch || '');
       }
     });
     return () => { cancelled = true; };
-  }, [conn?.id, selected?.id, selected?.defaultBranch, lang]);
+  }, [connIdForProjects, selectedProjectId, selectedDefaultBranch, lang]);
 
   useEffect(() => {
     if (tab !== 'git' || source !== 'pick' || !selected || nameTouched) return;
