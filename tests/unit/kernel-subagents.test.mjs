@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import { parseSSE } from '../../src/core/sse.mjs';
 import { createExtensionHost } from '../../src/core/extensions.mjs';
 import { openConversationKernel } from '../../src/kernel/conversations.mjs';
-import { DELEGATE_DESCRIPTION, nameFromTask, SUBAGENT_DESCRIPTION } from '../../src/kernel/subagents.mjs';
+import { DELEGATE_DESCRIPTION, nameFromTask, SUBAGENT_DESCRIPTION, SUBAGENT_INSTRUCTIONS } from '../../src/kernel/subagents.mjs';
 import { SKILL_TOOL_DESCRIPTION } from '../../src/kernel/skill-tool.mjs';
 import { createSqliteStore } from '../../src/store/sqlite.mjs';
 import { killChild, request as serverRequest, startServer, stopServer } from './_server.mjs';
@@ -245,7 +245,7 @@ test('foreground delegate returns the child answer; tools and name are self-cont
     assert.equal((childCall.tools || []).includes('delegate'), false);
     assert.equal((childCall.tools || []).includes('subagent'), false);
     assert.equal((childCall.tools || []).includes('skill'), false);
-    assert.equal(sectionInner(childCall, 'instructions'), '');
+    assert.equal(sectionInner(childCall, 'instructions'), SUBAGENT_INSTRUCTIONS);
     assert.equal(sectionInner(childCall, 'skills'), '');
     assert.equal(/Skills you can load with the skill tool/i.test(JSON.stringify(childCall.sections || [])), false);
     assert.equal(/Pick a subagent/i.test(JSON.stringify(childCall.sections || [])), false);
@@ -284,7 +284,7 @@ test('foreground delegate returns the child answer; tools and name are self-cont
   }
 });
 
-test('child resolved agent is self-contained: empty instructions, parent model and cwd, no skills or dispatch tools', { timeout: 60000 }, async () => {
+test('child resolved agent is self-contained: no-ask instructions, parent model and cwd, no skills or dispatch tools', { timeout: 60000 }, async () => {
   const dataDir = await mkdtemp(path.join(tmpdir(), 'piw-ksub-self-contained-'));
   const record = path.join(dataDir, 'requests.jsonl');
   const task = '请确认前台子代理已经收到了这一整段很长的任务说明并马上开始执行\n第二行不进名字';
@@ -340,7 +340,7 @@ test('child resolved agent is self-contained: empty instructions, parent model a
     assert.ok(parentHandle && childHandle);
     const parentAgent = await parentHandle.agent(kernel.context);
     const childAgent = await childHandle.agent(kernel.context);
-    assert.equal(childAgent.instructions ?? '', '');
+    assert.equal(childAgent.instructions ?? '', SUBAGENT_INSTRUCTIONS);
     assert.deepEqual(childAgent.model, parentAgent.model);
     assert.equal(childAgent.cwd, parentAgent.cwd);
     assert.equal(childAgent.cwd, wsPath);
@@ -370,7 +370,7 @@ test('child resolved agent is self-contained: empty instructions, parent model a
       && (row.users || []).some((text) => String(text).includes('请确认前台子代理'))
     ));
     assert.ok(childCall, JSON.stringify(records));
-    assert.equal(sectionInner(childCall, 'instructions'), '');
+    assert.equal(sectionInner(childCall, 'instructions'), SUBAGENT_INSTRUCTIONS);
     assert.equal(sectionInner(childCall, 'skills'), '');
     assert.equal((childCall.tools || []).includes('skill'), false);
     assert.equal(/You are the default coding Agent/i.test(JSON.stringify(childCall.sections || [])), false);
@@ -1072,6 +1072,174 @@ test('title survives a process restart', { timeout: 90000 }, async () => {
     assert.equal(worker.title, title);
     assert.equal(worker.name, 'auditor');
     assert.equal(worker.mode, 'background');
+  } finally {
+    await stopServer(proc);
+    await rm(dataDir, { recursive: true, force: true });
+  }
+});
+
+test('background STATUS: incomplete reports failed and shows chip as failed', { timeout: 60000 }, async () => {
+  const dataDir = await mkdtemp(path.join(tmpdir(), 'piw-ksub-incomplete-bg-'));
+  const script = await writeScript(dataDir, 'incomplete-bg.json', [
+    { tool: 'subagent', args: { action: 'spawn', name: 'scout', message: 'find-secret' } },
+    { text: 'spawned' },
+    { when: 'find-secret', text: 'STATUS: incomplete\nNeed the API key. Main agent should supply WEFT_API_KEY.' },
+  ]);
+  let proc = null;
+  try {
+    const srv = await startServer({
+      token: TOKEN,
+      dataDir,
+      env: {
+        WEFT_RETRY_MAX: '2',
+        WEFT_LLM: 'faux',
+        WEFT_FAUX_SCRIPT: script,
+      },
+    });
+    proc = srv.proc;
+    const ws = await request(srv.base, 'POST', '/api/workspaces', { name: 'incomplete-bg' });
+    const conv = await request(srv.base, 'POST', `/api/workspaces/${ws.body.id}/conversations`, { title: 'incomplete-bg' });
+    assert.equal((await request(srv.base, 'POST', `/api/conversations/${conv.body.id}/messages`, { text: 'spawn scout' })).status, 202);
+    const done = await waitFor(srv.base, conv.body.id, (body) => {
+      const worker = subagentsOf(body).find((agent) => agent.name === 'scout');
+      const report = (body.messages || []).some((message) => String(message.text || '').includes('[subagent scout failed:'));
+      return worker?.status === 'failed' && report;
+    }, 120);
+    const texts = (done.messages || []).map((message) => message.text || '').join('\n');
+    assert.match(texts, /\[subagent scout failed: Need the API key\. Main agent should supply WEFT_API_KEY\.]/);
+    assert.equal(texts.includes('STATUS:'), false);
+    assert.equal(texts.includes('[subagent scout answered, no reply needed]'), false);
+    const worker = subagentsOf(done).find((agent) => agent.name === 'scout');
+    assert.ok(worker, JSON.stringify(done.agents));
+    assert.equal(worker.status, 'failed');
+    assert.equal(worker.lastText, 'Need the API key. Main agent should supply WEFT_API_KEY.');
+    assert.equal(String(worker.lastText || '').includes('STATUS:'), false);
+  } finally {
+    await stopServer(proc);
+    await rm(dataDir, { recursive: true, force: true });
+  }
+});
+
+test('foreground STATUS: incomplete returns a failed report; chip is failed', { timeout: 60000 }, async () => {
+  const dataDir = await mkdtemp(path.join(tmpdir(), 'piw-ksub-incomplete-fg-'));
+  const task = 'Need a secret';
+  const script = await writeScript(dataDir, 'incomplete-fg.json', [
+    { tool: 'delegate', args: { task } },
+    { text: 'parent-done' },
+    { when: 'Need a secret', text: 'STATUS: incomplete\nMissing the API key.' },
+  ]);
+  let proc = null;
+  try {
+    const srv = await startServer({
+      token: TOKEN,
+      dataDir,
+      env: {
+        WEFT_RETRY_MAX: '2',
+        WEFT_LLM: 'faux',
+        WEFT_FAUX_SCRIPT: script,
+      },
+    });
+    proc = srv.proc;
+    const ws = await request(srv.base, 'POST', '/api/workspaces', { name: 'incomplete-fg' });
+    const conv = await request(srv.base, 'POST', `/api/workspaces/${ws.body.id}/conversations`, { title: 'incomplete-fg' });
+    assert.equal((await request(srv.base, 'POST', `/api/conversations/${conv.body.id}/messages`, { text: 'dispatch child' })).status, 202);
+    const done = await waitFor(srv.base, conv.body.id, (body) => (
+      body.status === 'done'
+      && assistantTexts(body).includes('parent-done')
+      && toolTexts(body).some((text) => text.includes('[subagent Need a secret failed:'))
+    ));
+    assert.equal(done.status, 'done', srv.logs());
+    assert.match(toolTexts(done).join('\n'), /\[subagent Need a secret failed: Missing the API key\.]/);
+    assert.equal(toolTexts(done).join('\n').includes('STATUS:'), false);
+    const child = subagentsOf(done).find((agent) => agent.mode === 'foreground');
+    assert.ok(child, JSON.stringify(done.agents));
+    assert.equal(child.status, 'failed');
+    assert.equal(child.lastText, 'Missing the API key.');
+    assert.equal(String(child.lastText || '').includes('STATUS:'), false);
+  } finally {
+    await stopServer(proc);
+    await rm(dataDir, { recursive: true, force: true });
+  }
+});
+
+test('STATUS: done and a missing marker both count as complete; marker is stripped', { timeout: 60000 }, async () => {
+  const dataDir = await mkdtemp(path.join(tmpdir(), 'piw-ksub-status-done-'));
+  const script = await writeScript(dataDir, 'status-done.json', [
+    { tool: 'subagent', args: { action: 'spawn', name: 'marked', message: 'with-status' } },
+    { tool: 'subagent', args: { action: 'spawn', name: 'plain', message: 'no-status' } },
+    { text: 'spawned' },
+    { when: 'with-status', text: 'STATUS: done\nMARKED_OK' },
+    { when: 'no-status', text: 'PLAIN_OK' },
+  ]);
+  let proc = null;
+  try {
+    const srv = await startServer({
+      token: TOKEN,
+      dataDir,
+      env: {
+        WEFT_RETRY_MAX: '2',
+        WEFT_LLM: 'faux',
+        WEFT_FAUX_SCRIPT: script,
+      },
+    });
+    proc = srv.proc;
+    const ws = await request(srv.base, 'POST', '/api/workspaces', { name: 'status-done' });
+    const conv = await request(srv.base, 'POST', `/api/workspaces/${ws.body.id}/conversations`, { title: 'status-done' });
+    assert.equal((await request(srv.base, 'POST', `/api/conversations/${conv.body.id}/messages`, { text: 'spawn both' })).status, 202);
+    const done = await waitFor(srv.base, conv.body.id, (body) => {
+      const marked = subagentsOf(body).find((agent) => agent.name === 'marked');
+      const plain = subagentsOf(body).find((agent) => agent.name === 'plain');
+      const texts = (body.messages || []).map((message) => message.text || '').join('\n');
+      return marked?.status === 'done' && plain?.status === 'done'
+        && texts.includes('[subagent marked answered, no reply needed] MARKED_OK')
+        && texts.includes('[subagent plain answered, no reply needed] PLAIN_OK');
+    }, 120);
+    const texts = (done.messages || []).map((message) => message.text || '').join('\n');
+    assert.match(texts, /\[subagent marked answered, no reply needed] MARKED_OK/);
+    assert.match(texts, /\[subagent plain answered, no reply needed] PLAIN_OK/);
+    assert.equal(texts.includes('STATUS:'), false);
+    const marked = subagentsOf(done).find((agent) => agent.name === 'marked');
+    const plain = subagentsOf(done).find((agent) => agent.name === 'plain');
+    assert.equal(marked.status, 'done');
+    assert.equal(marked.lastText, 'MARKED_OK');
+    assert.equal(plain.status, 'done');
+    assert.equal(plain.lastText, 'PLAIN_OK');
+  } finally {
+    await stopServer(proc);
+    await rm(dataDir, { recursive: true, force: true });
+  }
+});
+
+test('a child generation error still reports [subagent name failed: reason]', { timeout: 60000 }, async () => {
+  const dataDir = await mkdtemp(path.join(tmpdir(), 'piw-ksub-error-bg-'));
+  const script = await writeScript(dataDir, 'error-bg.json', [
+    { tool: 'subagent', args: { action: 'spawn', name: 'boom', message: 'fail-now' } },
+    { text: 'spawned' },
+    { when: 'fail-now', error: 'provider exploded' },
+  ]);
+  let proc = null;
+  try {
+    const srv = await startServer({
+      token: TOKEN,
+      dataDir,
+      env: {
+        WEFT_RETRY_MAX: '2',
+        WEFT_LLM: 'faux',
+        WEFT_FAUX_SCRIPT: script,
+      },
+    });
+    proc = srv.proc;
+    const ws = await request(srv.base, 'POST', '/api/workspaces', { name: 'error-bg' });
+    const conv = await request(srv.base, 'POST', `/api/workspaces/${ws.body.id}/conversations`, { title: 'error-bg' });
+    assert.equal((await request(srv.base, 'POST', `/api/conversations/${conv.body.id}/messages`, { text: 'spawn boom' })).status, 202);
+    const done = await waitFor(srv.base, conv.body.id, (body) => (
+      (body.messages || []).some((message) => /\[subagent boom failed:/.test(String(message.text || '')))
+    ), 120);
+    const reports = (done.messages || []).filter((message) => /\[subagent boom failed:/.test(String(message.text || '')));
+    assert.equal(reports.length >= 1, true, `${srv.logs()}\n${JSON.stringify(done?.messages)}`);
+    assert.match(reports[0].text, /\[subagent boom failed:/);
+    assert.equal(String(reports[0].text || '').includes('[subagent boom answered, no reply needed]'), false);
+    assert.equal(String(reports[0].text || '').includes('STATUS:'), false);
   } finally {
     await stopServer(proc);
     await rm(dataDir, { recursive: true, force: true });

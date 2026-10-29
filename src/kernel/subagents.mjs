@@ -1,7 +1,7 @@
 // Foreground and background subagents, as in Pi Durable examples 22 and 23.
 // Ownership, abort, and restart reuse belong to the Harness. This module
-// configures a self-contained child (task text only, empty instructions) and
-// reads what the tools already committed: details, the ownership index, and
+// configures a self-contained child (task text plus fixed no-ask instructions)
+// and reads what the tools already committed: details, the ownership index, and
 // the background name document.
 import { Type } from '@earendil-works/pi-ai';
 import {
@@ -21,10 +21,18 @@ import {
   SUBAGENT_REPORTER_KIND,
   SUBAGENTS_DOC_KIND,
 } from './ids.mjs';
-import { formatSubagentReport } from './subagent-report.mjs';
+import { formatSubagentReport, parseSubagentOutcome } from './subagent-report.mjs';
 
 export const TITLE_DESCRIPTION = 'A one-line summary of at most 20 characters, in the user\'s language, saying what this subagent will do. Shown as the heading to the user. Do not include a file path.';
-export const DELEGATE_DESCRIPTION = 'Run a self-contained task on a subagent and return its answer. The subagent cannot see this conversation, or your instructions; put everything it needs in task: what to do, where, when it is done, and what to report back. Pass title: a short heading (at most 20 characters, user\'s language, no file path) shown to the user.';
+export const DELEGATE_DESCRIPTION = 'Run a self-contained task on a subagent and return its answer. The subagent cannot see this conversation, or your instructions; put everything it needs in task: what to do, where, when it is done, and what to report back. The subagent will not ask questions; if its report says the work is incomplete, you decide whether to fill in the missing information and re-dispatch, do it yourself, or ask the user. Pass title: a short heading (at most 20 characters, user\'s language, no file path) shown to the user.';
+export const SUBAGENT_INSTRUCTIONS = [
+  'You are a subagent dispatched to complete one task independently.',
+  'You cannot ask the user questions, and you will not receive answers.',
+  'If information is missing or you hit a blocker, do not stop to ask; continue with the most reasonable assumption, or end.',
+  'Your last message must be a report to the main agent: what you did, the result, what is unfinished and why, and what the main agent needs to supply.',
+  'Do not ask the user questions in the report.',
+  'Start the report with a first line of exactly STATUS: done or STATUS: incomplete.',
+].join(' ');
 export const SUBAGENT_DESCRIPTION = `${DELEGATE_DESCRIPTION} On spawn, pass that text as message. \`name\` is used later with send, wait, and stop. Also pass title on spawn.`;
 const DISPATCH_TOOLS = new Set(['delegate', 'subagent', 'skill']);
 const NAME_CAP = 30;
@@ -85,10 +93,11 @@ const Reporter = defineTask({
         if (!agent || agent.reported.includes(settled.answer)) return next();
         agent.reported.push(settled.answer);
         const answer = (await tx.entry(AssistantEntry, settled.answer))?.model?.[0];
+        const outcome = parseSubagentOutcome(messageText(answer));
         return next(formatSubagentReport({
           name,
-          kind: 'answered',
-          body: messageText(answer),
+          kind: outcome.complete ? 'answered' : 'failed',
+          body: outcome.body,
         }));
       }, taskContext);
     },
@@ -173,10 +182,17 @@ async function latestAssistantText(api, conversationId, context) {
   return '';
 }
 
+function parentTextFromChild(name, text) {
+  const outcome = parseSubagentOutcome(text);
+  if (outcome.complete) return outcome.body;
+  return formatSubagentReport({ name, kind: 'failed', body: outcome.body });
+}
+
 /**
  * Dispatch tools for the main agent. A child is configured with this extension
- * removed, so it cannot delegate, spawn, or load skills. `prepareChild` blanks
- * instructions and keeps the parent's workspace/plugin tools, model, and cwd.
+ * removed, so it cannot delegate, spawn, or load skills. `prepareChild` sets
+ * fixed no-ask instructions and keeps the parent's workspace/plugin tools,
+ * model, and cwd.
  */
 export function createSubagentExtension({
   prepareChild,
@@ -233,7 +249,7 @@ export function createSubagentExtension({
         return reply(`subagent ${settled.status} ${settled.reason || ''}`, { isError: true });
       }
       const text = await assistantText(api, settled.answer, context);
-      return reply(text, { details: childDetails(child, name, title) });
+      return reply(parentTextFromChild(name, text), { details: childDetails(child, name, title) });
     },
   });
 
@@ -288,7 +304,11 @@ export function createSubagentExtension({
         if (!handle) return reply(`No conversation for ${name}.`, { isError: true });
         await handle.waitForIdle(context);
         const text = await latestAssistantText(api, agent.conversationId, context);
-        return reply(text || '(no answer)', {
+        const outcome = parseSubagentOutcome(text);
+        const replyText = outcome.complete
+          ? (outcome.body || '(no answer)')
+          : formatSubagentReport({ name, kind: 'failed', body: outcome.body });
+        return reply(replyText, {
           details: childDetails(agent.conversationId, name, agent.title),
         });
       }
@@ -515,10 +535,11 @@ export function activityFields(transcript, status) {
   return out;
 }
 
-function childStatus(busy, aborted, lastText) {
+function childStatus(busy, aborted, outcome) {
   if (busy) return 'running';
   if (aborted) return 'stopped';
-  if (lastText) return 'done';
+  if (outcome && outcome.complete === false) return 'failed';
+  if (outcome?.body || outcome?.marked) return 'done';
   return 'waiting';
 }
 
@@ -574,7 +595,7 @@ export function createSubagentHost({
   let closed = false;
 
   async function prepareChild(parentAgent) {
-    const change = { tools: childTools(parentAgent), instructions: '' };
+    const change = { tools: childTools(parentAgent), instructions: SUBAGENT_INSTRUCTIONS };
     if (parentAgent?.cwd) change.cwd = parentAgent.cwd;
     return { change };
   }
@@ -702,7 +723,8 @@ export function createSubagentHost({
       const stats = statsOf(transcript.messages);
       const aborted = generations.get(key)?.state?.outcome?.status === 'aborted';
       const name = entry.name || String(entry.conversationId);
-      const status = childStatus(Boolean(childLive?.run), aborted, stats.lastText);
+      const outcome = parseSubagentOutcome(stats.lastText);
+      const status = childStatus(Boolean(childLive?.run), aborted, outcome);
       const title = cleanTitle(entry.title);
       out.push({
         id: `${conv.id}:sub:${entry.conversationId}`,
@@ -711,7 +733,7 @@ export function createSubagentHost({
         step: stats.step,
         totalSteps: stats.totalSteps,
         toolCalls: stats.toolCalls,
-        lastText: stats.lastText,
+        lastText: outcome.body,
         mode: entry.mode === 'background' ? 'background' : 'foreground',
         harnessId: entry.conversationId,
         toolCallId: firstToolCallId(entry.toolCallId),

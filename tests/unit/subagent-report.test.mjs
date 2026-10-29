@@ -4,11 +4,13 @@ import { messagesFromEntries } from '../../src/kernel/events.mjs';
 import {
   formatSubagentReport,
   parseSubagentReport,
+  parseSubagentOutcome,
   isSubagentReportText,
 } from '../../src/kernel/subagent-report.mjs';
 import {
   formatSubagentReport as formatFromPublic,
   parseSubagentReport as parseFromPublic,
+  parseSubagentOutcome as parseOutcomeFromPublic,
   isSubagentReportText as isReportFromPublic,
 } from '../../src/kernel/subagent-report-text.mjs';
 import { isPromptUserMessage } from '../../src/kernel/continuation-text.mjs';
@@ -102,6 +104,80 @@ test('kernel and public modules share the same format helpers', () => {
     parseFromPublic(formatFromPublic(args)),
   );
   assert.equal(isSubagentReportText('[subagent a failed: x]'), isReportFromPublic('[subagent a failed: x]'));
+  assert.deepEqual(
+    parseSubagentOutcome('STATUS: incomplete\nneed a path'),
+    parseOutcomeFromPublic('STATUS: incomplete\nneed a path'),
+  );
+});
+
+test('parseSubagentOutcome reads STATUS and strips it; missing marker is complete', () => {
+  assert.deepEqual(parseSubagentOutcome('STATUS: done\nAll good'), {
+    complete: true,
+    marked: true,
+    body: 'All good',
+  });
+  assert.deepEqual(parseSubagentOutcome('STATUS: incomplete\nNeed the repo path'), {
+    complete: false,
+    marked: true,
+    body: 'Need the repo path',
+  });
+  assert.deepEqual(parseSubagentOutcome('STATUS: INCOMPLETE\n\nNeed a key'), {
+    complete: false,
+    marked: true,
+    body: 'Need a key',
+  });
+  assert.deepEqual(parseSubagentOutcome('  STATUS: Done  \nok'), {
+    complete: true,
+    marked: true,
+    body: 'ok',
+  });
+  assert.deepEqual(parseSubagentOutcome('\nSTATUS: incomplete\nstopped'), {
+    complete: false,
+    marked: true,
+    body: 'stopped',
+  });
+  assert.deepEqual(parseSubagentOutcome('STATUS: done'), {
+    complete: true,
+    marked: true,
+    body: '',
+  });
+  assert.deepEqual(parseSubagentOutcome('SCOUT_PONG'), {
+    complete: true,
+    marked: false,
+    body: 'SCOUT_PONG',
+  });
+  assert.deepEqual(parseSubagentOutcome('STATUS: unknown\nstill going'), {
+    complete: true,
+    marked: false,
+    body: 'STATUS: unknown\nstill going',
+  });
+  assert.deepEqual(parseSubagentOutcome('Did STATUS: incomplete later\nnope'), {
+    complete: true,
+    marked: false,
+    body: 'Did STATUS: incomplete later\nnope',
+  });
+  assert.deepEqual(parseSubagentOutcome('line one\nSTATUS: incomplete\nnot first'), {
+    complete: true,
+    marked: false,
+    body: 'line one\nSTATUS: incomplete\nnot first',
+  });
+  assert.deepEqual(parseSubagentOutcome(''), {
+    complete: true,
+    marked: false,
+    body: '',
+  });
+  const failed = formatSubagentReport({ name: 'boom', kind: 'failed', body: 'timeout' });
+  assert.deepEqual(parseSubagentOutcome(failed), {
+    complete: true,
+    marked: false,
+    body: failed,
+  });
+  const incomplete = parseSubagentOutcome('STATUS: incomplete\nNeed the API key');
+  assert.equal(
+    formatSubagentReport({ name: 'scout', kind: incomplete.complete ? 'answered' : 'failed', body: incomplete.body }),
+    '[subagent scout failed: Need the API key]',
+  );
+  assert.equal(incomplete.body.includes('STATUS:'), false);
 });
 
 test('isPromptUserMessage is false for subagent reports', () => {

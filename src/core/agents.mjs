@@ -1,4 +1,4 @@
-const AGENT_STATUSES = new Set(['waiting', 'running', 'done', 'error', 'stopped']);
+const AGENT_STATUSES = new Set(['waiting', 'running', 'done', 'error', 'stopped', 'failed']);
 
 export function mapConvStatusToAgent(status) {
   switch (status) {
