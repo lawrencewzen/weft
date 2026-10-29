@@ -154,7 +154,8 @@ test('default model, patch, remove, and onChange', async () => {
     await service.setDefaultModel(CUSTOM_ID, 'beta');
     assert.deepEqual(await service.getDefaultModel(), { providerId: CUSTOM_ID, modelId: 'beta' });
     await service.setDefaultModel(CUSTOM_ID, null);
-    assert.equal(await service.getDefaultModel(), null);
+    assert.deepEqual(await service.getDefaultModel(), { providerId: CUSTOM_ID, modelId: 'alpha' });
+    assert.equal((await store.getSettings()).defaultModel, null);
 
     await credentials.modify(CUSTOM_ID, async () => ({ type: 'api_key', key: KEY }));
     await modelsStore.write(CUSTOM_ID, { models: [{ id: 'alpha' }] });
@@ -241,6 +242,65 @@ test('hasAvailableModel is false when nothing is configured', async () => {
     assert.equal(await service.hasAvailableModel(), false);
     assert.equal(await service.resolveTarget({}), null);
     assert.equal(await service.contextWindowFor({}), null);
+  });
+});
+
+test('unset or disabled defaultModel falls back to the first enabled model', async () => {
+  await withService(async ({ service, store }) => {
+    assert.equal((await store.getSettings()).defaultModel, null);
+    assert.deepEqual(await service.getDefaultModel(), { providerId: CUSTOM_ID, modelId: 'alpha' });
+    assert.deepEqual(await service.resolveTarget({}), { providerId: CUSTOM_ID, modelId: 'alpha' });
+    assert.deepEqual(await service.resolveTarget({
+      modelSourceId: CUSTOM_ID,
+      modelId: 'beta',
+    }), { providerId: CUSTOM_ID, modelId: 'beta' });
+    assert.equal(await service.hasAvailableModel(), true);
+    assert.equal(await service.contextWindowFor({}), 128000);
+  }, {
+    settings: {
+      ...customSettings(),
+      defaultModel: null,
+    },
+  });
+
+  await withService(async ({ service }) => {
+    assert.deepEqual(await service.getDefaultModel(), { providerId: CUSTOM_ID, modelId: 'alpha' });
+    assert.deepEqual(await service.resolveTarget({}), { providerId: CUSTOM_ID, modelId: 'alpha' });
+  }, {
+    settings: {
+      version: 3,
+      providers: [{
+        id: CUSTOM_ID,
+        kind: 'custom',
+        name: 'Local',
+        baseUrl: 'http://127.0.0.1:9/v1',
+        api: 'openai-completions',
+        enabled: ['alpha', 'beta'],
+        overrides: {},
+      }],
+      defaultModel: { providerId: CUSTOM_ID, modelId: 'gone' },
+    },
+  });
+
+  await withService(async ({ service }) => {
+    assert.equal(await service.getDefaultModel(), null);
+    assert.equal(await service.resolveTarget({}), null);
+    assert.equal(await service.hasAvailableModel(), false);
+    assert.equal(await service.contextWindowFor({}), null);
+  }, {
+    settings: {
+      version: 3,
+      providers: [{
+        id: CUSTOM_ID,
+        kind: 'custom',
+        name: 'Local',
+        baseUrl: 'http://127.0.0.1:9/v1',
+        api: 'openai-completions',
+        enabled: [],
+        overrides: {},
+      }],
+      defaultModel: null,
+    },
   });
 });
 
@@ -547,7 +607,11 @@ test('patch defaultModel and DELETE clear credentials and the default', async ()
     });
     const cleared = (await service.listProviders())[0];
     assert.deepEqual(cleared.models.find((item) => item.id === 'deepseek-chat').overridden, {});
-    assert.equal(await service.getDefaultModel(), null);
+    assert.deepEqual(await service.getDefaultModel(), {
+      providerId: 'deepseek',
+      modelId: 'deepseek-chat',
+    });
+    assert.equal((await store.getSettings()).defaultModel, null);
 
     await service.patchProvider('deepseek', { defaultModel: 'deepseek-chat' });
     await service.removeProvider('deepseek');

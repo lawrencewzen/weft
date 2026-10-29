@@ -2861,7 +2861,7 @@
       "get": {
         "operationId": "getProviders",
         "summary": "已接入的模型服务商和默认模型",
-        "description": "返回当前 settings.providers 里的 Provider 视图，以及默认模型。\n`status.error` 按 `lang` 出成句。密钥只以 auth.keyTail（末 4 位）出现，响应不含明文 key。\n界面上不出现「pi-ai」字样。\n",
+        "description": "返回当前 settings.providers 里的 Provider 视图，以及默认模型。\n`defaultModel` 是实际会用的默认：已显式设置且仍有效则用它，未显式设置时为自动选择的第一个可用模型。\n`status.error` 按 `lang` 出成句。密钥只以 auth.keyTail（末 4 位）出现，响应不含明文 key。\n界面上不出现「pi-ai」字样。\n",
         "security": [
           {
             "bearerAuth": []
@@ -6827,7 +6827,7 @@
             }
           },
           "defaultModel": {
-            "description": "当前默认模型。没有则为 null",
+            "description": "当前默认模型。未显式设置时为自动选择的第一个可用模型；没有任何可用模型时为 null",
             "oneOf": [
               {
                 "type": "null"
@@ -6864,7 +6864,7 @@
         ],
         "properties": {
           "model": {
-            "description": "当前默认模型。没有则为 null",
+            "description": "当前默认模型。未显式设置时为自动选择的第一个可用模型；没有任何可用模型时为 null",
             "oneOf": [
               {
                 "type": "null"

@@ -586,6 +586,7 @@ export interface paths {
         /**
          * 已接入的模型服务商和默认模型
          * @description 返回当前 settings.providers 里的 Provider 视图，以及默认模型。
+         *     `defaultModel` 是实际会用的默认：已显式设置且仍有效则用它，未显式设置时为自动选择的第一个可用模型。
          *     `status.error` 按 `lang` 出成句。密钥只以 auth.keyTail（末 4 位）出现，响应不含明文 key。
          *     界面上不出现「pi-ai」字样。
          */
@@ -1559,7 +1560,7 @@ export interface components {
         /** @description GET /api/v2/providers 的响应。 */
         ProvidersSnapshot: {
             providers: components["schemas"]["Provider"][];
-            /** @description 当前默认模型。没有则为 null */
+            /** @description 当前默认模型。未显式设置时为自动选择的第一个可用模型；没有任何可用模型时为 null */
             defaultModel: null | components["schemas"]["ResolvedModel"];
         };
         /** @description GET /api/v2/providers/available 的响应。 */
@@ -1568,7 +1569,7 @@ export interface components {
         };
         /** @description providers 主题里 defaults/self 实体的值。 */
         ProviderDefaults: {
-            /** @description 当前默认模型。没有则为 null */
+            /** @description 当前默认模型。未显式设置时为自动选择的第一个可用模型；没有任何可用模型时为 null */
             model: null | components["schemas"]["ResolvedModel"];
         };
         ProviderEnvelope: {
