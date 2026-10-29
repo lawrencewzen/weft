@@ -13,48 +13,23 @@ test('seeded subagent tree, report cards, messages and stop', async ({ page }) =
   const state = await openProto(page);
 
   // c-rich carries five subagents: running, stuck, done, waiting and failed.
-  // A tree with a live agent starts open; clicking the orbit does not toggle, clicking the toggle chevron toggles it.
-  const chip = page.getByTestId('next-subagent-chip').first();
-  await expect(chip).toBeVisible();
-  await expect(chip).toContainText('3/5');
-  const tree = page.getByTestId('next-subagent-tree').first();
-  await expect(tree).toHaveClass(/is-open/);
-  await expect(page.getByTestId('next-subagent-row')).toHaveCount(5);
+  // In the Codex sidebar, subagents are NOT shown anywhere in the sidebar.
+  await expect(page.getByTestId('next-sidebar').getByTestId('next-subagent-chip')).toHaveCount(0);
+  await expect(page.getByTestId('next-sidebar').getByTestId('next-subagent-tree')).toHaveCount(0);
+  await expect(page.getByTestId('next-sidebar').getByTestId('next-subagent-row')).toHaveCount(0);
 
-  // Requirement 3: Orbit animation is non-clickable (clicking does not collapse list)
-  const orbit = chip.getByTestId('next-subagent-orbit');
-  await orbit.click();
-  await expect(tree).toHaveClass(/is-open/);
+  // Subagents can be accessed via the right pane's subagent tab
+  const subagentTab = page.getByTestId('next-right-tab-subagents');
+  await expect(subagentTab).toBeVisible();
+  await expect(subagentTab).toContainText('5');
+  await subagentTab.click();
+  await expect(page.getByTestId('next-subagent-overview')).toBeVisible();
+  await expect(page.getByTestId('next-subagent-card')).toHaveCount(5);
 
-  // Separate toggle button collapses and expands list
-  const toggleBtn = chip.getByTestId('next-subagent-toggle');
-  await toggleBtn.click();
-  await expect(tree).not.toHaveClass(/is-open/);
-  await toggleBtn.click();
-  await expect(tree).toHaveClass(/is-open/);
-  await expect(page.getByTestId('next-subagent-row').evaluateAll(
-    (rows) => rows.map((row) => row.dataset.status),
-  )).resolves.toEqual(['running', 'stuck', 'done', 'waiting', 'failed']);
-  await expect(page.getByTestId('next-subagent-action')).toHaveCount(0);
-  await expect(page.getByTestId('next-subagent-time')).toHaveCount(0);
-
-  // Non-current conversation: chip only until clicked; current tree stays open when leaving.
-  const docsChip = page.locator('[data-testid=next-conv-row][data-id="c-docs"]').getByTestId('next-subagent-chip');
-  await expect(docsChip).toHaveText(/3/);
-  await expect(docsChip).not.toHaveClass(/is-live/);
-  const docsToggle = docsChip.getByTestId('next-subagent-toggle');
-  await expect(docsToggle).toHaveAttribute('aria-expanded', 'false');
-  await docsToggle.click();
-  await expect(docsToggle).toHaveAttribute('aria-expanded', 'true');
-  const docsTree = page.locator('[data-testid=next-subagent-tree][data-conv-id="c-docs"]');
-  await expect(docsTree.getByTestId('next-subagent-row')).toHaveCount(3);
-  await expect(docsTree.getByTestId('next-subagent-row').first()).toHaveAttribute('data-visual', 'done');
-  await expect(docsTree.getByTestId('next-subagent-row').first().getByTestId('status-icon')).toHaveAttribute('data-status', 'done');
-  await expect(docsTree.getByTestId('next-subagent-time')).toHaveCount(0);
-
+  // Switching conversations: c-tests doesn't have subagents
   await page.locator('[data-testid=next-conv-row][data-id="c-tests"]').click();
   await expect(page).toHaveURL(/#\/c\/c-tests$/);
-  await expect(tree).toHaveClass(/is-open/);
+  await expect(page.getByTestId('next-right-tab-subagents')).toHaveCount(0);
   await page.locator('[data-testid=next-conv-row][data-id="c-rich"]').click();
   await expect(page).toHaveURL(/#\/c\/c-rich$/);
 
@@ -72,7 +47,8 @@ test('seeded subagent tree, report cards, messages and stop', async ({ page }) =
 
   // Opening the running subagent shows its process in the right pane; center stays the main chat.
   const title = await page.locator('.col-center .top-title').innerText();
-  await page.getByTestId('next-subagent-row').first().click();
+  await page.getByTestId('next-right-tab-subagents').click();
+  await page.getByTestId('next-subagent-card').first().click();
   await expect(page).toHaveURL(/\/a\//);
   await expect(page.getByTestId('next-center')).toBeVisible();
   await expect(page.locator('.col-center .top-title')).toHaveText(title);
@@ -119,8 +95,8 @@ test('a message spawns a subagent and its report lands in the thread', async ({ 
   await page.getByTestId('next-send').click();
   await expect(page.getByTestId('next-stop')).toBeVisible({ timeout: 10_000 });
 
-  // The subagent appears in the sidebar while it runs, then reports back.
-  await expect(page.getByTestId('next-subagent-chip').last()).toBeVisible({ timeout: 20_000 });
+  // The subagent does not appear in the sidebar; its report lands in the thread.
+  await expect(page.getByTestId('next-sidebar').getByTestId('next-subagent-chip')).toHaveCount(0);
   await expect(page.getByTestId('next-item-subagent-report').last()).toBeVisible({ timeout: 40_000 });
   await expect(page.getByTestId('next-stop')).toHaveCount(0, { timeout: 40_000 });
   await expect(page.getByTestId('next-send')).toBeVisible();
@@ -194,9 +170,8 @@ test('switching between conversations never flashes loading or empty thread, sub
   await expect(page).toHaveURL(/#\/c\/c-git$/);
   await expect(page.locator('.msg-group')).not.toHaveCount(0);
 
-  // Ensure c-rich's subagent tree is open
-  const richTree = page.locator('[data-testid=next-subagent-tree][data-conv-id="c-rich"]');
-  await expect(richTree).toHaveClass(/is-open/);
+  // Ensure the sidebar has no subagent tree
+  await expect(page.getByTestId('next-sidebar').getByTestId('next-subagent-tree')).toHaveCount(0);
 
   // Start continuous frame sampling via requestAnimationFrame
   await page.evaluate(() => {

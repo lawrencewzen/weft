@@ -116,8 +116,35 @@ function installResetButton(): void {
   });
   button.addEventListener('mouseenter', () => { button.style.opacity = '1'; });
   button.addEventListener('mouseleave', () => { button.style.opacity = '0.7'; });
-  button.addEventListener('click', () => window.location.reload());
+  button.addEventListener('click', () => {
+    try {
+      localStorage.removeItem('weft_conv_last_opened');
+    } catch {}
+    window.location.reload();
+  });
   document.body.appendChild(button);
+}
+
+function seedLastOpened(): void {
+  try {
+    if (!localStorage.getItem('weft_conv_last_opened')) {
+      const now = Date.now();
+      const MINUTE = 60_000;
+      const HOUR = 60 * MINUTE;
+      const DAY = 24 * HOUR;
+      localStorage.setItem('weft_conv_last_opened', JSON.stringify({
+        'c-rich': now,
+        'c-tests': now - 10 * MINUTE,
+        'c-docs': now - 4 * HOUR,
+        'c-scripts': now - 5 * HOUR,
+        'c-git': now - DAY,
+        'c-site-1': now - 10 * MINUTE,
+        'c-site-2': now - DAY,
+      }));
+    }
+  } catch {
+    // ignore
+  }
 }
 
 /**
@@ -141,6 +168,7 @@ function blockExternalWindows(): void {
 export function installMockBackend(): void {
   window.__protoRequests = [];
   blockExternalWindows();
+  seedLastOpened();
   const db = createDb();
   const hub = createHub(readTopic(db));
   installFetch(db, hub);

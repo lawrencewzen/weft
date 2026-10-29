@@ -7,7 +7,7 @@ import { CtxMenu, type CtxMenuItem } from './CtxMenu';
 import { Markdown } from './Markdown';
 
 const DIR_CHEV = (
-  <svg className="ws-chev" viewBox="0 0 12 12" aria-hidden="true">
+  <svg className="ws-chev" width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
     <path d="M4.5 3l3 3-3 3" />
   </svg>
 );

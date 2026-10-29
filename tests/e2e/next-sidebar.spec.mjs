@@ -133,7 +133,7 @@ test('new-conversation draft posts on first send then jumps to the new chat', as
     await wsNode(page, 'draft').getByTestId('next-ws-add').click();
     await expect(page).toHaveURL(new RegExp(`/w/${ws.id}/new$`));
     await expect(page.getByTestId('next-draft-row')).toHaveCount(0);
-    await expect(page.locator('.conv-tree-node.conv-active')).toHaveCount(0);
+    await expect(page.locator('[data-testid=next-conv-row].conv-active')).toHaveCount(0);
     await expect(page.getByTestId('next-composer-input')).toBeVisible();
     await page.getByTestId('next-composer-input').fill('写个 README');
     await page.getByTestId('next-send').click();
@@ -141,6 +141,7 @@ test('new-conversation draft posts on first send then jumps to the new chat', as
     await expect(page.getByTestId('next-draft-row')).toHaveCount(0);
     const top = wsNode(page, 'draft').getByTestId('next-conv-row').first();
     await expect(top).not.toHaveAttribute('data-id', existing.id);
+    await expect(page.locator('[data-testid=next-conv-row].conv-active')).toHaveCount(1);
     await expect(page.getByTestId('next-item-user')).toContainText('写个 README');
   } finally {
     await srv.kill();
@@ -530,10 +531,8 @@ test('switching between conversations never flashes loading or empty thread, sub
     await sendNext(page, 'spawn subagent');
     await waitRunDone(page);
 
-    // Wait for subagent row and message to appear in conv1
-    const tree1 = page.locator(`[data-testid=next-subagent-tree][data-conv-id="${conv1.id}"]`);
-    await expect(tree1).toBeVisible({ timeout: 20000 });
-    await expect(tree1).toHaveClass(/is-open/);
+    // Sidebar does not show subagents; ensure message appears in conv1
+    await expect(page.getByTestId('next-sidebar').getByTestId('next-subagent-tree')).toHaveCount(0);
     await expect(page.locator('.msg-group')).not.toHaveCount(0);
 
     // Visit conv2, send message so conv2 also has messages
@@ -545,8 +544,7 @@ test('switching between conversations never flashes loading or empty thread, sub
     await expect(page.locator('.msg-group')).not.toHaveCount(0);
 
     // Both conv1 and conv2 have now been visited and have messages.
-    // Ensure conv1's subagent tree is open
-    await expect(tree1).toHaveClass(/is-open/);
+    await expect(page.getByTestId('next-sidebar').getByTestId('next-subagent-tree')).toHaveCount(0);
 
     // Start requestAnimationFrame continuous sampling
     await page.evaluate(({ c1, c2 }) => {
