@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { DEFAULT_SETTINGS, mergeSettings, normalizeSettings } from '../core/settings.mjs';
 
-const SCHEMA_VERSION = 7;
+const SCHEMA_VERSION = 8;
 const MESSAGE_META_KEYS = ['kind', 'fromAgent', 'toAgent', 'agentId'];
 export const APP_DB_FILE = 'weft.sqlite';
 export const LEGACY_APP_DB_FILE = 'pi-work.sqlite';
@@ -189,6 +189,16 @@ export function createSqliteStore(dir, { log = console } = {}) {
       id TEXT NOT NULL,
       PRIMARY KEY (kind, id)
     );
+    CREATE TABLE IF NOT EXISTS provider_credentials (
+      provider_id TEXT PRIMARY KEY,
+      json TEXT NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS provider_models (
+      provider_id TEXT PRIMARY KEY,
+      json TEXT NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
     CREATE TABLE IF NOT EXISTS schema_version (
       version INTEGER NOT NULL
     );
@@ -279,6 +289,15 @@ export function createSqliteStore(dir, { log = console } = {}) {
     insTomb: db.prepare('INSERT OR IGNORE INTO catalog_tombstones (kind, id) VALUES (?, ?)'),
     delTomb: db.prepare('DELETE FROM catalog_tombstones WHERE kind = ? AND id = ?'),
     hasTomb: db.prepare('SELECT 1 AS ok FROM catalog_tombstones WHERE kind = ? AND id = ?'),
+    getProvCred: db.prepare('SELECT json FROM provider_credentials WHERE provider_id = ?'),
+    putProvCred: db.prepare(`INSERT INTO provider_credentials (provider_id, json, updated_at) VALUES (?, ?, ?)
+      ON CONFLICT(provider_id) DO UPDATE SET json = excluded.json, updated_at = excluded.updated_at`),
+    delProvCred: db.prepare('DELETE FROM provider_credentials WHERE provider_id = ?'),
+    listProvCred: db.prepare('SELECT provider_id, json, updated_at FROM provider_credentials ORDER BY provider_id'),
+    getProvModels: db.prepare('SELECT json FROM provider_models WHERE provider_id = ?'),
+    putProvModels: db.prepare(`INSERT INTO provider_models (provider_id, json, updated_at) VALUES (?, ?, ?)
+      ON CONFLICT(provider_id) DO UPDATE SET json = excluded.json, updated_at = excluded.updated_at`),
+    delProvModels: db.prepare('DELETE FROM provider_models WHERE provider_id = ?'),
   };
 
   chmodSecret(dbPath);
@@ -448,6 +467,35 @@ export function createSqliteStore(dir, { log = console } = {}) {
     },
     async hasCatalogTombstone(kind, id) {
       return Boolean(q.hasTomb.get(kind, id));
+    },
+
+    async getProviderCredential(providerId) {
+      const row = q.getProvCred.get(providerId);
+      return row ? p(row.json) : undefined;
+    },
+    async putProviderCredential(providerId, credential) {
+      q.putProvCred.run(providerId, j(credential), Date.now());
+    },
+    async deleteProviderCredential(providerId) {
+      q.delProvCred.run(providerId);
+    },
+    async listProviderCredentials() {
+      return q.listProvCred.all().map((row) => ({
+        providerId: row.provider_id,
+        credential: p(row.json),
+        updatedAt: row.updated_at,
+      }));
+    },
+
+    async getProviderModels(providerId) {
+      const row = q.getProvModels.get(providerId);
+      return row ? p(row.json) : undefined;
+    },
+    async putProviderModels(providerId, entry) {
+      q.putProvModels.run(providerId, j(entry), Date.now());
+    },
+    async deleteProviderModels(providerId) {
+      q.delProvModels.run(providerId);
     },
 
     async getSettings() {
