@@ -1,11 +1,25 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, symlink, writeFile } from 'node:fs/promises';
+import {
+  chmod,
+  lstat,
+  mkdtemp,
+  mkdir,
+  readdir,
+  readFile,
+  realpath,
+  stat,
+  symlink,
+  writeFile,
+} from 'node:fs/promises';
+import fs from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { PROTOCOL_VERSION } from '../../src/v2/version.ts';
 import { validateResponse } from '../../src/v2/validate.ts';
+import { resolveInWorkspace } from '../../src/core/paths.mjs';
 import {
+  ATOMIC_RENAME_ATTEMPTS,
   contentVersion,
   emptyFileContent,
   fileNodeView,
@@ -14,6 +28,7 @@ import {
   readWorkspaceFile,
   saveWorkspaceFile,
   workspaceTreeView,
+  writeFileAtomic,
   WORKSPACE_TREE_MAX_ENTRIES,
 } from '../../src/v2/views/files.ts';
 import { posixPath } from '../../src/v2/views/changes.ts';
@@ -169,6 +184,145 @@ test('saveWorkspaceFile writes, conflicts, and skips check without baseVersion',
     () => saveWorkspaceFile({ root, path: '../x.txt', text: 'no' }),
     (err) => err.code === 'E_SANDBOX',
   );
+});
+
+async function tmpLeftovers(dir) {
+  const names = await readdir(dir);
+  return names.filter((name) => name.endsWith('.tmp'));
+}
+
+function busyError(code = 'EPERM') {
+  const err = new Error(code);
+  err.code = code;
+  return err;
+}
+
+test('saveWorkspaceFile atomic write leaves no tmp and writes content', async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'piw-v2-atomic-'));
+  await mkdir(path.join(root, 'nested'), { recursive: true });
+  await writeFile(path.join(root, 'nested', 'a.txt'), 'old\n');
+  const saved = await saveWorkspaceFile({ root, path: 'nested/a.txt', text: 'fresh\n' });
+  assert.equal(saved.version, contentVersion('fresh\n'));
+  const after = await readWorkspaceFile(root, 'nested/a.txt');
+  assert.equal(after.text, 'fresh\n');
+  assert.deepEqual(await tmpLeftovers(path.join(root, 'nested')), []);
+  assert.deepEqual(await tmpLeftovers(root), []);
+});
+
+test('saveWorkspaceFile rename does not empty the existing file', async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'piw-v2-atomic-seen-'));
+  const abs = path.join(root, 'a.txt');
+  await writeFile(abs, 'old-content\n');
+  let seen = null;
+  await saveWorkspaceFile({
+    root,
+    path: 'a.txt',
+    text: 'new-content\n',
+    atomic: {
+      rename: async (from, to) => {
+        seen = await readFile(to, 'utf8');
+        await fs.rename(from, to);
+      },
+    },
+  });
+  assert.equal(seen, 'old-content\n');
+  assert.equal(await readFile(abs, 'utf8'), 'new-content\n');
+  assert.deepEqual(await tmpLeftovers(root), []);
+});
+
+test('saveWorkspaceFile preserves 0o755 mode', { skip: process.platform === 'win32' }, async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'piw-v2-atomic-mode-'));
+  const abs = path.join(root, 'script.sh');
+  await writeFile(abs, '#!/bin/sh\necho old\n', { mode: 0o755 });
+  await chmod(abs, 0o755);
+  assert.equal((await stat(abs)).mode & 0o777, 0o755);
+  await saveWorkspaceFile({ root, path: 'script.sh', text: '#!/bin/sh\necho new\n' });
+  assert.equal(await readFile(abs, 'utf8'), '#!/bin/sh\necho new\n');
+  assert.equal((await stat(abs)).mode & 0o777, 0o755);
+  assert.deepEqual(await tmpLeftovers(root), []);
+});
+
+test('saveWorkspaceFile through symlink updates the target and keeps the link', async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'piw-v2-atomic-link-'));
+  const realAbs = path.join(root, 'real.txt');
+  const linkAbs = path.join(root, 'link.txt');
+  await writeFile(realAbs, 'via-real\n');
+  await symlink(realAbs, linkAbs);
+  const resolved = await resolveInWorkspace(root, 'link.txt');
+  assert.equal(resolved, await realpath(realAbs));
+  await saveWorkspaceFile({ root, path: 'link.txt', text: 'updated\n' });
+  assert.equal((await lstat(linkAbs)).isSymbolicLink(), true);
+  assert.equal(await readFile(linkAbs, 'utf8'), 'updated\n');
+  assert.equal(await readFile(realAbs, 'utf8'), 'updated\n');
+  assert.deepEqual(await tmpLeftovers(root), []);
+});
+
+test('writeFileAtomic falls back to writeFile after repeated EPERM', async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'piw-v2-atomic-eperm-'));
+  const abs = path.join(root, 'a.txt');
+  await writeFile(abs, 'old\n');
+  const writes = [];
+  let renameCalls = 0;
+  await writeFileAtomic(abs, 'fallback\n', {
+    writeFile: async (file, data, encoding) => {
+      writes.push(file);
+      await fs.writeFile(file, data, encoding);
+    },
+    rename: async () => {
+      renameCalls += 1;
+      throw busyError('EPERM');
+    },
+    sleep: async () => {},
+  });
+  assert.equal(renameCalls, ATOMIC_RENAME_ATTEMPTS);
+  assert.equal(writes.at(-1), abs);
+  assert.equal(writes.some((file) => file !== abs && file.endsWith('.tmp')), true);
+  assert.equal(await readFile(abs, 'utf8'), 'fallback\n');
+  assert.deepEqual(await tmpLeftovers(root), []);
+});
+
+test('writeFileAtomic rename succeeds after two EPERM retries', async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'piw-v2-atomic-retry-'));
+  const abs = path.join(root, 'a.txt');
+  await writeFile(abs, 'old\n');
+  const writes = [];
+  let renameCalls = 0;
+  await writeFileAtomic(abs, 'renamed\n', {
+    writeFile: async (file, data, encoding) => {
+      writes.push(file);
+      await fs.writeFile(file, data, encoding);
+    },
+    rename: async (from, to) => {
+      renameCalls += 1;
+      if (renameCalls < 3) throw busyError('EPERM');
+      await fs.rename(from, to);
+    },
+    sleep: async () => {},
+  });
+  assert.equal(renameCalls, 3);
+  assert.equal(writes.includes(abs), false);
+  assert.equal(await readFile(abs, 'utf8'), 'renamed\n');
+  assert.deepEqual(await tmpLeftovers(root), []);
+});
+
+test('writeFileAtomic cleans tmp and keeps original when writing tmp fails', async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'piw-v2-atomic-fail-'));
+  const abs = path.join(root, 'a.txt');
+  await writeFile(abs, 'keep-me\n');
+  await assert.rejects(
+    () => writeFileAtomic(abs, 'should-not-land\n', {
+      writeFile: async (file, data, encoding) => {
+        if (file.endsWith('.tmp')) {
+          await fs.writeFile(file, 'partial', encoding);
+          throw new Error('ENOSPC');
+        }
+        await fs.writeFile(file, data, encoding);
+      },
+    }),
+    (err) => err.message === 'ENOSPC',
+  );
+  assert.equal(await readFile(abs, 'utf8'), 'keep-me\n');
+  assert.deepEqual(await tmpLeftovers(root), []);
 });
 
 test('GET/PUT /api/v2/workspaces/{id}/files and tree: contract, sandbox, binary, tooLarge, conflict', { timeout: 40_000 }, async () => {

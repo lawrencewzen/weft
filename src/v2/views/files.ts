@@ -1,6 +1,6 @@
 /** Workspace file tree, file content, and save views. */
 
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -143,12 +143,113 @@ async function readSample(abs: string, size: number): Promise<Buffer> {
   return Buffer.concat(chunks);
 }
 
+function ioErrorCode(err: unknown): string {
+  return err && typeof err === 'object' && 'code' in err ? String((err as { code?: unknown }).code) : '';
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** Windows rename can fail while another process holds the destination. */
+export const ATOMIC_RENAME_BUSY_CODES: ReadonlySet<string> = new Set(['EPERM', 'EBUSY', 'EACCES']);
+/** Five attempts; delays between them stay under ~500ms. */
+export const ATOMIC_RENAME_ATTEMPTS = 5;
+export const ATOMIC_RENAME_DELAYS_MS: readonly number[] = [25, 50, 100, 200];
+
+export type WriteFileAtomicIo = {
+  writeFile?: (file: string, data: string, encoding: BufferEncoding) => Promise<void>;
+  rename?: (oldPath: string, newPath: string) => Promise<void>;
+  sleep?: (ms: number) => Promise<void>;
+};
+
+async function unlinkQuiet(file: string): Promise<void> {
+  try {
+    await fs.unlink(file);
+  } catch {
+    /* tmp may already be gone after rename, or never created */
+  }
+}
+
+async function renameWithRetry(
+  rename: (oldPath: string, newPath: string) => Promise<void>,
+  tmp: string,
+  abs: string,
+  sleep: (ms: number) => Promise<void>,
+): Promise<void> {
+  let lastErr: unknown;
+  for (let attempt = 1; attempt <= ATOMIC_RENAME_ATTEMPTS; attempt += 1) {
+    try {
+      await rename(tmp, abs);
+      return;
+    } catch (err) {
+      lastErr = err;
+      const code = ioErrorCode(err);
+      if (!ATOMIC_RENAME_BUSY_CODES.has(code) || attempt === ATOMIC_RENAME_ATTEMPTS) {
+        throw err;
+      }
+      const wait = ATOMIC_RENAME_DELAYS_MS[attempt - 1] ?? ATOMIC_RENAME_DELAYS_MS[ATOMIC_RENAME_DELAYS_MS.length - 1];
+      await sleep(wait);
+    }
+  }
+  throw lastErr;
+}
+
+/**
+ * Write `text` by creating a sibling temp file, then renaming over `abs`.
+ * Callers must pass a path already resolved (and realpath'd) inside the workspace.
+ * On Windows, a destination locked by another process falls back to in-place writeFile.
+ */
+export async function writeFileAtomic(
+  abs: string,
+  text: string,
+  io: WriteFileAtomicIo = {},
+): Promise<void> {
+  const writeFile = io.writeFile ?? ((file, data, encoding) => fs.writeFile(file, data, encoding));
+  const rename = io.rename ?? ((oldPath, newPath) => fs.rename(oldPath, newPath));
+  const sleep = io.sleep ?? delay;
+
+  let mode: number | undefined;
+  try {
+    const st = await fs.stat(abs);
+    mode = st.mode & 0o777;
+  } catch (err) {
+    if (ioErrorCode(err) !== 'ENOENT') throw err;
+  }
+
+  const tmp = path.join(
+    path.dirname(abs),
+    `.${path.basename(abs)}.${process.pid}.${randomUUID()}.tmp`,
+  );
+  try {
+    await writeFile(tmp, text, 'utf8');
+    if (mode != null) {
+      try {
+        await fs.chmod(tmp, mode);
+      } catch {
+        /* Windows: chmod is best-effort */
+      }
+    }
+    try {
+      await renameWithRetry(rename, tmp, abs, sleep);
+    } catch (err) {
+      if (!ATOMIC_RENAME_BUSY_CODES.has(ioErrorCode(err))) throw err;
+      await writeFile(abs, text, 'utf8');
+    }
+  } catch (err) {
+    await unlinkQuiet(tmp);
+    throw err;
+  }
+  await unlinkQuiet(tmp);
+}
+
 export type SaveWorkspaceFileInput = {
   root: string;
   path: string;
   text: string;
   baseVersion?: string | null;
   env?: NodeJS.ProcessEnv;
+  atomic?: WriteFileAtomicIo;
 };
 
 export async function saveWorkspaceFile({
@@ -157,6 +258,7 @@ export async function saveWorkspaceFile({
   text,
   baseVersion,
   env = process.env,
+  atomic,
 }: SaveWorkspaceFileInput): Promise<SaveResult> {
   const abs = await resolveInWorkspace(root, rel);
   let existed = true;
@@ -164,7 +266,7 @@ export async function saveWorkspaceFile({
   try {
     current = await readWorkspaceFile(root, rel, env);
   } catch (err) {
-    const code = err && typeof err === 'object' && 'code' in err ? String((err as { code?: unknown }).code) : '';
+    const code = ioErrorCode(err);
     if (code === 'EISDIR') throw err;
     if (code !== 'ENOENT') throw err;
     existed = false;
@@ -188,7 +290,7 @@ export async function saveWorkspaceFile({
     }
   }
   await fs.mkdir(path.dirname(abs), { recursive: true });
-  await fs.writeFile(abs, text, 'utf8');
+  await writeFileAtomic(abs, text, atomic);
   const stats = diffStats(before, text) as { added: number; removed: number };
   return {
     path: posixPath(rel),
