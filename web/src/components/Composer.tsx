@@ -275,14 +275,14 @@ export function Composer({
   }, [atOpen, workspaceId, treeCache]);
 
   const cachedTree = workspaceId ? treeCache[workspaceId] : null;
-  const treeFiles = cachedTree?.files || [];
   const treeError = Boolean(cachedTree?.error);
   const treeLoading = atOpen && Boolean(workspaceId && !cachedTree);
 
   const matchedFiles = useMemo(() => {
     if (!atTrigger || treeError) return [];
-    return filterAtFiles(treeFiles, atTrigger.query, 6);
-  }, [atTrigger, treeError, treeFiles]);
+    const files = cachedTree?.files || [];
+    return filterAtFiles(files, atTrigger.query, 6);
+  }, [atTrigger, treeError, cachedTree]);
 
   useEffect(() => {
     if (atOpen) {
@@ -483,7 +483,7 @@ export function Composer({
         }
       })();
     }
-  }, [lang, workspaceId]);
+  }, [lang, workspaceId, uploads.length]);
 
   const dropFiles = useCallback(async (fileList: File[], uriList = '') => {
     const uriPaths = pathsFromUriList(uriList);

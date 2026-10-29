@@ -47,7 +47,10 @@ export function usePendingSend(
     setBoundId(conversationId);
     setPending([]);
   }
-  const local = boundId === conversationId ? pending : [];
+  const local = useMemo(
+    () => (boundId === conversationId ? pending : []),
+    [boundId, conversationId, pending],
+  );
   const itemsRef = useRef<readonly ThreadItem[]>(items);
   itemsRef.current = items;
   const sendsRef = useRef<readonly SendEntry[] | null>(sends ?? null);

@@ -34,6 +34,7 @@ Weft 是基于 Pi Durable（`@earendil-works/pi-durable`，作为库嵌入）的
 
 ## 验证
 - `npm run check`：语法检查。
+- `npm run lint`：前端 ESLint（web/src 与 web/proto）。
 - `npm test`：`tests/unit` 单元测试。Linux CI 的 `test` job 和 Windows 的 `kernel-unit` 跑这一套。
 - `npm run test:e2e`：Playwright 自动化子集（`tests/e2e/*.spec.mjs`），配置 `tests/playwright.config.mjs`。先装浏览器：`npx playwright install chromium`；CI 用 `npx playwright install --with-deps chromium`。用例自己起服务，走演示模型（`WEFT_LLM=faux`）。系统 Chrome 可设 `WEFT_CHROME`（例如 `/usr/bin/google-chrome`）。默认用测试结果证明，确实需要看画面时另行说明。Linux CI 的 `e2e` job 跑这一套；Windows job 不跑 e2e。手工验收清单仍是 `tests/e2e/*.md`。
 

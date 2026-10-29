@@ -322,7 +322,8 @@ export function RightPaneProvider({
     setSaveState(IDLE_SAVE);
     versionRef.current = null;
     if (tab === 'files' && wsId) void loadTree(wsId);
-  }, [wsId]); // eslint-disable-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only runs on workspaceId change; tab is read imperatively to avoid resetting state on tab switch
+  }, [wsId]);
 
   const seenChangePaths = useRef<Set<string>>(new Set());
 

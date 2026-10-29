@@ -36,6 +36,7 @@ jobs:
       - run: npm run check
       - run: npm run typecheck
       - run: npm run typecheck:web
+      - run: npm run lint
       - run: npm run check:contract
       - run: npm run test:web
 
