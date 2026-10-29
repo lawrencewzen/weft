@@ -203,6 +203,17 @@ export async function fetchCustomProviderModels(context, {
   return parseFetchedChatModels(json, { providerId: id, api, baseUrl: normalizeHttpUrl(baseUrl) });
 }
 
+function catalogMaxTokens(model) {
+  if (Number.isInteger(model?.maxTokens) && model.maxTokens > 0) return model.maxTokens;
+  return DEFAULT_MAX_OUTPUT_TOKENS;
+}
+
+/**
+ * Request-time window/maxTokens. Display in provider-service still reads the
+ * catalog (or user override) and is not capped here.
+ * maxTokens: overrides.maxTokens > WEFT_MAX_OUTPUT_TOKENS > min(catalog, 32768),
+ * then capMaxTokens against the effective context window.
+ */
 function applyModelOverrides(model, overrides, env) {
   const over = overrides && typeof overrides === 'object' ? overrides[model.id] : null;
   const fallbackWindow = contextWindowFromEnv(env);
@@ -212,11 +223,10 @@ function applyModelOverrides(model, overrides, env) {
       ? model.contextWindow
       : fallbackWindow;
   }
-  const explicitMax = explicitMaxOutputTokens(env);
   let maxTokens = over?.maxTokens;
   if (!Number.isInteger(maxTokens) || maxTokens <= 0) {
-    maxTokens = explicitMax
-      ?? (Number.isInteger(model.maxTokens) && model.maxTokens > 0 ? model.maxTokens : DEFAULT_MAX_OUTPUT_TOKENS);
+    const explicitMax = explicitMaxOutputTokens(env);
+    maxTokens = explicitMax ?? Math.min(catalogMaxTokens(model), DEFAULT_MAX_OUTPUT_TOKENS);
   }
   maxTokens = capMaxTokens(maxTokens, contextWindow);
   if (model.contextWindow === contextWindow && model.maxTokens === maxTokens) return model;

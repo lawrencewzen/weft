@@ -116,7 +116,7 @@ test('builtin catalog metadata is kept and user/env overrides apply', async () =
 
   const flash = (await modelOf(base, {}, { LLM_CONTEXT_WINDOW: '200000' })).model;
   assert.equal(flash.contextWindow, 1_000_000);
-  assert.equal(flash.maxTokens, 384000);
+  assert.equal(flash.maxTokens, 32768);
   assert.equal(flash.reasoning, true);
   assert.equal(flash.thinkingLevelMap.low, 'low');
   assert.deepEqual(flash.input, ['text', 'image']);
@@ -144,12 +144,22 @@ test('builtin catalog metadata is kept and user/env overrides apply', async () =
     },
   ], { providerId: 'deepseek', modelId: 'deepseek-flash' }))).model;
   assert.equal(userWindow.contextWindow, 256000);
-  assert.equal(userWindow.maxTokens, 256000);
+  assert.equal(userWindow.maxTokens, 32768);
   assert.equal(userWindow.reasoning, true);
 
   const envMax = (await modelOf(base, {}, { WEFT_MAX_OUTPUT_TOKENS: '2048' })).model;
   assert.equal(envMax.contextWindow, 1_000_000);
   assert.equal(envMax.maxTokens, 2048);
+
+  const userMax = (await modelOf(v3Settings([
+    {
+      id: 'deepseek',
+      kind: 'builtin',
+      enabled: ['deepseek-flash'],
+      overrides: { 'deepseek-flash': { maxTokens: 65536 } },
+    },
+  ], { providerId: 'deepseek', modelId: 'deepseek-flash' }))).model;
+  assert.equal(userMax.maxTokens, 65536);
 });
 
 function rewriteDeepseekFetch(fakeBaseUrl) {
@@ -167,7 +177,7 @@ function rewriteDeepseekFetch(fakeBaseUrl) {
   };
 }
 
-test('builtin DeepSeek request uses catalog reasoning and stored Authorization', async () => {
+async function captureDeepseekRequest({ overrides = {}, env = {} } = {}) {
   const fake = await startFakeModel({ mode: 'openai', text: 'from-catalog' });
   const dir = await makeTempDir('weft-kmodels-ds-');
   const store = createSqliteStore(dir);
@@ -176,33 +186,52 @@ test('builtin DeepSeek request uses catalog reasoning and stored Authorization',
     await credentials.modify('deepseek', async () => ({ type: 'api_key', key: KEY_DS }));
     const models = createModels({ credentials });
     const settings = v3Settings([
-      { id: 'deepseek', kind: 'builtin', enabled: ['deepseek-flash'], overrides: {} },
+      { id: 'deepseek', kind: 'builtin', enabled: ['deepseek-flash'], overrides },
     ], { providerId: 'deepseek', modelId: 'deepseek-flash' });
-    const routes = createKernelModels({ models, getSettings: async () => settings, env: {} });
+    const routes = createKernelModels({ models, getSettings: async () => settings, env });
     const ref = await routes.modelFor({});
     const model = models.getModel(ref.provider, ref.modelId);
-    assert.equal(ref.provider, 'deepseek');
-    assert.equal(model.reasoning, true);
-
     const stream = models.streamSimple(model, {
       messages: [{ role: 'user', content: 'ping', timestamp: Date.now() }],
     }, { fetch: rewriteDeepseekFetch(fake.baseUrl), maxRetries: 0 });
     await stream.result();
-
     const hit = fake.seen.find((item) => item.path.endsWith('/chat/completions'));
-    assert.ok(hit, JSON.stringify(fake.seen));
-    assert.equal(hit.authorization, `Bearer ${KEY_DS}`);
-    assert.equal(hit.body.model, 'deepseek-flash');
-    assert.equal(hit.body.max_tokens, 384000);
-    assert.deepEqual(hit.body.thinking, { type: 'disabled' });
-    assert.equal(Object.prototype.hasOwnProperty.call(hit.body, 'reasoning'), false);
-    assert.equal(Object.prototype.hasOwnProperty.call(hit.body, 'reasoning_effort'), false);
-    assert.equal(Object.prototype.hasOwnProperty.call(hit.body, 'enable_thinking'), false);
+    return { hit, model, ref, seen: fake.seen };
   } finally {
     store.close();
     await fake.close();
     await removeTempDir(dir);
   }
+}
+
+test('builtin DeepSeek request uses catalog reasoning and stored Authorization', async () => {
+  const { hit, model, ref, seen } = await captureDeepseekRequest();
+  assert.equal(ref.provider, 'deepseek');
+  assert.equal(model.reasoning, true);
+  assert.ok(hit, JSON.stringify(seen));
+  assert.equal(hit.authorization, `Bearer ${KEY_DS}`);
+  assert.equal(hit.body.model, 'deepseek-flash');
+  assert.equal(hit.body.max_tokens, 32768);
+  assert.deepEqual(hit.body.thinking, { type: 'disabled' });
+  assert.equal(Object.prototype.hasOwnProperty.call(hit.body, 'reasoning'), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(hit.body, 'reasoning_effort'), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(hit.body, 'enable_thinking'), false);
+});
+
+test('builtin DeepSeek request max_tokens follows user override 65536', async () => {
+  const { hit, seen } = await captureDeepseekRequest({
+    overrides: { 'deepseek-flash': { maxTokens: 65536 } },
+  });
+  assert.ok(hit, JSON.stringify(seen));
+  assert.equal(hit.body.max_tokens, 65536);
+});
+
+test('builtin DeepSeek request max_tokens follows WEFT_MAX_OUTPUT_TOKENS 16000', async () => {
+  const { hit, seen } = await captureDeepseekRequest({
+    env: { WEFT_MAX_OUTPUT_TOKENS: '16000' },
+  });
+  assert.ok(hit, JSON.stringify(seen));
+  assert.equal(hit.body.max_tokens, 16000);
 });
 
 test('custom OpenAI-compatible provider sends to baseUrl with Authorization', async () => {
