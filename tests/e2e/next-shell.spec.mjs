@@ -16,7 +16,7 @@ test('GET / without a session prompts to use weft open', async ({ page }) => {
   try {
     await page.goto(`${srv.url}/`);
     await expect(page.getByTestId('next-app')).toBeVisible();
-    await expect(page.getByText('Weft（新版，开发中）')).toBeVisible();
+    await expect(page.locator('.next-home h1')).toHaveText('Weft');
     await expect(page.getByTestId('next-error')).toHaveText('请用 weft open 打开新版网页端');
     expect(csp, 'page console has no CSP errors').toEqual([]);
   } finally {
@@ -45,7 +45,11 @@ test('GET /auth?code= exchanges a web-code for a session and shows protocol 2.0.
     await expect(page).toHaveURL(/http:\/\/127\.0\.0\.1:\d+\/$/);
     await expect(page.getByTestId('next-app')).toBeVisible();
     await expect(page.getByTestId('next-sidebar')).toBeVisible();
-    await expect(page.getByTestId('next-home-hint')).toHaveText(/点左栏「项目」旁的 \+ 新建工作区|Use \+ next to Projects to add a workspace/);
+    await expect(page.getByTestId('next-home-title')).toHaveText(/还没有项目|No projects yet/);
+    await expect(page.getByTestId('next-home-desc')).toHaveText(/添加一个本地目录或 Git 仓库后就可以开始对话|Add a local folder or a Git repository to start chatting/);
+    await expect(page.getByTestId('next-home-add')).toBeVisible();
+    await page.getByTestId('next-home-add').click();
+    await expect(page.getByTestId('next-ws-dialog')).toBeVisible();
     expect(csp, 'page console has no CSP errors').toEqual([]);
   } finally {
     await srv.kill();
@@ -57,7 +61,7 @@ test('GET /some/deep/route falls back to the SPA shell', async ({ page }) => {
   try {
     await page.goto(`${srv.url}/some/deep/route`);
     await expect(page.getByTestId('next-app')).toBeVisible();
-    await expect(page.getByText('Weft（新版，开发中）')).toBeVisible();
+    await expect(page.locator('.next-home h1')).toHaveText('Weft');
   } finally {
     await srv.kill();
   }

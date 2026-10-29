@@ -339,7 +339,6 @@ function AppShellLayout({
             <div className="next-status-inner">
               <div className="top-heading">
                 <LeftOpenButton lang={lang} onOpen={() => setLeftOpen(true)} />
-                <h1 className="top-title" style={{ color: 'var(--faint)' }}>{t(lang, 'home_title')}</h1>
               </div>
               <div className="top-right">
                 <RightToggle lang={lang} />
@@ -347,7 +346,16 @@ function AppShellLayout({
             </div>
           </header>
           <div className="thread-empty">
-            <p data-testid="next-home-hint">{t(lang, 'no_workspaces')}</p>
+            <div className="empty-home-title" data-testid="next-home-title">{t(lang, 'no_projects')}</div>
+            <div className="empty-home-desc" data-testid="next-home-desc">{t(lang, 'no_projects_desc')}</div>
+            <button
+              type="button"
+              className="btn"
+              data-testid="next-home-add"
+              onClick={() => setWsDialog(true)}
+            >
+              {t(lang, 'add_project')}
+            </button>
           </div>
         </main>
       ) : (

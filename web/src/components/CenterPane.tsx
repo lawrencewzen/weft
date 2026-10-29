@@ -159,7 +159,6 @@ export function CenterPane({
           <div className="next-status-inner">
             <div className="top-heading">
               <LeftOpenButton lang={lang} onOpen={onOpenLeft} />
-              <h1 className="top-title" style={{ color: 'var(--faint)' }}>{t(lang, 'home_title')}</h1>
             </div>
             <div className="top-right"><RightToggle lang={lang} /></div>
           </div>
@@ -180,9 +179,7 @@ export function CenterPane({
               <LeftOpenButton lang={lang} onOpen={onOpenLeft} />
               {cid ? (
                 <span className="top-title">{knownTitle}</span>
-              ) : (
-                <h1 className="top-title" style={{ color: 'var(--faint)' }}>{t(lang, 'home_title')}</h1>
-              )}
+              ) : null}
             </div>
             <div className="top-right"><RightToggle lang={lang} /></div>
           </div>

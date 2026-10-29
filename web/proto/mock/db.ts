@@ -14,7 +14,20 @@ import {
 import type { Change } from './types';
 
 export function createDb(): MockDb {
-  return createSeed(Date.now());
+  const db = createSeed(Date.now());
+  if (typeof window !== 'undefined') {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      if (params.has('empty') || params.get('state') === 'empty') {
+        db.workspaces = [];
+        db.conversations.clear();
+        db.repos.clear();
+      }
+    } catch {
+      // ignore
+    }
+  }
+  return db;
 }
 
 export function conversationTopic(cid: string): string {
