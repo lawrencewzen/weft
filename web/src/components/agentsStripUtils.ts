@@ -40,14 +40,30 @@ export function countByIconStatus(agents: readonly Subagent[]): Array<{ status: 
   return res;
 }
 
+export function stripMarkdownInline(text: string): string {
+  if (!text) return '';
+  return text
+    .replace(/```[\s\S]*?```/g, (m) => m.slice(3, -3).trim())
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/`+/g, '')
+    .replace(/\*\*([^*]+)\*\*/g, '$1')
+    .replace(/\*([^*]+)\*/g, '$1')
+    .replace(/__([^_]+)__/g, '$1')
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 export function formatAgentsHeadline(agents: readonly Subagent[], lang: Lang): string {
   if (!agents.length) return '';
-  const r = agents.filter((a) => a.status === 'running' || a.status === 'stuck').length;
+  const r = agents.filter((a) => a.status === 'running').length;
+  const k = agents.filter((a) => a.status === 'stuck').length;
   const q = agents.filter((a) => a.status === 'waiting' || (a.status as string) === 'queued').length;
 
-  if (r > 0 || q > 0) {
+  if (r > 0 || k > 0 || q > 0) {
     const parts: string[] = [];
     if (r > 0) parts.push(t(lang, 'agents_strip_running', { count: r }));
+    if (k > 0) parts.push(t(lang, 'agents_strip_stuck', { count: k }));
     if (q > 0) parts.push(t(lang, 'agents_strip_queued', { count: q }));
     return parts.join(' · ');
   }
@@ -71,7 +87,7 @@ export function formatAgentDoing(
   if (agent.status === 'done') {
     if (resText) {
       const firstLine = resText.trim().split('\n')[0].trim();
-      if (firstLine) return firstLine;
+      if (firstLine) return stripMarkdownInline(firstLine);
     }
     return t(lang, 'status_done');
   }
@@ -81,11 +97,12 @@ export function formatAgentDoing(
   if (agent.status === 'failed') {
     return t(lang, 'agents_strip_failed_doing');
   }
-  return stripActionMarks(agent.currentAction || '') || t(lang, 'status_running');
+  return stripMarkdownInline(stripActionMarks(agent.currentAction || '')) || t(lang, 'status_running');
 }
 
 export function formatAgentElapsed(agent: Subagent, now: number): string {
   if (isSubagentEnded(agent.status)) return '';
+  if (agent.status === 'waiting' || (agent.status as string) === 'queued') return '';
   if (!agent.startedAt || agent.startedAt <= 0) return '';
   return formatMmSs(now - agent.startedAt);
 }

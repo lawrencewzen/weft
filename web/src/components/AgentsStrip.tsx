@@ -15,6 +15,7 @@ import {
   hasUnendedAgents,
   isAllEndedAgents,
   isSubagentEnded,
+  stripMarkdownInline,
 } from './agentsStripUtils';
 import { StatusIcon, statusIconFor } from './StatusIcon';
 
@@ -185,6 +186,7 @@ export function AgentsStrip({ cid, lang }: AgentsStripProps) {
       ref={stripRef}
       className={`agents-strip strip${open ? ' open is-open' : ''}${fading ? ' fade is-fade' : ''}`}
       data-testid="next-agents-strip"
+      data-open={open ? 'true' : 'false'}
     >
       <div
         className="agents-strip-header sh"
@@ -225,7 +227,7 @@ export function AgentsStrip({ cid, lang }: AgentsStripProps) {
           {agents.map((agent) => {
             const isRowOpen = openRow === agent.id;
             const iconStatus = statusIconFor(agent.status, 'subagent') ?? 'running';
-            const name = agent.name || agent.title || '';
+            const name = agent.title || agent.name || '';
             const isEnded = isSubagentEnded(agent.status);
 
             // Find parent report if any
@@ -302,7 +304,7 @@ export function AgentsStrip({ cid, lang }: AgentsStripProps) {
                   <div className="agents-strip-detail det" data-testid="next-agents-strip-detail">
                     {agent.status === 'done' ? (
                       <div className="agents-strip-res res" data-testid="next-agents-strip-detail-text">
-                        {resText || t(lang, 'agents_strip_done_summary')}
+                        {stripMarkdownInline(resText || t(lang, 'agents_strip_done_summary'))}
                       </div>
                     ) : agent.status === 'waiting' || (agent.status as string) === 'queued' ? (
                       <div className="agents-strip-res res" data-testid="next-agents-strip-detail-text">
@@ -310,18 +312,20 @@ export function AgentsStrip({ cid, lang }: AgentsStripProps) {
                       </div>
                     ) : agent.status === 'failed' ? (
                       <div className="agents-strip-res res" data-testid="next-agents-strip-detail-text">
-                        {t(lang, 'agents_strip_failed_desc', { reason: failReason })}
+                        {stripMarkdownInline(t(lang, 'agents_strip_failed_desc', { reason: stripMarkdownInline(failReason) }))}
                       </div>
                     ) : steps.length > 0 ? (
                       steps.map((st, idx) => (
                         <div key={idx} className="agents-strip-step step" data-testid="next-agents-strip-step">
                           <span className="agents-strip-step-verb k">{st.verb}</span>
-                          <span className="agents-strip-step-desc v">{st.desc}</span>
+                          <span className="agents-strip-step-desc v" title={st.desc}>
+                            {stripMarkdownInline(st.desc)}
+                          </span>
                         </div>
                       ))
                     ) : (
                       <div className="agents-strip-res res" data-testid="next-agents-strip-detail-text">
-                        {agent.currentAction || t(lang, 'status_running')}
+                        {stripMarkdownInline(agent.currentAction || t(lang, 'status_running'))}
                       </div>
                     )}
                   </div>

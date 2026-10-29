@@ -36,7 +36,7 @@ test('diff, file tree, preview, save and the 409 conflict demo', async ({ page }
   await changesPaneRow.getByTestId('next-change-by').click();
   const strip = page.getByTestId('next-agents-strip');
   await expect(strip).toBeVisible();
-  await expect(strip).toHaveAttribute('data-expanded', 'true');
+  await expect(strip).toHaveAttribute('data-open', 'true');
   await expect(changesPaneRow.getByTestId('next-diff')).toBeVisible();
 
   // Right tabs container is aligned to the left, immediately following the collapse button.

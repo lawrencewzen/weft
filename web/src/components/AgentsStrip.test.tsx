@@ -15,6 +15,7 @@ import {
   formatAgentsHeadline,
   hasUnendedAgents,
   isAllEndedAgents,
+  stripMarkdownInline,
 } from './agentsStripUtils';
 
 function makeAgent(overrides: Partial<Subagent>): Subagent {
@@ -70,10 +71,21 @@ describe('agentsStripUtils', () => {
     it('formats running-only headline', () => {
       const agents: Subagent[] = [
         makeAgent({ id: '1', status: 'running' }),
-        makeAgent({ id: '2', status: 'stuck' }),
+        makeAgent({ id: '2', status: 'running' }),
       ];
       expect(formatAgentsHeadline(agents, 'zh')).toBe('2 个运行中');
       expect(formatAgentsHeadline(agents, 'en')).toBe('2 running');
+    });
+
+    it('formats running, stuck, and queued together', () => {
+      const agents: Subagent[] = [
+        makeAgent({ id: '1', status: 'running' }),
+        makeAgent({ id: '2', status: 'running' }),
+        makeAgent({ id: '3', status: 'stuck' }),
+        makeAgent({ id: '4', status: 'waiting' }),
+      ];
+      expect(formatAgentsHeadline(agents, 'zh')).toBe('2 个运行中 · 1 个卡住 · 1 个排队');
+      expect(formatAgentsHeadline(agents, 'en')).toBe('2 running · 1 stuck · 1 queued');
     });
 
     it('formats queued-only headline', () => {
@@ -113,9 +125,9 @@ describe('agentsStripUtils', () => {
   });
 
   describe('doing text and steps extraction', () => {
-    it('formats doing text for various statuses', () => {
+    it('formats doing text for various statuses and strips markdown', () => {
       const done = makeAgent({ status: 'done' });
-      expect(formatAgentDoing(done, { lang: 'zh', resText: '全部单测通过\n第二行' })).toBe('全部单测通过');
+      expect(formatAgentDoing(done, { lang: 'zh', resText: '补好了 `text.delta` 偏移的两条用例\n第二行' })).toBe('补好了 text.delta 偏移的两条用例');
 
       const queued = makeAgent({ status: 'waiting' });
       expect(formatAgentDoing(queued, { lang: 'zh' })).toBe('排队中');
@@ -127,12 +139,30 @@ describe('agentsStripUtils', () => {
       expect(formatAgentDoing(running, { lang: 'zh' })).toBe('正在读取 store.ts');
     });
 
-    it('formats elapsed time only for unended agents', () => {
+    it('strips inline markdown from plain text summaries', () => {
+      expect(stripMarkdownInline('补好了 `text.delta` 偏移的两条用例，`npm run test:web` 全绿。')).toBe(
+        '补好了 text.delta 偏移的两条用例，npm run test:web 全绿。',
+      );
+      expect(stripMarkdownInline('**粗体** 与 *斜体* 以及 [链接](http://example.com)')).toBe(
+        '粗体 与 斜体 以及 链接',
+      );
+    });
+
+    it('formats elapsed time only for unended, non-queued agents', () => {
       const running = makeAgent({ status: 'running', startedAt: 10_000 });
       expect(formatAgentElapsed(running, 75_000)).toBe('01:05');
 
+      const stuck = makeAgent({ status: 'stuck', startedAt: 10_000 });
+      expect(formatAgentElapsed(stuck, 75_000)).toBe('01:05');
+
+      const queued = makeAgent({ status: 'waiting', startedAt: 10_000 });
+      expect(formatAgentElapsed(queued, 75_000)).toBe('');
+
       const done = makeAgent({ status: 'done', startedAt: 10_000 });
       expect(formatAgentElapsed(done, 75_000)).toBe('');
+
+      const failed = makeAgent({ status: 'failed', startedAt: 10_000 });
+      expect(formatAgentElapsed(failed, 75_000)).toBe('');
     });
 
     it('extracts up to 3 recent steps from subagent topic items', () => {
@@ -262,13 +292,13 @@ describe('AgentsStrip component', () => {
           topic: convTop,
           entity: 'subagent',
           id: 'sa1',
-          value: makeAgent({ id: 'sa1', name: 'agent-one', status: 'running' }),
+          value: makeAgent({ id: 'sa1', title: 'Task Alpha', name: 'agent-one', status: 'running' }),
         },
         {
           topic: convTop,
           entity: 'subagent',
           id: 'sa2',
-          value: makeAgent({ id: 'sa2', name: 'agent-two', status: 'waiting' }),
+          value: makeAgent({ id: 'sa2', title: '', name: 'agent-two', status: 'waiting' }),
         },
       ],
     });
@@ -278,6 +308,7 @@ describe('AgentsStrip component', () => {
     const strip = host!.querySelector('[data-testid="next-agents-strip"]');
     expect(strip).toBeTruthy();
     expect(strip!.classList.contains('open')).toBe(false);
+    expect(strip!.getAttribute('data-open')).toBe('false');
 
     // List should not be rendered when collapsed
     expect(host!.querySelector('[data-testid="next-agents-strip-list"]')).toBeNull();
@@ -290,15 +321,22 @@ describe('AgentsStrip component', () => {
     });
 
     expect(strip!.classList.contains('open')).toBe(true);
+    expect(strip!.getAttribute('data-open')).toBe('true');
     expect(host!.querySelector('[data-testid="next-agents-strip-list"]')).toBeTruthy();
     const rows = host!.querySelectorAll('[data-testid="next-agents-strip-row"]');
     expect(rows.length).toBe(2);
+
+    // Row 1 prefers title, Row 2 falls back to name
+    const names = host!.querySelectorAll('[data-testid="next-agents-strip-name"]');
+    expect(names[0]?.textContent?.trim()).toBe('Task Alpha');
+    expect(names[1]?.textContent?.trim()).toBe('agent-two');
 
     // Click header again to collapse
     act(() => {
       toggle!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
     expect(strip!.classList.contains('open')).toBe(false);
+    expect(strip!.getAttribute('data-open')).toBe('false');
     expect(host!.querySelector('[data-testid="next-agents-strip-list"]')).toBeNull();
   });
 

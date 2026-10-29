@@ -27,9 +27,9 @@ test('status strip appearance, collapsed counts, expand, in-place details, and s
   // Collapsed strip displays summary counts and headline
   const toggle = page.getByTestId('next-agents-strip-toggle');
   await expect(toggle).toBeVisible();
+  await expect(strip).toHaveAttribute('data-open', 'false');
   const headline = page.getByTestId('next-agents-strip-headline');
-  await expect(headline).toContainText('运行中');
-  await expect(headline).toContainText('排队');
+  await expect(headline).toContainText('2 个运行中 · 1 个卡住 · 1 个排队');
 
   const expandBtn = page.getByTestId('next-agents-strip-expand');
   await expect(expandBtn).toContainText('展开');
@@ -40,6 +40,7 @@ test('status strip appearance, collapsed counts, expand, in-place details, and s
   // 2. Click header to expand strip
   await toggle.click();
   await expect(strip).toHaveClass(/open/);
+  await expect(strip).toHaveAttribute('data-open', 'true');
   await expect(expandBtn).toContainText('收起');
   const list = page.getByTestId('next-agents-strip-list');
   await expect(list).toBeVisible();
@@ -61,9 +62,11 @@ test('status strip appearance, collapsed counts, expand, in-place details, and s
   await expect(failedRow.getByTestId('next-agents-strip-doing')).toContainText('没完成');
 
   // 3. In-place expansion
-  // (a) Queued row: shows "还没开始"
+  // (a) Queued row: shows "还没开始", has no elapsed time, has stop button
   const waitRow = page.locator('[data-testid="next-agents-strip-row"][data-agent-id="c-rich:sub:sa-3"]');
   await expect(waitRow).toBeVisible();
+  await expect(waitRow.getByTestId('next-agents-strip-time')).toHaveText('');
+  await expect(waitRow.getByTestId('next-agents-strip-stop')).toHaveCount(1);
   await waitRow.click();
   const waitItem = page.locator('.agents-strip-item[data-agent-id="c-rich:sub:sa-3"]');
   await expect(waitItem.getByTestId('next-agents-strip-detail-text')).toContainText('还没开始');
@@ -110,6 +113,7 @@ test('dispatch card click opens status strip and focuses that subagent row', asy
   await expect(strip).toBeVisible();
   // Initially strip is collapsed
   await expect(strip).not.toHaveClass(/open/);
+  await expect(strip).toHaveAttribute('data-open', 'false');
 
   // Click row 0 (sa-1) in dispatch card
   const dispatchRows = card.getByTestId('next-dispatch-row');
@@ -117,6 +121,7 @@ test('dispatch card click opens status strip and focuses that subagent row', asy
 
   // Strip should now be expanded and the sa-1 row opened in-place
   await expect(strip).toHaveClass(/open/);
+  await expect(strip).toHaveAttribute('data-open', 'true');
   const targetItem = page.locator('.agents-strip-item[data-agent-id="c-rich:sub:sa-1"]');
   await expect(targetItem).toHaveClass(/is-open/);
   await expect(targetItem.getByTestId('next-agents-strip-detail')).toBeVisible();
@@ -126,6 +131,7 @@ test('dispatch card click opens status strip and focuses that subagent row', asy
   if (await reportOpen.count()) {
     await reportOpen.click();
     await expect(strip).toHaveClass(/open/);
+    await expect(strip).toHaveAttribute('data-open', 'true');
   }
 
   expectClean(state);

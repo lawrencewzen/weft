@@ -251,7 +251,7 @@ test('report open focuses the matching sub-agent in status strip', async ({ page
     await openBtn.click();
     const strip = page.getByTestId('next-agents-strip');
     await expect(strip).toBeVisible();
-    await expect(strip).toHaveAttribute('data-expanded', 'true');
+    await expect(strip).toHaveAttribute('data-open', 'true');
     const row = page.getByTestId('next-agents-strip-row').first();
     await expect(row).toBeVisible();
     await expect(row.getByTestId('next-agents-strip-name')).toHaveText(REPORT_NAME);
