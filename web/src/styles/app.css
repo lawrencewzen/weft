@@ -1543,10 +1543,10 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.6; backgroun
 }
 .model-chip { font-size: 13px; gap: 7px; min-width: 0; }
 .ws-chip { color: var(--ink3); gap: 6px; }
-.context-chip { flex-shrink: 0; }
+.context-chip { flex-shrink: 0; cursor: default; }
 .model-chip-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .model-chip-caret { font-size: 10px; color: var(--mute); }
-.model-chip:hover, .model-chip.is-open, .context-chip:hover, .context-chip.is-open { background: var(--hover); }
+.model-chip:hover, .model-chip.is-open { background: var(--hover); }
 .model-chip:disabled, .context-chip:disabled { cursor: default; opacity: .6; }
 /* After .model-chip so the 28px draft title chip is not overwritten by the 13px composer chip. */
 .model-chip.ws-chip-hero {
