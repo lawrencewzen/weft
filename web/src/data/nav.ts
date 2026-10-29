@@ -1,4 +1,4 @@
-import type { SettingsPage } from './providerWizard';
+import type { SettingsPage } from './settingsPages';
 
 export function conversationPath(id: string): string {
   return `/c/${encodeURIComponent(id)}`;

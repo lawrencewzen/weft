@@ -1,31 +1,43 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
-import { mkdtemp, readFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import path from 'node:path';
-import { DatabaseSync } from 'node:sqlite';
 import { PROTOCOL_VERSION } from '../../src/v2/version.ts';
 import { validateResponse } from '../../src/v2/validate.ts';
-import { createV2Runtime } from '../../src/v2/index.ts';
-import { discoveryPath } from '../../src/v2/daemon/discovery.ts';
-import { readDiscovery, request as serverRequest, startServer, stopServer } from './_server.mjs';
+import { handleProvidersApi } from '../../src/v2/providers-http.ts';
+import { phrase } from '../../src/v2/phrases/index.ts';
+import { createSqliteStore } from '../../src/store/sqlite.mjs';
+import { createCredentialStore, createModelsStore } from '../../src/core/provider-stores.mjs';
+import {
+  createProviderService,
+  EXCLUDED_PROVIDER_IDS,
+  POPULAR_PROVIDER_IDS,
+} from '../../src/core/provider-service.mjs';
+import { readDiscovery, startServer, stopServer } from './_server.mjs';
+import { makeTempDir, removeTempDir } from './_tmp.mjs';
+import {
+  fakeKeyProvider,
+  fakeOAuthProvider,
+  waitUntil,
+} from './provider-fakes.mjs';
 
 const TOKEN = 'v2-providers-http-token';
-const request = (base, method, apiPath, body) => serverRequest(base, method, apiPath, body, TOKEN);
+const SECRET = 'sk-http-never-leak-key-99';
 
-function v2Headers(token) {
-  return { authorization: `Bearer ${token}` };
+function assertChecked(apiPath, method, status, body) {
+  const checked = validateResponse(apiPath.split('?')[0], method, status, body);
+  assert.equal(checked.ok, true, `${method} ${apiPath} ${status}: ${JSON.stringify(checked.errors)}\n${JSON.stringify(body)}`);
 }
 
-async function sendV2(base, method, apiPath, token, body) {
+function assertNoSecret(value, secret = SECRET) {
+  const text = typeof value === 'string' ? value : JSON.stringify(value);
+  assert.equal(text.includes(secret), false, `secret leaked: ${text.slice(0, 400)}`);
+}
+
+async function send(base, method, apiPath, body) {
   const res = await fetch(base + apiPath, {
     method,
-    headers: {
-      'content-type': 'application/json',
-      ...(token ? v2Headers(token) : {}),
-    },
-    body: body == null ? undefined : JSON.stringify(body),
+    headers: { 'content-type': 'application/json' },
+    body: body == null || method === 'GET' || method === 'HEAD' ? undefined : JSON.stringify(body),
   });
   const text = await res.text();
   let parsed = null;
@@ -33,396 +45,436 @@ async function sendV2(base, method, apiPath, token, body) {
   return { status: res.status, body: parsed, text, headers: res.headers };
 }
 
-function assertChecked(apiPath, method, status, body) {
-  const checked = validateResponse(apiPath, method, status, body);
-  assert.equal(checked.ok, true, JSON.stringify(checked.errors));
-}
-
-function assertNoSecret(payload, secret, label) {
-  const text = typeof payload === 'string' ? payload : JSON.stringify(payload);
-  assert.equal(text.includes(secret), false, `${label} leaked key: ${text}`);
-}
-
-function writeSettings(dataDir, value) {
-  const db = new DatabaseSync(path.join(dataDir, 'weft.sqlite'));
-  db.prepare('INSERT INTO settings (id, json) VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET json = excluded.json')
-    .run('app', JSON.stringify(value));
-  db.close();
-}
-
-function startFake(label, { status = 200, delayMs = 0, body } = {}) {
-  const hits = [];
-  const server = http.createServer((req, res) => {
-    const chunks = [];
-    req.on('data', (chunk) => chunks.push(chunk));
-    req.on('end', () => {
-      hits.push({
-        method: req.method,
-        url: req.url,
-        authorization: req.headers.authorization || '',
-        host: req.headers.host,
-      });
-      const reply = () => {
-        if (status === 401) {
-          res.writeHead(401, { 'content-type': 'application/json' });
-          res.end(JSON.stringify({ error: { message: `rejected ${label}` } }));
-          return;
-        }
-        if (status !== 200) {
-          res.writeHead(status, { 'content-type': 'application/json' });
-          res.end(JSON.stringify({ error: 'fail' }));
-          return;
-        }
-        res.writeHead(200, { 'content-type': 'application/json' });
-        res.end(JSON.stringify(body || { data: [{ id: label }] }));
-      };
-      if (delayMs) setTimeout(reply, delayMs);
-      else reply();
-    });
-  });
-  return new Promise((resolve) => {
-    server.listen(0, '127.0.0.1', () => {
-      const { port } = server.address();
-      resolve({
-        label,
-        hits,
-        port,
-        baseUrl: `http://127.0.0.1:${port}/v1`,
-        close: () => new Promise((done) => server.close(done)),
-      });
-    });
+function deepseekFake(onCall) {
+  return fakeKeyProvider({
+    id: 'deepseek',
+    name: 'DeepSeek',
+    models: ['deepseek-chat', 'deepseek-flash'],
+    envVar: 'DEEPSEEK_API_KEY',
+    onCall,
   });
 }
 
-test('GET /api/v2/providers returns vendors and empty providers; unauth is 401', async () => {
-  const srv = await startServer({ token: TOKEN, env: { WEFT_LLM: 'faux' } });
-  try {
-    const discovery = await readDiscovery(srv.dataDir);
-    const empty = await sendV2(srv.base, 'GET', '/api/v2/providers', discovery.token);
-    assert.equal(empty.status, 200, empty.text);
-    assert.equal(empty.headers.get('weft-protocol'), PROTOCOL_VERSION);
-    assertChecked('/api/v2/providers', 'GET', 200, empty.body);
-    assert.equal(empty.body.providers.length, 0);
-    assert.equal(empty.body.vendors.length, 11);
-    assert.equal(empty.body.defaultModel, null);
-    assert.equal(empty.body.vendors[0].id, 'deepseek');
-
-    const unauth = await sendV2(srv.base, 'GET', '/api/v2/providers');
-    assert.equal(unauth.status, 401);
-    assertChecked('/api/v2/providers', 'GET', 401, unauth.body);
-  } finally {
-    await stopServer(srv);
+async function readObjectBody(req, res, pathname, method, sendV2) {
+  const chunks = [];
+  for await (const chunk of req) chunks.push(chunk);
+  const raw = Buffer.concat(chunks).toString('utf8');
+  if (!raw.trim()) {
+    sendV2(res, pathname, method, 400, { error: 'invalid body', code: 'E_BAD_REQUEST' });
+    return null;
   }
-});
-
-test('POST/PATCH/DELETE providers follow old source rules and never leak the key', async () => {
-  const fake = await startFake('alpha');
-  const other = await startFake('beta');
-  const secret = 'key-alpha-secret';
-  const srv = await startServer({ token: TOKEN, env: { WEFT_LLM: 'faux' } });
   try {
-    const discovery = await readDiscovery(srv.dataDir);
-    const created = await sendV2(srv.base, 'POST', '/api/v2/providers', discovery.token, {
-      vendor: 'custom',
-      name: 'A',
-      baseUrl: fake.baseUrl,
-      apiKey: secret,
-      models: ['alpha'],
-    });
-    assert.equal(created.status, 201, created.text);
-    assertChecked('/api/v2/providers', 'POST', 201, created.body);
-    assert.equal(created.body.name, 'A');
-    assert.equal(created.body.access, 'custom_endpoint');
-    assert.equal(created.body.hasKey, true);
-    assert.ok(created.body.keyMasked);
-    assert.equal(created.body.status, 'untested');
-    assertNoSecret(created.body, secret, 'create');
-    const id = created.body.id;
-
-    const listed = await sendV2(srv.base, 'GET', '/api/v2/providers', discovery.token);
-    assert.equal(listed.status, 200, listed.text);
-    assertChecked('/api/v2/providers', 'GET', 200, listed.body);
-    assert.equal(listed.body.providers.length, 1);
-    assertNoSecret(listed.body, secret, 'list');
-
-    const renamed = await sendV2(srv.base, 'PATCH', `/api/v2/providers/${id}`, discovery.token, { name: 'Alpha' });
-    assert.equal(renamed.status, 200, renamed.text);
-    assertChecked(`/api/v2/providers/${id}`, 'PATCH', 200, renamed.body);
-    assert.equal(renamed.body.name, 'Alpha');
-    assert.equal(renamed.body.hasKey, true);
-
-    const cleared = await sendV2(srv.base, 'PATCH', `/api/v2/providers/${id}`, discovery.token, {
-      baseUrl: other.baseUrl,
-    });
-    assert.equal(cleared.status, 400, cleared.text);
-    assert.equal(cleared.body.error, 'api key required');
-    const still = await sendV2(srv.base, 'GET', '/api/v2/providers', discovery.token);
-    assert.equal(still.body.providers[0].hasKey, true);
-    assert.equal(still.body.providers[0].baseUrl, fake.baseUrl);
-
-    const moved = await sendV2(srv.base, 'PATCH', `/api/v2/providers/${id}`, discovery.token, {
-      baseUrl: other.baseUrl,
-      apiKey: 'key-beta-secret',
-    });
-    assert.equal(moved.status, 200, moved.text);
-    assert.equal(moved.body.hasKey, true);
-    assertNoSecret(moved.body, 'key-beta-secret', 'moved');
-    assertNoSecret(moved.body, secret, 'moved-old');
-
-    const asDefault = await sendV2(srv.base, 'PATCH', `/api/v2/providers/${id}`, discovery.token, {
-      defaultModel: 'alpha',
-    });
-    assert.equal(asDefault.status, 200, asDefault.text);
-    const afterDefault = await sendV2(srv.base, 'GET', '/api/v2/providers', discovery.token);
-    assert.deepEqual(afterDefault.body.defaultModel, { providerId: id, modelId: 'alpha' });
-    assert.equal(afterDefault.body.providers[0].isDefault, true);
-
-    const deleted = await sendV2(srv.base, 'DELETE', `/api/v2/providers/${id}`, discovery.token, {});
-    assert.equal(deleted.status, 200, deleted.text);
-    assertChecked(`/api/v2/providers/${id}`, 'DELETE', 200, deleted.body);
-    const gone = await sendV2(srv.base, 'GET', '/api/v2/providers', discovery.token);
-    assert.equal(gone.body.providers.length, 0);
-    assert.equal(gone.body.defaultModel, null);
-    assert.equal(JSON.stringify(srv.logs()).includes(secret), false);
-    assert.equal(JSON.stringify(srv.logs()).includes('key-beta-secret'), false);
-  } finally {
-    await stopServer(srv);
-    await Promise.all([fake.close(), other.close()]);
-  }
-});
-
-test('provider test hits the given baseUrl: success, 401, and saved lastTest', async () => {
-  const secret = 'sk-probe-secret-7788';
-  const okFake = await startFake('ok-model');
-  const authFake = await startFake('nope', { status: 401 });
-  const srv = await startServer({ token: TOKEN, env: { WEFT_LLM: 'faux' } });
-  try {
-    const discovery = await readDiscovery(srv.dataDir);
-    const draftOk = await sendV2(srv.base, 'POST', '/api/v2/providers/test', discovery.token, {
-      vendor: 'custom',
-      baseUrl: okFake.baseUrl,
-      apiKey: secret,
-    });
-    assert.equal(draftOk.status, 200, draftOk.text);
-    assertChecked('/api/v2/providers/test', 'POST', 200, draftOk.body);
-    assert.equal(draftOk.body.ok, true);
-    assert.deepEqual(draftOk.body.models, ['ok-model']);
-    assert.equal(draftOk.body.status, 'ok');
-    assertNoSecret(draftOk.body, secret, 'draft-ok');
-    assert.equal(okFake.hits.some((hit) => String(hit.url).endsWith('/models')), true);
-    assert.equal(okFake.hits[0].authorization, `Bearer ${secret}`);
-
-    const draftAuth = await sendV2(srv.base, 'POST', '/api/v2/providers/test', discovery.token, {
-      vendor: 'custom',
-      baseUrl: authFake.baseUrl,
-      apiKey: secret,
-    });
-    assert.equal(draftAuth.status, 200, draftAuth.text);
-    assert.equal(draftAuth.body.ok, false);
-    assert.equal(draftAuth.body.status, 'needs_auth');
-    assert.match(draftAuth.body.statusText, /鉴权失败|Authentication failed/);
-    assertNoSecret(draftAuth.body, secret, 'draft-401');
-    const listed = await sendV2(srv.base, 'GET', '/api/v2/providers', discovery.token);
-    assert.equal(listed.body.providers.length, 0);
-
-    const created = await sendV2(srv.base, 'POST', '/api/v2/providers', discovery.token, {
-      vendor: 'custom',
-      name: 'Saved',
-      baseUrl: okFake.baseUrl,
-      apiKey: secret,
-      models: [],
-    });
-    assert.equal(created.status, 201, created.text);
-    const tested = await sendV2(srv.base, 'POST', `/api/v2/providers/${created.body.id}/test`, discovery.token, {});
-    assert.equal(tested.status, 200, tested.text);
-    assertChecked(`/api/v2/providers/${created.body.id}/test`, 'POST', 200, tested.body);
-    assert.equal(tested.body.status, 'ok');
-    assert.deepEqual(tested.body.models.map((item) => item.id), ['ok-model']);
-    assert.ok(tested.body.lastTestedAt);
-    assertNoSecret(tested.body, secret, 'saved-test');
-
-    const en = await sendV2(srv.base, 'POST', `/api/v2/providers/test?lang=en`, discovery.token, {
-      vendor: 'custom',
-      baseUrl: authFake.baseUrl,
-      apiKey: secret,
-    });
-    assert.equal(en.body.statusText, 'Authentication failed: rejected nope');
-  } finally {
-    await stopServer(srv);
-    await Promise.all([okFake.close(), authFake.close()]);
-  }
-});
-
-test('POST /api/v2/providers/test times out against a hanging origin', async () => {
-  process.env.WEFT_V2_VALIDATE = '1';
-  const dataDir = await mkdtemp(path.join(tmpdir(), 'piw-v2-probe-timeout-'));
-  const hanging = await startFake('slow', { delayMs: 5_000 });
-  const runtime = createV2Runtime({
-    serviceVersion: '0.1.0',
-    startedAt: 1,
-    dataDir,
-    probeTimeoutMs: 120,
-    getSettings: async () => ({ sources: [], models: {} }),
-  });
-  const server = http.createServer((req, res) => {
-    const url = new URL(req.url, 'http://127.0.0.1');
-    runtime.handleApi(req, res, url).catch((err) => {
-      if (!res.headersSent) res.writeHead(500).end(String(err));
-    });
-  });
-  const port = await new Promise((resolve) => {
-    server.listen(0, '127.0.0.1', () => resolve(server.address().port));
-  });
-  runtime.writeDiscoveryFile(port);
-  try {
-    const discovery = JSON.parse(await readFile(discoveryPath(dataDir), 'utf8'));
-    const probed = await sendV2(`http://127.0.0.1:${port}`, 'POST', '/api/v2/providers/test', discovery.token, {
-      vendor: 'custom',
-      baseUrl: hanging.baseUrl,
-      apiKey: 'sk-timeout-secret',
-    });
-    assert.equal(probed.status, 200, probed.text);
-    assertChecked('/api/v2/providers/test', 'POST', 200, probed.body);
-    assert.equal(probed.body.ok, false);
-    assert.equal(probed.body.status, 'unreachable');
-    assert.match(probed.body.statusText, /超时|Timed out/);
-    assertNoSecret(probed.body, 'sk-timeout-secret', 'timeout');
-    assert.equal(probed.body.models.length, 0);
-  } finally {
-    runtime.dispose();
-    await new Promise((resolve) => server.close(resolve));
-    await hanging.close();
-  }
-});
-
-test('context-window set/restore updates conversation context; PATCH model updates conversation.model', async () => {
-  const fake = await startFake('alpha', { body: { data: [{ id: 'alpha' }, { id: 'beta' }] } });
-  const srv = await startServer({ token: TOKEN, env: { WEFT_LLM: 'faux' } });
-  try {
-    const discovery = await readDiscovery(srv.dataDir);
-    const created = await sendV2(srv.base, 'POST', '/api/v2/providers', discovery.token, {
-      vendor: 'custom',
-      name: 'A',
-      baseUrl: fake.baseUrl,
-      apiKey: 'key-alpha-secret',
-      models: ['alpha', 'beta'],
-    });
-    assert.equal(created.status, 201, created.text);
-    const id = created.body.id;
-    const bound = await sendV2(srv.base, 'PATCH', `/api/v2/providers/${id}`, discovery.token, {
-      defaultModel: 'alpha',
-    });
-    assert.equal(bound.status, 200, bound.text);
-
-    const tooSmall = await sendV2(srv.base, 'PUT', `/api/v2/providers/${id}/models/alpha/context-window`, discovery.token, {
-      window: 12,
-    });
-    assert.equal(tooSmall.status, 400);
-    assertChecked(`/api/v2/providers/${id}/models/alpha/context-window`, 'PUT', 400, tooSmall.body);
-
-    const setWin = await sendV2(srv.base, 'PUT', `/api/v2/providers/${id}/models/alpha/context-window`, discovery.token, {
-      window: 256000,
-    });
-    assert.equal(setWin.status, 200, setWin.text);
-    assertChecked(`/api/v2/providers/${id}/models/alpha/context-window`, 'PUT', 200, setWin.body);
-    const alpha = setWin.body.models.find((item) => item.id === 'alpha');
-    assert.equal(alpha.contextWindow, 256000);
-    assert.equal(alpha.contextWindowCustom, true);
-
-    const ws = await request(srv.base, 'POST', '/api/workspaces', { name: 'models' });
-    assert.equal(ws.status, 201);
-    const conv = await request(srv.base, 'POST', `/api/workspaces/${ws.body.id}/conversations`, { title: 'm' });
-    assert.equal(conv.status, 201);
-    const snap = await sendV2(srv.base, 'GET', `/api/v2/conversations/${conv.body.id}`, discovery.token);
-    assert.equal(snap.status, 200, snap.text);
-    assert.equal(snap.body.conversation.context.window, 256000);
-    assert.equal(snap.body.conversation.model.sourceId, id);
-    assert.equal(snap.body.conversation.model.modelId, 'alpha');
-
-    const switched = await sendV2(srv.base, 'PATCH', `/api/v2/conversations/${conv.body.id}`, discovery.token, {
-      model: { providerId: id, modelId: 'beta' },
-    });
-    assert.equal(switched.status, 200, switched.text);
-    assertChecked(`/api/v2/conversations/${conv.body.id}`, 'PATCH', 200, switched.body);
-    assert.equal(switched.body.model.modelId, 'beta');
-    assert.equal(switched.body.context.window, 128000);
-
-    const restored = await sendV2(srv.base, 'PUT', `/api/v2/providers/${id}/models/alpha/context-window`, discovery.token, {
-      window: null,
-    });
-    assert.equal(restored.status, 200, restored.text);
-    const alpha2 = restored.body.models.find((item) => item.id === 'alpha');
-    assert.equal(alpha2.contextWindowCustom, false);
-
-    const back = await sendV2(srv.base, 'PATCH', `/api/v2/conversations/${conv.body.id}`, discovery.token, {
-      model: null,
-    });
-    assert.equal(back.status, 200, back.text);
-    assert.equal(back.body.model.modelId, 'alpha');
-    assert.equal(back.body.context.window, 128000);
-
-    const bad = await sendV2(srv.base, 'PATCH', `/api/v2/conversations/${conv.body.id}`, discovery.token, {
-      model: { providerId: id, modelId: 'missing' },
-    });
-    assert.equal(bad.status, 400);
-  } finally {
-    await stopServer(srv);
-    await fake.close();
-  }
-});
-
-test('leftover kind:grok source is omitted from GET /api/v2/providers and sending a message does not crash', {
-  timeout: 60000,
-}, async () => {
-  const dataDir = await mkdtemp(path.join(tmpdir(), 'piw-v2-legacy-source-'));
-  const first = await startServer({ token: TOKEN, dataDir });
-  await stopServer(first);
-  writeSettings(dataDir, {
-    version: 2,
-    sources: [{
-      id: 'grok',
-      kind: 'grok',
-      vendor: 'grok',
-      name: 'Grok 订阅',
-      baseUrl: '',
-      apiKey: '',
-      models: ['grok-build'],
-    }],
-    models: { default: { sourceId: 'grok', model: 'grok-build' } },
-  });
-  const srv = await startServer({ token: TOKEN, dataDir });
-  try {
-    const discovery = await readDiscovery(srv.dataDir);
-    const listed = await sendV2(srv.base, 'GET', '/api/v2/providers', discovery.token);
-    assert.equal(listed.status, 200, listed.text);
-    assertChecked('/api/v2/providers', 'GET', 200, listed.body);
-    assert.equal(listed.body.providers.some((item) => item.id === 'grok' || item.vendor === 'Grok'), false, JSON.stringify(listed.body.providers));
-    assert.equal(listed.body.providers.length, 0);
-
-    const ws = await request(srv.base, 'POST', '/api/workspaces', { name: 'legacy-source' });
-    assert.equal(ws.status, 201, ws.text);
-    const conv = await request(srv.base, 'POST', `/api/workspaces/${ws.body.id}/conversations`, {
-      title: 'pinned-to-dropped-source',
-    });
-    assert.equal(conv.status, 201, conv.text);
-    const sent = await sendV2(srv.base, 'POST', `/api/v2/conversations/${conv.body.id}/messages`, discovery.token, {
-      text: 'hello leftover',
-    });
-    assert.equal(sent.status, 202, sent.text);
-    assertChecked(`/api/v2/conversations/${conv.body.id}/messages`, 'POST', 202, sent.body);
-
-    let last = null;
-    for (let i = 0; i < 80; i += 1) {
-      last = await sendV2(srv.base, 'GET', `/api/v2/conversations/${conv.body.id}`, discovery.token);
-      const runStatus = last.body?.conversation?.run?.status;
-      if (last.status === 200 && (runStatus === 'failed' || runStatus === 'idle' || runStatus === 'done')) break;
-      await new Promise((resolve) => setTimeout(resolve, 50));
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      sendV2(res, pathname, method, 400, { error: 'invalid body', code: 'E_BAD_REQUEST' });
+      return null;
     }
-    assert.equal(last.status, 200, last?.text);
-    const run = last.body?.conversation?.run;
-    assert.equal(run?.status, 'failed', JSON.stringify(last.body));
-    assert.equal(run?.error?.code, 'E_NO_MODEL');
+    return parsed;
+  } catch {
+    sendV2(res, pathname, method, 400, { error: 'invalid JSON', code: 'E_BAD_REQUEST' });
+    return null;
+  }
+}
+
+function sendV2(res, requestPath, method, status, body) {
+  if (status === 204) {
+    res.writeHead(204, {
+      'cache-control': 'no-store',
+      'Weft-Protocol': PROTOCOL_VERSION,
+    });
+    res.end();
+    return;
+  }
+  res.writeHead(status, {
+    'content-type': 'application/json; charset=utf-8',
+    'cache-control': 'no-store',
+    'Weft-Protocol': PROTOCOL_VERSION,
+  });
+  res.end(JSON.stringify(body));
+}
+
+async function withHttp(fn, serviceOpts = {}) {
+  const dir = await makeTempDir('weft-providers-http-');
+  const store = createSqliteStore(dir);
+  const credentials = createCredentialStore(store);
+  const modelsStore = createModelsStore(store);
+  if (serviceOpts.settings) await store.replaceSettings(serviceOpts.settings);
+  const changes = [];
+  const service = createProviderService({
+    store,
+    credentials,
+    modelsStore,
+    env: serviceOpts.env || {},
+    extraProviders: serviceOpts.extraProviders,
+    fetchImpl: serviceOpts.fetchImpl,
+    now: serviceOpts.now,
+    loginTtlMs: serviceOpts.loginTtlMs,
+    onChange() { changes.push(Date.now()); },
+  });
+  const server = http.createServer(async (req, res) => {
+    const url = new URL(req.url || '/', 'http://127.0.0.1');
+    const handled = await handleProvidersApi({
+      req,
+      res,
+      url,
+      pathname: url.pathname,
+      method: req.method || 'GET',
+      sendV2,
+      readObjectBody: (incoming, outgoing, pathname, method) => (
+        readObjectBody(incoming, outgoing, pathname, method, sendV2)
+      ),
+    }, { service });
+    if (!handled) {
+      res.writeHead(404, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ error: 'not found', code: 'E_NOT_FOUND' }));
+    }
+  });
+  await new Promise((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', resolve);
+  });
+  const { port } = server.address();
+  const base = `http://127.0.0.1:${port}`;
+  try {
+    return await fn({
+      base,
+      service,
+      store,
+      credentials,
+      modelsStore,
+      changes,
+    });
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+    store.close();
+    await removeTempDir(dir);
+  }
+}
+
+test('GET /api/v2/providers empty snapshot; 401 on the live server', async () => {
+  const srv = await startServer({ token: TOKEN, env: { WEFT_LLM: 'faux' } });
+  try {
+    const discovery = await readDiscovery(srv.dataDir);
+    const unauth = await fetch(`${srv.base}/api/v2/providers`);
+    const unauthBody = await unauth.json();
+    assert.equal(unauth.status, 401);
+    assertChecked('/api/v2/providers', 'GET', 401, unauthBody);
+
+    const got = await fetch(`${srv.base}/api/v2/providers`, {
+      headers: { authorization: `Bearer ${discovery.token}` },
+    });
+    const body = await got.json();
+    assert.equal(got.status, 200, JSON.stringify(body));
+    assert.equal(got.headers.get('weft-protocol'), PROTOCOL_VERSION);
+    assertChecked('/api/v2/providers', 'GET', 200, body);
+    assert.deepEqual(body.providers, []);
+    assert.equal(body.defaultModel, null);
   } finally {
     await stopServer(srv);
   }
+});
+
+test('legacy /api/sources routes still return 503 E_UNAVAILABLE', async () => {
+  const srv = await startServer({ token: TOKEN, env: { WEFT_LLM: 'faux' } });
+  try {
+    const listed = await fetch(`${srv.base}/api/sources`, {
+      headers: { authorization: `Bearer ${TOKEN}` },
+    });
+    const listedBody = await listed.json();
+    assert.equal(listed.status, 503, JSON.stringify(listedBody));
+    assert.equal(listedBody.code, 'E_UNAVAILABLE');
+    const created = await fetch(`${srv.base}/api/sources`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${TOKEN}` },
+      body: JSON.stringify({ vendor: 'custom' }),
+    });
+    const createdBody = await created.json();
+    assert.equal(created.status, 503);
+    assert.equal(createdBody.code, 'E_UNAVAILABLE');
+  } finally {
+    await stopServer(srv);
+  }
+});
+
+test('GET /api/v2/providers/available sorts popular, excludes blocked ids, localizes zh names', async () => {
+  await withHttp(async ({ base }) => {
+    const zh = await send(base, 'GET', '/api/v2/providers/available?lang=zh');
+    assert.equal(zh.status, 200, zh.text);
+    assertChecked('/api/v2/providers/available', 'GET', 200, zh.body);
+    const ids = zh.body.providers.map((item) => item.id);
+    for (const blocked of EXCLUDED_PROVIDER_IDS) {
+      assert.equal(ids.includes(blocked), false, blocked);
+    }
+    const popular = zh.body.providers.filter((item) => item.popular).map((item) => item.id);
+    const expectedPopular = POPULAR_PROVIDER_IDS.filter((id) => ids.includes(id));
+    assert.deepEqual(popular, expectedPopular);
+    assert.deepEqual(zh.body.providers.slice(0, popular.length).map((item) => item.id), popular);
+    const byId = Object.fromEntries(zh.body.providers.map((item) => [item.id, item]));
+    assert.equal(byId['moonshotai-cn']?.name, 'Kimi（国内）');
+    assert.equal(byId.zai?.name, '智谱 Z.AI');
+    assert.equal(byId['qwen-token-plan-cn']?.name, '通义千问 Token Plan（国内）');
+    assert.equal(byId['minimax-cn']?.name, 'MiniMax（国内）');
+    assert.equal(byId.xiaomi?.name, '小米 MiMo');
+    assert.equal(byId.deepseek?.brand, 'deepseek');
+    assert.equal(byId.deepseek?.envVar, 'DEEPSEEK_API_KEY');
+    assert.equal(byId.deepseek?.connected, false);
+
+    const en = await send(base, 'GET', '/api/v2/providers/available?lang=en');
+    assert.equal(en.status, 200, en.text);
+    assertChecked('/api/v2/providers/available', 'GET', 200, en.body);
+    const enZai = en.body.providers.find((item) => item.id === 'zai');
+    assert.notEqual(enZai.name, '智谱 Z.AI');
+  });
+});
+
+test('POST connect api_key success and auth failure does not save or leak the key', async () => {
+  let allow = false;
+  await withHttp(async ({ base, credentials, store }) => {
+    const logs = [];
+    const origLog = console.log;
+    const origErr = console.error;
+    console.log = (...args) => { logs.push(args.map(String).join(' ')); };
+    console.error = (...args) => { logs.push(args.map(String).join(' ')); };
+    let failed;
+    try {
+      failed = await send(base, 'POST', '/api/v2/providers/deepseek/connect?lang=zh', {
+        method: 'api_key',
+        apiKey: SECRET,
+      });
+    } finally {
+      console.log = origLog;
+      console.error = origErr;
+    }
+    assert.equal(failed.status, 400, failed.text);
+    assert.equal(failed.body.code, 'E_AUTH');
+    assertChecked('/api/v2/providers/deepseek/connect', 'POST', 400, failed.body);
+    assertNoSecret(failed.body);
+    assertNoSecret(logs.join('\n'));
+    assert.equal(await credentials.read('deepseek'), undefined);
+    assert.deepEqual((await store.getSettings()).providers, []);
+
+    allow = true;
+    const ok = await send(base, 'POST', '/api/v2/providers/deepseek/connect?lang=zh', {
+      method: 'api_key',
+      apiKey: SECRET,
+    });
+    assert.equal(ok.status, 200, ok.text);
+    assertChecked('/api/v2/providers/deepseek/connect', 'POST', 200, ok.body);
+    assert.equal(ok.body.provider.id, 'deepseek');
+    assert.equal(ok.body.provider.auth.type, 'api_key');
+    assert.equal(ok.body.provider.auth.keyTail, SECRET.slice(-4));
+    assert.equal(ok.body.provider.status.state, 'ok');
+    assertNoSecret(ok.body);
+    assert.equal((await credentials.read('deepseek')).key, SECRET);
+
+    const listed = await send(base, 'GET', '/api/v2/providers?lang=zh');
+    assert.equal(listed.status, 200);
+    assertChecked('/api/v2/providers', 'GET', 200, listed.body);
+    assert.equal(listed.body.providers[0].id, 'deepseek');
+    assertNoSecret(listed.body);
+  }, {
+    extraProviders: [deepseekFake(() => (allow
+      ? { ok: true }
+      : { ok: false, status: 401, errorMessage: 'invalid api key' }))],
+  });
+});
+
+test('POST connect env succeeds when the env var is present', async () => {
+  await withHttp(async ({ base, credentials }) => {
+    const missing = await send(base, 'POST', '/api/v2/providers/deepseek/connect', { method: 'env' });
+    assert.equal(missing.status, 400);
+    assert.equal(missing.body.code, 'E_BAD_REQUEST');
+    assertChecked('/api/v2/providers/deepseek/connect', 'POST', 400, missing.body);
+  }, { extraProviders: [deepseekFake()] });
+
+  await withHttp(async ({ base, credentials }) => {
+    const ok = await send(base, 'POST', '/api/v2/providers/deepseek/connect?lang=zh', { method: 'env' });
+    assert.equal(ok.status, 200, ok.text);
+    assertChecked('/api/v2/providers/deepseek/connect', 'POST', 200, ok.body);
+    assert.equal(ok.body.provider.auth.type, 'env');
+    assert.equal(ok.body.provider.auth.envVar, 'DEEPSEEK_API_KEY');
+    assert.equal(await credentials.read('deepseek'), undefined);
+  }, {
+    env: { DEEPSEEK_API_KEY: 'sk-from-env' },
+    extraProviders: [deepseekFake()],
+  });
+});
+
+test('POST connect oauth, poll, answer, done; cancel and unknown session', async () => {
+  await withHttp(async ({ base, credentials }) => {
+    const bad = await send(base, 'POST', '/api/v2/providers/nope/connect', { method: 'oauth' });
+    assert.equal(bad.status, 404);
+    assertChecked('/api/v2/providers/nope/connect', 'POST', 404, bad.body);
+
+    const started = await send(base, 'POST', '/api/v2/providers/google/connect?lang=zh', {
+      method: 'oauth',
+    });
+    assert.equal(started.status, 200, started.text);
+    assertChecked('/api/v2/providers/google/connect', 'POST', 200, started.body);
+    const sid = started.body.session.id;
+    assert.ok(['pending', 'prompt'].includes(started.body.session.state));
+
+    const prompted = await waitUntil(async () => {
+      const got = await send(base, 'GET', `/api/v2/login-sessions/${sid}?lang=zh`);
+      assert.equal(got.status, 200, got.text);
+      assertChecked(`/api/v2/login-sessions/${sid}`, 'GET', 200, got.body);
+      return got.body.session.state === 'prompt' ? got.body.session : null;
+    });
+    assert.equal(prompted.prompt.type, 'manual_code');
+    assert.equal(prompted.events[0].type, 'auth_url');
+    assert.equal(prompted.events[1].type, 'device_code');
+
+    const answered = await send(base, 'POST', `/api/v2/login-sessions/${sid}/answer`, {
+      value: 'user-code',
+    });
+    assert.equal(answered.status, 200, answered.text);
+    assertChecked(`/api/v2/login-sessions/${sid}/answer`, 'POST', 200, answered.body);
+
+    const done = await waitUntil(async () => {
+      const got = await send(base, 'GET', `/api/v2/login-sessions/${sid}`);
+      return got.body.session.state === 'done' ? got.body.session : null;
+    });
+    assert.equal(done.provider.id, 'google');
+    assert.equal(done.provider.auth.type, 'oauth');
+    assert.equal((await credentials.read('google')).type, 'oauth');
+
+    const missing = await send(base, 'GET', '/api/v2/login-sessions/unknown');
+    assert.equal(missing.status, 404);
+    assertChecked('/api/v2/login-sessions/unknown', 'GET', 404, missing.body);
+    assert.equal(missing.body.error, phrase('zh', 'src_err_session'));
+  }, { extraProviders: [fakeOAuthProvider({ id: 'google', name: 'Google' })] });
+});
+
+test('POST login-sessions cancel', async () => {
+  await withHttp(async ({ base, store }) => {
+    const started = await send(base, 'POST', '/api/v2/providers/google/connect', { method: 'oauth' });
+    const sid = started.body.session.id;
+    await waitUntil(async () => {
+      const got = await send(base, 'GET', `/api/v2/login-sessions/${sid}`);
+      return got.body.session.state === 'prompt';
+    });
+    const cancelled = await send(base, 'POST', `/api/v2/login-sessions/${sid}/cancel`, {});
+    assert.equal(cancelled.status, 200, cancelled.text);
+    assertChecked(`/api/v2/login-sessions/${sid}/cancel`, 'POST', 200, cancelled.body);
+    assert.equal(cancelled.body.session.state, 'cancelled');
+    assert.deepEqual((await store.getSettings()).providers, []);
+  }, { extraProviders: [fakeOAuthProvider({ id: 'google', name: 'Google' })] });
+});
+
+test('POST /api/v2/providers/custom fetches /models; failure does not save', async () => {
+  await withHttp(async ({ base, store, credentials }) => {
+    const failed = await send(base, 'POST', '/api/v2/providers/custom?lang=zh', {
+      name: 'Local',
+      baseUrl: 'http://127.0.0.1:9/v1',
+      api: 'openai-completions',
+      apiKey: SECRET,
+    });
+    assert.equal(failed.status, 400, failed.text);
+    assertChecked('/api/v2/providers/custom', 'POST', 400, failed.body);
+    assertNoSecret(failed.body);
+    assert.deepEqual((await store.getSettings()).providers, []);
+    assert.equal((await credentials.list()).length, 0);
+
+    const missingName = await send(base, 'POST', '/api/v2/providers/custom', {
+      baseUrl: 'http://127.0.0.1:9/v1',
+      api: 'openai-completions',
+    });
+    assert.equal(missingName.status, 400);
+    assert.equal(missingName.body.code, 'E_BAD_REQUEST');
+  }, {
+    fetchImpl: async () => ({
+      ok: false,
+      status: 401,
+      text: async () => 'unauthorized',
+    }),
+  });
+
+  await withHttp(async ({ base }) => {
+    const created = await send(base, 'POST', '/api/v2/providers/custom?lang=zh', {
+      name: 'Local',
+      baseUrl: 'http://127.0.0.1:9/v1',
+      api: 'openai-completions',
+      apiKey: 'sk-custom-ok',
+    });
+    assert.equal(created.status, 200, created.text);
+    assertChecked('/api/v2/providers/custom', 'POST', 200, created.body);
+    assert.equal(created.body.provider.kind, 'custom');
+    assert.equal(created.body.provider.brand, null);
+    assert.equal(created.body.provider.models.length, 2);
+    assert.equal(created.body.provider.models.every((item) => item.enabled), true);
+    assertNoSecret(created.body, 'sk-custom-ok');
+  }, {
+    fetchImpl: async () => ({
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify({ data: [{ id: 'alpha', name: 'Alpha' }, { id: 'beta' }] }),
+    }),
+  });
+});
+
+test('POST test, PATCH, DELETE 204, and 404 for missing provider', async () => {
+  await withHttp(async ({ base, credentials, store }) => {
+    const missingTest = await send(base, 'POST', '/api/v2/providers/deepseek/test', {});
+    assert.equal(missingTest.status, 404);
+    assertChecked('/api/v2/providers/deepseek/test', 'POST', 404, missingTest.body);
+
+    const connected = await send(base, 'POST', '/api/v2/providers/deepseek/connect', {
+      method: 'api_key',
+      apiKey: 'sk-ok-123456',
+    });
+    assert.equal(connected.status, 200, connected.text);
+
+    const tested = await send(base, 'POST', '/api/v2/providers/deepseek/test', {});
+    assert.equal(tested.status, 200, tested.text);
+    assertChecked('/api/v2/providers/deepseek/test', 'POST', 200, tested.body);
+    assert.equal(tested.body.provider.status.state, 'ok');
+
+    const patched = await send(base, 'PATCH', '/api/v2/providers/deepseek?lang=zh', {
+      enabled: ['deepseek-chat'],
+      overrides: { 'deepseek-chat': { contextWindow: 64000, maxTokens: 1024 } },
+      defaultModel: 'deepseek-chat',
+    });
+    assert.equal(patched.status, 200, patched.text);
+    assertChecked('/api/v2/providers/deepseek', 'PATCH', 200, patched.body);
+    const chat = patched.body.provider.models.find((item) => item.id === 'deepseek-chat');
+    assert.equal(chat.enabled, true);
+    assert.equal(chat.overridden.contextWindow, true);
+    assert.equal(chat.overridden.maxTokens, true);
+    const listed = await send(base, 'GET', '/api/v2/providers');
+    assert.deepEqual(listed.body.defaultModel, {
+      providerId: 'deepseek',
+      modelId: 'deepseek-chat',
+    });
+
+    const cleared = await send(base, 'PATCH', '/api/v2/providers/deepseek', {
+      overrides: { 'deepseek-chat': { contextWindow: null, maxTokens: null } },
+      defaultModel: null,
+    });
+    assert.equal(cleared.status, 200);
+    const clearedChat = cleared.body.provider.models.find((item) => item.id === 'deepseek-chat');
+    assert.deepEqual(clearedChat.overridden, {});
+
+    await send(base, 'PATCH', '/api/v2/providers/deepseek', { defaultModel: 'deepseek-chat' });
+    const removed = await send(base, 'DELETE', '/api/v2/providers/deepseek');
+    assert.equal(removed.status, 204, removed.text);
+    assert.equal(removed.body, null);
+    assertChecked('/api/v2/providers/deepseek', 'DELETE', 204, removed.body);
+    assert.equal(await credentials.read('deepseek'), undefined);
+    assert.deepEqual((await store.getSettings()).providers, []);
+    const after = await send(base, 'GET', '/api/v2/providers');
+    assert.equal(after.body.defaultModel, null);
+
+    const missingDel = await send(base, 'DELETE', '/api/v2/providers/deepseek');
+    assert.equal(missingDel.status, 404);
+    assertChecked('/api/v2/providers/deepseek', 'DELETE', 404, missingDel.body);
+  }, { extraProviders: [deepseekFake()] });
+});
+
+test('POST connect rejects unknown methods', async () => {
+  await withHttp(async ({ base }) => {
+    const got = await send(base, 'POST', '/api/v2/providers/deepseek/connect', { method: 'magic' });
+    assert.equal(got.status, 400);
+    assert.equal(got.body.code, 'E_BAD_REQUEST');
+    assertChecked('/api/v2/providers/deepseek/connect', 'POST', 400, got.body);
+  }, { extraProviders: [deepseekFake()] });
 });

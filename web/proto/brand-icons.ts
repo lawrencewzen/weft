@@ -16,6 +16,25 @@ import lmstudio from '../../public/vendor/brand-icons/lmstudio.svg?raw';
 import mistral from '../../public/vendor/brand-icons/mistral.svg?raw';
 import meta from '../../public/vendor/brand-icons/meta.svg?raw';
 import google from '../../public/vendor/brand-icons/google.svg?raw';
+import minimax from '../../public/vendor/brand-icons/minimax.svg?raw';
+import xiaomimimo from '../../public/vendor/brand-icons/xiaomimimo.svg?raw';
+import aws from '../../public/vendor/brand-icons/aws.svg?raw';
+import azure from '../../public/vendor/brand-icons/azure.svg?raw';
+import googlecloud from '../../public/vendor/brand-icons/googlecloud.svg?raw';
+import antgroup from '../../public/vendor/brand-icons/antgroup.svg?raw';
+import baseten from '../../public/vendor/brand-icons/baseten.svg?raw';
+import cerebras from '../../public/vendor/brand-icons/cerebras.svg?raw';
+import cloudflare from '../../public/vendor/brand-icons/cloudflare.svg?raw';
+import fireworks from '../../public/vendor/brand-icons/fireworks.svg?raw';
+import groq from '../../public/vendor/brand-icons/groq.svg?raw';
+import huggingface from '../../public/vendor/brand-icons/huggingface.svg?raw';
+import nvidia from '../../public/vendor/brand-icons/nvidia.svg?raw';
+import opencode from '../../public/vendor/brand-icons/opencode.svg?raw';
+import together from '../../public/vendor/brand-icons/together.svg?raw';
+import vercel from '../../public/vendor/brand-icons/vercel.svg?raw';
+import alibaba from '../../public/vendor/brand-icons/alibaba.svg?raw';
+import bedrock from '../../public/vendor/brand-icons/bedrock.svg?raw';
+import vertexai from '../../public/vendor/brand-icons/vertexai.svg?raw';
 
 /**
  * Only the brand icons the prototype data actually shows are bundled; inlining
@@ -30,6 +49,7 @@ const ICONS: Record<string, string> = {
   gemini,
   qwen,
   githubcopilot,
+  'github-copilot': githubcopilot,
   kiro,
   deepseek,
   moonshot,
@@ -41,6 +61,27 @@ const ICONS: Record<string, string> = {
   mistral,
   meta,
   google,
+  minimax,
+  xiaomi: xiaomimimo,
+  xiaomimimo,
+  aws,
+  azure,
+  googlecloud,
+  antgroup,
+  baseten,
+  cerebras,
+  cloudflare,
+  fireworks,
+  groq,
+  huggingface,
+  nvidia,
+  opencode,
+  together,
+  togetherai: together,
+  vercel,
+  alibaba,
+  bedrock,
+  vertexai,
 };
 
 function dataUri(raw: string): string {
@@ -48,12 +89,16 @@ function dataUri(raw: string): string {
 }
 
 const BRAND_SRC = /^\/vendor\/brand-icons\/([a-z0-9._-]+)\.svg$/i;
+const FALLBACK_PLUG_SVG =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none" stroke="%23888888" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2v3.5M10 2v3.5"/><path d="M4.5 5.5h7v3a3.5 3.5 0 0 1-7 0Z"/><path d="M8 12v2.5"/></svg>';
+const FALLBACK_DATA_URI = `data:image/svg+xml;charset=utf-8,${FALLBACK_PLUG_SVG}`;
 
 function mapBrandSrc(value: unknown): string {
   const text = String(value ?? '');
   const match = BRAND_SRC.exec(text);
-  const raw = match ? ICONS[match[1].toLowerCase()] : undefined;
-  return raw ? dataUri(raw) : text;
+  if (!match) return text;
+  const raw = ICONS[match[1].toLowerCase()];
+  return raw ? dataUri(raw) : FALLBACK_DATA_URI;
 }
 
 /**

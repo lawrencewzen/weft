@@ -7,27 +7,11 @@ import { TOOLS as BUILTIN_TOOLS } from './src/core/config.mjs';
 import { resolveInWorkspace } from './src/core/paths.mjs';
 import { listWorkspaceTree } from './src/core/workspace-tree.mjs';
 import { diffStats } from './src/core/diff.mjs';
-import { publicSettings, isMaskedOrEmptyApiKey } from './src/core/settings.mjs';
-import {
-  VENDOR_PRESETS,
-  publicSource,
-  migrateLegacySettings,
-  resolveConversationModelPatch,
-  hasAvailableSource,
-  validateRoleModels,
-  createApiSource,
-  applySourcePatch,
-  contextWindowForConversation,
-  resolveConversationTarget,
-  sourceFromEnv,
-  probeModels,
-  probeFailurePayload,
-  modelsAfterProbe,
-  effectiveBaseUrl,
-  vendorPreset,
-  sourceNeedsKey,
-  normalizeHttpUrl,
-} from './src/core/model-sources.mjs';
+import { publicSettings } from './src/core/settings.mjs';
+import { VENDOR_PRESETS } from './src/core/model-sources.mjs';
+import { createCredentialStore, createModelsStore } from './src/core/provider-stores.mjs';
+import { createProviderService } from './src/core/provider-service.mjs';
+import { migrateAppSettingsToV3 } from './src/core/provider-migrate.mjs';
 import { cloneGitRepo, stripGitUrlCredentials } from './src/core/git-import.mjs';
 import { gitFailureBody, planWorkspaceGit as planGitImport, usesConnectionClone } from './src/core/workspace-git.mjs';
 import {
@@ -85,7 +69,7 @@ const PLUGIN_DIRS = [path.join(ROOT, 'plugins'), path.join(DATA_DIR, 'plugins')]
 const USER_SKILLS = path.join(DATA_DIR, 'skills');
 const USER_PLUGINS = path.join(DATA_DIR, 'plugins');
 await fs.mkdir(DATA_DIR, { recursive: true });
-const v2 = createV2Runtime({
+const v2Opts = {
   serviceVersion: String(pkg.version || '0.0.0'),
   startedAt,
   dataDir: DATA_DIR,
@@ -99,12 +83,12 @@ const v2 = createV2Runtime({
     if (!conv) return null;
     const presented = await kernelApi.present(conv, { includeMessages: true });
     const subagents = await kernelApi.listSubagents(presented);
-    const settings = await ensureSettings();
+    const target = providerService ? await providerService.resolveTarget(presented) : null;
     return {
       presented,
       subagents,
-      modelTarget: resolveConversationTarget(settings, presented),
-      window: contextWindowForConversation(settings, presented),
+      modelTarget: target ? { source: { id: target.providerId }, model: target.modelId } : null,
+      window: providerService ? await providerService.contextWindowFor(presented) : null,
     };
   },
   async getConversation(id) {
@@ -230,7 +214,8 @@ const v2 = createV2Runtime({
       return planGitImport(body, { loadConnections: loadGitConnections });
     },
   },
-});
+};
+const v2 = createV2Runtime(v2Opts);
 
 let dataLock;
 try {
@@ -305,55 +290,23 @@ function envRequestsFaux() {
   return explicitDemo();
 }
 
-let droppedLegacySettingsFields = false;
-
 async function ensureSettings() {
-  const current = await store.getSettings();
-  if (current.version === 2) {
-    if (!droppedLegacySettingsFields) {
-      await store.putSettings({});
-      droppedLegacySettingsFields = true;
-      return store.getSettings();
-    }
-    return current;
-  }
-  const migrated = migrateLegacySettings(current);
-  await store.putSettings(migrated);
-  droppedLegacySettingsFields = true;
-  const saved = await store.getSettings();
-  return saved.version === 2 ? saved : migrated;
+  await migrateAppSettingsToV3(store, { credentials: credentialStore });
+  return store.getSettings();
 }
 
 async function resolveChatKind() {
   if (envRequestsFaux()) return 'faux';
   if (String(process.env.WEFT_LLM || '').trim().toLowerCase() === 'openai') return 'openai';
-  const settings = await ensureSettings();
-  const available = hasAvailableSource(settings);
-  return selectChatRuntime('', { hasApiKey: available });
+  const available = providerService ? await providerService.hasAvailableModel() : false;
+  return selectChatRuntime('', { hasApiKey: available, hasBaseUrl: available });
 }
 
 async function settingsResponse(stored) {
   const body = publicSettings(stored);
   body.vendors = VENDOR_PRESETS.map((item) => ({ ...item }));
-  body.sources = (stored?.version === 2 ? (stored.sources || []) : []).map((source) => publicSource(source));
   body.runtime = await resolveChatKind();
   return body;
-}
-
-function presentProbe(result) {
-  if (result?.ok) return { ok: true, models: result.models || [] };
-  return probeFailurePayload(result);
-}
-
-function lastTestFrom(result) {
-  const lastTest = { ok: result?.ok === true, at: new Date().toISOString() };
-  if (!lastTest.ok) {
-    const failure = probeFailurePayload(result);
-    lastTest.error = failure.error;
-    if (failure.code) lastTest.code = failure.code;
-    if (failure.status) lastTest.status = failure.status;
-  }
-  return lastTest;
 }
 
 function publicConversation(conv) {
@@ -458,6 +411,17 @@ function isSsePath(p) {
 }
 
 const store = createSqliteStore(DATA_DIR);
+const credentialStore = createCredentialStore(store);
+const modelsStore = createModelsStore(store);
+const providerService = createProviderService({
+  store,
+  credentials: credentialStore,
+  modelsStore,
+  onChange() {
+    try { v2.notifyProvidersChanged(); } catch { /* v2 may still be starting */ }
+  },
+});
+v2Opts.providerService = providerService;
 let kernelApi = null;
 
 async function reloadKernelPlugins() {
@@ -506,17 +470,7 @@ await ensureSettings();
   const apiKey = String(process.env.LLM_API_KEY || '').trim();
   const model = String(process.env.LLM_MODEL || '').trim();
   if (baseUrl || apiKey || model) {
-    const cur = await ensureSettings();
-    const hasApi = (cur.sources || []).some((source) => source.kind === 'api');
-    if (!hasApi) {
-      const seeded = sourceFromEnv({ baseUrl, apiKey, model });
-      if (seeded?.source) {
-        await store.putSettings({
-          sources: [...(cur.sources || []), seeded.source],
-          models: { ...(cur.models || {}), ...seeded.models },
-        });
-      }
-    }
+    await providerService.seedFromEnv({ baseUrl, apiKey, model });
   }
 }
 
@@ -534,6 +488,9 @@ try {
     describeAgents: agentsFor,
     extensions: extensionHost,
     getSettings: () => ensureSettings(),
+    credentials: credentialStore,
+    modelsStore,
+    providerService,
   });
 } catch (err) {
   console.error(`WEFT_KERNEL_OPEN_FAILED ${err instanceof Error ? err.message : err}`);
@@ -620,128 +577,9 @@ const server = createServer(async (req, res) => {
   }
 });
 
-function parseSourceId(raw) {
-  let id = raw;
-  try { id = decodeURIComponent(raw); } catch { return null; }
-  if (!/^[a-f0-9]{8}$/.test(id) && !/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,31}$/.test(id)) return null;
-  return id;
-}
-
 async function handleSources(req, res, p, m) {
-  if (p === '/api/sources' && m === 'POST') {
-    const body = await readBody(req);
-    const created = createApiSource(body || {});
-    if (!created.source) {
-      sendJson(res, 400, { error: created.error || 'invalid source' });
-      return true;
-    }
-    const settings = await ensureSettings();
-    if (settings.sources.some((source) => source.id === created.source.id)) {
-      sendJson(res, 409, { error: 'exists' });
-      return true;
-    }
-    await store.putSettings({ sources: [...settings.sources, created.source] });
-    v2.notifyProvidersChanged();
-    sendJson(res, 201, publicSource(created.source));
-    return true;
-  }
-
-  if (p === '/api/sources/test' && m === 'POST') {
-    const body = await readBody(req);
-    const settings = await ensureSettings();
-    if (body?.sourceId != null && String(body.sourceId).trim()) {
-      const id = parseSourceId(String(body.sourceId));
-      const source = id && settings.sources.find((item) => item.id === id);
-      if (!source) {
-        sendJson(res, 404, { error: 'not found' });
-        return true;
-      }
-      const override = {};
-      for (const key of ['vendor', 'baseUrl', 'apiKey']) {
-        if (body[key] != null) override[key] = body[key];
-      }
-      const hasOverride = Object.keys(override).length > 0;
-      let probeSource = source;
-      if (hasOverride) {
-        const patched = applySourcePatch(source, override);
-        if (!patched.source) {
-          sendJson(res, 400, { error: patched.error || 'invalid source' });
-          return true;
-        }
-        probeSource = patched.source;
-      }
-      const result = await probeModels({ baseUrl: effectiveBaseUrl(probeSource), apiKey: probeSource.apiKey });
-      if (!hasOverride) {
-        const sources = settings.sources.map((item) => {
-          if (item.id !== source.id) return item;
-          const next = { ...item, lastTest: lastTestFrom(result) };
-          if (result?.ok) {
-            const merged = modelsAfterProbe(item.models, result.models);
-            next.models = merged.models;
-            if (merged.catalog.length) next.catalog = merged.catalog;
-            else delete next.catalog;
-          }
-          return next;
-        });
-        await store.putSettings({ sources });
-        v2.notifyProvidersChanged();
-      }
-      sendJson(res, 200, presentProbe(result));
-      return true;
-    }
-    const preset = vendorPreset(body?.vendor);
-    if (!preset) {
-      sendJson(res, 400, { error: 'unknown vendor' });
-      return true;
-    }
-    const baseUrl = body?.baseUrl != null && String(body.baseUrl).trim()
-      ? normalizeHttpUrl(body.baseUrl)
-      : (preset.id !== 'custom' ? preset.baseUrl : '');
-    const apiKey = isMaskedOrEmptyApiKey(body?.apiKey) ? '' : String(body.apiKey);
-    if (!baseUrl) {
-      sendJson(res, 400, { error: 'base url required' });
-      return true;
-    }
-    if (sourceNeedsKey({ kind: 'api', vendor: preset.id }) && !apiKey) {
-      sendJson(res, 400, { error: 'api key required' });
-      return true;
-    }
-    const result = await probeModels({ baseUrl, apiKey });
-    sendJson(res, 200, presentProbe(result));
-    return true;
-  }
-
-  const match = p.match(/^\/api\/sources\/([^/]+)$/);
-  if (!match) return false;
-  const id = parseSourceId(match[1]);
-  const settings = await ensureSettings();
-  const index = id ? settings.sources.findIndex((source) => source.id === id) : -1;
-  if (index < 0) {
-    sendJson(res, 404, { error: 'not found' });
-    return true;
-  }
-  const current = settings.sources[index];
-  if (m === 'DELETE') {
-    const sources = settings.sources.filter((source) => source.id !== current.id);
-    const models = { ...(settings.models || {}) };
-    if (models.default?.sourceId === current.id) models.default = null;
-    await store.putSettings({ sources, models });
-    v2.notifyProvidersChanged();
-    sendJson(res, 200, { ok: true, id: current.id });
-    return true;
-  }
-  if (m === 'PUT') {
-    const body = await readBody(req);
-    const patched = applySourcePatch(current, body || {});
-    if (!patched.source) {
-      sendJson(res, 400, { error: patched.error || 'invalid source' });
-      return true;
-    }
-    const sources = settings.sources.slice();
-    sources[index] = patched.source;
-    await store.putSettings({ sources });
-    v2.notifyProvidersChanged();
-    sendJson(res, 200, publicSource(patched.source));
+  if (p === '/api/sources' || p === '/api/sources/test' || /^\/api\/sources\/[^/]+$/.test(p)) {
+    sendJson(res, 503, { error: 'providers api is being rewritten', code: 'E_UNAVAILABLE' });
     return true;
   }
   return false;
@@ -1050,7 +888,7 @@ async function routeApi(req, res, url) {
     const ws = await store.getWorkspace(wid);
     if (!ws) { sendJson(res, 404, { error: 'workspace not found' }); return; }
     const body = await readBody(req);
-    const modelChoice = resolveConversationModelPatch(await store.getSettings(), body);
+    const modelChoice = await providerService.resolveConversationModelPatch(body);
     if (modelChoice.present && !modelChoice.ok) {
       sendJson(res, 400, { errors: modelChoice.errors });
       return;
@@ -1190,10 +1028,9 @@ async function routeApi(req, res, url) {
       ...(await agentsFor(live, messages)),
       ...(await kernelApi.listSubagents(live)),
     ];
-    const settings = await ensureSettings();
     const context = presentConversationContext(
       live.usage,
-      contextWindowForConversation(settings, live),
+      await providerService.contextWindowFor(live),
     );
     sendJson(res, 200, {
       id: live.id,
@@ -1291,14 +1128,7 @@ async function routeApi(req, res, url) {
   }
   if (p === '/api/settings' && m === 'PUT') {
     const body = await readBody(req) || {};
-    const current = await ensureSettings();
-    if (body.models && typeof body.models === 'object' && !Array.isArray(body.models)) {
-      const invalid = validateRoleModels(current, body.models);
-      if (invalid) { sendJson(res, 400, { error: invalid }); return; }
-    } else if (body.models != null) {
-      sendJson(res, 400, { error: 'invalid model binding' });
-      return;
-    }
+    await ensureSettings();
     const patch = { ...body };
     delete patch.sources;
     delete patch.version;
@@ -1308,8 +1138,10 @@ async function routeApi(req, res, url) {
     delete patch.apiKey;
     delete patch.hasApiKey;
     delete patch.gitConnections;
+    delete patch.models;
+    delete patch.providers;
+    delete patch.defaultModel;
     const saved = await store.putSettings(patch);
-    if (Object.prototype.hasOwnProperty.call(body, 'models')) v2.notifyProvidersChanged();
     sendJson(res, 200, await settingsResponse(saved));
     return;
   }

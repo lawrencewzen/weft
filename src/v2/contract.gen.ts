@@ -80,7 +80,7 @@ export interface paths {
          *     - `provider`：id 为 Provider id，值为 Provider
          *     - `defaults`：id 为 `self`，值为 ProviderDefaults（`model` 为当前默认 `{ providerId, modelId }`，没有则为 null）
          *
-         *     快照是 GET /api/v2/providers 的 providers 与 defaultModel 拆成上述实体（vendors 是静态预设，不进推送）。任何 Provider 增删改、连通性测试、上下文上限或默认模型修改后 upsert（新旧接口改动都要触发）；实体删除时 remove。
+         *     快照是 GET /api/v2/providers 的 providers 与 defaultModel 拆成上述实体。任何 Provider 增删改（接入、自定义接口、测试、PATCH、删除）或默认模型修改后 upsert；实体删除时 remove。登录会话不进主题，靠轮询 GET /api/v2/login-sessions/{sid}。密钥永不明文出现在响应或推送里。
          *
          *     主题 `extensions` 注册为精确主题。实体：
          *     - `plugin`：id 为插件 id，值为 Plugin
@@ -584,25 +584,44 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Provider 列表、厂商预设和默认模型
-         * @description 返回当前已保存的 Provider 视图、VENDOR_PRESETS 预设列表，以及默认模型。
-         *     `statusText` 按 `lang` 出成句。密钥只以 keyMasked 出现，响应不含明文 key。
+         * 已接入的模型服务商和默认模型
+         * @description 返回当前 settings.providers 里的 Provider 视图，以及默认模型。
+         *     `status.error` 按 `lang` 出成句。密钥只以 auth.keyTail（末 4 位）出现，响应不含明文 key。
+         *     界面上不出现「pi-ai」字样。
          */
         get: operations["getProviders"];
         put?: never;
-        /**
-         * 新增 API Provider
-         * @description 创建规则与旧 POST /api/sources 相同（createApiSource）。
-         *     成功后推送 providers 主题。
-         */
-        post: operations["createProvider"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v2/providers/test": {
+    "/api/v2/providers/available": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 可接入的内置服务商目录
+         * @description 返回全部内置服务商（排除 xai、openai-codex、radius、typesafe）。
+         *     popular 优先（固定顺序），其余按 name 排序。
+         *     `envVar` / `envDetected` 按内置服务商的环境变量规则；`connected` 表示已在 settings.providers 里。
+         *     中文环境下少量本地化名：moonshotai-cn、zai、qwen-token-plan-cn、minimax-cn、xiaomi。
+         */
+        get: operations["getAvailableProviders"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/providers/custom": {
         parameters: {
             query?: never;
             header?: never;
@@ -612,11 +631,56 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * 用请求体里的配置测试连通并探测模型（不保存）
-         * @description 只把请求发往请求体里的 baseUrl（或该 vendor 预设地址）。不写 lastTest。
-         *     探测失败时 models 为空数组。statusText 按 lang 出成句。响应不含明文 key。
+         * 新增自定义接口
+         * @description 先 GET `{baseUrl}/models`，成功才保存。拉到的模型 ≤6 个全启用，否则都不启用。
+         *     失败 400 不保存。成功后推送 providers 主题。
          */
-        post: operations["testProviderDraft"];
+        post: operations["createCustomProvider"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/providers/{id}/connect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 接入内置服务商
+         * @description `method=api_key` 或 `env`：用该服务商第一个启用的模型（没有启用的就用目录第一个 chat 模型）发一次 max_tokens=1 的请求；
+         *     验证通过后 `{ provider }`。新接入的内置服务商默认启用：模型 ≤6 个时全部，否则一个都不启用。
+         *     验证失败 400 `{ error, code: E_AUTH | E_NETWORK | E_HTTP }`，不保存凭据。
+         *     `method=oauth`：开始登录会话，返回 `{ session }`。同一服务商同时只允许一个进行中的会话。
+         */
+        post: operations["connectProvider"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/providers/{id}/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 测试已保存的服务商
+         * @description 内置：用第一个启用的模型发一次 max_tokens=1 的请求。
+         *     自定义：重新拉 /models 并合并，已启用和覆盖保留。
+         *     结果写进 lastTest，推送 providers 主题。响应不含明文 key。
+         */
+        post: operations["testProvider"];
         delete?: never;
         options?: never;
         head?: never;
@@ -635,20 +699,40 @@ export interface paths {
         post?: never;
         /**
          * 删除 Provider
-         * @description 删除后若它是默认模型来源则清空默认。推送 providers 主题。
+         * @description 同时删除凭据。默认模型指向它时清空。推送 providers 主题。成功 204。
          */
         delete: operations["deleteProvider"];
         options?: never;
         head?: never;
         /**
          * 修改已保存的 Provider
-         * @description 改名、baseUrl、key、模型列表、默认模型。换 baseUrl 或 vendor 且没给新 key 时清空已存 key，规则同旧 applySourcePatch。
-         *     成功后推送 providers 主题；若改了上下文相关字段或默认模型，对话主题的 model / context 也会重算。
+         * @description 任意组合：enabled、overrides（null = 清除覆盖）、defaultModel、以及仅自定义的 name / baseUrl / api；
+         *     apiKey 内置也可，用来换 Key。成功后推送 providers 主题。
          */
         patch: operations["patchProvider"];
         trace?: never;
     };
-    "/api/v2/providers/{id}/test": {
+    "/api/v2/login-sessions/{sid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 查询登录会话
+         * @description 前端每 1 秒轮询。登录会话不进 providers 主题。
+         */
+        get: operations["getLoginSession"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/login-sessions/{sid}/answer": {
         parameters: {
             query?: never;
             header?: never;
@@ -658,18 +742,17 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * 测试已保存的 Provider
-         * @description 探测已保存配置的连通性和模型列表，结果写回 lastTest。成功时按旧 modelsAfterProbe 合并模型。
-         *     推送 providers 主题。响应不含明文 key。
+         * 回答登录会话的 prompt
+         * @description 会话处于 state=prompt 时提交用户输入，然后继续登录流程。
          */
-        post: operations["testProvider"];
+        post: operations["answerLoginSession"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v2/providers/{id}/models/{modelId}/context-window": {
+    "/api/v2/login-sessions/{sid}/cancel": {
         parameters: {
             query?: never;
             header?: never;
@@ -677,13 +760,12 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
+        put?: never;
         /**
-         * 设置或恢复某个模型的上下文上限
-         * @description `window` 为整数时写入 source.contextWindows（范围同旧 CONTEXT_WINDOW_MIN/MAX，1000–10000000）。
-         *     `null` 恢复默认（目录或环境变量）。推送 providers 主题，并重算相关对话的 context。
+         * 取消登录会话
+         * @description 中止进行中的登录（abort signal）。
          */
-        put: operations["putProviderModelContextWindow"];
-        post?: never;
+        post: operations["cancelLoginSession"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1358,61 +1440,116 @@ export interface components {
             /** @description 先用 modelId */
             label: string;
         };
-        /**
-         * @description agent 只在契约里预留，当前实现不会返回。
-         * @enum {string}
-         */
-        ProviderAccess: "api_key" | "account" | "local" | "custom_endpoint" | "agent";
         /** @enum {string} */
-        ProviderStatus: "ok" | "needs_auth" | "unreachable" | "error" | "untested";
-        /** @description Provider 上的一个可用模型。 */
+        ProviderAuthType: "api_key" | "oauth" | "env" | "none";
+        /** @description 服务商凭据视图。响应和日志都不含明文 API key。 */
+        ProviderAuth: {
+            type: components["schemas"]["ProviderAuthType"];
+            /** @description API Key 末 4 位。没有 key 时省略。永远不是明文。 */
+            keyTail?: string;
+            /** @description OAuth 时的账号描述，可空 */
+            account?: string;
+            /** @description 环境变量名（auth.type=env 时） */
+            envVar?: string;
+        };
+        /** @enum {string} */
+        ProviderStatusState: "ok" | "untested" | "error" | "testing";
+        ProviderStatus: {
+            state: components["schemas"]["ProviderStatusState"];
+            /** @description 最近一次测试时间（毫秒）。从未测试时省略 */
+            testedAt?: number;
+            /** @description 已按 lang 出成句。state 不是 error 时省略 */
+            error?: string;
+        };
+        /** @enum {string} */
+        ProviderKind: "builtin" | "custom";
+        /** @enum {string} */
+        CustomApi: "openai-completions" | "openai-responses" | "anthropic-messages";
+        /** @description 哪些字段被用户覆盖。未覆盖的键省略。 */
+        ModelOverridden: {
+            contextWindow?: boolean;
+            maxTokens?: boolean;
+        };
+        /** @description Provider 上的一个 chat 模型。 */
         ProviderModel: {
             id: string;
-            /** @description 按品牌表算出的显示名；认不出品牌时等于 id */
-            displayName: string;
-            /** @description 品牌 id，认不出为 null */
+            /** @description 模型自带的显示名；没有就等于 id */
+            name: string;
+            /** @description 模型品牌图标 id。认不出为 null */
             brand: null | string;
-            /** @description 手动覆盖 → 模型目录 → 环境变量 */
-            contextWindow: number;
-            /** @description true 表示用户手动覆盖 */
-            contextWindowCustom: boolean;
-            /** @description 模型目录 input 含 image 时为 true。前端据此决定是否允许贴图。 */
+            enabled: boolean;
+            /** @description 已应用用户覆盖；null = 未知（运行时按 128000 算） */
+            contextWindow: null | number;
+            /** @description 已应用用户覆盖；null = 未知 */
+            maxTokens: null | number;
             images: boolean;
+            reasoning: boolean;
+            overridden: components["schemas"]["ModelOverridden"];
         };
-        /** @description 模型来源的视图。响应和日志都不含明文 API key。 */
+        /** @description 模型服务商视图。响应和日志都不含明文 API key。 */
         Provider: {
+            /** @description 内置为 catalog id（如 deepseek）；自定义为 custom- + 8 位 hex */
             id: string;
-            /** @description 品牌 id，认不出为 null */
-            vendor: null | string;
-            name: string;
-            access: components["schemas"]["ProviderAccess"];
-            /**
-             * @description 当前实现恒为 model。agent 只在契约里预留。
-             * @enum {string}
-             */
-            runtime: "model" | "agent";
-            baseUrl: string;
-            /** @description 没有 key 时为 null。永远不是明文 */
-            keyMasked: null | string;
-            hasKey: boolean;
-            status: components["schemas"]["ProviderStatus"];
-            /** @description 服务端按 lang 出成句。ok / untested 时为空字符串 */
-            statusText: string;
-            /** @description 最近一次探测时间（毫秒）。从未探测为 null */
-            lastTestedAt: null | number;
-            models: components["schemas"]["ProviderModel"][];
-            isDefault: boolean;
-        };
-        /** @description 可添加的厂商预设（VENDOR_PRESETS）。 */
-        Vendor: {
-            id: string;
-            name: string;
-            access: components["schemas"]["ProviderAccess"];
-            needsKey: boolean;
-            /** @description 预设默认地址。custom 为空字符串 */
-            baseUrl: string;
-            /** @description 品牌 id，认不出为 null */
+            kind: components["schemas"]["ProviderKind"];
+            /** @description 品牌图标 id。自定义为 null */
             brand: null | string;
+            name: string;
+            api?: components["schemas"]["CustomApi"];
+            baseUrl?: string;
+            auth: components["schemas"]["ProviderAuth"];
+            status: components["schemas"]["ProviderStatus"];
+            models: components["schemas"]["ProviderModel"][];
+        };
+        /** @description 可接入的内置服务商。 */
+        AvailableProvider: {
+            id: string;
+            name: string;
+            /** @description 品牌图标 id */
+            brand?: null | string;
+            authMethods: ("api_key" | "oauth")[];
+            modelCount: number;
+            popular: boolean;
+            envVar?: string;
+            envDetected: boolean;
+            connected: boolean;
+        };
+        LoginSessionEvent: {
+            /** @constant */
+            type: "auth_url";
+            url: string;
+            instructions?: string;
+        } | {
+            /** @constant */
+            type: "device_code";
+            userCode: string;
+            verificationUri: string;
+        } | {
+            /** @enum {string} */
+            type: "info" | "progress";
+            message: string;
+        };
+        LoginPromptOption: {
+            id: string;
+            label: string;
+            description?: string;
+        };
+        LoginPrompt: {
+            /** @enum {string} */
+            type: "text" | "secret" | "select" | "manual_code";
+            message: string;
+            placeholder?: string;
+            options?: components["schemas"]["LoginPromptOption"][];
+        };
+        /** @description OAuth 登录会话。内存保存，10 分钟过期。 */
+        LoginSession: {
+            id: string;
+            providerId: string;
+            /** @enum {string} */
+            state: "pending" | "prompt" | "done" | "error" | "cancelled";
+            events: components["schemas"]["LoginSessionEvent"][];
+            prompt?: components["schemas"]["LoginPrompt"];
+            error?: string;
+            provider?: components["schemas"]["Provider"];
         };
         /** @description 对话或默认绑定的 Provider + 模型。 */
         ResolvedModel: {
@@ -1422,54 +1559,68 @@ export interface components {
         /** @description GET /api/v2/providers 的响应。 */
         ProvidersSnapshot: {
             providers: components["schemas"]["Provider"][];
-            vendors: components["schemas"]["Vendor"][];
             /** @description 当前默认模型。没有则为 null */
             defaultModel: null | components["schemas"]["ResolvedModel"];
+        };
+        /** @description GET /api/v2/providers/available 的响应。 */
+        AvailableProvidersSnapshot: {
+            providers: components["schemas"]["AvailableProvider"][];
         };
         /** @description providers 主题里 defaults/self 实体的值。 */
         ProviderDefaults: {
             /** @description 当前默认模型。没有则为 null */
             model: null | components["schemas"]["ResolvedModel"];
         };
-        /** @description 创建 API Provider。规则同旧 POST /api/sources。 */
-        CreateProviderRequest: {
-            vendor: string;
-            name?: string;
-            baseUrl?: string;
-            apiKey?: string;
-            models?: string[];
+        ProviderEnvelope: {
+            provider: components["schemas"]["Provider"];
         };
-        /** @description 修改已保存的 Provider。applySourcePatch 规则。 */
-        PatchProviderRequest: {
-            vendor?: string;
-            name?: string;
-            baseUrl?: string;
-            apiKey?: string;
-            models?: string[];
-            /** @description 把该 Provider 上的这个模型设为默认；null 且当前默认就是它时清空默认 */
-            defaultModel?: null | string;
+        LoginSessionEnvelope: {
+            session: components["schemas"]["LoginSession"];
         };
-        /** @description 未保存配置的连通性测试。请求只发往这里的 baseUrl（或 vendor 预设地址）。 */
-        TestProviderRequest: {
-            vendor: string;
-            baseUrl?: string;
-            apiKey?: string;
-        };
-        /** @description 未保存配置的探测结果。失败时 models 为空数组。 */
-        ProviderProbeResult: {
-            ok: boolean;
-            models: string[];
-            status: components["schemas"]["ProviderStatus"];
-            statusText: string;
-        };
-        ContextWindowRequest: {
-            /** @description 新的上下文上限；null 恢复默认。整数范围 1000–10000000 */
-            window: null | number;
-        };
-        /** @description DELETE /api/v2/providers/{id} 成功。 */
-        ProviderRemoved: {
+        ConnectApiKeyRequest: {
             /** @constant */
-            removed: true;
+            method: "api_key";
+            apiKey: string;
+        };
+        ConnectEnvRequest: {
+            /** @constant */
+            method: "env";
+        };
+        ConnectOAuthRequest: {
+            /** @constant */
+            method: "oauth";
+        };
+        /** @description 接入内置服务商。 */
+        ConnectProviderRequest: components["schemas"]["ConnectApiKeyRequest"] | components["schemas"]["ConnectEnvRequest"] | components["schemas"]["ConnectOAuthRequest"];
+        /** @description 新增自定义接口。先拉 /models，成功才保存。 */
+        CreateCustomProviderRequest: {
+            name: string;
+            baseUrl: string;
+            api: components["schemas"]["CustomApi"];
+            apiKey?: string;
+        };
+        ModelOverridePatch: {
+            /** @description 新的上下文上限；null 清除覆盖 */
+            contextWindow?: null | number;
+            /** @description 新的 max tokens；null 清除覆盖 */
+            maxTokens?: null | number;
+        };
+        /** @description 修改已保存的 Provider。后四个仅自定义；apiKey 内置也可用来换 Key。 */
+        PatchProviderRequest: {
+            enabled?: string[];
+            overrides?: {
+                [key: string]: components["schemas"]["ModelOverridePatch"];
+            };
+            /** @description 把该 Provider 上的这个模型设为默认；null 清空（仅当当前默认就是它） */
+            defaultModel?: null | string;
+            name?: string;
+            baseUrl?: string;
+            api?: components["schemas"]["CustomApi"];
+            apiKey?: string;
+        };
+        /** @description 回答登录会话当前 prompt。 */
+        LoginAnswerRequest: {
+            value: string;
         };
         /** @description PATCH /api/v2/conversations/{id} 的请求体。 */
         PatchConversationModelRequest: {
@@ -4146,7 +4297,7 @@ export interface operations {
             };
         };
     };
-    createProvider: {
+    getAvailableProviders: {
         parameters: {
             query?: {
                 lang?: string;
@@ -4155,41 +4306,19 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CreateProviderRequest"];
-            };
-        };
+        requestBody?: never;
         responses: {
-            /** @description 已创建 */
-            201: {
+            /** @description 可接入目录 */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Provider"];
-                };
-            };
-            /** @description 请求体无效 */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["V2Error"];
+                    "application/json": components["schemas"]["AvailableProvidersSnapshot"];
                 };
             };
             /** @description 未授权 */
             401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["V2Error"];
-                };
-            };
-            /** @description id 已存在 */
-            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -4217,7 +4346,7 @@ export interface operations {
             };
         };
     };
-    testProviderDraft: {
+    createCustomProvider: {
         parameters: {
             query?: {
                 lang?: string;
@@ -4228,20 +4357,20 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["TestProviderRequest"];
+                "application/json": components["schemas"]["CreateCustomProviderRequest"];
             };
         };
         responses: {
-            /** @description 探测结果 */
+            /** @description 已创建 */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ProviderProbeResult"];
+                    "application/json": components["schemas"]["ProviderEnvelope"];
                 };
             };
-            /** @description 请求体无效 */
+            /** @description 请求体无效或 /models 失败 */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -4252,6 +4381,154 @@ export interface operations {
             };
             /** @description 未授权 */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 客户端错误 */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 服务端错误 */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+        };
+    };
+    connectProvider: {
+        parameters: {
+            query?: {
+                lang?: string;
+            };
+            header?: never;
+            path: {
+                /** @description 内置服务商 id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConnectProviderRequest"];
+            };
+        };
+        responses: {
+            /** @description 已接入或已开始登录会话 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderEnvelope"] | components["schemas"]["LoginSessionEnvelope"];
+                };
+            };
+            /** @description 验证失败或请求体无效 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 未授权 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 服务商不存在 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 客户端错误 */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 服务端错误 */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+        };
+    };
+    testProvider: {
+        parameters: {
+            query?: {
+                lang?: string;
+            };
+            header?: never;
+            path: {
+                /** @description Provider id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": Record<string, never>;
+            };
+        };
+        responses: {
+            /** @description 更新后的 Provider */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderEnvelope"];
+                };
+            };
+            /** @description 测试失败 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 未授权 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description Provider 不存在 */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -4281,7 +4558,9 @@ export interface operations {
     };
     deleteProvider: {
         parameters: {
-            query?: never;
+            query?: {
+                lang?: string;
+            };
             header?: never;
             path: {
                 /** @description Provider id */
@@ -4292,13 +4571,11 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description 已删除 */
-            200: {
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ProviderRemoved"];
-                };
+                content?: never;
             };
             /** @description 未授权 */
             401: {
@@ -4362,10 +4639,10 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Provider"];
+                    "application/json": components["schemas"]["ProviderEnvelope"];
                 };
             };
-            /** @description 请求体无效或 applySourcePatch 拒绝 */
+            /** @description 请求体无效 */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -4412,15 +4689,148 @@ export interface operations {
             };
         };
     };
-    testProvider: {
+    getLoginSession: {
         parameters: {
             query?: {
                 lang?: string;
             };
             header?: never;
             path: {
-                /** @description Provider id */
-                id: string;
+                /** @description 登录会话 id */
+                sid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 当前会话 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoginSessionEnvelope"];
+                };
+            };
+            /** @description 未授权 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 会话不存在 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 客户端错误 */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 服务端错误 */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+        };
+    };
+    answerLoginSession: {
+        parameters: {
+            query?: {
+                lang?: string;
+            };
+            header?: never;
+            path: {
+                sid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LoginAnswerRequest"];
+            };
+        };
+        responses: {
+            /** @description 更新后的会话 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoginSessionEnvelope"];
+                };
+            };
+            /** @description 当前不能回答 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 未授权 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 会话不存在 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 客户端错误 */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 服务端错误 */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+        };
+    };
+    cancelLoginSession: {
+        parameters: {
+            query?: {
+                lang?: string;
+            };
+            header?: never;
+            path: {
+                sid: string;
             };
             cookie?: never;
         };
@@ -4430,13 +4840,13 @@ export interface operations {
             };
         };
         responses: {
-            /** @description 更新后的 Provider */
+            /** @description 已取消的会话 */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Provider"];
+                    "application/json": components["schemas"]["LoginSessionEnvelope"];
                 };
             };
             /** @description 未授权 */
@@ -4448,83 +4858,7 @@ export interface operations {
                     "application/json": components["schemas"]["V2Error"];
                 };
             };
-            /** @description Provider 不存在 */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["V2Error"];
-                };
-            };
-            /** @description 客户端错误 */
-            "4XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["V2Error"];
-                };
-            };
-            /** @description 服务端错误 */
-            "5XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["V2Error"];
-                };
-            };
-        };
-    };
-    putProviderModelContextWindow: {
-        parameters: {
-            query?: {
-                lang?: string;
-            };
-            header?: never;
-            path: {
-                /** @description Provider id */
-                id: string;
-                /** @description 模型 id（含斜杠时需百分号编码） */
-                modelId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ContextWindowRequest"];
-            };
-        };
-        responses: {
-            /** @description 更新后的 Provider */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Provider"];
-                };
-            };
-            /** @description 窗口超出范围或请求体无效 */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["V2Error"];
-                };
-            };
-            /** @description 未授权 */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["V2Error"];
-                };
-            };
-            /** @description Provider 不存在 */
+            /** @description 会话不存在 */
             404: {
                 headers: {
                     [name: string]: unknown;

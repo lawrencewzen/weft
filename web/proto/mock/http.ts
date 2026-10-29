@@ -33,16 +33,19 @@ import {
   summaryOf,
   toolValue,
 } from './views';
+import { MOCK_AVAILABLE_PROVIDERS, MOCK_CATALOG_MODELS } from './piCatalog';
+import { sortAvailableProviders } from '../../src/data/providerFormat';
 import type {
+  CustomApiProtocol,
   ConversationSummary,
   EntityValue,
   GitConnection,
   GitTestResult,
-  GrokPending,
-  GrokSession,
   Lang,
+  LoginSession,
   MockConv,
   MockDb,
+  Model,
   Plugin,
   Provider,
   ResolvedModel,
@@ -65,10 +68,13 @@ export type MockReply = {
 const SERVICE_VERSION = '0.1.0-prototype';
 const STARTED_AT = Date.now();
 const WORK_ROOT = 'D:\\work';
-const GROK_VERIFY_URI = 'https://grok.com/device';
 
 function ok(body: unknown): MockReply {
   return { status: 200, body };
+}
+
+function noContent(): MockReply {
+  return { status: 204 };
 }
 
 function created(body: unknown): MockReply {
@@ -112,92 +118,7 @@ function modelLabel(db: MockDb, model: ResolvedModel | null): string {
   if (!model) return '';
   const provider = db.providers.find((row) => row.id === model.providerId);
   const found = provider?.models.find((row) => row.id === model.modelId);
-  return found?.displayName || model.modelId;
-}
-
-const MODEL_NAMES: Record<string, { name: string; brand: string | null; window: number }> = {
-  'grok-4.6': { name: 'Grok 4.6', brand: 'Grok', window: 200_000 },
-  'grok-4': { name: 'Grok 4', brand: 'Grok', window: 128_000 },
-  'grok-code-fast': { name: 'Grok Code Fast', brand: 'Grok', window: 256_000 },
-  'grok-build': { name: 'Grok Build', brand: 'Grok', window: 256_000 },
-  'gpt-5': { name: 'GPT-5', brand: 'OpenAI', window: 400_000 },
-  'gpt-5-mini': { name: 'GPT-5 mini', brand: 'OpenAI', window: 200_000 },
-  'gpt-4.1': { name: 'GPT-4.1', brand: 'OpenAI', window: 128_000 },
-  'claude-sonnet-4-5': { name: 'Claude Sonnet', brand: 'Claude', window: 200_000 },
-  'claude-opus-4-1': { name: 'Claude Opus', brand: 'Claude', window: 200_000 },
-  'anthropic/claude-sonnet': { name: 'Claude Sonnet', brand: 'Claude', window: 200_000 },
-  'anthropic/claude-haiku': { name: 'Claude Haiku', brand: 'Claude', window: 200_000 },
-  'openai/gpt-5': { name: 'GPT', brand: 'OpenAI', window: 400_000 },
-  'google/gemini-pro': { name: 'Gemini Pro', brand: 'Gemini', window: 1_000_000 },
-  'deepseek/deepseek-chat': { name: 'DeepSeek Chat', brand: 'DeepSeek', window: 128_000 },
-  'qwen/qwen-coder': { name: '通义千问 Coder', brand: 'Qwen', window: 256_000 },
-  'meta-llama/llama-3': { name: 'Llama', brand: 'Meta', window: 128_000 },
-  'mistralai/mistral-large': { name: 'Mistral Large', brand: 'Mistral', window: 128_000 },
-  'x-ai/grok-4': { name: 'Grok', brand: 'Grok', window: 256_000 },
-  'deepseek-chat': { name: 'DeepSeek Chat', brand: 'DeepSeek', window: 128_000 },
-  'local-model': { name: 'Local Model', brand: null, window: 32_000 },
-};
-
-function mockModelSupportsImages(modelId: string): boolean {
-  return !/code-fast|coder|local-model|deepseek-chat/i.test(modelId);
-}
-
-function modelRows(ids: string[], fallbackBrand: string | null): Provider['models'] {
-  const seen = new Set<string>();
-  const out: Provider['models'] = [];
-  for (const id of ids) {
-    const modelId = String(id || '').trim();
-    if (!modelId || seen.has(modelId)) continue;
-    seen.add(modelId);
-    const meta = MODEL_NAMES[modelId];
-    out.push({
-      id: modelId,
-      displayName: meta?.name || modelId,
-      brand: meta?.brand || fallbackBrand,
-      contextWindow: meta?.window || 128_000,
-      contextWindowCustom: false,
-      images: mockModelSupportsImages(modelId),
-    });
-  }
-  return out;
-}
-
-function maskKey(key: string): string {
-  const text = key.trim();
-  if (!text) return '';
-  const tail = text.slice(-4);
-  return `${text.slice(0, 3)}…${tail}`;
-}
-
-function probeModels(vendor: string, modelIds?: string[]): string[] {
-  if (modelIds?.length) return modelIds;
-  if (vendor === 'xai' || vendor === 'grok') return ['grok-4.6', 'grok-4', 'grok-code-fast'];
-  if (vendor === 'openai') return ['gpt-5', 'gpt-5-mini', 'gpt-4.1'];
-  if (vendor === 'anthropic') return ['claude-sonnet-4-5', 'claude-opus-4-1'];
-  if (vendor === 'deepseek') return ['deepseek-chat'];
-  if (vendor === 'openrouter') {
-    return [
-      'anthropic/claude-sonnet',
-      'anthropic/claude-haiku',
-      'openai/gpt-5',
-      'google/gemini-pro',
-      'deepseek/deepseek-chat',
-      'qwen/qwen-coder',
-      'meta-llama/llama-3',
-      'mistralai/mistral-large',
-      'x-ai/grok-4',
-    ];
-  }
-  return ['local-model', 'gpt-4o-mini'];
-}
-
-function probeFailure(lang: Lang, reason: string): { status: 'error'; statusText: string } {
-  return {
-    status: 'error',
-    statusText: lang === 'en'
-      ? `Connection failed: ${reason} (prototype: keys starting with "bad" always fail)`
-      : `${reason}（原型：Key 以 bad 开头时固定失败）`,
-  };
+  return found?.name || found?.id || model.modelId;
 }
 
 function conversationSnapshot(conv: MockConv, lang: Lang): unknown {
@@ -232,10 +153,6 @@ function providerView(provider: Provider): Provider {
 
 function publishProviderGone(hub: MockHub, id: string): void {
   hub.publish('providers', { event: 'remove', entity: 'provider', id });
-}
-
-function defaultWindowOf(db: MockDb, providerId: string, modelId: string): number | undefined {
-  return db.defaultWindows.get(`${providerId}:${modelId}`);
 }
 
 function removeWorkspace(db: MockDb, hub: MockHub, workspaceId: string): MockReply {
@@ -332,173 +249,226 @@ function patchConversation(
   return ok(valueOf(conversationValue(conv), 'zh'));
 }
 
-function setContextWindow(
+function handleConnect(
   db: MockDb,
   hub: MockHub,
-  providerId: string,
-  modelId: string,
-  window: number | null,
+  id: string,
+  body: Record<string, unknown>,
+  lang: Lang,
 ): MockReply {
-  const provider = db.providers.find((row) => row.id === providerId);
-  const model = provider?.models.find((row) => row.id === modelId);
-  if (!provider || !model) return fail(404, 'Provider 或模型不存在');
-  if (window == null) {
-    model.contextWindow = defaultWindowOf(db, providerId, modelId) || model.contextWindow;
-    model.contextWindowCustom = false;
-  } else {
-    if (!Number.isInteger(window) || window < 1000 || window > 10_000_000) {
-      return fail(400, '上下文上限超出范围', 'E_BAD_REQUEST');
+  const method = str(body.method);
+  if (method === 'api_key') {
+    const apiKey = str(body.apiKey).trim();
+    if (!apiKey || apiKey.startsWith('bad')) {
+      return fail(400, lang === 'en' ? 'Invalid API key' : '无效的 API Key', 'E_AUTH');
     }
-    model.contextWindow = window;
-    model.contextWindowCustom = true;
+    const avail = MOCK_AVAILABLE_PROVIDERS.find((p) => p.id === id);
+    const catModels = MOCK_CATALOG_MODELS[id] || [];
+    const autoEnable = catModels.length <= 6;
+    const provider: Provider = {
+      id,
+      kind: 'builtin',
+      brand: id === 'deepseek' ? 'DeepSeek' : id === 'anthropic' ? 'Anthropic' : id === 'openai' ? 'OpenAI' : id === 'zai' ? 'ZAI' : id === 'moonshotai-cn' ? 'Moonshot' : (avail?.name || null),
+      name: avail?.name || id,
+      auth: { type: 'api_key', keyTail: apiKey.slice(-4) },
+      status: { state: 'ok', testedAt: Date.now() },
+      models: catModels.map((m) => ({ ...m, enabled: autoEnable })),
+    };
+    const idx = db.providers.findIndex((p) => p.id === id);
+    if (idx >= 0) db.providers[idx] = provider;
+    else db.providers.push(provider);
+    if (!db.defaultModel && provider.models.some((m) => m.enabled)) {
+      const first = provider.models.find((m) => m.enabled);
+      if (first) db.defaultModel = { providerId: id, modelId: first.id };
+    }
+    publishProviders(db, hub);
+    return ok({ provider: providerView(provider) });
   }
-  publishProviders(db, hub);
-  for (const conv of db.conversations.values()) {
-    if (conv.view.model?.sourceId !== providerId || conv.view.model.modelId !== modelId) continue;
-    recomputeContext(db, conv);
-    publishConversationView(conv, hub);
+
+  if (method === 'env') {
+    const avail = MOCK_AVAILABLE_PROVIDERS.find((p) => p.id === id);
+    const catModels = MOCK_CATALOG_MODELS[id] || [];
+    const autoEnable = catModels.length <= 6;
+    const provider: Provider = {
+      id,
+      kind: 'builtin',
+      brand: id === 'moonshotai-cn' ? 'Moonshot' : (avail?.name || null),
+      name: avail?.name || id,
+      auth: { type: 'env', envVar: avail?.envVar || 'MOONSHOT_API_KEY' },
+      status: { state: 'ok', testedAt: Date.now() },
+      models: catModels.map((m) => ({ ...m, enabled: autoEnable })),
+    };
+    const idx = db.providers.findIndex((p) => p.id === id);
+    if (idx >= 0) db.providers[idx] = provider;
+    else db.providers.push(provider);
+    if (!db.defaultModel && provider.models.some((m) => m.enabled)) {
+      const first = provider.models.find((m) => m.enabled);
+      if (first) db.defaultModel = { providerId: id, modelId: first.id };
+    }
+    publishProviders(db, hub);
+    return ok({ provider: providerView(provider) });
   }
-  return ok(providerView(provider));
+
+  if (method === 'oauth') {
+    const sid = nextId(db, 'session');
+    const avail = MOCK_AVAILABLE_PROVIDERS.find((p) => p.id === id);
+    const session: LoginSession = {
+      id: sid,
+      providerId: id,
+      state: 'pending',
+      events: [
+        {
+          type: 'auth_url',
+          url: `https://auth.${id}.com/oauth/authorize`,
+          instructions: `用 ${avail?.name || id} 账号授权（订阅额度可直接用）`,
+        },
+        {
+          type: 'device_code',
+          userCode: 'WFT-7Q2K',
+          verificationUri: `https://auth.${id}.com/device`,
+        },
+        {
+          type: 'progress',
+          message: lang === 'en' ? 'Waiting for authorization…' : '等待授权…',
+        },
+      ],
+    };
+    db.loginSessions.set(sid, { session, pollCount: 0 });
+    return ok({ session });
+  }
+
+  return fail(400, 'Unsupported connect method', 'E_BAD_REQUEST');
 }
 
-function createProvider(db: MockDb, hub: MockHub, body: Record<string, unknown>): MockReply {
-  const vendor = str(body.vendor) || 'custom';
-  const baseUrl = str(body.baseUrl) || (vendor === 'xai' ? 'https://api.x.ai/v1' : '');
-  const apiKey = str(body.apiKey);
-  const name = str(body.name) || (db.vendors.find((row) => row.id === vendor)?.name ?? vendor);
-  const access = vendor === 'custom' ? 'custom_endpoint' : 'api_key';
-  const models = modelRows(
-    Array.isArray(body.models) ? body.models.map((item) => String(item)) : probeModels(vendor).slice(0, 2),
-    db.vendors.find((row) => row.id === vendor)?.brand ?? null,
-  );
+function handleCustomProvider(
+  db: MockDb,
+  hub: MockHub,
+  body: Record<string, unknown>,
+  lang: Lang,
+): MockReply {
+  const name = str(body.name).trim() || '自定义接口';
+  const baseUrl = str(body.baseUrl).trim();
+  const api = (str(body.api) as CustomApiProtocol) || 'openai-completions';
+  const apiKey = str(body.apiKey).trim();
+
+  if (!baseUrl) return fail(400, 'Base URL 不能为空', 'E_BAD_REQUEST');
+  if (baseUrl.includes('bad') || apiKey.startsWith('bad')) {
+    return fail(400, lang === 'en' ? 'Connection failed' : '连接失败', 'E_AUTH');
+  }
+
+  const customModels: Model[] = [
+    {
+      id: 'llama3.3:70b',
+      name: 'llama3.3:70b',
+      brand: 'Meta',
+      enabled: true,
+      contextWindow: 131072,
+      maxTokens: 8192,
+      images: false,
+      reasoning: false,
+      overridden: {},
+    },
+    {
+      id: 'qwen3:32b',
+      name: 'qwen3:32b',
+      brand: 'Qwen',
+      enabled: true,
+      contextWindow: 40960,
+      maxTokens: 8192,
+      images: false,
+      reasoning: true,
+      overridden: {},
+    },
+    {
+      id: 'nomic-embed-text',
+      name: 'nomic-embed-text',
+      brand: null,
+      enabled: false,
+      contextWindow: null,
+      maxTokens: null,
+      images: false,
+      reasoning: false,
+      overridden: {},
+    },
+  ];
+
+  const id = `custom-${Math.random().toString(16).slice(2, 10)}`;
   const provider: Provider = {
-    id: nextId(db, 'p'),
-    vendor,
+    id,
+    kind: 'custom',
+    brand: null,
     name,
-    access,
-    runtime: 'model',
     baseUrl,
-    keyMasked: apiKey ? maskKey(apiKey) : null,
-    hasKey: Boolean(apiKey),
-    status: apiKey || access === 'custom_endpoint' ? 'ok' : 'untested',
-    statusText: '',
-    lastTestedAt: Date.now(),
-    models,
-    isDefault: false,
+    api,
+    auth: apiKey ? { type: 'api_key', keyTail: apiKey.slice(-4) } : { type: 'none' },
+    status: { state: 'ok', testedAt: Date.now() },
+    models: customModels,
   };
   db.providers.push(provider);
-  for (const model of provider.models) {
-    db.defaultWindows.set(`${provider.id}:${model.id}`, model.contextWindow);
+  if (!db.defaultModel && provider.models.some((m) => m.enabled)) {
+    const first = provider.models.find((m) => m.enabled);
+    if (first) db.defaultModel = { providerId: id, modelId: first.id };
   }
-  if (!db.defaultModel && provider.models[0]) {
-    db.defaultModel = { providerId: provider.id, modelId: provider.models[0].id };
-  }
-  for (const row of db.providers) row.isDefault = db.defaultModel?.providerId === row.id;
   publishProviders(db, hub);
-  return created(providerView(provider));
+  return ok({ provider: providerView(provider) });
 }
 
-function patchProvider(db: MockDb, hub: MockHub, provider: Provider, body: Record<string, unknown>): MockReply {
-  if (typeof body.name === 'string' && body.name.trim()) provider.name = body.name.trim();
-  if (typeof body.baseUrl === 'string') provider.baseUrl = body.baseUrl;
-  if (typeof body.apiKey === 'string' && body.apiKey.trim()) {
-    provider.keyMasked = maskKey(body.apiKey);
-    provider.hasKey = true;
-    provider.status = 'ok';
-    provider.statusText = '';
-    provider.lastTestedAt = Date.now();
+function handlePatchProvider(
+  db: MockDb,
+  hub: MockHub,
+  provider: Provider,
+  body: Record<string, unknown>,
+): MockReply {
+  if (Array.isArray(body.enabled)) {
+    const set = new Set(body.enabled.map(String));
+    for (const m of provider.models) {
+      m.enabled = set.has(m.id);
+    }
   }
-  if (Array.isArray(body.models)) {
-    const ids = body.models.map((item) => String(item));
-    const existing = new Map(provider.models.map((model) => [model.id, model]));
-    provider.models = modelRows(ids, provider.vendor).map((model) => {
-      const old = existing.get(model.id);
-      return old
-        ? { ...model, contextWindow: old.contextWindow, contextWindowCustom: old.contextWindowCustom }
-        : model;
-    });
-    for (const model of provider.models) {
-      if (!db.defaultWindows.has(`${provider.id}:${model.id}`)) {
-        db.defaultWindows.set(`${provider.id}:${model.id}`, model.contextWindow);
+  if (body.overrides && typeof body.overrides === 'object' && !Array.isArray(body.overrides)) {
+    for (const [mid, rawOv] of Object.entries(body.overrides as Record<string, unknown>)) {
+      const ov = rawOv && typeof rawOv === 'object' ? (rawOv as Record<string, unknown>) : null;
+      if (!ov) continue;
+      const m = provider.models.find((x) => x.id === mid);
+      if (!m) continue;
+      if (ov.contextWindow !== undefined) {
+        if (ov.contextWindow === null) {
+          m.overridden = { ...m.overridden, contextWindow: false };
+          const cat = MOCK_CATALOG_MODELS[provider.id]?.find((x) => x.id === mid);
+          m.contextWindow = cat ? cat.contextWindow : (mid === 'glm-5.2-fp8' ? null : 128_000);
+        } else if (Number.isFinite(ov.contextWindow)) {
+          m.contextWindow = Number(ov.contextWindow);
+          m.overridden = { ...m.overridden, contextWindow: true };
+        }
+      }
+      if (ov.maxTokens !== undefined) {
+        if (ov.maxTokens === null) {
+          m.overridden = { ...m.overridden, maxTokens: false };
+          const cat = MOCK_CATALOG_MODELS[provider.id]?.find((x) => x.id === mid);
+          m.maxTokens = cat ? cat.maxTokens : null;
+        } else if (Number.isFinite(ov.maxTokens)) {
+          m.maxTokens = Number(ov.maxTokens);
+          m.overridden = { ...m.overridden, maxTokens: true };
+        }
       }
     }
   }
-  if (body.defaultModel === null) {
-    if (db.defaultModel?.providerId === provider.id) db.defaultModel = null;
-  } else if (typeof body.defaultModel === 'string' && body.defaultModel) {
-    db.defaultModel = { providerId: provider.id, modelId: body.defaultModel };
+  if (body.defaultModel !== undefined) {
+    if (body.defaultModel === null) {
+      if (db.defaultModel?.providerId === provider.id) db.defaultModel = null;
+    } else if (typeof body.defaultModel === 'string' && body.defaultModel) {
+      db.defaultModel = { providerId: provider.id, modelId: body.defaultModel };
+    }
   }
-  for (const row of db.providers) row.isDefault = db.defaultModel?.providerId === row.id;
-  publishProviders(db, hub);
-  return ok(providerView(provider));
-}
-
-function grokSession(db: MockDb): GrokSession {
-  const signedIn = db.grok.signedIn;
-  return {
-    signedIn,
-    account: signedIn ? db.grok.account : null,
-    email: signedIn ? 'demo@weft.local' : null,
-    expiresAt: signedIn ? STARTED_AT + 86_400_000 : null,
-    authMode: signedIn ? 'oidc' : null,
-    source: signedIn ? 'prototype' : null,
-    pending: db.grok.pending,
-  };
-}
-
-function ensureGrokProvider(db: MockDb, hub: MockHub): Provider {
-  const found = db.providers.find((row) => row.id === 'grok');
-  if (found) return found;
-  const provider: Provider = {
-    id: 'grok',
-    vendor: 'xai',
-    name: 'Grok Build',
-    access: 'account',
-    runtime: 'model',
-    baseUrl: 'https://cli-chat-proxy.grok.com/v1',
-    keyMasked: null,
-    hasKey: true,
-    status: 'ok',
-    statusText: '',
-    lastTestedAt: null,
-    models: modelRows(['grok-build'], 'grok'),
-    isDefault: false,
-  };
-  db.providers.push(provider);
-  for (const model of provider.models) {
-    db.defaultWindows.set(`${provider.id}:${model.id}`, model.contextWindow);
+  if (typeof body.name === 'string' && body.name.trim()) provider.name = body.name.trim();
+  if (typeof body.baseUrl === 'string' && body.baseUrl.trim()) provider.baseUrl = body.baseUrl.trim();
+  if (typeof body.api === 'string') provider.api = body.api as CustomApiProtocol;
+  if (typeof body.apiKey === 'string') {
+    provider.auth = { ...provider.auth, type: 'api_key', keyTail: body.apiKey.slice(-4) };
+    provider.status = { state: 'ok', testedAt: Date.now() };
   }
   publishProviders(db, hub);
-  return provider;
-}
-
-function startGrokLogin(db: MockDb): GrokPending {
-  const pending: GrokPending = {
-    loginId: nextId(db, 'login'),
-    verificationUri: GROK_VERIFY_URI,
-    userCode: 'WEFT-DEMO',
-    interval: 2,
-    expiresAt: Date.now() + 10 * 60_000,
-  };
-  db.grok.pending = pending;
-  db.grokPolls.set(pending.loginId, 0);
-  return pending;
-}
-
-function pollGrokLogin(db: MockDb, hub: MockHub, loginId: string): MockReply {
-  const pending = db.grok.pending;
-  if (!pending || pending.loginId !== loginId) return fail(404, 'no_login');
-  const count = (db.grokPolls.get(loginId) || 0) + 1;
-  db.grokPolls.set(loginId, count);
-  if (count < 2) {
-    return ok({ status: 'pending', interval: 1, expiresAt: pending.expiresAt });
-  }
-  db.grok.signedIn = true;
-  db.grok.account = 'demo@weft.local';
-  db.grok.pending = null;
-  db.grokPolls.delete(loginId);
-  ensureGrokProvider(db, hub);
-  return ok({ status: 'done', grok: grokSession(db) });
+  return ok({ provider: providerView(provider) });
 }
 
 /* ---------- workspace directory browser ---------- */
@@ -840,117 +810,125 @@ export function handleMockRequest(db: MockDb, hub: MockHub, rawUrl: string, init
   if (path === '/api/v2/providers' && method === 'GET') {
     return ok({
       providers: db.providers.map((provider) => providerView(provider)),
-      vendors: db.vendors,
       defaultModel: db.defaultModel,
     });
   }
-  if (path === '/api/v2/providers' && method === 'POST') {
-    return createProvider(db, hub, body);
-  }
-  if (path === '/api/v2/providers/test' && method === 'POST') {
-    const vendor = str(body.vendor) || 'custom';
-    const key = str(body.apiKey);
-    const baseUrl = str(body.baseUrl);
-    if (tokenFails(key) || /bad/i.test(baseUrl)) {
-      return ok({ ok: false, models: [], ...probeFailure(lang, lang === 'en' ? '401 Unauthorized' : '401 未授权') });
-    }
-    const models = probeModels(vendor);
+  if (path === '/api/v2/providers/available' && method === 'GET') {
+    const connectedIds = new Set(db.providers.map((p) => p.id));
+    const list = MOCK_AVAILABLE_PROVIDERS.map((item) => ({
+      ...item,
+      connected: connectedIds.has(item.id),
+    }));
     return ok({
-      ok: true,
-      models,
-      status: 'ok',
-      statusText: lang === 'en' ? `Found ${models.length} models` : `发现 ${models.length} 个模型`,
+      providers: sortAvailableProviders(list),
     });
   }
-  if (path === '/api/v2/providers/grok/session' && method === 'GET') {
-    return ok(grokSession(db));
-  }
-  if (path === '/api/v2/providers/grok/login' && method === 'POST') {
-    return ok(startGrokLogin(db));
-  }
-  if (path === '/api/v2/providers/grok/login/poll' && method === 'POST') {
-    return pollGrokLogin(db, hub, str(body.loginId));
-  }
-  if (path === '/api/v2/providers/grok/login/cancel' && method === 'POST') {
-    db.grok.pending = null;
-    db.grokPolls.clear();
-    return ok(grokSession(db));
-  }
-  if (path === '/api/v2/providers/grok/logout' && method === 'POST') {
-    db.grok.signedIn = false;
-    db.grok.account = null;
-    db.grok.pending = null;
-    for (const row of db.providers) {
-      if (row.id !== 'grok') continue;
-      row.status = 'needs_auth';
-      row.statusText = lang === 'en' ? 'Signed out' : '已退出登录';
-    }
-    publishProviders(db, hub);
-    return ok(grokSession(db));
+  if (path === '/api/v2/providers/custom' && method === 'POST') {
+    return handleCustomProvider(db, hub, body, lang);
   }
 
-  const contextMatch = /^\/api\/v2\/providers\/([^/]+)\/models\/([^/]+)\/context-window$/.exec(path);
-  if (contextMatch && method === 'PUT') {
-    const providerId = decodeURIComponent(contextMatch[1]);
-    const modelId = decodeURIComponent(contextMatch[2]);
-    const window = body.window === null ? null : Number(body.window);
-    return setContextWindow(db, hub, providerId, modelId, Number.isFinite(window as number) ? window as number : null);
+  const connectMatch = /^\/api\/v2\/providers\/([^/]+)\/connect$/.exec(path);
+  if (connectMatch && method === 'POST') {
+    const id = decodeURIComponent(connectMatch[1]);
+    return handleConnect(db, hub, id, body, lang);
+  }
+
+  const loginSessionMatch = /^\/api\/v2\/login-sessions\/([^/]+)$/.exec(path);
+  if (loginSessionMatch && method === 'GET') {
+    const sid = decodeURIComponent(loginSessionMatch[1]);
+    const sessionRec = db.loginSessions.get(sid);
+    if (!sessionRec) return fail(404, 'Login session not found');
+    sessionRec.pollCount += 1;
+    if (sessionRec.pollCount >= 3 && sessionRec.session.state === 'pending') {
+      sessionRec.session.state = 'done';
+      const id = sessionRec.session.providerId;
+      const avail = MOCK_AVAILABLE_PROVIDERS.find((p) => p.id === id);
+      const catModels = MOCK_CATALOG_MODELS[id] || [];
+      const autoEnable = catModels.length <= 6;
+      const provider: Provider = {
+        id,
+        kind: 'builtin',
+        brand: avail?.name || id,
+        name: avail?.name || id,
+        auth: { type: 'oauth', account: 'user@example.com' },
+        status: { state: 'ok', testedAt: Date.now() },
+        models: catModels.map((m) => ({ ...m, enabled: autoEnable })),
+      };
+      const idx = db.providers.findIndex((p) => p.id === id);
+      if (idx >= 0) db.providers[idx] = provider;
+      else db.providers.push(provider);
+      if (!db.defaultModel && provider.models.some((m) => m.enabled)) {
+        const first = provider.models.find((m) => m.enabled);
+        if (first) db.defaultModel = { providerId: id, modelId: first.id };
+      }
+      publishProviders(db, hub);
+    }
+    return ok({ session: sessionRec.session });
+  }
+
+  const loginAnswerMatch = /^\/api\/v2\/login-sessions\/([^/]+)\/answer$/.exec(path);
+  if (loginAnswerMatch && method === 'POST') {
+    const sid = decodeURIComponent(loginAnswerMatch[1]);
+    const sessionRec = db.loginSessions.get(sid);
+    if (!sessionRec) return fail(404, 'Login session not found');
+    return ok({ session: sessionRec.session });
+  }
+
+  const loginCancelMatch = /^\/api\/v2\/login-sessions\/([^/]+)\/cancel$/.exec(path);
+  if (loginCancelMatch && method === 'POST') {
+    const sid = decodeURIComponent(loginCancelMatch[1]);
+    const sessionRec = db.loginSessions.get(sid);
+    if (!sessionRec) return fail(404, 'Login session not found');
+    sessionRec.session.state = 'cancelled';
+    return ok({ session: sessionRec.session });
   }
 
   const providerTestMatch = /^\/api\/v2\/providers\/([^/]+)\/test$/.exec(path);
   if (providerTestMatch && method === 'POST') {
     const id = decodeURIComponent(providerTestMatch[1]);
-    let provider = db.providers.find((row) => row.id === id);
-    if (!provider && id === 'grok') {
-      if (!db.grok.signedIn) return fail(409, lang === 'en' ? 'Grok is not signed in' : 'Grok 还没登录');
-      provider = ensureGrokProvider(db, hub);
-    }
+    const provider = db.providers.find((row) => row.id === id);
     if (!provider) return fail(404, 'Provider 不存在');
-    if (provider.id === 'grok' && !db.grok.signedIn) {
-      provider.status = 'needs_auth';
-      provider.statusText = lang === 'en' ? 'Sign in to Grok first' : '先登录 Grok';
-      publishProviders(db, hub);
-      return ok(providerView(provider));
+    let fails = false;
+    if (provider.auth.type === 'api_key' && (provider.auth.keyTail?.includes('9f01') || provider.auth.keyTail?.includes('bad'))) {
+      fails = true;
     }
-    provider.status = 'ok';
-    provider.statusText = '';
-    provider.lastTestedAt = Date.now();
+    if (provider.baseUrl && (provider.baseUrl.includes('10.8.0.12') || provider.baseUrl.includes('bad'))) {
+      fails = true;
+    }
+    if (provider.auth.type === 'api_key' && provider.auth.keyTail && /bad/i.test(provider.auth.keyTail)) {
+      fails = true;
+    }
+    if (fails) {
+      provider.status = {
+        state: 'error',
+        error: lang === 'en' ? '401 Unauthorized: Invalid API key or endpoint' : '401 未授权：API Key 或接口地址无效',
+        testedAt: Date.now(),
+      };
+      publishProviders(db, hub);
+      return ok({ ok: false, error: provider.status.error });
+    }
+    provider.status = { state: 'ok', testedAt: Date.now() };
     publishProviders(db, hub);
-    return ok(providerView(provider));
+    return ok({ ok: true, models: provider.models });
   }
 
   const providerMatch = /^\/api\/v2\/providers\/([^/]+)$/.exec(path);
   if (providerMatch) {
     const id = decodeURIComponent(providerMatch[1]);
-    let provider = db.providers.find((row) => row.id === id);
-    if (!provider && id === 'grok' && db.grok.signedIn) provider = ensureGrokProvider(db, hub);
+    const provider = db.providers.find((row) => row.id === id);
     if (!provider) return fail(404, 'Provider 不存在');
-    if (method === 'PATCH') return patchProvider(db, hub, provider, body);
-    if (method === 'GET') return ok(providerView(provider));
+    if (method === 'PATCH') return handlePatchProvider(db, hub, provider, body);
+    if (method === 'GET') return ok({ provider: providerView(provider) });
     if (method === 'DELETE') {
-      const wasDefault = db.defaultModel?.providerId === provider.id;
-      db.providers = db.providers.filter((row) => row.id !== provider!.id);
-      publishProviderGone(hub, provider.id);
-      // A signed-in Grok account is the only source of the `grok` Provider. In the
-      // prototype it cannot stand on its own, so removing the default Provider or
-      // the last API-key Provider signs Grok out too. That keeps the
-      // 「没有配置模型」state reachable from the settings page.
-      const onlyAccountLeft = db.providers.length > 0
-        && db.providers.every((row) => row.access === 'account');
-      if (db.grok.signedIn && (wasDefault || db.providers.length === 0 || onlyAccountLeft)) {
-        db.grok.signedIn = false;
-        db.grok.account = null;
-        db.grok.pending = null;
-        db.providers = db.providers.filter((row) => row.id !== 'grok');
-        publishProviderGone(hub, 'grok');
+      db.providers = db.providers.filter((row) => row.id !== id);
+      publishProviderGone(hub, id);
+      if (db.defaultModel?.providerId === id) {
+        const next = db.providers.find((row) => row.models.some((m) => m.enabled));
+        const nextModel = next?.models.find((m) => m.enabled);
+        db.defaultModel = next && nextModel ? { providerId: next.id, modelId: nextModel.id } : null;
       }
-      if (db.defaultModel?.providerId === provider.id) {
-        const next = db.providers.find((row) => row.models.length);
-        db.defaultModel = next ? { providerId: next.id, modelId: next.models[0].id } : null;
-      }
-      for (const row of db.providers) row.isDefault = db.defaultModel?.providerId === row.id;
       publishProviders(db, hub);
-      return ok({ removed: true });
+      return noContent();
     }
   }
 
@@ -1384,6 +1362,12 @@ export function handleMockRequest(db: MockDb, hub: MockHub, rawUrl: string, init
 /** Everything the prototype serves, wrapped in a real `Response`. */
 export function mockResponse(db: MockDb, hub: MockHub, rawUrl: string, init?: RequestInit): Response {
   const reply = handleMockRequest(db, hub, rawUrl, init);
+  if (reply.status === 204) {
+    return new Response(null, {
+      status: 204,
+      headers: reply.headers,
+    });
+  }
   if (reply.bytes) {
     const copy = new ArrayBuffer(reply.bytes.byteLength);
     new Uint8Array(copy).set(reply.bytes);

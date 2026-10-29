@@ -1,5 +1,6 @@
 import { expect } from '@playwright/test';
 import { api, readDiscovery } from './server.mjs';
+import { startFakeOpenAIServer } from './fake-openai.mjs';
 
 export async function loginNext(page, srv) {
   const discovery = await readDiscovery(srv.dataDir);
@@ -95,30 +96,49 @@ export async function createProviderModels(srv, {
   models = ['grok-4.6', 'grok-4'],
   defaultModel = 'grok-4.6',
   contextWindow,
+  apiKey = 'sk-chip-test-key1',
 } = {}) {
-  const created = await apiV2(srv, 'POST', '/api/v2/providers', {
-    vendor: 'openai',
-    name,
-    apiKey: 'sk-chip-test-key1',
-    models,
+  const modelEntries = models.map((m) => {
+    if (typeof m === 'string') {
+      let displayName = m;
+      if (m === 'grok-4.6') displayName = 'Grok 4.6';
+      else if (m === 'grok-4') displayName = 'Grok 4';
+      return { id: m, name: displayName, context_window: contextWindow ?? 200000 };
+    }
+    return m;
   });
-  expect(created.status, created.text).toBe(201);
-  const id = created.body.id;
-  if (defaultModel) {
-    const bound = await apiV2(srv, 'PATCH', `/api/v2/providers/${id}`, { defaultModel });
-    expect(bound.status, bound.text).toBe(200);
+
+  const fake = await startFakeOpenAIServer({ models: modelEntries });
+  if (srv && typeof srv.kill === 'function') {
+    const origKill = srv.kill;
+    srv.kill = async (...args) => {
+      try { await fake.close(); } catch {}
+      return origKill.apply(srv, args);
+    };
   }
+
+  const created = await apiV2(srv, 'POST', '/api/v2/providers/custom', {
+    name,
+    baseUrl: fake.baseUrl,
+    api: 'openai-completions',
+    apiKey,
+  });
+  expect(created.status, created.text).toBe(200);
+  const id = created.body.provider.id;
+
+  const patchBody = {};
+  if (defaultModel) patchBody.defaultModel = defaultModel;
   if (contextWindow != null) {
-    const names = defaultModel ? [defaultModel] : models;
+    patchBody.overrides = {};
+    const names = defaultModel ? [defaultModel] : models.map((m) => (typeof m === 'string' ? m : m.id));
     for (const modelId of names) {
-      const win = await apiV2(
-        srv,
-        'PUT',
-        `/api/v2/providers/${id}/models/${encodeURIComponent(modelId)}/context-window`,
-        { window: contextWindow },
-      );
-      expect(win.status, win.text).toBe(200);
+      patchBody.overrides[modelId] = { contextWindow };
     }
   }
-  return { id, body: created.body };
+  if (Object.keys(patchBody).length > 0) {
+    const bound = await apiV2(srv, 'PATCH', `/api/v2/providers/${id}`, patchBody);
+    expect(bound.status, bound.text).toBe(200);
+  }
+
+  return { id, body: created.body.provider, fake, close: () => fake.close() };
 }

@@ -217,7 +217,7 @@
       "get": {
         "operationId": "getEvents",
         "summary": "SSE 推送流",
-        "description": "一个客户端一条 SSE 连接，用查询参数 `topics` 订阅主题（逗号分隔），`lang` 为 zh 或 en（缺省 zh，不认识的按 zh）。\n每条业务事件带全局递增序号，写成标准 SSE：`id: <序号>`、`event: <类型>`、`data: <JSON>`。\n断线后带 `Last-Event-ID` 头（或查询参数 `lastEventId`）续传；环形缓冲里补不上（太旧、比当前还新、或格式不对）时先发一份新快照。\n没带 Last-Event-ID 时先发快照。快照的 SSE id 是开始计算快照时的最新序号；计算期间该连接订阅主题上到达的事件在快照之后按序补发（seq 大于该 id）。upsert / remove 是整实体替换，重复应用结果一样。\n订阅的主题和上次不同时，客户端不要带 Last-Event-ID / lastEventId，直接重新连接拿快照（续传只保证同一组主题）。\n心跳每 15 秒一次，不带 id，不进缓冲。\n\n主题 `workspaces` 注册为精确主题。实体：\n- `workspace`：id 为工作区 id，值为 Workspace（含可选 git 状态）\n- `conversation_summary`：id 为对话 id，值为 ConversationSummary\n\n快照与 GET /api/v2/workspaces 同一套数据拆成上述实体。工作区或对话增删改、运行状态、子 Agent 计数或 git 状态变化时 upsert；实体删除时 remove。值没变不推送。\n\n主题 `providers` 注册为精确主题。实体：\n- `provider`：id 为 Provider id，值为 Provider\n- `defaults`：id 为 `self`，值为 ProviderDefaults（`model` 为当前默认 `{ providerId, modelId }`，没有则为 null）\n\n快照是 GET /api/v2/providers 的 providers 与 defaultModel 拆成上述实体（vendors 是静态预设，不进推送）。任何 Provider 增删改、连通性测试、上下文上限或默认模型修改后 upsert（新旧接口改动都要触发）；实体删除时 remove。\n\n主题 `extensions` 注册为精确主题。实体：\n- `plugin`：id 为插件 id，值为 Plugin\n- `skill`：id 为技能 id，值为 Skill\n- `git_connection`：id 为 Git 连接 id，值为 GitConnection\n\n快照是 GET /api/v2/plugins、GET /api/v2/skills、GET /api/v2/git/connections 同一套数据拆成上述实体。插件、技能、Git 连接增删改（含旧接口）后 upsert；实体删除时 remove。失败原因、Git 测试结果按订阅的 `lang` 出成句。\n\n主题 `conversation:<id>`（`<id>` 为对话 id）按前缀动态注册。实体：\n- `conversation`：id 为对话 id，值为 ConversationView\n- `item`：id 为 ThreadItem.id，值为 ThreadItem\n- `tool`：id 为 ToolCall.id，值为 ToolCall\n- `subagent`：id 为子 Agent id，值为 Subagent。卡住由服务端判定：kernel 状态为 running 且超过 stuckAfterMs（默认 60000，环境变量 WEFT_SUBAGENT_STUCK_MS）没有活动时 status 为 stuck，到点推送 upsert。\n- `change`：id 为相对工作区的路径（统一用 `/`），值为 Change。快照带上当前变更列表。工具结束（write / edit / bash 都可能改文件）或经保存接口写入后随重算更新：变了才 upsert，从列表消失则 remove。不做文件监听。\n\n快照是 GET /api/v2/conversations/{id} 的 conversation / items / tools，再加上该对话的 subagent 和 change 实体。模型流式输出时先 upsert 一条 `item`，id 以 `live:` 开头、`streaming` 为 true、`text` 为空；随后用 `text.delta` 追加。正式助手消息到来后 remove 这条流式项，再 upsert 正式项和 conversation。bash 工具运行中用 `tool.delta` 追加保留窗口（不要复用 `text.delta`）；偏移对不上时客户端丢掉本地缓冲，等下一次 upsert。\n\n主题 `subagent:<cid>:<agentId>`（`<cid>` 为父对话 id，`<agentId>` 为子 Agent id）按前缀动态注册。实体：\n- `subagent`：id 为子 Agent id，值为 Subagent\n- `item`：id 为 ThreadItem.id，值为 ThreadItem（子 Agent 自己的消息流，没有嵌套子 Agent 汇报）\n- `tool`：id 为 ToolCall.id，值为 ToolCall\n\n快照是 GET /api/v2/conversations/{id}/subagents/{agentId} 同一套数据拆成上述实体。订阅父对话的内核事件（含 `agent`）后重算；子 Agent 的进展会体现在父对话事件里。\n\n订阅不存在的对话或子 Agent 时仍返回 200：先发 snapshot，entities 为空，并在 snapshot 数据里加 `missing: [\"conversation:<id>\"]` 或 `missing: [\"subagent:<cid>:<agentId>\"]`，连接保持。\n\n事件名与 data 的对应关系：\n- `snapshot` → SnapshotEvent\n- `upsert` → UpsertEvent\n- `remove` → RemoveEvent\n- `text.delta` → TextDeltaEvent\n- `tool.delta` → ToolDeltaEvent\n- `heartbeat` → HeartbeatEvent\n",
+        "description": "一个客户端一条 SSE 连接，用查询参数 `topics` 订阅主题（逗号分隔），`lang` 为 zh 或 en（缺省 zh，不认识的按 zh）。\n每条业务事件带全局递增序号，写成标准 SSE：`id: <序号>`、`event: <类型>`、`data: <JSON>`。\n断线后带 `Last-Event-ID` 头（或查询参数 `lastEventId`）续传；环形缓冲里补不上（太旧、比当前还新、或格式不对）时先发一份新快照。\n没带 Last-Event-ID 时先发快照。快照的 SSE id 是开始计算快照时的最新序号；计算期间该连接订阅主题上到达的事件在快照之后按序补发（seq 大于该 id）。upsert / remove 是整实体替换，重复应用结果一样。\n订阅的主题和上次不同时，客户端不要带 Last-Event-ID / lastEventId，直接重新连接拿快照（续传只保证同一组主题）。\n心跳每 15 秒一次，不带 id，不进缓冲。\n\n主题 `workspaces` 注册为精确主题。实体：\n- `workspace`：id 为工作区 id，值为 Workspace（含可选 git 状态）\n- `conversation_summary`：id 为对话 id，值为 ConversationSummary\n\n快照与 GET /api/v2/workspaces 同一套数据拆成上述实体。工作区或对话增删改、运行状态、子 Agent 计数或 git 状态变化时 upsert；实体删除时 remove。值没变不推送。\n\n主题 `providers` 注册为精确主题。实体：\n- `provider`：id 为 Provider id，值为 Provider\n- `defaults`：id 为 `self`，值为 ProviderDefaults（`model` 为当前默认 `{ providerId, modelId }`，没有则为 null）\n\n快照是 GET /api/v2/providers 的 providers 与 defaultModel 拆成上述实体。任何 Provider 增删改（接入、自定义接口、测试、PATCH、删除）或默认模型修改后 upsert；实体删除时 remove。登录会话不进主题，靠轮询 GET /api/v2/login-sessions/{sid}。密钥永不明文出现在响应或推送里。\n\n主题 `extensions` 注册为精确主题。实体：\n- `plugin`：id 为插件 id，值为 Plugin\n- `skill`：id 为技能 id，值为 Skill\n- `git_connection`：id 为 Git 连接 id，值为 GitConnection\n\n快照是 GET /api/v2/plugins、GET /api/v2/skills、GET /api/v2/git/connections 同一套数据拆成上述实体。插件、技能、Git 连接增删改（含旧接口）后 upsert；实体删除时 remove。失败原因、Git 测试结果按订阅的 `lang` 出成句。\n\n主题 `conversation:<id>`（`<id>` 为对话 id）按前缀动态注册。实体：\n- `conversation`：id 为对话 id，值为 ConversationView\n- `item`：id 为 ThreadItem.id，值为 ThreadItem\n- `tool`：id 为 ToolCall.id，值为 ToolCall\n- `subagent`：id 为子 Agent id，值为 Subagent。卡住由服务端判定：kernel 状态为 running 且超过 stuckAfterMs（默认 60000，环境变量 WEFT_SUBAGENT_STUCK_MS）没有活动时 status 为 stuck，到点推送 upsert。\n- `change`：id 为相对工作区的路径（统一用 `/`），值为 Change。快照带上当前变更列表。工具结束（write / edit / bash 都可能改文件）或经保存接口写入后随重算更新：变了才 upsert，从列表消失则 remove。不做文件监听。\n\n快照是 GET /api/v2/conversations/{id} 的 conversation / items / tools，再加上该对话的 subagent 和 change 实体。模型流式输出时先 upsert 一条 `item`，id 以 `live:` 开头、`streaming` 为 true、`text` 为空；随后用 `text.delta` 追加。正式助手消息到来后 remove 这条流式项，再 upsert 正式项和 conversation。bash 工具运行中用 `tool.delta` 追加保留窗口（不要复用 `text.delta`）；偏移对不上时客户端丢掉本地缓冲，等下一次 upsert。\n\n主题 `subagent:<cid>:<agentId>`（`<cid>` 为父对话 id，`<agentId>` 为子 Agent id）按前缀动态注册。实体：\n- `subagent`：id 为子 Agent id，值为 Subagent\n- `item`：id 为 ThreadItem.id，值为 ThreadItem（子 Agent 自己的消息流，没有嵌套子 Agent 汇报）\n- `tool`：id 为 ToolCall.id，值为 ToolCall\n\n快照是 GET /api/v2/conversations/{id}/subagents/{agentId} 同一套数据拆成上述实体。订阅父对话的内核事件（含 `agent`）后重算；子 Agent 的进展会体现在父对话事件里。\n\n订阅不存在的对话或子 Agent 时仍返回 200：先发 snapshot，entities 为空，并在 snapshot 数据里加 `missing: [\"conversation:<id>\"]` 或 `missing: [\"subagent:<cid>:<agentId>\"]`，连接保持。\n\n事件名与 data 的对应关系：\n- `snapshot` → SnapshotEvent\n- `upsert` → UpsertEvent\n- `remove` → RemoveEvent\n- `text.delta` → TextDeltaEvent\n- `tool.delta` → ToolDeltaEvent\n- `heartbeat` → HeartbeatEvent\n",
         "security": [
           {
             "bearerAuth": []
@@ -2860,8 +2860,8 @@
     "/api/v2/providers": {
       "get": {
         "operationId": "getProviders",
-        "summary": "Provider 列表、厂商预设和默认模型",
-        "description": "返回当前已保存的 Provider 视图、VENDOR_PRESETS 预设列表，以及默认模型。\n`statusText` 按 `lang` 出成句。密钥只以 keyMasked 出现，响应不含明文 key。\n",
+        "summary": "已接入的模型服务商和默认模型",
+        "description": "返回当前 settings.providers 里的 Provider 视图，以及默认模型。\n`status.error` 按 `lang` 出成句。密钥只以 auth.keyTail（末 4 位）出现，响应不含明文 key。\n界面上不出现「pi-ai」字样。\n",
         "security": [
           {
             "bearerAuth": []
@@ -2923,11 +2923,13 @@
             }
           }
         }
-      },
-      "post": {
-        "operationId": "createProvider",
-        "summary": "新增 API Provider",
-        "description": "创建规则与旧 POST /api/sources 相同（createApiSource）。\n成功后推送 providers 主题。\n",
+      }
+    },
+    "/api/v2/providers/available": {
+      "get": {
+        "operationId": "getAvailableProviders",
+        "summary": "可接入的内置服务商目录",
+        "description": "返回全部内置服务商（排除 xai、openai-codex、radius、typesafe）。\npopular 优先（固定顺序），其余按 name 排序。\n`envVar` / `envDetected` 按内置服务商的环境变量规则；`connected` 表示已在 settings.providers 里。\n中文环境下少量本地化名：moonshotai-cn、zai、qwen-token-plan-cn、minimax-cn、xiaomi。\n",
         "security": [
           {
             "bearerAuth": []
@@ -2946,49 +2948,19 @@
             }
           }
         ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CreateProviderRequest"
-              }
-            }
-          }
-        },
         "responses": {
-          "201": {
-            "description": "已创建",
+          "200": {
+            "description": "可接入目录",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Provider"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "请求体无效",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/V2Error"
+                  "$ref": "#/components/schemas/AvailableProvidersSnapshot"
                 }
               }
             }
           },
           "401": {
             "description": "未授权",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/V2Error"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "id 已存在",
             "content": {
               "application/json": {
                 "schema": {
@@ -3020,11 +2992,11 @@
         }
       }
     },
-    "/api/v2/providers/test": {
+    "/api/v2/providers/custom": {
       "post": {
-        "operationId": "testProviderDraft",
-        "summary": "用请求体里的配置测试连通并探测模型（不保存）",
-        "description": "只把请求发往请求体里的 baseUrl（或该 vendor 预设地址）。不写 lastTest。\n探测失败时 models 为空数组。statusText 按 lang 出成句。响应不含明文 key。\n",
+        "operationId": "createCustomProvider",
+        "summary": "新增自定义接口",
+        "description": "先 GET `{baseUrl}/models`，成功才保存。拉到的模型 ≤6 个全启用，否则都不启用。\n失败 400 不保存。成功后推送 providers 主题。\n",
         "security": [
           {
             "bearerAuth": []
@@ -3048,24 +3020,24 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/TestProviderRequest"
+                "$ref": "#/components/schemas/CreateCustomProviderRequest"
               }
             }
           }
         },
         "responses": {
           "200": {
-            "description": "探测结果",
+            "description": "已创建",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProviderProbeResult"
+                  "$ref": "#/components/schemas/ProviderEnvelope"
                 }
               }
             }
           },
           "400": {
-            "description": "请求体无效",
+            "description": "请求体无效或 /models 失败",
             "content": {
               "application/json": {
                 "schema": {
@@ -3076,6 +3048,226 @@
           },
           "401": {
             "description": "未授权",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "客户端错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "服务端错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/providers/{id}/connect": {
+      "post": {
+        "operationId": "connectProvider",
+        "summary": "接入内置服务商",
+        "description": "`method=api_key` 或 `env`：用该服务商第一个启用的模型（没有启用的就用目录第一个 chat 模型）发一次 max_tokens=1 的请求；\n验证通过后 `{ provider }`。新接入的内置服务商默认启用：模型 ≤6 个时全部，否则一个都不启用。\n验证失败 400 `{ error, code: E_AUTH | E_NETWORK | E_HTTP }`，不保存凭据。\n`method=oauth`：开始登录会话，返回 `{ session }`。同一服务商同时只允许一个进行中的会话。\n",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "内置服务商 id"
+          },
+          {
+            "name": "lang",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "default": "zh"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConnectProviderRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "已接入或已开始登录会话",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/ProviderEnvelope"
+                    },
+                    {
+                      "$ref": "#/components/schemas/LoginSessionEnvelope"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "验证失败或请求体无效",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "未授权",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "服务商不存在",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "客户端错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "服务端错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/providers/{id}/test": {
+      "post": {
+        "operationId": "testProvider",
+        "summary": "测试已保存的服务商",
+        "description": "内置：用第一个启用的模型发一次 max_tokens=1 的请求。\n自定义：重新拉 /models 并合并，已启用和覆盖保留。\n结果写进 lastTest，推送 providers 主题。响应不含明文 key。\n",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Provider id"
+          },
+          {
+            "name": "lang",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "default": "zh"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "更新后的 Provider",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "测试失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "未授权",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Provider 不存在",
             "content": {
               "application/json": {
                 "schema": {
@@ -3111,7 +3303,7 @@
       "patch": {
         "operationId": "patchProvider",
         "summary": "修改已保存的 Provider",
-        "description": "改名、baseUrl、key、模型列表、默认模型。换 baseUrl 或 vendor 且没给新 key 时清空已存 key，规则同旧 applySourcePatch。\n成功后推送 providers 主题；若改了上下文相关字段或默认模型，对话主题的 model / context 也会重算。\n",
+        "description": "任意组合：enabled、overrides（null = 清除覆盖）、defaultModel、以及仅自定义的 name / baseUrl / api；\napiKey 内置也可，用来换 Key。成功后推送 providers 主题。\n",
         "security": [
           {
             "bearerAuth": []
@@ -3155,13 +3347,13 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Provider"
+                  "$ref": "#/components/schemas/ProviderEnvelope"
                 }
               }
             }
           },
           "400": {
-            "description": "请求体无效或 applySourcePatch 拒绝",
+            "description": "请求体无效",
             "content": {
               "application/json": {
                 "schema": {
@@ -3215,7 +3407,7 @@
       "delete": {
         "operationId": "deleteProvider",
         "summary": "删除 Provider",
-        "description": "删除后若它是默认模型来源则清空默认。推送 providers 主题。",
+        "description": "同时删除凭据。默认模型指向它时清空。推送 providers 主题。成功 204。",
         "security": [
           {
             "bearerAuth": []
@@ -3233,18 +3425,19 @@
               "type": "string"
             },
             "description": "Provider id"
+          },
+          {
+            "name": "lang",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "default": "zh"
+            }
           }
         ],
         "responses": {
-          "200": {
-            "description": "已删除",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProviderRemoved"
-                }
-              }
-            }
+          "204": {
+            "description": "已删除"
           },
           "401": {
             "description": "未授权",
@@ -3289,11 +3482,11 @@
         }
       }
     },
-    "/api/v2/providers/{id}/test": {
-      "post": {
-        "operationId": "testProvider",
-        "summary": "测试已保存的 Provider",
-        "description": "探测已保存配置的连通性和模型列表，结果写回 lastTest。成功时按旧 modelsAfterProbe 合并模型。\n推送 providers 主题。响应不含明文 key。\n",
+    "/api/v2/login-sessions/{sid}": {
+      "get": {
+        "operationId": "getLoginSession",
+        "summary": "查询登录会话",
+        "description": "前端每 1 秒轮询。登录会话不进 providers 主题。",
         "security": [
           {
             "bearerAuth": []
@@ -3304,13 +3497,203 @@
         ],
         "parameters": [
           {
-            "name": "id",
+            "name": "sid",
             "in": "path",
             "required": true,
             "schema": {
               "type": "string"
             },
-            "description": "Provider id"
+            "description": "登录会话 id"
+          },
+          {
+            "name": "lang",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "default": "zh"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "当前会话",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginSessionEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "未授权",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "会话不存在",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "客户端错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "服务端错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/login-sessions/{sid}/answer": {
+      "post": {
+        "operationId": "answerLoginSession",
+        "summary": "回答登录会话的 prompt",
+        "description": "会话处于 state=prompt 时提交用户输入，然后继续登录流程。",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "sid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "lang",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "default": "zh"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginAnswerRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "更新后的会话",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginSessionEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "当前不能回答",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "未授权",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "会话不存在",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "客户端错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "服务端错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/login-sessions/{sid}/cancel": {
+      "post": {
+        "operationId": "cancelLoginSession",
+        "summary": "取消登录会话",
+        "description": "中止进行中的登录（abort signal）。",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "sid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
           },
           {
             "name": "lang",
@@ -3334,11 +3717,11 @@
         },
         "responses": {
           "200": {
-            "description": "更新后的 Provider",
+            "description": "已取消的会话",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Provider"
+                  "$ref": "#/components/schemas/LoginSessionEnvelope"
                 }
               }
             }
@@ -3354,122 +3737,7 @@
             }
           },
           "404": {
-            "description": "Provider 不存在",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/V2Error"
-                }
-              }
-            }
-          },
-          "4XX": {
-            "description": "客户端错误",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/V2Error"
-                }
-              }
-            }
-          },
-          "5XX": {
-            "description": "服务端错误",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/V2Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v2/providers/{id}/models/{modelId}/context-window": {
-      "put": {
-        "operationId": "putProviderModelContextWindow",
-        "summary": "设置或恢复某个模型的上下文上限",
-        "description": "`window` 为整数时写入 source.contextWindows（范围同旧 CONTEXT_WINDOW_MIN/MAX，1000–10000000）。\n`null` 恢复默认（目录或环境变量）。推送 providers 主题，并重算相关对话的 context。\n",
-        "security": [
-          {
-            "bearerAuth": []
-          },
-          {
-            "sessionCookie": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            },
-            "description": "Provider id"
-          },
-          {
-            "name": "modelId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            },
-            "description": "模型 id（含斜杠时需百分号编码）"
-          },
-          {
-            "name": "lang",
-            "in": "query",
-            "schema": {
-              "type": "string",
-              "default": "zh"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ContextWindowRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "更新后的 Provider",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Provider"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "窗口超出范围或请求体无效",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/V2Error"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "未授权",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/V2Error"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Provider 不存在",
+            "description": "会话不存在",
             "content": {
               "application/json": {
                 "schema": {
@@ -6094,124 +6362,121 @@
         },
         "description": "对话当前模型。取对话自己选的或默认模型。"
       },
-      "ProviderAccess": {
+      "ProviderAuthType": {
         "type": "string",
         "enum": [
           "api_key",
-          "account",
-          "local",
-          "custom_endpoint",
-          "agent"
-        ],
-        "description": "agent 只在契约里预留，当前实现不会返回。"
+          "oauth",
+          "env",
+          "none"
+        ]
       },
-      "ProviderStatus": {
+      "ProviderAuth": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "$ref": "#/components/schemas/ProviderAuthType"
+          },
+          "keyTail": {
+            "type": "string",
+            "description": "API Key 末 4 位。没有 key 时省略。永远不是明文。"
+          },
+          "account": {
+            "type": "string",
+            "description": "OAuth 时的账号描述，可空"
+          },
+          "envVar": {
+            "type": "string",
+            "description": "环境变量名（auth.type=env 时）"
+          }
+        },
+        "description": "服务商凭据视图。响应和日志都不含明文 API key。"
+      },
+      "ProviderStatusState": {
         "type": "string",
         "enum": [
           "ok",
-          "needs_auth",
-          "unreachable",
+          "untested",
           "error",
-          "untested"
+          "testing"
         ]
+      },
+      "ProviderStatus": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "state"
+        ],
+        "properties": {
+          "state": {
+            "$ref": "#/components/schemas/ProviderStatusState"
+          },
+          "testedAt": {
+            "type": "integer",
+            "description": "最近一次测试时间（毫秒）。从未测试时省略"
+          },
+          "error": {
+            "type": "string",
+            "description": "已按 lang 出成句。state 不是 error 时省略"
+          }
+        }
+      },
+      "ProviderKind": {
+        "type": "string",
+        "enum": [
+          "builtin",
+          "custom"
+        ]
+      },
+      "CustomApi": {
+        "type": "string",
+        "enum": [
+          "openai-completions",
+          "openai-responses",
+          "anthropic-messages"
+        ]
+      },
+      "ModelOverridden": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "contextWindow": {
+            "type": "boolean"
+          },
+          "maxTokens": {
+            "type": "boolean"
+          }
+        },
+        "description": "哪些字段被用户覆盖。未覆盖的键省略。"
       },
       "ProviderModel": {
         "type": "object",
         "additionalProperties": false,
         "required": [
           "id",
-          "displayName",
-          "brand",
-          "contextWindow",
-          "contextWindowCustom",
-          "images"
-        ],
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "displayName": {
-            "type": "string",
-            "description": "按品牌表算出的显示名；认不出品牌时等于 id"
-          },
-          "brand": {
-            "description": "品牌 id，认不出为 null",
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "type": "string"
-              }
-            ]
-          },
-          "contextWindow": {
-            "type": "integer",
-            "description": "手动覆盖 → 模型目录 → 环境变量"
-          },
-          "contextWindowCustom": {
-            "type": "boolean",
-            "description": "true 表示用户手动覆盖"
-          },
-          "images": {
-            "type": "boolean",
-            "description": "模型目录 input 含 image 时为 true。前端据此决定是否允许贴图。"
-          }
-        },
-        "description": "Provider 上的一个可用模型。"
-      },
-      "Provider": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "id",
-          "vendor",
           "name",
-          "access",
-          "runtime",
-          "baseUrl",
-          "keyMasked",
-          "hasKey",
-          "status",
-          "statusText",
-          "lastTestedAt",
-          "models",
-          "isDefault"
+          "brand",
+          "enabled",
+          "contextWindow",
+          "maxTokens",
+          "images",
+          "reasoning",
+          "overridden"
         ],
         "properties": {
           "id": {
             "type": "string"
-          },
-          "vendor": {
-            "description": "品牌 id，认不出为 null",
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "type": "string"
-              }
-            ]
           },
           "name": {
-            "type": "string"
-          },
-          "access": {
-            "$ref": "#/components/schemas/ProviderAccess"
-          },
-          "runtime": {
             "type": "string",
-            "enum": [
-              "model",
-              "agent"
-            ],
-            "description": "当前实现恒为 model。agent 只在契约里预留。"
+            "description": "模型自带的显示名；没有就等于 id"
           },
-          "baseUrl": {
-            "type": "string"
-          },
-          "keyMasked": {
-            "description": "没有 key 时为 null。永远不是明文",
+          "brand": {
+            "description": "模型品牌图标 id。认不出为 null",
             "oneOf": [
               {
                 "type": "null"
@@ -6221,18 +6486,11 @@
               }
             ]
           },
-          "hasKey": {
+          "enabled": {
             "type": "boolean"
           },
-          "status": {
-            "$ref": "#/components/schemas/ProviderStatus"
-          },
-          "statusText": {
-            "type": "string",
-            "description": "服务端按 lang 出成句。ok / untested 时为空字符串"
-          },
-          "lastTestedAt": {
-            "description": "最近一次探测时间（毫秒）。从未探测为 null",
+          "contextWindow": {
+            "description": "已应用用户覆盖；null = 未知（运行时按 128000 算）",
             "oneOf": [
               {
                 "type": "null"
@@ -6242,48 +6500,51 @@
               }
             ]
           },
-          "models": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ProviderModel"
-            }
+          "maxTokens": {
+            "description": "已应用用户覆盖；null = 未知",
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "integer"
+              }
+            ]
           },
-          "isDefault": {
+          "images": {
             "type": "boolean"
+          },
+          "reasoning": {
+            "type": "boolean"
+          },
+          "overridden": {
+            "$ref": "#/components/schemas/ModelOverridden"
           }
         },
-        "description": "模型来源的视图。响应和日志都不含明文 API key。"
+        "description": "Provider 上的一个 chat 模型。"
       },
-      "Vendor": {
+      "Provider": {
         "type": "object",
         "additionalProperties": false,
         "required": [
           "id",
+          "kind",
+          "brand",
           "name",
-          "access",
-          "needsKey",
-          "baseUrl",
-          "brand"
+          "auth",
+          "status",
+          "models"
         ],
         "properties": {
           "id": {
-            "type": "string"
-          },
-          "name": {
-            "type": "string"
-          },
-          "access": {
-            "$ref": "#/components/schemas/ProviderAccess"
-          },
-          "needsKey": {
-            "type": "boolean"
-          },
-          "baseUrl": {
             "type": "string",
-            "description": "预设默认地址。custom 为空字符串"
+            "description": "内置为 catalog id（如 deepseek）；自定义为 custom- + 8 位 hex"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ProviderKind"
           },
           "brand": {
-            "description": "品牌 id，认不出为 null",
+            "description": "品牌图标 id。自定义为 null",
             "oneOf": [
               {
                 "type": "null"
@@ -6292,9 +6553,247 @@
                 "type": "string"
               }
             ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "api": {
+            "$ref": "#/components/schemas/CustomApi"
+          },
+          "baseUrl": {
+            "type": "string"
+          },
+          "auth": {
+            "$ref": "#/components/schemas/ProviderAuth"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ProviderStatus"
+          },
+          "models": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProviderModel"
+            }
           }
         },
-        "description": "可添加的厂商预设（VENDOR_PRESETS）。"
+        "description": "模型服务商视图。响应和日志都不含明文 API key。"
+      },
+      "AvailableProvider": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "name",
+          "authMethods",
+          "modelCount",
+          "popular",
+          "envDetected",
+          "connected"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "brand": {
+            "description": "品牌图标 id",
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "authMethods": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "api_key",
+                "oauth"
+              ]
+            }
+          },
+          "modelCount": {
+            "type": "integer"
+          },
+          "popular": {
+            "type": "boolean"
+          },
+          "envVar": {
+            "type": "string"
+          },
+          "envDetected": {
+            "type": "boolean"
+          },
+          "connected": {
+            "type": "boolean"
+          }
+        },
+        "description": "可接入的内置服务商。"
+      },
+      "LoginSessionEvent": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "type",
+              "url"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "auth_url"
+              },
+              "url": {
+                "type": "string"
+              },
+              "instructions": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "type",
+              "userCode",
+              "verificationUri"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "device_code"
+              },
+              "userCode": {
+                "type": "string"
+              },
+              "verificationUri": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "type",
+              "message"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "info",
+                  "progress"
+                ]
+              },
+              "message": {
+                "type": "string"
+              }
+            }
+          }
+        ]
+      },
+      "LoginPromptOption": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "label"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          }
+        }
+      },
+      "LoginPrompt": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "type",
+          "message"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "text",
+              "secret",
+              "select",
+              "manual_code"
+            ]
+          },
+          "message": {
+            "type": "string"
+          },
+          "placeholder": {
+            "type": "string"
+          },
+          "options": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LoginPromptOption"
+            }
+          }
+        }
+      },
+      "LoginSession": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "providerId",
+          "state",
+          "events"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "providerId": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "prompt",
+              "done",
+              "error",
+              "cancelled"
+            ]
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LoginSessionEvent"
+            }
+          },
+          "prompt": {
+            "$ref": "#/components/schemas/LoginPrompt"
+          },
+          "error": {
+            "type": "string"
+          },
+          "provider": {
+            "$ref": "#/components/schemas/Provider"
+          }
+        },
+        "description": "OAuth 登录会话。内存保存，10 分钟过期。"
       },
       "ResolvedModel": {
         "type": "object",
@@ -6318,7 +6817,6 @@
         "additionalProperties": false,
         "required": [
           "providers",
-          "vendors",
           "defaultModel"
         ],
         "properties": {
@@ -6326,12 +6824,6 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/Provider"
-            }
-          },
-          "vendors": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/Vendor"
             }
           },
           "defaultModel": {
@@ -6347,6 +6839,22 @@
           }
         },
         "description": "GET /api/v2/providers 的响应。"
+      },
+      "AvailableProvidersSnapshot": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "providers"
+        ],
+        "properties": {
+          "providers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AvailableProvider"
+            }
+          }
+        },
+        "description": "GET /api/v2/providers/available 的响应。"
       },
       "ProviderDefaults": {
         "type": "object",
@@ -6369,58 +6877,157 @@
         },
         "description": "providers 主题里 defaults/self 实体的值。"
       },
-      "CreateProviderRequest": {
+      "ProviderEnvelope": {
         "type": "object",
         "additionalProperties": false,
         "required": [
-          "vendor"
+          "provider"
         ],
         "properties": {
-          "vendor": {
-            "type": "string"
+          "provider": {
+            "$ref": "#/components/schemas/Provider"
+          }
+        }
+      },
+      "LoginSessionEnvelope": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "session"
+        ],
+        "properties": {
+          "session": {
+            "$ref": "#/components/schemas/LoginSession"
+          }
+        }
+      },
+      "ConnectApiKeyRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "method",
+          "apiKey"
+        ],
+        "properties": {
+          "method": {
+            "type": "string",
+            "const": "api_key"
           },
+          "apiKey": {
+            "type": "string"
+          }
+        }
+      },
+      "ConnectEnvRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "method"
+        ],
+        "properties": {
+          "method": {
+            "type": "string",
+            "const": "env"
+          }
+        }
+      },
+      "ConnectOAuthRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "method"
+        ],
+        "properties": {
+          "method": {
+            "type": "string",
+            "const": "oauth"
+          }
+        }
+      },
+      "ConnectProviderRequest": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/ConnectApiKeyRequest"
+          },
+          {
+            "$ref": "#/components/schemas/ConnectEnvRequest"
+          },
+          {
+            "$ref": "#/components/schemas/ConnectOAuthRequest"
+          }
+        ],
+        "description": "接入内置服务商。"
+      },
+      "CreateCustomProviderRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "baseUrl",
+          "api"
+        ],
+        "properties": {
           "name": {
             "type": "string"
           },
           "baseUrl": {
             "type": "string"
           },
+          "api": {
+            "$ref": "#/components/schemas/CustomApi"
+          },
           "apiKey": {
             "type": "string"
-          },
-          "models": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
           }
         },
-        "description": "创建 API Provider。规则同旧 POST /api/sources。"
+        "description": "新增自定义接口。先拉 /models，成功才保存。"
+      },
+      "ModelOverridePatch": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "contextWindow": {
+            "description": "新的上下文上限；null 清除覆盖",
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "integer"
+              }
+            ]
+          },
+          "maxTokens": {
+            "description": "新的 max tokens；null 清除覆盖",
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "integer"
+              }
+            ]
+          }
+        }
       },
       "PatchProviderRequest": {
         "type": "object",
         "additionalProperties": false,
         "properties": {
-          "vendor": {
-            "type": "string"
-          },
-          "name": {
-            "type": "string"
-          },
-          "baseUrl": {
-            "type": "string"
-          },
-          "apiKey": {
-            "type": "string"
-          },
-          "models": {
+          "enabled": {
             "type": "array",
             "items": {
               "type": "string"
             }
           },
+          "overrides": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ModelOverridePatch"
+            }
+          },
           "defaultModel": {
-            "description": "把该 Provider 上的这个模型设为默认；null 且当前默认就是它时清空默认",
+            "description": "把该 Provider 上的这个模型设为默认；null 清空（仅当当前默认就是它）",
             "oneOf": [
               {
                 "type": "null"
@@ -6429,92 +7036,34 @@
                 "type": "string"
               }
             ]
-          }
-        },
-        "description": "修改已保存的 Provider。applySourcePatch 规则。"
-      },
-      "TestProviderRequest": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "vendor"
-        ],
-        "properties": {
-          "vendor": {
+          },
+          "name": {
             "type": "string"
           },
           "baseUrl": {
             "type": "string"
           },
+          "api": {
+            "$ref": "#/components/schemas/CustomApi"
+          },
           "apiKey": {
             "type": "string"
           }
         },
-        "description": "未保存配置的连通性测试。请求只发往这里的 baseUrl（或 vendor 预设地址）。"
+        "description": "修改已保存的 Provider。后四个仅自定义；apiKey 内置也可用来换 Key。"
       },
-      "ProviderProbeResult": {
+      "LoginAnswerRequest": {
         "type": "object",
         "additionalProperties": false,
         "required": [
-          "ok",
-          "models",
-          "status",
-          "statusText"
+          "value"
         ],
         "properties": {
-          "ok": {
-            "type": "boolean"
-          },
-          "models": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "status": {
-            "$ref": "#/components/schemas/ProviderStatus"
-          },
-          "statusText": {
+          "value": {
             "type": "string"
           }
         },
-        "description": "未保存配置的探测结果。失败时 models 为空数组。"
-      },
-      "ContextWindowRequest": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "window"
-        ],
-        "properties": {
-          "window": {
-            "description": "新的上下文上限；null 恢复默认。整数范围 1000–10000000",
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "type": "integer",
-                "minimum": 1000,
-                "maximum": 10000000
-              }
-            ]
-          }
-        }
-      },
-      "ProviderRemoved": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "removed"
-        ],
-        "properties": {
-          "removed": {
-            "type": "boolean",
-            "const": true
-          }
-        },
-        "description": "DELETE /api/v2/providers/{id} 成功。"
+        "description": "回答登录会话当前 prompt。"
       },
       "PatchConversationModelRequest": {
         "type": "object",

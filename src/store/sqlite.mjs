@@ -271,6 +271,8 @@ export function createSqliteStore(dir, { log = console } = {}) {
     getWs: db.prepare('SELECT * FROM workspaces WHERE id = ?'),
     getSettings: db.prepare('SELECT json FROM settings WHERE id = ?'),
     putSettings: db.prepare('INSERT INTO settings (id, json) VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET json = excluded.json'),
+    listAllConv: db.prepare('SELECT id, model_source_id, model_id FROM conversations'),
+    updConvModel: db.prepare('UPDATE conversations SET model_source_id=?, model_id=? WHERE id=?'),
     insConv: db.prepare(`INSERT INTO conversations (
       id, workspace_id, title, status, auto_continues, retries, last_checkpoint_at,
       current_step, updated_at, created_at,
@@ -498,6 +500,15 @@ export function createSqliteStore(dir, { log = console } = {}) {
       q.delProvModels.run(providerId);
     },
 
+    async getSettingsRaw(id = 'app') {
+      const row = q.getSettings.get(id);
+      return row ? p(row.json) : null;
+    },
+    async putSettingsRaw(id, value, { overwrite = true } = {}) {
+      if (!overwrite && q.getSettings.get(id)) return false;
+      q.putSettings.run(id, j(value));
+      return true;
+    },
     async getSettings() {
       const row = q.getSettings.get('app');
       return normalizeSettings(row ? p(row.json) : DEFAULT_SETTINGS);
@@ -507,6 +518,33 @@ export function createSqliteStore(dir, { log = console } = {}) {
       const next = mergeSettings(cur, patch);
       q.putSettings.run('app', j(next));
       return next;
+    },
+    async replaceSettings(next) {
+      const normalized = normalizeSettings(next);
+      q.putSettings.run('app', j(normalized));
+      return normalized;
+    },
+    async remapConversationModelSources(idMap) {
+      if (!idMap || typeof idMap !== 'object') return;
+      const rows = q.listAllConv.all();
+      for (const row of rows) {
+        const oldId = row.model_source_id;
+        if (!oldId || !Object.prototype.hasOwnProperty.call(idMap, oldId)) continue;
+        const mapped = idMap[oldId];
+        if (mapped) q.updConvModel.run(mapped, row.model_id, row.id);
+        else q.updConvModel.run(null, null, row.id);
+      }
+    },
+    async withTransaction(fn) {
+      db.exec('BEGIN IMMEDIATE');
+      try {
+        const result = await fn();
+        db.exec('COMMIT');
+        return result;
+      } catch (err) {
+        try { db.exec('ROLLBACK'); } catch { /* already rolled back */ }
+        throw err;
+      }
     },
 
     close() {

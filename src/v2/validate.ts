@@ -118,6 +118,14 @@ export function validateResponse(
   body: unknown,
 ): ValidateResult {
   const specPath = matchContractPath(requestPath) ?? requestPath;
+  if (status === 204) {
+    const op = spec.paths?.[specPath]?.[method.toLowerCase()];
+    const chosen = op?.responses?.['204'];
+    if (chosen && (chosen.content == null || Object.keys(chosen.content).length === 0)) {
+      if (body == null || body === '') return { ok: true };
+      return { ok: false, errors: [{ message: '204 must not have a body' }] };
+    }
+  }
   const key = `${method.toUpperCase()} ${specPath} ${status}`;
   let validator = cache.get(key);
   if (!validator) {

@@ -1,4 +1,4 @@
-import { SETTINGS_PAGES, type SettingsPage } from './data/providerWizard';
+import { SETTINGS_PAGES, type SettingsPage } from './data/settingsPages';
 
 export type AppRoute =
   | { name: 'home' }

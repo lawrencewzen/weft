@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
-import http from 'node:http';
 import { startServer, prepareWorkspaces } from './helpers/server.mjs';
 import { loginNext, openWorkspaceConversation } from './helpers/next.mjs';
+import { startFakeOpenAIServer } from './helpers/fake-openai.mjs';
 
 test.use({ locale: 'zh-CN', viewport: { width: 1440, height: 900 } });
 test.describe.configure({ timeout: 90_000 });
@@ -21,35 +21,16 @@ test.afterEach(async () => {
   }
 });
 
-function startFakeModels({ statusFor } = {}) {
-  const hits = [];
-  const server = http.createServer((req, res) => {
-    const chunks = [];
-    req.on('data', (chunk) => chunks.push(chunk));
-    req.on('end', () => {
-      const authorization = String(req.headers.authorization || '');
-      hits.push({ method: req.method, url: req.url, authorization });
-      const key = authorization.replace(/^Bearer\s+/i, '');
-      const status = statusFor ? statusFor(key) : 200;
-      if (status === 401) {
-        res.writeHead(401, { 'content-type': 'application/json' });
-        res.end(JSON.stringify({ error: { message: 'invalid api key' } }));
-        return;
-      }
-      res.writeHead(200, { 'content-type': 'application/json' });
-      res.end(JSON.stringify({ data: [{ id: 'alpha-one' }, { id: 'beta-two' }] }));
-    });
+async function startFakeModels({ statusFor } = {}) {
+  const fake = await startFakeOpenAIServer({
+    statusFor,
+    models: [
+      { id: 'alpha-one', name: 'alpha-one' },
+      { id: 'beta-two', name: 'beta-two' },
+    ],
   });
-  return new Promise((resolve) => {
-    server.listen(0, '127.0.0.1', () => {
-      closers.push((done) => server.close(done));
-      const { port } = server.address();
-      resolve({
-        hits,
-        baseUrl: `http://127.0.0.1:${port}/v1`,
-      });
-    });
-  });
+  closers.push((done) => fake.close().then(done, done));
+  return fake;
 }
 
 function attachCspLog(page) {
@@ -132,71 +113,58 @@ test('add provider: failed 401, then pass, pick two models, default, rename, del
   await openProviders(page);
 
   await page.getByTestId('next-provider-add').click();
-  await expect(page.getByTestId('next-vendor-card')).toHaveCount(15);
-  await expect(page.locator('[data-testid=next-vendor-card][data-vendor=github-copilot]')).toBeDisabled();
-  await expect(page.locator('[data-testid=next-vendor-card][data-vendor=kiro]')).toBeDisabled();
-  await expect(page.locator('[data-testid=next-vendor-card][data-vendor=lmstudio]')).toBeDisabled();
-  await page.locator('[data-testid=next-vendor-card][data-vendor=anthropic]').click();
-  await page.getByRole('button', { name: '下一步' }).click();
-  await expect(page.getByTestId('next-way-account')).toBeDisabled();
-  await expect(page.getByTestId('next-way-account')).toContainText('账号登录 · Claude Code');
-  await expect(page.getByTestId('next-way-account')).toContainText('即将支持');
-  await expect(page.getByTestId('next-way-agent')).toContainText('ACP Agent · Claude Code');
-  await page.getByRole('button', { name: '上一步' }).click();
+  await expect(page.locator('.mp-dlg')).toBeVisible();
 
-  await page.locator('[data-testid=next-vendor-card][data-vendor=custom]').click();
-  await expect(page.getByTestId('next-settings')).toContainText('已选');
-  await page.getByRole('button', { name: '下一步' }).click();
+  // Step 0: click Custom card
+  await page.locator('[data-testid=next-vendor-card][data-vendor="custom"]').click();
+  await expect(page.getByTestId('next-custom-name')).toBeVisible();
 
-  await expect(page.getByTestId('next-way-custom_endpoint')).toBeVisible();
-  await expect(page.getByTestId('next-way-custom_endpoint')).toContainText('兼容 OpenAI 协议的网关');
-  await expect(page.getByTestId('next-way-custom_endpoint')).not.toContainText('兼容 OpenAI 兼容');
-  await expect(page.getByTestId('next-way-account')).toBeDisabled();
-  await expect(page.getByTestId('next-way-account')).toContainText('即将支持');
-  await expect(page.getByTestId('next-way-agent')).toBeDisabled();
-  await expect(page.getByTestId('next-way-agent')).toContainText('即将支持');
+  // Step 1: fill form with wrong key -> 401 error
+  await page.getByTestId('next-custom-name').fill('Local Fake');
+  await page.getByTestId('next-custom-url').fill(fake.baseUrl);
+  await page.getByTestId('next-custom-key').fill(WRONG_KEY);
+  await page.locator('.mp-dlg .mp-df .mp-btn.mp-pri').click();
+  await expect(page.getByTestId('next-test-result')).toBeVisible();
+  await expect(page.getByTestId('next-test-result')).toContainText(/401|鉴权失败|失败|unauthorized/i);
 
-  await page.getByTestId('next-provider-url').fill(fake.baseUrl);
-  await page.getByTestId('next-key-input').fill(WRONG_KEY);
-  await page.getByTestId('next-provider-test').click();
-  await expect(page.getByTestId('next-test-result')).toContainText(/鉴权失败/);
-  await expect(page.getByRole('button', { name: '下一步' })).toBeDisabled();
+  // Step 1: fix key -> pass to step 2
+  await page.getByTestId('next-custom-key').fill(RIGHT_KEY);
+  await page.locator('.mp-dlg .mp-df .mp-btn.mp-pri').click();
 
-  await page.getByTestId('next-key-input').fill(RIGHT_KEY);
-  await page.getByTestId('next-provider-test').click();
-  await expect(page.getByTestId('next-test-result')).toContainText(/连接成功，找到 2 个模型/);
-  await page.getByRole('button', { name: '下一步' }).click();
-
-  const rows = page.getByTestId('next-model-row');
-  await expect(page.getByTestId('next-provider-crumb')).toBeVisible();
-  await expect(page.locator('.next-settings-crumb')).toContainText('添加');
-  await expect(page.locator('.ns-wizard-heading h2')).toContainText('自定义');
-  await expect(rows).toHaveCount(2, { timeout: 15000 });
-  await expect(page.getByTestId('next-model-filter').first()).toBeVisible();
-  await expect(page.getByPlaceholder('搜索模型名或 ID')).toBeVisible();
-  await expect(page.getByPlaceholder('列表里没有？手动加一个模型 ID')).toBeVisible();
-  await expect(page.getByText('已选 0 个')).toBeVisible();
-  await rows.nth(0).locator('.ns-switch').click();
-  await rows.nth(1).locator('.ns-switch').click();
-  await expect(page.getByText('已选 2 个')).toBeVisible();
-  await expect(page.getByText('只看已选')).toBeVisible();
+  // Step 2: select both models and finish
+  await expect(page.getByTestId('next-provider-finish')).toBeVisible();
+  const checkboxes = page.locator('.mp-pickm input[type="checkbox"]');
+  await expect(checkboxes).toHaveCount(2);
+  await checkboxes.nth(0).check();
+  await checkboxes.nth(1).check();
   await page.getByTestId('next-provider-finish').click();
+  await expect(page.locator('.mp-dlg')).toHaveCount(0);
 
+  // Provider list: row exists and models enabled
   const row = page.getByTestId('next-provider-row').first();
   await expect(row).toBeVisible();
-  await expect(row).toContainText('测试通过');
-  await expect(row).toContainText('启用 2 个模型');
+  await expect(row).toContainText('Local Fake');
+  await expect(row).toContainText(/2\s*\/\s*2|启用 2/);
 
-  await page.getByTestId('next-default-model').click();
-  await page.locator('.ns-pop-item').first().click();
-  await expect(page.getByTestId('next-default-model')).toContainText(/alpha-one|beta-two/);
+  // Set default model
+  await page.getByTestId('next-provider-default-picker').click();
+  await expect(page.locator('.mp-menu')).toBeVisible();
+  await page.locator('.mp-menu-i').first().click();
+  await expect(page.getByTestId('next-provider-default-picker')).toContainText(/alpha-one|beta-two/);
 
-  await page.getByTestId('next-provider-edit').click();
-  await page.getByTestId('next-provider-name').fill('Lab Key');
-  await page.getByRole('button', { name: '下一步' }).click();
-  await page.getByTestId('next-provider-finish').click();
-  await expect(page.getByTestId('next-provider-row')).toContainText('Lab Key');
+  // In-place edit context window
+  const modelRow = page.locator('[data-testid=next-model-row][data-model="alpha-one"]');
+  await expect(modelRow).toBeVisible();
+  const ctxVal = modelRow.locator('.mp-num .mp-v').first();
+  await ctxVal.click();
+  const ctxInput = page.getByTestId('next-ctx-input');
+  await expect(ctxInput).toBeVisible();
+  await ctxInput.fill('256K');
+  await ctxInput.press('Enter');
+  await expect(modelRow.locator('.mp-num .mp-v').first()).toHaveText('256K');
 
+  // Remove provider
+  await row.getByTestId('next-provider-more').click();
   await page.getByTestId('next-provider-delete').click();
   await page.getByTestId('next-confirm-ok').click();
   await expect(page.getByTestId('next-provider-row')).toHaveCount(0);
@@ -208,43 +176,27 @@ test('add provider: failed 401, then pass, pick two models, default, rename, del
   expect(fake.hits.some((hit) => String(hit.url).endsWith('/models'))).toBe(true);
 });
 
-test('wizard back: breadcrumb, header arrow, left nav, and sticky footer', async ({ page }) => {
+test('add provider dialog back, cancel and close navigation', async ({ page }) => {
   await boot(page);
   await openProviders(page);
 
   await page.getByTestId('next-provider-add').click();
-  await expect(page.getByTestId('next-vendor-card').first()).toBeVisible();
-  await expect(page.getByTestId('next-provider-crumb')).toBeVisible();
-  await expect(page.getByTestId('next-provider-add')).toHaveCount(0);
+  await expect(page.locator('.mp-dlg')).toBeVisible();
+  await expect(page.locator('[data-testid=next-vendor-card][data-vendor="custom"]')).toBeVisible();
 
-  await page.getByTestId('next-provider-crumb').click();
-  await expect(page.getByTestId('next-provider-add')).toBeVisible();
+  await page.locator('[data-testid=next-vendor-card][data-vendor="custom"]').click();
+  await expect(page.getByTestId('next-custom-name')).toBeVisible();
+
+  await page.locator('.mp-df .mp-btn').filter({ hasText: '上一步' }).click();
+  await expect(page.locator('[data-testid=next-vendor-card][data-vendor="custom"]')).toBeVisible();
+
+  await page.locator('.mp-dh .mp-x').click();
+  await expect(page.locator('.mp-dlg')).toHaveCount(0);
 
   await page.getByTestId('next-provider-add').click();
-  await page.getByTestId('next-provider-crumb').focus();
-  await expect(page.getByTestId('next-provider-crumb')).toBeFocused();
-  await page.keyboard.press('Enter');
-  await expect(page.getByTestId('next-provider-add')).toBeVisible();
-
-  await page.getByTestId('next-provider-add').click();
-  await page.locator('[data-testid=next-vendor-card][data-vendor=custom]').click();
-  await page.getByRole('button', { name: '下一步' }).click();
-  await expect(page.getByTestId('next-way-custom_endpoint')).toBeVisible();
-  await expect(page.getByTestId('next-provider-crumb')).toBeVisible();
-  await page.getByRole('button', { name: '返回' }).click();
-  await expect(page.getByTestId('next-vendor-card').first()).toBeVisible();
-  await expect(page.getByTestId('next-way-custom_endpoint')).toHaveCount(0);
-
-  await page.locator('[data-testid=next-vendor-card][data-vendor=custom]').click();
-  await page.getByRole('button', { name: '下一步' }).click();
-  await expect(page.getByTestId('next-way-custom_endpoint')).toBeVisible();
-  await page.getByTestId('next-settings-nav-providers').click();
-  await expect(page.getByTestId('next-provider-add')).toBeVisible();
-  await expect(page.getByTestId('next-way-custom_endpoint')).toHaveCount(0);
-
-  await page.setViewportSize({ width: 1280, height: 600 });
-  await page.getByTestId('next-provider-add').click();
-  await expect(page.getByTestId('next-wizard-foot')).toBeInViewport();
-  await expect(page.getByRole('button', { name: '取消' })).toBeInViewport();
-  await expect(page.getByRole('button', { name: '下一步' })).toBeInViewport();
+  await expect(page.locator('.mp-dlg')).toBeVisible();
+  await page.locator('[data-testid=next-vendor-card][data-vendor="custom"]').click();
+  await expect(page.getByTestId('next-custom-name')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.mp-dlg')).toHaveCount(0);
 });

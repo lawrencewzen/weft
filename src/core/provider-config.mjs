@@ -54,9 +54,19 @@ function cleanName(value, fallback) {
 
 function copyLastTest(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
-  const at = typeof value.at === 'string' ? value.at.trim().slice(0, 40) : '';
-  if (!at) return undefined;
+  let at;
+  if (typeof value.at === 'number' && Number.isFinite(value.at) && value.at > 0) {
+    at = Math.round(value.at);
+  } else if (typeof value.at === 'string' && value.at.trim()) {
+    at = value.at.trim().slice(0, 40);
+  }
+  if (at == null || at === '') return undefined;
   const last = { ok: value.ok === true, at };
+  if (typeof value.code === 'string' && value.code.trim()) {
+    last.code = value.code.trim().slice(0, 40);
+  }
+  const status = typeof value.status === 'number' ? value.status : Number(value.status);
+  if (Number.isInteger(status) && status >= 100 && status <= 599) last.status = status;
   if (!last.ok && value.error != null) {
     const error = String(value.error).trim();
     if (error) last.error = error.slice(0, 500);

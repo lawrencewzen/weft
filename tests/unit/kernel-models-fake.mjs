@@ -30,7 +30,7 @@ function chatCompletionSse(text) {
  * Local stand-in for one OpenAI-compatible model endpoint.
  * Records the key's last 4 characters, never the secret.
  */
-export function startFakeModel({ mode = 'openai', text }) {
+export function startFakeModel({ mode = 'openai', text, models } = {}) {
   const seen = [];
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url || '/', 'http://127.0.0.1');
@@ -38,6 +38,7 @@ export function startFakeModel({ mode = 'openai', text }) {
     const record = {
       method: req.method,
       path: url.pathname,
+      authorization,
       keyTail: authorization.toLowerCase().startsWith('bearer ') ? authorization.slice(-4) : '',
     };
     let raw = '';
@@ -57,9 +58,15 @@ export function startFakeModel({ mode = 'openai', text }) {
     } catch { /* ignore non-JSON */ }
     seen.push(record);
 
+    if (req.method === 'GET' && url.pathname.endsWith('/models')) {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify(models || { data: [] }));
+      return;
+    }
+
     if (mode === 'openai' && url.pathname.endsWith('/chat/completions')) {
       res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache' });
-      res.end(chatCompletionSse(text));
+      res.end(chatCompletionSse(text || 'ok'));
       return;
     }
 

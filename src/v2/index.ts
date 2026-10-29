@@ -22,7 +22,7 @@ import {
 } from './stream/hub.ts';
 import { contractMismatchLog, validateResponse } from './validate.ts';
 import { PROTOCOL_VERSION } from './version.ts';
-import { handleProvidersApi, type ProvidersHttpOpts, type ProvidersJsonBody } from './providers-http.ts';
+import { handleProvidersApi, type ProviderServiceLike, type ProvidersHttpOpts, type ProvidersJsonBody } from './providers-http.ts';
 import { attachConversationTopic, type KernelEvent } from './stream/conversation-topic.ts';
 import { attachProvidersTopic } from './stream/providers-topic.ts';
 import { attachWorkspacesTopic } from './stream/workspaces-topic.ts';
@@ -275,7 +275,7 @@ function sendV2(
   requestPath: string,
   method: string,
   status: number,
-  body: V2JsonBody,
+  body: V2JsonBody | null,
   onSent?: () => void,
 ): void {
   if (process.env.WEFT_V2_VALIDATE === '1') {
@@ -286,6 +286,14 @@ function sendV2(
       writeJson(res, 500, errorBody);
       return;
     }
+  }
+  if (status === 204) {
+    const headers = { ...SECURITY_HEADERS, 'cache-control': 'no-store', 'Weft-Protocol': PROTOCOL_VERSION };
+    res.writeHead(204, headers);
+    res.end(() => {
+      onSent?.();
+    });
+    return;
   }
   writeJson(res, status, body, onSent);
 }
@@ -1580,10 +1588,7 @@ export function createV2Runtime(opts: {
   changesConversation?: ChangesConversationFn;
   diffConversation?: DiffConversationFn;
   patchConversation?: PatchConversationFn;
-  getSettings?: ProvidersHttpOpts['getSettings'];
-  putSettings?: ProvidersHttpOpts['putSettings'];
-  probeFetch?: ProvidersHttpOpts['probeFetch'];
-  probeTimeoutMs?: ProvidersHttpOpts['probeTimeoutMs'];
+  providerService?: ProviderServiceLike | null;
   extensions?: ExtensionsHost;
 }): V2Runtime {
   const pid = opts.pid ?? process.pid;
@@ -1631,7 +1636,12 @@ export function createV2Runtime(opts: {
   });
   const providersTopic = attachProvidersTopic(hub, {
     loader: {
-      getSettings: opts.getSettings,
+      listProviders: () => (opts.providerService
+        ? opts.providerService.listProviders()
+        : Promise.resolve([])),
+      getDefaultModel: () => (opts.providerService
+        ? opts.providerService.getDefaultModel()
+        : Promise.resolve(null)),
     },
   });
   async function notifyAllConversations(): Promise<void> {
@@ -1696,11 +1706,9 @@ export function createV2Runtime(opts: {
     notifyConversation: (cid) => conversationTopic.notify(cid),
     patchConversation: opts.patchConversation,
     providers: {
-      getSettings: opts.getSettings,
-      putSettings: opts.putSettings,
-      probeFetch: opts.probeFetch,
-      probeTimeoutMs: opts.probeTimeoutMs,
-      now: opts.now,
+      get service() {
+        return opts.providerService;
+      },
       onProvidersChanged: notifyProvidersChanged,
     },
     extensions: opts.extensions,

@@ -43,92 +43,120 @@ test('general: language, appearance, theme and font size apply immediately', asy
 
   await page.locator('[data-testid=next-pref-lang] button[data-lang="en"]').click();
   await expect(page.getByTestId('next-settings-nav-general')).toHaveText('General');
-  await expect(page.getByTestId('next-settings-nav-providers')).toHaveText('Provider');
+  await expect(page.getByTestId('next-settings-nav-providers')).toHaveText('Models');
   await page.locator('[data-testid=next-pref-lang] button[data-lang="zh"]').click();
   await expect(page.getByTestId('next-settings-nav-general')).toHaveText('通用');
+  await expect(page.getByTestId('next-settings-nav-providers')).toHaveText('模型服务');
 
   expectClean(state);
 });
 
-test('providers: wizard, failing probe, Grok device login, default and context window', async ({ page }) => {
+test('providers: rows, column alignment, expand, switch, in-place context edit, add builtin, oauth, custom, and remove', async ({ page }) => {
   const state = await openProto(page);
   await page.getByTestId('next-open-settings').click();
   await page.getByTestId('next-settings-nav-providers').click();
-  await expect(page.getByTestId('next-provider-row')).toHaveCount(1);
 
-  // Step 1 vendor → step 2 key + probe → step 3 models.
+  // 1. Seeded providers: exactly 3 rows (DeepSeek, Anthropic, 内网网关)
+  const rows = page.getByTestId('next-provider-row');
+  await expect(rows).toHaveCount(3);
+  await expect(rows.nth(0)).toContainText('DeepSeek');
+  await expect(rows.nth(1)).toContainText('Anthropic');
+  await expect(rows.nth(2)).toContainText('内网网关');
+
+  // 2. Column alignment: test buttons across all rows have the same x coordinate
+  const testBtns = page.getByTestId('next-provider-test');
+  const box0 = await testBtns.nth(0).boundingBox();
+  const box1 = await testBtns.nth(1).boundingBox();
+  const box2 = await testBtns.nth(2).boundingBox();
+  expect(box0).not.toBeNull();
+  expect(box1).not.toBeNull();
+  expect(box2).not.toBeNull();
+  expect(Math.round(box0.x)).toBe(Math.round(box1.x));
+  expect(Math.round(box1.x)).toBe(Math.round(box2.x));
+
+  // 3. Expand: DeepSeek starts open; click Anthropic row to open Anthropic
+  await rows.nth(1).click();
+  await expect(page.locator('[data-testid=next-model-row][data-model="claude-opus-4-6"]')).toBeVisible();
+
+  // 4. Switch toggle: toggle a model enabled state
+  const modelToggle = page.locator('[data-testid=next-model-row][data-model="claude-opus-4-6"] [data-testid=next-model-toggle]');
+  await expect(modelToggle).toBeVisible();
+  const hadOn = await modelToggle.evaluate((el) => el.classList.contains('mp-on'));
+  await modelToggle.click();
+  await expect(modelToggle).toHaveClass(hadOn ? /^mp-sw(?!.*mp-on)/ : /mp-sw mp-on/);
+
+  // 5. In-place edit context window
+  const ctxVal = page.locator('[data-testid=next-model-row][data-model="claude-opus-4-6"] .mp-num .mp-v').first();
+  await ctxVal.click();
+  const ctxInput = page.getByTestId('next-ctx-input');
+  await expect(ctxInput).toBeVisible();
+  await ctxInput.fill('500K');
+  await ctxInput.press('Enter');
+  await expect(page.locator('[data-testid=next-model-row][data-model="claude-opus-4-6"] .mp-num .mp-v').first()).toHaveText('500K');
+
+  // 6. Add preset provider (API Key flow)
   await page.getByTestId('next-provider-add').click();
-  await expect(page.getByTestId('next-vendor-card')).toHaveCount(15);
+  await expect(page.getByTestId('next-vendor-card').first()).toBeVisible();
   await page.locator('[data-testid=next-vendor-card][data-vendor="openai"]').click();
-  await page.locator('.ns-foot-acts .ns-btn-primary').click();
-
-  await page.getByTestId('next-key-input').fill('bad-key');
-  await page.getByTestId('next-provider-test').click();
-  await expect(page.getByTestId('next-test-result')).toHaveClass(/is-bad/);
-  await expect(page.getByTestId('next-test-result')).toContainText('bad');
   await page.getByTestId('next-key-input').fill('sk-demo-1234');
-  await page.getByTestId('next-provider-test').click();
-  await expect(page.getByTestId('next-test-result')).toHaveClass(/is-ok/);
-
-  await page.locator('.ns-foot-acts .ns-btn-primary').click();
-  await expect(page.getByTestId('next-model-row').first()).toBeVisible();
-  await page.locator('[data-testid=next-model-row][data-model="gpt-5"] .ns-switch').click();
+  await page.locator('.mp-dlg .mp-df .mp-btn.mp-pri').click();
+  await expect(page.getByTestId('next-provider-finish')).toBeVisible();
+  await page.locator('.mp-pickm input[type="checkbox"]').first().check();
   await page.getByTestId('next-provider-finish').click();
-  await expect(page.getByTestId('next-provider-row')).toHaveCount(2);
-  await expect(page.getByTestId('next-provider-row').last()).toContainText('OpenAI');
+  await expect(rows).toHaveCount(4);
+  await expect(rows.filter({ hasText: /^OpenAI/ })).toBeVisible();
 
-  // Edit the new provider's name.
-  await page.getByTestId('next-provider-row').last().getByTestId('next-provider-edit').click();
-  await page.getByTestId('next-provider-name').fill('OpenAI 备用');
-  await page.locator('.ns-foot-acts .ns-btn-primary').click();
-  await expect(page.getByTestId('next-model-row').first()).toBeVisible();
-  await page.getByTestId('next-provider-finish').click();
-  await expect(page.getByTestId('next-provider-row').last()).toContainText('OpenAI 备用');
-
-  // Grok device-code login: code shown, then it signs in and offers its model.
-  await page.getByTestId('next-settings-nav-providers').click();
+  // 7. OAuth flow
   await page.getByTestId('next-provider-add').click();
-  await page.locator('[data-testid=next-vendor-card][data-vendor="grok"]').click();
-  await page.locator('.ns-foot-acts .ns-btn-primary').click();
-  await expect(page.getByTestId('next-grok-code')).toContainText('WEFT-DEMO');
-  await expect(page.getByTestId('next-model-row').first()).toBeVisible({ timeout: 20_000 });
-  await expect(page.locator('[data-testid=next-model-row][data-model="grok-build"]')).toBeVisible();
-  await page.locator('[data-testid=next-model-row][data-model="grok-build"] .ns-switch').click();
+  await page.locator('[data-testid=next-vendor-card][data-vendor="openrouter"]').click();
+  await page.locator('.mp-seg button').filter({ hasText: '账号登录' }).click();
+  await page.locator('.mp-oauth button').filter({ hasText: '打开授权页' }).click();
+  await expect(page.getByTestId('next-provider-finish')).toBeVisible({ timeout: 15_000 });
+  await page.locator('.mp-pickm input[type="checkbox"]').first().check();
   await page.getByTestId('next-provider-finish').click();
-  await expect(page.getByTestId('next-provider-row')).toHaveCount(3);
-  await expect(page.getByTestId('next-provider-row').last()).toContainText('Grok');
+  await expect(rows).toHaveCount(5);
+  await expect(rows.filter({ hasText: 'OpenRouter' })).toBeVisible();
 
-  // Default model.
-  await page.getByTestId('next-default-model').click();
-  await page.locator('.ns-pop-item').filter({ hasText: 'Grok Build' }).click();
-  await expect(page.getByTestId('next-default-model')).toContainText('Grok Build');
+  // 8. Custom interface flow
+  await page.getByTestId('next-provider-add').click();
+  await page.locator('[data-testid=next-vendor-card][data-vendor="custom"]').click();
+  await page.getByTestId('next-custom-name').fill('Local vLLM');
+  await page.getByTestId('next-custom-url').fill('http://127.0.0.1:8000/v1');
+  await page.locator('.mp-dlg .mp-df .mp-btn.mp-pri').click();
+  await expect(page.getByTestId('next-provider-finish')).toBeVisible();
+  await page.locator('.mp-pickm input[type="checkbox"]').first().check();
+  await page.getByTestId('next-provider-finish').click();
+  await expect(rows).toHaveCount(6);
+  await expect(rows.filter({ hasText: 'Local vLLM' })).toBeVisible();
 
-  // Context window (composer chip) hits PUT /context-window.
-  await page.locator('.next-settings-close').click();
-  await page.getByTestId('next-context-chip').click();
-  await expect(page.getByTestId('next-context-menu')).toBeVisible();
-  await page.getByTestId('next-context-option').first().click();
-  const put = (await state.requests()).filter(
-    (row) => row.method === 'PUT' && row.url.includes('/context-window'),
-  );
-  expect(put.length).toBeGreaterThan(0);
-  await expect(page.getByTestId('next-context-menu')).toHaveCount(0);
-
-  expectClean(state);
-});
-
-test('deleting the only provider shows the no-model state', async ({ page }) => {
-  const state = await openProto(page);
-  await page.getByTestId('next-open-settings').click();
-  await page.getByTestId('next-settings-nav-providers').click();
-  await expect(page.getByTestId('next-provider-row')).toHaveCount(1);
+  // 9. Remove provider
+  const rowToRemove = rows.filter({ hasText: 'Local vLLM' });
+  await rowToRemove.getByTestId('next-provider-more').click();
   await page.getByTestId('next-provider-delete').click();
   await page.getByTestId('next-confirm-ok').click();
+  await expect(rows).toHaveCount(5);
+
+  expectClean(state);
+});
+
+test('deleting all providers shows the no-model state', async ({ page }) => {
+  const state = await openProto(page);
+  await page.getByTestId('next-open-settings').click();
+  await page.getByTestId('next-settings-nav-providers').click();
+  await expect(page.getByTestId('next-provider-row')).toHaveCount(3);
+
+  // Delete all 3 providers
+  for (let i = 0; i < 3; i++) {
+    await page.getByTestId('next-provider-row').first().getByTestId('next-provider-more').click();
+    await page.getByTestId('next-provider-delete').click();
+    await page.getByTestId('next-confirm-ok').click();
+  }
   await expect(page.getByTestId('next-provider-row')).toHaveCount(0);
 
   await page.locator('.next-settings-close').click();
   await expect(page.getByTestId('next-no-model')).toBeVisible();
   await expect(page.getByTestId('next-no-model-connect')).toBeVisible();
+
   // c-rich is seeded running (T51-7), so the round button is Stop. The idle
   // no-model send control is on c-docs.
   await page.locator('[data-testid=next-conv-row][data-id="c-docs"]').click();

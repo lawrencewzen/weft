@@ -17,7 +17,6 @@ import { autoTitleFromText } from '../../src/kernel/agent-config.mjs';
 import { request as serverRequest, startServer, stopServer } from './_server.mjs';
 
 const TOKEN = 'unit-kernel-continuation-token';
-const KEY = 'sk-continuation-secret';
 const request = (base, method, apiPath, body) => serverRequest(base, method, apiPath, body, TOKEN);
 
 async function openConversation(base, title = 'continuation') {
@@ -54,17 +53,17 @@ test('maxTokens defaults to 32768 and WEFT_MAX_OUTPUT_TOKENS overrides', async (
   assert.equal(maxOutputTokensFromEnv({ WEFT_MAX_OUTPUT_TOKENS: '1.5' }), DEFAULT_MAX_OUTPUT_TOKENS);
 
   const settings = {
-    version: 2,
-    sources: [{
-      id: 'srcdefault',
-      kind: 'api',
-      vendor: 'custom',
+    version: 3,
+    providers: [{
+      id: 'custom-aaaaaaaa',
+      kind: 'custom',
       name: 'Default',
       baseUrl: 'http://127.0.0.1:4101/v1',
-      apiKey: KEY,
-      models: ['model-default'],
+      api: 'openai-completions',
+      enabled: ['model-default'],
+      overrides: {},
     }],
-    models: { default: { sourceId: 'srcdefault', model: 'model-default' } },
+    defaultModel: { providerId: 'custom-aaaaaaaa', modelId: 'model-default' },
   };
 
   async function tokensFor(env) {

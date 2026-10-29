@@ -184,10 +184,10 @@ test('context menu sets the model window and keeps it after refresh', async ({ p
       defaultModel: 'grok-4.6',
       contextWindow: 200000,
     });
-    const puts = [];
+    const patches = [];
     page.on('request', (req) => {
-      if (req.method() === 'PUT' && /\/api\/v2\/providers\//.test(req.url()) && /context-window/.test(req.url())) {
-        puts.push({ url: req.url(), body: JSON.parse(req.postData() || '{}') });
+      if (req.method() === 'PATCH' && req.url().includes(`/api/v2/providers/${sourceId}`)) {
+        patches.push({ url: req.url(), body: JSON.parse(req.postData() || '{}') });
       }
     });
     await openNextChat(page, srv, conv.id);
@@ -202,19 +202,21 @@ test('context menu sets the model window and keeps it after refresh', async ({ p
     await expect(menu).toBeVisible();
     await expect(menu).toContainText(/已用\s+16\.4k · 8%|Used\s+16\.4k · 8%/);
     await expect(menu).toContainText(/剩余\s+(184k|183\.6k) · 92%|Left\s+(184k|183\.6k) · 92%/);
-    const putDone = page.waitForResponse((res) => (
-      res.request().method() === 'PUT'
-      && /\/api\/v2\/providers\//.test(res.url())
-      && /context-window/.test(res.url())
+    const patchDone = page.waitForResponse((res) => (
+      res.request().method() === 'PATCH'
+      && res.url().includes(`/api/v2/providers/${sourceId}`)
       && res.ok()
     ));
     await menu.locator('[data-testid=next-context-option][data-tokens="256000"]').click();
-    await putDone;
+    await patchDone;
     await expect(menu).toBeHidden();
     await expect(page.getByTestId('next-context-chip')).toHaveText('6%');
-    expect(puts).toHaveLength(1);
-    expect(puts[0].url).toContain(`/api/v2/providers/${sourceId}/models/grok-4.6/context-window`);
-    expect(puts[0].body).toEqual({ window: 256000 });
+    expect(patches).toHaveLength(1);
+    expect(patches[0].body).toEqual({
+      overrides: {
+        'grok-4.6': { contextWindow: 256000 },
+      },
+    });
 
     await page.reload();
     await expect(page.getByTestId('next-context-chip')).toHaveText('6%');
@@ -222,7 +224,7 @@ test('context menu sets the model window and keeps it after refresh', async ({ p
     const saved = (listed.body.providers || []).find((item) => item.id === sourceId);
     const row = (saved?.models || []).find((item) => item.id === 'grok-4.6');
     expect(row?.contextWindow).toBe(256000);
-    expect(row?.contextWindowCustom).toBe(true);
+    expect(row?.overridden?.contextWindow).toBe(true);
   } finally {
     await srv.kill();
   }
@@ -240,7 +242,9 @@ test('context at 80% shows an orange banner', async ({ page }) => {
   try {
     const { conv } = await openWorkspaceConversation(srv, 'warn', prepared.dirs[0]);
     const { id } = await createProviderModels(srv, { models: ['grok-4.6'], defaultModel: 'grok-4.6' });
-    const win = await apiV2(srv, 'PUT', `/api/v2/providers/${id}/models/grok-4.6/context-window`, { window: 20000 });
+    const win = await apiV2(srv, 'PATCH', `/api/v2/providers/${id}`, {
+      overrides: { 'grok-4.6': { contextWindow: 20000 } },
+    });
     expect(win.status, win.text).toBe(200);
     await openNextChat(page, srv, conv.id);
     await expect(page.getByTestId('next-context-banner')).toHaveCount(0);

@@ -4,38 +4,32 @@ import { load } from './_root.mjs';
 
 const sources = await load('src/core/model-sources.mjs');
 const settings = await load('src/core/settings.mjs');
-const usage = await load('src/core/usage.mjs');
 
 const {
   migrateLegacySettings,
-  resolveRoleTarget,
-  resolveConversationTarget,
-  resolveConversationModelPatch,
-  applySourcePatch,
-  validateRoleModels,
-  publicSource,
-  probeModels,
-  probeFailurePayload,
-  modelsAfterProbe,
-  normalizeSources,
-  contextWindowForModel,
-  contextWindowForConversation,
+  vendorPreset,
+  vendorForBaseUrl,
+  normalizeHttpUrl,
+  isValidContextWindow,
+  VENDOR_PRESETS,
+  CONTEXT_WINDOW_MIN,
+  CONTEXT_WINDOW_MAX,
+  SETTINGS_VERSION,
 } = sources;
 
 const fixedId = () => 'srcfixed1';
 
-function apiSource(overrides = {}) {
-  return {
-    id: 'src1',
-    kind: 'api',
-    vendor: 'openai',
-    name: 'OpenAI',
-    baseUrl: 'https://api.openai.com/v1',
-    apiKey: 'sk-old-secret-value',
-    models: ['gpt-4o'],
-    ...overrides,
-  };
-}
+test('vendor presets and URL helpers stay available for v3 migration', () => {
+  assert.equal(SETTINGS_VERSION, 2);
+  assert.equal(vendorPreset('deepseek').baseUrl, 'https://api.deepseek.com/v1');
+  assert.equal(vendorPreset('zhipu').name, '智谱');
+  assert.equal(normalizeHttpUrl('https://api.deepseek.com/v1/'), 'https://api.deepseek.com/v1');
+  assert.equal(vendorForBaseUrl('https://api.deepseek.com/v1/').id, 'deepseek');
+  assert.equal(isValidContextWindow(CONTEXT_WINDOW_MIN), true);
+  assert.equal(isValidContextWindow(CONTEXT_WINDOW_MAX), true);
+  assert.equal(isValidContextWindow(12), false);
+  assert.equal(VENDOR_PRESETS.some((item) => item.id === 'custom'), true);
+});
 
 test('default and untouched preset rows do not become API sources', () => {
   const untouched = migrateLegacySettings({
@@ -164,416 +158,37 @@ test('settings do not persist a grok blob', () => {
   assert.equal(JSON.stringify(pub).includes('sk-real'), false);
 });
 
-test('model routing uses default then the first usable source; extra keys are ignored', () => {
-  const leftover = {
-    id: 'grok', kind: 'grok', vendor: 'grok', name: 'Grok', baseUrl: '', apiKey: '', models: ['grok-build'],
-  };
-  const alpha = {
-    id: 'aaaa', kind: 'api', vendor: 'custom', name: 'A', baseUrl: 'http://127.0.0.1:1/v1', apiKey: 'key-a', models: ['alpha'],
-  };
-  const beta = {
-    id: 'bbbb', kind: 'api', vendor: 'custom', name: 'B', baseUrl: 'http://127.0.0.1:2/v1', apiKey: 'key-b', models: ['beta'],
-  };
-  const locked = {
-    id: 'cccc', kind: 'api', vendor: 'openai', name: 'Locked', baseUrl: 'https://api.openai.com/v1', apiKey: '', models: ['hidden'],
-  };
-  const settingsRow = {
-    sources: [leftover, locked, alpha, beta],
-    models: {
-      coder: { sourceId: 'bbbb', model: 'beta' },
-      default: { sourceId: 'aaaa', model: 'alpha' },
-      auditor: { sourceId: 'cccc', model: 'hidden' },
-    },
-  };
-
-  const def = resolveRoleTarget(settingsRow);
-  assert.equal(def.source.id, 'aaaa');
-  assert.equal(def.model, 'alpha');
-
-  const pinned = resolveConversationTarget(settingsRow, { modelSourceId: 'bbbb', modelId: 'beta' });
-  assert.equal(pinned.source.id, 'bbbb');
-  assert.equal(pinned.model, 'beta');
-
-  const followsDefault = resolveConversationTarget(settingsRow, {});
-  assert.equal(followsDefault.source.id, 'aaaa');
-  assert.equal(followsDefault.model, 'alpha');
-
-  const first = resolveRoleTarget({ sources: [leftover, locked, beta] });
-  assert.equal(first.source.id, 'bbbb');
-  assert.equal(first.model, 'beta');
-
-  const firstConv = resolveConversationTarget({ sources: [leftover, locked, beta] }, {});
-  assert.equal(firstConv.source.id, 'bbbb');
-  assert.equal(firstConv.model, 'beta');
-
-  const droppedPinned = resolveConversationTarget(settingsRow, { modelSourceId: 'grok', modelId: 'grok-build' });
-  assert.equal(droppedPinned.source.id, 'aaaa');
-  assert.equal(droppedPinned.model, 'alpha');
-});
-
-test('changing origin without a new key drops the old key', () => {
-  const same = applySourcePatch(apiSource(), { baseUrl: 'https://api.openai.com/v1/project' });
-  assert.equal(same.error, undefined);
-  assert.equal(same.source.apiKey, 'sk-old-secret-value');
-  assert.equal(same.source.baseUrl, 'https://api.openai.com/v1/project');
-
-  const moved = applySourcePatch(apiSource(), { baseUrl: 'https://api.deepseek.com/v1' });
-  assert.equal(moved.error, 'api key required');
-  assert.equal(moved.source, undefined);
-
-  const masked = applySourcePatch(apiSource(), { baseUrl: 'https://example.test/v1', apiKey: '••••alue' });
-  assert.equal(masked.error, 'api key required');
-
-  const replaced = applySourcePatch(apiSource(), {
-    baseUrl: 'https://api.deepseek.com/v1',
-    apiKey: 'sk-new-secret-value',
-  });
-  assert.equal(replaced.error, undefined);
-  assert.equal(replaced.source.apiKey, 'sk-new-secret-value');
-
-  const ollama = applySourcePatch(apiSource({
-    vendor: 'ollama',
-    name: '本地 Ollama',
-    baseUrl: 'http://127.0.0.1:11434/v1',
-    apiKey: 'leftover-key',
-    models: ['llama'],
-  }), { baseUrl: 'http://10.0.0.8:11434/v1' });
-  assert.equal(ollama.error, undefined);
-  assert.equal(ollama.source.apiKey, '');
-  assert.equal(ollama.source.baseUrl, 'http://10.0.0.8:11434/v1');
-});
-
-test('default model bindings are rejected when the source or model is not usable', () => {
-  const row = { sources: [apiSource({ id: 'src1', models: ['gpt-4o'] })] };
-  assert.equal(validateRoleModels(row, {
-    default: { sourceId: 'src1', model: 'gpt-4o' },
-    coder: null,
-  }), '');
-  assert.equal(validateRoleModels(row, { default: 'gpt-4o' }), 'invalid model binding');
-  assert.equal(validateRoleModels(row, { 'bad id': { sourceId: 'src1', model: 'gpt-4o' } }), '');
-  assert.equal(validateRoleModels(row, { default: { sourceId: 'missing', model: 'gpt-4o' } }), 'unknown source');
-  assert.equal(validateRoleModels(row, { default: { sourceId: 'src1', model: 'other' } }), 'model not in source');
-  assert.equal(validateRoleModels(row, null), 'invalid model binding');
-});
-
-test('public settings and public sources do not leak a raw key', () => {
-  const source = apiSource({ apiKey: 'sk-live-secret-9999' });
-  const pub = publicSource(source);
-  assert.equal(pub.apiKey, '••••9999');
-  assert.equal(pub.hasApiKey, true);
-  assert.equal(JSON.stringify(pub).includes('sk-live-secret-9999'), false);
-
-  const body = settings.publicSettings({
-    version: 2,
-    provider: 'openai',
-    baseUrl: 'https://secret.example/v1',
-    apiKey: 'sk-live-secret-9999',
-    sources: [source],
-    models: { default: { sourceId: 'src1', model: 'gpt-4o' } },
-  });
-  assert.equal(body.version, 2);
-  assert.equal(body.provider, undefined);
-  assert.equal(body.baseUrl, undefined);
-  assert.equal(body.apiKey, undefined);
-  assert.equal(body.hasApiKey, undefined);
-  assert.equal(JSON.stringify(body).includes('sk-live-secret-9999'), false);
-
+test('normalizeSettings v3 keeps providers/defaultModel and drops sources/apiKey', () => {
   const stored = settings.normalizeSettings({
-    version: 2,
-    provider: 'ollama',
-    baseUrl: 'http://127.0.0.1:11434/v1',
+    version: 3,
+    providers: [{
+      id: 'deepseek',
+      kind: 'builtin',
+      enabled: ['deepseek-chat'],
+      overrides: { 'deepseek-chat': { contextWindow: 256000 } },
+    }],
+    defaultModel: { providerId: 'deepseek', modelId: 'deepseek-chat' },
+    sources: [{ id: 'old', apiKey: 'sk-live-secret-9999' }],
+    models: { default: { sourceId: 'old', model: 'x' } },
     apiKey: 'sk-live-secret-9999',
-    sources: [source],
-  });
-  assert.equal(stored.provider, undefined);
-  assert.equal(stored.baseUrl, undefined);
-  assert.equal(stored.apiKey, undefined);
-  assert.equal(stored.sources[0].apiKey, 'sk-live-secret-9999');
-
-  const merged = settings.mergeSettings({ version: 2, sources: [], models: {} }, {
-    provider: 'ollama',
-    baseUrl: 'http://evil.example/v1',
-    apiKey: 'sk-should-not-stick',
     language: 'en',
   });
-  assert.equal(merged.language, 'en');
-  assert.equal(merged.provider, undefined);
+  assert.equal(stored.version, 3);
+  assert.equal(stored.providers[0].id, 'deepseek');
+  assert.deepEqual(stored.defaultModel, { providerId: 'deepseek', modelId: 'deepseek-chat' });
+  assert.equal(stored.sources, undefined);
+  assert.equal(stored.models, undefined);
+  assert.equal(stored.apiKey, undefined);
+
+  const pub = settings.publicSettings(stored);
+  assert.equal(pub.version, 3);
+  assert.equal(pub.apiKey, undefined);
+  assert.equal(pub.sources, undefined);
+  assert.equal(JSON.stringify(pub).includes('sk-live-secret-9999'), false);
+
+  const merged = settings.mergeSettings(stored, { language: 'zh', providers: [], apiKey: 'sk-should-not-stick' });
+  assert.equal(merged.version, 3);
+  assert.equal(merged.language, 'zh');
   assert.equal(merged.apiKey, undefined);
   assert.equal(JSON.stringify(merged).includes('sk-should-not-stick'), false);
-});
-
-test('modelsAfterProbe enables every fetched name only when none are enabled', () => {
-  assert.deepEqual(modelsAfterProbe([], ['deepseek-chat', 'deepseek-reasoner']), {
-    models: ['deepseek-chat', 'deepseek-reasoner'],
-    catalog: ['deepseek-chat', 'deepseek-reasoner'],
-  });
-  assert.deepEqual(modelsAfterProbe(['keep-me', 'gone'], ['new-one', 'keep-me']), {
-    models: ['keep-me', 'gone'],
-    catalog: ['new-one', 'keep-me'],
-  });
-  assert.deepEqual(modelsAfterProbe(['only'], []), {
-    models: ['only'],
-    catalog: [],
-  });
-});
-
-test('probeModels reports success, failure, timeout, and redacts keys', async () => {
-  const secret = 'sk-live-secret-9999';
-  const ok = await probeModels({
-    baseUrl: 'http://127.0.0.1:9/v1',
-    apiKey: secret,
-    fetchImpl: async (url, opts) => {
-      assert.equal(url, 'http://127.0.0.1:9/v1/models');
-      assert.equal(opts.headers.authorization, `Bearer ${secret}`);
-      return {
-        ok: true,
-        status: 200,
-        text: async () => JSON.stringify({ data: [{ id: 'alpha' }, { id: 'alpha' }, { id: 'beta' }] }),
-      };
-    },
-  });
-  assert.deepEqual(ok, { ok: true, models: ['alpha', 'beta'] });
-
-  const failed = await probeModels({
-    baseUrl: 'http://127.0.0.1:9/v1',
-    apiKey: secret,
-    fetchImpl: async () => ({
-      ok: false,
-      status: 401,
-      text: async () => JSON.stringify({ error: { message: `rejected ${secret}` } }),
-    }),
-  });
-  assert.equal(failed.ok, false);
-  assert.equal(failed.code, 'auth');
-  assert.equal(failed.status, 401);
-  assert.equal(failed.error.includes(secret), false);
-  assert.match(failed.error, /sk-\*\*\*|rejected/);
-
-  const timedOut = await probeModels({
-    baseUrl: 'http://127.0.0.1:9/v1',
-    apiKey: secret,
-    fetchImpl: async () => {
-      const err = new Error(`The operation was aborted due to timeout ${secret}`);
-      err.name = 'TimeoutError';
-      throw err;
-    },
-  });
-  assert.deepEqual(timedOut, { ok: false, error: 'timeout', code: 'timeout' });
-
-  const thrown = await probeModels({
-    baseUrl: 'http://127.0.0.1:9/v1',
-    apiKey: secret,
-    fetchImpl: async () => {
-      throw new Error(`connect failed ${secret}`);
-    },
-  });
-  assert.equal(thrown.ok, false);
-  assert.equal(thrown.code, 'network');
-  assert.equal(thrown.error.includes(secret), false);
-  assert.match(thrown.error, /connect failed/);
-});
-
-test('probeModels assigns a code for network, json, 403, 404, and other HTTP errors', async () => {
-  const secret = 'sk-live-secret-9999';
-  const refused = await probeModels({
-    baseUrl: 'http://127.0.0.1:9/v1',
-    apiKey: secret,
-    fetchImpl: async () => {
-      const err = new TypeError('fetch failed');
-      err.cause = Object.assign(new Error('connect ECONNREFUSED 127.0.0.1:9'), { code: 'ECONNREFUSED' });
-      throw err;
-    },
-  });
-  assert.deepEqual(refused, { ok: false, error: 'fetch failed', code: 'network' });
-
-  const html = await probeModels({
-    baseUrl: 'http://127.0.0.1:9/v1',
-    fetchImpl: async () => ({ ok: true, status: 200, text: async () => '<html>nope</html>' }),
-  });
-  assert.deepEqual(html, { ok: false, error: 'invalid JSON', code: 'bad_json' });
-
-  const forbidden = await probeModels({
-    baseUrl: 'http://127.0.0.1:9/v1',
-    fetchImpl: async () => ({ ok: false, status: 403, text: async () => '' }),
-  });
-  assert.deepEqual(forbidden, { ok: false, error: 'HTTP 403', code: 'auth', status: 403 });
-
-  const missing = await probeModels({
-    baseUrl: 'http://127.0.0.1:9/v1',
-    fetchImpl: async () => ({ ok: false, status: 404, text: async () => 'missing' }),
-  });
-  assert.deepEqual(missing, { ok: false, error: 'missing', code: 'not_found', status: 404 });
-
-  const upstream = await probeModels({
-    baseUrl: 'http://127.0.0.1:9/v1',
-    apiKey: secret,
-    fetchImpl: async () => ({
-      ok: false,
-      status: 502,
-      text: async () => JSON.stringify({ error: { message: `overloaded ${secret}` } }),
-    }),
-  });
-  assert.equal(upstream.code, 'http');
-  assert.equal(upstream.status, 502);
-  assert.equal(upstream.error.includes(secret), false);
-  assert.match(upstream.error, /overloaded/);
-});
-
-test('stored lastTest keeps probe code and status and still redacts the error', () => {
-  const stamped = '2026-10-14T00:00:00.000Z';
-  const kept = publicSource(apiSource({
-    lastTest: { ok: false, at: stamped, error: 'HTTP 404', code: 'not_found', status: 404, extra: 'no' },
-  }));
-  assert.deepEqual(kept.lastTest, { ok: false, at: stamped, error: 'HTTP 404', code: 'not_found', status: 404 });
-
-  const dropped = publicSource(apiSource({
-    lastTest: { ok: false, at: stamped, error: 'sk-live-secret-9999 blew up', code: 'explode', status: 99 },
-  }));
-  assert.equal(dropped.lastTest.code, undefined);
-  assert.equal(dropped.lastTest.status, undefined);
-  assert.equal(dropped.lastTest.error.includes('sk-live-secret-9999'), false);
-
-  assert.deepEqual(probeFailurePayload({ error: 'timeout', code: 'timeout', status: 'nope' }), {
-    ok: false,
-    error: 'timeout',
-    code: 'timeout',
-  });
-});
-
-test('contextWindows are kept, merged, deleted, and invalid patch values error', () => {
-  const kept = normalizeSources([apiSource({
-    contextWindows: {
-      ' gpt-4o ': 256000,
-      'bad': 12,
-      '': 8000,
-      'gpt-4.1': 200000,
-      nope: '128000',
-      proto: null,
-    },
-  })]);
-  assert.deepEqual(kept[0].contextWindows, { 'gpt-4o': 256000, 'gpt-4.1': 200000 });
-
-  const missing = normalizeSources([apiSource()]);
-  assert.equal(missing[0].contextWindows, undefined);
-
-  const leftover = normalizeSources([{
-    id: 'grok',
-    kind: 'grok',
-    models: ['grok-build'],
-    contextWindows: { 'grok-build': 256000, skip: 1 },
-  }]);
-  assert.deepEqual(leftover, []);
-
-  const merged = applySourcePatch(apiSource({
-    models: ['gpt-4o', 'gpt-4.1'],
-    contextWindows: { 'gpt-4o': 256000, 'gpt-4.1': 200000 },
-  }), { contextWindows: { 'gpt-4o': 512000, extra: 64000 } });
-  assert.equal(merged.error, undefined);
-  assert.deepEqual(merged.source.contextWindows, {
-    'gpt-4o': 512000,
-    'gpt-4.1': 200000,
-    extra: 64000,
-  });
-
-  const cleared = applySourcePatch(merged.source, { contextWindows: { extra: null, 'gpt-4.1': null } });
-  assert.deepEqual(cleared.source.contextWindows, { 'gpt-4o': 512000 });
-
-  const emptied = applySourcePatch(cleared.source, { contextWindows: { 'gpt-4o': null } });
-  assert.equal(emptied.error, undefined);
-  assert.equal(emptied.source.contextWindows, undefined);
-
-  assert.equal(applySourcePatch(apiSource(), { contextWindows: { 'gpt-4o': 12 } }).error, 'invalid context window');
-  assert.equal(applySourcePatch(apiSource(), { contextWindows: { 'gpt-4o': 10000001 } }).error, 'invalid context window');
-  assert.equal(applySourcePatch(apiSource(), { contextWindows: { 'gpt-4o': 256000.5 } }).error, 'invalid context window');
-  assert.equal(applySourcePatch(apiSource(), { contextWindows: { 'gpt-4o': '256000' } }).error, 'invalid context window');
-  assert.equal(applySourcePatch(apiSource(), { contextWindows: ['gpt-4o'] }).error, 'invalid context window');
-  assert.equal(applySourcePatch(apiSource(), { contextWindows: null }).error, 'invalid context window');
-});
-
-test('publicSource returns stored contextWindows and defaultContextWindow', () => {
-  const pub = publicSource(apiSource({
-    models: ['gpt-4o'],
-    contextWindows: { 'gpt-4o': 256000 },
-  }));
-  assert.deepEqual(pub.contextWindows, { 'gpt-4o': 256000 });
-  assert.equal(pub.defaultContextWindow, usage.contextWindowFromEnv());
-  assert.deepEqual(pub.defaultContextWindows, { 'gpt-4o': 128000 });
-
-  const plain = publicSource(apiSource());
-  assert.equal(plain.contextWindows, undefined);
-  assert.equal(plain.defaultContextWindow, usage.contextWindowFromEnv());
-  assert.deepEqual(plain.defaultContextWindows, { 'gpt-4o': 128000 });
-
-  const flash = publicSource(apiSource({
-    vendor: 'deepseek',
-    name: 'DeepSeek',
-    baseUrl: 'https://api.deepseek.com/v1',
-    models: ['deepseek-flash', 'not-a-real-model'],
-  }));
-  assert.equal(flash.defaultContextWindow, usage.contextWindowFromEnv());
-  assert.equal(flash.defaultContextWindows['deepseek-flash'], 1_000_000);
-  assert.equal(flash.defaultContextWindows['not-a-real-model'], usage.contextWindowFromEnv());
-});
-
-test('conversation context window follows the resolved model, else stays unset', () => {
-  const alpha = apiSource({ id: 'aaaa', models: ['alpha'], contextWindows: { alpha: 256000 } });
-  const beta = apiSource({
-    id: 'bbbb',
-    name: 'B',
-    baseUrl: 'http://127.0.0.1:2/v1',
-    apiKey: 'key-b',
-    models: ['beta'],
-  });
-  const settings = {
-    sources: [alpha, beta],
-    models: { default: { sourceId: 'aaaa', model: 'alpha' } },
-  };
-  assert.equal(contextWindowForModel(alpha, 'alpha'), 256000);
-  assert.equal(contextWindowForModel(alpha, 'other'), 128000);
-  const flashSource = apiSource({
-    id: 'cccc',
-    vendor: 'deepseek',
-    name: 'DeepSeek',
-    baseUrl: 'https://api.deepseek.com/v1',
-    models: ['deepseek-flash'],
-  });
-  assert.equal(contextWindowForModel(flashSource, 'deepseek-flash'), 1_000_000);
-  assert.equal(contextWindowForModel({
-    ...flashSource,
-    contextWindows: { 'deepseek-flash': 256000 },
-  }, 'deepseek-flash'), 256000);
-  assert.equal(contextWindowForConversation(settings, {}), 256000);
-  assert.equal(contextWindowForConversation(settings, {
-    modelSourceId: 'bbbb',
-    modelId: 'beta',
-  }), 128000);
-  assert.equal(contextWindowForConversation({ sources: [] }, {}), null);
-});
-
-test('conversation model patch accepts a listed pair and rejects unknown source or model', () => {
-  const settings = {
-    sources: [apiSource({ id: 'src1', models: ['gpt-4o', 'gpt-4.1'] })],
-  };
-  assert.deepEqual(resolveConversationModelPatch(settings, {}), { present: false });
-  assert.deepEqual(resolveConversationModelPatch(settings, { modelSourceId: null, modelId: null }), {
-    present: true,
-    ok: true,
-    value: { modelSourceId: null, modelId: null },
-  });
-  assert.deepEqual(resolveConversationModelPatch(settings, { modelSourceId: 'src1', modelId: 'gpt-4.1' }), {
-    present: true,
-    ok: true,
-    value: { modelSourceId: 'src1', modelId: 'gpt-4.1' },
-  });
-  assert.deepEqual(resolveConversationModelPatch(settings, { modelSourceId: 'missing', modelId: 'gpt-4o' }), {
-    present: true,
-    ok: false,
-    errors: ['unknown model source'],
-  });
-  assert.deepEqual(resolveConversationModelPatch(settings, { modelSourceId: 'src1', modelId: 'nope' }), {
-    present: true,
-    ok: false,
-    errors: ['unknown model'],
-  });
-  assert.equal(resolveConversationModelPatch(settings, { modelSourceId: 'src1' }).ok, false);
 });

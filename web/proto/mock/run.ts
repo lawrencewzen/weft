@@ -604,7 +604,7 @@ function finishRun(db: MockDb, conv: MockConv, hub: MockHub): void {
   const rest = run.followUps.slice();
   conv.run = null;
   conv.pending = null;
-  recomputeContext(db, conv, conv.view.context.used + 1_800);
+  recomputeContext(db, conv, conv.view.context.used + 20_000);
   if (next && !run.cancelled) {
     const id = nextId(db, 'u');
     const images = attachThreadImages(db, conv.view.id, id, next.images);

@@ -1,324 +1,338 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
+  addCustomProvider,
+  answerLoginSession,
+  cancelLoginSession,
+  connectProvider,
+  connectProviderOAuth,
   deleteProvider,
+  getAvailableProviders,
+  getLoginSession,
   patchProvider,
+  putModelContextWindow,
   testProvider,
-  type Provider,
 } from '../../data/api';
 import type { Lang } from '../../data/lang';
-import type { ConfirmOpts } from '../ConfirmDialog';
-import {
-  blankWizard,
-  formatContextWindow,
-  hostOf,
-  isGrokProvider,
-  keyTail,
-  statusKind,
-  vendorForProvider,
-  wizardFromProvider,
-  type WizardState,
-} from '../../data/providerWizard';
+import { formatNumber, parseContextInput } from '../../data/providerFormat';
+import type {
+  Available,
+  LoginSession,
+  Model,
+  Provider,
+} from '../../data/providerTypes';
 import { useProviders } from '../../data/useProviders';
 import { t } from '../../i18n';
-import { BrandIcon } from '../BrandIcon';
-import { cancelProviderWizard, ProviderWizard } from './ProviderWizard';
+import type { ConfirmOpts } from '../ConfirmDialog';
+import { AddProviderDialog } from './AddProviderDialog';
+import { ProviderList } from './ProviderList';
 
 type Props = {
   lang: Lang;
-  onToast: (message: string) => void;
-  onConfirm: (opts: ConfirmOpts) => Promise<boolean>;
+  onToast?: (message: string) => void;
+  onConfirm?: (opts: ConfirmOpts) => Promise<boolean>;
   providersNavSeq?: number;
 };
 
-type View = { kind: 'list' } | { kind: 'wizard'; state: WizardState };
+export function ProviderPage({ lang, onConfirm }: Props) {
+  const { providers, defaultModel } = useProviders();
 
-function accessTag(access: Provider['access']): { cls: string; key: 'provider_access_api_key' | 'provider_access_account' | 'provider_access_local' | 'provider_access_custom' } {
-  if (access === 'account') return { cls: 'is-account', key: 'provider_access_account' };
-  if (access === 'local') return { cls: 'is-local', key: 'provider_access_local' };
-  if (access === 'custom_endpoint') return { cls: 'is-key', key: 'provider_access_custom' };
-  return { cls: 'is-key', key: 'provider_access_api_key' };
-}
+  const [openId, setOpenId] = useState<string | null>('deepseek');
+  const [testing, setTesting] = useState<Record<string, boolean>>({});
+  const [defMenuOpen, setDefMenuOpen] = useState(false);
+  const defMenuRef = useRef<HTMLDivElement | null>(null);
 
-function detailOf(provider: Provider, lang: Lang): string {
-  if (provider.access === 'account') return t(lang, 'provider_detail_account');
-  const host = hostOf(provider.baseUrl);
-  if (provider.access === 'local') {
-    return [host, t(lang, 'provider_detail_ollama')].filter(Boolean).join(' · ');
-  }
-  const parts: string[] = [];
-  const tail = keyTail(provider.keyMasked);
-  if (tail) parts.push(t(lang, 'provider_detail_key', { tail }));
-  if (host) parts.push(host);
-  return parts.join(' · ');
-}
-
-function statusLabel(provider: Provider, lang: Lang): string {
-  if (provider.statusText) return provider.statusText;
-  if (provider.status === 'ok') return t(lang, 'provider_status_ok');
-  return t(lang, 'provider_status_untested');
-}
-
-export function ProviderPage({ lang, onToast, onConfirm, providersNavSeq = 0 }: Props) {
-  const { providers, defaultModel, vendors } = useProviders();
-  const [view, setView] = useState<View>({ kind: 'list' });
-  const [menuOpen, setMenuOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
-  const viewRef = useRef(view);
-  viewRef.current = view;
+  // Add dialog state
+  const [isAddOpen, setIsAddOpen] = useState(false);
+  const [available, setAvailable] = useState<Available[]>([]);
+  const [loginSession, setLoginSession] = useState<LoginSession | null>(null);
+  const sessionPollRef = useRef<number | null>(null);
 
   useEffect(() => {
-    if (!providersNavSeq) return;
-    const current = viewRef.current;
-    if (current.kind !== 'wizard') return;
-    void (async () => {
-      await cancelProviderWizard(current.state);
-      setView({ kind: 'list' });
-    })();
-  }, [providersNavSeq]);
-
-  useEffect(() => {
-    if (!menuOpen) return;
-    const onDown = (ev: MouseEvent) => {
-      if (!menuRef.current?.contains(ev.target as Node)) setMenuOpen(false);
+    if (!defMenuOpen) return;
+    const handleClick = (e: MouseEvent) => {
+      if (defMenuRef.current && !defMenuRef.current.contains(e.target as Node)) {
+        setDefMenuOpen(false);
+      }
     };
-    window.addEventListener('mousedown', onDown);
-    return () => window.removeEventListener('mousedown', onDown);
-  }, [menuOpen]);
+    window.addEventListener('mousedown', handleClick);
+    return () => window.removeEventListener('mousedown', handleClick);
+  }, [defMenuOpen]);
 
-  const defaultEntry = useMemo(() => {
-    if (!defaultModel) return null;
-    const source = providers.find((item) => item.id === defaultModel.providerId);
-    const model = source?.models.find((item) => item.id === defaultModel.modelId);
-    if (!source || !model) return null;
-    return { source, model };
-  }, [defaultModel, providers]);
+  useEffect(() => {
+    return () => {
+      if (sessionPollRef.current) window.clearTimeout(sessionPollRef.current);
+    };
+  }, []);
 
-  const wizardProvider = view.kind === 'wizard' && view.state.createdId
-    ? providers.find((item) => item.id === view.state.createdId) || null
-    : null;
-  const wizardModels = wizardProvider?.models || [];
-
-  if (view.kind === 'wizard') {
-    return (
-      <ProviderWizard
-        lang={lang}
-        vendors={vendors}
-        models={wizardModels}
-        state={view.state}
-        onChange={(state) => setView({ kind: 'wizard', state })}
-        onDone={() => setView({ kind: 'list' })}
-        onCancel={() => setView({ kind: 'list' })}
-        onToast={onToast}
-      />
-    );
-  }
-
-  async function retry(provider: Provider) {
+  const handleOpenAdd = async () => {
+    setIsAddOpen(true);
+    setLoginSession(null);
     try {
-      await testProvider(provider.id, lang);
-    } catch (err) {
-      onToast(err instanceof Error ? err.message : String(err));
+      const res = await getAvailableProviders(lang);
+      setAvailable(res.providers);
+    } catch {
+      // ignore
     }
-  }
+  };
 
-  async function remove(provider: Provider) {
-    if (isGrokProvider(provider)) return;
-    const ok = await onConfirm({
-      title: t(lang, 'provider_delete_title', { name: provider.name }),
-      message: t(lang, 'provider_delete_message'),
-      confirmLabel: t(lang, 'provider_delete'),
-      danger: true,
-    });
-    if (!ok) return;
+  const handleTest = async (id: string) => {
+    setTesting((prev) => ({ ...prev, [id]: true }));
     try {
-      await deleteProvider(provider.id);
-    } catch (err) {
-      onToast(err instanceof Error ? err.message : String(err));
+      await testProvider(id);
+    } catch {
+      // ignore
+    } finally {
+      setTesting((prev) => ({ ...prev, [id]: false }));
     }
-  }
+  };
 
-  async function setDefault(providerId: string, modelId: string) {
-    try {
-      await patchProvider(providerId, { defaultModel: modelId }, lang);
-      setMenuOpen(false);
-    } catch (err) {
-      onToast(err instanceof Error ? err.message : String(err));
+  const handleToggleModel = async (providerId: string, modelId: string, enabled: boolean) => {
+    const p = providers.find((x) => x.id === providerId);
+    if (!p) return;
+    const enabledSet = new Set(p.models.filter((m) => m.enabled).map((m) => m.id));
+    if (enabled) enabledSet.add(modelId);
+    else enabledSet.delete(modelId);
+    await patchProvider(providerId, { enabled: Array.from(enabledSet) }, lang);
+  };
+
+  const handleSaveOverride = async (
+    providerId: string,
+    modelId: string,
+    key: 'contextWindow' | 'maxTokens',
+    value: string,
+  ) => {
+    const trimmed = value.trim();
+    const parsed = parseContextInput(trimmed);
+    if (parsed === null) {
+      if (key === 'contextWindow') {
+        await putModelContextWindow(providerId, modelId, null, lang);
+      } else {
+        await patchProvider(providerId, { overrides: { [modelId]: { maxTokens: null } } }, lang);
+      }
+    } else if (parsed !== undefined) {
+      if (key === 'contextWindow') {
+        await putModelContextWindow(providerId, modelId, parsed, lang);
+      } else {
+        await patchProvider(providerId, { overrides: { [modelId]: { maxTokens: parsed } } }, lang);
+      }
+    }
+  };
+
+  const handleSelectDefault = async (providerId: string, modelId: string) => {
+    setDefMenuOpen(false);
+    await patchProvider(providerId, { defaultModel: modelId });
+  };
+
+  // OAuth Session flow
+  const pollSession = (sid: string) => {
+    if (sessionPollRef.current) window.clearTimeout(sessionPollRef.current);
+    sessionPollRef.current = window.setTimeout(async () => {
+      try {
+        const res = await getLoginSession(sid, lang);
+        const s = (res as { session?: LoginSession }).session || (res as unknown as LoginSession);
+        setLoginSession(s);
+        if (s && (s.state === 'pending' || s.state === 'prompt')) pollSession(sid);
+      } catch {
+        // ignore
+      }
+    }, 1000);
+  };
+
+  const handleStartOAuth = async (vendor: Available) => {
+    const res = await connectProviderOAuth(vendor.id, lang);
+    setLoginSession(res.session);
+    pollSession(res.session.id);
+  };
+
+  const handleAnswerOAuth = async (input: string) => {
+    if (!loginSession) return;
+    const res = await answerLoginSession(loginSession.id, input, lang);
+    setLoginSession(res.session);
+    if (res.session.state === 'pending' || res.session.state === 'prompt') pollSession(res.session.id);
+  };
+
+  const handleCancelOAuth = async () => {
+    if (!loginSession) return;
+    if (sessionPollRef.current) window.clearTimeout(sessionPollRef.current);
+    await cancelLoginSession(loginSession.id, lang);
+    setLoginSession(null);
+  };
+
+  const handleFinishAdd = async (models: Model[]) => {
+    if (loginSession && loginSession.providerId) {
+      setOpenId(loginSession.providerId);
+    }
+    setLoginSession(null);
+    if (sessionPollRef.current) {
+      window.clearTimeout(sessionPollRef.current);
+      sessionPollRef.current = null;
+    }
+    await Promise.resolve(models);
+  };
+
+  const handleCloseAdd = () => {
+    setIsAddOpen(false);
+    setLoginSession(null);
+    if (sessionPollRef.current) {
+      window.clearTimeout(sessionPollRef.current);
+      sessionPollRef.current = null;
+    }
+  };
+
+  const handleDelete = async (p: Provider) => {
+    if (onConfirm) {
+      const ok = await onConfirm({
+        title: t(lang, 'provider_delete_title', { name: p.name }),
+        message: t(lang, 'provider_delete_message'),
+        danger: true,
+        confirmLabel: t(lang, 'provider_act_remove'),
+      });
+      if (!ok) return;
+    }
+    await deleteProvider(p.id);
+  };
+
+  // Find default model display name
+  let currentDefaultName = t(lang, 'provider_default_unselected');
+  let currentDefaultProviderName = '';
+  if (defaultModel) {
+    for (const p of providers) {
+      if (p.id === defaultModel.providerId) {
+        const m = p.models.find((item) => item.id === defaultModel.modelId);
+        if (m) {
+          currentDefaultName = m.name;
+          currentDefaultProviderName = p.name;
+          break;
+        }
+      }
     }
   }
 
   return (
-    <div className="next-settings-content">
+    <div className="next-settings-content" data-testid="next-provider-page">
       <div className="next-settings-head">
         <div>
           <h2>{t(lang, 'provider_title')}</h2>
           <p className="next-settings-sub">{t(lang, 'provider_subtitle')}</p>
         </div>
-        <button
-          type="button"
-          className="ns-btn"
-          data-testid="next-provider-add"
-          onClick={() => setView({ kind: 'wizard', state: blankWizard('add') })}
-        >
-          {t(lang, 'provider_add')}
-        </button>
       </div>
-      <div className="ns-provider-table">
-        {providers.length === 0 ? (
-          <div className="ns-empty">{t(lang, 'provider_none')}</div>
-        ) : providers.map((provider) => {
-          const tag = accessTag(provider.access);
-          const kind = statusKind(provider.status);
-          const grok = isGrokProvider(provider);
-          return (
-            <div
-              key={provider.id}
-              className="ns-provider-row"
-              data-testid="next-provider-row"
-              data-provider-id={provider.id}
-            >
-              <span className="ns-icon-box">
-                <BrandIcon brand={provider.vendor} size={16} />
-              </span>
-              <div className="ns-provider-main">
-                <div className="ns-provider-name">
-                  <span>{provider.name}</span>
-                  <span className={`ns-tag ${tag.cls}`}>{t(lang, tag.key)}</span>
-                </div>
-                <div className="ns-provider-detail">{detailOf(provider, lang)}</div>
+
+      {/* 默认模型 */}
+      <div className="mp-sec">
+        <div className="mp-card mp-def">
+          <span className="mp-def-l">
+            <span>{t(lang, 'provider_default_title')}</span>
+            <span>{t(lang, 'provider_default_hint')}</span>
+          </span>
+          <span
+            className="mp-pick"
+            data-testid="next-provider-default-picker"
+            onClick={() => setDefMenuOpen(!defMenuOpen)}
+          >
+            <span>{currentDefaultName}</span>
+            {currentDefaultProviderName && <span className="mp-from">{currentDefaultProviderName}</span>}
+            {defMenuOpen && (
+              <div className="mp-menu" ref={defMenuRef} onClick={(e) => e.stopPropagation()}>
+                {providers.map((p) => {
+                  const enabledModels = p.models.filter((m) => m.enabled);
+                  if (enabledModels.length === 0) return null;
+                  return (
+                    <div key={p.id}>
+                      <div className="mp-menu-g">{p.name}</div>
+                      {enabledModels.map((m) => (
+                        <div
+                          key={m.id}
+                          className="mp-menu-i"
+                          data-testid="next-provider-default-item"
+                          onClick={() => void handleSelectDefault(p.id, m.id)}
+                        >
+                          <span>{m.name}</span>
+                          <span className="mp-menu-x">{m.contextWindow ? formatNumber(m.contextWindow) : ''}</span>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })}
               </div>
-              <div className="ns-provider-models">{t(lang, 'provider_enabled_count', { n: provider.models.length })}</div>
-              <div className={`ns-provider-status is-${kind}`}>
-                <span className={`ns-dot is-${kind}`} />
-                {statusLabel(provider, lang)}
-              </div>
-              <div className="ns-provider-acts">
-                {kind === 'bad' && !grok ? (
-                  <button type="button" className="ns-btn" onClick={() => { void retry(provider); }}>
-                    {t(lang, 'provider_retry')}
-                  </button>
-                ) : grok && (kind === 'warn' || kind === 'bad') ? (
-                  <button
-                    type="button"
-                    className="ns-btn"
-                    onClick={() => {
-                      const next = wizardFromProvider(provider);
-                      next.vendorId = 'grok';
-                      next.way = 'account';
-                      next.step = 2;
-                      next.probeOk = false;
-                      setView({ kind: 'wizard', state: next });
-                    }}
-                  >
-                    {t(lang, 'provider_relogin')}
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    className="ns-btn"
-                    data-testid="next-provider-edit"
-                    onClick={() => {
-                      const matched = vendorForProvider(provider, vendors);
-                      const next = wizardFromProvider(provider);
-                      if (matched) next.vendorId = matched.id;
-                      if (grok) next.step = 3;
-                      setView({ kind: 'wizard', state: next });
-                    }}
-                  >
-                    {t(lang, 'provider_edit')}
-                  </button>
-                )}
-                {kind === 'bad' && !grok ? (
-                  <button
-                    type="button"
-                    className="ns-btn ns-btn-ghost"
-                    data-testid="next-provider-edit"
-                    onClick={() => {
-                      const matched = vendorForProvider(provider, vendors);
-                      const next = wizardFromProvider(provider);
-                      if (matched) next.vendorId = matched.id;
-                      setView({ kind: 'wizard', state: next });
-                    }}
-                  >
-                    {t(lang, 'provider_edit')}
-                  </button>
-                ) : null}
-                {grok && kind !== 'warn' && kind !== 'bad' ? (
-                  <button
-                    type="button"
-                    className="ns-btn ns-btn-ghost"
-                    onClick={() => {
-                      const next = wizardFromProvider(provider);
-                      next.vendorId = 'grok';
-                      next.way = 'account';
-                      next.step = 2;
-                      next.probeOk = false;
-                      setView({ kind: 'wizard', state: next });
-                    }}
-                  >
-                    {t(lang, 'provider_relogin')}
-                  </button>
-                ) : null}
-                {!grok ? (
-                  <button
-                    type="button"
-                    className="ns-btn ns-btn-ghost"
-                    data-testid="next-provider-delete"
-                    onClick={() => { void remove(provider); }}
-                  >
-                    {t(lang, 'provider_delete')}
-                  </button>
-                ) : null}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-      <div className="ns-default">
-        <div className="ns-default-label">
-          {t(lang, 'provider_default_title')}
-          <span className="ns-default-hint">{t(lang, 'provider_default_hint')}</span>
+            )}
+          </span>
         </div>
-        <div ref={menuRef} style={{ position: 'relative' }}>
+      </div>
+
+      {/* 服务商列表 */}
+      <div className="mp-sec">
+        <div className="mp-sec-h">
+          <b>{t(lang, 'provider_sec_title')}</b>
+          <small>{t(lang, 'provider_sec_hint')}</small>
+          <span className="mp-sp" />
           <button
             type="button"
-            className="ns-default-btn"
-            data-testid="next-default-model"
-            onClick={() => setMenuOpen((open) => !open)}
+            className="mp-btn"
+            data-testid="next-provider-add"
+            onClick={() => void handleOpenAdd()}
           >
-            {defaultEntry ? (
-              <>
-                <BrandIcon brand={defaultEntry.model.brand} size={14} />
-                <span className="ns-default-name">{defaultEntry.model.displayName}</span>
-                <span className="ns-default-from">{t(lang, 'provider_from', { name: defaultEntry.source.name })}</span>
-              </>
-            ) : (
-              <span className="ns-default-name">{t(lang, 'provider_default_empty')}</span>
-            )}
-            <span className="ns-caret">▾</span>
+            {t(lang, 'provider_add_button')}
           </button>
-          {menuOpen ? (
-            <div className="ns-pop">
-              {providers.flatMap((source) => source.models.map((model) => {
-                const on = defaultModel?.providerId === source.id && defaultModel.modelId === model.id;
-                return (
-                  <button
-                    key={`${source.id}:${model.id}`}
-                    type="button"
-                    className={`ns-pop-item${on ? ' is-on' : ''}`}
-                    onClick={() => { void setDefault(source.id, model.id); }}
-                  >
-                    <BrandIcon brand={model.brand} size={14} />
-                    <span className="ns-pop-main">
-                      <b>{model.displayName}</b>
-                      <span>{model.id} · {formatContextWindow(model.contextWindow)} · {source.name}</span>
-                    </span>
-                  </button>
-                );
-              }))}
-            </div>
-          ) : null}
+        </div>
+
+        <div className="mp-card">
+          <div className="mp-plist">
+            <ProviderList
+              providers={providers}
+              openId={openId}
+              onToggleOpen={(id) => setOpenId(openId === id ? null : id)}
+              testing={testing}
+              onTest={handleTest}
+              onOpenRelogin={(p) => {
+                const vendor = available.find((a) => a.id === p.id);
+                if (vendor) {
+                  setIsAddOpen(true);
+                  void handleStartOAuth(vendor);
+                }
+              }}
+              onKeyChange={async (id, apiKey) => {
+                await patchProvider(id, { apiKey });
+              }}
+              onCustomEdit={async (id, data) => {
+                await patchProvider(id, data);
+              }}
+              onDelete={handleDelete}
+              lang={lang}
+              onToggleModel={handleToggleModel}
+              onSaveOverride={handleSaveOverride}
+              onRefreshModels={handleTest}
+            />
+          </div>
         </div>
       </div>
+
+      {/* Add Provider Dialog */}
+      <AddProviderDialog
+        lang={lang}
+        isOpen={isAddOpen}
+        onClose={handleCloseAdd}
+        available={available}
+        loginSession={loginSession}
+        onAnswerOAuth={handleAnswerOAuth}
+        onCancelOAuth={handleCancelOAuth}
+        onConnectBuiltinKey={async (id, key) => {
+          const res = await connectProvider(id, { method: 'api_key', apiKey: key }, lang);
+          setOpenId(id);
+          return res.provider.models;
+        }}
+        onConnectBuiltinEnv={async (id) => {
+          const res = await connectProvider(id, { method: 'env' }, lang);
+          setOpenId(id);
+          return res.provider.models;
+        }}
+        onStartOAuth={handleStartOAuth}
+        onConnectCustom={async (form) => {
+          const res = await addCustomProvider(form, lang);
+          setOpenId(res.provider.id);
+          return res.provider.models;
+        }}
+        onFinish={handleFinishAdd}
+      />
     </div>
   );
 }

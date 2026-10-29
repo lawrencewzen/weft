@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { load } from './_root.mjs';
 
 const { buildAgents, agentEventData } = await load('src/core/agents.mjs');
-const { effectiveModelFor } = await load('src/core/model-sources.mjs');
+const { resolveKernelTarget } = await load('src/kernel/models.mjs');
 
 test('buildAgents names the main agent Agent and has no role field', () => {
   const agents = buildAgents({
@@ -31,20 +31,27 @@ test('agentEventData omits retired role fields', () => {
   assert.equal(Object.hasOwn(data, 'roleId'), false);
 });
 
-test('effectiveModel follows settings.models.default then the first usable source', () => {
+test('resolveKernelTarget uses the pinned model, then defaultModel, otherwise null', () => {
   const settings = {
-    sources: [{
-      id: 'src1', kind: 'api', vendor: 'custom', name: 'A',
-      baseUrl: 'http://127.0.0.1:9/v1', apiKey: 'key', models: ['alpha', 'beta'],
+    version: 3,
+    providers: [{
+      id: 'custom-aaaaaaaa',
+      kind: 'custom',
+      name: 'A',
+      baseUrl: 'http://127.0.0.1:9/v1',
+      api: 'openai-completions',
+      enabled: ['alpha', 'beta'],
+      overrides: {},
     }],
-    models: { default: { sourceId: 'src1', model: 'alpha' }, coder: { sourceId: 'src1', model: 'beta' } },
+    defaultModel: { providerId: 'custom-aaaaaaaa', modelId: 'alpha' },
   };
-  assert.deepEqual(effectiveModelFor(settings), { sourceId: 'src1', model: 'alpha', follow: false });
-  assert.deepEqual(effectiveModelFor({
-    sources: settings.sources,
-    models: { coder: { sourceId: 'src1', model: 'beta' } },
-  }), { sourceId: 'src1', model: 'alpha', follow: true });
-  assert.deepEqual(effectiveModelFor({ sources: [], models: {} }), {
-    sourceId: null, model: null, follow: true,
+  assert.deepEqual(
+    resolveKernelTarget(settings, { modelSourceId: 'custom-aaaaaaaa', modelId: 'beta' }),
+    { provider: 'custom-aaaaaaaa', modelId: 'beta' },
+  );
+  assert.deepEqual(resolveKernelTarget(settings, {}), {
+    provider: 'custom-aaaaaaaa',
+    modelId: 'alpha',
   });
+  assert.equal(resolveKernelTarget({ version: 3, providers: [], defaultModel: null }, {}), null);
 });
