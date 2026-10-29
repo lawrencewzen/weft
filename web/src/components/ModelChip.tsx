@@ -212,22 +212,6 @@ export function ModelChip({
           })}
         </div>
       ))}
-      <div className="mfoot">
-        <span>{t(lang, 'model_only_this_chat')}</span>
-        <span className="model-menu-dot" aria-hidden="true">{' · '}</span>
-        <button
-          type="button"
-          className="model-menu-manage"
-          data-testid="next-model-manage"
-          onClick={() => {
-            setOpen(false);
-            setSubMenu(null);
-            onManage();
-          }}
-        >
-          {t(lang, 'model_manage')}
-        </button>
-      </div>
     </div>
   );
 
