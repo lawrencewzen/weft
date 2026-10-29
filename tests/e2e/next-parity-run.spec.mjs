@@ -193,19 +193,19 @@ test('running status lives in the sidebar status dot and live tool group', async
     await sendNext(page, 'run');
     await expect(page.getByTestId('next-stop')).toBeVisible();
 
-    await expect(page.getByTestId('next-tool-group-spinner')).toBeVisible({ timeout: 8000 });
+    await expect(page.getByTestId('next-tool-group').locator('[data-status="running"]')).toBeVisible({ timeout: 8000 });
     await expect(page.getByTestId('next-tool-group-text')).toHaveText('正在运行 `sleep 2`…');
     await expect(page.getByTestId('next-tool-group-elapsed')).toHaveText(/^\d+:\d{2}$/);
     await expect(page.locator('.tool-group-spin, .run-spin, [data-testid=next-stream-spin]')).toHaveCount(1);
     await expect(page.locator('[data-testid=next-tool-row][data-tool=bash]')).toBeHidden();
 
     await expect(page.getByTestId('next-tool-group-text')).toHaveText('运行 sleep 2 · 思考中', { timeout: 8000 });
-    await expect(page.getByTestId('next-tool-group-spinner')).toBeVisible();
+    await expect(page.getByTestId('next-tool-group').locator('[data-status="running"]')).toBeVisible();
     await expect(page.getByTestId('next-tool-group-elapsed')).toHaveText(/^\d+:\d{2}$/);
     await expect(page.locator('.tool-group-spin, .run-spin, [data-testid=next-stream-spin]')).toHaveCount(1);
 
     await expect(page.getByTestId('next-item-assistant').filter({ hasText: '跑完了。' })).toBeVisible({ timeout: 20000 });
-    await expect(page.getByTestId('next-tool-group-spinner')).toHaveCount(0);
+    await expect(page.getByTestId('next-tool-group').locator('[data-status="running"]')).toHaveCount(0);
     await expect(page.getByTestId('next-tool-group-elapsed')).toHaveCount(0);
     await waitRunDone(page);
     await expect(page.getByTestId('next-stop')).toHaveCount(0);

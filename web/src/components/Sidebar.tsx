@@ -17,7 +17,6 @@ import {
 } from '../data/prefs';
 import { useSession } from '../data/session';
 import {
-  conversationStatusKind,
   deleteOpenRecord,
   hasLiveSubagents,
   runningCount,
@@ -41,6 +40,7 @@ import { useWorkspaces } from '../data/useWorkspaces';
 import { t } from '../i18n';
 import { CtxMenu, type CtxMenuItem } from './CtxMenu';
 import type { ConfirmOpts } from './ConfirmDialog';
+import { ArchiveIcon, StatusIcon, statusIconFor } from './StatusIcon';
 import { SubagentChip, SubagentTree } from './SubagentTree';
 
 type MenuState = {
@@ -419,7 +419,7 @@ export function Sidebar({
                 <div className="ws-node-children">
                   {group.conversations.map((conv) => {
                     const isCurrent = conv.id === activeConversationId;
-                    const kind = conversationStatusKind(conv.status);
+                    const iconStatus = statusIconFor(conv.status);
                     const counts = conv.subagents;
                     const agents = store.subagents(conv.id);
                     const live = hasLiveSubagents(counts, agents);
@@ -453,12 +453,8 @@ export function Sidebar({
                           onContextMenu={(ev) => openMenu(ev, conversationItems(ws.id, conv), conv.title || '')}
                         >
                           <span className="conv-status-slot">
-                            {kind ? (
-                              <span
-                                className={`conv-status-dot is-${kind}`}
-                                data-testid="next-conv-dot"
-                                data-kind={kind}
-                              />
+                            {iconStatus ? (
+                              <StatusIcon status={iconStatus} size={14} lang={lang} />
                             ) : null}
                           </span>
                           <span className="conv-node-title">
@@ -506,14 +502,7 @@ export function Sidebar({
           data-testid="next-archived-toggle"
           onClick={() => setArchivedOpen((prev) => !prev)}
         >
-          <svg
-            className="ws-chev"
-            viewBox="0 0 12 12"
-            aria-hidden="true"
-            style={{ transform: archivedOpen ? 'rotate(90deg)' : 'rotate(0deg)' }}
-          >
-            <path d="M4.5 3l3 3-3 3" />
-          </svg>
+          <ArchiveIcon className="sidebar-archived-icon" size={14} aria-hidden="true" />
           <span className="sidebar-archived-title">{t(lang, 'archived_label')}</span>
           <span className="sidebar-archived-count" data-testid="next-archived-count">
             {archived.length}

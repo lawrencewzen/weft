@@ -60,6 +60,7 @@ import { useRightPane } from '../data/rightPaneContext';
 import { ContextBanner, ContextChip } from './ContextChip';
 import { DemoModelBadge } from './DemoModelBadge';
 import { ModelChip } from './ModelChip';
+import { StatusIcon } from './StatusIcon';
 import { WorkspaceChip } from './WorkspaceChip';
 import { createSendRequest, errorMessage } from './sendRequest';
 
@@ -1011,7 +1012,9 @@ export function Composer({
                       title={item.uploaded?.path || item.name}
                     >
                       {isUploading ? (
-                        <span className="composer-tag-spin" data-testid="next-upload-spinner" />
+                        <StatusIcon status="running" size={14} className="composer-tag-spin" aria-hidden="true" />
+                      ) : isError ? (
+                        <StatusIcon status="failed" size={14} className="composer-tag-file-icon" aria-hidden="true" />
                       ) : (
                         <span className="composer-tag-file-icon">{FILE_ICON}</span>
                       )}

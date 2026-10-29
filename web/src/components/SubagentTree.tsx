@@ -7,21 +7,7 @@ import {
 } from '../data/subagentTime';
 import type { Subagent } from '../data/store';
 import { t } from '../i18n';
-
-const STATUS_ICON = (
-  <svg
-    className="subagent-status-icon"
-    viewBox="0 0 12 12"
-    aria-hidden="true"
-    data-testid="next-subagent-status-icon"
-  >
-    <circle className="sa-ring" cx="6" cy="6" r="5" fill="none" />
-    <circle className="sa-arc" cx="6" cy="6" r="5" fill="none" />
-    <path className="sa-check" d="M3.2 6.2l2 2 3.6-4" fill="none" />
-    <rect className="sa-stop" x="4.35" y="4.35" width="3.3" height="3.3" rx="0.45" />
-    <path className="sa-fail" d="M4 4l4 4M8 4l-4 4" fill="none" />
-  </svg>
-);
+import { StatusIcon, statusIconFor } from './StatusIcon';
 
 export function SubagentChip({
   convId,
@@ -55,7 +41,7 @@ export function SubagentChip({
     const a = agents[k];
     const visual = a ? subagentTreeVisual(a.status) : (k < live ? 'running' : 'done');
     const on = visual === 'running' || visual === 'stuck';
-    const color = visual === 'running' ? 'var(--sa-run)' : visual === 'stuck' ? 'var(--sa-stuck)' : 'var(--sa-check)';
+    const color = visual === 'running' ? 'var(--mute)' : visual === 'stuck' ? 'var(--ink)' : 'var(--faint)';
     const op = on ? 1 : 0.55;
     const play = on ? 'running' : 'paused';
     const dur = `${1.6 + k * 0.45}s`;
@@ -80,7 +66,7 @@ export function SubagentChip({
         <span className="subagent-orbit-stage" aria-hidden="true">
           <span
             className="subagent-orbit-core"
-            style={{ background: live > 0 ? 'var(--sa-run)' : 'var(--sa-check)' }}
+            style={{ background: live > 0 ? 'var(--mute)' : 'var(--faint)' }}
           />
           {orbitDots.map((d, k) => (
             <span
@@ -105,7 +91,7 @@ export function SubagentChip({
         </span>
         <span
           className="subagent-chip-count"
-          style={{ color: live > 0 ? 'var(--run-ink)' : 'var(--faint)' }}
+          style={{ color: live > 0 ? 'var(--ink)' : 'var(--faint)' }}
         >
           {label}
         </span>
@@ -283,7 +269,12 @@ export function SubagentTree({
                       }}
                     >
                       <div className="subagent-tree-line trow">
-                        {STATUS_ICON}
+                        <StatusIcon
+                          status={statusIconFor(agent.status, 'subagent') ?? 'running'}
+                          size={14}
+                          className="subagent-status-icon"
+                          lang={lang}
+                        />
                         <span className="subagent-tree-summary tt" data-testid="next-subagent-summary">
                           {agent.title || agent.name}
                         </span>

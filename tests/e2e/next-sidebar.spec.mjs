@@ -104,15 +104,15 @@ test('running status appears from the stream and disappears after stop, without 
 
     const row = convRow(page, conv.id);
     await expect(row).toHaveAttribute('data-status', 'running', { timeout: 15000 });
-    await expect(row.getByTestId('next-conv-dot')).toBeVisible();
-    await expect(row.getByTestId('next-conv-dot')).toHaveAttribute('data-kind', 'running');
+    await expect(row.getByTestId('status-icon')).toBeVisible();
+    await expect(row.getByTestId('status-icon')).toHaveAttribute('data-status', 'running');
 
     await row.click({ button: 'right' });
     const menu = page.getByTestId('next-ctx-menu');
     await expect(menu).toBeVisible();
     await menu.getByText('停止').click();
     await expect(row).not.toHaveAttribute('data-status', 'running', { timeout: 20000 });
-    await expect(row.getByTestId('next-conv-dot')).toHaveCount(0);
+    await expect(row.getByTestId('status-icon')).toHaveCount(0);
     await expect(page.getByTestId('next-stop')).toHaveCount(0);
   } finally {
     await srv.kill();

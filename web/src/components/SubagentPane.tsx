@@ -19,9 +19,10 @@ type Props = {
   lang: Lang;
 };
 
-function statusKey(status: Subagent['status']): 'status_running' | 'status_waiting' | 'status_failed' | 'status_stopped' | 'status_done' | 'status_idle' {
+function statusKey(status: Subagent['status']): 'status_running' | 'status_waiting' | 'status_failed' | 'status_stopped' | 'status_done' | 'status_idle' | 'status_queued' | 'status_stuck' {
   if (status === 'running') return 'status_running';
-  if (status === 'stuck' || status === 'waiting') return 'status_waiting';
+  if (status === 'stuck') return 'status_stuck';
+  if (status === 'waiting') return 'status_queued';
   if (status === 'failed') return 'status_failed';
   if (status === 'stopped') return 'status_stopped';
   if (status === 'done') return 'status_done';

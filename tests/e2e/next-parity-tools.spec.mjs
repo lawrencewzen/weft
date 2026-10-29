@@ -115,11 +115,11 @@ test('a running call shows a spinner and the current action without opening the 
     const { conv } = await openWorkspaceConversation(srv, 'demo', ws);
     await openNextChat(page, srv, conv.id);
     await sendNext(page, '跑');
-    await expect(page.getByTestId('next-tool-group-spinner')).toBeVisible({ timeout: 15000 });
+    await expect(page.getByTestId('next-tool-group').locator('[data-status="running"]')).toBeVisible({ timeout: 15000 });
     await expect(page.getByTestId('next-tool-group-text')).toHaveText('正在运行 `sleep 3`…');
     await expect(page.locator('[data-testid=next-tool-row][data-tool=bash]')).toBeHidden();
     await expect(page.getByTestId('next-tool-group-text')).toHaveText('运行 sleep 3', { timeout: 15000 });
-    await expect(page.getByTestId('next-tool-group-spinner')).toHaveCount(0);
+    await expect(page.getByTestId('next-tool-group').locator('[data-status="running"]')).toHaveCount(0);
     await expect(page.locator('[data-testid=next-tool-row][data-tool=bash]')).toBeHidden();
   } finally {
     await srv.kill();

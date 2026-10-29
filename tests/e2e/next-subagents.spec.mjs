@@ -400,7 +400,8 @@ test('finished sub-agent trees start closed, show a check, and use the name when
     await expect(doneRow).toHaveAttribute('data-status', 'done');
     await expect(doneRow).toHaveAttribute('data-visual', 'done');
     await expect(doneRow.getByTestId('next-subagent-summary')).toHaveText('worker');
-    await expect(doneRow.locator('.sa-check')).toHaveCSS('opacity', '1');
+    await expect(doneRow.getByTestId('status-icon')).toHaveAttribute('data-status', 'done');
+    await expect(doneRow.getByTestId('status-icon')).toHaveClass(/is-calm/);
   } finally {
     await srv.kill();
   }
@@ -524,7 +525,7 @@ test('dispatch card appears in thread when spawning sub-agent, transitioning fro
 
     // Status is initially running
     await expect(row).toHaveAttribute('data-status', /running|waiting/);
-    await expect(row.getByTestId('next-dispatch-status')).toHaveText(/运行中|等待中/);
+    await expect(row.getByTestId('next-dispatch-status')).toHaveText(/运行中|排队中|等待中/);
 
     // After child finishes, status transitions to done
     await expect(row).toHaveAttribute('data-status', 'done', { timeout: 30000 });

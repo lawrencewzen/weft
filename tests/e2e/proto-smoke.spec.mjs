@@ -105,9 +105,9 @@ test('prototype runs from file:// with mock data, no network and no console erro
   await expect(websiteNode.locator('.ws-node-count')).toHaveText('1 运行中');
   const richRow = page.locator('[data-testid=next-conv-row][data-id="c-rich"]');
   await expect(richRow).toHaveAttribute('data-status', 'running');
-  await expect(richRow.getByTestId('next-conv-dot')).toHaveAttribute('data-kind', 'running');
-  await expect(page.locator('[data-testid=next-conv-row][data-id="c-tests"]').getByTestId('next-conv-dot')).toHaveAttribute('data-kind', 'waiting');
-  await expect(page.locator('[data-testid=next-conv-row][data-id="c-scripts"]').getByTestId('next-conv-dot')).toHaveAttribute('data-kind', 'failed');
+  await expect(richRow.getByTestId('status-icon')).toHaveAttribute('data-status', 'running');
+  await expect(page.locator('[data-testid=next-conv-row][data-id="c-tests"]').getByTestId('status-icon')).toHaveAttribute('data-status', 'waiting');
+  await expect(page.locator('[data-testid=next-conv-row][data-id="c-scripts"]').getByTestId('status-icon')).toHaveAttribute('data-status', 'failed');
   await expect(page.getByTestId('next-service-dot')).toHaveClass(/is-ok/);
   await websiteToggle.click();
   await expect(websiteToggle).toHaveAttribute('aria-expanded', 'true');

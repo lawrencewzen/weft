@@ -49,6 +49,7 @@ test('seeded subagent tree, report cards, messages and stop', async ({ page }) =
   const docsTree = page.locator('[data-testid=next-subagent-tree][data-conv-id="c-docs"]');
   await expect(docsTree.getByTestId('next-subagent-row')).toHaveCount(3);
   await expect(docsTree.getByTestId('next-subagent-row').first()).toHaveAttribute('data-visual', 'done');
+  await expect(docsTree.getByTestId('next-subagent-row').first().getByTestId('status-icon')).toHaveAttribute('data-status', 'done');
   await expect(docsTree.getByTestId('next-subagent-time')).toHaveCount(0);
 
   await page.locator('[data-testid=next-conv-row][data-id="c-tests"]').click();
@@ -62,8 +63,10 @@ test('seeded subagent tree, report cards, messages and stop', async ({ page }) =
   const answered = page.getByTestId('next-item-subagent-report').first();
   const failed = page.getByTestId('next-item-subagent-report').last();
   await expect(answered.locator('.subagent-report-summary')).toContainText('交回结果');
+  await expect(answered.getByTestId('status-icon')).toHaveAttribute('data-status', 'done');
   await expect(failed).toHaveClass(/is-failed/);
-  await expect(failed.locator('.subagent-report-summary')).toContainText('失败');
+  await expect(failed.locator('.subagent-report-summary')).toContainText('没完成');
+  await expect(failed.getByTestId('status-icon')).toHaveAttribute('data-status', 'failed');
   await answered.getByTestId('next-subagent-report-summary').click();
   await expect(answered.getByTestId('next-subagent-report-body')).toContainText('text.delta');
 
@@ -273,29 +276,30 @@ test('dispatch card in conversation thread: row count, statuses, click to open i
   await expect(rows.nth(0).getByTestId('next-dispatch-name')).toHaveText('sub-load-order');
   await expect(rows.nth(0).getByTestId('next-dispatch-task')).toHaveText('核对 store.ts 的加载顺序');
   await expect(rows.nth(0).getByTestId('next-dispatch-status')).toHaveText('运行中');
-  await expect(rows.nth(0).getByTestId('next-dispatch-dot')).toHaveClass(/is-running/);
+  await expect(rows.nth(0).getByTestId('status-icon')).toHaveAttribute('data-status', 'running');
 
   // Row 1: sub-git-status, stuck, "卡住"
   await expect(rows.nth(1).getByTestId('next-dispatch-name')).toHaveText('sub-git-status');
   await expect(rows.nth(1).getByTestId('next-dispatch-task')).toHaveText('核对 Git 工作树状态');
   await expect(rows.nth(1).getByTestId('next-dispatch-status')).toHaveText('卡住');
-  await expect(rows.nth(1).getByTestId('next-dispatch-dot')).toHaveClass(/is-stuck/);
+  await expect(rows.nth(1).getByTestId('status-icon')).toHaveAttribute('data-status', 'stuck');
 
   // Row 2: sub-delta-test, done, "完成"
   await expect(rows.nth(2).getByTestId('next-dispatch-name')).toHaveText('sub-delta-test');
   await expect(rows.nth(2).getByTestId('next-dispatch-task')).toHaveText('补 text.delta 偏移的用例');
   await expect(rows.nth(2).getByTestId('next-dispatch-status')).toHaveText('完成');
 
-  // Row 3: sub-docs, waiting, "等待中"
+  // Row 3: sub-docs, waiting, "排队中"
   await expect(rows.nth(3).getByTestId('next-dispatch-name')).toHaveText('sub-docs');
   await expect(rows.nth(3).getByTestId('next-dispatch-task')).toHaveText('等主 Agent 确认文档口径');
-  await expect(rows.nth(3).getByTestId('next-dispatch-status')).toHaveText('等待中');
+  await expect(rows.nth(3).getByTestId('next-dispatch-status')).toHaveText('排队中');
+  await expect(rows.nth(3).getByTestId('status-icon')).toHaveAttribute('data-status', 'queued');
 
   // Row 4: sub-win-script, failed, "失败"
   await expect(rows.nth(4).getByTestId('next-dispatch-name')).toHaveText('sub-win-script');
   await expect(rows.nth(4).getByTestId('next-dispatch-task')).toHaveText('跑 Windows 上的启动脚本');
   await expect(rows.nth(4).getByTestId('next-dispatch-status')).toHaveText('失败');
-  await expect(rows.nth(4).getByTestId('next-dispatch-dot')).toHaveClass(/is-failed/);
+  await expect(rows.nth(4).getByTestId('status-icon')).toHaveAttribute('data-status', 'failed');
 
   // 2. Click a row to open subagent in right pane: URL becomes /c/<cid>/a/<aid> and row is highlighted
   await rows.nth(0).click();
