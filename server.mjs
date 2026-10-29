@@ -69,7 +69,7 @@ const PLUGIN_DIRS = [path.join(ROOT, 'plugins'), path.join(DATA_DIR, 'plugins')]
 const USER_SKILLS = path.join(DATA_DIR, 'skills');
 const USER_PLUGINS = path.join(DATA_DIR, 'plugins');
 await fs.mkdir(DATA_DIR, { recursive: true });
-const v2 = createV2Runtime({
+const v2Opts = {
   serviceVersion: String(pkg.version || '0.0.0'),
   startedAt,
   dataDir: DATA_DIR,
@@ -214,7 +214,8 @@ const v2 = createV2Runtime({
       return planGitImport(body, { loadConnections: loadGitConnections });
     },
   },
-});
+};
+const v2 = createV2Runtime(v2Opts);
 
 let dataLock;
 try {
@@ -420,6 +421,7 @@ const providerService = createProviderService({
     try { v2.notifyProvidersChanged(); } catch { /* v2 may still be starting */ }
   },
 });
+v2Opts.providerService = providerService;
 let kernelApi = null;
 
 async function reloadKernelPlugins() {

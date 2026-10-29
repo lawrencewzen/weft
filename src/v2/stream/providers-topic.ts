@@ -2,20 +2,20 @@
 
 import type { Lang } from '../phrases/index.ts';
 import {
-  providersSnapshot,
+  providersSnapshotFrom,
   type Provider,
   type ProviderDefaults,
   type ProvidersSnapshot,
+  type RawProvider,
   type ResolvedModel,
-  type SettingsLike,
 } from '../views/providers.ts';
-// Snapshot is empty until T59-4b rewires this topic onto provider-service.
 import { normalizeLang, type Entity, type EventHub } from './hub.ts';
 
 export const PROVIDERS_TOPIC = 'providers';
 
 export type ProvidersLoader = {
-  getSettings?: () => Promise<SettingsLike | null | undefined>;
+  listProviders?: () => Promise<RawProvider[]>;
+  getDefaultModel?: () => Promise<ResolvedModel | null>;
 };
 
 export type ProvidersTopicOpts = {
@@ -80,8 +80,9 @@ export function attachProvidersTopic(hub: EventHub, opts: ProvidersTopicOpts = {
   }
 
   async function loadSnapshot(lang: Lang): Promise<ProvidersSnapshot> {
-    const settings = opts.loader?.getSettings ? await opts.loader.getSettings() : null;
-    return providersSnapshot({ settings, lang });
+    const providers = opts.loader?.listProviders ? await opts.loader.listProviders() : [];
+    const defaultModel = opts.loader?.getDefaultModel ? await opts.loader.getDefaultModel() : null;
+    return providersSnapshotFrom({ providers, defaultModel }, lang);
   }
 
   function publishRemove(entity: string, id: string): void {
