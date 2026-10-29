@@ -9,6 +9,7 @@ import {
   type ResolvedModel,
   type SettingsLike,
 } from '../views/providers.ts';
+// Snapshot is empty until T59-4b rewires this topic onto provider-service.
 import { normalizeLang, type Entity, type EventHub } from './hub.ts';
 
 export const PROVIDERS_TOPIC = 'providers';

@@ -8,7 +8,6 @@ import { defineExtension, defineTool, section } from '@earendil-works/pi-durable
 import { agentEventData, mapConvStatusToAgent } from '../core/agents.mjs';
 import { TOOLS } from '../core/config.mjs';
 import { unknownSkillError } from '../core/skills.mjs';
-import { resolveConversationModelPatch } from '../core/model-sources.mjs';
 import { createPluginHost } from './plugins.mjs';
 import { isAutoContinueText } from './continuation.mjs';
 import { EXT_BUILTIN_TOOLS, EXT_SKILLS } from './ids.mjs';
@@ -103,6 +102,7 @@ export function createAgentHost({
   describeAgents,
   resolveModel,
   statusOf,
+  providerService,
 } = {}) {
   if (!store) throw new Error('store is required');
   if (!harness) throw new Error('harness is required');
@@ -228,7 +228,9 @@ export function createAgentHost({
     const status = await liveStatus(conv);
     const patch = {};
     const input = body && typeof body === 'object' ? body : {};
-    const modelChoice = resolveConversationModelPatch(await store.getSettings(), input);
+    const modelChoice = providerService
+      ? await providerService.resolveConversationModelPatch(input)
+      : { present: false };
     if (modelChoice.present) {
       if (!modelChoice.ok) return { status: 400, body: { errors: modelChoice.errors } };
       patch.modelSourceId = modelChoice.value.modelSourceId;

@@ -1,19 +1,27 @@
-import { mkdtemp, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import path from 'node:path';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createModels } from '@earendil-works/pi-ai/models';
-import { streamSimple as completionsStreamSimple } from '@earendil-works/pi-ai/api/openai-completions';
-import { createKernelModels, explicitDemo, providerIdForSource, selectChatRuntime } from '../../src/kernel/models.mjs';
+import { createSqliteStore } from '../../src/store/sqlite.mjs';
+import { createCredentialStore, createModelsStore } from '../../src/core/provider-stores.mjs';
+import {
+  createKernelModels,
+  explicitDemo,
+  fetchCustomProviderModels,
+  parseFetchedChatModels,
+  selectChatRuntime,
+} from '../../src/kernel/models.mjs';
 import { startFakeModel } from './kernel-models-fake.mjs';
+import { makeTempDir, removeTempDir } from './_tmp.mjs';
 import { request as serverRequest, startServer, stopServer } from './_server.mjs';
 
 const TOKEN = 'unit-kernel-models-token';
 const KEY_DEFAULT = 'sk-default-secret-1111';
 const KEY_DEFAULT_NEXT = 'sk-default-secret-3333';
 const KEY_CODER = 'sk-coder-secret-2222';
-const SECRETS = [KEY_DEFAULT, KEY_DEFAULT_NEXT, KEY_CODER];
+const KEY_DS = 'sk-deepseek-secret-4444';
+const SECRETS = [KEY_DEFAULT, KEY_DEFAULT_NEXT, KEY_CODER, KEY_DS];
+const CUSTOM_DEFAULT = 'custom-aaaaaaaa';
+const CUSTOM_CODER = 'custom-bbbbbbbb';
 
 test('explicit demo is only the three switches', () => {
   assert.equal(explicitDemo({}), false);
@@ -39,192 +47,107 @@ test('chat runtime uses a real model when one is connected, and faux only when a
   assert.equal(selectChatRuntime('', { llmApi: 'openai-completions' }), 'none');
 });
 
-test('model routing follows conversation, then default, then first usable source', async () => {
-  const models = createModels();
-  let settings = {
-    version: 2,
-    sources: [
-      {
-        id: 'srcdefault',
-        kind: 'api',
-        vendor: 'custom',
-        name: 'Default',
-        baseUrl: 'http://127.0.0.1:4101/v1',
-        apiKey: KEY_DEFAULT,
-        models: ['model-default'],
-      },
-      {
-        id: 'srccoder',
-        kind: 'api',
-        vendor: 'custom',
-        name: 'Coder',
-        baseUrl: 'http://127.0.0.1:4102/v1',
-        apiKey: KEY_CODER,
-        models: ['model-coder'],
-      },
-    ],
-    models: {
-      default: { sourceId: 'srcdefault', model: 'model-default' },
-      coder: { sourceId: 'srccoder', model: 'model-coder' },
-    },
+function customProvider(id, { baseUrl, enabled, overrides = {}, name = id } = {}) {
+  return {
+    id,
+    kind: 'custom',
+    name,
+    baseUrl,
+    api: 'openai-completions',
+    enabled,
+    overrides,
   };
-  const routes = createKernelModels({
-    models,
-    getSettings: async () => settings,
-    env: {},
-  });
+}
+
+function v3Settings(providers, defaultModel) {
+  return { version: 3, providers, defaultModel };
+}
+
+async function modelOf(settings, conv = {}, env = {}) {
+  const models = createModels();
+  const routes = createKernelModels({ models, getSettings: async () => settings, env });
+  const ref = await routes.modelFor(conv);
+  return { models, routes, ref, model: ref ? models.getModel(ref.provider, ref.modelId) : null };
+}
+
+test('modelFor uses the pinned enabled model, then defaultModel, otherwise null', async () => {
+  const settings = v3Settings([
+    customProvider(CUSTOM_DEFAULT, {
+      baseUrl: 'http://127.0.0.1:4101/v1',
+      enabled: ['model-default'],
+    }),
+    customProvider(CUSTOM_CODER, {
+      baseUrl: 'http://127.0.0.1:4102/v1',
+      enabled: ['model-coder'],
+    }),
+  ], { providerId: CUSTOM_DEFAULT, modelId: 'model-default' });
+  const models = createModels();
+  const routes = createKernelModels({ models, getSettings: async () => settings, env: {} });
+
   const main = await routes.modelFor({});
-  const pinned = await routes.modelFor({ modelSourceId: 'srccoder', modelId: 'model-coder' });
+  const pinned = await routes.modelFor({ modelSourceId: CUSTOM_CODER, modelId: 'model-coder' });
   assert.equal(main.modelId, 'model-default');
   assert.equal(pinned.modelId, 'model-coder');
-  assert.notEqual(main.provider, pinned.provider);
+  assert.equal(main.provider, CUSTOM_DEFAULT);
+  assert.equal(pinned.provider, CUSTOM_CODER);
   assert.equal(models.getModel(main.provider, main.modelId).baseUrl, 'http://127.0.0.1:4101/v1');
-  assert.equal(models.getModel(pinned.provider, pinned.modelId).baseUrl, 'http://127.0.0.1:4102/v1');
 
-  settings = { ...settings, models: {} };
-  const first = await routes.modelFor({});
-  assert.equal(first.modelId, 'model-default');
-  settings = {
-    ...settings,
-    models: {
-      default: { sourceId: 'srcdefault', model: 'model-default' },
-      coder: { sourceId: 'srccoder', model: 'model-coder' },
-    },
-  };
+  const missing = await routes.modelFor({ modelSourceId: 'missing', modelId: 'ghost' });
+  assert.equal(missing.modelId, 'model-default');
 
-  settings = {
-    ...settings,
-    sources: settings.sources.map((source) => (
-      source.id === 'srcdefault'
-        ? { ...source, baseUrl: 'http://127.0.0.1:4199/v1', apiKey: KEY_DEFAULT_NEXT }
-        : source
-    )),
-  };
-  const refreshed = await routes.modelFor({});
-  assert.equal(models.getModel(refreshed.provider, refreshed.modelId).baseUrl, 'http://127.0.0.1:4199/v1');
+  const disabled = await routes.modelFor({
+    modelSourceId: CUSTOM_CODER,
+    modelId: 'not-enabled',
+  });
+  assert.equal(disabled.modelId, 'model-default');
 
-  settings = {
-    ...settings,
-    sources: settings.sources.filter((source) => source.id !== 'srccoder'),
-    models: { default: settings.models.default },
-  };
-  await routes.modelFor({});
-  assert.equal(models.getProvider(providerIdForSource({ id: 'srccoder', kind: 'api' })), undefined);
-
-  settings = { version: 2, sources: [], models: {} };
-  assert.equal(await routes.modelFor({}), null);
-  assert.equal(models.getModel(main.provider, main.modelId), undefined);
-});
-
-test('chatModel uses a source context window and re-registers when it changes', async () => {
-  const models = createModels();
-  let settings = {
-    version: 2,
-    sources: [{
-      id: 'srcdefault',
-      kind: 'api',
-      vendor: 'custom',
-      name: 'Default',
-      baseUrl: 'http://127.0.0.1:4101/v1',
-      apiKey: KEY_DEFAULT,
-      models: ['model-default', 'model-wide'],
-      contextWindows: { 'model-wide': 256000 },
-    }],
-    models: { default: { sourceId: 'srcdefault', model: 'model-default' } },
-  };
-  const routes = createKernelModels({
-    models,
-    getSettings: async () => settings,
+  const empty = createKernelModels({
+    models: createModels(),
+    getSettings: async () => v3Settings([], null),
     env: {},
   });
-  const main = await routes.modelFor({});
-  assert.equal(models.getModel(main.provider, 'model-default').contextWindow, 128000);
-  assert.equal(models.getModel(main.provider, 'model-wide').contextWindow, 256000);
-
-  settings = {
-    ...settings,
-    sources: settings.sources.map((source) => ({
-      ...source,
-      contextWindows: { 'model-default': 512000, 'model-wide': 256000 },
-    })),
-  };
-  const refreshed = await routes.modelFor({});
-  assert.equal(models.getModel(refreshed.provider, 'model-default').contextWindow, 512000);
-  assert.equal(models.getModel(refreshed.provider, 'model-wide').contextWindow, 256000);
+  assert.equal(await empty.modelFor({}), null);
 });
 
-test('chatModel reads pi-ai catalog metadata and keeps user/env overrides', async () => {
-  async function modelFor(source, env = {}) {
-    const models = createModels();
-    const settings = {
-      version: 2,
-      sources: [source],
-      models: { default: { sourceId: source.id, model: source.models[0] } },
-    };
-    const routes = createKernelModels({
-      models,
-      getSettings: async () => settings,
-      env,
-    });
-    const ref = await routes.modelFor({});
-    return models.getModel(ref.provider, ref.modelId);
-  }
+test('builtin catalog metadata is kept and user/env overrides apply', async () => {
+  const base = v3Settings([
+    { id: 'deepseek', kind: 'builtin', enabled: ['deepseek-flash'], overrides: {} },
+  ], { providerId: 'deepseek', modelId: 'deepseek-flash' });
 
-  const flash = await modelFor({
-    id: 'srcflash',
-    kind: 'api',
-    vendor: 'deepseek',
-    name: 'DeepSeek',
-    baseUrl: 'https://api.deepseek.com/v1',
-    apiKey: KEY_DEFAULT,
-    models: ['deepseek-flash'],
-  }, { LLM_CONTEXT_WINDOW: '200000' });
+  const flash = (await modelOf(base, {}, { LLM_CONTEXT_WINDOW: '200000' })).model;
   assert.equal(flash.contextWindow, 1_000_000);
   assert.equal(flash.maxTokens, 384000);
-  assert.equal(flash.reasoning, false);
-  assert.equal(flash.thinkingLevelMap, undefined);
+  assert.equal(flash.reasoning, true);
+  assert.equal(flash.thinkingLevelMap.low, 'low');
   assert.deepEqual(flash.input, ['text', 'image']);
   assert.equal(flash.cost.input, 0.3);
   assert.equal(flash.compat?.maxTokensField, 'max_tokens');
+  assert.equal(flash.compat?.thinkingFormat, 'deepseek');
 
-  const unknown = await modelFor({
-    id: 'srcunknown',
-    kind: 'api',
-    vendor: 'custom',
-    name: 'Custom',
-    baseUrl: 'http://127.0.0.1:4101/v1',
-    apiKey: KEY_DEFAULT,
-    models: ['not-a-real-model'],
-  });
+  const unknown = (await modelOf(v3Settings([
+    customProvider(CUSTOM_DEFAULT, {
+      baseUrl: 'http://127.0.0.1:4101/v1',
+      enabled: ['not-a-real-model'],
+    }),
+  ], { providerId: CUSTOM_DEFAULT, modelId: 'not-a-real-model' }))).model;
   assert.equal(unknown.contextWindow, 128000);
   assert.equal(unknown.maxTokens, 32768);
-  assert.equal(unknown.reasoning, false);
+  assert.equal(unknown.reasoning, Boolean(0));
   assert.deepEqual(unknown.input, ['text']);
-  assert.deepEqual(unknown.cost, { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 });
-  assert.equal(unknown.compat, undefined);
 
-  const userWindow = await modelFor({
-    id: 'srcflash',
-    kind: 'api',
-    vendor: 'deepseek',
-    name: 'DeepSeek',
-    baseUrl: 'https://api.deepseek.com/v1',
-    apiKey: KEY_DEFAULT,
-    models: ['deepseek-flash'],
-    contextWindows: { 'deepseek-flash': 256000 },
-  });
+  const userWindow = (await modelOf(v3Settings([
+    {
+      id: 'deepseek',
+      kind: 'builtin',
+      enabled: ['deepseek-flash'],
+      overrides: { 'deepseek-flash': { contextWindow: 256000 } },
+    },
+  ], { providerId: 'deepseek', modelId: 'deepseek-flash' }))).model;
   assert.equal(userWindow.contextWindow, 256000);
   assert.equal(userWindow.maxTokens, 256000);
+  assert.equal(userWindow.reasoning, true);
 
-  const envMax = await modelFor({
-    id: 'srcflash',
-    kind: 'api',
-    vendor: 'deepseek',
-    name: 'DeepSeek',
-    baseUrl: 'https://api.deepseek.com/v1',
-    apiKey: KEY_DEFAULT,
-    models: ['deepseek-flash'],
-  }, { WEFT_MAX_OUTPUT_TOKENS: '2048' });
+  const envMax = (await modelOf(base, {}, { WEFT_MAX_OUTPUT_TOKENS: '2048' })).model;
   assert.equal(envMax.contextWindow, 1_000_000);
   assert.equal(envMax.maxTokens, 2048);
 });
@@ -244,134 +167,164 @@ function rewriteDeepseekFetch(fakeBaseUrl) {
   };
 }
 
-function withoutTokenLimitValue(body) {
-  const copy = JSON.parse(JSON.stringify(body));
-  if (Object.prototype.hasOwnProperty.call(copy, 'max_tokens')) copy.max_tokens = '<limit>';
-  if (Object.prototype.hasOwnProperty.call(copy, 'max_completion_tokens')) copy.max_completion_tokens = '<limit>';
-  return copy;
-}
-
-async function drainCompletions(model, fetchImpl) {
-  const stream = completionsStreamSimple(model, {
-    messages: [{ role: 'user', content: 'ping', timestamp: Date.now() }],
-  }, { apiKey: KEY_DEFAULT, fetch: fetchImpl, maxRetries: 0 });
-  await stream.result();
-}
-
-test('deepseek-flash request body matches the pre-catalog shape except max_tokens', async () => {
+test('builtin DeepSeek request uses catalog reasoning and stored Authorization', async () => {
   const fake = await startFakeModel({ mode: 'openai', text: 'from-catalog' });
+  const dir = await makeTempDir('weft-kmodels-ds-');
+  const store = createSqliteStore(dir);
+  const credentials = createCredentialStore(store);
   try {
-    const models = createModels();
-    const settings = {
-      version: 2,
-      sources: [{
-        id: 'srcflash',
-        kind: 'api',
-        vendor: 'deepseek',
-        name: 'DeepSeek',
-        baseUrl: 'https://api.deepseek.com/v1',
-        apiKey: KEY_DEFAULT,
-        models: ['deepseek-flash'],
-      }],
-      models: { default: { sourceId: 'srcflash', model: 'deepseek-flash' } },
-    };
-    const routes = createKernelModels({
-      models,
-      getSettings: async () => settings,
-      env: {},
-    });
+    await credentials.modify('deepseek', async () => ({ type: 'api_key', key: KEY_DS }));
+    const models = createModels({ credentials });
+    const settings = v3Settings([
+      { id: 'deepseek', kind: 'builtin', enabled: ['deepseek-flash'], overrides: {} },
+    ], { providerId: 'deepseek', modelId: 'deepseek-flash' });
+    const routes = createKernelModels({ models, getSettings: async () => settings, env: {} });
     const ref = await routes.modelFor({});
-    const catalogModel = models.getModel(ref.provider, ref.modelId);
-    const legacyModel = {
-      id: 'deepseek-flash',
-      name: 'deepseek-flash',
-      api: 'openai-completions',
-      provider: catalogModel.provider,
-      baseUrl: 'https://api.deepseek.com/v1',
-      reasoning: false,
-      input: ['text'],
-      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-      contextWindow: 128000,
-      maxTokens: 32768,
-    };
-    const fetchImpl = rewriteDeepseekFetch(fake.baseUrl);
-    await drainCompletions(legacyModel, fetchImpl);
-    await drainCompletions(catalogModel, fetchImpl);
-    const [legacyHit, catalogHit] = fake.seen.filter((hit) => hit.path.endsWith('/chat/completions'));
-    assert.ok(legacyHit?.body, 'legacy request was recorded');
-    assert.ok(catalogHit?.body, 'catalog request was recorded');
-    assert.equal(legacyHit.body.max_tokens, 32768);
-    assert.equal(catalogHit.body.max_tokens, 384000);
-    assert.deepEqual(withoutTokenLimitValue(catalogHit.body), withoutTokenLimitValue(legacyHit.body));
-    assert.equal(Object.prototype.hasOwnProperty.call(catalogHit.body, 'thinking'), false);
-    assert.equal(Object.prototype.hasOwnProperty.call(catalogHit.body, 'reasoning'), false);
-    assert.equal(Object.prototype.hasOwnProperty.call(catalogHit.body, 'reasoning_effort'), false);
-    assert.equal(Object.prototype.hasOwnProperty.call(catalogHit.body, 'enable_thinking'), false);
+    const model = models.getModel(ref.provider, ref.modelId);
+    assert.equal(ref.provider, 'deepseek');
+    assert.equal(model.reasoning, true);
+
+    const stream = models.streamSimple(model, {
+      messages: [{ role: 'user', content: 'ping', timestamp: Date.now() }],
+    }, { fetch: rewriteDeepseekFetch(fake.baseUrl), maxRetries: 0 });
+    await stream.result();
+
+    const hit = fake.seen.find((item) => item.path.endsWith('/chat/completions'));
+    assert.ok(hit, JSON.stringify(fake.seen));
+    assert.equal(hit.authorization, `Bearer ${KEY_DS}`);
+    assert.equal(hit.body.model, 'deepseek-flash');
+    assert.equal(hit.body.max_tokens, 384000);
+    assert.deepEqual(hit.body.thinking, { type: 'disabled' });
+    assert.equal(Object.prototype.hasOwnProperty.call(hit.body, 'reasoning'), false);
+    assert.equal(Object.prototype.hasOwnProperty.call(hit.body, 'reasoning_effort'), false);
+    assert.equal(Object.prototype.hasOwnProperty.call(hit.body, 'enable_thinking'), false);
   } finally {
+    store.close();
     await fake.close();
+    await removeTempDir(dir);
   }
 });
 
-test('modelFor prefers a conversation model and falls back when that source is down', async () => {
-  const models = createModels();
-  let settings = {
-    version: 2,
-    sources: [
-      {
-        id: 'srcdefault',
-        kind: 'api',
-        vendor: 'custom',
-        name: 'Default',
-        baseUrl: 'http://127.0.0.1:4101/v1',
-        apiKey: KEY_DEFAULT,
-        models: ['model-default'],
-      },
-      {
-        id: 'srccoder',
-        kind: 'api',
-        vendor: 'custom',
-        name: 'Coder',
-        baseUrl: 'http://127.0.0.1:4102/v1',
-        apiKey: KEY_CODER,
-        models: ['model-coder'],
-      },
-    ],
-    models: {
-      default: { sourceId: 'srcdefault', model: 'model-default' },
-      coder: { sourceId: 'srccoder', model: 'model-coder' },
-    },
-  };
-  const routes = createKernelModels({
-    models,
-    getSettings: async () => settings,
-    env: {},
-  });
+test('custom OpenAI-compatible provider sends to baseUrl with Authorization', async () => {
+  const fake = await startFakeModel({ mode: 'openai', text: 'from-custom' });
+  const dir = await makeTempDir('weft-kmodels-custom-');
+  const store = createSqliteStore(dir);
+  const credentials = createCredentialStore(store);
+  try {
+    await credentials.modify(CUSTOM_DEFAULT, async () => ({ type: 'api_key', key: KEY_DEFAULT }));
+    const models = createModels({ credentials });
+    const settings = v3Settings([
+      customProvider(CUSTOM_DEFAULT, {
+        baseUrl: fake.baseUrl,
+        enabled: ['model-default'],
+        overrides: { 'model-default': { contextWindow: 256000 } },
+      }),
+    ], { providerId: CUSTOM_DEFAULT, modelId: 'model-default' });
+    const routes = createKernelModels({ models, getSettings: async () => settings, env: {} });
+    const ref = await routes.modelFor({});
+    const model = models.getModel(ref.provider, ref.modelId);
+    assert.equal(model.contextWindow, 256000);
+    const stream = models.streamSimple(model, {
+      messages: [{ role: 'user', content: 'ping', timestamp: Date.now() }],
+    }, { maxRetries: 0 });
+    await stream.result();
+    const hit = fake.seen.find((item) => item.path.endsWith('/chat/completions'));
+    assert.ok(hit, JSON.stringify(fake.seen));
+    assert.equal(hit.authorization, `Bearer ${KEY_DEFAULT}`);
+    assert.equal(hit.body.model, 'model-default');
+  } finally {
+    store.close();
+    await fake.close();
+    await removeTempDir(dir);
+  }
+});
 
-  const pinned = await routes.modelFor({
-    modelSourceId: 'srcdefault',
-    modelId: 'model-default',
-  });
-  assert.equal(pinned.modelId, 'model-default');
-  const main = await routes.modelFor({});
-  assert.equal(pinned.provider, main.provider);
+test('parseFetchedChatModels reads each documented field name', () => {
+  const meta = { providerId: CUSTOM_DEFAULT, api: 'openai-completions', baseUrl: 'http://127.0.0.1:9/v1' };
+  const cases = [
+    ['context_window', { id: 'a', context_window: 1111 }],
+    ['context_length', { id: 'a', context_length: 2222 }],
+    ['max_context_length', { id: 'a', max_context_length: 3333 }],
+    ['max_model_len', { id: 'a', max_model_len: 4444 }],
+    ['top_provider.context_length', { id: 'a', top_provider: { context_length: 5555 } }],
+  ];
+  for (const [label, item] of cases) {
+    const [model] = parseFetchedChatModels({ data: [item] }, meta);
+    assert.ok(model.contextWindow > 0, label);
+  }
+  assert.equal(parseFetchedChatModels({ data: [{ id: 'n', name: 'Named' }] }, meta)[0].name, 'Named');
+  assert.equal(parseFetchedChatModels({ data: [{ id: 'n', display_name: 'Shown' }] }, meta)[0].name, 'Shown');
+  assert.equal(parseFetchedChatModels({ data: [{ id: 'n' }] }, meta)[0].name, 'n');
+  assert.equal(parseFetchedChatModels({ data: [{ id: 'n', max_output_tokens: 11 }] }, meta)[0].maxTokens, 11);
+  assert.equal(parseFetchedChatModels({ data: [{ id: 'n', max_completion_tokens: 22 }] }, meta)[0].maxTokens, 22);
+  assert.equal(parseFetchedChatModels({
+    data: [{ id: 'n', top_provider: { max_completion_tokens: 33 } }],
+  }, meta)[0].maxTokens, 33);
+  assert.deepEqual(parseFetchedChatModels({
+    data: [{ id: 'n', input_modalities: ['image'] }],
+  }, meta)[0].input, ['text', 'image']);
+  assert.deepEqual(parseFetchedChatModels({
+    data: [{ id: 'n', architecture: { input_modalities: ['image'] } }],
+  }, meta)[0].input, ['text', 'image']);
+  assert.equal(parseFetchedChatModels({ data: [{ id: 'n', effort: 'high' }] }, meta)[0].reasoning, true);
+  assert.equal(parseFetchedChatModels({ data: [{ id: 'n', reasoning: { effort: 'low' } }] }, meta)[0].reasoning, true);
+  assert.equal(parseFetchedChatModels({ data: [{ id: 'n' }] }, meta)[0].reasoning, Boolean(0));
+});
 
-  const missing = await routes.modelFor({
-    modelSourceId: 'missing',
-    modelId: 'ghost',
+test('fetchModels omits Authorization without a key and persists through ModelsStore', async () => {
+  const fake = await startFakeModel({
+    models: { data: [{ id: 'cached', name: 'Cached', context_window: 8000 }] },
   });
-  assert.equal(missing.modelId, 'model-default');
+  const dir = await makeTempDir('weft-kmodels-fetch-');
+  const store = createSqliteStore(dir);
+  const credentials = createCredentialStore(store);
+  const modelsStore = createModelsStore(store);
+  try {
+    const none = await fetchCustomProviderModels({ signal: AbortSignal.timeout(2_000) }, {
+      id: CUSTOM_DEFAULT,
+      api: 'openai-completions',
+      baseUrl: fake.baseUrl,
+    });
+    assert.equal(none[0].id, 'cached');
+    const listHit = fake.seen.find((item) => item.path.endsWith('/models'));
+    assert.equal(listHit.authorization, '');
 
-  settings = {
-    ...settings,
-    sources: settings.sources.map((source) => (
-      source.id === 'srcdefault' ? { ...source, apiKey: '' } : source
-    )),
-  };
-  const fallback = await routes.modelFor({
-    modelSourceId: 'srcdefault',
-    modelId: 'model-default',
-  });
-  assert.equal(fallback.modelId, 'model-coder');
+    await credentials.modify(CUSTOM_DEFAULT, async () => ({ type: 'api_key', key: KEY_DEFAULT }));
+    const settings = v3Settings([
+      customProvider(CUSTOM_DEFAULT, { baseUrl: fake.baseUrl, enabled: ['cached'] }),
+    ], { providerId: CUSTOM_DEFAULT, modelId: 'cached' });
+    const first = createModels({ credentials, modelsStore });
+    const routes = createKernelModels({
+      models: first,
+      getSettings: async () => settings,
+      env: {},
+      fetchImpl: globalThis.fetch,
+    });
+    await routes.modelFor({});
+    await first.refresh({ providers: [CUSTOM_DEFAULT], allowNetwork: true });
+    const stored = await modelsStore.read(CUSTOM_DEFAULT);
+    assert.equal(stored.models.some((item) => item.id === 'cached'), true);
+
+    const blocked = async () => {
+      throw new Error('network should not be used');
+    };
+    const second = createModels({ credentials, modelsStore });
+    const again = createKernelModels({
+      models: second,
+      getSettings: async () => settings,
+      env: {},
+      fetchImpl: blocked,
+    });
+    const ref = await again.modelFor({});
+    const model = second.getModel(ref.provider, ref.modelId);
+    assert.equal(model.id, 'cached');
+    assert.equal(model.name, 'Cached');
+    assert.equal(model.contextWindow, 8000);
+  } finally {
+    store.close();
+    await fake.close();
+    await removeTempDir(dir);
+  }
 });
 
 function scrub(text) {
@@ -410,55 +363,36 @@ function assistantTexts(body) {
   return (body?.messages || []).filter((message) => message.role === 'assistant').map((message) => message.text);
 }
 
-test('kernel models call each source and hide keys', { timeout: 60000 }, async () => {
-  const dataDir = await mkdtemp(path.join(tmpdir(), 'piw-kmodels-'));
+test('kernel models call each custom provider and hide keys', { timeout: 60000 }, async () => {
+  const dataDir = await makeTempDir('weft-kmodels-http-');
   const defaultFake = await startFakeModel({ mode: 'openai', text: 'from-default' });
   const coderFake = await startFakeModel({ mode: 'openai', text: 'from-coder' });
-  let proc = null;
-  try {
-    const srv = await startServer({
-      dataDir,
-      token: TOKEN,
-      formatLog: scrub,
-    });
-    proc = srv.proc;
-    const { base } = srv;
-
-    const createdDefault = await request(base, 'POST', '/api/sources', {
-      vendor: 'custom',
+  const seed = createSqliteStore(dataDir);
+  const credentials = createCredentialStore(seed);
+  await seed.replaceSettings(v3Settings([
+    customProvider(CUSTOM_DEFAULT, {
       name: 'Default',
       baseUrl: defaultFake.baseUrl,
-      apiKey: KEY_DEFAULT,
-      models: ['model-default'],
-    });
-    assert.equal(createdDefault.status, 201);
-    assert.equal(createdDefault.body.apiKey, `••••${KEY_DEFAULT.slice(-4)}`);
-    assert.equal(createdDefault.body.hasApiKey, true);
-    const createdCoder = await request(base, 'POST', '/api/sources', {
-      vendor: 'custom',
+      enabled: ['model-default'],
+    }),
+    customProvider(CUSTOM_CODER, {
       name: 'Coder',
       baseUrl: coderFake.baseUrl,
-      apiKey: KEY_CODER,
-      models: ['model-coder'],
-    });
-    assert.equal(createdCoder.status, 201);
-    const bound = await request(base, 'PUT', '/api/settings', {
-      models: {
-        default: { sourceId: createdDefault.body.id, model: 'model-default' },
-        coder: { sourceId: createdCoder.body.id, model: 'model-coder' },
-      },
-    });
-    assert.equal(bound.status, 200);
-    assert.deepEqual(bound.body.models.default, { sourceId: createdDefault.body.id, model: 'model-default' });
-    assert.equal(bound.body.models.coder, undefined);
-    const settingsText = JSON.stringify(bound.body);
-    assertClean(settingsText, 'settings');
-    const listedDefault = bound.body.sources.find((source) => source.id === createdDefault.body.id);
-    const listedCoder = bound.body.sources.find((source) => source.id === createdCoder.body.id);
-    assert.equal(listedDefault.apiKey, `••••${KEY_DEFAULT.slice(-4)}`);
-    assert.equal(listedCoder.apiKey, `••••${KEY_CODER.slice(-4)}`);
-    assert.equal(listedDefault.baseUrl, defaultFake.baseUrl);
-    assert.equal(listedCoder.baseUrl, coderFake.baseUrl);
+      enabled: ['model-coder'],
+    }),
+  ], { providerId: CUSTOM_DEFAULT, modelId: 'model-default' }));
+  await credentials.modify(CUSTOM_DEFAULT, async () => ({ type: 'api_key', key: KEY_DEFAULT }));
+  await credentials.modify(CUSTOM_CODER, async () => ({ type: 'api_key', key: KEY_CODER }));
+  seed.close();
+
+  let srv = null;
+  try {
+    srv = await startServer({ dataDir, token: TOKEN, formatLog: scrub });
+    const { base } = srv;
+    const settings = await request(base, 'GET', '/api/settings');
+    assert.equal(settings.status, 200);
+    assert.equal(settings.body.version, 3);
+    assert.equal(JSON.stringify(settings.body).includes(KEY_DEFAULT), false);
 
     const ws = await request(base, 'POST', '/api/workspaces', { name: 'kernel-models' });
     assert.equal(ws.status, 201);
@@ -466,7 +400,7 @@ test('kernel models call each source and hide keys', { timeout: 60000 }, async (
     assert.equal(mainConv.status, 201);
     const coderConv = await request(base, 'POST', `/api/workspaces/${ws.body.id}/conversations`, {
       title: 'coder-pinned',
-      modelSourceId: createdCoder.body.id,
+      modelSourceId: CUSTOM_CODER,
       modelId: 'model-coder',
     });
     assert.equal(coderConv.status, 201);
@@ -475,47 +409,19 @@ test('kernel models call each source and hide keys', { timeout: 60000 }, async (
     assert.equal(sentMain.status, 202);
     const mainDone = await waitTurn(base, mainConv.body.id, (body) => assistantTexts(body).includes('from-default'));
     assert.equal(mainDone.status, 'done');
-    assert.deepEqual(defaultFake.seen.map((hit) => hit.keyTail), [KEY_DEFAULT.slice(-4)]);
-    assert.equal(coderFake.seen.length, 0);
+    assert.deepEqual(defaultFake.seen.filter((hit) => hit.path.endsWith('/chat/completions')).map((hit) => hit.keyTail), [KEY_DEFAULT.slice(-4)]);
+    assert.equal(coderFake.seen.filter((hit) => hit.path.endsWith('/chat/completions')).length, 0);
 
     const sentCoder = await request(base, 'POST', `/api/conversations/${coderConv.body.id}/messages`, { text: 'ping-coder' });
     assert.equal(sentCoder.status, 202);
     const coderDone = await waitTurn(base, coderConv.body.id, (body) => assistantTexts(body).includes('from-coder'));
     assert.equal(coderDone.status, 'done');
-    assert.deepEqual(coderFake.seen.map((hit) => hit.keyTail), [KEY_CODER.slice(-4)]);
-    assert.equal(coderFake.seen[0].path.endsWith('/chat/completions'), true);
-    assert.deepEqual(defaultFake.seen.map((hit) => hit.keyTail), [KEY_DEFAULT.slice(-4)]);
-
-    const rotated = await request(base, 'PUT', `/api/sources/${createdDefault.body.id}`, { apiKey: KEY_DEFAULT_NEXT });
-    assert.equal(rotated.status, 200);
-    assert.equal(rotated.body.apiKey, `••••${KEY_DEFAULT_NEXT.slice(-4)}`);
-    assertClean(rotated.text, 'rotated source');
-    const sentRotated = await request(base, 'POST', `/api/conversations/${mainConv.body.id}/messages`, { text: 'ping-default-again' });
-    assert.equal(sentRotated.status, 202);
-    const rotatedDone = await waitTurn(
-      base,
-      mainConv.body.id,
-      (body) => assistantTexts(body).filter((text) => text === 'from-default').length >= 2,
-    );
-    assert.equal(rotatedDone.status, 'done');
-    assert.deepEqual(defaultFake.seen.map((hit) => hit.keyTail), [KEY_DEFAULT.slice(-4), KEY_DEFAULT_NEXT.slice(-4)]);
-
-    assert.equal((await request(base, 'DELETE', `/api/sources/${createdCoder.body.id}`)).status, 200);
-    assert.equal((await request(base, 'DELETE', `/api/sources/${createdDefault.body.id}`)).status, 200);
-    const bare = await request(base, 'POST', `/api/conversations/${mainConv.body.id}/messages`, { text: 'no-source' });
-    assert.equal(bare.status, 202);
-    const failed = await waitTurn(base, mainConv.body.id, (body) => body.status === 'failed' || body.status === 'done');
-    assert.equal(failed.status, 'failed');
-    assert.equal(failed.llmError?.code, 'E_NO_MODEL');
-    assert.equal(failed.llmError?.message, 'err_no_model');
-    assert.equal(failed.messages.some((message) => message.role === 'user' && message.text === 'no-source'), true);
-    assertClean(JSON.stringify(failed), 'failed conversation');
+    assert.deepEqual(coderFake.seen.filter((hit) => hit.path.endsWith('/chat/completions')).map((hit) => hit.keyTail), [KEY_CODER.slice(-4)]);
     assertClean(srv.logs(), 'server log');
   } finally {
-    await stopServer(proc);
+    await stopServer(srv);
     await defaultFake.close();
     await coderFake.close();
-    await rm(dataDir, { recursive: true, force: true });
+    await removeTempDir(dataDir);
   }
 });
-

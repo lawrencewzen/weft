@@ -12,8 +12,9 @@ import { liveDiff } from '../core/diff.mjs';
 import { redactAuthText } from '../core/redact.mjs';
 import { resolveInWorkspace } from '../core/paths.mjs';
 import { formatSSE } from '../core/sse.mjs';
-import { contextWindowForConversation } from '../core/model-sources.mjs';
 import { presentContext } from '../core/usage.mjs';
+import { createCredentialStore, createModelsStore } from '../core/provider-stores.mjs';
+import { createProviderService } from '../core/provider-service.mjs';
 import {
   createMapContext,
   mapHarnessBatch,
@@ -119,13 +120,24 @@ export async function openConversationKernel({
   describeAgents,
   extensions,
   getSettings,
+  credentials,
+  modelsStore,
+  providerService,
   env = process.env,
 } = {}) {
   if (!dataDir) throw new Error('dataDir is required');
   if (!store) throw new Error('store is required');
   const faux = demo === true || explicitDemo(env);
-  const models = createModels();
+  const credStore = credentials || createCredentialStore(store);
+  const modelCache = modelsStore || createModelsStore(store);
+  const models = createModels({ credentials: credStore, modelsStore: modelCache });
   if (faux) installDemo(models, env);
+  const providers = providerService || createProviderService({
+    store,
+    credentials: credStore,
+    modelsStore: modelCache,
+    env,
+  });
   const modelRoutes = createKernelModels({ models, getSettings, env });
   const routes = faux ? null : modelRoutes;
   const registry = createRegistry();
@@ -285,9 +297,8 @@ export async function openConversationKernel({
   }
 
   async function conversationWindow(conv) {
-    if (!conv || typeof getSettings !== 'function') return null;
-    const settings = await getSettings();
-    return contextWindowForConversation(settings, conv, { env });
+    if (!conv) return null;
+    return providers.contextWindowFor(conv);
   }
 
   async function applyBatch(cid, batch, mapCtx) {
@@ -340,6 +351,7 @@ export async function openConversationKernel({
     describeAgents,
     resolveModel,
     statusOf,
+    providerService: providers,
   });
 
   function cidFor(harnessId) {

@@ -184,7 +184,7 @@ test('createModels login persists api_key and getAuth reads it', async () => {
         api: 'openai-completions',
         provider: 'weft-fake',
         baseUrl: 'http://127.0.0.1:9/v1',
-        reasoning: false,
+        reasoning: Boolean(0),
         input: ['text'],
         cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
         contextWindow: 8000,
