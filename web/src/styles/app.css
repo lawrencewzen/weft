@@ -1024,8 +1024,7 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.6; backgroun
 }
 .subagent-report-summary:hover { color: var(--ink); }
 .subagent-report-summary:focus-visible { outline: 1px solid var(--faint); outline-offset: 2px; border-radius: 4px; }
-.subagent-report-icon { width: 12px; height: 12px; flex-shrink: 0; color: var(--faint); }
-.subagent-report.is-failed .subagent-report-icon { color: var(--fail); }
+.subagent-report-icon { flex-shrink: 0; }
 .subagent-report-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .subagent-report-reason { color: var(--faint); margin-left: 6px; }
 .subagent-report-chevron { width: 11px; height: 11px; flex-shrink: 0; color: var(--faint); transition: transform .15s; }

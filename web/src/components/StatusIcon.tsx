@@ -8,6 +8,8 @@ export type StatusIconType = 'running' | 'waiting' | 'failed' | 'stuck' | 'stopp
 
 export type StatusTone = 'hot' | 'mid' | 'calm';
 
+export type StatusKind = 'conversation' | 'subagent';
+
 export interface StatusIconProps {
   status: StatusIconType;
   size?: number;
@@ -37,14 +39,17 @@ export function statusToneClass(status: StatusIconType): string {
   return `is-${statusTone(status)}`;
 }
 
-export function statusIconFor(status: string | null | undefined): StatusIconType | null {
+export function statusIconFor(
+  status: string | null | undefined,
+  kind: StatusKind = 'conversation'
+): StatusIconType | null {
   if (!status || status === 'idle') return null;
   switch (status) {
     case 'running':
     case 'uploading':
       return 'running';
     case 'waiting':
-      return 'waiting';
+      return kind === 'subagent' ? 'queued' : 'waiting';
     case 'failed':
     case 'error':
       return 'failed';

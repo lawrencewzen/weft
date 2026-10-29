@@ -24,7 +24,7 @@ function statusLabel(status: Subagent['status'], lang: Lang): string {
     case 'stuck':
       return t(lang, 'status_stuck');
     case 'waiting':
-      return t(lang, 'status_waiting');
+      return t(lang, 'status_queued');
     case 'done':
       return t(lang, 'status_done');
     case 'stopped':
@@ -92,7 +92,7 @@ export function DispatchCard({ cid, agents, lang }: Props) {
             onContextMenu={(ev) => onContextMenu(ev, agent)}
           >
             <StatusIcon
-              status={statusIconFor(agent.status) ?? 'running'}
+              status={statusIconFor(agent.status, 'subagent') ?? 'running'}
               size={14}
               className="dispatch-card-status-icon"
               lang={lang}

@@ -270,7 +270,7 @@ export function SubagentTree({
                     >
                       <div className="subagent-tree-line trow">
                         <StatusIcon
-                          status={statusIconFor(agent.status) ?? 'running'}
+                          status={statusIconFor(agent.status, 'subagent') ?? 'running'}
                           size={14}
                           className="subagent-status-icon"
                           lang={lang}

@@ -5,6 +5,7 @@ import { subagentPath, navigate } from '../data/nav';
 import { useRightPane } from '../data/rightPaneContext';
 import { t } from '../i18n';
 import { Markdown } from './Markdown';
+import { StatusIcon } from './StatusIcon';
 
 type Item = components['schemas']['ThreadItemSubagentReport'];
 
@@ -40,10 +41,13 @@ export function SubagentReport({
           aria-expanded={open}
           onClick={() => setOpen((value) => !value)}
         >
-          <svg className="subagent-report-icon icon" viewBox="0 0 24 24" aria-hidden="true">
-            <polyline points="9 10 4 15 9 20" />
-            <path d="M20 4v7a4 4 0 0 1-4 4H4" />
-          </svg>
+          <StatusIcon
+            status={failed ? 'failed' : 'done'}
+            size={14}
+            className="subagent-report-icon"
+            lang={lang}
+            aria-hidden="true"
+          />
           <span className="subagent-report-text">
             {title}
             {reason ? <span className="subagent-report-reason">{reason}</span> : null}

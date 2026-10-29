@@ -63,8 +63,10 @@ test('seeded subagent tree, report cards, messages and stop', async ({ page }) =
   const answered = page.getByTestId('next-item-subagent-report').first();
   const failed = page.getByTestId('next-item-subagent-report').last();
   await expect(answered.locator('.subagent-report-summary')).toContainText('交回结果');
+  await expect(answered.getByTestId('status-icon')).toHaveAttribute('data-status', 'done');
   await expect(failed).toHaveClass(/is-failed/);
-  await expect(failed.locator('.subagent-report-summary')).toContainText('失败');
+  await expect(failed.locator('.subagent-report-summary')).toContainText('没完成');
+  await expect(failed.getByTestId('status-icon')).toHaveAttribute('data-status', 'failed');
   await answered.getByTestId('next-subagent-report-summary').click();
   await expect(answered.getByTestId('next-subagent-report-body')).toContainText('text.delta');
 
@@ -287,10 +289,11 @@ test('dispatch card in conversation thread: row count, statuses, click to open i
   await expect(rows.nth(2).getByTestId('next-dispatch-task')).toHaveText('补 text.delta 偏移的用例');
   await expect(rows.nth(2).getByTestId('next-dispatch-status')).toHaveText('完成');
 
-  // Row 3: sub-docs, waiting, "等待中"
+  // Row 3: sub-docs, waiting, "排队中"
   await expect(rows.nth(3).getByTestId('next-dispatch-name')).toHaveText('sub-docs');
   await expect(rows.nth(3).getByTestId('next-dispatch-task')).toHaveText('等主 Agent 确认文档口径');
-  await expect(rows.nth(3).getByTestId('next-dispatch-status')).toHaveText('等待中');
+  await expect(rows.nth(3).getByTestId('next-dispatch-status')).toHaveText('排队中');
+  await expect(rows.nth(3).getByTestId('status-icon')).toHaveAttribute('data-status', 'queued');
 
   // Row 4: sub-win-script, failed, "失败"
   await expect(rows.nth(4).getByTestId('next-dispatch-name')).toHaveText('sub-win-script');

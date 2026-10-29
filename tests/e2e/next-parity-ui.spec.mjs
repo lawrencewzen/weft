@@ -108,8 +108,10 @@ test('stored answered and failed reports render as cards without a user bubble',
     const cards = page.getByTestId('next-item-subagent-report');
     await expect(cards).toHaveCount(2, { timeout: 20000 });
     await expect(cards.nth(0).getByTestId('next-subagent-report-summary')).toContainText(`子 Agent「${BACKGROUND_NAME}」已交回结果`);
+    await expect(cards.nth(0).getByTestId('status-icon')).toHaveAttribute('data-status', 'done');
     await expect(cards.nth(1)).toHaveClass(/is-failed/);
-    await expect(cards.nth(1).getByTestId('next-subagent-report-summary')).toContainText('子 Agent「编码」失败');
+    await expect(cards.nth(1).getByTestId('next-subagent-report-summary')).toContainText('子 Agent「编码」没完成');
+    await expect(cards.nth(1).getByTestId('status-icon')).toHaveAttribute('data-status', 'failed');
     await expect(cards.nth(1).getByTestId('next-subagent-report-summary')).toContainText('timed out');
 
     const users = page.getByTestId('next-item-user');

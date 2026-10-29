@@ -525,7 +525,7 @@ test('dispatch card appears in thread when spawning sub-agent, transitioning fro
 
     // Status is initially running
     await expect(row).toHaveAttribute('data-status', /running|waiting/);
-    await expect(row.getByTestId('next-dispatch-status')).toHaveText(/运行中|等待中/);
+    await expect(row.getByTestId('next-dispatch-status')).toHaveText(/运行中|排队中|等待中/);
 
     // After child finishes, status transitions to done
     await expect(row).toHaveAttribute('data-status', 'done', { timeout: 30000 });

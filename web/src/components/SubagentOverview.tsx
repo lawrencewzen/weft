@@ -10,7 +10,7 @@ import { t } from '../i18n';
 import { StatusIcon, statusIconFor } from './StatusIcon';
 
 export function SubagentDot({ status }: { status: Subagent['status'] | string }) {
-  const iconStatus = statusIconFor(status) ?? 'running';
+  const iconStatus = statusIconFor(status, 'subagent') ?? 'running';
   return (
     <StatusIcon
       status={iconStatus}

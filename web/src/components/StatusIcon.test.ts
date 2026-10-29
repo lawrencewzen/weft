@@ -39,14 +39,25 @@ afterEach(async () => {
 });
 
 describe('statusIconFor mapping', () => {
-  it('maps conversation and subagent statuses to StatusIconType', () => {
+  it('maps conversation statuses with default conversation kind', () => {
     expect(statusIconFor('running')).toBe('running');
     expect(statusIconFor('waiting')).toBe('waiting');
+    expect(statusIconFor('waiting', 'conversation')).toBe('waiting');
     expect(statusIconFor('failed')).toBe('failed');
     expect(statusIconFor('stuck')).toBe('stuck');
     expect(statusIconFor('stopped')).toBe('stopped');
     expect(statusIconFor('queued')).toBe('queued');
     expect(statusIconFor('done')).toBe('done');
+  });
+
+  it('maps subagent waiting to queued, preserving other statuses', () => {
+    expect(statusIconFor('waiting', 'subagent')).toBe('queued');
+    expect(statusIconFor('running', 'subagent')).toBe('running');
+    expect(statusIconFor('failed', 'subagent')).toBe('failed');
+    expect(statusIconFor('stuck', 'subagent')).toBe('stuck');
+    expect(statusIconFor('stopped', 'subagent')).toBe('stopped');
+    expect(statusIconFor('queued', 'subagent')).toBe('queued');
+    expect(statusIconFor('done', 'subagent')).toBe('done');
   });
 
   it('maps idle, empty, null, and unknown to null', () => {
