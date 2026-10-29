@@ -12,9 +12,9 @@ import type {
   RunState,
   Subagent,
   MockSubThread,
-  Vendor,
   Workspace,
 } from './types';
+import { MOCK_CATALOG_MODELS } from './piCatalog';
 import { seedWebsiteRepo, seedWeftRepo, mockDiff } from './repo';
 import { seedGitConnections, seedGitProjects, seedPlugins, seedSkills } from './extensions';
 import { seedSubThreads, seedSubagentReports } from './subagents';
@@ -65,7 +65,7 @@ function conversation(input: {
       updatedAt: input.updatedAt,
       status: input.status ?? 'idle',
       model: input.model === undefined
-        ? { sourceId: 'demo', modelId: 'grok-4.6', label: 'Grok 4.6' }
+        ? { sourceId: 'deepseek', modelId: 'deepseek-flash', label: 'DeepSeek V4.1 Flash' }
         : input.model,
       run: { ...IDLE_RUN },
       context: context(input.used),
@@ -95,7 +95,7 @@ function user(
 function assistant(
   id: string,
   text: string,
-  model = 'grok-4.6',
+  model = 'deepseek-flash',
   pathRefs: { text: string; path: string; line?: number }[] = [],
 ): MockItem {
   return { kind: 'assistant', id, text, pathRefs, model, streaming: false, truncated: false };
@@ -353,7 +353,7 @@ function richConversation(now: number, threads: Map<string, MockSubThread>): Moc
       assistant(
         'rich-a1',
         RICH_ASSISTANT_ONE,
-        'grok-4.6',
+        'deepseek-flash',
         [{ text: 'web/src/data/store.ts', path: 'web/src/data/store.ts', line: 238 }],
       ),
       group(
@@ -364,7 +364,7 @@ function richConversation(now: number, threads: Map<string, MockSubThread>): Moc
       assistant(
         'rich-a2',
         RICH_ASSISTANT_TWO,
-        'grok-4.6',
+        'deepseek-flash',
         [
           { text: 'web/src/data/store.ts:238', path: 'web/src/data/store.ts', line: 238 },
           { text: 'web/src/data/store.ts', path: 'web/src/data/store.ts' },
@@ -591,7 +591,7 @@ function testsConversation(now: number): MockConv {
           '',
           '现有的 `web/src/data/stream.test.ts` 已经有 6 个用例，补一条就够。',
         ].join('\n'),
-        'grok-4.6',
+        'deepseek-flash',
         [{ text: 'web/src/data/stream.test.ts', path: 'web/src/data/stream.test.ts' }],
       ),
     ],
@@ -607,7 +607,7 @@ function docsConversation(now: number, threads: Map<string, MockSubThread>): Moc
     title: '把架构文档的图补上',
     updatedAt: now - 3 * HOUR,
     used: 172_000,
-    model: { sourceId: 'demo', modelId: 'grok-code-fast', label: 'Grok Code Fast' },
+    model: { sourceId: 'deepseek', modelId: 'deepseek-v4-pro', label: 'DeepSeek V4 Pro' },
     tools: spawnTools,
     subagents: [...threads.values()]
       .filter((thread) => thread.view.parentConversationId === 'c-docs')
@@ -630,7 +630,7 @@ function docsConversation(now: number, threads: Map<string, MockSubThread>): Moc
           '',
           '要我用 mermaid 画成代码块吗？',
         ].join('\n'),
-        'grok-code-fast',
+        'deepseek-v4-pro',
       ),
     ],
   });
@@ -700,7 +700,7 @@ function siteOne(now: number): MockConv {
     updatedAt: now - 20 * MINUTE,
     used: 22_600,
     status: 'running',
-    model: { sourceId: 'demo', modelId: 'grok-code-fast', label: 'Grok Code Fast' },
+    model: { sourceId: 'deepseek', modelId: 'deepseek-v4-pro', label: 'DeepSeek V4 Pro' },
     items: [
       user('site-u1', '首屏那句 slogan 再收一点，别太像广告。'),
       assistant(
@@ -716,7 +716,7 @@ function siteOne(now: number): MockConv {
           '',
           '我倾向「具体」那条，和实际界面能对上。',
         ].join('\n'),
-        'grok-code-fast',
+        'deepseek-v4-pro',
       ),
     ],
   });
@@ -766,64 +766,82 @@ function archivedTwo(now: number): MockConv {
   });
 }
 
-const PROVIDERS: Provider[] = [
-  {
-    id: 'demo',
-    vendor: 'xai',
-    name: '演示模型',
-    access: 'api_key',
-    runtime: 'model',
-    baseUrl: 'https://api.x.ai/v1',
-    keyMasked: 'xai-…7f3a',
-    hasKey: true,
-    status: 'ok',
-    statusText: '',
-    lastTestedAt: null,
-    models: [
-      {
-        id: 'grok-4.6',
-        displayName: 'Grok 4.6',
-        brand: 'xai',
-        contextWindow: DEFAULT_WINDOW,
-        contextWindowCustom: false,
-        images: true,
+function seedProviders(now: number): Provider[] {
+  return [
+    {
+      id: 'deepseek',
+      kind: 'builtin',
+      brand: 'DeepSeek',
+      name: 'DeepSeek',
+      auth: { type: 'api_key', keyTail: '75e2' },
+      status: { state: 'ok', testedAt: now - 180_000 },
+      models: (MOCK_CATALOG_MODELS.deepseek || []).map((m) => ({ ...m, enabled: true })),
+    },
+    {
+      id: 'anthropic',
+      kind: 'builtin',
+      brand: 'Anthropic',
+      name: 'Anthropic',
+      auth: { type: 'oauth', account: 'Claude Max · lawrence@…' },
+      status: { state: 'untested' },
+      models: (MOCK_CATALOG_MODELS.anthropic || []).map((m, idx) => ({
+        ...m,
+        enabled: idx === 1 || idx === 4,
+      })),
+    },
+    {
+      id: 'custom-9f01',
+      kind: 'custom',
+      brand: null,
+      name: '内网网关',
+      baseUrl: 'http://10.8.0.12:8000/v1',
+      api: 'openai-completions',
+      auth: { type: 'api_key', keyTail: '9f01' },
+      status: {
+        state: 'error',
+        testedAt: now - 10_000,
+        error: '401 Unauthorized · Invalid API key',
       },
-      {
-        id: 'grok-4',
-        displayName: 'Grok 4',
-        brand: 'xai',
-        contextWindow: 128_000,
-        contextWindowCustom: false,
-        images: true,
-      },
-      {
-        id: 'grok-code-fast',
-        displayName: 'Grok Code Fast',
-        brand: 'xai',
-        contextWindow: 256_000,
-        contextWindowCustom: false,
-        images: false,
-      },
-    ],
-    isDefault: true,
-  },
-];
+      models: [
+        {
+          id: 'qwen3-coder-480b',
+          name: 'qwen3-coder-480b',
+          brand: 'Qwen',
+          enabled: true,
+          contextWindow: 262144,
+          maxTokens: 65536,
+          images: false,
+          reasoning: false,
+          overridden: {},
+        },
+        {
+          id: 'glm-5.2-fp8',
+          name: 'glm-5.2-fp8',
+          brand: 'ZAI',
+          enabled: true,
+          contextWindow: null,
+          maxTokens: null,
+          images: false,
+          reasoning: true,
+          overridden: {},
+        },
+        {
+          id: 'bge-m3',
+          name: 'bge-m3',
+          brand: null,
+          enabled: false,
+          contextWindow: 8192,
+          maxTokens: null,
+          images: false,
+          reasoning: false,
+          overridden: {},
+        },
+      ],
+    },
+  ];
+}
 
-const VENDORS: Vendor[] = [
-  { id: 'deepseek', name: 'DeepSeek', access: 'api_key', needsKey: true, baseUrl: 'https://api.deepseek.com/v1', brand: 'DeepSeek' },
-  { id: 'xai', name: 'xAI', access: 'api_key', needsKey: true, baseUrl: 'https://api.x.ai/v1', brand: 'XAI' },
-  { id: 'openai', name: 'OpenAI', access: 'api_key', needsKey: true, baseUrl: 'https://api.openai.com/v1', brand: 'OpenAI' },
-  { id: 'anthropic', name: 'Anthropic', access: 'api_key', needsKey: true, baseUrl: 'https://api.anthropic.com/v1', brand: 'Anthropic' },
-  { id: 'gemini', name: 'Gemini', access: 'api_key', needsKey: true, baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai', brand: 'Gemini' },
-  { id: 'qwen', name: '通义千问', access: 'api_key', needsKey: true, baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', brand: 'Qwen' },
-  { id: 'moonshot', name: 'Kimi', access: 'api_key', needsKey: true, baseUrl: 'https://api.moonshot.cn/v1', brand: 'Moonshot' },
-  { id: 'zhipu', name: '智谱', access: 'api_key', needsKey: true, baseUrl: 'https://open.bigmodel.cn/api/paas/v4', brand: 'Zhipu' },
-  { id: 'openrouter', name: 'OpenRouter', access: 'api_key', needsKey: true, baseUrl: 'https://openrouter.ai/api/v1', brand: 'OpenRouter' },
-  { id: 'ollama', name: 'Ollama', access: 'local', needsKey: false, baseUrl: 'http://127.0.0.1:11434/v1', brand: 'Ollama' },
-  { id: 'custom', name: '自定义地址', access: 'custom_endpoint', needsKey: false, baseUrl: '', brand: null },
-];
-
-const DEFAULT_MODEL: ResolvedModel = { providerId: 'demo', modelId: 'grok-4.6' };
+const DEFAULT_MODEL: ResolvedModel = { providerId: 'deepseek', modelId: 'deepseek-flash' };
 
 function workspace(
   input: Pick<Workspace, 'id' | 'name' | 'path' | 'git'> & Partial<Workspace>,
@@ -889,18 +907,9 @@ export function createSeed(now: number): MockDb {
   return {
     workspaces,
     conversations: new Map(conversations.map((conv) => [conv.view.id, conv])),
-    providers: PROVIDERS.map((provider) => ({
-      ...provider,
-      models: provider.models.map((model) => ({ ...model })),
-    })),
-    vendors: VENDORS.map((vendor) => ({ ...vendor })),
+    providers: seedProviders(now),
     defaultModel: { ...DEFAULT_MODEL },
-    defaultWindows: new Map(
-      PROVIDERS.flatMap((provider) => provider.models.map((model) => [
-        `${provider.id}:${model.id}`,
-        model.contextWindow,
-      ] as [string, number])),
-    ),
+    loginSessions: new Map(),
     repos: new Map([
       ['ws-weft', seedWeftRepo()],
       ['ws-website', seedWebsiteRepo()],
@@ -910,8 +919,6 @@ export function createSeed(now: number): MockDb {
     gitConnections: seedGitConnections(now),
     gitProjects: seedGitProjects(now),
     subagents,
-    grok: { signedIn: false, account: null, pending: null },
-    grokPolls: new Map(),
     seq: 0,
     messageImages: new Map(),
     messagePastes: new Map(),

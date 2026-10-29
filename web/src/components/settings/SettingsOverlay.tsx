@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { Lang } from '../../data/lang';
 import { closeSettings, navigate, settingsPath } from '../../data/nav';
-import { SETTINGS_PAGES, type SettingsPage } from '../../data/providerWizard';
+import { SETTINGS_PAGES, type SettingsPage } from '../../data/settingsPages';
 import { useExtensions } from '../../data/useExtensions';
 import { t, type I18nKey } from '../../i18n';
 import type { ConfirmOpts } from '../ConfirmDialog';

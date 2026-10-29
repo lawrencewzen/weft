@@ -1,8 +1,7 @@
 import type { components } from '../../../src/v2/contract.gen';
+import type { Model, Provider } from './providerTypes';
 
-export type Provider = components['schemas']['Provider'];
-export type ProviderModel = components['schemas']['ProviderModel'];
-export type ProviderDefaults = components['schemas']['ProviderDefaults'];
+export type { Provider, Model };
 export type ResolvedModel = components['schemas']['ResolvedModel'];
 export type ConversationModel = components['schemas']['ConversationModel'];
 export type ContextUsage = components['schemas']['ContextUsage'];
@@ -49,18 +48,18 @@ export function conversationToResolved(model: ConversationModel | null | undefin
 
 function optionOf(
   provider: Provider,
-  model: ProviderModel,
+  model: Model,
   defaultModel: ResolvedModel | null,
 ): ComposerModelOption {
   return {
     providerId: provider.id,
     providerName: provider.name,
-    providerBrand: provider.vendor,
+    providerBrand: provider.brand,
     modelId: model.id,
-    displayName: model.displayName || model.id,
+    displayName: model.name || model.id,
     brand: model.brand,
-    contextWindow: model.contextWindow,
-    contextWindowCustom: Boolean(model.contextWindowCustom),
+    contextWindow: model.contextWindow ?? 128_000,
+    contextWindowCustom: Boolean(model.overridden?.contextWindow),
     isDefault: sameModel(defaultModel, { providerId: provider.id, modelId: model.id }),
     images: Boolean(model.images),
   };
@@ -74,14 +73,14 @@ export function groupComposerModels(
   for (const provider of providers) {
     const listed = Array.isArray(provider.models) ? provider.models : [];
     const models = listed
-      .filter((model) => typeof model?.id === 'string' && model.id.trim())
+      .filter((model) => typeof model?.id === 'string' && model.id.trim() && model.enabled)
       .map((model) => optionOf(provider, model, defaultModel));
     if (!models.length) continue;
     const brands = new Set(models.map((model) => model.brand || ''));
     groups.push({
       providerId: provider.id,
       providerName: provider.name || provider.id,
-      providerBrand: provider.vendor,
+      providerBrand: provider.brand,
       mixedBrands: brands.size > 1,
       models,
     });
@@ -216,7 +215,7 @@ export function modelAttribution(
   }
   for (const provider of providers) {
     const model = provider.models.find((item) => item.id === id);
-    if (model) return { brand: model.brand, displayName: model.displayName || id };
+    if (model) return { brand: model.brand, displayName: model.name || id };
   }
   return { brand: null, displayName: id };
 }

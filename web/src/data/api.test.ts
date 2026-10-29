@@ -2,10 +2,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   ApiError,
   ConflictError,
+  connectProvider,
   continueRun,
   createConversation,
   createGitConnection,
-  createProvider,
   createWorkspace,
   patchConversationModel,
   patchGitConnection,
@@ -349,55 +349,60 @@ describe('api client', () => {
     );
   });
 
-  it('creates and patches providers through v2 endpoints', async () => {
+  it('connects and patches providers through v2 endpoints', async () => {
     const created = {
-      id: 'p1', vendor: 'DeepSeek', name: 'Work', access: 'api_key', runtime: 'model',
-      baseUrl: 'https://api.deepseek.com/v1', keyMasked: '••••3f9c', hasKey: true,
-      status: 'untested', statusText: '', lastTestedAt: null, models: [], isDefault: false,
+      id: 'deepseek',
+      kind: 'builtin',
+      name: 'DeepSeek',
+      auth: { type: 'api_key', keyTail: '3f9c' },
+      status: { state: 'ok' },
+      models: [],
     };
     const fetchMock = vi.fn()
-      .mockResolvedValueOnce(jsonResponse(201, created))
-      .mockResolvedValueOnce(jsonResponse(200, { ...created, name: 'Home' }));
+      .mockResolvedValueOnce(jsonResponse(200, { provider: created }))
+      .mockResolvedValueOnce(jsonResponse(200, { provider: { ...created, name: 'Home' } }));
     vi.stubGlobal('fetch', fetchMock);
-    await expect(createProvider({
-      vendor: 'deepseek', name: 'Work', apiKey: 'sk-secret',
-    }, 'zh')).resolves.toMatchObject({ id: 'p1', keyMasked: '••••3f9c' });
-    await expect(patchProvider('p1', { name: 'Home' }, 'zh')).resolves.toMatchObject({ name: 'Home' });
-    expect(fetchMock.mock.calls[0][0]).toBe('/api/v2/providers?lang=zh');
+    await expect(connectProvider('deepseek', {
+      method: 'api_key', apiKey: 'sk-secret',
+    }, 'zh')).resolves.toMatchObject({ provider: { id: 'deepseek' } });
+    await expect(patchProvider('deepseek', { name: 'Home' }, 'zh')).resolves.toMatchObject({ provider: { name: 'Home' } });
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/v2/providers/deepseek/connect?lang=zh');
     expect(JSON.parse(String(fetchMock.mock.calls[0][1].body))).toEqual({
-      vendor: 'deepseek', name: 'Work', apiKey: 'sk-secret',
+      method: 'api_key', apiKey: 'sk-secret',
     });
     expect(JSON.parse(String(fetchMock.mock.calls[1][1].body))).toEqual({ name: 'Home' });
   });
 
   it('patches a conversation model and puts a context window, encoding ids', async () => {
     const view = { id: 'c/1', model: { sourceId: 'p/1', modelId: 'grok-4', label: 'grok-4' } };
-    const provider = { id: 'p/1', models: [{ id: 'grok-4', contextWindow: 256000, contextWindowCustom: true }] };
+    const provider = { id: 'p/1', models: [{ id: 'grok-4', contextWindow: 256000 }] };
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(jsonResponse(200, view))
       .mockResolvedValueOnce(jsonResponse(200, view))
-      .mockResolvedValueOnce(jsonResponse(200, provider))
-      .mockResolvedValueOnce(jsonResponse(200, provider));
+      .mockResolvedValueOnce(jsonResponse(200, { provider }))
+      .mockResolvedValueOnce(jsonResponse(200, { provider }));
     vi.stubGlobal('fetch', fetchMock);
 
     await expect(patchConversationModel('c/1', { providerId: 'p/1', modelId: 'grok-4' }))
       .resolves.toMatchObject({ id: 'c/1' });
     await expect(patchConversationModel('c/1', null)).resolves.toMatchObject({ id: 'c/1' });
     await expect(putModelContextWindow('p/1', 'grok-4', 256000))
-      .resolves.toMatchObject({ id: 'p/1' });
+      .resolves.toMatchObject({ provider: { id: 'p/1' } });
     await expect(putModelContextWindow('p/1', 'grok-4', null))
-      .resolves.toMatchObject({ id: 'p/1' });
+      .resolves.toMatchObject({ provider: { id: 'p/1' } });
 
     expect(fetchMock.mock.calls[0][0]).toBe('/api/v2/conversations/c%2F1');
     expect(JSON.parse(String(fetchMock.mock.calls[0][1].body))).toEqual({
       model: { providerId: 'p/1', modelId: 'grok-4' },
     });
     expect(JSON.parse(String(fetchMock.mock.calls[1][1].body))).toEqual({ model: null });
-    expect(fetchMock.mock.calls[2][0]).toBe(
-      '/api/v2/providers/p%2F1/models/grok-4/context-window',
-    );
-    expect(JSON.parse(String(fetchMock.mock.calls[2][1].body))).toEqual({ window: 256000 });
-    expect(JSON.parse(String(fetchMock.mock.calls[3][1].body))).toEqual({ window: null });
+    expect(fetchMock.mock.calls[2][0]).toBe('/api/v2/providers/p%2F1');
+    expect(JSON.parse(String(fetchMock.mock.calls[2][1].body))).toEqual({
+      overrides: { 'grok-4': { contextWindow: 256000 } },
+    });
+    expect(JSON.parse(String(fetchMock.mock.calls[3][1].body))).toEqual({
+      overrides: { 'grok-4': { contextWindow: null } },
+    });
   });
 
   it('creates a workspace and a git connection through v2 endpoints', async () => {

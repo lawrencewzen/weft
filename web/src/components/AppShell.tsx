@@ -25,7 +25,7 @@ import { conversationPath, draftPath, navigate, rememberSettingsBehind } from '.
 import { latestConversation, pickDraftWorkspace } from '../data/sidebarModel';
 import { useWorkspaces } from '../data/useWorkspaces';
 import { t } from '../i18n';
-import type { SettingsPage } from '../data/providerWizard';
+import type { SettingsPage } from '../data/settingsPages';
 import type { AppRoute } from '../route';
 import { CenterPane } from './CenterPane';
 import { ConfirmDialog, type ConfirmOpts } from './ConfirmDialog';

@@ -17,39 +17,7 @@ export type FileContent = components['schemas']['FileContent'];
 export type SaveResult = components['schemas']['SaveResult'];
 export type SaveFileRequest = components['schemas']['SaveFileRequest'];
 export type ConversationView = components['schemas']['ConversationView'];
-export type Provider = components['schemas']['Provider'];
-export type ProviderModel = components['schemas']['ProviderModel'];
-export type Vendor = components['schemas']['Vendor'];
-export type ProvidersSnapshot = components['schemas']['ProvidersSnapshot'];
-export type ProviderProbeResult = components['schemas']['ProviderProbeResult'];
-export type ResolvedModel = components['schemas']['ResolvedModel'];
-export type CreateProviderRequest = components['schemas']['CreateProviderRequest'];
-export type PatchProviderRequest = components['schemas']['PatchProviderRequest'];
-export type TestProviderRequest = components['schemas']['TestProviderRequest'];
-export type ProviderRemoved = components['schemas']['ProviderRemoved'];
-/** Local shapes for the Grok login UI. T59-2 dropped these from the contract; T59-3 removes the UI. */
-export type GrokPending = {
-  loginId: string;
-  verificationUri: string;
-  userCode: string;
-  interval: number;
-  expiresAt: number;
-};
-export type GrokSession = {
-  signedIn: boolean;
-  account: null | string;
-  email: null | string;
-  expiresAt: null | number;
-  authMode: null | string;
-  source: null | string;
-  pending: null | GrokPending;
-};
-export type GrokLoginStart = GrokPending;
-export type GrokLoginPollRequest = { loginId: string };
-export type GrokLoginCancelRequest = { loginId?: string };
-export type GrokLoginPollResult =
-  | { status: 'pending'; interval: number; expiresAt: number }
-  | { status: 'done'; grok: GrokSession };
+
 export type CreateWorkspaceRequest = components['schemas']['CreateWorkspaceRequest'];
 export type Workspace = components['schemas']['Workspace'];
 export type WorkspaceRoot = components['schemas']['WorkspaceRoot'];
@@ -61,6 +29,53 @@ export type InstallPluginRequest = components['schemas']['InstallPluginRequest']
 export type PatchPluginRequest = components['schemas']['PatchPluginRequest'];
 export type Skill = components['schemas']['Skill'];
 export type SkillList = components['schemas']['SkillList'];
+export type ResolvedModel = components['schemas']['ResolvedModel'];
+
+import type {
+  Available,
+  ConnectApiKeyRequest,
+  ConnectEnvRequest,
+  ConnectOAuthRequest,
+  ConnectProviderRequest,
+  CustomApiProtocol,
+  CustomProviderRequest,
+  DefaultModel,
+  GetAvailableResponse,
+  GetProvidersResponse,
+  LoginPrompt,
+  LoginPromptOption,
+  LoginSession,
+  LoginSessionEvent,
+  Model,
+  PatchProviderRequest,
+  Provider,
+  ProviderAuth,
+  ProviderStatus,
+  ProviderStatusState,
+} from './providerTypes';
+
+export type {
+  Available,
+  ConnectApiKeyRequest,
+  ConnectEnvRequest,
+  ConnectOAuthRequest,
+  ConnectProviderRequest,
+  CustomApiProtocol,
+  CustomProviderRequest,
+  DefaultModel,
+  GetAvailableResponse,
+  GetProvidersResponse,
+  LoginPrompt,
+  LoginPromptOption,
+  LoginSession,
+  LoginSessionEvent,
+  Model,
+  PatchProviderRequest,
+  Provider,
+  ProviderAuth,
+  ProviderStatus,
+  ProviderStatusState,
+};
 export type SkillWriteRequest = components['schemas']['SkillWriteRequest'];
 export type GitConnection = components['schemas']['GitConnection'];
 export type GitConnectionList = components['schemas']['GitConnectionList'];
@@ -184,6 +199,9 @@ async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
     throw new ApiError(parsed.error, { status: res.status, code: parsed.code, current: parsed.current });
   }
   if (!text) {
+    if (res.status === 204 || res.ok) {
+      return undefined as T;
+    }
     throw new ApiError('empty response', { status: res.status });
   }
   try {
@@ -402,42 +420,85 @@ function providerPath(id: string, suffix = ''): string {
   return `/api/v2/providers/${encodeURIComponent(id)}${suffix}`;
 }
 
-export function getProviders(lang?: string): Promise<ProvidersSnapshot> {
-  return requestJson<ProvidersSnapshot>(withLang('/api/v2/providers', lang));
+export function getProviders(lang?: string): Promise<GetProvidersResponse> {
+  return requestJson<GetProvidersResponse>(withLang('/api/v2/providers', lang));
 }
 
-export function createProvider(body: CreateProviderRequest, lang?: string): Promise<Provider> {
-  return requestJson<Provider>(withLang('/api/v2/providers', lang), {
+export function getAvailableProviders(lang?: string): Promise<GetAvailableResponse> {
+  return requestJson<GetAvailableResponse>(withLang('/api/v2/providers/available', lang));
+}
+
+export function connectProvider(
+  id: string,
+  body: ConnectApiKeyRequest | ConnectEnvRequest,
+  lang?: string,
+): Promise<{ provider: Provider }> {
+  return requestJson<{ provider: Provider }>(withLang(providerPath(id, '/connect'), lang), {
     method: 'POST',
     body: JSON.stringify(body),
   });
 }
 
-export function patchProvider(id: string, body: PatchProviderRequest, lang?: string): Promise<Provider> {
-  return requestJson<Provider>(withLang(providerPath(id), lang), {
+export function connectProviderOAuth(id: string, lang?: string): Promise<{ session: LoginSession }> {
+  return requestJson<{ session: LoginSession }>(withLang(providerPath(id, '/connect'), lang), {
+    method: 'POST',
+    body: JSON.stringify({ method: 'oauth' }),
+  });
+}
+
+export function getLoginSession(sid: string, lang?: string): Promise<{ session: LoginSession }> {
+  return requestJson<{ session: LoginSession }>(withLang(`/api/v2/login-sessions/${encodeURIComponent(sid)}`, lang));
+}
+
+export function answerLoginSession(
+  sid: string,
+  value: string,
+  lang?: string,
+): Promise<{ session: LoginSession }> {
+  return requestJson<{ session: LoginSession }>(
+    withLang(`/api/v2/login-sessions/${encodeURIComponent(sid)}/answer`, lang),
+    {
+      method: 'POST',
+      body: JSON.stringify({ value }),
+    },
+  );
+}
+
+export function cancelLoginSession(sid: string, lang?: string): Promise<{ session: LoginSession }> {
+  return requestJson<{ session: LoginSession }>(
+    withLang(`/api/v2/login-sessions/${encodeURIComponent(sid)}/cancel`, lang),
+    {
+      method: 'POST',
+      body: '{}',
+    },
+  );
+}
+
+export function addCustomProvider(
+  body: CustomProviderRequest,
+  lang?: string,
+): Promise<{ provider: Provider }> {
+  return requestJson<{ provider: Provider }>(withLang('/api/v2/providers/custom', lang), {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+export function testProvider(id: string, lang?: string): Promise<{ provider: Provider }> {
+  return requestJson<{ provider: Provider }>(withLang(providerPath(id, '/test'), lang), {
+    method: 'POST',
+    body: '{}',
+  });
+}
+
+export function patchProvider(
+  id: string,
+  body: PatchProviderRequest,
+  lang?: string,
+): Promise<{ provider: Provider }> {
+  return requestJson<{ provider: Provider }>(withLang(providerPath(id), lang), {
     method: 'PATCH',
     body: JSON.stringify(body),
-  });
-}
-
-export function deleteProvider(id: string): Promise<ProviderRemoved> {
-  return requestJson<ProviderRemoved>(providerPath(id), {
-    method: 'DELETE',
-    body: '{}',
-  });
-}
-
-export function testProviderDraft(body: TestProviderRequest, lang?: string): Promise<ProviderProbeResult> {
-  return requestJson<ProviderProbeResult>(withLang('/api/v2/providers/test', lang), {
-    method: 'POST',
-    body: JSON.stringify(body),
-  });
-}
-
-export function testProvider(id: string, lang?: string): Promise<Provider> {
-  return requestJson<Provider>(withLang(providerPath(id, '/test'), lang), {
-    method: 'POST',
-    body: '{}',
   });
 }
 
@@ -446,44 +507,17 @@ export function putModelContextWindow(
   modelId: string,
   window: number | null,
   lang?: string,
-): Promise<Provider> {
-  return requestJson<Provider>(
-    withLang(`${providerPath(providerId)}/models/${encodeURIComponent(modelId)}/context-window`, lang),
-    { method: 'PUT', body: JSON.stringify({ window }) },
-  );
+): Promise<{ provider: Provider }> {
+  return patchProvider(providerId, {
+    overrides: {
+      [modelId]: { contextWindow: window },
+    },
+  }, lang);
 }
 
-export function getGrokSession(): Promise<GrokSession> {
-  return requestJson<GrokSession>('/api/v2/providers/grok/session');
-}
-
-export function startGrokLogin(): Promise<GrokLoginStart> {
-  return requestJson<GrokLoginStart>('/api/v2/providers/grok/login', {
-    method: 'POST',
-    body: '{}',
-  });
-}
-
-export function pollGrokLogin(loginId: string): Promise<GrokLoginPollResult> {
-  return requestJson<GrokLoginPollResult>('/api/v2/providers/grok/login/poll', {
-    method: 'POST',
-    body: JSON.stringify({ loginId } satisfies GrokLoginPollRequest),
-  });
-}
-
-export function cancelGrokLogin(loginId?: string): Promise<GrokSession> {
-  const body: GrokLoginCancelRequest = {};
-  if (loginId) body.loginId = loginId;
-  return requestJson<GrokSession>('/api/v2/providers/grok/login/cancel', {
-    method: 'POST',
-    body: JSON.stringify(body),
-  });
-}
-
-export function logoutGrok(): Promise<GrokSession> {
-  return requestJson<GrokSession>('/api/v2/providers/grok/logout', {
-    method: 'POST',
-    body: '{}',
+export function deleteProvider(id: string, lang?: string): Promise<void> {
+  return requestJson<void>(withLang(providerPath(id), lang), {
+    method: 'DELETE',
   });
 }
 

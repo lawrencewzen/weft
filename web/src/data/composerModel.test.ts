@@ -23,41 +23,38 @@ import {
 function model(id: string, extra?: Partial<Provider['models'][number]>): Provider['models'][number] {
   return {
     id,
-    displayName: extra?.displayName ?? id,
+    name: extra?.name ?? id,
     brand: extra?.brand ?? null,
+    enabled: extra?.enabled ?? true,
     contextWindow: extra?.contextWindow ?? 128000,
-    contextWindowCustom: extra?.contextWindowCustom ?? false,
+    maxTokens: extra?.maxTokens ?? 16384,
     images: extra?.images ?? false,
+    reasoning: extra?.reasoning ?? false,
+    overridden: extra?.overridden ?? {},
   };
 }
 
 function provider(id: string, name: string, models: Provider['models'], extra?: Partial<Provider>): Provider {
   return {
     id,
-    vendor: extra?.vendor ?? 'openai',
+    kind: extra?.kind ?? 'builtin',
     name,
-    access: extra?.access ?? 'api_key',
-    runtime: 'model',
-    baseUrl: extra?.baseUrl ?? 'https://api.example.com',
-    keyMasked: '••••ab12',
-    hasKey: true,
-    status: extra?.status ?? 'ok',
-    statusText: '',
-    lastTestedAt: null,
+    brand: extra?.brand ?? 'openai',
+    auth: extra?.auth ?? { type: 'api_key', keyTail: 'ab12' },
+    status: extra?.status ?? { state: 'ok' },
     models,
-    isDefault: extra?.isDefault ?? false,
   };
 }
 
 describe('composer model grouping', () => {
   const chip = provider('src-chip', 'Chip', [
-    model('grok-4.6', { displayName: 'Grok 4.6', brand: 'grok', contextWindow: 200000 }),
-    model('grok-4', { displayName: 'Grok 4', brand: 'grok', contextWindow: 128000 }),
-  ], { vendor: 'xai' });
+    model('grok-4.6', { name: 'Grok 4.6', brand: 'grok', contextWindow: 200000 }),
+    model('grok-4', { name: 'Grok 4', brand: 'grok', contextWindow: 128000 }),
+  ], { brand: 'xai' });
   const router = provider('src-or', 'OpenRouter', [
-    model('openai/gpt-4o', { displayName: 'GPT 4o', brand: 'openai', contextWindow: 128000 }),
-    model('anthropic/claude-sonnet-4', { displayName: 'Claude Sonnet 4', brand: 'claude', contextWindow: 200000 }),
-  ], { vendor: 'openrouter' });
+    model('openai/gpt-4o', { name: 'GPT 4o', brand: 'openai', contextWindow: 128000 }),
+    model('anthropic/claude-sonnet-4', { name: 'Claude Sonnet 4', brand: 'claude', contextWindow: 200000 }),
+  ], { brand: 'openrouter' });
   const empty = provider('src-empty', 'Empty', []);
   const defaultModel = { providerId: 'src-chip', modelId: 'grok-4.6' };
 
@@ -94,8 +91,8 @@ describe('composer model grouping', () => {
 
 describe('composer selection', () => {
   const chip = provider('src-chip', 'Chip', [
-    model('grok-4.6', { displayName: 'Grok 4.6', brand: 'grok' }),
-    model('grok-4', { displayName: 'Grok 4', brand: 'grok' }),
+    model('grok-4.6', { name: 'Grok 4.6', brand: 'grok' }),
+    model('grok-4', { name: 'Grok 4', brand: 'grok' }),
   ]);
   const defaultModel = { providerId: 'src-chip', modelId: 'grok-4.6' };
 
@@ -191,7 +188,7 @@ describe('brand helpers', () => {
     expect(sameModel({ providerId: 'a', modelId: 'b' }, { providerId: 'a', modelId: 'b' })).toBe(true);
 
     const chip = provider('src-chip', 'Chip', [
-      model('grok-4', { displayName: 'Grok 4', brand: 'grok' }),
+      model('grok-4', { name: 'Grok 4', brand: 'grok' }),
     ]);
     expect(modelAttribution('grok-4', [chip], { sourceId: 'src-chip', modelId: 'grok-4', label: 'grok-4' }))
       .toEqual({ brand: 'grok', displayName: 'Grok 4' });

@@ -1,4 +1,12 @@
 import type { components } from '../../../src/v2/contract.gen';
+import type {
+  Available,
+  CustomApiProtocol,
+  DefaultModel,
+  LoginSession,
+  Model,
+  Provider,
+} from '../../src/data/providerTypes';
 import type { MockRepo } from './repo';
 
 export type Lang = 'zh' | 'en';
@@ -10,15 +18,13 @@ export type ConversationSend = components['schemas']['ConversationSend'];
 export type ThreadItem = components['schemas']['ThreadItem'];
 export type ToolCall = components['schemas']['ToolCall'];
 export type Workspace = components['schemas']['Workspace'];
-export type Provider = components['schemas']['Provider'];
-export type Vendor = components['schemas']['Vendor'];
-export type ResolvedModel = components['schemas']['ResolvedModel'];
+export type { Available, CustomApiProtocol, DefaultModel, LoginSession, Model, Provider };
+export type ResolvedModel = { providerId: string; modelId: string };
 export type Change = components['schemas']['Change'];
 export type Diff = components['schemas']['Diff'];
 export type Subagent = components['schemas']['Subagent'];
 export type RunState = components['schemas']['RunState'];
 export type ServiceInfo = components['schemas']['ServiceInfo'];
-export type ProvidersSnapshot = components['schemas']['ProvidersSnapshot'];
 export type ToolOutput = components['schemas']['ToolOutput'];
 export type FileContent = components['schemas']['FileContent'];
 export type FileNode = components['schemas']['FileNode'];
@@ -32,23 +38,7 @@ export type GitConnection = components['schemas']['GitConnection'];
 export type GitProject = components['schemas']['GitProject'];
 export type GitBranch = components['schemas']['GitBranch'];
 export type GitTestResult = components['schemas']['GitTestResult'];
-/** Local shapes for the prototype Grok login mock. T59-2 dropped these from the contract; T59-3 removes the UI. */
-export type GrokPending = {
-  loginId: string;
-  verificationUri: string;
-  userCode: string;
-  interval: number;
-  expiresAt: number;
-};
-export type GrokSession = {
-  signedIn: boolean;
-  account: null | string;
-  email: null | string;
-  expiresAt: null | number;
-  authMode: null | string;
-  source: null | string;
-  pending: null | GrokPending;
-};
+
 
 /** A tool row before it is folded into the language the client asked for. */
 export type MockTool = {
@@ -130,20 +120,12 @@ export type MockSubThread = {
   run: RunHandle | null;
 };
 
-export type MockGrok = {
-  signedIn: boolean;
-  account: string | null;
-  pending: GrokPending | null;
-};
-
 export type MockDb = {
   workspaces: Workspace[];
   conversations: Map<string, MockConv>;
   providers: Provider[];
-  vendors: Vendor[];
   defaultModel: ResolvedModel | null;
-  /** providerId:modelId → default context window, so 「恢复默认」 works. */
-  defaultWindows: Map<string, number>;
+  loginSessions: Map<string, { session: LoginSession; pollCount: number }>;
   /** Per-workspace mock repository used by the right pane file tab. */
   repos: Map<string, MockRepo>;
   plugins: Plugin[];
@@ -152,9 +134,6 @@ export type MockDb = {
   gitProjects: Record<string, GitProject[]>;
   /** `${cid}:${agentId}` → subagent thread. */
   subagents: Map<string, MockSubThread>;
-  grok: MockGrok;
-  /** loginId → polls answered so far (device-code demo becomes `done` on the 2nd poll). */
-  grokPolls: Map<string, number>;
   seq: number;
   /** `${cid}\\t${messageId}\\t${index}` → raw bytes for GET .../images/{index}. */
   messageImages: Map<string, StoredMessageImage>;
