@@ -13,6 +13,7 @@ import { createEventHub } from '../../src/v2/stream/hub.ts';
 import {
   attachConversationTopic,
   liveItemId,
+  TEXT_DELTA_MS,
 } from '../../src/v2/stream/conversation-topic.ts';
 import { toolGroupSummaryView } from '../../src/v2/views/tools.ts';
 import { ROOT } from './_root.mjs';
@@ -1247,6 +1248,337 @@ test('in-process: tool.delta throttles, trimStart, set, and skips unknown tools'
     assert.equal(replaced.data.append, undefined);
     assertPushedEntities(frames.filter((frame) => frame.event !== 'heartbeat'));
     session.close();
+  } finally {
+    topic.dispose();
+    hub.dispose();
+  }
+});
+
+function createFakeClock(start = 1_000_000) {
+  let now = start;
+  const timers = [];
+  return {
+    now: () => now,
+    advance(ms) { now += ms; },
+    setTimer(fn, ms) {
+      const handle = { fn, fireAt: now + ms, cancelled: false };
+      timers.push(handle);
+      return handle;
+    },
+    clearTimer(handle) {
+      if (handle) handle.cancelled = true;
+    },
+    fireDue() {
+      const t = now;
+      const due = timers.filter((item) => !item.cancelled && item.fireAt <= t);
+      for (const item of due) {
+        item.cancelled = true;
+        item.fn();
+      }
+    },
+    pending() {
+      return timers.filter((item) => !item.cancelled);
+    },
+  };
+}
+
+async function drain(times = 4) {
+  for (let i = 0; i < times; i += 1) {
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+}
+
+function fragmentSource(n) {
+  let text = '';
+  for (let i = 0; i < n; i += 1) text += String.fromCharCode(97 + (i % 26));
+  return text;
+}
+
+function joinTextDeltas(deltas, startOffset = 0) {
+  let offset = startOffset;
+  let text = '';
+  for (const delta of deltas) {
+    assert.equal(delta.data.offset, offset, JSON.stringify(deltas.map((row) => row.data)));
+    text += delta.data.append;
+    offset += String(delta.data.append).length;
+  }
+  return text;
+}
+
+async function attachTextDeltaTopic(clock, { data, listeners }) {
+  const hub = createEventHub({ heartbeatMs: 60_000, protocolVersion: PROTOCOL_VERSION });
+  const topic = attachConversationTopic(hub, {
+    loadConversation: async (id) => (id === 'c1' ? data : null),
+    subscribe: (_cid, fn) => {
+      listeners.add(fn);
+      return () => listeners.delete(fn);
+    },
+    coalesceMs: 60_000,
+    textDeltaMs: TEXT_DELTA_MS,
+    now: clock.now,
+    setTimer: clock.setTimer,
+    clearTimer: clock.clearTimer,
+    log() {},
+  });
+  return { hub, topic };
+}
+
+test('in-process: 200 text fragments in a 50ms window coalesce; offsets stay contiguous', async () => {
+  const clock = createFakeClock();
+  const listeners = new Set();
+  const source = fragmentSource(200);
+  const data = {
+    presented: presentedFixture({ status: 'running' }),
+    subagents: [],
+    modelTarget: null,
+    window: 128000,
+  };
+  const { hub, topic } = await attachTextDeltaTopic(clock, { data, listeners });
+  try {
+    const frames = [];
+    const session = hub.connect({
+      topics: ['conversation:c1'],
+      lang: 'zh',
+      send: (frame) => frames.push(frame),
+    });
+    await session.ready;
+    const emit = (ev) => {
+      for (const fn of listeners) fn(ev);
+    };
+    for (const ch of source) {
+      emit({ event: 'message.delta', data: { messageId: 'live-1', text: ch } });
+    }
+    await drain();
+    const liveId = liveItemId('live-1');
+    let deltas = frames.filter((frame) => frame.event === 'text.delta' && frame.data.itemId === liveId);
+    assert.equal(deltas.length, 1, JSON.stringify(deltas.map((row) => row.data)));
+    assert.equal(deltas[0].data.offset, 0);
+    assert.equal(deltas[0].data.append, source[0]);
+    assert.equal(clock.pending().length, 1);
+
+    clock.advance(TEXT_DELTA_MS);
+    clock.fireDue();
+    await drain();
+    deltas = frames.filter((frame) => frame.event === 'text.delta' && frame.data.itemId === liveId);
+    assert.equal(deltas.length, 2, JSON.stringify(deltas.map((row) => row.data)));
+    assert.equal(joinTextDeltas(deltas), source);
+    assert.equal(clock.pending().length, 0);
+    assertPushedEntities(frames.filter((frame) => frame.event !== 'heartbeat'));
+    session.close();
+  } finally {
+    topic.dispose();
+    hub.dispose();
+  }
+});
+
+test('in-process: message.done flushes the text buffer before catch-up', async () => {
+  const clock = createFakeClock();
+  const listeners = new Set();
+  const source = fragmentSource(200);
+  const data = {
+    presented: presentedFixture({ status: 'running' }),
+    subagents: [],
+    modelTarget: null,
+    window: 128000,
+  };
+  const { hub, topic } = await attachTextDeltaTopic(clock, { data, listeners });
+  try {
+    const frames = [];
+    const session = hub.connect({
+      topics: ['conversation:c1'],
+      lang: 'zh',
+      send: (frame) => frames.push(frame),
+    });
+    await session.ready;
+    const emit = (ev) => {
+      for (const fn of listeners) fn(ev);
+    };
+    for (const ch of source) {
+      emit({ event: 'message.delta', data: { messageId: 'live-1', text: ch } });
+    }
+    await drain();
+    const liveId = liveItemId('live-1');
+    assert.equal(frames.filter((frame) => frame.event === 'text.delta').length, 1);
+    assert.equal(clock.pending().length, 1);
+
+    data.presented = presentedFixture({
+      status: 'done',
+      messages: [
+        { id: 'a1', role: 'assistant', text: source },
+      ],
+    });
+    emit({ event: 'message.done', data: { messageId: 'a1', text: source, liveId: 'live-1' } });
+    await drain();
+    const deltas = frames.filter((frame) => frame.event === 'text.delta' && frame.data.itemId === liveId);
+    assert.equal(deltas.length, 2, JSON.stringify(deltas.map((row) => row.data)));
+    assert.equal(joinTextDeltas(deltas), source);
+    assert.equal(clock.pending().length, 0);
+    session.close();
+  } finally {
+    topic.dispose();
+    hub.dispose();
+  }
+});
+
+test('in-process: mid-stream subscriber gets published snapshot plus trailing delta', async () => {
+  const clock = createFakeClock();
+  const listeners = new Set();
+  const source = fragmentSource(200);
+  const data = {
+    presented: presentedFixture({ status: 'running' }),
+    subagents: [],
+    modelTarget: null,
+    window: 128000,
+  };
+  const { hub, topic } = await attachTextDeltaTopic(clock, { data, listeners });
+  try {
+    const firstFrames = [];
+    const first = hub.connect({
+      topics: ['conversation:c1'],
+      lang: 'zh',
+      send: (frame) => firstFrames.push(frame),
+    });
+    await first.ready;
+    const emit = (ev) => {
+      for (const fn of listeners) fn(ev);
+    };
+    for (const ch of source) {
+      emit({ event: 'message.delta', data: { messageId: 'live-1', text: ch } });
+    }
+    await drain();
+    const liveId = liveItemId('live-1');
+    const published = source[0];
+
+    const secondFrames = [];
+    const second = hub.connect({
+      topics: ['conversation:c1'],
+      lang: 'zh',
+      send: (frame) => secondFrames.push(frame),
+    });
+    await second.ready;
+    const snap = secondFrames.find((frame) => frame.event === 'snapshot');
+    assert.ok(snap);
+    const live = (snap.data.entities || []).find((row) => row.entity === 'item' && row.id === liveId);
+    assert.ok(live, JSON.stringify(snap.data.entities));
+    assert.equal(live.value.text, published);
+    assert.equal(live.value.streaming, true);
+
+    clock.advance(TEXT_DELTA_MS);
+    clock.fireDue();
+    await drain();
+    const trailing = secondFrames.filter((frame) => frame.event === 'text.delta' && frame.data.itemId === liveId);
+    assert.equal(trailing.length >= 1, true, JSON.stringify(trailing.map((row) => row.data)));
+    assert.equal(trailing[0].data.offset, published.length);
+    const rest = joinTextDeltas(trailing, published.length);
+    assert.equal(live.value.text + rest, source);
+
+    const firstDeltas = firstFrames.filter((frame) => frame.event === 'text.delta' && frame.data.itemId === liveId);
+    assert.equal(joinTextDeltas(firstDeltas), source);
+    second.close();
+    first.close();
+  } finally {
+    topic.dispose();
+    hub.dispose();
+  }
+});
+
+test('in-process: tool.start flushes buffered text before inserting a new item', async () => {
+  const clock = createFakeClock();
+  const listeners = new Set();
+  const source = fragmentSource(200);
+  const data = {
+    presented: presentedFixture({ status: 'running' }),
+    subagents: [],
+    modelTarget: null,
+    window: 128000,
+  };
+  const { hub, topic } = await attachTextDeltaTopic(clock, { data, listeners });
+  try {
+    const frames = [];
+    const session = hub.connect({
+      topics: ['conversation:c1'],
+      lang: 'zh',
+      send: (frame) => frames.push(frame),
+    });
+    await session.ready;
+    const emit = (ev) => {
+      for (const fn of listeners) fn(ev);
+    };
+    for (const ch of source) {
+      emit({ event: 'message.delta', data: { messageId: 'live-1', text: ch } });
+    }
+    await drain();
+    const liveId = liveItemId('live-1');
+    assert.equal(frames.filter((frame) => frame.event === 'text.delta').length, 1);
+    assert.equal(clock.pending().length, 1);
+
+    data.presented = presentedFixture({
+      status: 'running',
+      messages: [
+        {
+          id: 't1',
+          role: 'tool',
+          tool: {
+            id: 'bash-1',
+            name: 'bash',
+            status: 'running',
+            input: { command: 'npm test' },
+          },
+        },
+      ],
+    });
+    emit({
+      event: 'tool.start',
+      data: { tool: { id: 'bash-1', name: 'bash', status: 'running', input: { command: 'npm test' } } },
+    });
+    await drain();
+    const deltas = frames.filter((frame) => frame.event === 'text.delta' && frame.data.itemId === liveId);
+    assert.equal(deltas.length, 2, JSON.stringify(deltas.map((row) => row.data)));
+    assert.equal(joinTextDeltas(deltas), source);
+    assert.equal(clock.pending().length, 0);
+    const lastDeltaAt = frames.lastIndexOf(deltas[deltas.length - 1]);
+    const toolAt = frames.findIndex((frame) => (
+      frame.event === 'upsert' && frame.data.entity === 'tool'
+    ));
+    if (toolAt >= 0) assert.ok(lastDeltaAt < toolAt, JSON.stringify(frames.map((frame) => frame.event)));
+    session.close();
+  } finally {
+    topic.dispose();
+    hub.dispose();
+  }
+});
+
+test('in-process: last subscriber leaving flushes and drops text timers', async () => {
+  const clock = createFakeClock();
+  const listeners = new Set();
+  const source = fragmentSource(20);
+  const data = {
+    presented: presentedFixture({ status: 'running' }),
+    subagents: [],
+    modelTarget: null,
+    window: 128000,
+  };
+  const { hub, topic } = await attachTextDeltaTopic(clock, { data, listeners });
+  try {
+    const frames = [];
+    const session = hub.connect({
+      topics: ['conversation:c1'],
+      lang: 'zh',
+      send: (frame) => frames.push(frame),
+    });
+    await session.ready;
+    const emit = (ev) => {
+      for (const fn of listeners) fn(ev);
+    };
+    for (const ch of source) {
+      emit({ event: 'message.delta', data: { messageId: 'live-1', text: ch } });
+    }
+    await drain();
+    assert.equal(clock.pending().length, 1);
+    session.close();
+    await drain();
+    assert.equal(clock.pending().length, 0);
+    assert.equal(topic.kernelSubscriptionCount(), 0);
   } finally {
     topic.dispose();
     hub.dispose();

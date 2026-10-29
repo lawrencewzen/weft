@@ -32,11 +32,19 @@ import {
   TOOL_DELTA_MS,
   type ToolLive,
 } from './tool-delta.ts';
+import {
+  clearTextLiveTimer,
+  createTextLive,
+  publishedText,
+  takeTextDelta,
+  TEXT_DELTA_MS,
+  type TextLive,
+} from './text-delta.ts';
 
 export const CONVERSATION_PREFIX = 'conversation:';
 export const COALESCE_MS = 50;
 export const PATH_CACHE_MS = 2000;
-export { TOOL_DELTA_MS };
+export { TOOL_DELTA_MS, TEXT_DELTA_MS };
 /** After write/edit ends, suppress a first +0 −0 change until disk catches up. */
 export const FRESH_WRITE_MS = 400;
 export const CHANGE_RETRY_MS = 40;
@@ -54,8 +62,11 @@ export type ConversationTopicOpts = {
   loadChanges?: LoadChanges;
   subscribe?: (cid: string, fn: (ev: KernelEvent) => void) => () => void;
   coalesceMs?: number;
+  textDeltaMs?: number;
   pathCacheMs?: number;
   now?: () => number;
+  setTimer?: (fn: () => void, ms: number) => unknown;
+  clearTimer?: (handle: unknown) => void;
   stuckAfterMs?: number;
   stuck?: StuckWatch;
   log?: (line: string) => void;
@@ -71,7 +82,7 @@ type AssistantItem = components['schemas']['ThreadItemAssistant'];
 type EntityKey = string;
 
 type TopicState = {
-  lives: Map<string, { text: string }>;
+  lives: Map<string, TextLive>;
   toolLives: Map<string, ToolLive>;
   lastZh: Map<EntityKey, object>;
   lastEn: Map<EntityKey, object>;
@@ -171,7 +182,7 @@ export function entitiesFromSnapshot(snap: TopicSnapshot | ConversationSnapshot)
 
 function overlayLive(
   snap: TopicSnapshot,
-  lives: Map<string, { text: string }>,
+  lives: Map<string, TextLive>,
   toolLives?: Map<string, ToolLive>,
 ): TopicSnapshot {
   let next = snap;
@@ -180,14 +191,15 @@ function overlayLive(
     const items = [...snap.items];
     const have = new Set(itemIds);
     for (const [id, live] of lives) {
+      const text = publishedText(live);
       if (have.has(id)) {
         const idx = items.findIndex((item) => item.id === id);
         if (idx >= 0 && items[idx]?.kind === 'assistant') {
-          items[idx] = { ...items[idx], text: live.text, streaming: true } as ThreadItem;
+          items[idx] = { ...items[idx], text, streaming: true } as ThreadItem;
         }
         continue;
       }
-      items.push(liveAssistant(id, live.text));
+      items.push(liveAssistant(id, text));
       itemIds.push(id);
     }
     next = {
@@ -224,8 +236,17 @@ function orderedUpsertKeys(snap: TopicSnapshot): EntityKey[] {
 
 export function attachConversationTopic(hub: EventHub, opts: ConversationTopicOpts = {}): ConversationTopic {
   const coalesceMs = opts.coalesceMs ?? COALESCE_MS;
+  const textDeltaMs = opts.textDeltaMs ?? TEXT_DELTA_MS;
   const pathCacheMs = opts.pathCacheMs ?? PATH_CACHE_MS;
   const now = opts.now ?? Date.now;
+  const setTimer = opts.setTimer ?? ((fn: () => void, ms: number) => {
+    const handle = setTimeout(fn, ms);
+    handle.unref?.();
+    return handle;
+  });
+  const cancelTimer = opts.clearTimer ?? ((handle: unknown) => {
+    clearTimeout(handle as ReturnType<typeof setTimeout>);
+  });
   const stuckAfterMs = opts.stuckAfterMs ?? resolveStuckAfterMs();
   const log = opts.log ?? ((line: string) => {
     console.log(line);
@@ -274,11 +295,17 @@ export function attachConversationTopic(hub: EventHub, opts: ConversationTopicOp
     }
   }
 
+  function cancelTextTimer(live: TextLive): void {
+    clearTextLiveTimer(live, cancelTimer);
+  }
+
   function dropState(cid: string): void {
     const state = states.get(cid);
     if (state) {
+      flushAllTextLives(cid);
       clearTimer(state);
       clearChangeRetry(state);
+      for (const live of state.lives.values()) cancelTextTimer(live);
       for (const live of state.toolLives.values()) clearToolLiveTimer(live);
     }
     states.delete(cid);
@@ -521,6 +548,42 @@ export function attachConversationTopic(hub: EventHub, opts: ConversationTopicOp
     }
   }
 
+  function flushTextLive(cid: string, itemId: string): void {
+    const state = states.get(cid);
+    if (!state) return;
+    const live = state.lives.get(itemId);
+    if (!live) return;
+    cancelTextTimer(live);
+    const payload = takeTextDelta(live);
+    if (!payload) return;
+    rememberLiveItem(state, cid, liveAssistant(itemId, publishedText(live)));
+    hub.publish(topicOf(cid), {
+      event: 'text.delta',
+      itemId,
+      offset: payload.offset,
+      append: payload.append,
+    });
+  }
+
+  function flushAllTextLives(cid: string): void {
+    const state = states.get(cid);
+    if (!state) return;
+    for (const itemId of [...state.lives.keys()]) flushTextLive(cid, itemId);
+  }
+
+  function scheduleTextFlush(cid: string, itemId: string): void {
+    if (disposed || !kernelUnsubs.has(cid)) return;
+    const state = states.get(cid);
+    const live = state?.lives.get(itemId);
+    if (!live || live.timer != null) return;
+    live.timer = setTimer(() => {
+      live.timer = null;
+      enqueue(cid, () => {
+        flushTextLive(cid, itemId);
+      });
+    }, textDeltaMs);
+  }
+
   async function handleDelta(cid: string, messageId: string, append: string): Promise<void> {
     if (!append || disposed || !kernelUnsubs.has(cid)) return;
     const state = stateOf(cid);
@@ -529,7 +592,7 @@ export function attachConversationTopic(hub: EventHub, opts: ConversationTopicOp
     if (!live) {
       if (!state.lastZh.size && !state.lastEn.size) await recompute(cid);
       if (disposed || !kernelUnsubs.has(cid)) return;
-      live = { text: '' };
+      live = createTextLive();
       state.lives.set(id, live);
       const item = liveAssistant(id, '');
       hub.publish(topicOf(cid), { event: 'upsert', entity: 'item', id, value: item });
@@ -540,11 +603,13 @@ export function attachConversationTopic(hub: EventHub, opts: ConversationTopicOp
         publishUpsert(cid, 'conversation', cid, convZh || convEn || {}, convEn || convZh || {});
       }
     }
-    const offset = live.text.length;
+    const first = live.published === 0 && live.text.length === 0;
     live.text += append;
-    const item = liveAssistant(id, live.text);
-    rememberLiveItem(state, cid, item);
-    hub.publish(topicOf(cid), { event: 'text.delta', itemId: id, offset, append });
+    if (first) {
+      flushTextLive(cid, id);
+      return;
+    }
+    scheduleTextFlush(cid, id);
   }
 
   async function flushPending(cid: string): Promise<void> {
@@ -564,16 +629,14 @@ export function attachConversationTopic(hub: EventHub, opts: ConversationTopicOp
     const live = state.lives.get(id);
     const finalText = typeof data.text === 'string' ? data.text : '';
     if (!live || !finalText.startsWith(live.text) || finalText.length <= live.text.length) return;
-    const append = finalText.slice(live.text.length);
-    const offset = live.text.length;
     live.text = finalText;
-    rememberLiveItem(state, cid, liveAssistant(id, live.text));
-    hub.publish(topicOf(cid), { event: 'text.delta', itemId: id, offset, append });
+    flushTextLive(cid, id);
   }
 
   function noteMessageDone(cid: string, data: Record<string, unknown>): void {
-    catchUpLiveText(cid, data);
     const liveId = typeof data.liveId === 'string' && data.liveId ? data.liveId : '';
+    if (liveId) flushTextLive(cid, liveItemId(liveId));
+    catchUpLiveText(cid, data);
     if (!liveId) return;
     stateOf(cid).lives.delete(liveItemId(liveId));
   }
@@ -670,6 +733,7 @@ export function attachConversationTopic(hub: EventHub, opts: ConversationTopicOp
       await handleToolDelta(cid, data);
       return;
     }
+    flushAllTextLives(cid);
     if (event === 'tool.end') {
       const tool = asRecord(data.tool);
       const toolId = typeof tool.id === 'string' ? tool.id : '';
