@@ -4007,6 +4007,9 @@ components:
         - canStop
         - lockedReason
         - error
+        - lastActivityAt
+        - stalledSince
+        - activeTool
       properties:
         status:
           type: string
@@ -4064,7 +4067,37 @@ components:
                       type: integer
                     delayMs:
                       type: integer
-      description: 当前运行状态。供输入框、停止按钮和等待提示使用。
+        lastActivityAt:
+          description: running 时最近一次内核活动时间（毫秒）。文字/思考片段、工具开始/结束/输出、消息结束都算活动。未在跑时为 null
+          oneOf:
+            - type: "null"
+            - type: integer
+        stalledSince:
+          description: running 且 now − lastActivityAt 超过 stallAfterMs（默认 180000，可用 WEFT_MAIN_STALL_MS 改）时为 lastActivityAt，否则 null。等于阈值不算卡住
+          oneOf:
+            - type: "null"
+            - type: integer
+        activeTool:
+          description: 当前正在运行（已 start 未 end）的工具，供界面显示「正在运行 npm test」。没有则为 null
+          oneOf:
+            - type: "null"
+            - type: object
+              additionalProperties: false
+              required:
+                - name
+                - startedAt
+                - summary
+              properties:
+                name:
+                  type: string
+                  description: 工具名，例如 bash
+                startedAt:
+                  type: integer
+                  description: 这次 tool.start 的时间（毫秒）
+                summary:
+                  type: string
+                  description: 工具标题摘要，例如 bash 命令前 80 个字符
+      description: 当前运行状态。供输入框、停止按钮、等待提示和主对话卡住判定使用。
     ConversationModel:
       type: object
       additionalProperties: false

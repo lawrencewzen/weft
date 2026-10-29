@@ -29,6 +29,9 @@ function runState(): ConversationView['run'] {
     canStop: false,
     lockedReason: null,
     error: null,
+    lastActivityAt: null,
+    stalledSince: null,
+    activeTool: null,
   };
 }
 

@@ -35,6 +35,9 @@ const DRAFT_RUN: ConversationView['run'] = {
   canStop: false,
   lockedReason: null,
   error: null,
+  lastActivityAt: null,
+  stalledSince: null,
+  activeTool: null,
 };
 
 function draftView(workspaceId: string, lang: Lang): ConversationView {

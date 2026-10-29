@@ -649,6 +649,9 @@ function finishRun(db: MockDb, conv: MockConv, hub: MockHub): void {
     canStop: false,
     lockedReason: null,
     error: null,
+    lastActivityAt: null,
+    stalledSince: null,
+    activeTool: null,
   };
   touch(conv);
   publishConversationView(conv, hub);
@@ -750,6 +753,9 @@ export function startRun(
     canStop: true,
     lockedReason: null,
     error: null,
+    lastActivityAt: Date.now(),
+    stalledSince: null,
+    activeTool: null,
   };
   conv.pending = THINKING;
   touch(conv);
@@ -937,6 +943,9 @@ export function stopConversation(db: MockDb, conv: MockConv, hub: MockHub): void
     canStop: false,
     lockedReason: null,
     error: null,
+    lastActivityAt: null,
+    stalledSince: null,
+    activeTool: null,
   };
   conv.pending = null;
   touch(conv);

@@ -1407,7 +1407,7 @@ export interface components {
         };
         /** @description 对话流里的一项。按 kind 区分。 */
         ThreadItem: components["schemas"]["ThreadItemUser"] | components["schemas"]["ThreadItemAssistant"] | components["schemas"]["ThreadItemToolGroup"] | components["schemas"]["ThreadItemSubagentReport"] | components["schemas"]["ThreadItemSystemNote"];
-        /** @description 当前运行状态。供输入框、停止按钮和等待提示使用。 */
+        /** @description 当前运行状态。供输入框、停止按钮、等待提示和主对话卡住判定使用。 */
         RunState: {
             /**
              * @description present() 状态归一。recovering、resuming 算 running；paused 算 waiting；error 算 failed；done 算 idle
@@ -1432,6 +1432,19 @@ export interface components {
                     attempt: number;
                     delayMs: number;
                 };
+            };
+            /** @description running 时最近一次内核活动时间（毫秒）。文字/思考片段、工具开始/结束/输出、消息结束都算活动。未在跑时为 null */
+            lastActivityAt: null | number;
+            /** @description running 且 now − lastActivityAt 超过 stallAfterMs（默认 180000，可用 WEFT_MAIN_STALL_MS 改）时为 lastActivityAt，否则 null。等于阈值不算卡住 */
+            stalledSince: null | number;
+            /** @description 当前正在运行（已 start 未 end）的工具，供界面显示「正在运行 npm test」。没有则为 null */
+            activeTool: null | {
+                /** @description 工具名，例如 bash */
+                name: string;
+                /** @description 这次 tool.start 的时间（毫秒） */
+                startedAt: number;
+                /** @description 工具标题摘要，例如 bash 命令前 80 个字符 */
+                summary: string;
             };
         };
         /** @description 对话当前模型。取对话自己选的或默认模型。 */

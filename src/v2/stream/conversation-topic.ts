@@ -9,11 +9,19 @@ import {
 } from '../views/conversation.ts';
 import { fileExistsInWorkspace } from '../views/path-refs.ts';
 import {
+  activeToolView,
+  normalizeRunStatus,
+  resolveStallAfterMs,
+  stalledSinceOf,
+  type ActiveTool,
+} from '../views/run.ts';
+import {
   resolveStuckAfterMs,
   subagentViews,
   type Subagent,
   type SubagentLike,
 } from '../views/subagents.ts';
+import type { ToolLike } from '../views/tools.ts';
 import {
   normalizeLang,
   type Entity,
@@ -21,6 +29,7 @@ import {
   type PublishEvent,
   type SnapshotPayload,
 } from './hub.ts';
+import type { StallWatch } from './stall-watch.ts';
 import type { StuckWatch } from './stuck-watch.ts';
 import {
   applyKernelToolDelta,
@@ -69,6 +78,8 @@ export type ConversationTopicOpts = {
   clearTimer?: (handle: unknown) => void;
   stuckAfterMs?: number;
   stuck?: StuckWatch;
+  stallAfterMs?: number;
+  stall?: StallWatch;
   log?: (line: string) => void;
 };
 
@@ -95,6 +106,9 @@ type TopicState = {
   freshWrites: Map<string, number>;
   tail: Promise<void>;
   rawAgents: SubagentLike[];
+  running: boolean;
+  lastActivityAt: number | null;
+  activeTools: Map<string, ActiveTool & { id: string }>;
 };
 
 export type ConversationTopic = {
@@ -248,6 +262,7 @@ export function attachConversationTopic(hub: EventHub, opts: ConversationTopicOp
     clearTimeout(handle as ReturnType<typeof setTimeout>);
   });
   const stuckAfterMs = opts.stuckAfterMs ?? resolveStuckAfterMs();
+  const stallAfterMs = opts.stallAfterMs ?? resolveStallAfterMs();
   const log = opts.log ?? ((line: string) => {
     console.log(line);
   });
@@ -255,6 +270,9 @@ export function attachConversationTopic(hub: EventHub, opts: ConversationTopicOp
   const kernelUnsubs = new Map<string, () => void>();
   let disposed = false;
   const unlisten = opts.stuck?.listen((cid) => {
+    enqueue(cid, () => recompute(cid));
+  });
+  const unlistenStall = opts.stall?.listen((cid) => {
     enqueue(cid, () => recompute(cid));
   });
 
@@ -275,6 +293,9 @@ export function attachConversationTopic(hub: EventHub, opts: ConversationTopicOp
         freshWrites: new Map(),
         tail: Promise.resolve(),
         rawAgents: [],
+        running: false,
+        lastActivityAt: null,
+        activeTools: new Map(),
       };
       states.set(cid, state);
     }
@@ -286,6 +307,114 @@ export function attachConversationTopic(hub: EventHub, opts: ConversationTopicOp
       clearTimeout(state.timer);
       state.timer = null;
     }
+  }
+
+  function currentActiveTool(state: TopicState): ActiveTool | null {
+    if (!state.activeTools.size) return null;
+    let latest: (ActiveTool & { id: string }) | null = null;
+    for (const entry of state.activeTools.values()) {
+      if (!latest || entry.startedAt >= latest.startedAt) latest = entry;
+    }
+    if (!latest) return null;
+    return { name: latest.name, startedAt: latest.startedAt, summary: latest.summary };
+  }
+
+  function applyRunFields(run: ConversationView['run'], state: TopicState): ConversationView['run'] {
+    const running = run.status === 'running';
+    const last = running ? state.lastActivityAt : null;
+    return {
+      ...run,
+      lastActivityAt: last,
+      stalledSince: stalledSinceOf(running, last, now(), stallAfterMs),
+      activeTool: running ? currentActiveTool(state) : null,
+    };
+  }
+
+  function overlayRun(cid: string, state: TopicState, snap: TopicSnapshot): TopicSnapshot {
+    const running = snap.conversation.run.status === 'running';
+    if (running && state.lastActivityAt == null) {
+      state.lastActivityAt = snap.conversation.run.startedAt ?? now();
+      state.running = true;
+      opts.stall?.sync(cid, { running: true, lastActivityAt: state.lastActivityAt });
+    }
+    return {
+      ...snap,
+      conversation: {
+        ...snap.conversation,
+        run: applyRunFields(snap.conversation.run, state),
+      },
+    };
+  }
+
+  function publishRunOverlay(cid: string): void {
+    const state = states.get(cid);
+    if (!state) return;
+    const convKey = entityKey('conversation', cid);
+    const patch = (conv: ConversationView): ConversationView => ({
+      ...conv,
+      run: applyRunFields(conv.run, state),
+    });
+    const zh = state.lastZh.get(convKey) as ConversationView | undefined;
+    const en = state.lastEn.get(convKey) as ConversationView | undefined;
+    if (!zh && !en) return;
+    const nextZh = zh ? patch(zh) : patch(en as ConversationView);
+    const nextEn = en ? patch(en) : patch(zh as ConversationView);
+    if (jsonEq(zh, nextZh) && jsonEq(en, nextEn)) return;
+    state.lastZh.set(convKey, nextZh);
+    state.lastEn.set(convKey, nextEn);
+    publishUpsert(cid, 'conversation', cid, nextZh, nextEn);
+  }
+
+  function clearRunTracking(cid: string, state: TopicState): void {
+    state.running = false;
+    state.lastActivityAt = null;
+    state.activeTools.clear();
+    opts.stall?.sync(cid, { running: false, lastActivityAt: null });
+  }
+
+  function wasStalled(state: TopicState): boolean {
+    return stalledSinceOf(state.running, state.lastActivityAt, now(), stallAfterMs) != null;
+  }
+
+  function noteActivity(cid: string, publishUnstall: boolean): void {
+    const state = states.get(cid);
+    if (!state?.running) return;
+    const stalled = wasStalled(state);
+    state.lastActivityAt = now();
+    opts.stall?.sync(cid, { running: true, lastActivityAt: state.lastActivityAt });
+    if (stalled && publishUnstall) publishRunOverlay(cid);
+  }
+
+  function applyStatus(cid: string, status: unknown): void {
+    const state = stateOf(cid);
+    const running = normalizeRunStatus(status) === 'running';
+    if (running) {
+      if (!state.running) {
+        state.running = true;
+        state.lastActivityAt = now();
+        opts.stall?.sync(cid, { running: true, lastActivityAt: state.lastActivityAt });
+      }
+      return;
+    }
+    if (!state.running && state.lastActivityAt == null && !state.activeTools.size) return;
+    const stalled = wasStalled(state);
+    clearRunTracking(cid, state);
+    if (stalled) publishRunOverlay(cid);
+  }
+
+  function applyToolStart(cid: string, tool: Record<string, unknown>): void {
+    const id = typeof tool.id === 'string' ? tool.id : '';
+    if (!id) return;
+    const state = stateOf(cid);
+    const view = activeToolView(tool as ToolLike, now());
+    if (!view) return;
+    state.activeTools.set(id, { id, ...view });
+  }
+
+  function applyToolEnd(cid: string, tool: Record<string, unknown>): void {
+    const id = typeof tool.id === 'string' ? tool.id : '';
+    if (!id) return;
+    stateOf(cid).activeTools.delete(id);
   }
 
   function clearChangeRetry(state: TopicState): void {
@@ -418,7 +547,7 @@ export function attachConversationTopic(hub: EventHub, opts: ConversationTopicOp
       exists: existsFor(cid, workspacePath),
     });
     const t = now();
-    return overlayLive({
+    return overlayRun(cid, state, overlayLive({
       ...snap,
       subagents: subagentViews(state.rawAgents, {
         parentConversationId: cid,
@@ -426,7 +555,7 @@ export function attachConversationTopic(hub: EventHub, opts: ConversationTopicOp
         stuckAfterMs,
       }),
       changes: overlayLiveChanges(state, lang, source.changeRows),
-    }, state.lives, overlayTools ? state.toolLives : undefined);
+    }, state.lives, overlayTools ? state.toolLives : undefined));
   }
 
   async function snapshotsFor(
@@ -563,6 +692,7 @@ export function attachConversationTopic(hub: EventHub, opts: ConversationTopicOp
       offset: payload.offset,
       append: payload.append,
     });
+    noteActivity(cid, true);
   }
 
   function flushAllTextLives(cid: string): void {
@@ -673,6 +803,7 @@ export function attachConversationTopic(hub: EventHub, opts: ConversationTopicOp
     markPublished(live);
     if ('set' in payload) {
       publishToolDelta(cid, toolId, { event: 'tool.delta', toolId, set: payload.set });
+      noteActivity(cid, true);
       return;
     }
     publishToolDelta(cid, toolId, {
@@ -682,6 +813,7 @@ export function attachConversationTopic(hub: EventHub, opts: ConversationTopicOp
       append: payload.append,
       ...(payload.trimStart ? { trimStart: payload.trimStart } : {}),
     });
+    noteActivity(cid, true);
   }
 
   function scheduleToolFlush(cid: string, toolId: string): void {
@@ -720,6 +852,11 @@ export function attachConversationTopic(hub: EventHub, opts: ConversationTopicOp
     const event = String(ev?.event || '');
     const data = asRecord(ev?.data);
     noteFileTool(stateOf(cid), ev);
+    if (event === 'status') applyStatus(cid, data.status);
+    if (event === 'tool.start') applyToolStart(cid, asRecord(data.tool));
+    if (event === 'tool.end') applyToolEnd(cid, asRecord(data.tool));
+    const deltaPath = event === 'message.delta' || event === 'tool.delta';
+    noteActivity(cid, deltaPath);
     if (event === 'message.delta') {
       await flushPending(cid);
       const messageId = typeof data.messageId === 'string' ? data.messageId : '';
@@ -765,6 +902,7 @@ export function attachConversationTopic(hub: EventHub, opts: ConversationTopicOp
     }) : () => {};
     kernelUnsubs.set(cid, unsub);
     opts.stuck?.retain(cid);
+    opts.stall?.retain(cid);
     log(`WEFT_V2_CONV_SUB ${cid}`);
   }
 
@@ -779,6 +917,7 @@ export function attachConversationTopic(hub: EventHub, opts: ConversationTopicOp
       console.error(`WEFT_V2_CONV_UNSUB ${cid}`, err);
     }
     opts.stuck?.release(cid);
+    opts.stall?.release(cid);
     dropState(cid);
     if (unsub) log(`WEFT_V2_CONV_UNSUB ${cid}`);
   }
@@ -800,10 +939,12 @@ export function attachConversationTopic(hub: EventHub, opts: ConversationTopicOp
     dispose() {
       disposed = true;
       unlisten?.();
+      unlistenStall?.();
       for (const [cid, unsub] of kernelUnsubs) {
         kernelUnsubs.delete(cid);
         try { unsub(); } catch { /* ignore */ }
         opts.stuck?.release(cid);
+        opts.stall?.release(cid);
         dropState(cid);
         log(`WEFT_V2_CONV_UNSUB ${cid}`);
       }
