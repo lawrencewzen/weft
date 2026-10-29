@@ -62,24 +62,10 @@ function convNode(page, id) {
   return page.locator('.conv-tree-node').filter({ has: convRow(page, id) });
 }
 
-function treeOf(page, convId) {
-  return page.locator(`[data-testid=next-subagent-tree][data-conv-id="${convId}"]`);
-}
-
-async function clipStyle(locator) {
-  return locator.evaluate((el) => {
-    const s = getComputedStyle(el);
-    return {
-      overflow: s.overflow,
-      overflowX: s.overflowX,
-      overflowY: s.overflowY,
-      radius: s.borderRadius,
-    };
-  });
-}
-
 async function waitSubagentRow(page, convId, timeout = 45000) {
-  const row = treeOf(page, convId).getByTestId('next-subagent-row').first();
+  const card = page.getByTestId('next-dispatch-card');
+  await expect(card).toBeVisible({ timeout });
+  const row = card.getByTestId('next-dispatch-row').first();
   await expect(row).toBeVisible({ timeout });
   return row;
 }
@@ -104,7 +90,7 @@ test('demo model badges appear under the composer and not in the header', async 
   }
 });
 
-test('spawning a sub-agent shows a sidebar row and chip; running time ticks', async ({ page }) => {
+test('spawning a sub-agent does not show subagents in sidebar; appears in thread dispatch card', async ({ page }) => {
   const prepared = await prepareWorkspaces(['repo']);
   const script = await writeScript(prepared.root, 'spawn-hold.json', [
     { tool: 'subagent', args: { action: 'spawn', name: 'worker', message: HOLD } },
@@ -120,11 +106,10 @@ test('spawning a sub-agent shows a sidebar row and chip; running time ticks', as
     await openNextChat(page, srv, conv.id);
     await sendNext(page, '请派子代理');
     const row = await waitSubagentRow(page, conv.id);
-    await expect(convRow(page, conv.id).getByTestId('next-subagent-chip')).toBeVisible();
-    await expect(convRow(page, conv.id).getByTestId('next-subagent-chip')).toHaveClass(/is-live/);
+    await expect(page.getByTestId('next-sidebar').getByTestId('next-subagent-chip')).toHaveCount(0);
+    await expect(page.getByTestId('next-sidebar').getByTestId('next-subagent-tree')).toHaveCount(0);
     await expect(row).toHaveAttribute('data-status', /running|waiting|stuck/);
-    await expect(row.getByTestId('next-subagent-time')).toHaveCount(0);
-    await expect(row.getByTestId('next-subagent-action')).toHaveCount(0);
+    await expect(row.getByTestId('next-dispatch-name')).toHaveText('worker');
     expect(csp, 'page console has no CSP errors').toEqual([]);
   } finally {
     await srv.kill();
@@ -152,14 +137,12 @@ test('short WEFT_SUBAGENT_STUCK_MS turns the row stuck with idle time without re
     await sendNext(page, '请派子代理');
     const row = await waitSubagentRow(page, conv.id);
     await expect(row).toHaveAttribute('data-status', 'stuck', { timeout: 20000 });
-    await expect(row.getByTestId('next-subagent-time')).toHaveCount(0);
-    await expect(row.getByTestId('next-subagent-action')).toHaveCount(0);
   } finally {
     await srv.kill();
   }
 });
 
-test('other conversation chip expands by subscribing and collapses by unsubscribing', async ({ page }) => {
+test('other conversation does not show subagents in sidebar', async ({ page }) => {
   const prepared = await prepareWorkspaces(['repo']);
   const script = await writeScript(prepared.root, 'spawn-other.json', [
     { tool: 'subagent', args: { action: 'spawn', name: 'worker', message: HOLD } },
@@ -185,31 +168,8 @@ test('other conversation chip expands by subscribing and collapses by unsubscrib
 
     await convRow(page, aId).click();
     await expect(page).toHaveURL(new RegExp(`/c/${aId}$`));
-    const chipB = convRow(page, bId).getByTestId('next-subagent-chip');
-    await expect(chipB).toBeVisible();
-    await expect(chipB).toHaveAttribute('aria-expanded', 'true');
-    await expect(treeOf(page, bId).getByTestId('next-subagent-row')).toHaveCount(1, { timeout: 15000 });
-    await expect.poll(async () => lastTopics(page), { timeout: 10000 }).toEqual(
-      expect.arrayContaining([`conversation:${aId}`, `conversation:${bId}`]),
-    );
-
-    // Clicking orbit does not toggle
-    await chipB.getByTestId('next-subagent-orbit').click();
-    await expect(chipB).toHaveAttribute('aria-expanded', 'true');
-
-    // Clicking toggle chevron toggles collapse/expand
-    const toggleB = chipB.getByTestId('next-subagent-toggle');
-    await toggleB.click();
-    await expect(chipB).toHaveAttribute('aria-expanded', 'false');
-    await expect.poll(async () => lastTopics(page), { timeout: 10000 }).not.toContain(`conversation:${bId}`);
-    await expect.poll(async () => lastTopics(page)).toContain(`conversation:${aId}`);
-
-    await toggleB.click();
-    await expect(chipB).toHaveAttribute('aria-expanded', 'true');
-    await expect(treeOf(page, bId).getByTestId('next-subagent-row')).toHaveCount(1, { timeout: 15000 });
-    await expect.poll(async () => lastTopics(page), { timeout: 10000 }).toEqual(
-      expect.arrayContaining([`conversation:${aId}`, `conversation:${bId}`]),
-    );
+    await expect(page.getByTestId('next-sidebar').getByTestId('next-subagent-chip')).toHaveCount(0);
+    await expect(page.getByTestId('next-sidebar').getByTestId('next-subagent-tree')).toHaveCount(0);
   } finally {
     await srv.kill();
   }
@@ -240,7 +200,7 @@ test('clicking a row opens the sub-agent view; send and stop work; refresh keeps
     await expect(page.getByTestId('next-subagent-view')).toBeVisible();
     await expect(page.getByTestId('next-right-tab-subagents')).toHaveClass(/active/);
     await expect(page.getByTestId('next-subagent-back')).toHaveText('子 Agent');
-    await expect(page.locator(`[data-testid=next-subagent-row][data-agent-id="${agentId}"]`)).toHaveClass(/is-active/);
+    await expect(page.locator(`[data-testid=next-dispatch-row][data-agent-id="${agentId}"]`)).toHaveClass(/is-selected/);
     await expect(page.getByTestId('next-subagent-thread')).toContainText(HOLD);
     await expect(page.getByTestId('next-subagent-input')).toBeVisible();
     await expect(page.getByTestId('next-subagent-stop')).toBeVisible({ timeout: 15000 });
@@ -314,7 +274,7 @@ test('report open jumps to the matching sub-agent; missing sub-agent shows an er
   }
 });
 
-test('expanding conversation A then opening B leaves A expanded', async ({ page }) => {
+test('switching conversation leaves sidebar clean without subagents', async ({ page }) => {
   const prepared = await prepareWorkspaces(['repo']);
   const script = await writeScript(prepared.root, 'spawn-keep.json', [
     { tool: 'subagent', args: { action: 'spawn', name: 'worker', message: HOLD } },
@@ -334,24 +294,17 @@ test('expanding conversation A then opening B leaves A expanded', async ({ page 
     await openNextChat(page, srv, aId);
     await sendNext(page, '请派子代理');
     await waitSubagentRow(page, aId);
-    const chipA = convRow(page, aId).getByTestId('next-subagent-chip');
-    await expect(chipA).toHaveAttribute('aria-expanded', 'true');
-    const toggleA = chipA.getByTestId('next-subagent-toggle');
-    await toggleA.click();
-    await expect(chipA).toHaveAttribute('aria-expanded', 'false');
-    await toggleA.click();
-    await expect(chipA).toHaveAttribute('aria-expanded', 'true');
 
     await convRow(page, bId).click();
     await expect(page).toHaveURL(new RegExp(`/c/${bId}$`));
-    await expect(convRow(page, aId).getByTestId('next-subagent-chip')).toHaveAttribute('aria-expanded', 'true');
-    await expect(treeOf(page, aId).getByTestId('next-subagent-row')).toHaveCount(1, { timeout: 15000 });
+    await expect(page.getByTestId('next-sidebar').getByTestId('next-subagent-chip')).toHaveCount(0);
+    await expect(page.getByTestId('next-sidebar').getByTestId('next-subagent-tree')).toHaveCount(0);
   } finally {
     await srv.kill();
   }
 });
 
-test('with no saved tree state a running sub-agent tree starts open', async ({ page }) => {
+test('running sub-agent does not show in sidebar', async ({ page }) => {
   const prepared = await prepareWorkspaces(['repo']);
   const script = await writeScript(prepared.root, 'spawn-live-default.json', [
     { tool: 'subagent', args: { action: 'spawn', name: 'worker', message: HOLD } },
@@ -366,14 +319,14 @@ test('with no saved tree state a running sub-agent tree starts open', async ({ p
     await openNextChat(page, srv, conv.id);
     await sendNext(page, '请派子代理');
     await waitSubagentRow(page, conv.id);
-    await expect(convRow(page, conv.id).getByTestId('next-subagent-chip')).toHaveAttribute('aria-expanded', 'true');
-    await expect(treeOf(page, conv.id)).toHaveClass(/is-open/);
+    await expect(page.getByTestId('next-sidebar').getByTestId('next-subagent-chip')).toHaveCount(0);
+    await expect(page.getByTestId('next-sidebar').getByTestId('next-subagent-tree')).toHaveCount(0);
   } finally {
     await srv.kill();
   }
 });
 
-test('finished sub-agent trees start closed, show a check, and use the name when there is no title', async ({ page }) => {
+test('finished sub-agents report in thread and do not show in sidebar', async ({ page }) => {
   const prepared = await prepareWorkspaces(['repo']);
   const script = await writeScript(prepared.root, 'spawn-done-default.json', [
     { tool: 'subagent', args: { action: 'spawn', name: 'worker', message: 'quick-task' } },
@@ -387,27 +340,15 @@ test('finished sub-agent trees start closed, show a check, and use the name when
     const { conv } = await openWorkspaceConversation(srv, 'demo', prepared.dirs[0]);
     await openNextChat(page, srv, conv.id);
     await sendNext(page, '请派子代理');
-    const chip = convRow(page, conv.id).getByTestId('next-subagent-chip');
-    await expect(chip).toBeVisible({ timeout: 45000 });
-    await expect(chip).not.toHaveClass(/is-live/, { timeout: 45000 });
-    await expect(chip).toHaveAttribute('aria-expanded', 'false');
-    await expect(treeOf(page, conv.id)).not.toHaveClass(/is-open/);
-
-    await chip.getByTestId('next-subagent-toggle').click();
-    await expect(chip).toHaveAttribute('aria-expanded', 'true');
-    const doneRow = treeOf(page, conv.id).getByTestId('next-subagent-row').first();
-    await expect(doneRow).toBeVisible();
-    await expect(doneRow).toHaveAttribute('data-status', 'done');
-    await expect(doneRow).toHaveAttribute('data-visual', 'done');
-    await expect(doneRow.getByTestId('next-subagent-summary')).toHaveText('worker');
-    await expect(doneRow.getByTestId('status-icon')).toHaveAttribute('data-status', 'done');
-    await expect(doneRow.getByTestId('status-icon')).toHaveClass(/is-calm/);
+    await expect(page.getByTestId('next-item-subagent-report')).toBeVisible({ timeout: 45000 });
+    await expect(page.getByTestId('next-sidebar').getByTestId('next-subagent-chip')).toHaveCount(0);
+    await expect(page.getByTestId('next-sidebar').getByTestId('next-subagent-tree')).toHaveCount(0);
   } finally {
     await srv.kill();
   }
 });
 
-test('opening a sub-agent keeps the parent lightweight; tree rails are unclipped and continuous', async ({ page }) => {
+test('opening a sub-agent keeps the parent lightweight and opens in right pane', async ({ page }) => {
   const prepared = await prepareWorkspaces(['repo']);
   const script = await writeScript(prepared.root, 'spawn-two-hold.json', [
     {
@@ -427,74 +368,21 @@ test('opening a sub-agent keeps the parent lightweight; tree rails are unclipped
     const { conv } = await openWorkspaceConversation(srv, 'demo', prepared.dirs[0]);
     await openNextChat(page, srv, conv.id);
     await sendNext(page, '请派子代理');
-    const tree = treeOf(page, conv.id);
-    const rows = tree.getByTestId('next-subagent-row');
-    await expect(rows).toHaveCount(2, { timeout: 45000 });
-    await expect(rows.nth(1)).toBeVisible();
-    await expect.poll(async () => rows.first().evaluate((el) => getComputedStyle(el).transform)).toBe('none');
-
-    const node = convNode(page, conv.id);
-    await expect(node).toHaveClass(/conv-active/);
-    await expect(node).not.toHaveClass(/conv-child-active/);
-    await expect(convRow(page, conv.id)).not.toHaveClass(/is-child-active/);
-
-    const shells = tree.getByTestId('next-subagent-tree-shell');
-    const stem = tree.getByTestId('next-subagent-tree-stem');
-    const rails = tree.getByTestId('next-subagent-tree-v');
-    const elbows = tree.getByTestId('next-subagent-tree-h');
-    await expect(shells).toHaveCount(2);
-    await expect(stem).toBeVisible();
-    await expect(rails).toHaveCount(2);
-    await expect(elbows).toHaveCount(2);
-
-    for (const loc of [stem, shells.first(), shells.last(), rails.first(), rails.last(), elbows.first()]) {
-      const css = await clipStyle(loc);
-      expect(css.overflow, 'tree rail host must not clip').toBe('visible');
-      expect(css.overflowX).toBe('visible');
-      expect(css.overflowY).toBe('visible');
-      expect(css.radius === '0px' || css.radius === '0px 0px 0px 0px').toBeTruthy();
-    }
-
-    const firstRow = await rows.first().boundingBox();
-    const lastRow = await rows.last().boundingBox();
-    const stemBox = await stem.boundingBox();
-    const firstV = await rails.first().boundingBox();
-    const lastV = await rails.last().boundingBox();
-    const firstH = await elbows.first().boundingBox();
-    expect(firstRow).toBeTruthy();
-    expect(lastRow).toBeTruthy();
-    expect(stemBox).toBeTruthy();
-    expect(firstV).toBeTruthy();
-    expect(lastV).toBeTruthy();
-    expect(firstH).toBeTruthy();
-    expect(stemBox.y).toBeLessThanOrEqual(firstRow.y + 0.5);
-    expect(firstV.y).toBeLessThanOrEqual(firstRow.y + 2);
-    expect(Math.abs((stemBox.y + stemBox.height) - firstV.y)).toBeLessThanOrEqual(1.5);
-    expect(lastV.y + lastV.height).toBeGreaterThanOrEqual(lastRow.y + 11);
-    expect(lastV.y + lastV.height).toBeLessThan(lastRow.y + lastRow.height);
-    expect(Math.abs((firstV.y + firstV.height) - lastV.y)).toBeLessThanOrEqual(1.5);
-    expect(firstH.width).toBeGreaterThanOrEqual(12);
-    expect(firstH.width).toBeLessThanOrEqual(14);
+    const card = page.getByTestId('next-dispatch-card');
+    await expect(card).toBeVisible({ timeout: 45000 });
+    const rows = card.getByTestId('next-dispatch-row');
+    await expect(rows).toHaveCount(2);
 
     await rows.nth(1).click();
     await expect(page).toHaveURL(new RegExp(`/c/${conv.id}/a/`));
     await expect(page.getByTestId('next-center')).toBeVisible();
     await expect(page.getByTestId('next-subagent-view')).toBeVisible();
     await expect(page.getByTestId('next-right-tab-subagents')).toHaveClass(/active/);
-    await expect(node).not.toHaveClass(/conv-active/);
-    await expect(node).toHaveClass(/conv-child-active/);
-    await expect(convRow(page, conv.id)).toHaveClass(/is-child-active/);
-    await expect(rows.nth(1)).toHaveClass(/is-active/);
-    await expect(rows.first()).not.toHaveClass(/is-active/);
 
     await convRow(page, conv.id).click();
     await expect(page).toHaveURL(new RegExp(`/c/${conv.id}$`));
     await expect(page.getByTestId('next-subagent-view')).toHaveCount(0);
     await expect(page.getByTestId('next-right-tab-changes')).toHaveClass(/active/);
-    await expect(node).toHaveClass(/conv-active/);
-    await expect(node).not.toHaveClass(/conv-child-active/);
-    await expect(convRow(page, conv.id)).not.toHaveClass(/is-child-active/);
-    await expect(tree.locator('[data-testid=next-subagent-row].is-active')).toHaveCount(0);
   } finally {
     await srv.kill();
   }
