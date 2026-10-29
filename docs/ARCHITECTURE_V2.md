@@ -115,7 +115,7 @@
   - `title` 按 title → brief 第一行 → lastText → name 的顺序回退，由服务端算。
   - `toolCallId` 是派出该子 Agent 的那次 `delegate` / `subagent` 工具调用 id，与对话快照里 `ToolCall.id` 一致；从 roster 里来、找不到对应工具调用时为 `null`。
   - **卡住由服务端判定**：running 状态下超过 `stuckAfterMs` 没有活动，服务端把 status 改成 stuck 并推送 upsert；恢复活动后改回 running。
-- **RunState**：`status, startedAt, pendingText, canSend, canStop, lockedReason, error{code, message, retry{attempt, delayMs}}`
+- **RunState**：`status, startedAt, pendingText, canSend, canStop, lockedReason, error{code, message, retry{attempt, delayMs}}, lastActivityAt, stalledSince, activeTool{name, startedAt, summary}`
 - **ContextUsage**：`used, window, percent, level(ok|warn|full)`。窗口大小按"手动覆盖 → Provider 默认 → 模型目录 → 环境变量"的顺序由服务端解析。
 
 ### 6.3 资源

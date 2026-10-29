@@ -9,12 +9,66 @@
 
 import { phrase, type Lang } from '../phrases/index.ts';
 import type { components } from '../contract.gen.ts';
-import { toolGroupSummaryView, type ToolLike } from './tools.ts';
+import { activeToolSummary, toolGroupSummaryView, type ToolLike } from './tools.ts';
 import type { ThreadMessage, ThreadSubagent } from './thread.ts';
 
 export type RunState = components['schemas']['RunState'];
 export type RunStatus = RunState['status'];
 export type ConversationStatus = components['schemas']['ConversationView']['status'];
+export type ActiveTool = NonNullable<RunState['activeTool']>;
+
+/** Main-run stall threshold. Equal to the threshold is not stalled. */
+export const DEFAULT_STALL_AFTER_MS = 180_000;
+
+export function resolveStallAfterMs(env: NodeJS.ProcessEnv = process.env): number {
+  const raw = String(env.WEFT_MAIN_STALL_MS || '').trim();
+  if (!raw) return DEFAULT_STALL_AFTER_MS;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n <= 0) return DEFAULT_STALL_AFTER_MS;
+  return Math.trunc(n);
+}
+
+/** Same as subagent finiteTs: positive finite timestamps only. */
+export function finiteTs(value: unknown): number {
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+/** running and now − lastActivityAt > stallAfterMs. Equal to the threshold is not stalled. */
+export function isRunStalled(
+  lastActivityAt: unknown,
+  now: number,
+  stallAfterMs = DEFAULT_STALL_AFTER_MS,
+): boolean {
+  const last = finiteTs(lastActivityAt);
+  if (!last) return false;
+  return now - last > stallAfterMs;
+}
+
+export function stalledSinceOf(
+  running: boolean,
+  lastActivityAt: unknown,
+  now: number,
+  stallAfterMs = DEFAULT_STALL_AFTER_MS,
+): number | null {
+  if (!running) return null;
+  const last = finiteTs(lastActivityAt);
+  if (!last) return null;
+  return now - last > stallAfterMs ? last : null;
+}
+
+export function activeToolView(
+  tool: ToolLike | null | undefined,
+  startedAt: number,
+): ActiveTool | null {
+  const name = String(tool?.name ?? '').trim();
+  if (!name || !Number.isFinite(startedAt) || startedAt <= 0) return null;
+  return {
+    name,
+    startedAt: Math.trunc(startedAt),
+    summary: activeToolSummary(tool),
+  };
+}
 
 export type LlmErrorLike = {
   code?: unknown;
@@ -34,6 +88,10 @@ export type RunStateInput = {
   lang?: Lang;
   hasWorkspace?: boolean;
   startedAt?: unknown;
+  lastActivityAt?: unknown;
+  activeTool?: ActiveTool | null;
+  now?: number;
+  stallAfterMs?: number;
 };
 
 function isRealSubagent(agent: ThreadSubagent | null | undefined): boolean {
@@ -113,9 +171,16 @@ export function runStateView({
   lang = 'zh',
   hasWorkspace = true,
   startedAt,
+  lastActivityAt,
+  activeTool = null,
+  now,
+  stallAfterMs,
 }: RunStateInput = {}): RunState {
   const runStatus = normalizeRunStatus(status);
   const running = runStatus === 'running';
+  const last = running ? asStartedAt(lastActivityAt) : null;
+  const t = now ?? Date.now();
+  const threshold = stallAfterMs ?? resolveStallAfterMs();
   return {
     status: runStatus,
     startedAt: asStartedAt(startedAt),
@@ -124,5 +189,8 @@ export function runStateView({
     canStop: running,
     lockedReason: hasWorkspace ? null : 'no_workspace',
     error: runStatus === 'failed' ? errorView(llmError) : null,
+    lastActivityAt: last,
+    stalledSince: stalledSinceOf(running, last, t, threshold),
+    activeTool: running ? activeTool : null,
   };
 }

@@ -214,6 +214,23 @@ export function toolRowHeading(tool: ToolLike | null | undefined): ToolRowHeadin
   return { title: focus.text, detail: '', intent: false };
 }
 
+/** Max length of RunState.activeTool.summary (bash command, path, or heading). */
+export const ACTIVE_TOOL_SUMMARY_MAX = 80;
+
+/** One-line title for the currently running tool, e.g. the bash command. */
+export function activeToolSummary(tool: ToolLike | null | undefined): string {
+  const kind = toolKind(tool?.name);
+  const input = tool?.input && typeof tool.input === 'object' && !Array.isArray(tool.input)
+    ? asRecord(tool.input)
+    : {};
+  if (kind === 'bash') {
+    const command = String(input.command || input.cmd || '');
+    if (command) return oneLine(command, ACTIVE_TOOL_SUMMARY_MAX);
+  }
+  const heading = toolRowHeading(tool);
+  return oneLine(heading.title || heading.detail || String(tool?.name || ''), ACTIVE_TOOL_SUMMARY_MAX);
+}
+
 export function toolGroupKey(tools: unknown): string {
   const list = Array.isArray(tools) ? tools as ToolLike[] : [];
   const first = list.find((tool) => tool && tool.id != null && String(tool.id) !== '');

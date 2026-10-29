@@ -5,7 +5,16 @@ import path from 'node:path';
 import { compileSchema } from '../../src/v2/validate.ts';
 import { phrase } from '../../src/v2/phrases/index.ts';
 import { toolGroupSummaryView } from '../../src/v2/views/tools.ts';
-import { conversationStatus, normalizeRunStatus, runStateView } from '../../src/v2/views/run.ts';
+import {
+  conversationStatus,
+  DEFAULT_STALL_AFTER_MS,
+  isRunStalled,
+  normalizeRunStatus,
+  resolveStallAfterMs,
+  runStateView,
+  stalledSinceOf,
+} from '../../src/v2/views/run.ts';
+import { activeToolSummary } from '../../src/v2/views/tools.ts';
 import { ROOT } from './_root.mjs';
 
 const spec = JSON.parse(readFileSync(path.join(ROOT, 'contract/openapi.json'), 'utf8'));
@@ -144,4 +153,76 @@ test('recovering is running so the composer can stop', () => {
   assert.equal(view.canSend, true);
   assert.equal(view.lockedReason, null);
   assert.equal(view.pendingText, phrase('zh', 'pending_thinking'));
+  assert.equal(view.lastActivityAt, null);
+  assert.equal(view.stalledSince, null);
+  assert.equal(view.activeTool, null);
+});
+
+test('stall threshold: default 3 minutes; WEFT_MAIN_STALL_MS overrides; invalid falls back', () => {
+  assert.equal(DEFAULT_STALL_AFTER_MS, 180_000);
+  assert.equal(resolveStallAfterMs({}), 180_000);
+  assert.equal(resolveStallAfterMs({ WEFT_MAIN_STALL_MS: '250' }), 250);
+  assert.equal(resolveStallAfterMs({ WEFT_MAIN_STALL_MS: '0' }), 180_000);
+  assert.equal(resolveStallAfterMs({ WEFT_MAIN_STALL_MS: '-1' }), 180_000);
+  assert.equal(resolveStallAfterMs({ WEFT_MAIN_STALL_MS: 'nope' }), 180_000);
+});
+
+test('stalledSince is lastActivityAt only when running past the threshold', () => {
+  const last = 1_000_000;
+  const threshold = 500;
+  assert.equal(isRunStalled(last, last + 499, threshold), false);
+  assert.equal(isRunStalled(last, last + 500, threshold), false);
+  assert.equal(isRunStalled(last, last + 501, threshold), true);
+  assert.equal(stalledSinceOf(true, last, last + 501, threshold), last);
+  assert.equal(stalledSinceOf(false, last, last + 501, threshold), null);
+  assert.equal(stalledSinceOf(true, null, last + 501, threshold), null);
+
+  const stalled = runStateView({
+    status: 'running',
+    lastActivityAt: last,
+    now: last + 501,
+    stallAfterMs: threshold,
+  });
+  assertRun(stalled, 'stalled');
+  assert.equal(stalled.lastActivityAt, last);
+  assert.equal(stalled.stalledSince, last);
+
+  const edge = runStateView({
+    status: 'running',
+    lastActivityAt: last,
+    now: last + 500,
+    stallAfterMs: threshold,
+  });
+  assertRun(edge, 'edge');
+  assert.equal(edge.stalledSince, null);
+
+  const idle = runStateView({
+    status: 'idle',
+    lastActivityAt: last,
+    now: last + 501,
+    stallAfterMs: threshold,
+  });
+  assertRun(idle, 'idle-stall');
+  assert.equal(idle.lastActivityAt, null);
+  assert.equal(idle.stalledSince, null);
+});
+
+test('activeTool is kept while running and cleared otherwise', () => {
+  const tool = { name: 'bash', input: { command: 'npm test' } };
+  const active = { name: 'bash', startedAt: 1_000_000, summary: activeToolSummary(tool) };
+  assert.equal(active.summary, 'npm test');
+  const long = activeToolSummary({
+    name: 'bash',
+    input: { command: `${'x'.repeat(90)}` },
+  });
+  assert.equal(long.length, 80);
+  assert.equal(long.endsWith('…'), true);
+
+  const running = runStateView({ status: 'running', activeTool: active });
+  assertRun(running, 'active-tool');
+  assert.deepEqual(running.activeTool, active);
+
+  const idle = runStateView({ status: 'idle', activeTool: active });
+  assertRun(idle, 'idle-active-tool');
+  assert.equal(idle.activeTool, null);
 });

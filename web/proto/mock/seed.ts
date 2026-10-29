@@ -31,6 +31,9 @@ const IDLE_RUN: RunState = {
   canStop: false,
   lockedReason: null,
   error: null,
+  lastActivityAt: null,
+  stalledSince: null,
+  activeTool: null,
 };
 
 const DEFAULT_WINDOW = 200_000;
@@ -543,6 +546,9 @@ function richConversation(now: number, threads: Map<string, MockSubThread>): Moc
     canStop: true,
     lockedReason: null,
     error: null,
+    lastActivityAt: now - 8_000,
+    stalledSince: null,
+    activeTool: null,
   };
   rich.pending = { zh: '正在编辑 public/app.css', en: 'Editing public/app.css' };
   rich.run = {

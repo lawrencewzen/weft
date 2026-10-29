@@ -28,6 +28,7 @@ import { attachProvidersTopic } from './stream/providers-topic.ts';
 import { attachWorkspacesTopic } from './stream/workspaces-topic.ts';
 import { attachSubagentTopic, type LoadSubagent } from './stream/subagent-topic.ts';
 import { createStuckWatch } from './stream/stuck-watch.ts';
+import { createStallWatch } from './stream/stall-watch.ts';
 import { attachExtensionsTopic } from './stream/extensions-topic.ts';
 import { handleExtensionsApi, loadExtensionsSnapshot, type ExtensionsHost } from './http/extensions.ts';
 import { handleOpenTerminalApi } from './http/open-terminal.ts';
@@ -1620,12 +1621,14 @@ export function createV2Runtime(opts: {
     },
   });
   const stuck = createStuckWatch({ now: opts.now });
+  const stall = createStallWatch({ now: opts.now });
   const conversationTopic = attachConversationTopic(hub, {
     loadConversation: opts.loadConversation,
     loadChanges: opts.changesConversation,
     subscribe: opts.subscribeConversation,
     now: opts.now,
     stuck,
+    stall,
   });
   const subagentTopic = attachSubagentTopic(hub, {
     loadSubagent: opts.loadSubagent,
@@ -1765,6 +1768,7 @@ export function createV2Runtime(opts: {
       conversationTopic.dispose();
       subagentTopic.dispose();
       stuck.dispose();
+      stall.dispose();
       hub.dispose();
       idle.dispose();
       auth.dispose();

@@ -48,6 +48,7 @@
 | `WEFT_V2_STARTUP_CODE_TTL_MS` | `600000` | **只给测试用。** `npm start` 在 `WEFT_READY` 之后打印的那枚登录码有效期（毫秒）。默认 10 分钟，只能用一次。 |
 | `WEFT_V2_VALIDATE` | `0` | 设为 `1` 时按 OpenAPI 契约校验 `/api/v2` 响应；不一致则记日志并返回 500。测试默认打开。 |
 | `WEFT_SUBAGENT_STUCK_MS` | `60000` | **只给测试用。** 子 Agent 处于 running 且超过该毫秒数没有活动时，服务端把 status 改成 stuck 并推送。默认与旧前端 60000 一致。 |
+| `WEFT_MAIN_STALL_MS` | `180000` | 主对话处于 running 且超过该毫秒数没有任何动静时，服务端把 `RunState.stalledSince` 设为 `lastActivityAt` 并推送。默认 3 分钟。 |
 | `WEFT_EXPECT_PROTOCOL` | 空 / `3.0.0` | **只给测试用。** 覆盖 `weft` 命令行认为的协议版本（默认与 `PROTOCOL_VERSION` 相同），用来测版本不兼容时的 restart。只影响命令行，不影响服务端。 |
 | `WEFT_PROBE_TIMEOUT_MS` | `3000` | **只给测试用。** `weft` 探测 GET `/api/v2/service` 的超时（毫秒）。只影响命令行，不影响服务端。 |
 | `WEFT_TERMINAL_APP` | `Terminal` | macOS 上「在终端中打开」传给 `open -a` 的应用名。例如 `iTerm`、`iTerm2`。只影响 macOS。 |
