@@ -16,6 +16,7 @@ import {
   buildBuiltinProvider,
   buildCustomProvider,
   fetchCustomProviderModels,
+  resolveEffectiveDefault,
   resolveKernelTarget,
 } from '../kernel/models.mjs';
 
@@ -370,7 +371,9 @@ export function createProviderService({
 
   async function getDefaultModel() {
     const settings = await loadSettings();
-    return defaultModelOf(settings);
+    const hit = resolveEffectiveDefault(settings);
+    if (!hit) return null;
+    return { providerId: hit.provider, modelId: hit.modelId };
   }
 
   async function setDefaultModel(providerId, modelId) {
@@ -539,14 +542,7 @@ export function createProviderService({
 
   async function hasAvailableModel() {
     const settings = await loadSettings();
-    if (resolveKernelTarget(settings, {})) return true;
-    for (const entry of providersOf(settings)) {
-      if (!Array.isArray(entry.enabled) || !entry.enabled.length) continue;
-      const auth = await authView(entry);
-      if (entry.kind === 'custom') return true;
-      if (auth.type !== 'none') return true;
-    }
-    return false;
+    return Boolean(resolveKernelTarget(settings, {}));
   }
 
   async function resolveConversationModelPatch(body = {}) {

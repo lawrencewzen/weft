@@ -31,8 +31,8 @@ test('agentEventData omits retired role fields', () => {
   assert.equal(Object.hasOwn(data, 'roleId'), false);
 });
 
-test('resolveKernelTarget uses the pinned model, then defaultModel, otherwise null', () => {
-  const settings = {
+function customSettings({ enabled = ['alpha', 'beta'], defaultModel = { providerId: 'custom-aaaaaaaa', modelId: 'alpha' } } = {}) {
+  return {
     version: 3,
     providers: [{
       id: 'custom-aaaaaaaa',
@@ -40,11 +40,15 @@ test('resolveKernelTarget uses the pinned model, then defaultModel, otherwise nu
       name: 'A',
       baseUrl: 'http://127.0.0.1:9/v1',
       api: 'openai-completions',
-      enabled: ['alpha', 'beta'],
+      enabled,
       overrides: {},
     }],
-    defaultModel: { providerId: 'custom-aaaaaaaa', modelId: 'alpha' },
+    defaultModel,
   };
+}
+
+test('resolveKernelTarget uses the pinned model, then defaultModel, otherwise the first enabled model', () => {
+  const settings = customSettings();
   assert.deepEqual(
     resolveKernelTarget(settings, { modelSourceId: 'custom-aaaaaaaa', modelId: 'beta' }),
     { provider: 'custom-aaaaaaaa', modelId: 'beta' },
@@ -54,4 +58,42 @@ test('resolveKernelTarget uses the pinned model, then defaultModel, otherwise nu
     modelId: 'alpha',
   });
   assert.equal(resolveKernelTarget({ version: 3, providers: [], defaultModel: null }, {}), null);
+});
+
+test('resolveKernelTarget falls back to the first enabled model when defaultModel is unset or disabled', () => {
+  const unset = customSettings({ defaultModel: null });
+  assert.deepEqual(resolveKernelTarget(unset, {}), {
+    provider: 'custom-aaaaaaaa',
+    modelId: 'alpha',
+  });
+
+  const disabledDefault = customSettings({
+    enabled: ['alpha', 'beta'],
+    defaultModel: { providerId: 'custom-aaaaaaaa', modelId: 'gone' },
+  });
+  assert.deepEqual(resolveKernelTarget(disabledDefault, {}), {
+    provider: 'custom-aaaaaaaa',
+    modelId: 'alpha',
+  });
+
+  const allOff = customSettings({ enabled: [], defaultModel: null });
+  assert.equal(resolveKernelTarget(allOff, {}), null);
+  assert.equal(resolveKernelTarget(allOff, {
+    modelSourceId: 'custom-aaaaaaaa',
+    modelId: 'alpha',
+  }), null);
+});
+
+test('resolveKernelTarget prefers a conversation pin over the default', () => {
+  const settings = customSettings({
+    defaultModel: { providerId: 'custom-aaaaaaaa', modelId: 'alpha' },
+  });
+  assert.deepEqual(
+    resolveKernelTarget(settings, { modelSourceId: 'custom-aaaaaaaa', modelId: 'beta' }),
+    { provider: 'custom-aaaaaaaa', modelId: 'beta' },
+  );
+  assert.deepEqual(
+    resolveKernelTarget(settings, { modelSourceId: 'missing', modelId: 'beta' }),
+    { provider: 'custom-aaaaaaaa', modelId: 'alpha' },
+  );
 });

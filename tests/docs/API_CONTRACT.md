@@ -183,7 +183,7 @@ JSON：`{"turns":[ {"text":"..."} | {"text":"...","stopReason":"length"} | {"too
 
 `POST /api/sources/test` 带 `sourceId` 时，把请求里的 `vendor` / `baseUrl` / `apiKey` 叠到已保存的来源上再探测，不写回这条来源。origin 变了又没带新密钥，同样 400 `api key required`，不探测。只有请求里完全没有这些覆盖字段时，才把结果写入该来源的 `lastTest`（含 `code` / `status`）。这次如果成功，还按下面的规则改 `models`，并把拉到的完整列表写入 `catalog`：刷新不删除已经启用的模型。当前没有启用任何模型时，`models` 变成拉到的全部；已经有启用模型时 `models` 保持不变，新出现的名字只进 `catalog`、不自动启用。失败不改 `models` 和 `catalog`。
 
-发消息时按这条链选来源：对话自己的 `{ modelSourceId, modelId }`，没有再用 `settings.models.default`，再没有就用第一个可用的来源上的第一个模型。目标源不可用、并且没有别的可用目标时，本轮以 `E_NO_MODEL` / `err_no_model` 失败。
+发消息时按这条链选来源：对话自己的 `{ modelSourceId, modelId }`（须该服务商存在且该模型已启用），没有再用 `settings.defaultModel`（同样须有效），再没有就用 `settings.providers` 顺序上第一个有启用模型的服务商的第一个启用模型。都没有时本轮以 `E_NO_MODEL` / `err_no_model` 失败。`GET /api/v2/providers` 的 `defaultModel` 返回这条链里实际会用的默认（未显式设置时为自动选择的第一个可用模型），不是存储里的 null。
 
 ## 9. Skills
 

@@ -174,6 +174,60 @@ test('GET /api/v2/providers empty snapshot; 401 on the live server', async () =>
   }
 });
 
+test('GET /api/v2/providers returns the first enabled model when defaultModel is unset or disabled', async () => {
+  const providers = [{
+    id: 'custom-aaaaaaaa',
+    kind: 'custom',
+    name: 'Local',
+    baseUrl: 'http://127.0.0.1:9/v1',
+    api: 'openai-completions',
+    enabled: ['alpha', 'beta'],
+    overrides: {},
+  }];
+
+  await withHttp(async ({ base, store }) => {
+    assert.equal((await store.getSettings()).defaultModel, null);
+    const listed = await send(base, 'GET', '/api/v2/providers');
+    assert.equal(listed.status, 200);
+    assertChecked('/api/v2/providers', 'GET', 200, listed.body);
+    assert.deepEqual(listed.body.defaultModel, {
+      providerId: 'custom-aaaaaaaa',
+      modelId: 'alpha',
+    });
+  }, {
+    settings: { version: 3, providers, defaultModel: null },
+  });
+
+  await withHttp(async ({ base }) => {
+    const listed = await send(base, 'GET', '/api/v2/providers');
+    assert.equal(listed.status, 200);
+    assertChecked('/api/v2/providers', 'GET', 200, listed.body);
+    assert.deepEqual(listed.body.defaultModel, {
+      providerId: 'custom-aaaaaaaa',
+      modelId: 'alpha',
+    });
+  }, {
+    settings: {
+      version: 3,
+      providers,
+      defaultModel: { providerId: 'custom-aaaaaaaa', modelId: 'gone' },
+    },
+  });
+
+  await withHttp(async ({ base }) => {
+    const listed = await send(base, 'GET', '/api/v2/providers');
+    assert.equal(listed.status, 200);
+    assertChecked('/api/v2/providers', 'GET', 200, listed.body);
+    assert.equal(listed.body.defaultModel, null);
+  }, {
+    settings: {
+      version: 3,
+      providers: [{ ...providers[0], enabled: [] }],
+      defaultModel: null,
+    },
+  });
+});
+
 test('legacy /api/sources routes still return 503 E_UNAVAILABLE', async () => {
   const srv = await startServer({ token: TOKEN, env: { WEFT_LLM: 'faux' } });
   try {

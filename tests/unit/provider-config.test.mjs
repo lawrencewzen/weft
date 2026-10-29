@@ -274,6 +274,26 @@ test('two DeepSeek sources: first builtin, rest custom, idMap points at both', (
   assert.equal(credentials[1].credential.key, 'sk-b');
 });
 
+test('v2 with no models.default keeps defaultModel null', () => {
+  const { settings, idMap } = migrateSettingsV2toV3({
+    version: 2,
+    sources: [
+      apiSource({
+        id: 'ds',
+        vendor: 'deepseek',
+        name: 'DeepSeek',
+        baseUrl: 'https://api.deepseek.com/v1',
+        apiKey: 'sk-ds',
+        models: ['deepseek-flash', 'deepseek-chat'],
+      }),
+    ],
+    models: {},
+  });
+  assert.equal(idMap.ds, 'deepseek');
+  assert.deepEqual(settings.providers[0].enabled, ['deepseek-flash', 'deepseek-chat']);
+  assert.equal(settings.defaultModel, null);
+});
+
 test('defaultModel is null when the mapped source was discarded', () => {
   const { settings } = migrateSettingsV2toV3({
     version: 2,

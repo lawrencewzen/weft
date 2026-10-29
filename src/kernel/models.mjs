@@ -332,6 +332,38 @@ function providerEnabled(entry, modelId) {
   return enabled.includes(modelId);
 }
 
+function firstEnabledModel(providers) {
+  for (const entry of providers) {
+    const enabled = Array.isArray(entry.enabled) ? entry.enabled : [];
+    const name = enabled.find((item) => typeof item === 'string' && item.trim());
+    if (!name) continue;
+    return { provider: entry.id, modelId: name.trim() };
+  }
+  return null;
+}
+
+/**
+ * Model the kernel actually uses when the conversation does not pin one.
+ * Stored `defaultModel` wins when that provider exists and the model is
+ * enabled; otherwise the first enabled model on the first provider that
+ * has one, in `settings.providers` order. Null only when nothing is enabled.
+ */
+export function resolveEffectiveDefault(settings) {
+  const providers = normalizeProvidersV3(settings?.providers);
+  const stored = defaultModelOf(settings);
+  if (stored) {
+    const entry = providers.find((item) => item.id === stored.providerId);
+    if (entry && providerEnabled(entry, stored.modelId)) {
+      return { provider: stored.providerId, modelId: stored.modelId };
+    }
+  }
+  return firstEnabledModel(providers);
+}
+
+/**
+ * Conversation pin, then the effective default. The pin must name an
+ * existing provider and an enabled model; otherwise it is ignored.
+ */
 export function resolveKernelTarget(settings, conv) {
   const providers = normalizeProvidersV3(settings?.providers);
   const byId = new Map(providers.map((item) => [item.id, item]));
@@ -343,14 +375,7 @@ export function resolveKernelTarget(settings, conv) {
       return { provider: sourceId, modelId };
     }
   }
-  const fallback = defaultModelOf(settings);
-  if (fallback) {
-    const entry = byId.get(fallback.providerId);
-    if (entry && providerEnabled(entry, fallback.modelId)) {
-      return { provider: fallback.providerId, modelId: fallback.modelId };
-    }
-  }
-  return null;
+  return resolveEffectiveDefault(settings);
 }
 
 function fingerprintOf(entry, env) {

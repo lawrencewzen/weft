@@ -277,6 +277,9 @@ export function migrateSettingsV2toV3(raw) {
     ...keepRest(input),
     version: SETTINGS_VERSION_V3,
     providers: normalizeProvidersV3(providers),
+    // Keep defaultModel null when v2 had no models.default. Runtime and
+    // GET /api/v2/providers then auto-pick the first enabled model, so a later
+    // enable-order change still follows the provider list.
     defaultModel: defaultModelFrom(input.models, idMap),
   };
   return { settings, credentials, idMap };

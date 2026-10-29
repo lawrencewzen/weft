@@ -27,6 +27,31 @@ function chatCompletionSse(text) {
 }
 
 /**
+ * Rewrite `https://api.deepseek.com` to a local fake. Captures the original
+ * fetch so this can also be installed as `globalThis.fetch` in a child process.
+ */
+export function rewriteDeepseekFetch(fakeBaseUrl, fetchImpl = globalThis.fetch) {
+  const fake = new URL(fakeBaseUrl);
+  const orig = typeof fetchImpl === 'function' ? fetchImpl.bind(globalThis) : globalThis.fetch.bind(globalThis);
+  return async (input, init) => {
+    const href = typeof input === 'string'
+      ? input
+      : (input instanceof URL ? input.href : (input && typeof input.url === 'string' ? input.url : ''));
+    const url = new URL(href);
+    if (url.hostname !== 'api.deepseek.com') return orig(input, init);
+    url.protocol = fake.protocol;
+    url.host = fake.host;
+    if (input instanceof Request) return orig(new Request(url, input), init);
+    return orig(url, init);
+  };
+}
+
+const fakeDeepseekOrigin = String(process.env.WEFT_FAKE_DEEPSEEK_ORIGIN || '').trim();
+if (fakeDeepseekOrigin) {
+  globalThis.fetch = rewriteDeepseekFetch(fakeDeepseekOrigin);
+}
+
+/**
  * Local stand-in for one OpenAI-compatible model endpoint.
  * Records the key's last 4 characters, never the secret.
  */

@@ -2,6 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import { ROOT } from './_root.mjs';
+import { createSqliteStore } from '../../src/store/sqlite.mjs';
+import { makeTempDir, removeTempDir } from './_tmp.mjs';
 import { request as serverRequest, startServer, stopServer } from './_server.mjs';
 
 const TOKEN = 'unit-no-model-token';
@@ -78,5 +80,39 @@ test('LLM_API=faux opts into the demo runtime without loading a user-facing scri
     assert.equal(done.messages.some((message) => String(message.text || '').includes('reported usage')), false);
   } finally {
     await stopServer(srv);
+  }
+});
+
+test('a provider with every model disabled fails with E_NO_MODEL', async () => {
+  const dir = await makeTempDir('weft-no-model-disabled-');
+  const store = createSqliteStore(dir);
+  await store.replaceSettings({
+    version: 3,
+    providers: [{
+      id: 'custom-aaaaaaaa',
+      kind: 'custom',
+      name: 'Local',
+      baseUrl: 'http://127.0.0.1:9/v1',
+      api: 'openai-completions',
+      enabled: [],
+      overrides: {},
+    }],
+    defaultModel: { providerId: 'custom-aaaaaaaa', modelId: 'alpha' },
+  });
+  store.close();
+
+  let srv = null;
+  try {
+    srv = await startServer({ token: TOKEN, dataDir: dir });
+    const id = await openConversation(srv.base);
+    const sent = await request(srv.base, 'POST', `/api/conversations/${id}/messages`, { text: '你好' });
+    assert.equal(sent.status, 202);
+    const done = await waitFinished(srv.base, id);
+    assert.equal(done.status, 'failed');
+    assert.equal(done.llmError?.code, 'E_NO_MODEL');
+    assert.equal(done.llmError?.message, 'err_no_model');
+  } finally {
+    await stopServer(srv);
+    await removeTempDir(dir);
   }
 });
