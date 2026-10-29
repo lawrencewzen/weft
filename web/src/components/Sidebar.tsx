@@ -36,6 +36,7 @@ import {
 } from '../data/store';
 import { useLeftPanel } from '../data/leftPanelContext';
 import { useRightPane } from '../data/rightPaneContext';
+import { useStoreTopics } from '../data/useStoreTopic';
 import { useWorkspaces } from '../data/useWorkspaces';
 import { t } from '../i18n';
 import { CtxMenu, type CtxMenuItem } from './CtxMenu';
@@ -93,8 +94,14 @@ export function Sidebar({
   onRemoveWorkspace,
   onNewWorkspace,
 }: Props) {
-  const { groups, archived } = useWorkspaces();
+  const { groups, archived, conversations } = useWorkspaces();
   const { store, status, setExtraConversationIds } = useSession();
+  const convIdsKey = conversations.map((conv) => conv.id).sort().join(';');
+  const subagentConvTopics = useMemo(() => (
+    conversations.map((conv) => `${conversationTopic(conv.id)}#subagent`)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- convIdsKey captures list of conversations
+  ), [convIdsKey]);
+  useStoreTopics(store, subagentConvTopics);
   const { tab, setTab, showFiles, openInTerminal } = useRightPane();
   const { toggleLeft, sbBtnOp } = useLeftPanel();
   const [openMap, setOpenMap] = useState<OpenRecord>(() => readWorkspaceOpen());
