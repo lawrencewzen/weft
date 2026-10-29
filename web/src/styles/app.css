@@ -328,8 +328,7 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.6; backgroun
 .conv-node-header { padding: 0 8px 0 32px; }
 .draft-row { padding: 0 8px 0 24px; }
 .conv-node-header:hover, .draft-row:hover { background: var(--hover); }
-.conv-tree-node.conv-active > .conv-node-header, .draft-row.is-active { background: var(--sel); }
-.conv-tree-node { min-width: 0; overflow: hidden; }
+.conv-node-header.conv-active, .draft-row.is-active { background: var(--sel); }
 
 @keyframes saOrbit {
   to { transform: rotate(360deg); }

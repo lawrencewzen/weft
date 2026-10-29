@@ -133,7 +133,7 @@ test('new-conversation draft posts on first send then jumps to the new chat', as
     await wsNode(page, 'draft').getByTestId('next-ws-add').click();
     await expect(page).toHaveURL(new RegExp(`/w/${ws.id}/new$`));
     await expect(page.getByTestId('next-draft-row')).toHaveCount(0);
-    await expect(page.locator('.conv-tree-node.conv-active')).toHaveCount(0);
+    await expect(page.locator('[data-testid=next-conv-row].conv-active')).toHaveCount(0);
     await expect(page.getByTestId('next-composer-input')).toBeVisible();
     await page.getByTestId('next-composer-input').fill('写个 README');
     await page.getByTestId('next-send').click();
@@ -141,6 +141,7 @@ test('new-conversation draft posts on first send then jumps to the new chat', as
     await expect(page.getByTestId('next-draft-row')).toHaveCount(0);
     const top = wsNode(page, 'draft').getByTestId('next-conv-row').first();
     await expect(top).not.toHaveAttribute('data-id', existing.id);
+    await expect(page.locator('[data-testid=next-conv-row].conv-active')).toHaveCount(1);
     await expect(page.getByTestId('next-item-user')).toContainText('写个 README');
   } finally {
     await srv.kill();

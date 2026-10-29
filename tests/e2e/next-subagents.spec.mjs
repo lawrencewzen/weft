@@ -59,7 +59,7 @@ function convRow(page, id) {
 }
 
 function convNode(page, id) {
-  return page.locator('.conv-tree-node').filter({ has: convRow(page, id) });
+  return convRow(page, id);
 }
 
 async function waitSubagentRow(page, convId, timeout = 45000) {

@@ -105,6 +105,7 @@ export function SidebarGroup({
               data-id={conv.id}
               data-status={conv.status || 'idle'}
               data-ws-id={ws.id}
+              aria-current={isCurrent ? 'page' : undefined}
               title={conv.title || ''}
               onClick={() => onOpenConversation(ws.id, conv.id)}
               onContextMenu={(ev) => onOpenMenu(ev, conversationItems(ws.id, conv), conv.title || '')}

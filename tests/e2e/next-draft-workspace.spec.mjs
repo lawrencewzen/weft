@@ -58,7 +58,7 @@ test('new chat does not add a sidebar row until the first message is sent', asyn
     await page.getByTestId('next-new-chat').click();
     await expect(page).toHaveURL(new RegExp(`/w/${ws.id}/new$`));
     await expect(page.getByTestId('next-draft-row')).toHaveCount(0);
-    await expect(page.locator('.conv-tree-node.conv-active')).toHaveCount(0);
+    await expect(page.locator('[data-testid=next-conv-row].conv-active')).toHaveCount(0);
     await expect(wsNode(page, 'draft').getByTestId('next-conv-row')).toHaveCount(1);
     await expect(page.getByTestId('next-draft-hint')).toContainText('draft');
     await expect(page.getByTestId('next-draft-hero-ws')).toContainText('draft');
@@ -70,7 +70,7 @@ test('new chat does not add a sidebar row until the first message is sent', asyn
     await expect(wsNode(page, 'draft').getByTestId('next-conv-row')).toHaveCount(2);
     const top = wsNode(page, 'draft').getByTestId('next-conv-row').first();
     await expect(top).not.toHaveAttribute('data-id', existing.id);
-    await expect(page.locator('.conv-tree-node.conv-active')).toHaveCount(1);
+    await expect(page.locator('[data-testid=next-conv-row].conv-active')).toHaveCount(1);
     await expect(page.getByTestId('next-item-user')).toContainText('写个 README');
   } finally {
     await srv.kill();
