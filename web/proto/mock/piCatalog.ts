@@ -8,6 +8,7 @@ export const MOCK_AVAILABLE_PROVIDERS: Available[] = [
   {
     "id": "qwen-token-plan-cn",
     "name": "通义千问 Token Plan（国内）",
+    "brand": "qwen",
     "authMethods": [
       "api_key"
     ],
@@ -20,6 +21,7 @@ export const MOCK_AVAILABLE_PROVIDERS: Available[] = [
   {
     "id": "xiaomi",
     "name": "小米 MiMo",
+    "brand": "xiaomi",
     "authMethods": [
       "api_key"
     ],
@@ -32,6 +34,7 @@ export const MOCK_AVAILABLE_PROVIDERS: Available[] = [
   {
     "id": "zai",
     "name": "智谱 Z.AI",
+    "brand": "zhipu",
     "authMethods": [
       "api_key"
     ],
@@ -44,6 +47,7 @@ export const MOCK_AVAILABLE_PROVIDERS: Available[] = [
   {
     "id": "anthropic",
     "name": "Anthropic",
+    "brand": "anthropic",
     "authMethods": [
       "api_key",
       "oauth"
@@ -57,6 +61,7 @@ export const MOCK_AVAILABLE_PROVIDERS: Available[] = [
   {
     "id": "deepseek",
     "name": "DeepSeek",
+    "brand": "deepseek",
     "authMethods": [
       "api_key"
     ],
@@ -69,6 +74,7 @@ export const MOCK_AVAILABLE_PROVIDERS: Available[] = [
   {
     "id": "google",
     "name": "Google",
+    "brand": "google",
     "authMethods": [
       "api_key"
     ],
@@ -81,6 +87,7 @@ export const MOCK_AVAILABLE_PROVIDERS: Available[] = [
   {
     "id": "moonshotai-cn",
     "name": "Kimi（国内）",
+    "brand": "moonshot",
     "authMethods": [
       "api_key"
     ],
@@ -93,6 +100,7 @@ export const MOCK_AVAILABLE_PROVIDERS: Available[] = [
   {
     "id": "minimax-cn",
     "name": "MiniMax（国内）",
+    "brand": "minimax",
     "authMethods": [
       "api_key"
     ],
@@ -105,6 +113,7 @@ export const MOCK_AVAILABLE_PROVIDERS: Available[] = [
   {
     "id": "openai",
     "name": "OpenAI",
+    "brand": "openai",
     "authMethods": [
       "api_key",
       "oauth"
@@ -118,6 +127,7 @@ export const MOCK_AVAILABLE_PROVIDERS: Available[] = [
   {
     "id": "openrouter",
     "name": "OpenRouter",
+    "brand": "openrouter",
     "authMethods": [
       "api_key",
       "oauth"
@@ -131,6 +141,7 @@ export const MOCK_AVAILABLE_PROVIDERS: Available[] = [
   {
     "id": "amazon-bedrock",
     "name": "Amazon Bedrock",
+    "brand": "aws",
     "authMethods": [
       "api_key"
     ],
@@ -142,6 +153,7 @@ export const MOCK_AVAILABLE_PROVIDERS: Available[] = [
   {
     "id": "ant-ling",
     "name": "Ant Ling",
+    "brand": "antgroup",
     "authMethods": [
       "api_key"
     ],
@@ -154,6 +166,7 @@ export const MOCK_AVAILABLE_PROVIDERS: Available[] = [
   {
     "id": "azure",
     "name": "Azure",
+    "brand": "azure",
     "authMethods": [
       "api_key"
     ],
@@ -166,6 +179,7 @@ export const MOCK_AVAILABLE_PROVIDERS: Available[] = [
   {
     "id": "baseten",
     "name": "Baseten",
+    "brand": "baseten",
     "authMethods": [
       "api_key"
     ],
@@ -178,6 +192,7 @@ export const MOCK_AVAILABLE_PROVIDERS: Available[] = [
   {
     "id": "cerebras",
     "name": "Cerebras",
+    "brand": "cerebras",
     "authMethods": [
       "api_key"
     ],
@@ -190,6 +205,7 @@ export const MOCK_AVAILABLE_PROVIDERS: Available[] = [
   {
     "id": "cloudflare-ai-gateway",
     "name": "Cloudflare AI Gateway",
+    "brand": "cloudflare",
     "authMethods": [
       "api_key"
     ],
@@ -202,6 +218,7 @@ export const MOCK_AVAILABLE_PROVIDERS: Available[] = [
   {
     "id": "cloudflare-workers-ai",
     "name": "Cloudflare Workers AI",
+    "brand": "cloudflare",
     "authMethods": [
       "api_key"
     ],
@@ -214,6 +231,7 @@ export const MOCK_AVAILABLE_PROVIDERS: Available[] = [
   {
     "id": "fireworks",
     "name": "Fireworks",
+    "brand": "fireworks",
     "authMethods": [
       "api_key"
     ],
@@ -226,6 +244,7 @@ export const MOCK_AVAILABLE_PROVIDERS: Available[] = [
   {
     "id": "github-copilot",
     "name": "GitHub Copilot",
+    "brand": "githubcopilot",
     "authMethods": [
       "api_key",
       "oauth"
@@ -239,6 +258,7 @@ export const MOCK_AVAILABLE_PROVIDERS: Available[] = [
   {
     "id": "google-vertex",
     "name": "Google Vertex AI",
+    "brand": "googlecloud",
     "authMethods": [
       "api_key"
     ],
@@ -251,6 +271,7 @@ export const MOCK_AVAILABLE_PROVIDERS: Available[] = [
   {
     "id": "groq",
     "name": "Groq",
+    "brand": "groq",
     "authMethods": [
       "api_key"
     ],
@@ -263,6 +284,7 @@ export const MOCK_AVAILABLE_PROVIDERS: Available[] = [
   {
     "id": "huggingface",
     "name": "Hugging Face",
+    "brand": "huggingface",
     "authMethods": [
       "api_key"
     ],
@@ -275,6 +297,7 @@ export const MOCK_AVAILABLE_PROVIDERS: Available[] = [
   {
     "id": "kimi-coding",
     "name": "Kimi For Coding",
+    "brand": "kimi",
     "authMethods": [
       "api_key",
       "oauth"
@@ -288,6 +311,7 @@ export const MOCK_AVAILABLE_PROVIDERS: Available[] = [
   {
     "id": "meta",
     "name": "Meta",
+    "brand": "meta",
     "authMethods": [
       "api_key",
       "oauth"
@@ -301,6 +325,7 @@ export const MOCK_AVAILABLE_PROVIDERS: Available[] = [
   {
     "id": "minimax",
     "name": "MiniMax",
+    "brand": "minimax",
     "authMethods": [
       "api_key"
     ],
@@ -313,6 +338,7 @@ export const MOCK_AVAILABLE_PROVIDERS: Available[] = [
   {
     "id": "mistral",
     "name": "Mistral",
+    "brand": "mistral",
     "authMethods": [
       "api_key"
     ],
@@ -325,6 +351,7 @@ export const MOCK_AVAILABLE_PROVIDERS: Available[] = [
   {
     "id": "moonshotai",
     "name": "Moonshot AI",
+    "brand": "moonshot",
     "authMethods": [
       "api_key"
     ],
@@ -337,6 +364,7 @@ export const MOCK_AVAILABLE_PROVIDERS: Available[] = [
   {
     "id": "nvidia",
     "name": "NVIDIA",
+    "brand": "nvidia",
     "authMethods": [
       "api_key"
     ],
@@ -349,6 +377,7 @@ export const MOCK_AVAILABLE_PROVIDERS: Available[] = [
   {
     "id": "opencode-go",
     "name": "OpenCode Go",
+    "brand": "opencode",
     "authMethods": [
       "api_key"
     ],
@@ -361,6 +390,7 @@ export const MOCK_AVAILABLE_PROVIDERS: Available[] = [
   {
     "id": "opencode",
     "name": "OpenCode Zen",
+    "brand": "opencode",
     "authMethods": [
       "api_key"
     ],
@@ -373,6 +403,7 @@ export const MOCK_AVAILABLE_PROVIDERS: Available[] = [
   {
     "id": "qwen-token-plan",
     "name": "Qwen Token Plan",
+    "brand": "qwen",
     "authMethods": [
       "api_key"
     ],
@@ -385,6 +416,7 @@ export const MOCK_AVAILABLE_PROVIDERS: Available[] = [
   {
     "id": "qwen-token-plan-individual",
     "name": "Qwen Token Plan Individual",
+    "brand": "qwen",
     "authMethods": [
       "api_key"
     ],
@@ -397,6 +429,7 @@ export const MOCK_AVAILABLE_PROVIDERS: Available[] = [
   {
     "id": "together",
     "name": "Together",
+    "brand": "together",
     "authMethods": [
       "api_key"
     ],
@@ -409,6 +442,7 @@ export const MOCK_AVAILABLE_PROVIDERS: Available[] = [
   {
     "id": "vercel-ai-gateway",
     "name": "Vercel AI Gateway",
+    "brand": "vercel",
     "authMethods": [
       "api_key"
     ],
@@ -421,6 +455,7 @@ export const MOCK_AVAILABLE_PROVIDERS: Available[] = [
   {
     "id": "xiaomi-token-plan-ams",
     "name": "Xiaomi Token Plan AMS",
+    "brand": "xiaomi",
     "authMethods": [
       "api_key"
     ],
@@ -433,6 +468,7 @@ export const MOCK_AVAILABLE_PROVIDERS: Available[] = [
   {
     "id": "xiaomi-token-plan-cn",
     "name": "Xiaomi Token Plan CN",
+    "brand": "xiaomi",
     "authMethods": [
       "api_key"
     ],
@@ -445,6 +481,7 @@ export const MOCK_AVAILABLE_PROVIDERS: Available[] = [
   {
     "id": "xiaomi-token-plan-sgp",
     "name": "Xiaomi Token Plan SGP",
+    "brand": "xiaomi",
     "authMethods": [
       "api_key"
     ],
@@ -457,6 +494,7 @@ export const MOCK_AVAILABLE_PROVIDERS: Available[] = [
   {
     "id": "zai-coding-cn",
     "name": "Z.AI Coding CN",
+    "brand": "zhipu",
     "authMethods": [
       "api_key"
     ],
@@ -1289,6 +1327,4364 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "contextWindow": 1000000,
       "maxTokens": 131072,
       "images": false,
+      "reasoning": true,
+      "overridden": {}
+    }
+  ],
+  "openrouter": [
+    {
+      "id": "anthropic/claude-fable-5",
+      "name": "Anthropic: Claude Fable 5",
+      "brand": "Claude",
+      "enabled": false,
+      "contextWindow": 1000000,
+      "maxTokens": 128000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "anthropic/claude-fable-5.1",
+      "name": "Anthropic: Claude Fable 5.1",
+      "brand": "Claude",
+      "enabled": false,
+      "contextWindow": 1000000,
+      "maxTokens": 128000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "anthropic/claude-haiku-4.5",
+      "name": "Anthropic: Claude Haiku 4.5",
+      "brand": "Claude",
+      "enabled": false,
+      "contextWindow": 200000,
+      "maxTokens": 64000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "anthropic/claude-haiku-5.5",
+      "name": "Anthropic: Claude Haiku 5.5",
+      "brand": "Claude",
+      "enabled": false,
+      "contextWindow": 1000000,
+      "maxTokens": 128000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "anthropic/claude-opus-4.1",
+      "name": "Anthropic: Claude Opus 4.1",
+      "brand": "Claude",
+      "enabled": false,
+      "contextWindow": 200000,
+      "maxTokens": 32000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "anthropic/claude-opus-4.5",
+      "name": "Anthropic: Claude Opus 4.5",
+      "brand": "Claude",
+      "enabled": false,
+      "contextWindow": 200000,
+      "maxTokens": 64000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "anthropic/claude-opus-4.6",
+      "name": "Anthropic: Claude Opus 4.6",
+      "brand": "Claude",
+      "enabled": false,
+      "contextWindow": 1000000,
+      "maxTokens": 128000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "anthropic/claude-opus-4.7",
+      "name": "Anthropic: Claude Opus 4.7",
+      "brand": "Claude",
+      "enabled": false,
+      "contextWindow": 1000000,
+      "maxTokens": 128000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "anthropic/claude-opus-4.8",
+      "name": "Anthropic: Claude Opus 4.8",
+      "brand": "Claude",
+      "enabled": false,
+      "contextWindow": 1000000,
+      "maxTokens": 128000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "anthropic/claude-opus-5",
+      "name": "Anthropic: Claude Opus 5",
+      "brand": "Claude",
+      "enabled": false,
+      "contextWindow": 1000000,
+      "maxTokens": 128000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "anthropic/claude-opus-5.5",
+      "name": "Anthropic: Claude Opus 5.5",
+      "brand": "Claude",
+      "enabled": false,
+      "contextWindow": 1000000,
+      "maxTokens": 128000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "anthropic/claude-sonnet-4.5",
+      "name": "Anthropic: Claude Sonnet 4.5",
+      "brand": "Claude",
+      "enabled": false,
+      "contextWindow": 1000000,
+      "maxTokens": 64000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "anthropic/claude-sonnet-4.6",
+      "name": "Anthropic: Claude Sonnet 4.6",
+      "brand": "Claude",
+      "enabled": false,
+      "contextWindow": 1000000,
+      "maxTokens": 128000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "anthropic/claude-sonnet-5",
+      "name": "Anthropic: Claude Sonnet 5",
+      "brand": "Claude",
+      "enabled": false,
+      "contextWindow": 1000000,
+      "maxTokens": 128000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "anthropic/claude-sonnet-5.5",
+      "name": "Anthropic: Claude Sonnet 5.5",
+      "brand": "Claude",
+      "enabled": false,
+      "contextWindow": 1000000,
+      "maxTokens": 128000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "~anthropic/claude-fable-latest",
+      "name": "Anthropic: Claude Fable Latest",
+      "brand": "Claude",
+      "enabled": false,
+      "contextWindow": 1000000,
+      "maxTokens": 128000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "~anthropic/claude-haiku-latest",
+      "name": "Anthropic: Claude Haiku Latest",
+      "brand": "Claude",
+      "enabled": false,
+      "contextWindow": 1000000,
+      "maxTokens": 128000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "~anthropic/claude-opus-latest",
+      "name": "Anthropic: Claude Opus Latest",
+      "brand": "Claude",
+      "enabled": false,
+      "contextWindow": 1000000,
+      "maxTokens": 128000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "~anthropic/claude-sonnet-latest",
+      "name": "Anthropic: Claude Sonnet Latest",
+      "brand": "Claude",
+      "enabled": false,
+      "contextWindow": 1000000,
+      "maxTokens": 128000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "~deepseek/deepseek-flash-latest",
+      "name": "DeepSeek: DeepSeek Flash Latest",
+      "brand": "DeepSeek",
+      "enabled": false,
+      "contextWindow": 1048576,
+      "maxTokens": 943718,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "~deepseek/deepseek-pro-latest",
+      "name": "DeepSeek: DeepSeek Pro Latest",
+      "brand": "DeepSeek",
+      "enabled": false,
+      "contextWindow": 1048576,
+      "maxTokens": 393216,
+      "images": false,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "~deepseek/deepseek-v4-flash-latest",
+      "name": "DeepSeek: DeepSeek V4 Flash Latest",
+      "brand": "DeepSeek",
+      "enabled": false,
+      "contextWindow": 1048576,
+      "maxTokens": 943718,
+      "images": false,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "~google/gemini-flash-latest",
+      "name": "Google: Gemini Flash Latest",
+      "brand": "Gemini",
+      "enabled": false,
+      "contextWindow": 1048576,
+      "maxTokens": 65536,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "~google/gemini-pro-latest",
+      "name": "Google: Gemini Pro Latest",
+      "brand": "Gemini",
+      "enabled": false,
+      "contextWindow": 1048576,
+      "maxTokens": 65536,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "~moonshotai/kimi-latest",
+      "name": "MoonshotAI: Kimi Latest",
+      "brand": "Moonshot",
+      "enabled": false,
+      "contextWindow": 1048576,
+      "maxTokens": 131072,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "~openai/gpt-astra-latest",
+      "name": "OpenAI: GPT Astra Latest",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 1050000,
+      "maxTokens": 128000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "~openai/gpt-luna-latest",
+      "name": "OpenAI: GPT Luna Latest",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 1050000,
+      "maxTokens": 128000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "~openai/gpt-mini-latest",
+      "name": "OpenAI: GPT Mini Latest",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 400000,
+      "maxTokens": 128000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "~openai/gpt-sol-latest",
+      "name": "OpenAI: GPT Sol Latest",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 1050000,
+      "maxTokens": 128000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "~openai/gpt-terra-latest",
+      "name": "OpenAI: GPT Terra Latest",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 1050000,
+      "maxTokens": 128000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "~unbiased/pareto-latest",
+      "name": "Pareto Latest",
+      "brand": "UnionAlpha",
+      "enabled": false,
+      "contextWindow": 262144,
+      "maxTokens": 131072,
+      "images": true,
+      "reasoning": false,
+      "overridden": {}
+    },
+    {
+      "id": "~x-ai/grok-latest",
+      "name": "xAI: Grok Latest",
+      "brand": "Grok",
+      "enabled": false,
+      "contextWindow": 500000,
+      "maxTokens": 450000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "~z-ai/glm-flash-latest",
+      "name": "Z.ai: GLM Flash Latest",
+      "brand": "ChatGLM",
+      "enabled": false,
+      "contextWindow": 1048576,
+      "maxTokens": 943718,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "~z-ai/glm-latest",
+      "name": "Z.ai: GLM Latest",
+      "brand": "ChatGLM",
+      "enabled": false,
+      "contextWindow": 1048576,
+      "maxTokens": 131072,
+      "images": false,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "aion-labs/aion-2.0",
+      "name": "AionLabs: Aion-2.0",
+      "brand": "AionLabs",
+      "enabled": false,
+      "contextWindow": 131072,
+      "maxTokens": 32768,
+      "images": false,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "aion-labs/aion-3.0",
+      "name": "AionLabs: Aion-3.0",
+      "brand": "AionLabs",
+      "enabled": false,
+      "contextWindow": 131072,
+      "maxTokens": 32768,
+      "images": false,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "aion-labs/aion-3.0-mini",
+      "name": "AionLabs: Aion-3.0-Mini",
+      "brand": "AionLabs",
+      "enabled": false,
+      "contextWindow": 131072,
+      "maxTokens": 32768,
+      "images": false,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "aion-labs/aion-3.5",
+      "name": "AionLabs: Aion 3.5",
+      "brand": "AionLabs",
+      "enabled": false,
+      "contextWindow": 262144,
+      "maxTokens": 32768,
+      "images": false,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "aion-labs/aion-3.5-mini",
+      "name": "AionLabs: Aion 3.5 Mini",
+      "brand": "AionLabs",
+      "enabled": false,
+      "contextWindow": 262144,
+      "maxTokens": 32768,
+      "images": false,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "amazon/nova-2-lite-v1",
+      "name": "Amazon: Nova 2 Lite",
+      "brand": "Nova",
+      "enabled": false,
+      "contextWindow": 1000000,
+      "maxTokens": 65535,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "amazon/nova-lite-v1",
+      "name": "Amazon: Nova Lite 1.0",
+      "brand": "Nova",
+      "enabled": false,
+      "contextWindow": 300000,
+      "maxTokens": 5120,
+      "images": true,
+      "reasoning": false,
+      "overridden": {}
+    },
+    {
+      "id": "amazon/nova-micro-v1",
+      "name": "Amazon: Nova Micro 1.0",
+      "brand": "Nova",
+      "enabled": false,
+      "contextWindow": 128000,
+      "maxTokens": 5120,
+      "images": false,
+      "reasoning": false,
+      "overridden": {}
+    },
+    {
+      "id": "amazon/nova-premier-v1",
+      "name": "Amazon: Nova Premier 1.0",
+      "brand": "Nova",
+      "enabled": false,
+      "contextWindow": 1000000,
+      "maxTokens": 32000,
+      "images": true,
+      "reasoning": false,
+      "overridden": {}
+    },
+    {
+      "id": "amazon/nova-pro-v1",
+      "name": "Amazon: Nova Pro 1.0",
+      "brand": "Nova",
+      "enabled": false,
+      "contextWindow": 300000,
+      "maxTokens": 5120,
+      "images": true,
+      "reasoning": false,
+      "overridden": {}
+    },
+    {
+      "id": "anthropic/claude-fable-5:batch",
+      "name": "Anthropic: Claude Fable 5 (batch)",
+      "brand": "Claude",
+      "enabled": false,
+      "contextWindow": 1000000,
+      "maxTokens": 128000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "anthropic/claude-fable-5.1:batch",
+      "name": "Anthropic: Claude Fable 5.1 (batch)",
+      "brand": "Claude",
+      "enabled": false,
+      "contextWindow": 1000000,
+      "maxTokens": 128000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "anthropic/claude-haiku-4.5:batch",
+      "name": "Anthropic: Claude Haiku 4.5 (batch)",
+      "brand": "Claude",
+      "enabled": false,
+      "contextWindow": 200000,
+      "maxTokens": 64000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "anthropic/claude-haiku-5.5:batch",
+      "name": "Anthropic: Claude Haiku 5.5 (batch)",
+      "brand": "Claude",
+      "enabled": false,
+      "contextWindow": 1000000,
+      "maxTokens": 128000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "anthropic/claude-opus-4.1:batch",
+      "name": "Anthropic: Claude Opus 4.1 (batch)",
+      "brand": "Claude",
+      "enabled": false,
+      "contextWindow": 200000,
+      "maxTokens": 32000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "anthropic/claude-opus-4.5:batch",
+      "name": "Anthropic: Claude Opus 4.5 (batch)",
+      "brand": "Claude",
+      "enabled": false,
+      "contextWindow": 200000,
+      "maxTokens": 64000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "anthropic/claude-opus-4.6:batch",
+      "name": "Anthropic: Claude Opus 4.6 (batch)",
+      "brand": "Claude",
+      "enabled": false,
+      "contextWindow": 1000000,
+      "maxTokens": 128000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "anthropic/claude-opus-4.7:batch",
+      "name": "Anthropic: Claude Opus 4.7 (batch)",
+      "brand": "Claude",
+      "enabled": false,
+      "contextWindow": 1000000,
+      "maxTokens": 128000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "anthropic/claude-opus-4.8:batch",
+      "name": "Anthropic: Claude Opus 4.8 (batch)",
+      "brand": "Claude",
+      "enabled": false,
+      "contextWindow": 1000000,
+      "maxTokens": 128000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "anthropic/claude-opus-5:batch",
+      "name": "Anthropic: Claude Opus 5 (batch)",
+      "brand": "Claude",
+      "enabled": false,
+      "contextWindow": 1000000,
+      "maxTokens": 128000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "anthropic/claude-opus-5.5:batch",
+      "name": "Anthropic: Claude Opus 5.5 (batch)",
+      "brand": "Claude",
+      "enabled": false,
+      "contextWindow": 1000000,
+      "maxTokens": 128000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "anthropic/claude-sonnet-4.5:batch",
+      "name": "Anthropic: Claude Sonnet 4.5 (batch)",
+      "brand": "Claude",
+      "enabled": false,
+      "contextWindow": 1000000,
+      "maxTokens": 64000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "anthropic/claude-sonnet-4.6:batch",
+      "name": "Anthropic: Claude Sonnet 4.6 (batch)",
+      "brand": "Claude",
+      "enabled": false,
+      "contextWindow": 1000000,
+      "maxTokens": 128000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "anthropic/claude-sonnet-5:batch",
+      "name": "Anthropic: Claude Sonnet 5 (batch)",
+      "brand": "Claude",
+      "enabled": false,
+      "contextWindow": 1000000,
+      "maxTokens": 128000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "anthropic/claude-sonnet-5.5:batch",
+      "name": "Anthropic: Claude Sonnet 5.5 (batch)",
+      "brand": "Claude",
+      "enabled": false,
+      "contextWindow": 1000000,
+      "maxTokens": 128000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "arcee-ai/trinity-large-thinking",
+      "name": "Arcee AI: Trinity Large Thinking",
+      "brand": "Arcee",
+      "enabled": false,
+      "contextWindow": 262144,
+      "maxTokens": 80000,
+      "images": false,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "auto",
+      "name": "Auto",
+      "brand": null,
+      "enabled": false,
+      "contextWindow": 2000000,
+      "maxTokens": 30000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "bytedance-seed/seed-1.6",
+      "name": "ByteDance Seed: Seed 1.6",
+      "brand": "ByteDance",
+      "enabled": false,
+      "contextWindow": 262144,
+      "maxTokens": 32768,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "bytedance-seed/seed-1.6-flash",
+      "name": "ByteDance Seed: Seed 1.6 Flash",
+      "brand": "ByteDance",
+      "enabled": false,
+      "contextWindow": 262144,
+      "maxTokens": 32768,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "bytedance-seed/seed-2-1-turbo",
+      "name": "ByteDance Seed: Seed 2.1 Turbo",
+      "brand": "ByteDance",
+      "enabled": false,
+      "contextWindow": 262144,
+      "maxTokens": 235929,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "bytedance-seed/seed-2.0-code",
+      "name": "ByteDance Seed: Seed-2.0-Code",
+      "brand": "ByteDance",
+      "enabled": false,
+      "contextWindow": 262144,
+      "maxTokens": 131072,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "bytedance-seed/seed-2.0-lite",
+      "name": "ByteDance Seed: Seed-2.0-Lite",
+      "brand": "ByteDance",
+      "enabled": false,
+      "contextWindow": 262144,
+      "maxTokens": 131072,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "bytedance-seed/seed-2.0-mini",
+      "name": "ByteDance Seed: Seed-2.0-Mini",
+      "brand": "ByteDance",
+      "enabled": false,
+      "contextWindow": 262144,
+      "maxTokens": 131072,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "cohere/command-a-plus",
+      "name": "Cohere: Command A+",
+      "brand": "Cohere",
+      "enabled": false,
+      "contextWindow": 192000,
+      "maxTokens": 64000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "cohere/command-r-08-2024",
+      "name": "Cohere: Command R (08-2024)",
+      "brand": "Cohere",
+      "enabled": false,
+      "contextWindow": 128000,
+      "maxTokens": 4000,
+      "images": false,
+      "reasoning": false,
+      "overridden": {}
+    },
+    {
+      "id": "cohere/command-r-plus-08-2024",
+      "name": "Cohere: Command R+ (08-2024)",
+      "brand": "Cohere",
+      "enabled": false,
+      "contextWindow": 128000,
+      "maxTokens": 4000,
+      "images": false,
+      "reasoning": false,
+      "overridden": {}
+    },
+    {
+      "id": "cohere/north-mini-code:free",
+      "name": "Cohere: North Mini Code (free)",
+      "brand": null,
+      "enabled": false,
+      "contextWindow": 256000,
+      "maxTokens": 64000,
+      "images": false,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "deepseek/deepseek-chat",
+      "name": "DeepSeek: DeepSeek V3",
+      "brand": "DeepSeek",
+      "enabled": false,
+      "contextWindow": 163840,
+      "maxTokens": 16384,
+      "images": false,
+      "reasoning": false,
+      "overridden": {}
+    },
+    {
+      "id": "deepseek/deepseek-chat-v3-0324",
+      "name": "DeepSeek: DeepSeek V3 0324",
+      "brand": "DeepSeek",
+      "enabled": false,
+      "contextWindow": 128000,
+      "maxTokens": 115200,
+      "images": false,
+      "reasoning": false,
+      "overridden": {}
+    },
+    {
+      "id": "deepseek/deepseek-chat-v3.1",
+      "name": "DeepSeek: DeepSeek V3.1",
+      "brand": "DeepSeek",
+      "enabled": false,
+      "contextWindow": 163840,
+      "maxTokens": 32768,
+      "images": false,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "deepseek/deepseek-r1",
+      "name": "DeepSeek: R1",
+      "brand": "DeepSeek",
+      "enabled": false,
+      "contextWindow": 64000,
+      "maxTokens": 16000,
+      "images": false,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "deepseek/deepseek-r1-0528",
+      "name": "DeepSeek: R1 0528",
+      "brand": "DeepSeek",
+      "enabled": false,
+      "contextWindow": 163840,
+      "maxTokens": 32768,
+      "images": false,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "deepseek/deepseek-v3.1-terminus",
+      "name": "DeepSeek: DeepSeek V3.1 Terminus",
+      "brand": "DeepSeek",
+      "enabled": false,
+      "contextWindow": 163840,
+      "maxTokens": 147456,
+      "images": false,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "deepseek/deepseek-v3.2",
+      "name": "DeepSeek: DeepSeek V3.2",
+      "brand": "DeepSeek",
+      "enabled": false,
+      "contextWindow": 163840,
+      "maxTokens": 147456,
+      "images": false,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "deepseek/deepseek-v3.2-exp",
+      "name": "DeepSeek: DeepSeek V3.2 Exp",
+      "brand": "DeepSeek",
+      "enabled": false,
+      "contextWindow": 163840,
+      "maxTokens": 147456,
+      "images": false,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "deepseek/deepseek-v4-flash",
+      "name": "DeepSeek: DeepSeek V4 Flash 0423",
+      "brand": "DeepSeek",
+      "enabled": false,
+      "contextWindow": 1048575,
+      "maxTokens": 943717,
+      "images": false,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "deepseek/deepseek-v4-flash-0731",
+      "name": "DeepSeek: DeepSeek V4 Flash 0731",
+      "brand": "DeepSeek",
+      "enabled": false,
+      "contextWindow": 1048576,
+      "maxTokens": 943718,
+      "images": false,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "deepseek/deepseek-v4-flash-vision-exp",
+      "name": "DeepSeek: DeepSeek V4 Flash Vision Exp",
+      "brand": "DeepSeek",
+      "enabled": false,
+      "contextWindow": 1048576,
+      "maxTokens": 262144,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "deepseek/deepseek-v4-pro",
+      "name": "DeepSeek: DeepSeek V4 Pro 0423",
+      "brand": "DeepSeek",
+      "enabled": false,
+      "contextWindow": 1024000,
+      "maxTokens": 384000,
+      "images": false,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "deepseek/deepseek-v4-pro-0813",
+      "name": "DeepSeek: DeepSeek V4 Pro 0813",
+      "brand": "DeepSeek",
+      "enabled": false,
+      "contextWindow": 1048576,
+      "maxTokens": 393216,
+      "images": false,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "deepseek/deepseek-v4.1-flash",
+      "name": "DeepSeek: DeepSeek V4.1 Flash",
+      "brand": "DeepSeek",
+      "enabled": false,
+      "contextWindow": 1048576,
+      "maxTokens": 943718,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "deepseek/deepseek-v4.1-flash:batch",
+      "name": "DeepSeek: DeepSeek V4.1 Flash (batch)",
+      "brand": "DeepSeek",
+      "enabled": false,
+      "contextWindow": 1048576,
+      "maxTokens": 131072,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "dots-studio/dots-3-note-preview:free",
+      "name": "Dots Studio: Dots3-Note Preview (free)",
+      "brand": "Udio",
+      "enabled": false,
+      "contextWindow": 512000,
+      "maxTokens": 460800,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "fireworks/ember-1",
+      "name": "Fireworks: Ember-1",
+      "brand": null,
+      "enabled": false,
+      "contextWindow": 1048576,
+      "maxTokens": 943718,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "google/gemini-2.5-flash",
+      "name": "Google: Gemini 2.5 Flash",
+      "brand": "Gemini",
+      "enabled": false,
+      "contextWindow": 1048576,
+      "maxTokens": 65535,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "google/gemini-2.5-flash-lite",
+      "name": "Google: Gemini 2.5 Flash Lite",
+      "brand": "Gemini",
+      "enabled": false,
+      "contextWindow": 1048576,
+      "maxTokens": 65535,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "google/gemini-2.5-flash-lite:batch",
+      "name": "Google: Gemini 2.5 Flash Lite (batch)",
+      "brand": "Gemini",
+      "enabled": false,
+      "contextWindow": 1048576,
+      "maxTokens": 65535,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "google/gemini-2.5-flash:batch",
+      "name": "Google: Gemini 2.5 Flash (batch)",
+      "brand": "Gemini",
+      "enabled": false,
+      "contextWindow": 1048576,
+      "maxTokens": 65535,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "google/gemini-2.5-pro",
+      "name": "Google: Gemini 2.5 Pro",
+      "brand": "Gemini",
+      "enabled": false,
+      "contextWindow": 1048576,
+      "maxTokens": 65536,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "google/gemini-2.5-pro-preview",
+      "name": "Google: Gemini 2.5 Pro Preview 06-05",
+      "brand": "Gemini",
+      "enabled": false,
+      "contextWindow": 1048576,
+      "maxTokens": 65536,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "google/gemini-2.5-pro:batch",
+      "name": "Google: Gemini 2.5 Pro (batch)",
+      "brand": "Gemini",
+      "enabled": false,
+      "contextWindow": 1048576,
+      "maxTokens": 65536,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "google/gemini-3-flash-preview",
+      "name": "Google: Gemini 3 Flash Preview",
+      "brand": "Gemini",
+      "enabled": false,
+      "contextWindow": 1048576,
+      "maxTokens": 65536,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "google/gemini-3-flash-preview:batch",
+      "name": "Google: Gemini 3 Flash Preview (batch)",
+      "brand": "Gemini",
+      "enabled": false,
+      "contextWindow": 1048576,
+      "maxTokens": 65536,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "google/gemini-3-pro-image",
+      "name": "Google: Nano Banana Pro (Gemini 3 Pro Image)",
+      "brand": "NanoBanana",
+      "enabled": false,
+      "contextWindow": 65536,
+      "maxTokens": 32768,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "google/gemini-3.1-flash-lite",
+      "name": "Google: Gemini 3.1 Flash Lite",
+      "brand": "Gemini",
+      "enabled": false,
+      "contextWindow": 1048576,
+      "maxTokens": 65536,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "google/gemini-3.1-flash-lite-preview",
+      "name": "Google: Gemini 3.1 Flash Lite Preview",
+      "brand": "Gemini",
+      "enabled": false,
+      "contextWindow": 1048576,
+      "maxTokens": 65536,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "google/gemini-3.1-flash-lite:batch",
+      "name": "Google: Gemini 3.1 Flash Lite (batch)",
+      "brand": "Gemini",
+      "enabled": false,
+      "contextWindow": 1048576,
+      "maxTokens": 65536,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "google/gemini-3.1-pro-preview",
+      "name": "Google: Gemini 3.1 Pro Preview",
+      "brand": "Gemini",
+      "enabled": false,
+      "contextWindow": 1048576,
+      "maxTokens": 65536,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "google/gemini-3.1-pro-preview-customtools",
+      "name": "Google: Gemini 3.1 Pro Preview Custom Tools",
+      "brand": "Gemini",
+      "enabled": false,
+      "contextWindow": 1048576,
+      "maxTokens": 65536,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "google/gemini-3.1-pro-preview:batch",
+      "name": "Google: Gemini 3.1 Pro Preview (batch)",
+      "brand": "Gemini",
+      "enabled": false,
+      "contextWindow": 1048576,
+      "maxTokens": 65536,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "google/gemini-3.5-flash",
+      "name": "Google: Gemini 3.5 Flash",
+      "brand": "Gemini",
+      "enabled": false,
+      "contextWindow": 1048576,
+      "maxTokens": 65536,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "google/gemini-3.5-flash-lite",
+      "name": "Google: Gemini 3.5 Flash Lite",
+      "brand": "Gemini",
+      "enabled": false,
+      "contextWindow": 1048576,
+      "maxTokens": 65536,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "google/gemini-3.5-flash-lite:batch",
+      "name": "Google: Gemini 3.5 Flash Lite (batch)",
+      "brand": "Gemini",
+      "enabled": false,
+      "contextWindow": 1048576,
+      "maxTokens": 65536,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "google/gemini-3.5-flash:batch",
+      "name": "Google: Gemini 3.5 Flash (batch)",
+      "brand": "Gemini",
+      "enabled": false,
+      "contextWindow": 1048576,
+      "maxTokens": 65536,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "google/gemini-3.6-flash",
+      "name": "Google: Gemini 3.6 Flash",
+      "brand": "Gemini",
+      "enabled": false,
+      "contextWindow": 1048576,
+      "maxTokens": 65536,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "google/gemini-3.6-flash:batch",
+      "name": "Google: Gemini 3.6 Flash (batch)",
+      "brand": "Gemini",
+      "enabled": false,
+      "contextWindow": 1048576,
+      "maxTokens": 65536,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "google/gemini-3.7-flash",
+      "name": "Google: Gemini 3.7 Flash",
+      "brand": "Gemini",
+      "enabled": false,
+      "contextWindow": 1048576,
+      "maxTokens": 65536,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "google/gemini-3.7-flash:batch",
+      "name": "Google: Gemini 3.7 Flash (batch)",
+      "brand": "Gemini",
+      "enabled": false,
+      "contextWindow": 1048576,
+      "maxTokens": 65536,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "google/gemini-3.8-flash",
+      "name": "Google: Gemini 3.8 Flash",
+      "brand": "Gemini",
+      "enabled": false,
+      "contextWindow": 1048576,
+      "maxTokens": 65536,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "google/gemini-3.8-flash:batch",
+      "name": "Google: Gemini 3.8 Flash (batch)",
+      "brand": "Gemini",
+      "enabled": false,
+      "contextWindow": 1048576,
+      "maxTokens": 65536,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "google/gemini-4-argon",
+      "name": "Google: Gemini 4 Argon",
+      "brand": "Gemini",
+      "enabled": false,
+      "contextWindow": 1048576,
+      "maxTokens": 65536,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "google/gemini-4-argon:batch",
+      "name": "Google: Gemini 4 Argon (batch)",
+      "brand": "Gemini",
+      "enabled": false,
+      "contextWindow": 1048576,
+      "maxTokens": 943718,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "google/gemini-nano-banana-2.1",
+      "name": "Google: Nano Banana 2.1",
+      "brand": "NanoBanana",
+      "enabled": false,
+      "contextWindow": 65536,
+      "maxTokens": 58982,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "google/gemma-3-12b-it",
+      "name": "Google: Gemma 3 12B",
+      "brand": "Gemma",
+      "enabled": false,
+      "contextWindow": 131072,
+      "maxTokens": 16384,
+      "images": true,
+      "reasoning": false,
+      "overridden": {}
+    },
+    {
+      "id": "google/gemma-3-27b-it",
+      "name": "Google: Gemma 3 27B",
+      "brand": "Gemma",
+      "enabled": false,
+      "contextWindow": 131072,
+      "maxTokens": 117964,
+      "images": true,
+      "reasoning": false,
+      "overridden": {}
+    },
+    {
+      "id": "google/gemma-4-26b-a4b-it",
+      "name": "Google: Gemma 4 26B A4B ",
+      "brand": "Gemma",
+      "enabled": false,
+      "contextWindow": 262144,
+      "maxTokens": 235929,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "google/gemma-4-26b-a4b-it:free",
+      "name": "Google: Gemma 4 26B A4B  (free)",
+      "brand": "Gemma",
+      "enabled": false,
+      "contextWindow": 262144,
+      "maxTokens": 32768,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "google/gemma-4-31b-it",
+      "name": "Google: Gemma 4 31B",
+      "brand": "Gemma",
+      "enabled": false,
+      "contextWindow": 262144,
+      "maxTokens": 16384,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "google/gemma-4-31b-it:free",
+      "name": "Google: Gemma 4 31B (free)",
+      "brand": "Gemma",
+      "enabled": false,
+      "contextWindow": 262144,
+      "maxTokens": 32768,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "ibm-granite/granite-4.2-8b",
+      "name": "IBM: Granite 4.2 8B",
+      "brand": "IBM",
+      "enabled": false,
+      "contextWindow": 131072,
+      "maxTokens": 117964,
+      "images": false,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "inception/mercury-2",
+      "name": "Inception: Mercury 2",
+      "brand": "Inception",
+      "enabled": false,
+      "contextWindow": 128000,
+      "maxTokens": 50000,
+      "images": false,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "inception/mercury-2.5",
+      "name": "Inception: Mercury 2.5",
+      "brand": "Inception",
+      "enabled": false,
+      "contextWindow": 260000,
+      "maxTokens": 65536,
+      "images": false,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "inclusionai/ling-3.0-flash",
+      "name": "inclusionAI: Ling 3.0 Flash",
+      "brand": null,
+      "enabled": false,
+      "contextWindow": 262144,
+      "maxTokens": 32768,
+      "images": false,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "inclusionai/ling-3.0-flash-vl",
+      "name": "inclusionAI: Ling 3.0 Flash VL",
+      "brand": null,
+      "enabled": false,
+      "contextWindow": 131072,
+      "maxTokens": 32768,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "inclusionai/ling-3.1-flash",
+      "name": "inclusionAI: Ling 3.1 Flash",
+      "brand": null,
+      "enabled": false,
+      "contextWindow": 262144,
+      "maxTokens": 235929,
+      "images": false,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "liquid/lfm-2.5-2.6b:free",
+      "name": "LiquidAI: LFM2.5-2.6B (free)",
+      "brand": "Liquid",
+      "enabled": false,
+      "contextWindow": 65536,
+      "maxTokens": 8192,
+      "images": false,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "liquid/lfm-2.5-24b-a2b",
+      "name": "LiquidAI: LFM2.5-24B-A2B",
+      "brand": "Liquid",
+      "enabled": false,
+      "contextWindow": 128000,
+      "maxTokens": 8192,
+      "images": false,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "meituan/longcat-2.0",
+      "name": "Meituan: LongCat 2.0",
+      "brand": "LongCat",
+      "enabled": false,
+      "contextWindow": 1048756,
+      "maxTokens": 262144,
+      "images": false,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "meta-llama/llama-3.1-70b-instruct",
+      "name": "Meta: Llama 3.1 70B Instruct",
+      "brand": "Meta",
+      "enabled": false,
+      "contextWindow": 131072,
+      "maxTokens": 16384,
+      "images": false,
+      "reasoning": false,
+      "overridden": {}
+    },
+    {
+      "id": "meta-llama/llama-3.1-8b-instruct",
+      "name": "Meta: Llama 3.1 8B Instruct",
+      "brand": "Meta",
+      "enabled": false,
+      "contextWindow": 131072,
+      "maxTokens": 117964,
+      "images": false,
+      "reasoning": false,
+      "overridden": {}
+    },
+    {
+      "id": "meta-llama/llama-3.3-70b-instruct",
+      "name": "Meta: Llama 3.3 70B Instruct",
+      "brand": "Meta",
+      "enabled": false,
+      "contextWindow": 131072,
+      "maxTokens": 32768,
+      "images": false,
+      "reasoning": false,
+      "overridden": {}
+    },
+    {
+      "id": "meta-llama/llama-4-maverick",
+      "name": "Meta: Llama 4 Maverick",
+      "brand": "Meta",
+      "enabled": false,
+      "contextWindow": 128000,
+      "maxTokens": 16384,
+      "images": true,
+      "reasoning": false,
+      "overridden": {}
+    },
+    {
+      "id": "meta-llama/llama-4-scout",
+      "name": "Meta: Llama 4 Scout",
+      "brand": "Meta",
+      "enabled": false,
+      "contextWindow": 131072,
+      "maxTokens": 117964,
+      "images": true,
+      "reasoning": false,
+      "overridden": {}
+    },
+    {
+      "id": "meta/muse-glimmer-30b",
+      "name": "Meta: Muse Glimmer 30B",
+      "brand": null,
+      "enabled": false,
+      "contextWindow": 131072,
+      "maxTokens": 16384,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "meta/muse-spark-1.1",
+      "name": "Meta: Muse Spark 1.1",
+      "brand": "Meta",
+      "enabled": false,
+      "contextWindow": 1048576,
+      "maxTokens": 943718,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "meta/muse-spark-1.2",
+      "name": "Meta: Muse Spark 1.2",
+      "brand": "Meta",
+      "enabled": false,
+      "contextWindow": 1048576,
+      "maxTokens": 943718,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "meta/muse-spark-1.2-contributor",
+      "name": "Meta: Muse Spark 1.2 Contributor",
+      "brand": "Meta",
+      "enabled": false,
+      "contextWindow": 1048576,
+      "maxTokens": 943718,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "meta/muse-spark-1.3",
+      "name": "Meta: Muse Spark 1.3",
+      "brand": "Meta",
+      "enabled": false,
+      "contextWindow": 1048576,
+      "maxTokens": 943718,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "meta/muse-spark-1.3-contributor",
+      "name": "Meta: Muse Spark 1.3 Contributor",
+      "brand": "Meta",
+      "enabled": false,
+      "contextWindow": 1048576,
+      "maxTokens": 943718,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "meta/muse-spark-open",
+      "name": "Meta: Muse Spark Open",
+      "brand": "Meta",
+      "enabled": false,
+      "contextWindow": 1048576,
+      "maxTokens": 943718,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "meta/muse-wonder",
+      "name": "Meta: Muse Wonder",
+      "brand": null,
+      "enabled": false,
+      "contextWindow": 1048576,
+      "maxTokens": 943718,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "minimax/minimax-m1",
+      "name": "MiniMax: MiniMax M1",
+      "brand": "Minimax",
+      "enabled": false,
+      "contextWindow": 1000000,
+      "maxTokens": 40000,
+      "images": false,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "minimax/minimax-m2",
+      "name": "MiniMax: MiniMax M2",
+      "brand": "Minimax",
+      "enabled": false,
+      "contextWindow": 204800,
+      "maxTokens": 131072,
+      "images": false,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "minimax/minimax-m2.1",
+      "name": "MiniMax: MiniMax M2.1",
+      "brand": "Minimax",
+      "enabled": false,
+      "contextWindow": 204800,
+      "maxTokens": 131072,
+      "images": false,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "minimax/minimax-m2.5",
+      "name": "MiniMax: MiniMax M2.5",
+      "brand": "Minimax",
+      "enabled": false,
+      "contextWindow": 198000,
+      "maxTokens": 32768,
+      "images": false,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "minimax/minimax-m2.7",
+      "name": "MiniMax: MiniMax M2.7",
+      "brand": "Minimax",
+      "enabled": false,
+      "contextWindow": 204800,
+      "maxTokens": 131072,
+      "images": false,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "minimax/minimax-m3",
+      "name": "MiniMax: MiniMax M3",
+      "brand": "Minimax",
+      "enabled": false,
+      "contextWindow": 524288,
+      "maxTokens": 512000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "mistralai/codestral-2508",
+      "name": "Mistral: Codestral 2508",
+      "brand": "Mistral",
+      "enabled": false,
+      "contextWindow": 256000,
+      "maxTokens": 204800,
+      "images": false,
+      "reasoning": false,
+      "overridden": {}
+    },
+    {
+      "id": "mistralai/codestral-2508:batch",
+      "name": "Mistral: Codestral 2508 (batch)",
+      "brand": "Mistral",
+      "enabled": false,
+      "contextWindow": 256000,
+      "maxTokens": 204800,
+      "images": false,
+      "reasoning": false,
+      "overridden": {}
+    },
+    {
+      "id": "mistralai/devstral-2512",
+      "name": "Mistral: Devstral 2 2512",
+      "brand": "Mistral",
+      "enabled": false,
+      "contextWindow": 262144,
+      "maxTokens": 209715,
+      "images": false,
+      "reasoning": false,
+      "overridden": {}
+    },
+    {
+      "id": "mistralai/ministral-14b-2512",
+      "name": "Mistral: Ministral 3 14B 2512",
+      "brand": "Mistral",
+      "enabled": false,
+      "contextWindow": 262144,
+      "maxTokens": 209715,
+      "images": true,
+      "reasoning": false,
+      "overridden": {}
+    },
+    {
+      "id": "mistralai/ministral-3b-2512",
+      "name": "Mistral: Ministral 3 3B 2512",
+      "brand": "Mistral",
+      "enabled": false,
+      "contextWindow": 131072,
+      "maxTokens": 104857,
+      "images": true,
+      "reasoning": false,
+      "overridden": {}
+    },
+    {
+      "id": "mistralai/ministral-8b-2512",
+      "name": "Mistral: Ministral 3 8B 2512",
+      "brand": "Mistral",
+      "enabled": false,
+      "contextWindow": 262144,
+      "maxTokens": 209715,
+      "images": true,
+      "reasoning": false,
+      "overridden": {}
+    },
+    {
+      "id": "mistralai/ministral-8b-2512:batch",
+      "name": "Mistral: Ministral 3 8B 2512 (batch)",
+      "brand": "Mistral",
+      "enabled": false,
+      "contextWindow": 262144,
+      "maxTokens": 209715,
+      "images": true,
+      "reasoning": false,
+      "overridden": {}
+    },
+    {
+      "id": "mistralai/mistral-large",
+      "name": "Mistral Large",
+      "brand": "Mistral",
+      "enabled": false,
+      "contextWindow": 128000,
+      "maxTokens": 102400,
+      "images": false,
+      "reasoning": false,
+      "overridden": {}
+    },
+    {
+      "id": "mistralai/mistral-large-2407",
+      "name": "Mistral Large 2407",
+      "brand": "Mistral",
+      "enabled": false,
+      "contextWindow": 131072,
+      "maxTokens": 104857,
+      "images": false,
+      "reasoning": false,
+      "overridden": {}
+    },
+    {
+      "id": "mistralai/mistral-large-2512",
+      "name": "Mistral: Mistral Large 3 2512",
+      "brand": "Mistral",
+      "enabled": false,
+      "contextWindow": 262144,
+      "maxTokens": 209715,
+      "images": true,
+      "reasoning": false,
+      "overridden": {}
+    },
+    {
+      "id": "mistralai/mistral-large-2512:batch",
+      "name": "Mistral: Mistral Large 3 2512 (batch)",
+      "brand": "Mistral",
+      "enabled": false,
+      "contextWindow": 262144,
+      "maxTokens": 209715,
+      "images": true,
+      "reasoning": false,
+      "overridden": {}
+    },
+    {
+      "id": "mistralai/mistral-large-4-0",
+      "name": "Mistral: Mistral Large 4",
+      "brand": "Mistral",
+      "enabled": false,
+      "contextWindow": 1048576,
+      "maxTokens": 262144,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "mistralai/mistral-medium-3",
+      "name": "Mistral: Mistral Medium 3",
+      "brand": "Mistral",
+      "enabled": false,
+      "contextWindow": 131072,
+      "maxTokens": 104857,
+      "images": true,
+      "reasoning": false,
+      "overridden": {}
+    },
+    {
+      "id": "mistralai/mistral-medium-3-5",
+      "name": "Mistral: Mistral Medium 3.5",
+      "brand": "Mistral",
+      "enabled": false,
+      "contextWindow": 262144,
+      "maxTokens": 209715,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "mistralai/mistral-medium-3-5:batch",
+      "name": "Mistral: Mistral Medium 3.5 (batch)",
+      "brand": "Mistral",
+      "enabled": false,
+      "contextWindow": 262144,
+      "maxTokens": 209715,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "mistralai/mistral-medium-3.1",
+      "name": "Mistral: Mistral Medium 3.1",
+      "brand": "Mistral",
+      "enabled": false,
+      "contextWindow": 131072,
+      "maxTokens": 104857,
+      "images": true,
+      "reasoning": false,
+      "overridden": {}
+    },
+    {
+      "id": "mistralai/mistral-medium-3.1:batch",
+      "name": "Mistral: Mistral Medium 3.1 (batch)",
+      "brand": "Mistral",
+      "enabled": false,
+      "contextWindow": 131072,
+      "maxTokens": 104857,
+      "images": true,
+      "reasoning": false,
+      "overridden": {}
+    },
+    {
+      "id": "mistralai/mistral-nemo",
+      "name": "Mistral: Mistral Nemo",
+      "brand": "Mistral",
+      "enabled": false,
+      "contextWindow": 131072,
+      "maxTokens": 16384,
+      "images": false,
+      "reasoning": false,
+      "overridden": {}
+    },
+    {
+      "id": "mistralai/mistral-saba",
+      "name": "Mistral: Saba",
+      "brand": "Mistral",
+      "enabled": false,
+      "contextWindow": 32768,
+      "maxTokens": 26214,
+      "images": false,
+      "reasoning": false,
+      "overridden": {}
+    },
+    {
+      "id": "mistralai/mistral-small-2603",
+      "name": "Mistral: Mistral Small 4",
+      "brand": "Mistral",
+      "enabled": false,
+      "contextWindow": 262144,
+      "maxTokens": 209715,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "mistralai/mistral-small-2603:batch",
+      "name": "Mistral: Mistral Small 4 (batch)",
+      "brand": "Mistral",
+      "enabled": false,
+      "contextWindow": 262144,
+      "maxTokens": 209715,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "mistralai/mistral-small-3.1-24b-instruct",
+      "name": "Mistral: Mistral Small 3.1 24B",
+      "brand": "Mistral",
+      "enabled": false,
+      "contextWindow": 128000,
+      "maxTokens": 102400,
+      "images": true,
+      "reasoning": false,
+      "overridden": {}
+    },
+    {
+      "id": "mistralai/mistral-small-3.2-24b-instruct",
+      "name": "Mistral: Mistral Small 3.2 24B",
+      "brand": "Mistral",
+      "enabled": false,
+      "contextWindow": 256000,
+      "maxTokens": 16384,
+      "images": true,
+      "reasoning": false,
+      "overridden": {}
+    },
+    {
+      "id": "mistralai/mixtral-8x22b-instruct",
+      "name": "Mistral: Mixtral 8x22B Instruct",
+      "brand": "Mistral",
+      "enabled": false,
+      "contextWindow": 65536,
+      "maxTokens": 52428,
+      "images": false,
+      "reasoning": false,
+      "overridden": {}
+    },
+    {
+      "id": "mistralai/voxtral-small-24b-2507",
+      "name": "Mistral: Voxtral Small 24B 2507",
+      "brand": "Mistral",
+      "enabled": false,
+      "contextWindow": 32768,
+      "maxTokens": 26214,
+      "images": false,
+      "reasoning": false,
+      "overridden": {}
+    },
+    {
+      "id": "moonshotai/kimi-k2",
+      "name": "MoonshotAI: Kimi K2 0711",
+      "brand": "Moonshot",
+      "enabled": false,
+      "contextWindow": 131072,
+      "maxTokens": 98304,
+      "images": false,
+      "reasoning": false,
+      "overridden": {}
+    },
+    {
+      "id": "moonshotai/kimi-k2-0905",
+      "name": "MoonshotAI: Kimi K2 0905",
+      "brand": "Moonshot",
+      "enabled": false,
+      "contextWindow": 262144,
+      "maxTokens": 98304,
+      "images": false,
+      "reasoning": false,
+      "overridden": {}
+    },
+    {
+      "id": "moonshotai/kimi-k2-thinking",
+      "name": "MoonshotAI: Kimi K2 Thinking",
+      "brand": "Moonshot",
+      "enabled": false,
+      "contextWindow": 262144,
+      "maxTokens": 98304,
+      "images": false,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "moonshotai/kimi-k2.5",
+      "name": "MoonshotAI: Kimi K2.5",
+      "brand": "Moonshot",
+      "enabled": false,
+      "contextWindow": 262144,
+      "maxTokens": 4096,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "moonshotai/kimi-k2.6",
+      "name": "MoonshotAI: Kimi K2.6",
+      "brand": "Moonshot",
+      "enabled": false,
+      "contextWindow": 262144,
+      "maxTokens": 235929,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "moonshotai/kimi-k2.7-code",
+      "name": "MoonshotAI: Kimi K2.7 Code",
+      "brand": "Moonshot",
+      "enabled": false,
+      "contextWindow": 262144,
+      "maxTokens": 235929,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "moonshotai/kimi-k3",
+      "name": "MoonshotAI: Kimi K3",
+      "brand": "Moonshot",
+      "enabled": false,
+      "contextWindow": 1048576,
+      "maxTokens": 131072,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "moonshotai/kimi-k3:batch",
+      "name": "MoonshotAI: Kimi K3 (batch)",
+      "brand": "Moonshot",
+      "enabled": false,
+      "contextWindow": 1048576,
+      "maxTokens": 16384,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "nex-agi/nex-n2.5-pro",
+      "name": "Nex AGI: Nex-N2.5-Pro",
+      "brand": null,
+      "enabled": false,
+      "contextWindow": 262144,
+      "maxTokens": 235929,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "nvidia/nemotron-3-nano-30b-a3b",
+      "name": "NVIDIA: Nemotron 3 Nano 30B A3B",
+      "brand": "Nvidia",
+      "enabled": false,
+      "contextWindow": 262144,
+      "maxTokens": 235929,
+      "images": false,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+      "name": "NVIDIA: Nemotron 3 Nano Omni (free)",
+      "brand": "Nvidia",
+      "enabled": false,
+      "contextWindow": 256000,
+      "maxTokens": 65536,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "nvidia/nemotron-3-super-120b-a12b",
+      "name": "NVIDIA: Nemotron 3 Super",
+      "brand": "Nvidia",
+      "enabled": false,
+      "contextWindow": 262144,
+      "maxTokens": 235929,
+      "images": false,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "nvidia/nemotron-3-super-120b-a12b:free",
+      "name": "NVIDIA: Nemotron 3 Super (free)",
+      "brand": "Nvidia",
+      "enabled": false,
+      "contextWindow": 262144,
+      "maxTokens": 235929,
+      "images": false,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "nvidia/nemotron-3-ultra-550b-a55b",
+      "name": "NVIDIA: Nemotron 3 Ultra",
+      "brand": "Nvidia",
+      "enabled": false,
+      "contextWindow": 202800,
+      "maxTokens": 182520,
+      "images": false,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "nvidia/nemotron-3-ultra-550b-a55b:free",
+      "name": "NVIDIA: Nemotron 3 Ultra (free)",
+      "brand": "Nvidia",
+      "enabled": false,
+      "contextWindow": 1000000,
+      "maxTokens": 65536,
+      "images": false,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "nvidia/nemotron-3.5-lightning",
+      "name": "NVIDIA: Nemotron 3.5 Lightning",
+      "brand": "Nvidia",
+      "enabled": false,
+      "contextWindow": 262144,
+      "maxTokens": 235929,
+      "images": false,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "nvidia/nemotron-3.5-lightning:free",
+      "name": "NVIDIA: Nemotron 3.5 Lightning (free)",
+      "brand": "Nvidia",
+      "enabled": false,
+      "contextWindow": 1000000,
+      "maxTokens": 65536,
+      "images": false,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "nvidia/nemotron-3.5-super-vl",
+      "name": "NVIDIA: Nemotron 3.5 Super VL",
+      "brand": "Nvidia",
+      "enabled": false,
+      "contextWindow": 262144,
+      "maxTokens": 235929,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "nvidia/nemotron-3.5-super-vl:free",
+      "name": "NVIDIA: Nemotron 3.5 Super VL (free)",
+      "brand": "Nvidia",
+      "enabled": false,
+      "contextWindow": 1000000,
+      "maxTokens": 131072,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "openai/gpt-3.5-turbo",
+      "name": "OpenAI: GPT-3.5 Turbo",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 16385,
+      "maxTokens": 4096,
+      "images": false,
+      "reasoning": false,
+      "overridden": {}
+    },
+    {
+      "id": "openai/gpt-3.5-turbo-0613",
+      "name": "OpenAI: GPT-3.5 Turbo (older v0613)",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 4095,
+      "maxTokens": 3685,
+      "images": false,
+      "reasoning": false,
+      "overridden": {}
+    },
+    {
+      "id": "openai/gpt-3.5-turbo-16k",
+      "name": "OpenAI: GPT-3.5 Turbo 16k",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 16385,
+      "maxTokens": 4096,
+      "images": false,
+      "reasoning": false,
+      "overridden": {}
+    },
+    {
+      "id": "openai/gpt-3.5-turbo:batch",
+      "name": "OpenAI: GPT-3.5 Turbo (batch)",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 16385,
+      "maxTokens": 4096,
+      "images": false,
+      "reasoning": false,
+      "overridden": {}
+    },
+    {
+      "id": "openai/gpt-4",
+      "name": "OpenAI: GPT-4",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 8191,
+      "maxTokens": 4096,
+      "images": false,
+      "reasoning": false,
+      "overridden": {}
+    },
+    {
+      "id": "openai/gpt-4-turbo",
+      "name": "OpenAI: GPT-4 Turbo",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 128000,
+      "maxTokens": 4096,
+      "images": true,
+      "reasoning": false,
+      "overridden": {}
+    },
+    {
+      "id": "openai/gpt-4-turbo:batch",
+      "name": "OpenAI: GPT-4 Turbo (batch)",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 128000,
+      "maxTokens": 4096,
+      "images": true,
+      "reasoning": false,
+      "overridden": {}
+    },
+    {
+      "id": "openai/gpt-4.1",
+      "name": "OpenAI: GPT-4.1",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 1047576,
+      "maxTokens": 32768,
+      "images": true,
+      "reasoning": false,
+      "overridden": {}
+    },
+    {
+      "id": "openai/gpt-4.1-mini",
+      "name": "OpenAI: GPT-4.1 Mini",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 1047576,
+      "maxTokens": 32768,
+      "images": true,
+      "reasoning": false,
+      "overridden": {}
+    },
+    {
+      "id": "openai/gpt-4.1-mini:batch",
+      "name": "OpenAI: GPT-4.1 Mini (batch)",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 1047576,
+      "maxTokens": 32768,
+      "images": true,
+      "reasoning": false,
+      "overridden": {}
+    },
+    {
+      "id": "openai/gpt-4.1-nano",
+      "name": "OpenAI: GPT-4.1 Nano",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 1047576,
+      "maxTokens": 32768,
+      "images": true,
+      "reasoning": false,
+      "overridden": {}
+    },
+    {
+      "id": "openai/gpt-4.1-nano:batch",
+      "name": "OpenAI: GPT-4.1 Nano (batch)",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 1047576,
+      "maxTokens": 32768,
+      "images": true,
+      "reasoning": false,
+      "overridden": {}
+    },
+    {
+      "id": "openai/gpt-4.1:batch",
+      "name": "OpenAI: GPT-4.1 (batch)",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 1047576,
+      "maxTokens": 32768,
+      "images": true,
+      "reasoning": false,
+      "overridden": {}
+    },
+    {
+      "id": "openai/gpt-4o",
+      "name": "OpenAI: GPT-4o",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 128000,
+      "maxTokens": 16384,
+      "images": true,
+      "reasoning": false,
+      "overridden": {}
+    },
+    {
+      "id": "openai/gpt-4o-2024-05-13",
+      "name": "OpenAI: GPT-4o (2024-05-13)",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 128000,
+      "maxTokens": 4096,
+      "images": true,
+      "reasoning": false,
+      "overridden": {}
+    },
+    {
+      "id": "openai/gpt-4o-2024-08-06",
+      "name": "OpenAI: GPT-4o (2024-08-06)",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 128000,
+      "maxTokens": 16384,
+      "images": true,
+      "reasoning": false,
+      "overridden": {}
+    },
+    {
+      "id": "openai/gpt-4o-2024-11-20",
+      "name": "OpenAI: GPT-4o (2024-11-20)",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 128000,
+      "maxTokens": 16384,
+      "images": true,
+      "reasoning": false,
+      "overridden": {}
+    },
+    {
+      "id": "openai/gpt-4o-mini",
+      "name": "OpenAI: GPT-4o-mini",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 128000,
+      "maxTokens": 16384,
+      "images": true,
+      "reasoning": false,
+      "overridden": {}
+    },
+    {
+      "id": "openai/gpt-4o-mini-2024-07-18",
+      "name": "OpenAI: GPT-4o-mini (2024-07-18)",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 128000,
+      "maxTokens": 16384,
+      "images": true,
+      "reasoning": false,
+      "overridden": {}
+    },
+    {
+      "id": "openai/gpt-4o-mini:batch",
+      "name": "OpenAI: GPT-4o-mini (batch)",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 128000,
+      "maxTokens": 16384,
+      "images": true,
+      "reasoning": false,
+      "overridden": {}
+    },
+    {
+      "id": "openai/gpt-4o:batch",
+      "name": "OpenAI: GPT-4o (batch)",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 128000,
+      "maxTokens": 16384,
+      "images": true,
+      "reasoning": false,
+      "overridden": {}
+    },
+    {
+      "id": "openai/gpt-5",
+      "name": "OpenAI: GPT-5",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 400000,
+      "maxTokens": 128000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "openai/gpt-5-mini",
+      "name": "OpenAI: GPT-5 Mini",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 400000,
+      "maxTokens": 128000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "openai/gpt-5-mini:batch",
+      "name": "OpenAI: GPT-5 Mini (batch)",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 400000,
+      "maxTokens": 128000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "openai/gpt-5-nano",
+      "name": "OpenAI: GPT-5 Nano",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 400000,
+      "maxTokens": 128000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "openai/gpt-5-nano:batch",
+      "name": "OpenAI: GPT-5 Nano (batch)",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 400000,
+      "maxTokens": 128000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "openai/gpt-5-pro",
+      "name": "OpenAI: GPT-5 Pro",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 400000,
+      "maxTokens": 128000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "openai/gpt-5-pro:batch",
+      "name": "OpenAI: GPT-5 Pro (batch)",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 400000,
+      "maxTokens": 128000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "openai/gpt-5:batch",
+      "name": "OpenAI: GPT-5 (batch)",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 400000,
+      "maxTokens": 128000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "openai/gpt-5.1",
+      "name": "OpenAI: GPT-5.1",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 400000,
+      "maxTokens": 128000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "openai/gpt-5.1-codex",
+      "name": "OpenAI: GPT-5.1-Codex",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 400000,
+      "maxTokens": 128000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "openai/gpt-5.1-codex-max",
+      "name": "OpenAI: GPT-5.1-Codex-Max",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 400000,
+      "maxTokens": 128000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "openai/gpt-5.1-codex-mini",
+      "name": "OpenAI: GPT-5.1-Codex-Mini",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 400000,
+      "maxTokens": 128000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "openai/gpt-5.1:batch",
+      "name": "OpenAI: GPT-5.1 (batch)",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 400000,
+      "maxTokens": 128000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "openai/gpt-5.2",
+      "name": "OpenAI: GPT-5.2",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 400000,
+      "maxTokens": 128000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "openai/gpt-5.2-chat",
+      "name": "OpenAI: GPT-5.2 Chat",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 128000,
+      "maxTokens": 32000,
+      "images": true,
+      "reasoning": false,
+      "overridden": {}
+    },
+    {
+      "id": "openai/gpt-5.2-codex",
+      "name": "OpenAI: GPT-5.2-Codex",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 400000,
+      "maxTokens": 128000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "openai/gpt-5.2-pro",
+      "name": "OpenAI: GPT-5.2 Pro",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 400000,
+      "maxTokens": 128000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "openai/gpt-5.2-pro:batch",
+      "name": "OpenAI: GPT-5.2 Pro (batch)",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 400000,
+      "maxTokens": 128000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "openai/gpt-5.2:batch",
+      "name": "OpenAI: GPT-5.2 (batch)",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 400000,
+      "maxTokens": 128000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "openai/gpt-5.3-codex",
+      "name": "OpenAI: GPT-5.3-Codex",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 400000,
+      "maxTokens": 128000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "openai/gpt-5.4",
+      "name": "OpenAI: GPT-5.4",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 1050000,
+      "maxTokens": 128000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "openai/gpt-5.4-mini",
+      "name": "OpenAI: GPT-5.4 Mini",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 400000,
+      "maxTokens": 128000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "openai/gpt-5.4-mini:batch",
+      "name": "OpenAI: GPT-5.4 Mini (batch)",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 400000,
+      "maxTokens": 128000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "openai/gpt-5.4-nano",
+      "name": "OpenAI: GPT-5.4 Nano",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 400000,
+      "maxTokens": 128000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "openai/gpt-5.4-nano:batch",
+      "name": "OpenAI: GPT-5.4 Nano (batch)",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 400000,
+      "maxTokens": 128000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "openai/gpt-5.4-pro",
+      "name": "OpenAI: GPT-5.4 Pro",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 1050000,
+      "maxTokens": 128000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "openai/gpt-5.4-pro:batch",
+      "name": "OpenAI: GPT-5.4 Pro (batch)",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 1050000,
+      "maxTokens": 128000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "openai/gpt-5.4:batch",
+      "name": "OpenAI: GPT-5.4 (batch)",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 1050000,
+      "maxTokens": 128000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "openai/gpt-5.5",
+      "name": "OpenAI: GPT-5.5",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 1050000,
+      "maxTokens": 128000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "openai/gpt-5.5-pro",
+      "name": "OpenAI: GPT-5.5 Pro",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 1050000,
+      "maxTokens": 128000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "openai/gpt-5.5-pro:batch",
+      "name": "OpenAI: GPT-5.5 Pro (batch)",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 1050000,
+      "maxTokens": 128000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "openai/gpt-5.5:batch",
+      "name": "OpenAI: GPT-5.5 (batch)",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 1050000,
+      "maxTokens": 128000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "openai/gpt-5.6-luna",
+      "name": "OpenAI: GPT-5.6 Luna",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 1050000,
+      "maxTokens": 128000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "openai/gpt-5.6-luna-pro",
+      "name": "OpenAI: GPT-5.6 Luna Pro",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 1050000,
+      "maxTokens": 128000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "openai/gpt-5.6-luna-pro:batch",
+      "name": "OpenAI: GPT-5.6 Luna Pro (batch)",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 1050000,
+      "maxTokens": 128000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "openai/gpt-5.6-luna:batch",
+      "name": "OpenAI: GPT-5.6 Luna (batch)",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 1050000,
+      "maxTokens": 128000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "openai/gpt-5.6-sol",
+      "name": "OpenAI: GPT-5.6 Sol",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 1050000,
+      "maxTokens": 128000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "openai/gpt-5.6-sol-pro",
+      "name": "OpenAI: GPT-5.6 Sol Pro",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 1050000,
+      "maxTokens": 128000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "openai/gpt-5.6-sol-pro:batch",
+      "name": "OpenAI: GPT-5.6 Sol Pro (batch)",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 1050000,
+      "maxTokens": 128000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "openai/gpt-5.6-sol:batch",
+      "name": "OpenAI: GPT-5.6 Sol (batch)",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 1050000,
+      "maxTokens": 128000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "openai/gpt-5.6-terra",
+      "name": "OpenAI: GPT-5.6 Terra",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 1050000,
+      "maxTokens": 128000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "openai/gpt-5.6-terra-pro",
+      "name": "OpenAI: GPT-5.6 Terra Pro",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 1050000,
+      "maxTokens": 128000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "openai/gpt-5.6-terra-pro:batch",
+      "name": "OpenAI: GPT-5.6 Terra Pro (batch)",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 1050000,
+      "maxTokens": 128000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "openai/gpt-5.6-terra:batch",
+      "name": "OpenAI: GPT-5.6 Terra (batch)",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 1050000,
+      "maxTokens": 128000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "openai/gpt-6-astra",
+      "name": "OpenAI: GPT-6 Astra",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 1050000,
+      "maxTokens": 128000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "openai/gpt-6-astra-pro",
+      "name": "OpenAI: GPT-6 Astra Pro",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 1050000,
+      "maxTokens": 128000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "openai/gpt-6-astra-pro:batch",
+      "name": "OpenAI: GPT-6 Astra Pro (batch)",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 1050000,
+      "maxTokens": 128000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "openai/gpt-6-astra:batch",
+      "name": "OpenAI: GPT-6 Astra (batch)",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 1050000,
+      "maxTokens": 128000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "openai/gpt-6-luna",
+      "name": "OpenAI: GPT-6 Luna",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 1050000,
+      "maxTokens": 128000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "openai/gpt-6-luna-pro",
+      "name": "OpenAI: GPT-6 Luna Pro",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 1050000,
+      "maxTokens": 128000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "openai/gpt-6-luna-pro:batch",
+      "name": "OpenAI: GPT-6 Luna Pro (batch)",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 1050000,
+      "maxTokens": 128000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "openai/gpt-6-luna:batch",
+      "name": "OpenAI: GPT-6 Luna (batch)",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 1050000,
+      "maxTokens": 128000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "openai/gpt-6-sol",
+      "name": "OpenAI: GPT-6 Sol",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 1050000,
+      "maxTokens": 128000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "openai/gpt-6-sol-pro",
+      "name": "OpenAI: GPT-6 Sol Pro",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 1050000,
+      "maxTokens": 128000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "openai/gpt-6-sol-pro:batch",
+      "name": "OpenAI: GPT-6 Sol Pro (batch)",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 1050000,
+      "maxTokens": 128000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "openai/gpt-6-sol:batch",
+      "name": "OpenAI: GPT-6 Sol (batch)",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 1050000,
+      "maxTokens": 128000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "openai/gpt-6.1-sol",
+      "name": "OpenAI: GPT-6.1 Sol",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 1050000,
+      "maxTokens": 128000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "openai/gpt-6.1-sol-pro",
+      "name": "OpenAI: GPT-6.1 Sol Pro",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 1050000,
+      "maxTokens": 128000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "openai/gpt-6.1-sol-pro:batch",
+      "name": "OpenAI: GPT-6.1 Sol Pro (batch)",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 1050000,
+      "maxTokens": 128000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "openai/gpt-6.1-sol:batch",
+      "name": "OpenAI: GPT-6.1 Sol (batch)",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 1050000,
+      "maxTokens": 128000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "openai/gpt-audio",
+      "name": "OpenAI: GPT Audio",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 128000,
+      "maxTokens": 16384,
+      "images": false,
+      "reasoning": false,
+      "overridden": {}
+    },
+    {
+      "id": "openai/gpt-audio-mini",
+      "name": "OpenAI: GPT Audio Mini",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 128000,
+      "maxTokens": 16384,
+      "images": false,
+      "reasoning": false,
+      "overridden": {}
+    },
+    {
+      "id": "openai/gpt-chat-latest",
+      "name": "OpenAI: GPT Chat Latest",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 400000,
+      "maxTokens": 128000,
+      "images": true,
+      "reasoning": false,
+      "overridden": {}
+    },
+    {
+      "id": "openai/gpt-oss-120b",
+      "name": "OpenAI: gpt-oss-120b",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 131072,
+      "maxTokens": 65536,
+      "images": false,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "openai/gpt-oss-120b:batch",
+      "name": "OpenAI: gpt-oss-120b (batch)",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 131072,
+      "maxTokens": 117964,
+      "images": false,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "openai/gpt-oss-20b",
+      "name": "OpenAI: gpt-oss-20b",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 131072,
+      "maxTokens": 32768,
+      "images": false,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "openai/gpt-oss-20b:batch",
+      "name": "OpenAI: gpt-oss-20b (batch)",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 131072,
+      "maxTokens": 117964,
+      "images": false,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "openai/gpt-oss-safeguard-20b",
+      "name": "OpenAI: gpt-oss-safeguard-20b",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 131072,
+      "maxTokens": 65536,
+      "images": false,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "openai/o1",
+      "name": "OpenAI: o1",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 200000,
+      "maxTokens": 100000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "openai/o3",
+      "name": "OpenAI: o3",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 200000,
+      "maxTokens": 100000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "openai/o3-mini",
+      "name": "OpenAI: o3 Mini",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 200000,
+      "maxTokens": 100000,
+      "images": false,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "openai/o3-mini-high",
+      "name": "OpenAI: o3 Mini High",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 200000,
+      "maxTokens": 100000,
+      "images": false,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "openai/o3-mini:batch",
+      "name": "OpenAI: o3 Mini (batch)",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 200000,
+      "maxTokens": 100000,
+      "images": false,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "openai/o3-pro",
+      "name": "OpenAI: o3 Pro",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 200000,
+      "maxTokens": 100000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "openai/o3:batch",
+      "name": "OpenAI: o3 (batch)",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 200000,
+      "maxTokens": 100000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "openai/o4-mini",
+      "name": "OpenAI: o4 Mini",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 200000,
+      "maxTokens": 100000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "openai/o4-mini-high",
+      "name": "OpenAI: o4 Mini High",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 200000,
+      "maxTokens": 100000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "openai/o4-mini:batch",
+      "name": "OpenAI: o4 Mini (batch)",
+      "brand": "OpenAI",
+      "enabled": false,
+      "contextWindow": 200000,
+      "maxTokens": 100000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "openrouter/auto",
+      "name": "Auto Router",
+      "brand": "OpenRouter",
+      "enabled": false,
+      "contextWindow": 2000000,
+      "maxTokens": 4096,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "openrouter/auto-beta",
+      "name": "Auto Router (Beta)",
+      "brand": "OpenRouter",
+      "enabled": false,
+      "contextWindow": 2000000,
+      "maxTokens": 4096,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "openrouter/free",
+      "name": "Free Models Router",
+      "brand": "OpenRouter",
+      "enabled": false,
+      "contextWindow": 200000,
+      "maxTokens": 4096,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "openrouter/fusion",
+      "name": "OpenRouter: Fusion",
+      "brand": "OpenRouter",
+      "enabled": false,
+      "contextWindow": 1000000,
+      "maxTokens": 30000,
+      "images": false,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "openrouter/pareto-code",
+      "name": "Pareto Code Router",
+      "brand": "OpenRouter",
+      "enabled": false,
+      "contextWindow": 2000000,
+      "maxTokens": 4096,
+      "images": false,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "perceptron/perceptron-mk1.5",
+      "name": "Perceptron: Perceptron Mk1.5",
+      "brand": null,
+      "enabled": false,
+      "contextWindow": 36864,
+      "maxTokens": 8192,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "poolside/laguna-s-2.1",
+      "name": "Poolside: Laguna S 2.1",
+      "brand": null,
+      "enabled": false,
+      "contextWindow": 1048576,
+      "maxTokens": 131072,
+      "images": false,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "poolside/laguna-s-2.1:free",
+      "name": "Poolside: Laguna S 2.1 (free)",
+      "brand": null,
+      "enabled": false,
+      "contextWindow": 262144,
+      "maxTokens": 32768,
+      "images": false,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "poolside/laguna-xs-2.1",
+      "name": "Poolside: Laguna XS 2.1",
+      "brand": null,
+      "enabled": false,
+      "contextWindow": 262144,
+      "maxTokens": 32768,
+      "images": false,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "poolside/laguna-xs-2.1:free",
+      "name": "Poolside: Laguna XS 2.1 (free)",
+      "brand": null,
+      "enabled": false,
+      "contextWindow": 262144,
+      "maxTokens": 32768,
+      "images": false,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "prism-ml/ternary-bonsai-2-27b",
+      "name": "PrismML: Ternary Bonsai 2 27B",
+      "brand": null,
+      "enabled": false,
+      "contextWindow": 262144,
+      "maxTokens": 32768,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "qwen/qwen-2.5-72b-instruct",
+      "name": "Qwen2.5 72B Instruct",
+      "brand": "Qwen",
+      "enabled": false,
+      "contextWindow": 32768,
+      "maxTokens": 16384,
+      "images": false,
+      "reasoning": false,
+      "overridden": {}
+    },
+    {
+      "id": "qwen/qwen-2.5-7b-instruct",
+      "name": "Qwen: Qwen2.5 7B Instruct",
+      "brand": "Qwen",
+      "enabled": false,
+      "contextWindow": 32768,
+      "maxTokens": 29491,
+      "images": false,
+      "reasoning": false,
+      "overridden": {}
+    },
+    {
+      "id": "qwen/qwen-plus",
+      "name": "Qwen: Qwen-Plus",
+      "brand": "Qwen",
+      "enabled": false,
+      "contextWindow": 1000000,
+      "maxTokens": 32768,
+      "images": false,
+      "reasoning": false,
+      "overridden": {}
+    },
+    {
+      "id": "qwen/qwen3-14b",
+      "name": "Qwen: Qwen3 14B",
+      "brand": "Qwen",
+      "enabled": false,
+      "contextWindow": 40960,
+      "maxTokens": 16384,
+      "images": false,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "qwen/qwen3-235b-a22b-2507",
+      "name": "Qwen: Qwen3 235B A22B Instruct 2507",
+      "brand": "Qwen",
+      "enabled": false,
+      "contextWindow": 262144,
+      "maxTokens": 16384,
+      "images": false,
+      "reasoning": false,
+      "overridden": {}
+    },
+    {
+      "id": "qwen/qwen3-235b-a22b-thinking-2507",
+      "name": "Qwen: Qwen3 235B A22B Thinking 2507",
+      "brand": "Qwen",
+      "enabled": false,
+      "contextWindow": 128000,
+      "maxTokens": 16384,
+      "images": false,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "qwen/qwen3-30b-a3b",
+      "name": "Qwen: Qwen3 30B A3B",
+      "brand": "Qwen",
+      "enabled": false,
+      "contextWindow": 40960,
+      "maxTokens": 16384,
+      "images": false,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "qwen/qwen3-30b-a3b-instruct-2507",
+      "name": "Qwen: Qwen3 30B A3B Instruct 2507",
+      "brand": "Qwen",
+      "enabled": false,
+      "contextWindow": 262144,
+      "maxTokens": 235929,
+      "images": false,
+      "reasoning": false,
+      "overridden": {}
+    },
+    {
+      "id": "qwen/qwen3-32b",
+      "name": "Qwen: Qwen3 32B",
+      "brand": "Qwen",
+      "enabled": false,
+      "contextWindow": 40960,
+      "maxTokens": 16384,
+      "images": false,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "qwen/qwen3-coder",
+      "name": "Qwen: Qwen3 Coder 480B A35B",
+      "brand": "Qwen",
+      "enabled": false,
+      "contextWindow": 262144,
+      "maxTokens": 65536,
+      "images": false,
+      "reasoning": false,
+      "overridden": {}
+    },
+    {
+      "id": "qwen/qwen3-coder-30b-a3b-instruct",
+      "name": "Qwen: Qwen3 Coder 30B A3B Instruct",
+      "brand": "Qwen",
+      "enabled": false,
+      "contextWindow": 262144,
+      "maxTokens": 235929,
+      "images": false,
+      "reasoning": false,
+      "overridden": {}
+    },
+    {
+      "id": "qwen/qwen3-coder-flash",
+      "name": "Qwen: Qwen3 Coder Flash",
+      "brand": "Qwen",
+      "enabled": false,
+      "contextWindow": 1000000,
+      "maxTokens": 65536,
+      "images": false,
+      "reasoning": false,
+      "overridden": {}
+    },
+    {
+      "id": "qwen/qwen3-coder-next",
+      "name": "Qwen: Qwen3 Coder Next",
+      "brand": "Qwen",
+      "enabled": false,
+      "contextWindow": 262144,
+      "maxTokens": 235929,
+      "images": false,
+      "reasoning": false,
+      "overridden": {}
+    },
+    {
+      "id": "qwen/qwen3-next-80b-a3b-instruct",
+      "name": "Qwen: Qwen3 Next 80B A3B Instruct",
+      "brand": "Qwen",
+      "enabled": false,
+      "contextWindow": 262144,
+      "maxTokens": 235929,
+      "images": false,
+      "reasoning": false,
+      "overridden": {}
+    },
+    {
+      "id": "qwen/qwen3-next-80b-a3b-thinking",
+      "name": "Qwen: Qwen3 Next 80B A3B Thinking",
+      "brand": "Qwen",
+      "enabled": false,
+      "contextWindow": 262144,
+      "maxTokens": 235929,
+      "images": false,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "qwen/qwen3-vl-235b-a22b-instruct",
+      "name": "Qwen: Qwen3 VL 235B A22B Instruct",
+      "brand": "Qwen",
+      "enabled": false,
+      "contextWindow": 131072,
+      "maxTokens": 32768,
+      "images": true,
+      "reasoning": false,
+      "overridden": {}
+    },
+    {
+      "id": "qwen/qwen3-vl-30b-a3b-instruct",
+      "name": "Qwen: Qwen3 VL 30B A3B Instruct",
+      "brand": "Qwen",
+      "enabled": false,
+      "contextWindow": 262144,
+      "maxTokens": 16384,
+      "images": true,
+      "reasoning": false,
+      "overridden": {}
+    },
+    {
+      "id": "qwen/qwen3-vl-30b-a3b-thinking",
+      "name": "Qwen: Qwen3 VL 30B A3B Thinking",
+      "brand": "Qwen",
+      "enabled": false,
+      "contextWindow": 262144,
+      "maxTokens": 235929,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "qwen/qwen3-vl-8b-instruct",
+      "name": "Qwen: Qwen3 VL 8B Instruct",
+      "brand": "Qwen",
+      "enabled": false,
+      "contextWindow": 262144,
+      "maxTokens": 235929,
+      "images": true,
+      "reasoning": false,
+      "overridden": {}
+    },
+    {
+      "id": "qwen/qwen3.5-122b-a10b",
+      "name": "Qwen: Qwen3.5-122B-A10B",
+      "brand": "Qwen",
+      "enabled": false,
+      "contextWindow": 262144,
+      "maxTokens": 65536,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "qwen/qwen3.5-27b",
+      "name": "Qwen: Qwen3.5-27B",
+      "brand": "Qwen",
+      "enabled": false,
+      "contextWindow": 262144,
+      "maxTokens": 81920,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "qwen/qwen3.5-35b-a3b",
+      "name": "Qwen: Qwen3.5-35B-A3B",
+      "brand": "Qwen",
+      "enabled": false,
+      "contextWindow": 256000,
+      "maxTokens": 16384,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "qwen/qwen3.5-397b-a17b",
+      "name": "Qwen: Qwen3.5 397B A17B",
+      "brand": "Qwen",
+      "enabled": false,
+      "contextWindow": 262144,
+      "maxTokens": 235929,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "qwen/qwen3.5-9b",
+      "name": "Qwen: Qwen3.5-9B",
+      "brand": "Qwen",
+      "enabled": false,
+      "contextWindow": 256000,
+      "maxTokens": 32768,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "qwen/qwen3.5-flash-02-23",
+      "name": "Qwen: Qwen3.5-Flash",
+      "brand": "Qwen",
+      "enabled": false,
+      "contextWindow": 1000000,
+      "maxTokens": 65536,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "qwen/qwen3.5-plus-02-15",
+      "name": "Qwen: Qwen3.5 Plus 2026-02-15",
+      "brand": "Qwen",
+      "enabled": false,
+      "contextWindow": 1000000,
+      "maxTokens": 65536,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "qwen/qwen3.5-plus-20260420",
+      "name": "Qwen: Qwen3.5 Plus 2026-04-20",
+      "brand": "Qwen",
+      "enabled": false,
+      "contextWindow": 1000000,
+      "maxTokens": 65536,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "qwen/qwen3.6-27b",
+      "name": "Qwen: Qwen3.6 27B",
+      "brand": "Qwen",
+      "enabled": false,
+      "contextWindow": 262144,
+      "maxTokens": 65536,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "qwen/qwen3.6-35b-a3b",
+      "name": "Qwen: Qwen3.6 35B A3B",
+      "brand": "Qwen",
+      "enabled": false,
+      "contextWindow": 262144,
+      "maxTokens": 235929,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "qwen/qwen3.6-flash",
+      "name": "Qwen: Qwen3.6 Flash",
+      "brand": "Qwen",
+      "enabled": false,
+      "contextWindow": 1000000,
+      "maxTokens": 65536,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "qwen/qwen3.6-plus",
+      "name": "Qwen: Qwen3.6 Plus",
+      "brand": "Qwen",
+      "enabled": false,
+      "contextWindow": 1000000,
+      "maxTokens": 65536,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "qwen/qwen3.7-flash",
+      "name": "Qwen: Qwen3.7 Flash",
+      "brand": "Qwen",
+      "enabled": false,
+      "contextWindow": 1000000,
+      "maxTokens": 65536,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "qwen/qwen3.7-max",
+      "name": "Qwen: Qwen3.7 Max",
+      "brand": "Qwen",
+      "enabled": false,
+      "contextWindow": 1000000,
+      "maxTokens": 131072,
+      "images": false,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "qwen/qwen3.7-plus",
+      "name": "Qwen: Qwen3.7 Plus",
+      "brand": "Qwen",
+      "enabled": false,
+      "contextWindow": 1000000,
+      "maxTokens": 131072,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "qwen/qwen3.8-2.4t-a95b",
+      "name": "Qwen: Qwen3.8 2.4T A95B",
+      "brand": "Qwen",
+      "enabled": false,
+      "contextWindow": 1000000,
+      "maxTokens": 131072,
+      "images": false,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "qwen/qwen3.8-27b",
+      "name": "Qwen: Qwen3.8 27B",
+      "brand": "Qwen",
+      "enabled": false,
+      "contextWindow": 262144,
+      "maxTokens": 235929,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "qwen/qwen3.8-flash",
+      "name": "Qwen: Qwen3.8 Flash",
+      "brand": "Qwen",
+      "enabled": false,
+      "contextWindow": 1000000,
+      "maxTokens": 131072,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "qwen/qwen3.8-max-0902",
+      "name": "Qwen: Qwen3.8 Max (0902)",
+      "brand": "Qwen",
+      "enabled": false,
+      "contextWindow": 1000000,
+      "maxTokens": 131072,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "qwen/qwen3.8-max-prime",
+      "name": "Qwen: Qwen3.8 Max Prime",
+      "brand": "Qwen",
+      "enabled": false,
+      "contextWindow": 1000000,
+      "maxTokens": 131072,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "qwen/qwen3.8-omni-flash",
+      "name": "Qwen: Qwen3.8 Omni Flash",
+      "brand": "Qwen",
+      "enabled": false,
+      "contextWindow": 1000000,
+      "maxTokens": 131072,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "rekaai/reka-edge",
+      "name": "Reka Edge",
+      "brand": null,
+      "enabled": false,
+      "contextWindow": 16384,
+      "maxTokens": 14745,
+      "images": true,
+      "reasoning": false,
+      "overridden": {}
+    },
+    {
+      "id": "relace/relace-search",
+      "name": "Relace: Relace Search",
+      "brand": "Relace",
+      "enabled": false,
+      "contextWindow": 256000,
+      "maxTokens": 128000,
+      "images": false,
+      "reasoning": false,
+      "overridden": {}
+    },
+    {
+      "id": "sakana/fugu-max",
+      "name": "Sakana: Fugu Max",
+      "brand": null,
+      "enabled": false,
+      "contextWindow": 1000000,
+      "maxTokens": 128000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "sakana/fugu-ultra",
+      "name": "Sakana: Fugu Ultra",
+      "brand": null,
+      "enabled": false,
+      "contextWindow": 1000000,
+      "maxTokens": 128000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "sakana/fugu-ultra-v2",
+      "name": "Sakana: Fugu Ultra v2",
+      "brand": null,
+      "enabled": false,
+      "contextWindow": 1000000,
+      "maxTokens": 128000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "sakana/sakana-namazu",
+      "name": "Sakana: Sakana Namazu",
+      "brand": null,
+      "enabled": false,
+      "contextWindow": 262144,
+      "maxTokens": 65536,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "stepfun/step-3.5-flash",
+      "name": "StepFun: Step 3.5 Flash",
+      "brand": "Stepfun",
+      "enabled": false,
+      "contextWindow": 262144,
+      "maxTokens": 65536,
+      "images": false,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "stepfun/step-3.7-flash",
+      "name": "StepFun: Step 3.7 Flash",
+      "brand": "Stepfun",
+      "enabled": false,
+      "contextWindow": 256000,
+      "maxTokens": 230400,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "stepfun/step-5-preview",
+      "name": "StepFun: Step 5 Preview",
+      "brand": "Stepfun",
+      "enabled": false,
+      "contextWindow": 1000000,
+      "maxTokens": 64000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "tencent/hy3",
+      "name": "Tencent: Hy3",
+      "brand": "Hunyuan",
+      "enabled": false,
+      "contextWindow": 262144,
+      "maxTokens": 128000,
+      "images": false,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "tencent/hy3-preview",
+      "name": "Tencent: Hy3 preview",
+      "brand": "Hunyuan",
+      "enabled": false,
+      "contextWindow": 262144,
+      "maxTokens": 235929,
+      "images": false,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "tencent/hy4-preview",
+      "name": "Tencent: Hy4 preview",
+      "brand": null,
+      "enabled": false,
+      "contextWindow": 1048576,
+      "maxTokens": 64000,
+      "images": false,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "thinkingmachines/inkling",
+      "name": "Thinking Machines: Inkling",
+      "brand": null,
+      "enabled": false,
+      "contextWindow": 524288,
+      "maxTokens": 471859,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "thinkingmachines/inkling-small",
+      "name": "Thinking Machines: Inkling Small",
+      "brand": "Kling",
+      "enabled": false,
+      "contextWindow": 524288,
+      "maxTokens": 262144,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "thinkingmachines/inkling-small:free",
+      "name": "Thinking Machines: Inkling Small (free)",
+      "brand": "Kling",
+      "enabled": false,
+      "contextWindow": 1048576,
+      "maxTokens": 262144,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "thinkingmachines/inkling:free",
+      "name": "Thinking Machines: Inkling (free)",
+      "brand": null,
+      "enabled": false,
+      "contextWindow": 1048576,
+      "maxTokens": 262144,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "typesafe/jev-router",
+      "name": "TypeSafe: Jev Router",
+      "brand": null,
+      "enabled": false,
+      "contextWindow": 1000000,
+      "maxTokens": 4096,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "unbiased/pareto-26.9",
+      "name": "Pareto 26.9",
+      "brand": "UnionAlpha",
+      "enabled": false,
+      "contextWindow": 262144,
+      "maxTokens": 131072,
+      "images": true,
+      "reasoning": false,
+      "overridden": {}
+    },
+    {
+      "id": "upstage/solar-mini4",
+      "name": "Upstage: Solar Mini 4",
+      "brand": "Upstage",
+      "enabled": false,
+      "contextWindow": 524288,
+      "maxTokens": 131072,
+      "images": false,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "upstage/solar-pro-3",
+      "name": "Upstage: Solar Pro 3",
+      "brand": "Upstage",
+      "enabled": false,
+      "contextWindow": 131072,
+      "maxTokens": 117964,
+      "images": false,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "upstage/solar-pro4",
+      "name": "Upstage: Solar Pro 4",
+      "brand": "Upstage",
+      "enabled": false,
+      "contextWindow": 524288,
+      "maxTokens": 131072,
+      "images": false,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "x-ai/grok-4.20",
+      "name": "SpaceXAI: Grok 4.20",
+      "brand": "Grok",
+      "enabled": false,
+      "contextWindow": 2000000,
+      "maxTokens": 1800000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "x-ai/grok-4.3",
+      "name": "SpaceXAI: Grok 4.3",
+      "brand": "Grok",
+      "enabled": false,
+      "contextWindow": 1000000,
+      "maxTokens": 900000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "x-ai/grok-4.3:batch",
+      "name": "SpaceXAI: Grok 4.3 (batch)",
+      "brand": "Grok",
+      "enabled": false,
+      "contextWindow": 1000000,
+      "maxTokens": 900000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "x-ai/grok-4.5",
+      "name": "SpaceXAI: Grok 4.5",
+      "brand": "Grok",
+      "enabled": false,
+      "contextWindow": 500000,
+      "maxTokens": 450000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "x-ai/grok-4.6",
+      "name": "SpaceXAI: Grok 4.6",
+      "brand": "Grok",
+      "enabled": false,
+      "contextWindow": 500000,
+      "maxTokens": 450000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "x-ai/grok-4.7",
+      "name": "SpaceXAI: Grok 4.7",
+      "brand": "Grok",
+      "enabled": false,
+      "contextWindow": 500000,
+      "maxTokens": 450000,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "x-ai/grok-build-0.1",
+      "name": "SpaceXAI: Grok Build 0.1",
+      "brand": "Grok",
+      "enabled": false,
+      "contextWindow": 256000,
+      "maxTokens": 230400,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "xiaomi/mimo-v2.5",
+      "name": "Xiaomi: MiMo-V2.5",
+      "brand": "XiaomiMiMo",
+      "enabled": false,
+      "contextWindow": 1048576,
+      "maxTokens": 131072,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "xiaomi/mimo-v2.5-pro",
+      "name": "Xiaomi: MiMo-V2.5-Pro",
+      "brand": "XiaomiMiMo",
+      "enabled": false,
+      "contextWindow": 1048576,
+      "maxTokens": 131072,
+      "images": false,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "xiaomi/mimo-v2.6-flash",
+      "name": "Xiaomi: MiMo-V2.6-Flash",
+      "brand": "XiaomiMiMo",
+      "enabled": false,
+      "contextWindow": 1048576,
+      "maxTokens": 131072,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "xiaomi/mimo-v2.6-pro",
+      "name": "Xiaomi: MiMo-V2.6-Pro",
+      "brand": "XiaomiMiMo",
+      "enabled": false,
+      "contextWindow": 1048576,
+      "maxTokens": 131072,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "xiaomi/mimo-v2.6-pro-ultraspeed",
+      "name": "Xiaomi: MiMo-V2.6-Pro-UltraSpeed",
+      "brand": "XiaomiMiMo",
+      "enabled": false,
+      "contextWindow": 1048576,
+      "maxTokens": 131072,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "z-ai/glm-4.5",
+      "name": "Z.ai: GLM 4.5",
+      "brand": "ZAI",
+      "enabled": false,
+      "contextWindow": 131072,
+      "maxTokens": 98304,
+      "images": false,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "z-ai/glm-4.5-air",
+      "name": "Z.ai: GLM 4.5 Air",
+      "brand": "ZAI",
+      "enabled": false,
+      "contextWindow": 131072,
+      "maxTokens": 98304,
+      "images": false,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "z-ai/glm-4.5v",
+      "name": "Z.ai: GLM 4.5V",
+      "brand": "GLMV",
+      "enabled": false,
+      "contextWindow": 65536,
+      "maxTokens": 16384,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "z-ai/glm-4.6",
+      "name": "Z.ai: GLM 4.6",
+      "brand": "ZAI",
+      "enabled": false,
+      "contextWindow": 202752,
+      "maxTokens": 131072,
+      "images": false,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "z-ai/glm-4.6v",
+      "name": "Z.ai: GLM 4.6V",
+      "brand": "GLMV",
+      "enabled": false,
+      "contextWindow": 131072,
+      "maxTokens": 32768,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "z-ai/glm-4.7",
+      "name": "Z.ai: GLM 4.7",
+      "brand": "ZAI",
+      "enabled": false,
+      "contextWindow": 202752,
+      "maxTokens": 131072,
+      "images": false,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "z-ai/glm-4.7-flash",
+      "name": "Z.ai: GLM 4.7 Flash",
+      "brand": "ZAI",
+      "enabled": false,
+      "contextWindow": 131072,
+      "maxTokens": 117964,
+      "images": false,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "z-ai/glm-5",
+      "name": "Z.ai: GLM 5",
+      "brand": "ZAI",
+      "enabled": false,
+      "contextWindow": 202752,
+      "maxTokens": 131072,
+      "images": false,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "z-ai/glm-5-turbo",
+      "name": "Z.ai: GLM 5 Turbo",
+      "brand": "ZAI",
+      "enabled": false,
+      "contextWindow": 202752,
+      "maxTokens": 131072,
+      "images": false,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "z-ai/glm-5.1",
+      "name": "Z.ai: GLM 5.1",
+      "brand": "ZAI",
+      "enabled": false,
+      "contextWindow": 200000,
+      "maxTokens": 128000,
+      "images": false,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "z-ai/glm-5.2",
+      "name": "Z.ai: GLM 5.2",
+      "brand": "ZAI",
+      "enabled": false,
+      "contextWindow": 1048576,
+      "maxTokens": 943718,
+      "images": false,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "z-ai/glm-5.3",
+      "name": "Z.ai: GLM 5.3",
+      "brand": "ZAI",
+      "enabled": false,
+      "contextWindow": 1048576,
+      "maxTokens": 943718,
+      "images": false,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "z-ai/glm-5.3-flash",
+      "name": "Z.ai: GLM 5.3 Flash",
+      "brand": "ZAI",
+      "enabled": false,
+      "contextWindow": 1048575,
+      "maxTokens": 943717,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "z-ai/glm-5.3-flash:batch",
+      "name": "Z.ai: GLM 5.3 Flash (batch)",
+      "brand": "ZAI",
+      "enabled": false,
+      "contextWindow": 1048576,
+      "maxTokens": 131072,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "z-ai/glm-5.3-flashx",
+      "name": "Z.ai: GLM 5.3 FlashX",
+      "brand": "ZAI",
+      "enabled": false,
+      "contextWindow": 1048576,
+      "maxTokens": 131072,
+      "images": true,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "z-ai/glm-5.3-prime",
+      "name": "Z.ai: GLM 5.3 Prime",
+      "brand": "ZAI",
+      "enabled": false,
+      "contextWindow": 1000000,
+      "maxTokens": 131072,
+      "images": false,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "z-ai/glm-5.3:batch",
+      "name": "Z.ai: GLM 5.3 (batch)",
+      "brand": "ZAI",
+      "enabled": false,
+      "contextWindow": 1048576,
+      "maxTokens": 131072,
+      "images": false,
+      "reasoning": true,
+      "overridden": {}
+    },
+    {
+      "id": "z-ai/glm-5v-turbo",
+      "name": "Z.ai: GLM 5V Turbo",
+      "brand": "GLMV",
+      "enabled": false,
+      "contextWindow": 202752,
+      "maxTokens": 131072,
+      "images": true,
       "reasoning": true,
       "overridden": {}
     }

@@ -104,7 +104,7 @@ test('providers: rows, column alignment, expand, switch, in-place context edit, 
   await page.locator('.pickm input[type="checkbox"]').first().check();
   await page.getByTestId('next-provider-finish').click();
   await expect(rows).toHaveCount(4);
-  await expect(rows.filter({ hasText: 'OpenAI' })).toBeVisible();
+  await expect(rows.filter({ hasText: /^OpenAI/ })).toBeVisible();
 
   // 7. OAuth flow
   await page.getByTestId('next-provider-add').click();

@@ -858,7 +858,7 @@ export function handleMockRequest(db: MockDb, hub: MockHub, rawUrl: string, init
       }
       publishProviders(db, hub);
     }
-    return ok(sessionRec.session);
+    return ok({ session: sessionRec.session });
   }
 
   const loginAnswerMatch = /^\/api\/v2\/login-sessions\/([^/]+)\/answer$/.exec(path);
@@ -866,7 +866,7 @@ export function handleMockRequest(db: MockDb, hub: MockHub, rawUrl: string, init
     const sid = decodeURIComponent(loginAnswerMatch[1]);
     const sessionRec = db.loginSessions.get(sid);
     if (!sessionRec) return fail(404, 'Login session not found');
-    return ok(sessionRec.session);
+    return ok({ session: sessionRec.session });
   }
 
   const loginCancelMatch = /^\/api\/v2\/login-sessions\/([^/]+)\/cancel$/.exec(path);
@@ -875,7 +875,7 @@ export function handleMockRequest(db: MockDb, hub: MockHub, rawUrl: string, init
     const sessionRec = db.loginSessions.get(sid);
     if (!sessionRec) return fail(404, 'Login session not found');
     sessionRec.session.state = 'cancelled';
-    return ok(sessionRec.session);
+    return ok({ session: sessionRec.session });
   }
 
   const providerTestMatch = /^\/api\/v2\/providers\/([^/]+)\/test$/.exec(path);

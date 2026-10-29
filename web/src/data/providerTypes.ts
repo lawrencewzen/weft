@@ -45,6 +45,7 @@ export type Provider = {
 export type Available = {
   id: string;
   name: string;
+  brand?: string | null;
   authMethods: ('api_key' | 'oauth')[];
   modelCount: number;
   popular: boolean;

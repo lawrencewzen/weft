@@ -10,6 +10,7 @@ import { writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createBrandIcons, loadBrandData, brandIdOf } from '../src/v2/views/brand.ts';
+import { providerBrand } from '../web/src/data/providerBrand.ts';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = path.join(ROOT, 'web', 'proto', 'mock', 'piCatalog.ts');
@@ -81,7 +82,7 @@ const ENV_MAP = {
   anthropic: 'ANTHROPIC_API_KEY',
 };
 
-const TARGET_MODEL_PROVIDERS = ['deepseek', 'anthropic', 'openai', 'moonshotai-cn', 'zai'];
+const TARGET_MODEL_PROVIDERS = ['deepseek', 'anthropic', 'openai', 'moonshotai-cn', 'zai', 'openrouter'];
 
 const available = [];
 for (const p of builtinProviders) {
@@ -93,6 +94,7 @@ for (const p of builtinProviders) {
   available.push({
     id: p.id,
     name: CN_NAME[p.id] || p.name || p.id,
+    brand: providerBrand(p.id),
     authMethods,
     modelCount: chatModels.length,
     popular: POPULAR.includes(p.id),

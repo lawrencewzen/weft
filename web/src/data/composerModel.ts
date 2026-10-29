@@ -172,6 +172,7 @@ export function contextWindowOptions(current: number): ContextWindowOption[] {
 
 const BRAND_ICON_FILE: Record<string, string> = {
   claude: 'anthropic',
+  xiaomi: 'xiaomimimo',
 };
 
 const BAKED_COLOR_BRANDS = new Set([

@@ -264,6 +264,14 @@ html[data-theme$="-dark"] .ns-ws-dialog {
 .ns-btn-primary:hover { background: var(--accent); }
 .ns-btn-primary:disabled { background: var(--faint); border-color: var(--faint); color: var(--on-accent); opacity: 1; }
 
+/* 设置页面小节与卡片 */
+.sec { display: flex; flex-direction: column; gap: 10px; margin-bottom: 30px; }
+.sec-h { display: flex; align-items: flex-end; gap: 12px; }
+.sec-h b { font-size: 14px; font-weight: 600; color: var(--ink); }
+.sec-h small { font-size: 12.5px; color: var(--mute); }
+.sec-h .sp { flex: 1; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; }
+
 /* 默认模型 */
 .def { display: flex; align-items: center; gap: 12px; padding: 12px 14px; }
 .def .l { display: flex; flex-direction: column; flex: 1; }
@@ -281,7 +289,7 @@ html[data-theme$="-dark"] .ns-ws-dialog {
 /* 服务商列表：所有行共用一套列宽 (58px / 1fr / 136px / 166px / 146px) */
 .plist { display: grid; grid-template-columns: 58px minmax(0, 1fr) 136px 166px 146px; }
 .prow { display: contents; }
-.prow > .c { display: flex; align-items: center; min-height: 64px; padding: 10px 16px 10px 0; border-top: 1px solid var(--line2); cursor: pointer; }
+.prow > .c { display: flex; align-items: center; min-height: 64px; padding: 10px 16px 10px 0; border-top: 1px solid var(--line2); cursor: pointer; min-width: 0; }
 .prow.first > .c { border-top: 0; }
 .prow > .c:first-child { padding-left: 14px; }
 .prow > .c:last-child { padding-right: 14px; justify-content: flex-end; gap: 6px; }
@@ -295,14 +303,14 @@ html[data-theme$="-dark"] .ns-ws-dialog {
 .pn .d .k { font-family: var(--mono); }
 .tag { display: inline-flex; align-items: center; height: 18px; padding: 0 6px; border-radius: 4px; font-size: 11px; font-weight: 500; background: var(--side); color: var(--mute); white-space: nowrap; }
 .cnt { font-size: 12.5px; color: var(--mute); font-variant-numeric: tabular-nums; }
-.st { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--mute); white-space: nowrap; }
+.st { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--mute); white-space: nowrap; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .st i { width: 7px; height: 7px; border-radius: 50%; background: var(--bd3); flex-shrink: 0; }
 .st.ok { color: var(--ok-ink); }
 .st.ok i { background: var(--ok); }
 .st.bad { color: var(--err-ink); }
 .st.bad i { background: var(--err); }
 .st.run i { background: var(--faint); animation: pulse 1s infinite; }
-.st small { color: var(--faint); font-size: 11.5px; margin-left: 4px; }
+.st small { color: var(--faint); font-size: 11.5px; margin-left: 4px; flex-shrink: 0; }
 @keyframes pulse { 50% { opacity: .3; } }
 .btn { height: 28px; padding: 0 10px; border-radius: 7px; border: 1px solid var(--line); background: var(--panel); font-size: 12px; cursor: pointer; white-space: nowrap; color: var(--ink); display: inline-flex; align-items: center; justify-content: center; }
 .btn:hover { background: var(--hover); }
@@ -317,8 +325,8 @@ html[data-theme$="-dark"] .ns-ws-dialog {
 /* 展开后的模型表 */
 .models { grid-column: 1 / -1; padding: 0 14px 10px 58px; }
 .mt { display: grid; grid-template-columns: minmax(0, 1fr) 88px 88px 104px 44px; align-items: center; }
-.mt > * { padding-right: 16px; }
-.mt > :nth-child(5n) { padding-right: 0; justify-content: flex-end; }
+.mt > *, .mt .c, .mt .h { padding-right: 16px; box-sizing: border-box; }
+.mt > :nth-child(5n), .mt .c.last, .mt .h.last { padding-right: 0; justify-content: flex-end; }
 .mt .h { font-size: 11.5px; color: var(--faint); height: 30px; display: flex; align-items: center; border-top: 1px solid var(--line2); }
 .mt .h.r { justify-content: flex-end; }
 .mt .c { height: 40px; display: flex; align-items: center; border-top: 1px solid var(--line3); font-size: 13px; min-width: 0; }

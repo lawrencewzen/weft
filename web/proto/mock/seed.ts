@@ -771,7 +771,7 @@ function seedProviders(now: number): Provider[] {
     {
       id: 'deepseek',
       kind: 'builtin',
-      brand: 'DeepSeek',
+      brand: 'deepseek',
       name: 'DeepSeek',
       auth: { type: 'api_key', keyTail: '75e2' },
       status: { state: 'ok', testedAt: now - 180_000 },
@@ -780,7 +780,7 @@ function seedProviders(now: number): Provider[] {
     {
       id: 'anthropic',
       kind: 'builtin',
-      brand: 'Anthropic',
+      brand: 'anthropic',
       name: 'Anthropic',
       auth: { type: 'oauth', account: 'Claude Max · lawrence@…' },
       status: { state: 'untested' },
@@ -806,7 +806,7 @@ function seedProviders(now: number): Provider[] {
         {
           id: 'qwen3-coder-480b',
           name: 'qwen3-coder-480b',
-          brand: 'Qwen',
+          brand: 'qwen',
           enabled: true,
           contextWindow: 262144,
           maxTokens: 65536,
@@ -817,7 +817,7 @@ function seedProviders(now: number): Provider[] {
         {
           id: 'glm-5.2-fp8',
           name: 'glm-5.2-fp8',
-          brand: 'ZAI',
+          brand: 'zhipu',
           enabled: true,
           contextWindow: null,
           maxTokens: null,

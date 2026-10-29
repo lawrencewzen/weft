@@ -73,3 +73,17 @@ export function sortAvailableProviders(providers: readonly Available[]): Availab
     return a.name.localeCompare(b.name, 'zh-CN');
   });
 }
+
+export { formatTokenNum as formatNumber };
+
+export function formatTimeAgo(ts: number | null | undefined, lang: string): string {
+  if (!ts) return '';
+  const sec = Math.max(0, Math.floor((Date.now() - ts) / 1000));
+  if (sec < 60) return lang === 'en' ? 'just now' : '刚刚';
+  const mins = Math.floor(sec / 60);
+  if (mins < 60) return lang === 'en' ? `${mins}m ago` : `${mins} 分钟前`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return lang === 'en' ? `${hours}h ago` : `${hours} 小时前`;
+  const days = Math.floor(hours / 24);
+  return lang === 'en' ? `${days}d ago` : `${days} 天前`;
+}
