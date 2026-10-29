@@ -1,13 +1,16 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   CONTEXT_WINDOW_MAX,
   CONTEXT_WINDOW_MIN,
   CONTEXT_WINDOW_PRESETS,
+  RECENT_MODELS_STORAGE_KEY,
   brandIconUrl,
+  clampThinkingLevel,
   contextIsWarn,
   contextWindowOptions,
   conversationToResolved,
   findComposerModel,
+  getRecentModelEntries,
   isColorBrand,
   groupComposerModels,
   hasAvailableModels,
@@ -15,8 +18,10 @@ import {
   isValidContextWindow,
   modelAttribution,
   parseContextWindowInput,
+  readRecentModels,
   resolveComposerSelection,
   sameModel,
+  saveRecentModel,
   type Provider,
 } from './composerModel';
 
@@ -31,6 +36,8 @@ function model(id: string, extra?: Partial<Provider['models'][number]>): Provide
     images: extra?.images ?? false,
     reasoning: extra?.reasoning ?? false,
     overridden: extra?.overridden ?? {},
+    thinkingLevels: extra?.thinkingLevels ?? [],
+    defaultThinkingLevel: extra?.defaultThinkingLevel ?? null,
   };
 }
 
@@ -193,5 +200,94 @@ describe('brand helpers', () => {
     expect(modelAttribution('grok-4', [chip], { sourceId: 'src-chip', modelId: 'grok-4', label: 'grok-4' }))
       .toEqual({ brand: 'grok', displayName: 'Grok 4' });
     expect(modelAttribution('unknown', [chip], null)).toEqual({ brand: null, displayName: 'unknown' });
+  });
+});
+
+describe('clampThinkingLevel', () => {
+  it('returns null for models that do not support thinking', () => {
+    expect(clampThinkingLevel([], 'high')).toBeNull();
+    expect(clampThinkingLevel(undefined, 'high')).toBeNull();
+  });
+
+  it('keeps the level if directly supported', () => {
+    const flashLevels = ['off', 'low', 'high', 'max'] as const;
+    expect(clampThinkingLevel(flashLevels, 'low')).toBe('low');
+    expect(clampThinkingLevel(flashLevels, 'high')).toBe('high');
+    expect(clampThinkingLevel(flashLevels, 'off')).toBe('off');
+  });
+
+  it('clamps upward to nearest supported level, or to highest if none higher', () => {
+    const proLevels = ['off', 'high', 'max'] as const;
+    // requested 'low' (want=2) -> 'high' (order=4)
+    expect(clampThinkingLevel(proLevels, 'low')).toBe('high');
+    // requested 'medium' (want=3) -> 'high' (order=4)
+    expect(clampThinkingLevel(proLevels, 'medium')).toBe('high');
+
+    const sonnetLevels = ['off', 'minimal', 'low', 'medium', 'high'] as const;
+    // requested 'xhigh' -> highest supported which is 'high'
+    expect(clampThinkingLevel(sonnetLevels, 'xhigh')).toBe('high');
+    expect(clampThinkingLevel(sonnetLevels, 'max')).toBe('high');
+  });
+
+  it('falls back to first level when requested is null or unknown', () => {
+    const levels = ['low', 'high', 'max'] as const;
+    expect(clampThinkingLevel(levels, null)).toBe('low');
+    expect(clampThinkingLevel(levels, 'unknown_level')).toBe('low');
+  });
+});
+
+describe('recent models storage and deduplication', () => {
+  const chip = provider('src-chip', 'Chip', [
+    model('grok-4.6', { name: 'Grok 4.6', thinkingLevels: ['off', 'low', 'high', 'max'] }),
+    model('grok-4', { name: 'Grok 4', thinkingLevels: ['off', 'high', 'max'] }),
+    model('qwen', { name: 'Qwen', thinkingLevels: [] }),
+  ]);
+  const groups = groupComposerModels([chip], null);
+
+  it('filters out current combination, clamps levels, limits to 3, and excludes unknown models', () => {
+    const recent = [
+      { providerId: 'src-chip', modelId: 'grok-4.6', thinkingLevel: 'high' as const },
+      { providerId: 'src-chip', modelId: 'grok-4', thinkingLevel: 'low' as const }, // clamps to high
+      { providerId: 'src-chip', modelId: 'qwen', thinkingLevel: 'high' as const }, // clamps to null
+      { providerId: 'src-chip', modelId: 'grok-4.6', thinkingLevel: 'off' as const },
+      { providerId: 'unknown', modelId: 'm1', thinkingLevel: null },
+    ];
+
+    const current = { providerId: 'src-chip', modelId: 'grok-4.6', thinkingLevel: 'high' as const };
+    const entries = getRecentModelEntries(recent, current, groups);
+
+    expect(entries.length).toBe(3);
+    expect(entries[0].option.modelId).toBe('grok-4');
+    expect(entries[0].thinkingLevel).toBe('high'); // clamped from low
+    expect(entries[1].option.modelId).toBe('qwen');
+    expect(entries[1].thinkingLevel).toBeNull();
+    expect(entries[2].option.modelId).toBe('grok-4.6');
+    expect(entries[2].thinkingLevel).toBe('off');
+  });
+
+  it('reads and writes localStorage gracefully with deduplication and error tolerance', () => {
+    const storage: Record<string, string> = {};
+    const fakeLocalStorage = {
+      getItem: (key: string) => storage[key] ?? null,
+      setItem: (key: string, val: string) => { storage[key] = val; },
+    };
+    vi.stubGlobal('localStorage', fakeLocalStorage);
+
+    expect(readRecentModels()).toEqual([]);
+
+    saveRecentModel({ providerId: 'src-chip', modelId: 'grok-4', thinkingLevel: 'high' });
+    saveRecentModel({ providerId: 'src-chip', modelId: 'grok-4.6', thinkingLevel: 'off' });
+    saveRecentModel({ providerId: 'src-chip', modelId: 'grok-4', thinkingLevel: 'high' }); // dup
+
+    const stored = readRecentModels();
+    expect(stored.length).toBe(2);
+    expect(stored[0]).toEqual({ providerId: 'src-chip', modelId: 'grok-4', thinkingLevel: 'high' });
+    expect(stored[1]).toEqual({ providerId: 'src-chip', modelId: 'grok-4.6', thinkingLevel: 'off' });
+
+    // Corrupt data test
+    storage[RECENT_MODELS_STORAGE_KEY] = 'not-valid-json';
+    expect(readRecentModels()).toEqual([]);
+
+    vi.unstubAllGlobals();
   });
 });

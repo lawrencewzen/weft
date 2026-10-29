@@ -5,6 +5,17 @@ export type { Provider, Model };
 export type ResolvedModel = components['schemas']['ResolvedModel'];
 export type ConversationModel = components['schemas']['ConversationModel'];
 export type ContextUsage = components['schemas']['ContextUsage'];
+export type ThinkingLevel = components['schemas']['ThinkingLevel'];
+
+export const THINKING_LEVEL_ORDER: readonly ThinkingLevel[] = [
+  'off',
+  'minimal',
+  'low',
+  'medium',
+  'high',
+  'xhigh',
+  'max',
+] as const;
 
 export const CONTEXT_WINDOW_MIN = 1000;
 export const CONTEXT_WINDOW_MAX = 10_000_000;
@@ -21,6 +32,8 @@ export type ComposerModelOption = {
   contextWindowCustom: boolean;
   isDefault: boolean;
   images: boolean;
+  thinkingLevels: ThinkingLevel[];
+  defaultThinkingLevel: ThinkingLevel | null;
 };
 
 export type ComposerModelGroup = {
@@ -62,6 +75,8 @@ function optionOf(
     contextWindowCustom: Boolean(model.overridden?.contextWindow),
     isDefault: sameModel(defaultModel, { providerId: provider.id, modelId: model.id }),
     images: Boolean(model.images),
+    thinkingLevels: Array.isArray(model.thinkingLevels) ? model.thinkingLevels : [],
+    defaultThinkingLevel: model.defaultThinkingLevel ?? null,
   };
 }
 
@@ -128,6 +143,8 @@ export function resolveComposerSelection(opts: {
     contextWindowCustom: false,
     isDefault: sameModel(opts.defaultModel, ref),
     images: false,
+    thinkingLevels: [],
+    defaultThinkingLevel: null,
   };
 }
 
@@ -229,4 +246,81 @@ export function contextRemainPercent(ctx: Pick<ContextUsage, 'percent'>): number
 
 export function contextIsWarn(level: ContextUsage['level'] | undefined): boolean {
   return level === 'warn' || level === 'full';
+}
+
+export function clampThinkingLevel(
+  levels: readonly ThinkingLevel[] | undefined | null,
+  requested: ThinkingLevel | string | null | undefined,
+): ThinkingLevel | null {
+  if (!levels || levels.length === 0) return null;
+  if (!requested) return levels[0] ?? null;
+  if (levels.includes(requested as ThinkingLevel)) return requested as ThinkingLevel;
+  const wantIdx = THINKING_LEVEL_ORDER.indexOf(requested as ThinkingLevel);
+  if (wantIdx === -1) return levels[0] ?? null;
+  const up = levels.find((l) => THINKING_LEVEL_ORDER.indexOf(l) >= wantIdx);
+  return up || levels[levels.length - 1] || null;
+}
+
+export type RecentModelItem = {
+  providerId: string;
+  modelId: string;
+  thinkingLevel: ThinkingLevel | null;
+};
+
+export const RECENT_MODELS_STORAGE_KEY = 'weft_recent_models';
+
+export function readRecentModels(): RecentModelItem[] {
+  try {
+    const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(RECENT_MODELS_STORAGE_KEY) : null;
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((item): item is RecentModelItem => (
+      Boolean(item) &&
+      typeof item.providerId === 'string' &&
+      typeof item.modelId === 'string' &&
+      (item.thinkingLevel === null || (typeof item.thinkingLevel === 'string' && THINKING_LEVEL_ORDER.includes(item.thinkingLevel as ThinkingLevel)))
+    ));
+  } catch {
+    return [];
+  }
+}
+
+export function saveRecentModel(item: RecentModelItem): void {
+  try {
+    if (typeof localStorage === 'undefined') return;
+    const existing = readRecentModels();
+    const key = (x: RecentModelItem) => `${x.providerId}:${x.modelId}:${x.thinkingLevel ?? ''}`;
+    const targetKey = key(item);
+    const updated = [item, ...existing.filter((x) => key(x) !== targetKey)].slice(0, 10);
+    localStorage.setItem(RECENT_MODELS_STORAGE_KEY, JSON.stringify(updated));
+  } catch {
+    // Storage quota or security error, gracefully ignored
+  }
+}
+
+export function getRecentModelEntries(
+  recent: readonly RecentModelItem[],
+  current: { providerId: string; modelId: string; thinkingLevel: ThinkingLevel | null } | null,
+  groups: readonly ComposerModelGroup[],
+): Array<{ option: ComposerModelOption; thinkingLevel: ThinkingLevel | null }> {
+  const currentKey = current ? `${current.providerId}:${current.modelId}:${current.thinkingLevel ?? ''}` : '';
+  const result: Array<{ option: ComposerModelOption; thinkingLevel: ThinkingLevel | null }> = [];
+  const seenKeys = new Set<string>();
+
+  for (const item of recent) {
+    const group = groups.find((g) => g.providerId === item.providerId);
+    const option = group?.models.find((m) => m.modelId === item.modelId);
+    if (!option) continue;
+
+    const clampedLevel = clampThinkingLevel(option.thinkingLevels, item.thinkingLevel);
+    const itemKey = `${item.providerId}:${item.modelId}:${clampedLevel ?? ''}`;
+    if (itemKey === currentKey) continue;
+    if (seenKeys.has(itemKey)) continue;
+
+    seenKeys.add(itemKey);
+    result.push({ option, thinkingLevel: clampedLevel });
+    if (result.length >= 3) break;
+  }
+  return result;
 }

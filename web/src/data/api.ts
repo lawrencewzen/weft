@@ -17,6 +17,8 @@ export type FileContent = components['schemas']['FileContent'];
 export type SaveResult = components['schemas']['SaveResult'];
 export type SaveFileRequest = components['schemas']['SaveFileRequest'];
 export type ConversationView = components['schemas']['ConversationView'];
+export type ThinkingLevel = components['schemas']['ThinkingLevel'];
+export type PatchConversationRequest = components['schemas']['PatchConversationModelRequest'];
 
 export type CreateWorkspaceRequest = components['schemas']['CreateWorkspaceRequest'];
 export type Workspace = components['schemas']['Workspace'];
@@ -311,14 +313,28 @@ export function getSnapshot(cid: string, lang: string): Promise<ConversationSnap
   return requestJson<ConversationSnapshot>(`${conversationPath(cid)}?${params.toString()}`);
 }
 
+export function patchConversation(
+  cid: string,
+  patch: PatchConversationRequest,
+): Promise<ConversationView> {
+  return requestJson<ConversationView>(conversationPath(cid), {
+    method: 'PATCH',
+    body: JSON.stringify(patch),
+  });
+}
+
 export function patchConversationModel(
   cid: string,
   model: ResolvedModel | null,
 ): Promise<ConversationView> {
-  return requestJson<ConversationView>(conversationPath(cid), {
-    method: 'PATCH',
-    body: JSON.stringify({ model }),
-  });
+  return patchConversation(cid, { model });
+}
+
+export function patchConversationThinkingLevel(
+  cid: string,
+  thinkingLevel: ThinkingLevel | null,
+): Promise<ConversationView> {
+  return patchConversation(cid, { thinkingLevel });
 }
 
 export function createConversation(workspaceId: string, title?: string): Promise<ConversationSummary> {

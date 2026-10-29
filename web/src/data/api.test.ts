@@ -8,6 +8,7 @@ import {
   createGitConnection,
   createWorkspace,
   patchConversationModel,
+  patchConversationThinkingLevel,
   patchGitConnection,
   putModelContextWindow,
   getConversationDiff,
@@ -379,11 +380,14 @@ describe('api client', () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(jsonResponse(200, view))
       .mockResolvedValueOnce(jsonResponse(200, view))
+      .mockResolvedValueOnce(jsonResponse(200, view))
       .mockResolvedValueOnce(jsonResponse(200, { provider }))
       .mockResolvedValueOnce(jsonResponse(200, { provider }));
     vi.stubGlobal('fetch', fetchMock);
 
     await expect(patchConversationModel('c/1', { providerId: 'p/1', modelId: 'grok-4' }))
+      .resolves.toMatchObject({ id: 'c/1' });
+    await expect(patchConversationThinkingLevel('c/1', 'high'))
       .resolves.toMatchObject({ id: 'c/1' });
     await expect(patchConversationModel('c/1', null)).resolves.toMatchObject({ id: 'c/1' });
     await expect(putModelContextWindow('p/1', 'grok-4', 256000))
@@ -395,12 +399,16 @@ describe('api client', () => {
     expect(JSON.parse(String(fetchMock.mock.calls[0][1].body))).toEqual({
       model: { providerId: 'p/1', modelId: 'grok-4' },
     });
-    expect(JSON.parse(String(fetchMock.mock.calls[1][1].body))).toEqual({ model: null });
-    expect(fetchMock.mock.calls[2][0]).toBe('/api/v2/providers/p%2F1');
-    expect(JSON.parse(String(fetchMock.mock.calls[2][1].body))).toEqual({
+    expect(fetchMock.mock.calls[1][0]).toBe('/api/v2/conversations/c%2F1');
+    expect(JSON.parse(String(fetchMock.mock.calls[1][1].body))).toEqual({
+      thinkingLevel: 'high',
+    });
+    expect(JSON.parse(String(fetchMock.mock.calls[2][1].body))).toEqual({ model: null });
+    expect(fetchMock.mock.calls[3][0]).toBe('/api/v2/providers/p%2F1');
+    expect(JSON.parse(String(fetchMock.mock.calls[3][1].body))).toEqual({
       overrides: { 'grok-4': { contextWindow: 256000 } },
     });
-    expect(JSON.parse(String(fetchMock.mock.calls[3][1].body))).toEqual({
+    expect(JSON.parse(String(fetchMock.mock.calls[4][1].body))).toEqual({
       overrides: { 'grok-4': { contextWindow: null } },
     });
   });

@@ -20,6 +20,7 @@ function modelOption(page, modelId) {
 async function openModelMenu(page) {
   await page.getByTestId('next-model-chip').click();
   await expect(page.getByTestId('next-model-menu')).toBeVisible();
+  await page.getByTestId('next-menu-model').hover();
 }
 
 test('lists models by provider and switches the conversation model', async ({ page }) => {

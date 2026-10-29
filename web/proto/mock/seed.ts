@@ -53,6 +53,7 @@ function conversation(input: {
   items: MockItem[];
   tools?: Record<string, MockTool>;
   model?: ConversationView['model'];
+  thinkingLevel?: ConversationView['thinkingLevel'];
   changes?: Change[];
   diffs?: Record<string, MockConv['diffs'][string]>;
   subagents?: Subagent[];
@@ -70,6 +71,9 @@ function conversation(input: {
       model: input.model === undefined
         ? { sourceId: 'deepseek', modelId: 'deepseek-flash', label: 'DeepSeek V4.1 Flash' }
         : input.model,
+      thinkingLevel: input.thinkingLevel !== undefined
+        ? input.thinkingLevel
+        : (input.model === null ? null : (input.model?.modelId === 'claude-fable-5-1' ? 'medium' : 'high')),
       run: { ...IDLE_RUN },
       context: context(input.used),
       itemIds: input.items.map((item) => item.id),
@@ -818,6 +822,8 @@ function seedProviders(now: number): Provider[] {
           maxTokens: 65536,
           images: false,
           reasoning: false,
+          thinkingLevels: [],
+          defaultThinkingLevel: null,
           overridden: {},
         },
         {
@@ -829,6 +835,8 @@ function seedProviders(now: number): Provider[] {
           maxTokens: null,
           images: false,
           reasoning: true,
+          thinkingLevels: ['off', 'low', 'high', 'max'],
+          defaultThinkingLevel: 'high',
           overridden: {},
         },
         {
@@ -840,6 +848,8 @@ function seedProviders(now: number): Provider[] {
           maxTokens: null,
           images: false,
           reasoning: false,
+          thinkingLevels: [],
+          defaultThinkingLevel: null,
           overridden: {},
         },
       ],

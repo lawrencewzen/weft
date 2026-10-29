@@ -3,13 +3,14 @@ import type { components } from '../../../src/v2/contract.gen';
 import {
   continueRun as continueRunApi,
   createConversation,
-  patchConversationModel,
+  patchConversation,
   sendMessage,
   stop as stopApi,
   toolOutput,
   withdrawMessage as withdrawMessageApi,
   type ResolvedModel,
   type SendMode,
+  type ThinkingLevel,
 } from './api';
 
 type MessageImage = components['schemas']['MessageImage'];
@@ -102,6 +103,7 @@ export function useConversation(cid: string | null | undefined): ConversationSta
 export function useDraftSend(
   workspaceId: string | null | undefined,
   modelForCreate?: () => ResolvedModel | null,
+  thinkingLevelForCreate?: () => ThinkingLevel | null,
 ): ConversationActions {
   const created = useRef<{ workspaceId: string; conversationId: string } | null>(null);
   const wsId = workspaceId || '';
@@ -119,12 +121,18 @@ export function useDraftSend(
       const conversation = await createConversation(wsId);
       created.current = { workspaceId: wsId, conversationId: conversation.id };
       const model = modelForCreate?.() || null;
-      if (model) await patchConversationModel(conversation.id, model);
+      const thinkingLevel = thinkingLevelForCreate?.() ?? null;
+      if (model || thinkingLevel) {
+        await patchConversation(conversation.id, {
+          ...(model ? { model } : {}),
+          ...(thinkingLevel ? { thinkingLevel } : {}),
+        });
+      }
     }
     const cid = created.current.conversationId;
     await sendMessage(cid, text, requestId, images, mode, files, pastes);
     navigate(conversationPath(cid));
-  }, [wsId, modelForCreate]);
+  }, [wsId, modelForCreate, thinkingLevelForCreate]);
 
   return useMemo(() => ({
     send,
