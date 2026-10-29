@@ -19,6 +19,7 @@ import {
   resolveEffectiveDefault,
   resolveKernelTarget,
 } from '../kernel/models.mjs';
+import { effectiveThinkingLevel, thinkingFieldsOf } from './thinking-level.mjs';
 
 export const POPULAR_PROVIDER_IDS = Object.freeze([
   'deepseek',
@@ -192,6 +193,7 @@ function modelRow(model, { enabled, overridden }) {
   const flags = {};
   if (over.contextWindow != null) flags.contextWindow = true;
   if (over.maxTokens != null) flags.maxTokens = true;
+  const thinking = thinkingFieldsOf(model);
   return {
     id: model.id,
     name: model.name || model.id,
@@ -200,6 +202,8 @@ function modelRow(model, { enabled, overridden }) {
     maxTokens: over.maxTokens ?? displayWindow(model.maxTokens),
     images: input.includes('image'),
     reasoning: model.reasoning === true,
+    thinkingLevels: thinking.thinkingLevels,
+    defaultThinkingLevel: thinking.defaultThinkingLevel,
     overridden: flags,
   };
 }
@@ -518,6 +522,26 @@ export function createProviderService({
     const hit = resolveKernelTarget(settings, conv);
     if (!hit) return null;
     return { providerId: hit.provider, modelId: hit.modelId };
+  }
+
+  async function catalogModelFor(providerId, modelId) {
+    const id = String(providerId || '').trim();
+    const model = String(modelId || '').trim();
+    if (!id || !model) return null;
+    const settings = await loadSettings();
+    const entry = providersOf(settings).find((item) => item.id === id);
+    if (!entry) return null;
+    const catalog = entry.kind === 'builtin'
+      ? await builtinModels(entry.id)
+      : await customModels(entry.id);
+    return catalog.find((item) => item.id === model) || null;
+  }
+
+  async function effectiveThinkingLevelFor(conv) {
+    const target = await resolveTarget(conv);
+    if (!target) return null;
+    const model = await catalogModelFor(target.providerId, target.modelId);
+    return effectiveThinkingLevel(model, conv?.thinkingLevel);
   }
 
   async function contextWindowFor(conv) {
@@ -1106,6 +1130,8 @@ export function createProviderService({
     contextWindowFor,
     hasAvailableModel,
     resolveConversationModelPatch,
+    catalogModelFor,
+    effectiveThinkingLevelFor,
     seedFromEnv,
   };
 }

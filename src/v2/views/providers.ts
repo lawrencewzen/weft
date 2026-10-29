@@ -106,6 +106,8 @@ export type RawModel = {
   maxTokens: number | null;
   images: boolean;
   reasoning: boolean;
+  thinkingLevels?: string[];
+  defaultThinkingLevel?: string | null;
   overridden: { contextWindow?: boolean; maxTokens?: boolean };
 };
 
@@ -184,6 +186,9 @@ export function statusView(lastTest: RawLastTest, lang: Lang): ProviderStatus {
 }
 
 export function modelView(model: RawModel): ProviderModel {
+  const thinkingLevels = Array.isArray(model.thinkingLevels)
+    ? model.thinkingLevels.filter((item): item is NonNullable<ProviderModel['thinkingLevels']>[number] => typeof item === 'string')
+    : [];
   return {
     id: model.id,
     name: model.name || model.id,
@@ -193,6 +198,10 @@ export function modelView(model: RawModel): ProviderModel {
     maxTokens: model.maxTokens,
     images: model.images === true,
     reasoning: model.reasoning === true,
+    thinkingLevels,
+    defaultThinkingLevel: typeof model.defaultThinkingLevel === 'string'
+      ? model.defaultThinkingLevel as NonNullable<ProviderModel['defaultThinkingLevel']>
+      : null,
     overridden: {
       ...(model.overridden?.contextWindow ? { contextWindow: true } : {}),
       ...(model.overridden?.maxTokens ? { maxTokens: true } : {}),

@@ -8,6 +8,7 @@ import { defineExtension, defineTool, section } from '@earendil-works/pi-durable
 import { agentEventData, mapConvStatusToAgent } from '../core/agents.mjs';
 import { TOOLS } from '../core/config.mjs';
 import { unknownSkillError } from '../core/skills.mjs';
+import { parseThinkingLevelPatch } from '../core/thinking-level.mjs';
 import { createPluginHost } from './plugins.mjs';
 import { isAutoContinueText } from './continuation.mjs';
 import { EXT_BUILTIN_TOOLS, EXT_SKILLS } from './ids.mjs';
@@ -235,6 +236,11 @@ export function createAgentHost({
       if (!modelChoice.ok) return { status: 400, body: { errors: modelChoice.errors } };
       patch.modelSourceId = modelChoice.value.modelSourceId;
       patch.modelId = modelChoice.value.modelId;
+    }
+    const thinkingChoice = parseThinkingLevelPatch(input);
+    if (thinkingChoice.present) {
+      if (!thinkingChoice.ok) return { status: 400, body: { error: thinkingChoice.error } };
+      patch.thinkingLevel = thinkingChoice.value;
     }
     if (!Object.keys(patch).length) {
       // Unknown keys (pipeline leftovers, retired fields) are ignored.

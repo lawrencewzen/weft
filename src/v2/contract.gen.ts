@@ -792,9 +792,9 @@ export interface paths {
         options?: never;
         head?: never;
         /**
-         * 切换对话模型
+         * 切换对话模型或思考档位
          * @description `model` 为 `{ providerId, modelId }` 时绑定该模型，规则同旧 resolveConversationModelPatch。
-         *     `model` 为 null 时回到默认。运行中也能改，下次提交生效。成功后推送该对话主题的 ConversationView.model 和 context。
+         *     `model` 为 null 时回到默认。`thinkingLevel` 为档位名时写入对话；对当前模型不支持的档位按 clampThinkingLevel 就近处理，响应里的 thinkingLevel 是实际生效值。`thinkingLevel` 为 null 时清除，恢复模型默认。至少要有 model 或 thinkingLevel。运行中也能改，下次提交生效。成功后推送该对话主题的 ConversationView（含 model、thinkingLevel 和 context）。
          */
         patch: operations["patchConversation"];
         trace?: never;
@@ -1471,6 +1471,11 @@ export interface components {
             contextWindow?: boolean;
             maxTokens?: boolean;
         };
+        /**
+         * @description pi-ai 思考档位。界面按模型支持的显示为关 / 低 / 中 / 高 / 更高 / 最高。
+         * @enum {string}
+         */
+        ThinkingLevel: "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
         /** @description Provider 上的一个 chat 模型。 */
         ProviderModel: {
             id: string;
@@ -1485,6 +1490,13 @@ export interface components {
             maxTokens: null | number;
             images: boolean;
             reasoning: boolean;
+            /**
+             * @description 该模型支持的思考档位，来自 getSupportedThinkingLevels。非推理模型为空数组。
+             *     顺序从低到高：off / minimal / low / medium / high / xhigh / max（按模型支持的显示）。
+             */
+            thinkingLevels?: components["schemas"]["ThinkingLevel"][];
+            /** @description 未选档位时的默认。所有推理模型默认 medium，再经 clampThinkingLevel 得到实际值。非推理模型为 null。 */
+            defaultThinkingLevel?: null | components["schemas"]["ThinkingLevel"];
             overridden: components["schemas"]["ModelOverridden"];
         };
         /** @description 模型服务商视图。响应和日志都不含明文 API key。 */
@@ -1623,10 +1635,15 @@ export interface components {
         LoginAnswerRequest: {
             value: string;
         };
-        /** @description PATCH /api/v2/conversations/{id} 的请求体。 */
+        /** @description PATCH /api/v2/conversations/{id} 的请求体。至少包含 model 或 thinkingLevel。 */
         PatchConversationModelRequest: {
-            /** @description 绑定的模型；null 回到默认 */
-            model: null | components["schemas"]["ResolvedModel"];
+            /** @description 绑定的模型；null 回到默认。可与 thinkingLevel 同时传。 */
+            model?: null | components["schemas"]["ResolvedModel"];
+            /**
+             * @description 对话思考档位。合法名为 off / minimal / low / medium / high / xhigh / max；非法名 400。
+             *     当前模型不支持的档位按 clampThinkingLevel 就近处理，响应返回实际生效值。null 清除，恢复模型默认。
+             */
+            thinkingLevel?: null | components["schemas"]["ThinkingLevel"];
         };
         /** @description 侧栏工作区。 */
         Workspace: {
@@ -1735,6 +1752,11 @@ export interface components {
             status: "idle" | "running" | "waiting" | "failed";
             /** @description 解析不到时为 null */
             model: null | components["schemas"]["ConversationModel"];
+            /**
+             * @description 实际生效的思考档位：对话选的经 clampThinkingLevel 处理后的值；没选则为当前模型的 defaultThinkingLevel。
+             *     当前模型不支持思考时为 null。
+             */
+            thinkingLevel?: null | components["schemas"]["ThinkingLevel"];
             run: components["schemas"]["RunState"];
             context: components["schemas"]["ContextUsage"];
             /** @description 对话流 ThreadItem id 的顺序 */
@@ -4977,7 +4999,7 @@ export interface operations {
                     "application/json": components["schemas"]["ConversationView"];
                 };
             };
-            /** @description 模型不存在或请求体无效 */
+            /** @description 模型不存在、思考档位名非法或请求体无效 */
             400: {
                 headers: {
                     [name: string]: unknown;

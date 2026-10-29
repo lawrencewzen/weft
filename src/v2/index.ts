@@ -967,20 +967,27 @@ export function createV2Handler(opts: {
       const id = decodeURIComponent(convMatch[1]);
       const body = await readObjectBody(req, res, pathname, method);
       if (!body) return true;
-      if (!Object.prototype.hasOwnProperty.call(body, 'model')) {
-        sendV2(res, pathname, method, 400, { error: 'model required', code: 'E_BAD_REQUEST' } satisfies V2Error);
+      const hasModel = Object.prototype.hasOwnProperty.call(body, 'model');
+      const hasThinking = Object.prototype.hasOwnProperty.call(body, 'thinkingLevel');
+      if (!hasModel && !hasThinking) {
+        sendV2(res, pathname, method, 400, { error: 'model or thinkingLevel required', code: 'E_BAD_REQUEST' } satisfies V2Error);
         return true;
       }
-      let kernelBody: Record<string, unknown>;
-      if (body.model === null) {
-        kernelBody = { modelSourceId: null, modelId: null };
-      } else if (body.model && typeof body.model === 'object' && !Array.isArray(body.model)) {
-        const model = body.model as Record<string, unknown>;
-        kernelBody = { modelSourceId: model.providerId, modelId: model.modelId };
-      } else {
-        sendV2(res, pathname, method, 400, { error: 'invalid model', code: 'E_BAD_REQUEST' } satisfies V2Error);
-        return true;
+      const kernelBody: Record<string, unknown> = {};
+      if (hasModel) {
+        if (body.model === null) {
+          kernelBody.modelSourceId = null;
+          kernelBody.modelId = null;
+        } else if (body.model && typeof body.model === 'object' && !Array.isArray(body.model)) {
+          const model = body.model as Record<string, unknown>;
+          kernelBody.modelSourceId = model.providerId;
+          kernelBody.modelId = model.modelId;
+        } else {
+          sendV2(res, pathname, method, 400, { error: 'invalid model', code: 'E_BAD_REQUEST' } satisfies V2Error);
+          return true;
+        }
       }
+      if (hasThinking) kernelBody.thinkingLevel = body.thinkingLevel;
       if (!opts.patchConversation) {
         sendV2(res, pathname, method, 500, { error: 'kernel not ready', code: 'E_INTERNAL' } satisfies V2Error);
         return true;

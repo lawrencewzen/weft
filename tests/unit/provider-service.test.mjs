@@ -8,6 +8,7 @@ import {
   POPULAR_PROVIDER_IDS,
 } from '../../src/core/provider-service.mjs';
 import { makeTempDir, removeTempDir } from './_tmp.mjs';
+import { parseFetchedChatModels } from '../../src/kernel/models.mjs';
 import {
   fakeKeyProvider,
   fakeOAuthProvider,
@@ -96,6 +97,13 @@ test('listProviders reports builtin catalog, custom cache, auth types, and overr
     assert.equal(flash.reasoning, true);
     assert.equal(flash.images, true);
     assert.equal(flash.enabled, false);
+    assert.deepEqual(flash.thinkingLevels, ['off', 'low', 'high', 'max']);
+    assert.equal(flash.defaultThinkingLevel, 'high');
+    const pro = ds.models.find((item) => item.id === 'deepseek-v4-pro');
+    if (pro) {
+      assert.deepEqual(pro.thinkingLevels, ['off', 'high', 'max']);
+      assert.equal(pro.defaultThinkingLevel, 'high');
+    }
 
     assert.equal(google.auth.type, 'oauth');
 
@@ -130,6 +138,30 @@ test('listProviders reports builtin catalog, custom cache, auth types, and overr
       ],
       defaultModel: null,
     },
+  });
+});
+
+test('custom models expose thinkingLevels from effort.supported_levels', async () => {
+  await withService(async ({ service, modelsStore }) => {
+    const parsed = parseFetchedChatModels({
+      data: [
+        { id: 'thinker', effort: { supported_levels: ['low', 'high', 'max'] } },
+        { id: 'plain' },
+      ],
+    }, { providerId: CUSTOM_ID, api: 'openai-completions', baseUrl: 'http://127.0.0.1:9/v1' });
+    await modelsStore.write(CUSTOM_ID, { models: parsed });
+    const listed = await service.listProviders();
+    const custom = listed.find((item) => item.id === CUSTOM_ID);
+    const thinker = custom.models.find((item) => item.id === 'thinker');
+    const plain = custom.models.find((item) => item.id === 'plain');
+    assert.equal(thinker.reasoning, true);
+    assert.deepEqual(thinker.thinkingLevels, ['off', 'low', 'high', 'max']);
+    assert.equal(thinker.defaultThinkingLevel, 'high');
+    assert.equal(plain.reasoning, false);
+    assert.deepEqual(plain.thinkingLevels, []);
+    assert.equal(plain.defaultThinkingLevel, null);
+  }, {
+    settings: customSettings({ enabled: ['thinker', 'plain'] }),
   });
 });
 

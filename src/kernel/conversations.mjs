@@ -15,6 +15,7 @@ import { formatSSE } from '../core/sse.mjs';
 import { presentContext } from '../core/usage.mjs';
 import { createCredentialStore, createModelsStore } from '../core/provider-stores.mjs';
 import { createProviderService } from '../core/provider-service.mjs';
+import { configureThinkingLevel } from '../core/thinking-level.mjs';
 import {
   createMapContext,
   mapHarnessBatch,
@@ -327,12 +328,22 @@ export async function openConversationKernel({
     }));
   }
 
+  async function applyModel(conversation, conv) {
+    const model = await routes.modelFor(conv);
+    const change = { model: model ?? null };
+    if (model) {
+      const catalog = models.getModel(model.provider, model.modelId);
+      const thinkingLevel = configureThinkingLevel(catalog, conv?.thinkingLevel);
+      change.thinkingLevel = thinkingLevel ?? null;
+    }
+    await conversation.configure(change, context);
+  }
+
   async function resolveModel(conv) {
     if (!routes || !conv?.harnessId) return;
     const conversation = await harness.conversation(conv.harnessId, context);
     if (!conversation) return;
-    const model = await routes.modelFor(conv);
-    await conversation.configure({ model: model ?? null }, context);
+    await applyModel(conversation, conv);
   }
 
   async function statusOf(conv) {
@@ -687,8 +698,7 @@ export async function openConversationKernel({
       const prepared = agentHost ? await agentHost.prepareSend(conv, text) : null;
       const current = prepared?.conversation || conv;
       if (routes) {
-        const model = await routes.modelFor(current);
-        await conversation.configure({ model: model ?? null }, context);
+        await applyModel(conversation, current);
       }
       const given = typeof options.requestId === 'string' ? options.requestId.trim() : '';
       const requestId = given || prepared?.requestId || randomUUID();

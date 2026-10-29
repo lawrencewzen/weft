@@ -26,6 +26,8 @@ export type PresentedConversation = {
   messages?: ThreadMessage[] | null;
   modelSourceId?: unknown;
   modelId?: unknown;
+  /** Effective thinking level (clamped stored, or model default). */
+  thinkingLevel?: unknown;
   /** Where the conversation's recent sends landed; see `sendsView`. */
   sends?: unknown;
 };
@@ -57,6 +59,11 @@ export function conversationModelView(target: ConversationModelTarget): Conversa
 function asUpdatedAt(value: unknown): number {
   const n = Number(value);
   return Number.isFinite(n) ? Math.trunc(n) : 0;
+}
+
+function asThinkingLevel(value: unknown): ConversationView['thinkingLevel'] {
+  if (value == null || value === '') return null;
+  return String(value) as NonNullable<ConversationView['thinkingLevel']>;
 }
 
 /** Present() sends → contract. Rows without a requestId are dropped. */
@@ -118,6 +125,7 @@ export async function conversationSnapshot({
     updatedAt: asUpdatedAt(presented?.updatedAt),
     status: conversationStatus(run.status),
     model: conversationModelView(modelTarget),
+    thinkingLevel: asThinkingLevel(presented?.thinkingLevel),
     run,
     context: contextUsageView({
       usage: presented?.usage,

@@ -85,7 +85,12 @@ const v2Opts = {
     const subagents = await kernelApi.listSubagents(presented);
     const target = providerService ? await providerService.resolveTarget(presented) : null;
     return {
-      presented,
+      presented: {
+        ...presented,
+        thinkingLevel: providerService
+          ? await providerService.effectiveThinkingLevelFor(presented)
+          : null,
+      },
       subagents,
       modelTarget: target ? { source: { id: target.providerId }, model: target.modelId } : null,
       window: providerService ? await providerService.contextWindowFor(presented) : null,
