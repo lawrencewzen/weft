@@ -23,7 +23,7 @@ npm run test:e2e                         # playwright test -c tests/playwright.c
 - 每个新功能的 PR 必须在本目录新增或更新对应用例，和功能改动放在同一个 PR 里。
 - 一条用例只覆盖一个可观察的结果。步骤写操作，预期写屏幕上或回复里应出现的内容。
 - 默认界面是中文。`appearance.md` 会切到英文，结束时必须切回中文。
-- 需要模型的用例依赖已经登录的 Grok 会话，或已保存的 API Key。没有可用模型时把该条记为阻塞，不要记为失败。
+- 需要模型的用例依赖已保存的 API Key。没有可用模型时把该条记为阻塞，不要记为失败。
 - 把令牌、用户码和 API Key 写进记录是不允许的。
 
 ## 用例
@@ -39,8 +39,7 @@ npm run test:e2e                         # playwright test -c tests/playwright.c
 | [tool-loop.md](tool-loop.md) | 相同工具连呼、重复翻找与单步工具上限 |
 | [conversation-control.md](conversation-control.md) | 暂停、继续、终止，终止后再次发送 |
 | [running-overview.md](running-overview.md) | 运行中概览 |
-| [grok-login.md](grok-login.md) | Grok 设备码登录、退出登录 |
-| [model-connection.md](model-connection.md) | 未连接模型时报错，登录后真实回复，演示模式有徽章 |
+| [model-connection.md](model-connection.md) | 未连接模型时报错，接上 API 来源后真实回复，演示模式有徽章 |
 | [model-sources.md](model-sources.md) | 模型来源增删改测、默认模型、保存条、换主机重填 Key |
 | [skills.md](skills.md) | 新建 Skill、开关、启用后影响回复 |
 | [plugins.md](plugins.md) | Echo 列表、开关、调用工具、空导入被拒绝、导入 word-count、重启后仍在、无效插件报错 |

@@ -62,7 +62,7 @@ LLM_API_KEY=YOUR_OWN_KEY
 LLM_MODEL=your-provider-model-id
 ```
 
-优先复用本机 Grok Build 会话（`grok login` 写到 `~/.grok/auth.json`）。设置里的「用 Grok 登录」走同一套设备码。没有 Grok 会话、API Key 或 Base URL 时，服务拒绝回复。
+没有 API Key 或 Base URL 时，服务拒绝回复。
 
 **LLM 费用属于模型服务商。** 不要把密钥发到 Issue。
 

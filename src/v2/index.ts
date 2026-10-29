@@ -1582,12 +1582,6 @@ export function createV2Runtime(opts: {
   patchConversation?: PatchConversationFn;
   getSettings?: ProvidersHttpOpts['getSettings'];
   putSettings?: ProvidersHttpOpts['putSettings'];
-  grokStatus?: ProvidersHttpOpts['grokStatus'];
-  grokStartLogin?: ProvidersHttpOpts['grokStartLogin'];
-  grokPollLogin?: ProvidersHttpOpts['grokPollLogin'];
-  grokCancelLogin?: ProvidersHttpOpts['grokCancelLogin'];
-  grokLogout?: ProvidersHttpOpts['grokLogout'];
-  ensureGrokSource?: ProvidersHttpOpts['ensureGrokSource'];
   probeFetch?: ProvidersHttpOpts['probeFetch'];
   probeTimeoutMs?: ProvidersHttpOpts['probeTimeoutMs'];
   extensions?: ExtensionsHost;
@@ -1638,11 +1632,6 @@ export function createV2Runtime(opts: {
   const providersTopic = attachProvidersTopic(hub, {
     loader: {
       getSettings: opts.getSettings,
-      async grokSignedIn() {
-        if (!opts.grokStatus) return false;
-        const grok = await opts.grokStatus();
-        return Boolean(grok?.signedIn);
-      },
     },
   });
   async function notifyAllConversations(): Promise<void> {
@@ -1709,12 +1698,6 @@ export function createV2Runtime(opts: {
     providers: {
       getSettings: opts.getSettings,
       putSettings: opts.putSettings,
-      grokStatus: opts.grokStatus,
-      grokStartLogin: opts.grokStartLogin,
-      grokPollLogin: opts.grokPollLogin,
-      grokCancelLogin: opts.grokCancelLogin,
-      grokLogout: opts.grokLogout,
-      ensureGrokSource: opts.ensureGrokSource,
       probeFetch: opts.probeFetch,
       probeTimeoutMs: opts.probeTimeoutMs,
       now: opts.now,

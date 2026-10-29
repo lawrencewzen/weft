@@ -3,7 +3,6 @@
 import {
   CONTEXT_WINDOW_MAX,
   CONTEXT_WINDOW_MIN,
-  GROK_SOURCE_ID,
   VENDOR_PRESETS,
   contextWindowForModel,
   effectiveBaseUrl,
@@ -12,7 +11,7 @@ import {
   probeFailurePayload,
   sourceNeedsKey,
 } from '../../core/model-sources.mjs';
-import { redactAuthText } from '../../core/grok-auth.mjs';
+import { redactAuthText } from '../../core/redact.mjs';
 import { maskApiKey } from '../../core/settings.mjs';
 import type { components } from '../contract.gen.ts';
 import type { Lang } from '../phrases/index.ts';
@@ -32,10 +31,6 @@ export type ProvidersSnapshot = components['schemas']['ProvidersSnapshot'];
 export type ResolvedModel = components['schemas']['ResolvedModel'];
 export type ProviderDefaults = components['schemas']['ProviderDefaults'];
 export type ProviderProbeResult = components['schemas']['ProviderProbeResult'];
-export type GrokSession = components['schemas']['GrokSession'];
-export type GrokPending = components['schemas']['GrokPending'];
-export type GrokLoginStart = components['schemas']['GrokLoginStart'];
-export type GrokLoginPollResult = components['schemas']['GrokLoginPollResult'];
 export type ProviderAccess = components['schemas']['ProviderAccess'];
 export type ProviderStatus = components['schemas']['ProviderStatus'];
 
@@ -59,23 +54,6 @@ export type SettingsLike = {
   [key: string]: unknown;
 };
 
-export type GrokStatusLike = {
-  signedIn?: unknown;
-  account?: unknown;
-  email?: unknown;
-  expiresAt?: unknown;
-  authMode?: unknown;
-  source?: unknown;
-  pending?: {
-    loginId?: unknown;
-    verificationUri?: unknown;
-    userCode?: unknown;
-    interval?: unknown;
-    expiresAt?: unknown;
-  } | null;
-  [key: string]: unknown;
-};
-
 export { CONTEXT_WINDOW_MIN, CONTEXT_WINDOW_MAX };
 
 export function accessForVendor(vendorId: unknown): ProviderAccess {
@@ -87,20 +65,17 @@ export function accessForVendor(vendorId: unknown): ProviderAccess {
 
 export function providerAccess(source: SourceLike | null | undefined): ProviderAccess {
   if (!source) return 'api_key';
-  if (source.kind === 'grok' || source.id === GROK_SOURCE_ID) return 'account';
   return accessForVendor(source.vendor);
 }
 
 export function sourceBlockReason(
   source: SourceLike | null | undefined,
-  { grokSignedIn = false }: { grokSignedIn?: boolean } = {},
 ): string {
   if (!source) return 'missing';
-  if (source.kind === 'grok' || source.id === GROK_SOURCE_ID) {
-    if (!grokSignedIn) return 'unsigned';
-  } else if (sourceNeedsKey(source) && !String(source.apiKey || '').trim()) {
+  if (sourceNeedsKey(source) && !String(source.apiKey || '').trim()) {
     return 'no_key';
-  } else if (!effectiveBaseUrl(source) && !String(source.baseUrl || '').trim()) {
+  }
+  if (!effectiveBaseUrl(source) && !String(source.baseUrl || '').trim()) {
     return 'no_url';
   }
   if (source.lastTest && source.lastTest.ok === false) return 'offline';
@@ -151,9 +126,7 @@ export function providerModelsView(source: SourceLike): ProviderModel[] {
     if (typeof raw !== 'string') continue;
     const id = raw.trim();
     if (!id) continue;
-    const catalogUrl = source.kind === 'grok' || source.id === GROK_SOURCE_ID
-      ? 'https://api.x.ai/v1'
-      : (effectiveBaseUrl(source) || String(source.baseUrl || ''));
+    const catalogUrl = effectiveBaseUrl(source) || String(source.baseUrl || '');
     out.push({
       id,
       displayName: icons.displayName(id),
@@ -170,26 +143,23 @@ export function providerView(
   source: SourceLike,
   opts: {
     lang?: Lang;
-    grokSignedIn?: boolean;
     defaultProviderId?: string | null;
   } = {},
 ): Provider {
   const lang = opts.lang === 'en' ? 'en' : 'zh';
-  const grokSignedIn = Boolean(opts.grokSignedIn);
-  const reason = sourceBlockReason(source, { grokSignedIn });
+  const reason = sourceBlockReason(source);
   const status = providerStatusFromReason(source, reason);
   const statusText = status === 'ok' || status === 'untested'
     ? ''
     : sourceProbeStatusForLang(source, reason, lang);
   const icons = brandIcons();
-  const vendorKey = source.kind === 'grok' ? 'grok' : source.vendor;
   return {
     id: String(source.id || ''),
-    vendor: brandIdOf(icons.brandForProvider(vendorKey)),
+    vendor: brandIdOf(icons.brandForProvider(source.vendor)),
     name: String(source.name || ''),
     access: providerAccess(source),
     runtime: 'model',
-    baseUrl: source.kind === 'grok' ? '' : (effectiveBaseUrl(source) || String(source.baseUrl || '')),
+    baseUrl: effectiveBaseUrl(source) || String(source.baseUrl || ''),
     keyMasked: keyMaskedOf(source.apiKey),
     hasKey: Boolean(String(source.apiKey || '').trim()),
     status,
@@ -214,9 +184,8 @@ export function vendorViews(): Vendor[] {
 
 export function defaultModelView(
   settings: SettingsLike | null | undefined,
-  grokSignedIn = false,
 ): ResolvedModel | null {
-  const effective = effectiveModelFor(settings, { grokSignedIn }) as {
+  const effective = effectiveModelFor(settings) as {
     sourceId?: string | null;
     model?: string | null;
   };
@@ -228,17 +197,14 @@ export function defaultModelView(
 
 export function providersSnapshot(opts: {
   settings?: SettingsLike | null;
-  grokSignedIn?: boolean;
   lang?: Lang;
 }): ProvidersSnapshot {
-  const grokSignedIn = Boolean(opts.grokSignedIn);
   const sources = normalizeSources(opts.settings?.sources) as SourceLike[];
-  const defaultModel = defaultModelView(opts.settings, grokSignedIn);
+  const defaultModel = defaultModelView(opts.settings);
   const lang = opts.lang === 'en' ? 'en' : 'zh';
   return {
     providers: sources.map((source) => providerView(source, {
       lang,
-      grokSignedIn,
       defaultProviderId: defaultModel?.providerId ?? null,
     })),
     vendors: vendorViews(),
@@ -286,65 +252,3 @@ export function probeResultView(
   };
 }
 
-function timestampMs(value: unknown): number | null {
-  if (value == null) return null;
-  if (typeof value === 'number' && Number.isFinite(value)) return Math.trunc(value);
-  const n = Date.parse(String(value));
-  return Number.isFinite(n) ? n : null;
-}
-
-export function grokPendingView(
-  pending: GrokStatusLike['pending'] | { loginId?: unknown; verificationUri?: unknown; userCode?: unknown; interval?: unknown; expiresAt?: unknown } | null | undefined,
-): GrokPending | null {
-  if (!pending || typeof pending !== 'object') return null;
-  const loginId = pending.loginId == null ? '' : String(pending.loginId);
-  const verificationUri = pending.verificationUri == null ? '' : String(pending.verificationUri);
-  const userCode = pending.userCode == null ? '' : String(pending.userCode);
-  if (!loginId && !verificationUri && !userCode) return null;
-  return {
-    loginId,
-    verificationUri,
-    userCode,
-    interval: Number.isFinite(Number(pending.interval)) ? Math.trunc(Number(pending.interval)) : 0,
-    expiresAt: timestampMs(pending.expiresAt) ?? 0,
-  };
-}
-
-export function grokSessionView(status: GrokStatusLike | null | undefined): GrokSession {
-  return {
-    signedIn: Boolean(status?.signedIn),
-    account: status?.account == null || status.account === '' ? null : String(status.account),
-    email: status?.email == null || status.email === '' ? null : String(status.email),
-    expiresAt: timestampMs(status?.expiresAt),
-    authMode: status?.authMode == null || status.authMode === '' ? null : String(status.authMode),
-    source: status?.source == null || status.source === '' ? null : String(status.source),
-    pending: grokPendingView(status?.pending),
-  };
-}
-
-export function grokLoginStartView(started: {
-  loginId?: unknown;
-  verificationUri?: unknown;
-  userCode?: unknown;
-  interval?: unknown;
-  expiresAt?: unknown;
-}): GrokLoginStart {
-  return grokPendingView(started) || {
-    loginId: '',
-    verificationUri: '',
-    userCode: '',
-    interval: 0,
-    expiresAt: 0,
-  };
-}
-
-export function grokPollView(result: { status?: unknown; interval?: unknown; expiresAt?: unknown; grok?: GrokStatusLike } | null | undefined): GrokLoginPollResult {
-  if (result?.status === 'done') {
-    return { status: 'done', grok: grokSessionView(result.grok) };
-  }
-  return {
-    status: 'pending',
-    interval: Number.isFinite(Number(result?.interval)) ? Math.trunc(Number(result?.interval)) : 0,
-    expiresAt: timestampMs(result?.expiresAt) ?? 0,
-  };
-}

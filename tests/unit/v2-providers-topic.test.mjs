@@ -145,7 +145,6 @@ test('in-process providers topic snapshots defaults and upserts/removes provider
   const topic = attachProvidersTopic(hub, {
     loader: {
       getSettings: async () => settings,
-      grokSignedIn: async () => false,
     },
     log() {},
   });

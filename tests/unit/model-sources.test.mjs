@@ -20,7 +20,6 @@ const {
   normalizeSources,
   contextWindowForModel,
   contextWindowForConversation,
-  GROK_SOURCE_ID,
 } = sources;
 
 const fixedId = () => 'srcfixed1';
@@ -115,27 +114,29 @@ test('a real key, Ollama URL, or non-preset URL becomes one API source', () => {
   assert.equal(customUrl.models.default, undefined);
 });
 
-test('signed-in Grok receives leftover string models, and version 2 is left alone', () => {
+test('legacy grok sign-in is ignored, leftover grok field is dropped, and version 2 is left alone', () => {
   const grokOnly = migrateLegacySettings({
     provider: 'openai',
     baseUrl: '',
     apiKey: '',
+    grok: { signedIn: true },
     models: { default: 'grok-4' },
-  }, { grokSignedIn: true, createId: fixedId });
-  assert.equal(grokOnly.sources.length, 1);
-  assert.equal(grokOnly.sources[0].id, GROK_SOURCE_ID);
-  assert.deepEqual(grokOnly.models, { default: { sourceId: GROK_SOURCE_ID, model: 'grok-4' } });
-  assert.equal(grokOnly.sources[0].models.includes('grok-4'), true);
+  }, { createId: fixedId });
+  assert.equal(grokOnly.sources.length, 0);
+  assert.deepEqual(grokOnly.models, {});
+  assert.equal(grokOnly.grok, undefined);
 
   const both = migrateLegacySettings({
     provider: 'openai',
     apiKey: 'sk-legacy-secret-value',
+    grok: { signedIn: true },
     models: { coder: 'gpt-4o' },
-  }, { grokSignedIn: true, createId: fixedId });
-  assert.deepEqual(both.sources.map((source) => source.id), [GROK_SOURCE_ID, 'srcfixed1']);
+  }, { createId: fixedId });
+  assert.deepEqual(both.sources.map((source) => source.id), ['srcfixed1']);
   assert.equal(both.models.coder, undefined);
   assert.equal(both.models.default, undefined);
   assert.equal(both.apiKey, '');
+  assert.equal(both.grok, undefined);
 
   const current = {
     version: 2,
@@ -143,7 +144,7 @@ test('signed-in Grok receives leftover string models, and version 2 is left alon
     sources: [{ id: 'abc', kind: 'api', vendor: 'custom', name: 'C', baseUrl: 'http://127.0.0.1:9/v1', apiKey: 'k', models: ['m'] }],
     models: { default: { sourceId: 'abc', model: 'm' } },
   };
-  const again = migrateLegacySettings(current, { grokSignedIn: true, createId: () => 'nope' });
+  const again = migrateLegacySettings(current, { createId: () => 'nope' });
   assert.equal(again.version, 2);
   assert.equal(again.apiKey, 'leave-this-row');
   assert.equal(again.sources.length, 1);
@@ -151,9 +152,21 @@ test('signed-in Grok receives leftover string models, and version 2 is left alon
   assert.deepEqual(again.models, current.models);
 });
 
+test('settings do not persist a grok blob', () => {
+  const next = settings.mergeSettings({ provider: 'openai', apiKey: 'sk-real' }, {
+    grok: { signedIn: true, accessToken: 'should-not-stick' },
+    language: 'en',
+  });
+  assert.equal(next.grok, undefined);
+  assert.equal(next.apiKey, 'sk-real');
+  assert.equal(next.language, 'en');
+  const pub = settings.publicSettings(next);
+  assert.equal(JSON.stringify(pub).includes('sk-real'), false);
+});
+
 test('model routing uses default then the first usable source; extra keys are ignored', () => {
-  const grok = {
-    id: GROK_SOURCE_ID, kind: 'grok', vendor: 'grok', name: 'Grok', baseUrl: '', apiKey: '', models: ['grok-build'],
+  const leftover = {
+    id: 'grok', kind: 'grok', vendor: 'grok', name: 'Grok', baseUrl: '', apiKey: '', models: ['grok-build'],
   };
   const alpha = {
     id: 'aaaa', kind: 'api', vendor: 'custom', name: 'A', baseUrl: 'http://127.0.0.1:1/v1', apiKey: 'key-a', models: ['alpha'],
@@ -165,7 +178,7 @@ test('model routing uses default then the first usable source; extra keys are ig
     id: 'cccc', kind: 'api', vendor: 'openai', name: 'Locked', baseUrl: 'https://api.openai.com/v1', apiKey: '', models: ['hidden'],
   };
   const settingsRow = {
-    sources: [grok, locked, alpha, beta],
+    sources: [leftover, locked, alpha, beta],
     models: {
       coder: { sourceId: 'bbbb', model: 'beta' },
       default: { sourceId: 'aaaa', model: 'alpha' },
@@ -185,17 +198,17 @@ test('model routing uses default then the first usable source; extra keys are ig
   assert.equal(followsDefault.source.id, 'aaaa');
   assert.equal(followsDefault.model, 'alpha');
 
-  const first = resolveRoleTarget({ sources: [grok, locked, beta] }, { grokSignedIn: false });
+  const first = resolveRoleTarget({ sources: [leftover, locked, beta] });
   assert.equal(first.source.id, 'bbbb');
   assert.equal(first.model, 'beta');
 
-  const firstConv = resolveConversationTarget({ sources: [grok, locked, beta] }, {}, { grokSignedIn: false });
+  const firstConv = resolveConversationTarget({ sources: [leftover, locked, beta] }, {});
   assert.equal(firstConv.source.id, 'bbbb');
   assert.equal(firstConv.model, 'beta');
 
-  const signedIn = resolveRoleTarget({ sources: [grok, alpha] }, { grokSignedIn: true });
-  assert.equal(signedIn.source.id, GROK_SOURCE_ID);
-  assert.equal(signedIn.model, 'grok-build');
+  const droppedPinned = resolveConversationTarget(settingsRow, { modelSourceId: 'grok', modelId: 'grok-build' });
+  assert.equal(droppedPinned.source.id, 'aaaa');
+  assert.equal(droppedPinned.model, 'alpha');
 });
 
 test('changing origin without a new key drops the old key', () => {
@@ -443,13 +456,13 @@ test('contextWindows are kept, merged, deleted, and invalid patch values error',
   const missing = normalizeSources([apiSource()]);
   assert.equal(missing[0].contextWindows, undefined);
 
-  const grok = normalizeSources([{
-    id: GROK_SOURCE_ID,
+  const leftover = normalizeSources([{
+    id: 'grok',
     kind: 'grok',
     models: ['grok-build'],
     contextWindows: { 'grok-build': 256000, skip: 1 },
   }]);
-  assert.deepEqual(grok[0].contextWindows, { 'grok-build': 256000 });
+  assert.deepEqual(leftover, []);
 
   const merged = applySourcePatch(apiSource({
     models: ['gpt-4o', 'gpt-4.1'],
@@ -468,10 +481,6 @@ test('contextWindows are kept, merged, deleted, and invalid patch values error',
   const emptied = applySourcePatch(cleared.source, { contextWindows: { 'gpt-4o': null } });
   assert.equal(emptied.error, undefined);
   assert.equal(emptied.source.contextWindows, undefined);
-
-  const grokPatched = applySourcePatch(grok[0], { contextWindows: { 'grok-build': 256000 } });
-  assert.equal(grokPatched.error, undefined);
-  assert.equal(grokPatched.source.contextWindows['grok-build'], 256000);
 
   assert.equal(applySourcePatch(apiSource(), { contextWindows: { 'gpt-4o': 12 } }).error, 'invalid context window');
   assert.equal(applySourcePatch(apiSource(), { contextWindows: { 'gpt-4o': 10000001 } }).error, 'invalid context window');

@@ -1,26 +1,19 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
-import { pathToFileURL } from 'node:url';
 import assert from 'node:assert/strict';
 import { createModels } from '@earendil-works/pi-ai/models';
-import { GROK_AUTH_SCOPE, GROK_CLIENT_ID } from '../../src/core/grok-auth.mjs';
-import { createSqliteStore } from '../../src/store/sqlite.mjs';
 import { streamSimple as completionsStreamSimple } from '@earendil-works/pi-ai/api/openai-completions';
-import { createKernelModels, explicitDemo, providerIdForSource } from '../../src/kernel/models.mjs';
+import { createKernelModels, explicitDemo, providerIdForSource, selectChatRuntime } from '../../src/kernel/models.mjs';
 import { startFakeModel } from './kernel-models-fake.mjs';
-import { ROOT } from './_root.mjs';
 import { request as serverRequest, startServer, stopServer } from './_server.mjs';
 
 const TOKEN = 'unit-kernel-models-token';
 const KEY_DEFAULT = 'sk-default-secret-1111';
 const KEY_DEFAULT_NEXT = 'sk-default-secret-3333';
 const KEY_CODER = 'sk-coder-secret-2222';
-const ACCESS_1 = 'access-1';
-const REFRESH_1 = 'refresh-1';
-const SECRETS = [KEY_DEFAULT, KEY_DEFAULT_NEXT, KEY_CODER, REFRESH_1];
-const HOOK = pathToFileURL(path.join(ROOT, 'tests/unit/kernel-models-token-hook.mjs')).href;
+const SECRETS = [KEY_DEFAULT, KEY_DEFAULT_NEXT, KEY_CODER];
 
 test('explicit demo is only the three switches', () => {
   assert.equal(explicitDemo({}), false);
@@ -31,6 +24,19 @@ test('explicit demo is only the three switches', () => {
   assert.equal(explicitDemo({ LLM_API_KEY: KEY_DEFAULT }), false);
   assert.equal(explicitDemo({ [`PI${'_'}WORK_LLM`]: 'faux' }), false);
   assert.equal(explicitDemo({ [`PI${'_'}WORK_FAUX_SCRIPT`]: '/tmp/script.json' }), false);
+});
+
+test('chat runtime uses a real model when one is connected, and faux only when asked', () => {
+  assert.equal(selectChatRuntime('faux', { hasApiKey: true }), 'faux');
+  assert.equal(selectChatRuntime('openai', { hasApiKey: false }), 'openai');
+  assert.equal(selectChatRuntime(undefined, { hasApiKey: true }), 'openai');
+  assert.equal(selectChatRuntime('', { hasBaseUrl: true }), 'openai');
+  assert.equal(selectChatRuntime('', { llmApi: 'faux' }), 'faux');
+  assert.equal(selectChatRuntime('', { fauxScript: true }), 'faux');
+  assert.equal(selectChatRuntime('openai', { fauxScript: true, llmApi: 'faux' }), 'openai');
+  assert.equal(selectChatRuntime('', {}), 'none');
+  assert.equal(selectChatRuntime(undefined, {}), 'none');
+  assert.equal(selectChatRuntime('', { llmApi: 'openai-completions' }), 'none');
 });
 
 test('model routing follows conversation, then default, then first usable source', async () => {
@@ -65,7 +71,7 @@ test('model routing follows conversation, then default, then first usable source
   const routes = createKernelModels({
     models,
     getSettings: async () => settings,
-    env: { WEFT_GROK_CLIENT_VERSION: '1.0.50' },
+    env: {},
   });
   const main = await routes.modelFor({});
   const pinned = await routes.modelFor({ modelSourceId: 'srccoder', modelId: 'model-coder' });
@@ -129,7 +135,7 @@ test('chatModel uses a source context window and re-registers when it changes', 
   const routes = createKernelModels({
     models,
     getSettings: async () => settings,
-    env: { WEFT_GROK_CLIENT_VERSION: '1.0.50' },
+    env: {},
   });
   const main = await routes.modelFor({});
   assert.equal(models.getModel(main.provider, 'model-default').contextWindow, 128000);
@@ -158,7 +164,7 @@ test('chatModel reads pi-ai catalog metadata and keeps user/env overrides', asyn
     const routes = createKernelModels({
       models,
       getSettings: async () => settings,
-      env: { WEFT_GROK_CLIENT_VERSION: '1.0.50', ...env },
+      env,
     });
     const ref = await routes.modelFor({});
     return models.getModel(ref.provider, ref.modelId);
@@ -272,7 +278,7 @@ test('deepseek-flash request body matches the pre-catalog shape except max_token
     const routes = createKernelModels({
       models,
       getSettings: async () => settings,
-      env: { WEFT_GROK_CLIENT_VERSION: '1.0.50' },
+      env: {},
     });
     const ref = await routes.modelFor({});
     const catalogModel = models.getModel(ref.provider, ref.modelId);
@@ -338,7 +344,7 @@ test('modelFor prefers a conversation model and falls back when that source is d
   const routes = createKernelModels({
     models,
     getSettings: async () => settings,
-    env: { WEFT_GROK_CLIENT_VERSION: '1.0.50' },
+    env: {},
   });
 
   const pinned = await routes.modelFor({
@@ -389,38 +395,6 @@ async function request(base, method, apiPath, body) {
   return res;
 }
 
-async function seedGrok(dataDir) {
-  const authFile = path.join(dataDir, 'auth.json');
-  const store = {
-    [GROK_AUTH_SCOPE]: {
-      key: ACCESS_1,
-      auth_mode: 'oidc',
-      create_time: '2020-01-01T00:00:00.000Z',
-      user_id: 'user-1',
-      email: 'ada@example.com',
-      refresh_token: REFRESH_1,
-      expires_at: '2099-01-01T00:00:00.000Z',
-      oidc_issuer: 'https://auth.x.ai',
-      oidc_client_id: GROK_CLIENT_ID,
-    },
-  };
-  await writeFile(authFile, `${JSON.stringify(store, null, 2)}\n`, { mode: 0o600 });
-  const db = createSqliteStore(dataDir);
-  await db.putSettings({
-    sources: [{
-      id: 'grok',
-      kind: 'grok',
-      vendor: 'grok',
-      name: 'Grok 订阅',
-      baseUrl: '',
-      apiKey: '',
-      models: ['grok-build'],
-    }],
-    models: {},
-  });
-  db.close();
-}
-
 async function waitTurn(base, cid, pred, attempts = 80) {
   let last = null;
   for (let i = 0; i < attempts; i += 1) {
@@ -436,25 +410,16 @@ function assistantTexts(body) {
   return (body?.messages || []).filter((message) => message.role === 'assistant').map((message) => message.text);
 }
 
-test('kernel models call each source, refresh Grok once, and hide keys', { timeout: 60000 }, async () => {
+test('kernel models call each source and hide keys', { timeout: 60000 }, async () => {
   const dataDir = await mkdtemp(path.join(tmpdir(), 'piw-kmodels-'));
   const defaultFake = await startFakeModel({ mode: 'openai', text: 'from-default' });
   const coderFake = await startFakeModel({ mode: 'openai', text: 'from-coder' });
-  const grokFake = await startFakeModel({ mode: 'grok', text: 'from-grok', access1: ACCESS_1, access2: 'access-2' });
   let proc = null;
   try {
-    await seedGrok(dataDir);
     const srv = await startServer({
       dataDir,
       token: TOKEN,
-      authJson: false,
-      nodeArgs: ['--import', HOOK],
       formatLog: scrub,
-      env: {
-        WEFT_GROK_CLIENT_VERSION: '1.0.50',
-        WEFT_GROK_PROXY: grokFake.baseUrl,
-        WEFT_TEST_GROK_TOKEN_URL: grokFake.tokenUrl,
-      },
     });
     proc = srv.proc;
     const { base } = srv;
@@ -481,13 +446,11 @@ test('kernel models call each source, refresh Grok once, and hide keys', { timeo
       models: {
         default: { sourceId: createdDefault.body.id, model: 'model-default' },
         coder: { sourceId: createdCoder.body.id, model: 'model-coder' },
-        tester: { sourceId: 'grok', model: 'grok-build' },
       },
     });
     assert.equal(bound.status, 200);
     assert.deepEqual(bound.body.models.default, { sourceId: createdDefault.body.id, model: 'model-default' });
     assert.equal(bound.body.models.coder, undefined);
-    assert.equal(bound.body.models.tester, undefined);
     const settingsText = JSON.stringify(bound.body);
     assertClean(settingsText, 'settings');
     const listedDefault = bound.body.sources.find((source) => source.id === createdDefault.body.id);
@@ -537,30 +500,8 @@ test('kernel models call each source, refresh Grok once, and hide keys', { timeo
     assert.equal(rotatedDone.status, 'done');
     assert.deepEqual(defaultFake.seen.map((hit) => hit.keyTail), [KEY_DEFAULT.slice(-4), KEY_DEFAULT_NEXT.slice(-4)]);
 
-    const testerConv = await request(base, 'POST', `/api/workspaces/${ws.body.id}/conversations`, {
-      title: 'grok-pinned',
-      modelSourceId: 'grok',
-      modelId: 'grok-build',
-    });
-    assert.equal(testerConv.status, 201);
-    const sentGrok = await request(base, 'POST', `/api/conversations/${testerConv.body.id}/messages`, { text: 'ping-grok' });
-    assert.equal(sentGrok.status, 202);
-    const grokDone = await waitTurn(base, testerConv.body.id, (body) => assistantTexts(body).includes('from-grok'));
-    assert.equal(grokDone.status, 'done', scrub(JSON.stringify(grokDone)));
-    assert.equal(grokFake.refreshCount(), 1);
-    const grokResponses = grokFake.seen.filter((hit) => hit.path.endsWith('/responses'));
-    assert.equal(grokResponses.some((hit) => hit.tokenGen === 'access-1'), true);
-    const accepted = grokResponses.find((hit) => hit.tokenGen === 'access-2');
-    assert.ok(accepted);
-    assert.equal(accepted.grokIdentifier, 'grok-shell');
-    assert.equal(accepted.grokVersion, '1.0.50');
-    assert.equal(accepted.grokModel, 'grok-build');
-    assert.equal(accepted.tokenAuth, 'xai-grok-cli');
-    assert.equal(grokFake.seen.filter((hit) => hit.path.endsWith('/oauth2/token')).length, 1);
-
     assert.equal((await request(base, 'DELETE', `/api/sources/${createdCoder.body.id}`)).status, 200);
     assert.equal((await request(base, 'DELETE', `/api/sources/${createdDefault.body.id}`)).status, 200);
-    assert.equal((await request(base, 'DELETE', '/api/sources/grok')).status, 200);
     const bare = await request(base, 'POST', `/api/conversations/${mainConv.body.id}/messages`, { text: 'no-source' });
     assert.equal(bare.status, 202);
     const failed = await waitTurn(base, mainConv.body.id, (body) => body.status === 'failed' || body.status === 'done');
@@ -574,7 +515,6 @@ test('kernel models call each source, refresh Grok once, and hide keys', { timeo
     await stopServer(proc);
     await defaultFake.close();
     await coderFake.close();
-    await grokFake.close();
     await rm(dataDir, { recursive: true, force: true });
   }
 });

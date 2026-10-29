@@ -1,11 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { GROK_SOURCE_ID } from '../../src/core/model-sources.mjs';
 import { validateResponse } from '../../src/v2/validate.ts';
 import {
   accessForVendor,
   defaultModelView,
-  grokSessionView,
   lastTestFrom,
   probeResultView,
   providerAccess,
@@ -29,8 +27,7 @@ function source(partial) {
   };
 }
 
-test('access: Grok is account, ollama local, custom custom_endpoint, others api_key', () => {
-  assert.equal(providerAccess({ id: GROK_SOURCE_ID, kind: 'grok', vendor: 'grok' }), 'account');
+test('access: ollama local, custom custom_endpoint, others api_key', () => {
   assert.equal(providerAccess({ id: 'a', kind: 'api', vendor: 'ollama' }), 'local');
   assert.equal(providerAccess({ id: 'a', kind: 'api', vendor: 'custom' }), 'custom_endpoint');
   assert.equal(providerAccess({ id: 'a', kind: 'api', vendor: 'openai' }), 'api_key');
@@ -58,7 +55,6 @@ test('vendorViews lists 11 presets with brand ids and never includes agent acces
 test('providerView masks the key, sets brand, and maps status + zh/en statusText', () => {
   const ok = providerView(source({ lastTest: { ok: true, at: '2026-01-01T00:00:00.000Z' } }), {
     lang: 'zh',
-    grokSignedIn: false,
     defaultProviderId: 'abcd1234',
   });
   assert.equal(ok.access, 'api_key');
@@ -84,30 +80,6 @@ test('providerView masks the key, sets brand, and maps status + zh/en statusText
   assert.equal(noKey.hasKey, false);
   const noKeyEn = providerView(source({ apiKey: '' }), { lang: 'en' });
   assert.equal(noKeyEn.statusText, 'Missing key');
-
-  const grok = providerView({
-    id: GROK_SOURCE_ID,
-    kind: 'grok',
-    vendor: 'grok',
-    name: 'Grok 订阅',
-    baseUrl: '',
-    apiKey: '',
-    models: ['grok-build'],
-  }, { lang: 'zh', grokSignedIn: false });
-  assert.equal(grok.access, 'account');
-  assert.equal(grok.vendor, 'Grok');
-  assert.equal(grok.status, 'needs_auth');
-  assert.equal(grok.statusText, '未登录');
-  const grokEn = providerView({
-    id: GROK_SOURCE_ID, kind: 'grok', vendor: 'grok', name: 'Grok', baseUrl: '', apiKey: '', models: ['grok-build'],
-  }, { lang: 'en', grokSignedIn: false });
-  assert.equal(grokEn.statusText, 'Not signed in');
-
-  const grokIn = providerView({
-    id: GROK_SOURCE_ID, kind: 'grok', vendor: 'grok', name: 'Grok', baseUrl: '', apiKey: '', models: ['grok-build'],
-  }, { lang: 'zh', grokSignedIn: true });
-  assert.equal(grokIn.status, 'untested');
-  assert.equal(grokIn.statusText, '');
 
   const offline = providerView(source({
     lastTest: { ok: false, at: '2026-01-01T00:00:00.000Z', error: 'fetch failed', code: 'network' },
@@ -156,7 +128,7 @@ test('providersSnapshot defaultModel follows settings.models.default then first 
     sources: [source({ id: 'aaaa1111', models: ['gpt-4o'] })],
     models: { default: { sourceId: 'aaaa1111', model: 'gpt-4o' } },
   };
-  const snap = providersSnapshot({ settings, grokSignedIn: false, lang: 'zh' });
+  const snap = providersSnapshot({ settings, lang: 'zh' });
   assert.deepEqual(snap.defaultModel, { providerId: 'aaaa1111', modelId: 'gpt-4o' });
   assert.equal(snap.providers[0].isDefault, true);
   const checked = validateResponse('/api/v2/providers', 'GET', 200, snap);
@@ -177,21 +149,4 @@ test('probeResultView and lastTestFrom never copy a raw key into the payload', (
   const ok = probeResultView({ ok: true, models: ['a', 'b'] }, { lang: 'en' });
   assert.equal(ok.status, 'ok');
   assert.deepEqual(ok.models, ['a', 'b']);
-});
-
-test('grokSessionView converts ISO expiry to ms and drops secrets', () => {
-  const session = grokSessionView({
-    signedIn: true,
-    account: 'ada@example.com',
-    email: 'ada@example.com',
-    expiresAt: '2099-01-01T00:00:00.000Z',
-    authMode: 'oidc',
-    source: 'grok-auth-json',
-    pending: null,
-    key: 'access-token-secret',
-  });
-  assert.equal(session.signedIn, true);
-  assert.equal(session.expiresAt, Date.parse('2099-01-01T00:00:00.000Z'));
-  assert.equal(session.pending, null);
-  assert.equal(JSON.stringify(session).includes('access-token-secret'), false);
 });

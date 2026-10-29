@@ -26,7 +26,7 @@ flowchart LR
   end
 
   WS[(工作区目录)]
-  LLM[pi-ai<br/>Grok 订阅 / OpenAI 兼容 / 显式 faux]
+  LLM[pi-ai<br/>OpenAI 兼容 / 显式 faux]
 
   L & C & R -->|HTTP| API
   SSE -->|事件| Browser

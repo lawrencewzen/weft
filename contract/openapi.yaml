@@ -149,7 +149,7 @@ paths:
         - `provider`：id 为 Provider id，值为 Provider
         - `defaults`：id 为 `self`，值为 ProviderDefaults（`model` 为当前默认 `{ providerId, modelId }`，没有则为 null）
 
-        快照是 GET /api/v2/providers 的 providers 与 defaultModel 拆成上述实体（vendors 是静态预设，不进推送）。任何 Provider 增删改、连通性测试、Grok 登录状态变化、上下文上限或默认模型修改后 upsert（新旧接口改动都要触发）；实体删除时 remove。
+        快照是 GET /api/v2/providers 的 providers 与 defaultModel 拆成上述实体（vendors 是静态预设，不进推送）。任何 Provider 增删改、连通性测试、上下文上限或默认模型修改后 upsert（新旧接口改动都要触发）；实体删除时 remove。
 
         主题 `extensions` 注册为精确主题。实体：
         - `plugin`：id 为插件 id，值为 Plugin
@@ -1824,7 +1824,7 @@ paths:
       operationId: createProvider
       summary: 新增 API Provider
       description: |
-        创建规则与旧 POST /api/sources 相同（createApiSource）。Grok 不能用此接口创建。
+        创建规则与旧 POST /api/sources 相同（createApiSource）。
         成功后推送 providers 主题。
       security:
         - bearerAuth: []
@@ -1931,223 +1931,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/V2Error"
-  /api/v2/providers/grok/session:
-    get:
-      operationId: getGrokSession
-      summary: Grok Build 账号会话
-      description: |
-        与旧 GET /api/grok/session 相同：读 ~/.grok/auth.json，不返回令牌。
-        expiresAt 为毫秒时间戳。
-      security:
-        - bearerAuth: []
-        - sessionCookie: []
-      responses:
-        "200":
-          description: 当前会话
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/GrokSession"
-        "401":
-          description: 未授权
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/V2Error"
-        4XX:
-          description: 客户端错误
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/V2Error"
-        5XX:
-          description: 服务端错误
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/V2Error"
-  /api/v2/providers/grok/login:
-    post:
-      operationId: startGrokLogin
-      summary: 开始 Grok Build 设备码登录
-      description: 与旧 POST /api/grok/login 相同。返回验证网址和用户码。令牌写回 ~/.grok/auth.json。
-      security:
-        - bearerAuth: []
-        - sessionCookie: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              additionalProperties: false
-      responses:
-        "200":
-          description: 设备码已签发
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/GrokLoginStart"
-        "401":
-          description: 未授权
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/V2Error"
-        "502":
-          description: 登录服务不可用
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/V2Error"
-        4XX:
-          description: 客户端错误
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/V2Error"
-        5XX:
-          description: 服务端错误
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/V2Error"
-  /api/v2/providers/grok/login/poll:
-    post:
-      operationId: pollGrokLogin
-      summary: 轮询 Grok 设备码登录
-      description: 与旧 POST /api/grok/login/poll 相同。成功后确保存在 grok Provider，并推送 providers 主题。
-      security:
-        - bearerAuth: []
-        - sessionCookie: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/GrokLoginPollRequest"
-      responses:
-        "200":
-          description: 仍在等待或已完成
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/GrokLoginPollResult"
-        "401":
-          description: 未授权
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/V2Error"
-        "404":
-          description: 没有进行中的登录
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/V2Error"
-        "502":
-          description: 登录失败或过期
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/V2Error"
-        4XX:
-          description: 客户端错误
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/V2Error"
-        5XX:
-          description: 服务端错误
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/V2Error"
-  /api/v2/providers/grok/login/cancel:
-    post:
-      operationId: cancelGrokLogin
-      summary: 取消进行中的 Grok 设备码登录
-      description: 与旧 POST /api/grok/login/cancel 相同。loginId 缺省则取消全部进行中的登录。
-      security:
-        - bearerAuth: []
-        - sessionCookie: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/GrokLoginCancelRequest"
-      responses:
-        "200":
-          description: 当前会话
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/GrokSession"
-        "401":
-          description: 未授权
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/V2Error"
-        4XX:
-          description: 客户端错误
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/V2Error"
-        5XX:
-          description: 服务端错误
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/V2Error"
-  /api/v2/providers/grok/logout:
-    post:
-      operationId: logoutGrok
-      summary: 退出 Grok Build 登录
-      description: 与旧 POST /api/grok/logout 相同。只删除 OIDC 会话，保留 xai::api_key。推送 providers 主题。
-      security:
-        - bearerAuth: []
-        - sessionCookie: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              additionalProperties: false
-      responses:
-        "200":
-          description: 当前会话
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/GrokSession"
-        "401":
-          description: 未授权
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/V2Error"
-        "502":
-          description: 退出失败
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/V2Error"
-        4XX:
-          description: 客户端错误
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/V2Error"
-        5XX:
-          description: 服务端错误
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/V2Error"
   /api/v2/providers/{id}:
     patch:
       operationId: patchProvider
@@ -2216,7 +1999,7 @@ paths:
     delete:
       operationId: deleteProvider
       summary: 删除 Provider
-      description: Grok 不能删，返回 400。删除后若它是默认模型来源则清空默认。推送 providers 主题。
+      description: 删除后若它是默认模型来源则清空默认。推送 providers 主题。
       security:
         - bearerAuth: []
         - sessionCookie: []
@@ -2234,12 +2017,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ProviderRemoved"
-        "400":
-          description: 不能删除 Grok
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/V2Error"
         "401":
           description: 未授权
           content:
@@ -4277,7 +4054,7 @@ components:
           oneOf:
             - type: "null"
             - type: string
-      description: 可添加的厂商预设（VENDOR_PRESETS）。不含 Grok。
+      description: 可添加的厂商预设（VENDOR_PRESETS）。
     ResolvedModel:
       type: object
       additionalProperties: false
@@ -4433,118 +4210,6 @@ components:
             - type: "null"
             - $ref: "#/components/schemas/ResolvedModel"
       description: PATCH /api/v2/conversations/{id} 的请求体。
-    GrokPending:
-      type: object
-      additionalProperties: false
-      required:
-        - loginId
-        - verificationUri
-        - userCode
-        - interval
-        - expiresAt
-      properties:
-        loginId:
-          type: string
-        verificationUri:
-          type: string
-        userCode:
-          type: string
-        interval:
-          type: integer
-          description: 建议轮询间隔（秒）
-        expiresAt:
-          type: integer
-          description: 设备码过期时间（毫秒）
-      description: 进行中的设备码登录。
-    GrokSession:
-      type: object
-      additionalProperties: false
-      required:
-        - signedIn
-        - account
-        - email
-        - expiresAt
-        - authMode
-        - source
-        - pending
-      properties:
-        signedIn:
-          type: boolean
-        account:
-          oneOf:
-            - type: "null"
-            - type: string
-        email:
-          oneOf:
-            - type: "null"
-            - type: string
-        expiresAt:
-          description: 会话过期时间（毫秒）。未登录为 null
-          oneOf:
-            - type: "null"
-            - type: integer
-        authMode:
-          oneOf:
-            - type: "null"
-            - type: string
-        source:
-          oneOf:
-            - type: "null"
-            - type: string
-        pending:
-          description: 进行中的设备码登录。没有则为 null
-          oneOf:
-            - type: "null"
-            - $ref: "#/components/schemas/GrokPending"
-      description: Grok Build 会话。不含 access / refresh token。
-    GrokLoginStart:
-      $ref: "#/components/schemas/GrokPending"
-    GrokLoginPollRequest:
-      type: object
-      additionalProperties: false
-      required:
-        - loginId
-      properties:
-        loginId:
-          type: string
-    GrokLoginCancelRequest:
-      type: object
-      additionalProperties: false
-      properties:
-        loginId:
-          type: string
-    GrokLoginPending:
-      type: object
-      additionalProperties: false
-      required:
-        - status
-        - interval
-        - expiresAt
-      properties:
-        status:
-          type: string
-          const: pending
-        interval:
-          type: integer
-        expiresAt:
-          type: integer
-          description: 设备码过期时间（毫秒）
-    GrokLoginDone:
-      type: object
-      additionalProperties: false
-      required:
-        - status
-        - grok
-      properties:
-        status:
-          type: string
-          const: done
-        grok:
-          $ref: "#/components/schemas/GrokSession"
-    GrokLoginPollResult:
-      oneOf:
-        - $ref: "#/components/schemas/GrokLoginPending"
-        - $ref: "#/components/schemas/GrokLoginDone"
     Workspace:
       type: object
       additionalProperties: false

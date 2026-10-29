@@ -27,11 +27,29 @@ export type CreateProviderRequest = components['schemas']['CreateProviderRequest
 export type PatchProviderRequest = components['schemas']['PatchProviderRequest'];
 export type TestProviderRequest = components['schemas']['TestProviderRequest'];
 export type ProviderRemoved = components['schemas']['ProviderRemoved'];
-export type GrokSession = components['schemas']['GrokSession'];
-export type GrokLoginStart = components['schemas']['GrokLoginStart'];
-export type GrokLoginPollResult = components['schemas']['GrokLoginPollResult'];
-export type GrokLoginPollRequest = components['schemas']['GrokLoginPollRequest'];
-export type GrokLoginCancelRequest = components['schemas']['GrokLoginCancelRequest'];
+/** Local shapes for the Grok login UI. T59-2 dropped these from the contract; T59-3 removes the UI. */
+export type GrokPending = {
+  loginId: string;
+  verificationUri: string;
+  userCode: string;
+  interval: number;
+  expiresAt: number;
+};
+export type GrokSession = {
+  signedIn: boolean;
+  account: null | string;
+  email: null | string;
+  expiresAt: null | number;
+  authMode: null | string;
+  source: null | string;
+  pending: null | GrokPending;
+};
+export type GrokLoginStart = GrokPending;
+export type GrokLoginPollRequest = { loginId: string };
+export type GrokLoginCancelRequest = { loginId?: string };
+export type GrokLoginPollResult =
+  | { status: 'pending'; interval: number; expiresAt: number }
+  | { status: 'done'; grok: GrokSession };
 export type CreateWorkspaceRequest = components['schemas']['CreateWorkspaceRequest'];
 export type Workspace = components['schemas']['Workspace'];
 export type WorkspaceRoot = components['schemas']['WorkspaceRoot'];

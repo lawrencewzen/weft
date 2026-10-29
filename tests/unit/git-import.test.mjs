@@ -589,7 +589,6 @@ test('POST /api/workspaces returns git import error codes and stores a stripped 
       PORT: '0',
       WEFT_DATA_DIR: dataDir,
       WEFT_GIT_HTTP_HOSTS: '127.0.0.1',
-      WEFT_GROK_AUTH: path.join(dataDir, 'grok-auth.json'),
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });

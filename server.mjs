@@ -19,7 +19,6 @@ import {
   applySourcePatch,
   contextWindowForConversation,
   resolveConversationTarget,
-  grokSourceTemplate,
   sourceFromEnv,
   probeModels,
   probeFailurePayload,
@@ -28,7 +27,6 @@ import {
   vendorPreset,
   sourceNeedsKey,
   normalizeHttpUrl,
-  GROK_SOURCE_ID,
 } from './src/core/model-sources.mjs';
 import { cloneGitRepo, stripGitUrlCredentials } from './src/core/git-import.mjs';
 import { gitFailureBody, planWorkspaceGit as planGitImport, usesConnectionClone } from './src/core/workspace-git.mjs';
@@ -44,12 +42,7 @@ import { describePlugins, installPlugin, PLUGIN_ID } from './src/core/plugins.mj
 import { listSkills, listSkillRecords, createSkill, updateSkill, deleteSkill, SKILL_ID } from './src/core/skills.mjs';
 import { buildAgents } from './src/core/agents.mjs';
 import { createSqliteStore } from './src/store/sqlite.mjs';
-import {
-  createGrokAuth,
-  selectChatRuntime,
-  GROK_SESSION_MODEL,
-  GrokAuthError,
-} from './src/core/grok-auth.mjs';
+import { explicitDemo, selectChatRuntime } from './src/kernel/models.mjs';
 import {
   resolveAuthToken,
   unauthenticatedHostsWarning,
@@ -107,13 +100,11 @@ const v2 = createV2Runtime({
     const presented = await kernelApi.present(conv, { includeMessages: true });
     const subagents = await kernelApi.listSubagents(presented);
     const settings = await ensureSettings();
-    const grok = await currentGrok();
-    const grokSignedIn = Boolean(grok?.signedIn);
     return {
       presented,
       subagents,
-      modelTarget: resolveConversationTarget(settings, presented, { grokSignedIn }),
-      window: contextWindowForConversation(settings, presented, { grokSignedIn }),
+      modelTarget: resolveConversationTarget(settings, presented),
+      window: contextWindowForConversation(settings, presented),
     };
   },
   async getConversation(id) {
@@ -213,24 +204,6 @@ const v2 = createV2Runtime({
   putSettings(patch) {
     return store.putSettings(patch);
   },
-  grokStatus() {
-    return currentGrok();
-  },
-  grokStartLogin() {
-    return grokAuth.startLogin();
-  },
-  grokPollLogin(loginId) {
-    return grokAuth.pollLogin(loginId);
-  },
-  grokCancelLogin(loginId) {
-    return grokAuth.cancelLogin(loginId);
-  },
-  grokLogout() {
-    return grokAuth.logout();
-  },
-  ensureGrokSource() {
-    return ensureGrokSource();
-  },
   extensions: {
     dataDir: DATA_DIR,
     rootDir: ROOT,
@@ -329,22 +302,7 @@ async function readBody(req, limit = 2_000_000) {
 }
 
 function envRequestsFaux() {
-  return selectChatRuntime(process.env.WEFT_LLM, {
-    llmApi: process.env.LLM_API,
-    fauxScript: Boolean(String(process.env.WEFT_FAUX_SCRIPT || '').trim()),
-  }) === 'faux';
-}
-
-function emptyGrokStatus() {
-  return { signedIn: false, account: null, email: null, expiresAt: null, authMode: null, source: null, pending: null };
-}
-
-async function currentGrok() {
-  try {
-    return await grokAuth.status();
-  } catch {
-    return emptyGrokStatus();
-  }
+  return explicitDemo();
 }
 
 let droppedLegacySettingsFields = false;
@@ -359,8 +317,7 @@ async function ensureSettings() {
     }
     return current;
   }
-  const grok = await currentGrok();
-  const migrated = migrateLegacySettings(current, { grokSignedIn: Boolean(grok?.signedIn) });
+  const migrated = migrateLegacySettings(current);
   await store.putSettings(migrated);
   droppedLegacySettingsFields = true;
   const saved = await store.getSettings();
@@ -370,17 +327,15 @@ async function ensureSettings() {
 async function resolveChatKind() {
   if (envRequestsFaux()) return 'faux';
   if (String(process.env.WEFT_LLM || '').trim().toLowerCase() === 'openai') return 'openai';
-  const [grok, settings] = await Promise.all([currentGrok(), ensureSettings()]);
-  const available = hasAvailableSource(settings, { grokSignedIn: Boolean(grok?.signedIn) });
+  const settings = await ensureSettings();
+  const available = hasAvailableSource(settings);
   return selectChatRuntime('', { hasApiKey: available });
 }
 
 async function settingsResponse(stored) {
-  const grok = await currentGrok();
   const body = publicSettings(stored);
   body.vendors = VENDOR_PRESETS.map((item) => ({ ...item }));
-  body.sources = (stored?.version === 2 ? (stored.sources || []) : []).map((source) => publicSource(source, grok));
-  body.grok = grok;
+  body.sources = (stored?.version === 2 ? (stored.sources || []) : []).map((source) => publicSource(source));
   body.runtime = await resolveChatKind();
   return body;
 }
@@ -399,12 +354,6 @@ function lastTestFrom(result) {
     if (failure.status) lastTest.status = failure.status;
   }
   return lastTest;
-}
-
-function sendGrokError(res, err) {
-  const code = err instanceof GrokAuthError ? err.code : 'login_failed';
-  const status = code === 'no_login' ? 404 : 502;
-  sendJson(res, status, { error: code });
 }
 
 function publicConversation(conv) {
@@ -551,8 +500,6 @@ if (String(process.env.WEFT_STDIN_EXIT || '').trim() === '1') {
   if (process.stdin.readableEnded) shutdown();
 }
 
-const grokAuth = createGrokAuth();
-
 await ensureSettings();
 {
   const baseUrl = String(process.env.LLM_BASE_URL || '').trim();
@@ -587,7 +534,6 @@ try {
     describeAgents: agentsFor,
     extensions: extensionHost,
     getSettings: () => ensureSettings(),
-    grokAuth,
   });
 } catch (err) {
   console.error(`WEFT_KERNEL_OPEN_FAILED ${err instanceof Error ? err.message : err}`);
@@ -677,16 +623,8 @@ const server = createServer(async (req, res) => {
 function parseSourceId(raw) {
   let id = raw;
   try { id = decodeURIComponent(raw); } catch { return null; }
-  if (id === GROK_SOURCE_ID) return id;
   if (!/^[a-f0-9]{8}$/.test(id) && !/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,31}$/.test(id)) return null;
   return id;
-}
-
-async function ensureGrokSource() {
-  const settings = await ensureSettings();
-  if ((settings.sources || []).some((source) => source.kind === 'grok' || source.id === GROK_SOURCE_ID)) return settings;
-  await store.putSettings({ sources: [...(settings.sources || []), grokSourceTemplate()] });
-  return ensureSettings();
 }
 
 async function handleSources(req, res, p, m) {
@@ -703,16 +641,14 @@ async function handleSources(req, res, p, m) {
       return true;
     }
     await store.putSettings({ sources: [...settings.sources, created.source] });
-    const grok = await currentGrok();
     v2.notifyProvidersChanged();
-    sendJson(res, 201, publicSource(created.source, grok));
+    sendJson(res, 201, publicSource(created.source));
     return true;
   }
 
   if (p === '/api/sources/test' && m === 'POST') {
     const body = await readBody(req);
     const settings = await ensureSettings();
-    const grok = await currentGrok();
     if (body?.sourceId != null && String(body.sourceId).trim()) {
       const id = parseSourceId(String(body.sourceId));
       const source = id && settings.sources.find((item) => item.id === id);
@@ -734,9 +670,7 @@ async function handleSources(req, res, p, m) {
         }
         probeSource = patched.source;
       }
-      const result = probeSource.kind === 'grok'
-        ? { ok: Boolean(grok.signedIn), models: [GROK_SESSION_MODEL], error: grok.signedIn ? undefined : 'signed out' }
-        : await probeModels({ baseUrl: effectiveBaseUrl(probeSource), apiKey: probeSource.apiKey });
+      const result = await probeModels({ baseUrl: effectiveBaseUrl(probeSource), apiKey: probeSource.apiKey });
       if (!hasOverride) {
         const sources = settings.sources.map((item) => {
           if (item.id !== source.id) return item;
@@ -752,7 +686,7 @@ async function handleSources(req, res, p, m) {
         await store.putSettings({ sources });
         v2.notifyProvidersChanged();
       }
-      sendJson(res, 200, probeSource.kind === 'grok' ? { ok: result.ok, models: result.models } : presentProbe(result));
+      sendJson(res, 200, presentProbe(result));
       return true;
     }
     const preset = vendorPreset(body?.vendor);
@@ -788,12 +722,6 @@ async function handleSources(req, res, p, m) {
   }
   const current = settings.sources[index];
   if (m === 'DELETE') {
-    if (current.kind === 'grok') {
-      try { await grokAuth.logout(); } catch (err) {
-        sendGrokError(res, err);
-        return true;
-      }
-    }
     const sources = settings.sources.filter((source) => source.id !== current.id);
     const models = { ...(settings.models || {}) };
     if (models.default?.sourceId === current.id) models.default = null;
@@ -813,7 +741,7 @@ async function handleSources(req, res, p, m) {
     sources[index] = patched.source;
     await store.putSettings({ sources });
     v2.notifyProvidersChanged();
-    sendJson(res, 200, publicSource(patched.source, await currentGrok()));
+    sendJson(res, 200, publicSource(patched.source));
     return true;
   }
   return false;
@@ -1263,10 +1191,9 @@ async function routeApi(req, res, url) {
       ...(await kernelApi.listSubagents(live)),
     ];
     const settings = await ensureSettings();
-    const grok = await currentGrok();
     const context = presentConversationContext(
       live.usage,
-      contextWindowForConversation(settings, live, { grokSignedIn: Boolean(grok?.signedIn) }),
+      contextWindowForConversation(settings, live),
     );
     sendJson(res, 200, {
       id: live.id,
@@ -1384,50 +1311,6 @@ async function routeApi(req, res, url) {
     const saved = await store.putSettings(patch);
     if (Object.prototype.hasOwnProperty.call(body, 'models')) v2.notifyProvidersChanged();
     sendJson(res, 200, await settingsResponse(saved));
-    return;
-  }
-
-  if (p === '/api/grok/session' && m === 'GET') {
-    sendJson(res, 200, await grokAuth.status());
-    return;
-  }
-  if (p === '/api/grok/login' && m === 'POST') {
-    try {
-      const started = await grokAuth.startLogin();
-      v2.notifyProvidersChanged();
-      sendJson(res, 200, started);
-    } catch (err) {
-      sendGrokError(res, err);
-    }
-    return;
-  }
-  if (p === '/api/grok/login/poll' && m === 'POST') {
-    const body = await readBody(req);
-    try {
-      const result = await grokAuth.pollLogin(body?.loginId);
-      if (result?.status === 'done') await ensureGrokSource();
-      v2.notifyProvidersChanged();
-      sendJson(res, 200, result);
-    } catch (err) {
-      sendGrokError(res, err);
-    }
-    return;
-  }
-  if (p === '/api/grok/login/cancel' && m === 'POST') {
-    const body = await readBody(req);
-    const cancelled = await grokAuth.cancelLogin(body?.loginId);
-    v2.notifyProvidersChanged();
-    sendJson(res, 200, cancelled);
-    return;
-  }
-  if (p === '/api/grok/logout' && m === 'POST') {
-    try {
-      const after = await grokAuth.logout();
-      v2.notifyProvidersChanged();
-      sendJson(res, 200, after);
-    } catch (err) {
-      sendGrokError(res, err);
-    }
     return;
   }
 

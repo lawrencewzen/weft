@@ -7,7 +7,6 @@ import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { PROTOCOL_VERSION } from '../../src/v2/version.ts';
 import { validateResponse } from '../../src/v2/validate.ts';
-import { GROK_AUTH_SCOPE, GROK_API_KEY_SCOPE, GROK_CLIENT_ID } from '../../src/core/grok-auth.mjs';
 import { createV2Runtime } from '../../src/v2/index.ts';
 import { discoveryPath } from '../../src/v2/daemon/discovery.ts';
 import { readDiscovery, request as serverRequest, startServer, stopServer } from './_server.mjs';
@@ -372,26 +371,11 @@ test('context-window set/restore updates conversation context; PATCH model updat
   }
 });
 
-test('Grok cannot be deleted; session hides tokens; logout keeps api_key', async () => {
-  const dataDir = await mkdtemp(path.join(tmpdir(), 'piw-v2-grok-'));
-  const access = 'eyJhbGciOiJub25lIn0.' + Buffer.from(JSON.stringify({
-    sub: 'user-1', email: 'ada@example.com', exp: 4_000_000_000,
-  })).toString('base64url') + '.sig';
-  const authJson = JSON.stringify({
-      [GROK_AUTH_SCOPE]: {
-        key: access,
-        auth_mode: 'oidc',
-        create_time: '2020-01-01T00:00:00.000Z',
-        user_id: 'user-1',
-        email: 'ada@example.com',
-        refresh_token: 'refresh-test-value',
-        expires_at: '2099-01-01T00:00:00.000Z',
-        oidc_issuer: 'https://auth.x.ai',
-        oidc_client_id: GROK_CLIENT_ID,
-      },
-      [GROK_API_KEY_SCOPE]: { key: 'sk-keep-this', auth_mode: 'api_key', create_time: '2020-01-01T00:00:00.000Z', user_id: '' },
-    });
-  const first = await startServer({ token: TOKEN, dataDir, env: { WEFT_LLM: 'faux' }, authJson });
+test('leftover kind:grok source is omitted from GET /api/v2/providers and sending a message does not crash', {
+  timeout: 60000,
+}, async () => {
+  const dataDir = await mkdtemp(path.join(tmpdir(), 'piw-v2-legacy-source-'));
+  const first = await startServer({ token: TOKEN, dataDir });
   await stopServer(first);
   writeSettings(dataDir, {
     version: 2,
@@ -404,45 +388,40 @@ test('Grok cannot be deleted; session hides tokens; logout keeps api_key', async
       apiKey: '',
       models: ['grok-build'],
     }],
-    models: {},
+    models: { default: { sourceId: 'grok', model: 'grok-build' } },
   });
-  const srv = await startServer({
-    token: TOKEN,
-    dataDir,
-    env: { WEFT_LLM: 'faux' },
-    authJson: false,
-  });
+  const srv = await startServer({ token: TOKEN, dataDir });
   try {
     const discovery = await readDiscovery(srv.dataDir);
     const listed = await sendV2(srv.base, 'GET', '/api/v2/providers', discovery.token);
     assert.equal(listed.status, 200, listed.text);
-    const grok = listed.body.providers.find((item) => item.id === 'grok');
-    assert.ok(grok, JSON.stringify(listed.body.providers));
-    assert.equal(grok.access, 'account');
-    assert.equal(grok.status, 'untested');
+    assertChecked('/api/v2/providers', 'GET', 200, listed.body);
+    assert.equal(listed.body.providers.some((item) => item.id === 'grok' || item.vendor === 'Grok'), false, JSON.stringify(listed.body.providers));
+    assert.equal(listed.body.providers.length, 0);
 
-    const blocked = await sendV2(srv.base, 'DELETE', '/api/v2/providers/grok', discovery.token, {});
-    assert.equal(blocked.status, 400, blocked.text);
-    assertChecked('/api/v2/providers/grok', 'DELETE', 400, blocked.body);
+    const ws = await request(srv.base, 'POST', '/api/workspaces', { name: 'legacy-source' });
+    assert.equal(ws.status, 201, ws.text);
+    const conv = await request(srv.base, 'POST', `/api/workspaces/${ws.body.id}/conversations`, {
+      title: 'pinned-to-dropped-source',
+    });
+    assert.equal(conv.status, 201, conv.text);
+    const sent = await sendV2(srv.base, 'POST', `/api/v2/conversations/${conv.body.id}/messages`, discovery.token, {
+      text: 'hello leftover',
+    });
+    assert.equal(sent.status, 202, sent.text);
+    assertChecked(`/api/v2/conversations/${conv.body.id}/messages`, 'POST', 202, sent.body);
 
-    const session = await sendV2(srv.base, 'GET', '/api/v2/providers/grok/session', discovery.token);
-    assert.equal(session.status, 200, session.text);
-    assertChecked('/api/v2/providers/grok/session', 'GET', 200, session.body);
-    assert.equal(session.body.signedIn, true);
-    assert.equal(session.body.email, 'ada@example.com');
-    assertNoSecret(session.body, access, 'session-access');
-    assertNoSecret(session.body, 'refresh-test-value', 'session-refresh');
-    assertNoSecret(session.body, 'sk-keep-this', 'session-api-key');
-
-    const loggedOut = await sendV2(srv.base, 'POST', '/api/v2/providers/grok/logout', discovery.token, {});
-    assert.equal(loggedOut.status, 200, loggedOut.text);
-    assertChecked('/api/v2/providers/grok/logout', 'POST', 200, loggedOut.body);
-    assert.equal(loggedOut.body.signedIn, false);
-
-    const { readFile } = await import('node:fs/promises');
-    const disk = JSON.parse(await readFile(path.join(dataDir, 'auth.json'), 'utf8'));
-    assert.equal(disk[GROK_AUTH_SCOPE], undefined);
-    assert.equal(disk[GROK_API_KEY_SCOPE].key, 'sk-keep-this');
+    let last = null;
+    for (let i = 0; i < 80; i += 1) {
+      last = await sendV2(srv.base, 'GET', `/api/v2/conversations/${conv.body.id}`, discovery.token);
+      const runStatus = last.body?.conversation?.run?.status;
+      if (last.status === 200 && (runStatus === 'failed' || runStatus === 'idle' || runStatus === 'done')) break;
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    assert.equal(last.status, 200, last?.text);
+    const run = last.body?.conversation?.run;
+    assert.equal(run?.status, 'failed', JSON.stringify(last.body));
+    assert.equal(run?.error?.code, 'E_NO_MODEL');
   } finally {
     await stopServer(srv);
   }

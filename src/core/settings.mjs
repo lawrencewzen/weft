@@ -69,7 +69,6 @@ export function normalizeSettings(raw = {}) {
     delete out.version;
     if (!Array.isArray(input.sources)) delete out.sources;
   }
-  // Grok session lives in ~/.grok/auth.json, never in the settings row.
   delete out.grok;
   const gitConnections = normalizeGitConnections(out.gitConnections);
   if (gitConnections.length) out.gitConnections = gitConnections;

@@ -9,7 +9,7 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import { createModels } from '@earendil-works/pi-ai/models';
 import { createRegistry, watchEvents } from '@earendil-works/pi-durable';
 import { liveDiff } from '../core/diff.mjs';
-import { redactAuthText } from '../core/grok-auth.mjs';
+import { redactAuthText } from '../core/redact.mjs';
 import { resolveInWorkspace } from '../core/paths.mjs';
 import { formatSSE } from '../core/sse.mjs';
 import { contextWindowForConversation } from '../core/model-sources.mjs';
@@ -119,7 +119,6 @@ export async function openConversationKernel({
   describeAgents,
   extensions,
   getSettings,
-  grokAuth,
   env = process.env,
 } = {}) {
   if (!dataDir) throw new Error('dataDir is required');
@@ -127,7 +126,7 @@ export async function openConversationKernel({
   const faux = demo === true || explicitDemo(env);
   const models = createModels();
   if (faux) installDemo(models, env);
-  const modelRoutes = createKernelModels({ models, getSettings, grokAuth, env });
+  const modelRoutes = createKernelModels({ models, getSettings, env });
   const routes = faux ? null : modelRoutes;
   const registry = createRegistry();
   const agentBridge = {};
@@ -288,15 +287,7 @@ export async function openConversationKernel({
   async function conversationWindow(conv) {
     if (!conv || typeof getSettings !== 'function') return null;
     const settings = await getSettings();
-    let grokSignedIn = false;
-    if (typeof grokAuth?.status === 'function') {
-      try {
-        grokSignedIn = Boolean((await grokAuth.status())?.signedIn);
-      } catch {
-        grokSignedIn = false;
-      }
-    }
-    return contextWindowForConversation(settings, conv, { grokSignedIn, env });
+    return contextWindowForConversation(settings, conv, { env });
   }
 
   async function applyBatch(cid, batch, mapCtx) {
