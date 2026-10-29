@@ -135,8 +135,13 @@ test('short WEFT_SUBAGENT_STUCK_MS turns the row stuck with idle time without re
     const { conv } = await openWorkspaceConversation(srv, 'demo', prepared.dirs[0]);
     await openNextChat(page, srv, conv.id);
     await sendNext(page, '请派子代理');
-    const row = await waitSubagentRow(page, conv.id);
-    await expect(row).toHaveAttribute('data-status', 'stuck', { timeout: 20000 });
+    const strip = page.getByTestId('next-agents-strip');
+    await expect(strip).toBeVisible({ timeout: 20000 });
+    await page.getByTestId('next-agents-strip-toggle').click();
+    const stripRow = page.getByTestId('next-agents-strip-row').first();
+    await expect(stripRow).toHaveAttribute('data-status', 'stuck', { timeout: 20000 });
+    const icon = stripRow.getByTestId('status-icon');
+    await expect(icon).toHaveAttribute('data-status', 'stuck');
   } finally {
     await srv.kill();
   }
@@ -175,14 +180,12 @@ test('other conversation does not show subagents in sidebar', async ({ page }) =
   }
 });
 
-test('clicking a row opens the sub-agent view; send and stop work; refresh keeps it', async ({ page }) => {
+test('status strip shows sub-agent; stop works; right pane has no subagent tab', async ({ page }) => {
   const prepared = await prepareWorkspaces(['repo']);
   const script = await writeScript(prepared.root, 'spawn-steer.json', [
     { tool: 'subagent', args: { action: 'spawn', name: 'worker', message: HOLD } },
     { text: 'parent-idle' },
-    { when: HOLD, delayMs: 12000, text: 'child-first' },
-    { when: STEER, text: 'pad-0' },
-    { when: STEER, delayMs: 25000, text: 'child-after-steer' },
+    { when: HOLD, delayMs: 25000, text: 'child-first' },
   ]);
   const srv = await startServer({
     extraEnv: { WEFT_FAUX_SCRIPT: script, WEFT_WORKSPACE_ROOT: prepared.root },
@@ -191,55 +194,42 @@ test('clicking a row opens the sub-agent view; send and stop work; refresh keeps
     const { conv } = await openWorkspaceConversation(srv, 'demo', prepared.dirs[0]);
     await openNextChat(page, srv, conv.id);
     await sendNext(page, '请派子代理');
-    const row = await waitSubagentRow(page, conv.id);
-    const agentId = await row.getAttribute('data-agent-id');
-    expect(agentId).toBeTruthy();
-    await row.click();
-    await expect(page).toHaveURL(new RegExp(`/c/${conv.id}/a/`));
-    await expect(page.getByTestId('next-center')).toBeVisible();
-    await expect(page.getByTestId('next-subagent-view')).toBeVisible();
-    await expect(page.getByTestId('next-right-tab-subagents')).toHaveClass(/active/);
-    await expect(page.getByTestId('next-subagent-back')).toHaveText('子 Agent');
-    await expect(page.locator(`[data-testid=next-dispatch-row][data-agent-id="${agentId}"]`)).toHaveClass(/is-selected/);
-    await expect(page.getByTestId('next-subagent-thread')).toContainText(HOLD);
-    await expect(page.getByTestId('next-subagent-input')).toBeVisible();
-    await expect(page.getByTestId('next-subagent-stop')).toBeVisible({ timeout: 15000 });
 
-    const posted = page.waitForResponse((res) => (
+
+    // Right pane has no subagent tab
+    await expect(page.getByTestId('next-right-tab-subagents')).toHaveCount(0);
+
+    // Status strip appears above composer
+    const strip = page.getByTestId('next-agents-strip');
+    await expect(strip).toBeVisible({ timeout: 20000 });
+    await expect(strip.getByTestId('next-agents-strip-headline')).toContainText(/运行中/);
+
+    // Expand strip
+    await page.getByTestId('next-agents-strip-toggle').click();
+    const row = page.getByTestId('next-agents-strip-row').first();
+    await expect(row).toBeVisible();
+    await expect(row.getByTestId('next-agents-strip-name')).toHaveText('worker');
+
+    // Stop button works
+    const stopBtn = row.getByTestId('next-agents-strip-stop');
+    await expect(stopBtn).toBeVisible({ timeout: 15000 });
+    const stopped = page.waitForResponse((res) => (
       res.request().method() === 'POST'
-      && /\/api\/v2\/conversations\/[^/]+\/subagents\/[^/]+\/messages$/.test(new URL(res.url()).pathname)
+      && /\/api\/v2\/conversations\/[^/]+\/subagents\/[^/]+\/stop$/.test(new URL(res.url()).pathname)
     ), { timeout: 15000 });
-    await page.getByTestId('next-subagent-input').fill(STEER);
-    await page.getByTestId('next-subagent-send').click();
-    const sendRes = await posted;
-    expect(sendRes.status(), await sendRes.text()).toBe(202);
-    await expect(page.getByTestId('next-subagent-input')).toHaveValue('');
-    await expect(page.getByTestId('next-composer-error')).toHaveCount(0);
-    await expect(page.getByTestId('next-subagent-thread')).toContainText(STEER, { timeout: 25000 });
-    await expect(page.getByTestId('next-subagent-stop')).toBeVisible({ timeout: 10000 });
-    await page.getByTestId('next-subagent-stop').click();
-    await expect(page.getByTestId('next-subagent-status')).toHaveText(/已停止|Stopped/i, { timeout: 20000 });
+    await stopBtn.click();
+    const stopRes = await stopped;
+    expect(stopRes.status()).toBe(200);
 
     await page.reload();
     await expect(page.getByTestId('next-center')).toBeVisible({ timeout: 20000 });
-    await expect(page.getByTestId('next-subagent-view')).toBeVisible({ timeout: 20000 });
-    await expect(page.getByTestId('next-subagent-thread')).toContainText(HOLD);
-    await expect(page.getByTestId('next-subagent-thread')).toContainText(STEER);
-    await expect(page.getByTestId('next-subagent-status')).toHaveText(/已停止|Stopped|完成|Done/i);
-
-    await page.getByTestId('next-subagent-back').click();
-    await expect(page).toHaveURL(new RegExp(`/c/${conv.id}$`));
-    await expect(page.getByTestId('next-subagent-overview')).toBeVisible();
-    await convRow(page, conv.id).click();
-    await expect(page.getByTestId('next-right-tab-changes')).toHaveClass(/active/);
-    await expect(page.getByTestId('next-subagent-view')).toHaveCount(0);
-    await expect(page.getByTestId('next-subagent-overview')).toHaveCount(0);
+    await expect(page.getByTestId('next-right-tab-subagents')).toHaveCount(0);
   } finally {
     await srv.kill();
   }
 });
 
-test('report open jumps to the matching sub-agent; missing sub-agent shows an error', async ({ page }) => {
+test('report open focuses the matching sub-agent in status strip', async ({ page }) => {
   const prepared = await prepareWorkspaces(['repo']);
   const script = await writeScript(prepared.root, 'spawn-report.json', [
     { tool: 'subagent', args: { action: 'spawn', name: REPORT_NAME, message: REPORT_MSG } },
@@ -259,16 +249,12 @@ test('report open jumps to the matching sub-agent; missing sub-agent shows an er
     const openBtn = card.getByTestId('next-report-open');
     await expect(openBtn).toBeVisible();
     await openBtn.click();
-    await expect(page).toHaveURL(new RegExp(`/c/${conv.id}/a/`));
-    await expect(page.getByTestId('next-center')).toBeVisible();
-    await expect(page.getByTestId('next-subagent-view')).toBeVisible();
-    await expect(page.getByTestId('next-subagent-view')).toContainText(new RegExp(`${REPORT_NAME}|${REPORT_MSG}`));
-    await expect(page.getByTestId('next-subagent-thread')).toContainText(REPORT_TEXT, { timeout: 15000 });
-
-    await page.goto(`${srv.url}/c/${encodeURIComponent(conv.id)}/a/does-not-exist`);
-    await expect(page.getByTestId('next-center')).toBeVisible();
-    await expect(page.getByTestId('next-subagent-view')).toBeVisible();
-    await expect(page.getByTestId('next-error')).toHaveText('子 Agent 不存在');
+    const strip = page.getByTestId('next-agents-strip');
+    await expect(strip).toBeVisible();
+    await expect(strip).toHaveAttribute('data-expanded', 'true');
+    const row = page.getByTestId('next-agents-strip-row').first();
+    await expect(row).toBeVisible();
+    await expect(row.getByTestId('next-agents-strip-name')).toHaveText(REPORT_NAME);
   } finally {
     await srv.kill();
   }
@@ -374,14 +360,15 @@ test('opening a sub-agent keeps the parent lightweight and opens in right pane',
     await expect(rows).toHaveCount(2);
 
     await rows.nth(1).click();
-    await expect(page).toHaveURL(new RegExp(`/c/${conv.id}/a/`));
     await expect(page.getByTestId('next-center')).toBeVisible();
-    await expect(page.getByTestId('next-subagent-view')).toBeVisible();
-    await expect(page.getByTestId('next-right-tab-subagents')).toHaveClass(/active/);
+    await expect(page.getByTestId('next-right-tab-subagents')).toHaveCount(0);
+    const strip = page.getByTestId('next-agents-strip');
+    await expect(strip).toBeVisible();
+    await expect(strip).toHaveAttribute('data-open', 'true');
 
     await convRow(page, conv.id).click();
     await expect(page).toHaveURL(new RegExp(`/c/${conv.id}$`));
-    await expect(page.getByTestId('next-subagent-view')).toHaveCount(0);
+    await expect(page.getByTestId('next-right-tab-subagents')).toHaveCount(0);
     await expect(page.getByTestId('next-right-tab-changes')).toHaveClass(/active/);
   } finally {
     await srv.kill();

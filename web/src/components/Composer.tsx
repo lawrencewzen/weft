@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent } from 'react';
+import { AgentsStrip } from './AgentsStrip';
 import { ApiError, getWorkspaceTree, patchConversation, putModelContextWindow, uploadWorkspaceFile, type SendMessageFile, type ThinkingLevel } from '../data/api';
 import {
   addImages,
@@ -927,6 +928,9 @@ export function Composer({
   return (
     <footer className="center-composer">
       <div className="composer-stack">
+        {conversationId ? (
+          <AgentsStrip cid={conversationId} lang={lang} />
+        ) : null}
         <div
           className={boxClass}
           data-testid="next-composer"

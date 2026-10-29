@@ -1,9 +1,8 @@
 import { useState, type KeyboardEvent, type MouseEvent } from 'react';
 import type { Lang } from '../data/lang';
 import { changeByTitle, flattenDiff, formatChangeBy } from '../data/diffView';
-import { navigate, subagentPath } from '../data/nav';
+import { focusSubagent } from '../data/focusSubagent';
 import { useRightPane } from '../data/rightPaneContext';
-import { useSession } from '../data/session';
 import { t } from '../i18n';
 import { CtxMenu, type CtxMenuItem } from './CtxMenu';
 
@@ -17,7 +16,6 @@ type MenuState = { x: number; y: number; path: string };
 
 export function ChangesPane({ lang }: { lang: Lang }) {
   const {
-    conversationId: rightCid,
     visibleChanges,
     totals,
     openPaths,
@@ -26,8 +24,6 @@ export function ChangesPane({ lang }: { lang: Lang }) {
     openFile,
     copyPath,
   } = useRightPane();
-  const session = useSession();
-  const cid = rightCid || session?.conversationId || '';
   const [menu, setMenu] = useState<MenuState | null>(null);
 
   function onCtx(ev: MouseEvent, path: string) {
@@ -66,8 +62,8 @@ export function ChangesPane({ lang }: { lang: Lang }) {
 
         function onSubagentClick(ev: MouseEvent | KeyboardEvent) {
           ev.stopPropagation();
-          if (cid && subagentId) {
-            navigate(subagentPath(cid, subagentId));
+          if (subagentId) {
+            focusSubagent(subagentId);
           }
         }
 

@@ -112,7 +112,7 @@ open design/prototype/index.html    # macOS；Windows 直接双击
 | `web/proto/mock/views.ts` | 把内存数据转成前端收到的视图，按语言出文案 |
 | `tests/e2e/proto-smoke.spec.mjs` | 冒烟：`file://` 打开、切对话、新建并发消息、流式完成、停止、零网络 / 零控制台报错 |
 | `tests/e2e/proto-right-pane.spec.mjs` | 变更 diff（含「一次点击只发一次请求」）、文件树 / 预览 / 保存 / 409、路径标签、运行产生的变更 |
-| `tests/e2e/proto-subagents.spec.mjs` | 四种状态的子 Agent 树、汇报卡片、子 Agent 发消息 / 停止、派子 Agent |
+| `tests/e2e/proto-agents-strip.spec.mjs` | 子 Agent 状态条、展开/收起、行内展开、停止、派发卡片定位、淡出 |
 | `tests/e2e/proto-settings.spec.mjs` | 通用偏好、Provider 向导成功 / 失败 / Grok 登录 / 默认 / 上下文、删光 Provider 的「没有模型」、Git、插件、技能、关于 |
 | `tests/e2e/proto-workspace.spec.mjs` | 本地目录浏览 + 创建 + 在里面发消息、Git 导入选项目和分支 |
 | `tests/e2e/helpers/proto.mjs` | 上面几个 spec 共用的 `file://` 打开 / 零报错 / 零网络断言 |
@@ -128,7 +128,7 @@ open design/prototype/index.html    # macOS；Windows 直接双击
 
 ```bash
 npx playwright test -c tests/playwright.config.mjs \
-  proto-smoke proto-right-pane proto-subagents proto-settings proto-workspace
+  proto-smoke proto-right-pane proto-agents-strip proto-settings proto-workspace
 ```
 
 ## 改界面的流程

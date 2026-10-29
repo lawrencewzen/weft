@@ -1,7 +1,6 @@
 import { useEffect, useMemo } from 'react';
 import { agentCommands, commandTopics } from '../data/agentCommands';
 import type { Lang } from '../data/lang';
-import { conversationPath, navigate } from '../data/nav';
 import type { RightTab } from '../data/layout';
 import { useRightPane } from '../data/rightPaneContext';
 import { useSession } from '../data/session';
@@ -10,8 +9,6 @@ import { useStoreTopics } from '../data/useStoreTopic';
 import { t } from '../i18n';
 import { ChangesPane } from './ChangesPane';
 import { FileBrowser } from './FileBrowser';
-import { SubagentOverview } from './SubagentOverview';
-import { SubagentPane } from './SubagentPane';
 import { TerminalPane } from './TerminalPane';
 
 type Props = {
@@ -28,7 +25,6 @@ export function RightPane({ lang, workspaceLabel }: Props) {
     rpBtnOp,
     totals,
     hasChanges,
-    selectedSubagentId,
   } = useRightPane();
   const { store, conversationId, retainTopic, releaseTopic } = useSession();
   const agents = conversationId ? store.subagents(conversationId) : [];
@@ -46,14 +42,11 @@ export function RightPane({ lang, workspaceLabel }: Props) {
     [store, conversationId, agentsKey, storeVersion],
   );
   const runningCount = commands.filter((row) => row.running).length;
-  const showSubagentsTab = agents.length > 0 || Boolean(selectedSubagentId);
-  const effectiveTab: RightTab = tab === 'subagents' && showSubagentsTab
-    ? 'subagents'
-    : tab === 'term'
-      ? 'term'
-      : tab === 'files'
-        ? 'files'
-        : 'changes';
+  const effectiveTab: RightTab = tab === 'term'
+    ? 'term'
+    : tab === 'files'
+      ? 'files'
+      : 'changes';
 
   const agentKey = agents.map((agent) => agent.id).join('\n');
   useEffect(() => {
@@ -65,13 +58,6 @@ export function RightPane({ lang, workspaceLabel }: Props) {
       for (const topic of topics) releaseTopic(topic);
     };
   }, [conversationId, agentKey, retainTopic, releaseTopic, store]);
-
-  function onSubagentsTab() {
-    if (selectedSubagentId && conversationId) {
-      navigate(conversationPath(conversationId));
-    }
-    setTab('subagents');
-  }
 
   return (
     <aside
@@ -134,31 +120,10 @@ export function RightPane({ lang, workspaceLabel }: Props) {
             <span>{t(lang, 'tab_term')}</span>
             {runningCount > 0 ? <span className="tab-count">{runningCount}</span> : null}
           </button>
-          {showSubagentsTab ? (
-            <button
-              type="button"
-              className={`tab-btn${effectiveTab === 'subagents' ? ' active' : ''}`}
-              data-testid="next-right-tab-subagents"
-              title={t(lang, 'tab_subagents_title')}
-              onClick={onSubagentsTab}
-            >
-              <span>{t(lang, 'tab_subagents')}</span>
-              {agents.length > 0 ? <span className="tab-count">{agents.length}</span> : null}
-            </button>
-          ) : null}
         </nav>
       </header>
       <div className="right-viewport">
-        {effectiveTab === 'subagents' && conversationId && selectedSubagentId ? (
-          <SubagentPane
-            cid={conversationId}
-            agentId={selectedSubagentId}
-            agents={agents}
-            lang={lang}
-          />
-        ) : effectiveTab === 'subagents' && conversationId ? (
-          <SubagentOverview cid={conversationId} agents={agents} lang={lang} />
-        ) : effectiveTab === 'term' ? (
+        {effectiveTab === 'term' ? (
           <TerminalPane lang={lang} />
         ) : effectiveTab === 'files' ? (
           <FileBrowser lang={lang} workspaceLabel={workspaceLabel} />
