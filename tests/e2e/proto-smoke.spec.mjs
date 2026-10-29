@@ -60,7 +60,7 @@ test('prototype runs from file:// with mock data, no network and no console erro
   await page.locator('[data-testid=next-conv-row][data-id="c-rich"]').click();
   await expect(page.getByTestId('next-tool-group')).toHaveCount(2);
   await expect(page.getByTestId('next-dispatch-card')).toHaveCount(1);
-  await expect(page.getByTestId('next-message-chip').first()).toContainText('Grok 4.6');
+  await expect(page.getByTestId('next-message-chip').first()).toContainText('DeepSeek V4.1 Flash');
   await expect(page.getByTestId('next-composer-git-branch')).toHaveText('main');
   await expect(page.getByTestId('next-composer-git-ins')).toHaveText('+42');
   await expect(page.locator('.md-table')).toHaveCount(1);
@@ -196,9 +196,9 @@ test('prototype runs from file:// with mock data, no network and no console erro
   // The model menu really switches the conversation model.
   await page.getByTestId('next-model-chip').click();
   await expect(page.getByTestId('next-model-menu')).toBeVisible();
-  await expect(page.getByTestId('next-model-option')).toHaveCount(3);
-  await page.locator('[data-testid=next-model-option][data-model="grok-4"]').click();
-  await expect(page.getByTestId('next-model-chip')).toContainText('Grok 4');
+  await expect(page.getByTestId('next-model-option')).toHaveCount(6);
+  await page.locator('[data-testid=next-model-option][data-model="deepseek-v4-pro"]').click();
+  await expect(page.getByTestId('next-model-chip')).toContainText('DeepSeek V4 Pro');
 
   expect(pageErrors, 'page has no uncaught errors').toEqual([]);
   expect(consoleErrors, 'page has no console errors').toEqual([]);
@@ -230,10 +230,10 @@ test('sidebar appearance toggle persists across reload', async ({ page }) => {
   await expect(page.locator('html')).toHaveAttribute('data-theme', /dark$/);
   expect(await page.evaluate(() => localStorage.getItem('weft_appearance'))).toBe('dark');
 
-  // Dark mode Grok icon has invert filter (not black)
-  const grokIcon = page.locator('.assistant-message-author-badge .brand-icon img, .model-chip .brand-icon img').first();
-  await expect(grokIcon).toBeVisible();
-  await expect(grokIcon).toHaveCSS('filter', /invert/);
+  // Dark mode brand icon has invert filter (not black)
+  const brandIcon = page.locator('.assistant-message-author-badge .brand-icon img, .model-chip .brand-icon img').first();
+  await expect(brandIcon).toBeVisible();
+  await expect(brandIcon).toHaveCSS('filter', /invert/);
 
   await page.reload();
   await expect(page.getByTestId('next-appearance-toggle')).toBeVisible();
