@@ -3857,8 +3857,8 @@
       },
       "patch": {
         "operationId": "patchConversation",
-        "summary": "切换对话模型",
-        "description": "`model` 为 `{ providerId, modelId }` 时绑定该模型，规则同旧 resolveConversationModelPatch。\n`model` 为 null 时回到默认。运行中也能改，下次提交生效。成功后推送该对话主题的 ConversationView.model 和 context。\n",
+        "summary": "切换对话模型或思考档位",
+        "description": "`model` 为 `{ providerId, modelId }` 时绑定该模型，规则同旧 resolveConversationModelPatch。\n`model` 为 null 时回到默认。`thinkingLevel` 为档位名时写入对话；对当前模型不支持的档位按 clampThinkingLevel 就近处理，响应里的 thinkingLevel 是实际生效值。`thinkingLevel` 为 null 时清除，恢复模型默认。至少要有 model 或 thinkingLevel。运行中也能改，下次提交生效。成功后推送该对话主题的 ConversationView（含 model、thinkingLevel 和 context）。\n",
         "security": [
           {
             "bearerAuth": []
@@ -3908,7 +3908,7 @@
             }
           },
           "400": {
-            "description": "模型不存在或请求体无效",
+            "description": "模型不存在、思考档位名非法或请求体无效",
             "content": {
               "application/json": {
                 "schema": {
@@ -6453,6 +6453,19 @@
         },
         "description": "哪些字段被用户覆盖。未覆盖的键省略。"
       },
+      "ThinkingLevel": {
+        "type": "string",
+        "enum": [
+          "off",
+          "minimal",
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ],
+        "description": "pi-ai 思考档位。界面按模型支持的显示为关 / 低 / 中 / 高 / 更高 / 最高。"
+      },
       "ProviderModel": {
         "type": "object",
         "additionalProperties": false,
@@ -6516,6 +6529,24 @@
           },
           "reasoning": {
             "type": "boolean"
+          },
+          "thinkingLevels": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ThinkingLevel"
+            },
+            "description": "该模型支持的思考档位，来自 getSupportedThinkingLevels。非推理模型为空数组。\n顺序从低到高：off / minimal / low / medium / high / xhigh / max（按模型支持的显示）。\n"
+          },
+          "defaultThinkingLevel": {
+            "description": "未选档位时的默认。所有推理模型默认 medium，再经 clampThinkingLevel 得到实际值。非推理模型为 null。",
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ThinkingLevel"
+              }
+            ]
           },
           "overridden": {
             "$ref": "#/components/schemas/ModelOverridden"
@@ -7068,12 +7099,9 @@
       "PatchConversationModelRequest": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "model"
-        ],
         "properties": {
           "model": {
-            "description": "绑定的模型；null 回到默认",
+            "description": "绑定的模型；null 回到默认。可与 thinkingLevel 同时传。",
             "oneOf": [
               {
                 "type": "null"
@@ -7082,9 +7110,20 @@
                 "$ref": "#/components/schemas/ResolvedModel"
               }
             ]
+          },
+          "thinkingLevel": {
+            "description": "对话思考档位。合法名为 off / minimal / low / medium / high / xhigh / max；非法名 400。\n当前模型不支持的档位按 clampThinkingLevel 就近处理，响应返回实际生效值。null 清除，恢复模型默认。\n",
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ThinkingLevel"
+              }
+            ]
           }
         },
-        "description": "PATCH /api/v2/conversations/{id} 的请求体。"
+        "description": "PATCH /api/v2/conversations/{id} 的请求体。至少包含 model 或 thinkingLevel。\n"
       },
       "Workspace": {
         "type": "object",
@@ -7453,6 +7492,17 @@
               },
               {
                 "$ref": "#/components/schemas/ConversationModel"
+              }
+            ]
+          },
+          "thinkingLevel": {
+            "description": "实际生效的思考档位：对话选的经 clampThinkingLevel 处理后的值；没选则为当前模型的 defaultThinkingLevel。\n当前模型不支持思考时为 null。\n",
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ThinkingLevel"
               }
             ]
           },

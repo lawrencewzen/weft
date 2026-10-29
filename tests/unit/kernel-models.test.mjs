@@ -323,9 +323,22 @@ test('parseFetchedChatModels reads each documented field name', () => {
   assert.deepEqual(parseFetchedChatModels({
     data: [{ id: 'n', architecture: { input_modalities: ['image'] } }],
   }, meta)[0].input, ['text', 'image']);
-  assert.equal(parseFetchedChatModels({ data: [{ id: 'n', effort: 'high' }] }, meta)[0].reasoning, true);
-  assert.equal(parseFetchedChatModels({ data: [{ id: 'n', reasoning: { effort: 'low' } }] }, meta)[0].reasoning, true);
-  assert.equal(parseFetchedChatModels({ data: [{ id: 'n' }] }, meta)[0].reasoning, Boolean(0));
+  assert.equal(parseFetchedChatModels({ data: [{ id: 'n', effort: 'high' }] }, meta)[0].reasoning, false);
+  assert.equal(parseFetchedChatModels({ data: [{ id: 'n', reasoning: { effort: 'low' } }] }, meta)[0].reasoning, false);
+  assert.equal(parseFetchedChatModels({ data: [{ id: 'n' }] }, meta)[0].reasoning, false);
+  const withLevels = parseFetchedChatModels({
+    data: [{ id: 'n', effort: { supported_levels: ['low', 'high', 'max'] } }],
+  }, meta)[0];
+  assert.equal(withLevels.reasoning, true);
+  assert.deepEqual(withLevels.thinkingLevelMap, {
+    off: 'off',
+    minimal: null,
+    low: 'low',
+    medium: null,
+    high: 'high',
+    xhigh: null,
+    max: 'max',
+  });
 });
 
 test('fetchModels omits Authorization without a key and persists through ModelsStore', async () => {

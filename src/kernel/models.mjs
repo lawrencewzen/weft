@@ -11,6 +11,7 @@ import { openAICompletionsApi } from '@earendil-works/pi-ai/api/openai-completio
 import { openAIResponsesApi } from '@earendil-works/pi-ai/api/openai-responses.lazy';
 import { createProvider } from '@earendil-works/pi-ai/models';
 import { builtinProviders } from '@earendil-works/pi-ai/providers/all';
+import { thinkingLevelMapFromSupportedLevels } from '../core/thinking-level.mjs';
 import { contextWindowFromEnv } from '../core/usage.mjs';
 import { normalizeProvidersV3 } from '../core/provider-config.mjs';
 import { normalizeHttpUrl } from '../core/model-sources.mjs';
@@ -106,10 +107,10 @@ function hasImageModality(item) {
   return modalitiesOf(item).some((value) => String(value).toLowerCase() === 'image');
 }
 
-function hasReasoningField(item) {
-  if (!item || typeof item !== 'object') return false;
-  return Object.prototype.hasOwnProperty.call(item, 'effort')
-    || Object.prototype.hasOwnProperty.call(item, 'reasoning');
+function effortSupportedLevels(item) {
+  const effort = item?.effort;
+  if (!effort || typeof effort !== 'object' || Array.isArray(effort)) return undefined;
+  return effort.supported_levels;
 }
 
 function rowsFromModelsJson(json) {
@@ -137,18 +138,21 @@ function chatModelFromFetched(item, { providerId, api, baseUrl }) {
     rec.max_completion_tokens,
     rec.top_provider?.max_completion_tokens,
   );
-  return {
+  const thinkingLevelMap = thinkingLevelMapFromSupportedLevels(effortSupportedLevels(rec));
+  const model = {
     id,
     name,
     api,
     provider: providerId,
     baseUrl,
-    reasoning: hasReasoningField(rec),
+    reasoning: Boolean(thinkingLevelMap),
     input: hasImageModality(rec) ? ['text', 'image'] : ['text'],
     cost: { ...COST },
     contextWindow: contextWindow ?? 0,
     maxTokens: maxTokens ?? 0,
   };
+  if (thinkingLevelMap) model.thinkingLevelMap = thinkingLevelMap;
+  return model;
 }
 
 /** Parse an OpenAI-style `/models` body into pi-ai chat models. */
@@ -268,7 +272,7 @@ function stubChatModel({ providerId, id, api, baseUrl }) {
     api,
     provider: providerId,
     baseUrl,
-    reasoning: hasReasoningField(null),
+    reasoning: false,
     input: ['text'],
     cost: { ...COST },
     contextWindow: 0,

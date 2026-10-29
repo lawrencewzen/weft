@@ -98,6 +98,7 @@ function convFromRow(row) {
     lastSubmissionId: row.last_submission_id == null ? null : Number(row.last_submission_id),
     modelSourceId: row.model_source_id || null,
     modelId: row.model_id || null,
+    thinkingLevel: row.thinking_level || null,
   };
 }
 
@@ -145,7 +146,8 @@ export function createSqliteStore(dir, { log = console } = {}) {
       host_mark TEXT,
       last_submission_id INTEGER,
       model_source_id TEXT,
-      model_id TEXT
+      model_id TEXT,
+      thinking_level TEXT
     );
     CREATE TABLE IF NOT EXISTS messages (
       id TEXT PRIMARY KEY,
@@ -237,6 +239,7 @@ export function createSqliteStore(dir, { log = console } = {}) {
     if (!convCols.has('last_submission_id')) db.exec('ALTER TABLE conversations ADD COLUMN last_submission_id INTEGER');
     if (!convCols.has('model_source_id')) db.exec('ALTER TABLE conversations ADD COLUMN model_source_id TEXT');
     if (!convCols.has('model_id')) db.exec('ALTER TABLE conversations ADD COLUMN model_id TEXT');
+    if (!convCols.has('thinking_level')) db.exec('ALTER TABLE conversations ADD COLUMN thinking_level TEXT');
     if (convCols.has('role_id')) {
       try { db.exec('ALTER TABLE conversations DROP COLUMN role_id'); } catch { /* keep the column, stop reading it */ }
     }
@@ -277,15 +280,15 @@ export function createSqliteStore(dir, { log = console } = {}) {
       id, workspace_id, title, status, auto_continues, retries, last_checkpoint_at,
       current_step, updated_at, created_at,
       workspace_path, last_progress_at, original_text, usage_json, harness_id, host_mark,
-      last_submission_id, model_source_id, model_id
-    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`),
+      last_submission_id, model_source_id, model_id, thinking_level
+    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`),
     getConv: db.prepare('SELECT * FROM conversations WHERE id = ?'),
     listRecoverable: db.prepare("SELECT * FROM conversations WHERE status IN ('running','recovering') AND harness_id IS NULL"),
     listKernel: db.prepare('SELECT * FROM conversations WHERE harness_id IS NOT NULL'),
     updConv: db.prepare(`UPDATE conversations SET
       workspace_id=?, title=?, updated_at=?,
       workspace_path=?, last_progress_at=?, original_text=?, usage_json=?, harness_id=?,
-      last_submission_id=?, model_source_id=?, model_id=?
+      last_submission_id=?, model_source_id=?, model_id=?, thinking_level=?
       WHERE id=?`),
     listConv: db.prepare('SELECT * FROM conversations WHERE workspace_id = ? AND harness_id IS NOT NULL ORDER BY updated_at DESC'),
     insTomb: db.prepare('INSERT OR IGNORE INTO catalog_tombstones (kind, id) VALUES (?, ?)'),
@@ -398,13 +401,14 @@ export function createSqliteStore(dir, { log = console } = {}) {
         harnessId: null,
         modelSourceId: modelSourceId ?? null,
         modelId: modelId ?? null,
+        thinkingLevel: null,
       };
       q.insConv.run(
         conv.id, conv.workspaceId, conv.title, null, null, null,
         null, null, conv.updatedAt, conv.createdAt,
         conv.workspacePath, conv.lastProgressAt, conv.originalText,
         usageToSql(conv.usage), conv.harnessId, null, null,
-        conv.modelSourceId, conv.modelId,
+        conv.modelSourceId, conv.modelId, conv.thinkingLevel,
       );
       return conv;
     },
@@ -442,13 +446,14 @@ export function createSqliteStore(dir, { log = console } = {}) {
           harnessId: null,
           modelSourceId: null,
           modelId: null,
+          thinkingLevel: null,
         };
         q.insConv.run(
           conv.id, conv.workspaceId, conv.title, null, null, null,
           null, null, conv.updatedAt, conv.createdAt,
           conv.workspacePath, conv.lastProgressAt, conv.originalText,
           usageToSql(conv.usage), null, null, patch.lastSubmissionId ?? null,
-          conv.modelSourceId, conv.modelId,
+          conv.modelSourceId, conv.modelId, conv.thinkingLevel,
         );
       }
       const next = { ...conv, ...patch, updatedAt: Date.now() };
@@ -456,7 +461,7 @@ export function createSqliteStore(dir, { log = console } = {}) {
         next.workspaceId, next.title, next.updatedAt,
         next.workspacePath, next.lastProgressAt, next.originalText, usageToSql(next.usage),
         next.harnessId ?? null, next.lastSubmissionId ?? null,
-        next.modelSourceId ?? null, next.modelId ?? null, id,
+        next.modelSourceId ?? null, next.modelId ?? null, next.thinkingLevel ?? null, id,
       );
       return next;
     },
