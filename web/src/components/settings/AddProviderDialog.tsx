@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import { BrandIcon } from '../BrandIcon';
 import { getProviders } from '../../data/api';
+import { providerBrand } from '../../data/providerBrand';
 import type { Available, CustomApiProtocol, LoginSession, Model } from '../../data/providerTypes';
 import { t, type Lang } from '../../i18n';
 import { LoginSessionView } from './LoginSessionView';
+import { ModelPickStep } from './ModelPickStep';
 
 export const POPULAR_PROVIDER_IDS = [
   'deepseek', 'anthropic', 'openai', 'google', 'openrouter',
@@ -39,7 +41,6 @@ export function AddProviderDialog({
   const [customForm, setCustomForm] = useState({ name: '', baseUrl: '', api: 'openai-completions' as CustomApiProtocol, apiKey: '' });
   const [fetchedModels, setFetchedModels] = useState<Model[]>([]);
   const [selectedModelIds, setSelectedModelIds] = useState<Set<string>>(new Set());
-  const [modelSearch, setModelSearch] = useState('');
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -162,120 +163,195 @@ export function AddProviderDialog({
     }
   };
 
-  const renderCard = (p: Available) => (
-    <div key={p.id} className={`vcard ${p.connected ? 'dis' : ''}`} data-testid="next-vendor-card" data-vendor={p.id} onClick={() => handleSelectVendor(p)}>
-      <div className="av"><BrandIcon brand={p.brand || p.id} size={18} /></div>
-      <div className="inf">
-        <b>{p.name}</b>
-        <span>
-          {p.authMethods.includes('api_key') && p.authMethods.includes('oauth') ? t(lang, 'dlg_add_ways_both') : t(lang, 'dlg_add_ways_key_only')}
-          {' · '}{t(lang, 'dlg_add_models_count', { count: p.modelCount })}
-        </span>
+  const renderCard = (p: Available) => {
+    const isDis = p.connected;
+    const ways =
+      p.authMethods.includes('api_key') && p.authMethods.includes('oauth')
+        ? t(lang, 'dlg_add_ways_both')
+        : t(lang, 'dlg_add_ways_key_only');
+    const brand = p.brand || providerBrand(p.id);
+
+    return (
+      <div
+        key={p.id}
+        className={`mp-vi ${isDis ? 'mp-dis' : ''}`}
+        data-testid="next-vendor-card"
+        data-vendor={p.id}
+        onClick={() => !isDis && handleSelectVendor(p)}
+      >
+        <div className="mp-av">
+          <BrandIcon brand={brand} size={18} />
+        </div>
+        <div className="mp-vi-t">
+          <span>{p.name}</span>
+          <span>
+            {isDis
+              ? t(lang, 'dlg_add_already_connected')
+              : `${ways} · ${t(lang, 'dlg_add_models_count', { count: p.modelCount })}`}
+          </span>
+        </div>
+        {!isDis && p.envDetected && (
+          <span className="mp-vi-env">{t(lang, 'dlg_add_env_detected')}</span>
+        )}
       </div>
-      {p.connected && <span className="tag">{t(lang, 'dlg_add_already_connected')}</span>}
-      {!p.connected && p.envDetected && <span className="tag ok">{t(lang, 'dlg_add_env_detected')}</span>}
-    </div>
-  );
+    );
+  };
 
   return (
-    <div className="mask">
-      <div className="dlg" data-testid="next-add-dialog">
-        <div className="dh">
+    <div className="mp-mask">
+      <div className="mp-dlg" data-testid="next-add-dialog">
+        <div className="mp-dh">
           <b>{t(lang, 'dlg_add_provider_title')}</b>
-          <div className="steps">
-            <i className={step >= 0 ? 'on' : ''} />
-            <i className={step >= 1 ? 'on' : ''} />
-            <i className={step >= 2 ? 'on' : ''} />
+          <div className="mp-steps">
+            <i className={step >= 0 ? 'mp-on' : ''} />
+            <i className={step >= 1 ? 'mp-on' : ''} />
+            <i className={step >= 2 ? 'mp-on' : ''} />
           </div>
-          <button type="button" className="x" onClick={onClose}>×</button>
+          <button type="button" className="mp-x" onClick={onClose}>×</button>
         </div>
 
-        <div className="db">
-          {errorMsg && <div className="err">{errorMsg}</div>}
+        <div className="mp-db">
+          {errorMsg && <div className="mp-err">{errorMsg}</div>}
 
           {step === 0 && (
             <>
               <input
-                className="search"
+                className="mp-search"
                 data-testid="next-add-search"
                 placeholder={t(lang, 'dlg_add_search_placeholder')}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
-              <div className="grp">{t(lang, 'dlg_add_grp_popular')}</div>
-              <div className="vgrid">{filterCards(popularList).map(renderCard)}</div>
-              <div className="grp">{t(lang, 'dlg_add_grp_all')}</div>
-              <div className="vgrid">{filterCards(allOtherList).map(renderCard)}</div>
-              <div className="grp">{t(lang, 'dlg_add_grp_other')}</div>
-              <div
-                className="vcard custom"
-                data-testid="next-vendor-card"
-                data-vendor="custom"
-                onClick={handleSelectCustom}
-              >
-                <div className="av">＋</div>
-                <div className="inf">
-                  <b>{t(lang, 'dlg_add_custom_title')}</b>
-                  <span>{t(lang, 'dlg_add_custom_desc')}</span>
+              <div className="mp-grp">{t(lang, 'dlg_add_grp_popular')}</div>
+              <div className="mp-vgrid">{filterCards(popularList).map(renderCard)}</div>
+              <div className="mp-grp">{t(lang, 'dlg_add_grp_all')}</div>
+              <div className="mp-vgrid">{filterCards(allOtherList).map(renderCard)}</div>
+              <div className="mp-grp">{t(lang, 'dlg_add_grp_other')}</div>
+              <div className="mp-vgrid">
+                <div
+                  className="mp-vi mp-custom"
+                  data-testid="next-vendor-card"
+                  data-vendor="custom"
+                  onClick={handleSelectCustom}
+                >
+                  <div className="mp-av">
+                    <BrandIcon brand={null} size={18} />
+                  </div>
+                  <div className="mp-vi-t">
+                    <span>{t(lang, 'dlg_add_custom_title')}</span>
+                    <span>{t(lang, 'dlg_add_custom_desc')}</span>
+                  </div>
                 </div>
               </div>
             </>
           )}
 
           {step === 1 && isCustom && (
-            <div className="form">
-              <label className="lbl">{t(lang, 'dlg_custom_name_label')}</label>
-              <input className="inp" data-testid="next-custom-name" value={customForm.name} placeholder={t(lang, 'dlg_custom_name_placeholder')} onChange={(e) => setCustomForm({ ...customForm, name: e.target.value })} />
-              <label className="lbl">{t(lang, 'dlg_custom_url_label')}</label>
-              <input className="inp" data-testid="next-custom-url" value={customForm.baseUrl} placeholder={t(lang, 'dlg_custom_url_placeholder')} onChange={(e) => setCustomForm({ ...customForm, baseUrl: e.target.value })} />
-              <label className="lbl">{t(lang, 'dlg_custom_proto_label')}</label>
-              <select className="inp" data-testid="next-custom-api" value={customForm.api} onChange={(e) => setCustomForm({ ...customForm, api: e.target.value as CustomApiProtocol })}>
-                <option value="openai-completions">{t(lang, 'dlg_custom_proto_openai')}</option>
-                <option value="openai-responses">{t(lang, 'dlg_custom_proto_responses')}</option>
-                <option value="anthropic-messages">{t(lang, 'dlg_custom_proto_anthropic')}</option>
-              </select>
-              <label className="lbl">{t(lang, 'dlg_key_label')}</label>
-              <input type="password" className="inp" data-testid="next-custom-key" value={customForm.apiKey} placeholder="sk-..." onChange={(e) => setCustomForm({ ...customForm, apiKey: e.target.value })} />
-            </div>
+            <>
+              <div className="mp-fld">
+                <label>{t(lang, 'dlg_custom_name_label')}</label>
+                <input
+                  data-testid="next-custom-name"
+                  value={customForm.name}
+                  placeholder={t(lang, 'dlg_custom_name_placeholder')}
+                  onChange={(e) => setCustomForm({ ...customForm, name: e.target.value })}
+                />
+              </div>
+              <div className="mp-fld">
+                <label>{t(lang, 'dlg_custom_url_label')}</label>
+                <input
+                  className="mp-mono"
+                  data-testid="next-custom-url"
+                  value={customForm.baseUrl}
+                  placeholder={t(lang, 'dlg_custom_url_placeholder')}
+                  onChange={(e) => setCustomForm({ ...customForm, baseUrl: e.target.value })}
+                />
+              </div>
+              <div className="mp-fld">
+                <label>{t(lang, 'dlg_custom_proto_label')}</label>
+                <select
+                  data-testid="next-custom-api"
+                  value={customForm.api}
+                  onChange={(e) => setCustomForm({ ...customForm, api: e.target.value as CustomApiProtocol })}
+                >
+                  <option value="openai-completions">{t(lang, 'dlg_custom_proto_openai')}</option>
+                  <option value="openai-responses">{t(lang, 'dlg_custom_proto_responses')}</option>
+                  <option value="anthropic-messages">{t(lang, 'dlg_custom_proto_anthropic')}</option>
+                </select>
+              </div>
+              <div className="mp-fld">
+                <label>
+                  {t(lang, 'dlg_key_label')}{' '}
+                  <span style={{ color: 'var(--faint)', fontWeight: 400 }}>
+                    {t(lang, 'dlg_custom_key_optional')}
+                  </span>
+                </label>
+                <input
+                  type="password"
+                  className="mp-mono"
+                  data-testid="next-custom-key"
+                  value={customForm.apiKey}
+                  placeholder="sk-..."
+                  onChange={(e) => setCustomForm({ ...customForm, apiKey: e.target.value })}
+                />
+                <small>{t(lang, 'dlg_custom_key_placeholder')}</small>
+              </div>
+            </>
           )}
 
           {step === 1 && !isCustom && selectedVendor && (
             <div>
-              <div className="tabs seg">
+              <div className="mp-seg">
                 {selectedVendor.envDetected && (
-                  <button type="button" className={`tab ${connectWay === 'env' ? 'on' : ''}`} onClick={() => setConnectWay('env')}>
+                  <button
+                    type="button"
+                    className={connectWay === 'env' ? 'mp-on' : ''}
+                    onClick={() => setConnectWay('env')}
+                  >
                     {t(lang, 'dlg_tab_env')}
                   </button>
                 )}
                 {selectedVendor.authMethods.includes('api_key') && (
-                  <button type="button" className={`tab ${connectWay === 'api_key' ? 'on' : ''}`} onClick={() => setConnectWay('api_key')}>
+                  <button
+                    type="button"
+                    className={connectWay === 'api_key' ? 'mp-on' : ''}
+                    onClick={() => setConnectWay('api_key')}
+                  >
                     {t(lang, 'dlg_tab_api_key')}
                   </button>
                 )}
                 {selectedVendor.authMethods.includes('oauth') && (
-                  <button type="button" className={`tab ${connectWay === 'oauth' ? 'on' : ''}`} onClick={() => { setConnectWay('oauth'); void onStartOAuth(selectedVendor); }}>
+                  <button
+                    type="button"
+                    className={connectWay === 'oauth' ? 'mp-on' : ''}
+                    onClick={() => {
+                      setConnectWay('oauth');
+                      void onStartOAuth(selectedVendor);
+                    }}
+                  >
                     {t(lang, 'dlg_tab_oauth')}
                   </button>
                 )}
               </div>
 
               {connectWay === 'env' && (
-                <div style={{ padding: '16px 0', fontSize: 13, color: 'var(--mute)' }}>
-                  {t(lang, 'dlg_env_note', { env: selectedVendor.envVar || 'API_KEY' })}
+                <div className="mp-envbox">
+                  <span>✓</span>
+                  <span>{t(lang, 'dlg_env_note', { env: selectedVendor.envVar || 'API_KEY' })}</span>
                 </div>
               )}
               {connectWay === 'api_key' && (
-                <div className="form">
-                  <label className="lbl">{t(lang, 'dlg_key_label')}</label>
+                <div className="mp-fld">
+                  <label>{t(lang, 'dlg_key_label')}</label>
                   <input
                     type="password"
-                    className="inp"
+                    className="mp-mono"
                     data-testid="next-key-input"
                     value={apiKeyInput}
                     placeholder={t(lang, 'dlg_key_placeholder')}
                     onChange={(e) => setApiKeyInput(e.target.value)}
                   />
-                  <span style={{ fontSize: 12, color: 'var(--faint)' }}>{t(lang, 'dlg_key_hint')}</span>
+                  <small>{t(lang, 'dlg_key_hint')}</small>
                 </div>
               )}
               {connectWay === 'oauth' && (
@@ -290,59 +366,25 @@ export function AddProviderDialog({
           )}
 
           {step === 2 && (
-            <div>
-              <div className="conn-ok">
-                ✓ {t(lang, 'dlg_connected_models_found', { count: fetchedModels.length })}
-              </div>
-              {fetchedModels.length > 8 && (
-                <input
-                  className="search"
-                  data-testid="next-model-pick-search"
-                  placeholder={t(lang, 'dlg_add_search_placeholder')}
-                  value={modelSearch}
-                  onChange={(e) => setModelSearch(e.target.value)}
-                />
-              )}
-              <div className="mgrid pickm">
-                {fetchedModels
-                  .filter(
-                    (m) =>
-                      !modelSearch.trim() ||
-                      m.name.toLowerCase().includes(modelSearch.toLowerCase()) ||
-                      m.id.toLowerCase().includes(modelSearch.toLowerCase()),
-                  )
-                  .map((m) => {
-                    const checked = selectedModelIds.has(m.id);
-                    return (
-                      <div
-                        key={m.id}
-                        className="mrow"
-                        data-testid="next-model-pick-row"
-                        onClick={() => {
-                          const next = new Set(selectedModelIds);
-                          if (checked) next.delete(m.id);
-                          else next.add(m.id);
-                          setSelectedModelIds(next);
-                        }}
-                      >
-                        <input type="checkbox" checked={checked} onChange={() => {}} />
-                        <div className="minf">
-                          <span className="mnm">{m.name}</span>
-                          {m.name !== m.id && <span className="mid">{m.id}</span>}
-                        </div>
-                      </div>
-                    );
-                  })}
-              </div>
-            </div>
+            <ModelPickStep
+              lang={lang}
+              models={fetchedModels}
+              selectedIds={selectedModelIds}
+              onToggle={(id, checked) => {
+                const next = new Set(selectedModelIds);
+                if (checked) next.add(id);
+                else next.delete(id);
+                setSelectedModelIds(next);
+              }}
+            />
           )}
         </div>
 
-        <div className="df">
+        <div className="mp-df">
           {step > 0 && (
             <button
               type="button"
-              className="btn"
+              className="mp-btn"
               data-testid="next-add-back"
               disabled={loading}
               onClick={() => setStep((s) => (s - 1) as 0 | 1)}
@@ -350,14 +392,14 @@ export function AddProviderDialog({
               {t(lang, 'dlg_back')}
             </button>
           )}
-          <span style={{ flex: 1 }} />
-          <button type="button" className="btn" onClick={onClose} disabled={loading}>
+          <span className="mp-sp" />
+          <button type="button" className="mp-btn" onClick={onClose} disabled={loading}>
             {t(lang, 'dlg_cancel')}
           </button>
           {step === 1 && (isCustom || connectWay !== 'oauth') && (
             <button
               type="button"
-              className="btn pri"
+              className="mp-btn mp-pri"
               data-testid="next-add-next"
               disabled={loading}
               onClick={() => void handleStep1Submit()}
@@ -368,7 +410,7 @@ export function AddProviderDialog({
           {step === 2 && (
             <button
               type="button"
-              className="btn pri"
+              className="mp-btn mp-pri"
               data-testid="next-provider-finish"
               disabled={loading || selectedModelIds.size === 0}
               onClick={() => void handleFinishSubmit()}

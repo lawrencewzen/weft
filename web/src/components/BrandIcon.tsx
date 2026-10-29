@@ -3,10 +3,20 @@ import { brandIconUrl, isColorBrand } from '../data/composerModel';
 
 export { brandIconUrl, isColorBrand };
 
-const CUBE = (
-  <svg viewBox="0 0 16 16" aria-hidden="true" className="brand-icon-cube">
-    <path d="M8 1.8 14 5v6L8 14.2 2 11V5L8 1.8Z" />
-    <path d="M8 1.8v6.2M2 5l6 3.2L14 5" />
+const PLUG = (
+  <svg
+    viewBox="0 0 16 16"
+    aria-hidden="true"
+    className="brand-icon-plug brand-icon-cube"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.3"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <path d="M6 2v3.5M10 2v3.5" />
+    <path d="M4.5 5.5h7v3a3.5 3.5 0 0 1-7 0Z" />
+    <path d="M8 12v2.5" />
   </svg>
 );
 
@@ -39,7 +49,7 @@ export function BrandIcon({ brand, size = 16, alt = '', className = '', isColor 
           height={size}
           onError={() => setFailed(true)}
         />
-      ) : CUBE}
+      ) : PLUG}
     </span>
   );
 }

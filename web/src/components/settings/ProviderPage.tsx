@@ -209,41 +209,45 @@ export function ProviderPage({ lang, onConfirm }: Props) {
   }
 
   return (
-    <div className="main" data-testid="next-provider-page">
-      <h2>{t(lang, 'provider_title')}</h2>
-      <p className="lead">{t(lang, 'provider_subtitle')}</p>
+    <div className="next-settings-content" data-testid="next-provider-page">
+      <div className="next-settings-head">
+        <div>
+          <h2>{t(lang, 'provider_title')}</h2>
+          <p className="next-settings-sub">{t(lang, 'provider_subtitle')}</p>
+        </div>
+      </div>
 
       {/* 默认模型 */}
-      <div className="sec">
-        <div className="card def">
-          <span className="l">
+      <div className="mp-sec">
+        <div className="mp-card mp-def">
+          <span className="mp-def-l">
             <span>{t(lang, 'provider_default_title')}</span>
             <span>{t(lang, 'provider_default_hint')}</span>
           </span>
           <span
-            className="pick"
+            className="mp-pick"
             data-testid="next-provider-default-picker"
             onClick={() => setDefMenuOpen(!defMenuOpen)}
           >
             <span>{currentDefaultName}</span>
-            {currentDefaultProviderName && <span className="from">{currentDefaultProviderName}</span>}
+            {currentDefaultProviderName && <span className="mp-from">{currentDefaultProviderName}</span>}
             {defMenuOpen && (
-              <div className="menu" ref={defMenuRef} onClick={(e) => e.stopPropagation()}>
+              <div className="mp-menu" ref={defMenuRef} onClick={(e) => e.stopPropagation()}>
                 {providers.map((p) => {
                   const enabledModels = p.models.filter((m) => m.enabled);
                   if (enabledModels.length === 0) return null;
                   return (
                     <div key={p.id}>
-                      <div className="g">{p.name}</div>
+                      <div className="mp-menu-g">{p.name}</div>
                       {enabledModels.map((m) => (
                         <div
                           key={m.id}
-                          className="i"
+                          className="mp-menu-i"
                           data-testid="next-provider-default-item"
                           onClick={() => void handleSelectDefault(p.id, m.id)}
                         >
                           <span>{m.name}</span>
-                          <span className="x">{m.contextWindow ? formatNumber(m.contextWindow) : ''}</span>
+                          <span className="mp-menu-x">{m.contextWindow ? formatNumber(m.contextWindow) : ''}</span>
                         </div>
                       ))}
                     </div>
@@ -256,14 +260,14 @@ export function ProviderPage({ lang, onConfirm }: Props) {
       </div>
 
       {/* 服务商列表 */}
-      <div className="sec">
-        <div className="sec-h">
+      <div className="mp-sec">
+        <div className="mp-sec-h">
           <b>{t(lang, 'provider_sec_title')}</b>
           <small>{t(lang, 'provider_sec_hint')}</small>
-          <span className="sp" />
+          <span className="mp-sp" />
           <button
             type="button"
-            className="btn"
+            className="mp-btn"
             data-testid="next-provider-add"
             onClick={() => void handleOpenAdd()}
           >
@@ -271,8 +275,8 @@ export function ProviderPage({ lang, onConfirm }: Props) {
           </button>
         </div>
 
-        <div className="card">
-          <div className="plist">
+        <div className="mp-card">
+          <div className="mp-plist">
             <ProviderList
               providers={providers}
               openId={openId}

@@ -89,15 +89,16 @@ function dataUri(raw: string): string {
 }
 
 const BRAND_SRC = /^\/vendor\/brand-icons\/([a-z0-9._-]+)\.svg$/i;
-const EMPTY_DATA_URI =
-  'data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2016%2016%22%2F%3E';
+const FALLBACK_PLUG_SVG =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none" stroke="%23888888" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2v3.5M10 2v3.5"/><path d="M4.5 5.5h7v3a3.5 3.5 0 0 1-7 0Z"/><path d="M8 12v2.5"/></svg>';
+const FALLBACK_DATA_URI = `data:image/svg+xml;charset=utf-8,${FALLBACK_PLUG_SVG}`;
 
 function mapBrandSrc(value: unknown): string {
   const text = String(value ?? '');
   const match = BRAND_SRC.exec(text);
   if (!match) return text;
   const raw = ICONS[match[1].toLowerCase()];
-  return raw ? dataUri(raw) : EMPTY_DATA_URI;
+  return raw ? dataUri(raw) : FALLBACK_DATA_URI;
 }
 
 /**

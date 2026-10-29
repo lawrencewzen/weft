@@ -1,14 +1,10 @@
 import { Fragment, useEffect, useRef, useState } from 'react';
-import { BrandIcon, brandIconUrl } from '../BrandIcon';
+import { BrandIcon } from '../BrandIcon';
+import { providerBrand } from '../../data/providerBrand';
 import { formatTimeAgo } from '../../data/providerFormat';
 import type { CustomApiProtocol, Provider } from '../../data/providerTypes';
 import { t, type Lang } from '../../i18n';
 import { ModelTable } from './ModelTable';
-
-function initial(name: string): string {
-  const trimmed = name.trim();
-  return trimmed ? trimmed.charAt(0).toUpperCase() : '?';
-}
 
 type Props = {
   providers: readonly Provider[];
@@ -81,7 +77,7 @@ export function ProviderList({
     let name = t(lang, 'provider_tag_openai_compat');
     if (api === 'anthropic-messages') name = t(lang, 'provider_tag_anthropic_compat');
     else if (api === 'openai-responses') name = t(lang, 'provider_tag_openai_responses');
-    return <span className="tag">{name}</span>;
+    return <span className="mp-tag">{name}</span>;
   };
 
   const renderAuth = (p: Provider) => {
@@ -92,10 +88,10 @@ export function ProviderList({
       return <>{t(lang, 'provider_auth_account')}{p.auth.account ? ` · ${p.auth.account}` : ''}</>;
     }
     if (p.auth.type === 'env') {
-      return <>{t(lang, 'provider_auth_env')} <span className="k">{p.auth.envVar}</span></>;
+      return <>{t(lang, 'provider_auth_env')} <span className="mp-k">{p.auth.envVar}</span></>;
     }
     if (p.auth.type === 'api_key') {
-      return <>API Key <span className="k">····{p.auth.keyTail}</span></>;
+      return <>API Key <span className="mp-k">····{p.auth.keyTail}</span></>;
     }
     return t(lang, 'provider_auth_none');
   };
@@ -103,34 +99,34 @@ export function ProviderList({
   const renderStatus = (p: Provider, isTesting: boolean) => {
     if (isTesting) {
       return (
-        <span className="st run">
+        <span className="mp-st mp-run">
           <i />
-          <span className="st-text">{t(lang, 'provider_status_run')}</span>
+          <span className="mp-st-text">{t(lang, 'provider_status_run')}</span>
         </span>
       );
     }
     if (p.status.state === 'ok') {
       return (
-        <span className="st ok">
+        <span className="mp-st mp-ok">
           <i />
-          <span className="st-text">{t(lang, 'provider_status_ok')}</span>
+          <span className="mp-st-text">{t(lang, 'provider_status_ok')}</span>
           {p.status.testedAt ? <small>{formatTimeAgo(p.status.testedAt, lang)}</small> : null}
         </span>
       );
     }
     if (p.status.state === 'error') {
       return (
-        <span className="st bad">
+        <span className="mp-st mp-bad">
           <i />
-          <span className="st-text">{t(lang, 'provider_status_bad')}</span>
+          <span className="mp-st-text">{t(lang, 'provider_status_bad')}</span>
           {p.status.testedAt ? <small>{formatTimeAgo(p.status.testedAt, lang)}</small> : null}
         </span>
       );
     }
     return (
-      <span className="st">
+      <span className="mp-st">
         <i />
-        <span className="st-text">{t(lang, 'provider_status_untested')}</span>
+        <span className="mp-st-text">{t(lang, 'provider_status_untested')}</span>
       </span>
     );
   };
@@ -140,51 +136,51 @@ export function ProviderList({
       {providers.map((p, i) => {
         const enabledCount = p.models.filter((m) => m.enabled).length;
         const isOpen = openId === p.id;
-        const iconUrl = brandIconUrl(p.brand || p.id);
+        const iconBrand = p.brand || providerBrand(p.id);
         const isTesting = Boolean(testing[p.id]);
 
         return (
           <Fragment key={p.id}>
             <div
-              className={`prow ${i === 0 ? 'first' : ''} ${isOpen ? 'open' : ''}`}
+              className={`mp-prow ${i === 0 ? 'mp-first' : ''} ${isOpen ? 'mp-open' : ''}`}
               data-testid="next-provider-row"
               data-id={p.id}
               onClick={() => onToggleOpen(p.id)}
             >
               {/* Col 1: Icon (58px) */}
-              <span className="c">
-                <span className="av">
-                  {iconUrl ? <BrandIcon brand={p.brand || p.id} size={18} /> : <span>{initial(p.name)}</span>}
+              <span className="mp-c">
+                <span className="mp-av">
+                  <BrandIcon brand={iconBrand} size={18} />
                 </span>
               </span>
 
               {/* Col 2: Name & Auth (1fr) */}
-              <span className="c">
-                <span className="pn">
-                  <span className="n">
+              <span className="mp-c">
+                <span className="mp-pn">
+                  <span className="mp-pn-name">
                     <span>{p.name}</span>
                     {p.kind === 'custom' ? protoTag(p.api) : null}
-                    <svg className="chev" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.4">
+                    <svg className="mp-chev" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.4">
                       <path d="M4.5 2.5 8 6l-3.5 3.5" />
                     </svg>
                   </span>
-                  <span className="d">{renderAuth(p)}</span>
+                  <span className="mp-pn-desc">{renderAuth(p)}</span>
                 </span>
               </span>
 
               {/* Col 3: Enabled Count (136px) */}
-              <span className="c cnt">
+              <span className="mp-c mp-cnt">
                 {t(lang, 'provider_enabled_summary', { enabled: enabledCount, total: p.models.length })}
               </span>
 
               {/* Col 4: Status (166px) */}
-              <span className="c">{renderStatus(p, isTesting)}</span>
+              <span className="mp-c">{renderStatus(p, isTesting)}</span>
 
               {/* Col 5: Actions (146px) */}
-              <span className="c" onClick={(e) => e.stopPropagation()}>
+              <span className="mp-c" onClick={(e) => e.stopPropagation()}>
                 <button
                   type="button"
-                  className="btn"
+                  className="mp-btn"
                   data-testid="next-provider-test"
                   disabled={isTesting}
                   onClick={() => void onTest(p.id)}
@@ -193,13 +189,13 @@ export function ProviderList({
                 </button>
                 <button
                   type="button"
-                  className="more"
+                  className="mp-more"
                   data-testid="next-provider-more"
                   onClick={() => setMenuId(menuId === p.id ? null : p.id)}
                 >
                   ⋯
                   {menuId === p.id && (
-                    <div className="pop" ref={menuRef}>
+                    <div className="mp-pop" ref={menuRef}>
                       {p.auth.type === 'oauth' && (
                         <div
                           data-testid="next-provider-relogin"
@@ -229,7 +225,7 @@ export function ProviderList({
                         </div>
                       )}
                       <div
-                        className="danger"
+                        className="mp-danger"
                         data-testid="next-provider-delete"
                         onClick={() => { setMenuId(null); onDelete(p); }}
                       >
@@ -257,18 +253,18 @@ export function ProviderList({
 
       {/* Key Change Modal */}
       {keyTarget && (
-        <div className="mask">
-          <div className="dlg" style={{ width: 440 }}>
-            <div className="dh">
+        <div className="mp-mask">
+          <div className="mp-dlg" style={{ width: 440 }}>
+            <div className="mp-dh">
               <b>{t(lang, 'provider_act_key')} · {keyTarget.name}</b>
-              <button type="button" className="x" onClick={() => setKeyTarget(null)}>×</button>
+              <button type="button" className="mp-x" onClick={() => setKeyTarget(null)}>×</button>
             </div>
-            <div className="db">
-              <div className="form">
-                <label className="lbl">{t(lang, 'dlg_key_label')}</label>
+            <div className="mp-db">
+              <div className="mp-fld">
+                <label>{t(lang, 'dlg_key_label')}</label>
                 <input
                   type="password"
-                  className="inp"
+                  className="mp-mono"
                   data-testid="next-key-change-input"
                   value={newKey}
                   placeholder="sk-..."
@@ -276,14 +272,14 @@ export function ProviderList({
                 />
               </div>
             </div>
-            <div className="df">
-              <span style={{ flex: 1 }} />
-              <button type="button" className="btn" onClick={() => setKeyTarget(null)}>
+            <div className="mp-df">
+              <span className="mp-sp" />
+              <button type="button" className="mp-btn" onClick={() => setKeyTarget(null)}>
                 {t(lang, 'dlg_cancel')}
               </button>
               <button
                 type="button"
-                className="btn pri"
+                className="mp-btn mp-pri"
                 data-testid="next-key-change-submit"
                 disabled={!newKey.trim()}
                 onClick={async () => {
@@ -301,31 +297,33 @@ export function ProviderList({
 
       {/* Custom Edit Modal */}
       {editTarget && (
-        <div className="mask">
-          <div className="dlg" style={{ width: 500 }}>
-            <div className="dh">
+        <div className="mp-mask">
+          <div className="mp-dlg" style={{ width: 500 }}>
+            <div className="mp-dh">
               <b>{t(lang, 'provider_act_edit')} · {editTarget.name}</b>
-              <button type="button" className="x" onClick={() => setEditTarget(null)}>×</button>
+              <button type="button" className="mp-x" onClick={() => setEditTarget(null)}>×</button>
             </div>
-            <div className="db">
-              <div className="form">
-                <label className="lbl">{t(lang, 'dlg_custom_name_label')}</label>
+            <div className="mp-db">
+              <div className="mp-fld">
+                <label>{t(lang, 'dlg_custom_name_label')}</label>
                 <input
-                  className="inp"
                   data-testid="next-custom-edit-name"
                   value={editForm.name}
                   onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
                 />
-                <label className="lbl">{t(lang, 'dlg_custom_url_label')}</label>
+              </div>
+              <div className="mp-fld">
+                <label>{t(lang, 'dlg_custom_url_label')}</label>
                 <input
-                  className="inp"
+                  className="mp-mono"
                   data-testid="next-custom-edit-url"
                   value={editForm.baseUrl}
                   onChange={(e) => setEditForm({ ...editForm, baseUrl: e.target.value })}
                 />
-                <label className="lbl">{t(lang, 'dlg_custom_proto_label')}</label>
+              </div>
+              <div className="mp-fld">
+                <label>{t(lang, 'dlg_custom_proto_label')}</label>
                 <select
-                  className="inp"
                   data-testid="next-custom-edit-api"
                   value={editForm.api}
                   onChange={(e) => setEditForm({ ...editForm, api: e.target.value as CustomApiProtocol })}
@@ -334,10 +332,12 @@ export function ProviderList({
                   <option value="openai-responses">{t(lang, 'dlg_custom_proto_responses')}</option>
                   <option value="anthropic-messages">{t(lang, 'dlg_custom_proto_anthropic')}</option>
                 </select>
-                <label className="lbl">{t(lang, 'dlg_key_label')}</label>
+              </div>
+              <div className="mp-fld">
+                <label>{t(lang, 'dlg_key_label')}</label>
                 <input
                   type="password"
-                  className="inp"
+                  className="mp-mono"
                   data-testid="next-custom-edit-key"
                   value={editForm.apiKey}
                   placeholder="sk-... (留空保持不变)"
@@ -345,14 +345,14 @@ export function ProviderList({
                 />
               </div>
             </div>
-            <div className="df">
-              <span style={{ flex: 1 }} />
-              <button type="button" className="btn" onClick={() => setEditTarget(null)}>
+            <div className="mp-df">
+              <span className="mp-sp" />
+              <button type="button" className="mp-btn" onClick={() => setEditTarget(null)}>
                 {t(lang, 'dlg_cancel')}
               </button>
               <button
                 type="button"
-                className="btn pri"
+                className="mp-btn mp-pri"
                 data-testid="next-custom-edit-submit"
                 disabled={!editForm.name.trim() || !editForm.baseUrl.trim()}
                 onClick={async () => {

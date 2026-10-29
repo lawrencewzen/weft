@@ -15,11 +15,12 @@ export function LoginSessionView({ session, lang, onAnswer, onCancel }: Props) {
 
   if (!session) {
     return (
-      <div className="oauth-box oauth">
-        <span className="oauth-wait">
-          <i className="oauth-dot pulse" />
+      <div className="mp-oauth">
+        <p>
+          <span className="mp-spin" />
+          {' '}
           {t(lang, 'dlg_oauth_waiting')}
-        </span>
+        </p>
       </div>
     );
   }
@@ -40,34 +41,33 @@ export function LoginSessionView({ session, lang, onAnswer, onCancel }: Props) {
   const prompt = session.prompt;
 
   return (
-    <div className="oauth-box oauth">
+    <div className="mp-oauth">
       {authUrl && (
-        <div className="oauth-url-section">
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+          <p>{t(lang, 'dlg_oauth_opened_tip')}</p>
           <button
             type="button"
-            className="btn pri"
+            className="mp-btn mp-pri"
             data-testid="next-oauth-open"
             onClick={() => window.open(authUrl, '_blank', 'noopener,noreferrer')}
           >
             {t(lang, 'dlg_oauth_btn_open')}
           </button>
-          <div className="oauth-tip">{t(lang, 'dlg_oauth_opened_tip')}</div>
         </div>
       )}
 
       {userCode && (
-        <div className="oauth-code-block">
-          <div className="oauth-code-val">{userCode}</div>
-          <div className="oauth-code-tip">{t(lang, 'dlg_oauth_code_tip')}</div>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+          <div className="mp-oauth-code">{userCode}</div>
+          <p>{t(lang, 'dlg_oauth_code_tip')}</p>
         </div>
       )}
 
       {prompt && (
-        <div className="oauth-prompt">
-          <label className="lbl">{prompt.message}</label>
+        <div className="mp-fld" style={{ width: '100%', textAlign: 'left' }}>
+          <label>{prompt.message}</label>
           {prompt.type === 'select' ? (
             <select
-              className="inp"
               value={answerVal}
               onChange={(e) => setAnswerVal(e.target.value)}
             >
@@ -81,7 +81,7 @@ export function LoginSessionView({ session, lang, onAnswer, onCancel }: Props) {
           ) : (
             <input
               type={prompt.type === 'secret' ? 'password' : 'text'}
-              className="inp"
+              className="mp-mono"
               value={answerVal}
               placeholder={prompt.placeholder || ''}
               onChange={(e) => setAnswerVal(e.target.value)}
@@ -93,7 +93,7 @@ export function LoginSessionView({ session, lang, onAnswer, onCancel }: Props) {
           <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
             <button
               type="button"
-              className="btn pri"
+              className="mp-btn mp-pri"
               disabled={submitting || !answerVal.trim()}
               onClick={() => void handleAnswerSubmit()}
             >
@@ -104,24 +104,25 @@ export function LoginSessionView({ session, lang, onAnswer, onCancel }: Props) {
       )}
 
       {(session.state === 'pending' || session.state === 'prompt') && (
-        <div className="oauth-wait">
-          <i className="oauth-dot pulse" />
-          <span>{t(lang, 'dlg_oauth_waiting')}</span>
-        </div>
+        <p>
+          <span className="mp-spin" />
+          {' '}
+          {t(lang, 'dlg_oauth_waiting')}
+        </p>
       )}
 
       {session.state === 'done' && (
-        <div className="oauth-done">
+        <span className="mp-okline">
           ✓ {t(lang, 'dlg_oauth_signed_in', { account: session.provider?.auth.account || '' })}
-        </div>
+        </span>
       )}
 
       {session.state === 'error' && session.error && (
-        <div className="err">{session.error}</div>
+        <div className="mp-err">{session.error}</div>
       )}
 
-      <div style={{ marginTop: 12, display: 'flex', justifyContent: 'flex-end' }}>
-        <button type="button" className="btn" onClick={() => void onCancel()}>
+      <div style={{ marginTop: 12, display: 'flex', justifyContent: 'flex-end', width: '100%' }}>
+        <button type="button" className="mp-btn" onClick={() => void onCancel()}>
           {t(lang, 'dlg_cancel')}
         </button>
       </div>

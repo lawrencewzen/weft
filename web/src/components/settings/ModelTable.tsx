@@ -57,7 +57,7 @@ export function ModelTable({
     const isEditing = editingKey === `${provider.id}:${modelId}:${key}`;
     if (isEditing) {
       return (
-        <span className="c num">
+        <span className="mp-c mp-num">
           <input
             autoFocus
             data-testid={key === 'contextWindow' ? 'next-ctx-input' : undefined}
@@ -78,7 +78,7 @@ export function ModelTable({
     }
 
     const isUnk = val == null;
-    const cls = isOverridden ? 'v cus' : isUnk ? 'v unk' : 'v';
+    const cls = isOverridden ? 'mp-v mp-cus' : isUnk ? 'mp-v mp-unk' : 'mp-v';
     const title = isUnk
       ? t(lang, 'model_title_unknown')
       : isOverridden
@@ -86,7 +86,7 @@ export function ModelTable({
       : t(lang, 'model_title_default');
 
     return (
-      <span className="c num">
+      <span className="mp-c mp-num">
         <span
           className={cls}
           title={title}
@@ -102,19 +102,19 @@ export function ModelTable({
   };
 
   return (
-    <div className="models">
+    <div className="mp-models">
       {provider.status.state === 'error' && provider.status.error && (
-        <div className="err" data-testid="next-test-result">
+        <div className="mp-err" data-testid="next-test-result">
           {provider.status.error}
         </div>
       )}
 
-      <div className="mt">
-        <span className="h">{t(lang, 'model_th_name')}</span>
-        <span className="h r">{t(lang, 'model_th_context')}</span>
-        <span className="h r">{t(lang, 'model_th_max_tokens')}</span>
-        <span className="h">{t(lang, 'model_th_caps')}</span>
-        <span className="h r last">{t(lang, 'model_th_enabled')}</span>
+      <div className="mp-mt">
+        <span className="mp-mt-h">{t(lang, 'model_th_name')}</span>
+        <span className="mp-mt-h mp-r">{t(lang, 'model_th_context')}</span>
+        <span className="mp-mt-h mp-r">{t(lang, 'model_th_max_tokens')}</span>
+        <span className="mp-mt-h">{t(lang, 'model_th_caps')}</span>
+        <span className="mp-mt-h mp-r mp-last">{t(lang, 'model_th_enabled')}</span>
 
         {provider.models.map((m) => {
           const hasCaps = m.images || m.reasoning;
@@ -124,10 +124,10 @@ export function ModelTable({
           return (
             <div key={m.id} style={{ display: 'contents' }} data-testid="next-model-row" data-model={m.id}>
               {/* Col 1: Model name & id */}
-              <span className="c">
-                <span className={`mn ${m.enabled ? '' : 'off'}`}>
-                  <span className="nm">{m.name}</span>
-                  {m.name !== m.id ? <span className="id">{m.id}</span> : null}
+              <span className="mp-c">
+                <span className={`mp-mt-mn ${m.enabled ? '' : 'mp-mt-off'}`}>
+                  <span className="mp-mt-nm">{m.name}</span>
+                  {m.name !== m.id ? <span className="mp-mt-id">{m.id}</span> : null}
                 </span>
               </span>
 
@@ -138,9 +138,9 @@ export function ModelTable({
               {renderNumCell(m.id, 'maxTokens', m.maxTokens, isOverriddenMax)}
 
               {/* Col 4: Capabilities */}
-              <span className="c">
+              <span className="mp-c">
                 {hasCaps ? (
-                  <span className="caps">
+                  <span className="mp-caps">
                     {m.images && <span>{t(lang, 'model_cap_images')}</span>}
                     {m.reasoning && <span>{t(lang, 'model_cap_reasoning')}</span>}
                   </span>
@@ -150,10 +150,10 @@ export function ModelTable({
               </span>
 
               {/* Col 5: Enable Switch */}
-              <span className="c last">
+              <span className="mp-c mp-last">
                 <button
                   type="button"
-                  className={`sw ${m.enabled ? 'on' : ''}`}
+                  className={`mp-sw ${m.enabled ? 'mp-on' : ''}`}
                   data-testid="next-model-toggle"
                   title={t(lang, m.enabled ? 'model_toggle_on' : 'model_toggle_off')}
                   onClick={(e) => {
@@ -168,7 +168,7 @@ export function ModelTable({
       </div>
 
       {(unknownCount > 0 || provider.kind === 'custom') && (
-        <div className="mnote">
+        <div className="mp-mnote">
           {unknownCount > 0 && (
             <span>
               {t(lang, 'model_unknown_note', { count: unknownCount })}

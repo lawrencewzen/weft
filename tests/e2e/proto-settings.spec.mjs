@@ -81,27 +81,27 @@ test('providers: rows, column alignment, expand, switch, in-place context edit, 
   // 4. Switch toggle: toggle a model enabled state
   const modelToggle = page.locator('[data-testid=next-model-row][data-model="claude-opus-4-6"] [data-testid=next-model-toggle]');
   await expect(modelToggle).toBeVisible();
-  const hadOn = await modelToggle.evaluate((el) => el.classList.contains('on'));
+  const hadOn = await modelToggle.evaluate((el) => el.classList.contains('mp-on'));
   await modelToggle.click();
-  await expect(modelToggle).toHaveClass(hadOn ? /^sw(?!.*on)/ : /sw on/);
+  await expect(modelToggle).toHaveClass(hadOn ? /^mp-sw(?!.*mp-on)/ : /mp-sw mp-on/);
 
   // 5. In-place edit context window
-  const ctxVal = page.locator('[data-testid=next-model-row][data-model="claude-opus-4-6"] .num .v').first();
+  const ctxVal = page.locator('[data-testid=next-model-row][data-model="claude-opus-4-6"] .mp-num .mp-v').first();
   await ctxVal.click();
   const ctxInput = page.getByTestId('next-ctx-input');
   await expect(ctxInput).toBeVisible();
   await ctxInput.fill('500K');
   await ctxInput.press('Enter');
-  await expect(page.locator('[data-testid=next-model-row][data-model="claude-opus-4-6"] .num .v').first()).toHaveText('500K');
+  await expect(page.locator('[data-testid=next-model-row][data-model="claude-opus-4-6"] .mp-num .mp-v').first()).toHaveText('500K');
 
   // 6. Add preset provider (API Key flow)
   await page.getByTestId('next-provider-add').click();
   await expect(page.getByTestId('next-vendor-card').first()).toBeVisible();
   await page.locator('[data-testid=next-vendor-card][data-vendor="openai"]').click();
   await page.getByTestId('next-key-input').fill('sk-demo-1234');
-  await page.locator('.dlg .df .btn.pri').click();
+  await page.locator('.mp-dlg .mp-df .mp-btn.mp-pri').click();
   await expect(page.getByTestId('next-provider-finish')).toBeVisible();
-  await page.locator('.pickm input[type="checkbox"]').first().check();
+  await page.locator('.mp-pickm input[type="checkbox"]').first().check();
   await page.getByTestId('next-provider-finish').click();
   await expect(rows).toHaveCount(4);
   await expect(rows.filter({ hasText: /^OpenAI/ })).toBeVisible();
@@ -109,10 +109,10 @@ test('providers: rows, column alignment, expand, switch, in-place context edit, 
   // 7. OAuth flow
   await page.getByTestId('next-provider-add').click();
   await page.locator('[data-testid=next-vendor-card][data-vendor="openrouter"]').click();
-  await page.locator('.seg button').filter({ hasText: '账号登录' }).click();
-  await page.locator('.oauth button').filter({ hasText: '打开授权页' }).click();
+  await page.locator('.mp-seg button').filter({ hasText: '账号登录' }).click();
+  await page.locator('.mp-oauth button').filter({ hasText: '打开授权页' }).click();
   await expect(page.getByTestId('next-provider-finish')).toBeVisible({ timeout: 15_000 });
-  await page.locator('.pickm input[type="checkbox"]').first().check();
+  await page.locator('.mp-pickm input[type="checkbox"]').first().check();
   await page.getByTestId('next-provider-finish').click();
   await expect(rows).toHaveCount(5);
   await expect(rows.filter({ hasText: 'OpenRouter' })).toBeVisible();
@@ -122,9 +122,9 @@ test('providers: rows, column alignment, expand, switch, in-place context edit, 
   await page.locator('[data-testid=next-vendor-card][data-vendor="custom"]').click();
   await page.getByTestId('next-custom-name').fill('Local vLLM');
   await page.getByTestId('next-custom-url').fill('http://127.0.0.1:8000/v1');
-  await page.locator('.dlg .df .btn.pri').click();
+  await page.locator('.mp-dlg .mp-df .mp-btn.mp-pri').click();
   await expect(page.getByTestId('next-provider-finish')).toBeVisible();
-  await page.locator('.pickm input[type="checkbox"]').first().check();
+  await page.locator('.mp-pickm input[type="checkbox"]').first().check();
   await page.getByTestId('next-provider-finish').click();
   await expect(rows).toHaveCount(6);
   await expect(rows.filter({ hasText: 'Local vLLM' })).toBeVisible();
