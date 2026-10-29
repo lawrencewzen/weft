@@ -517,6 +517,13 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 384000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "low",
+        "high",
+        "max"
+      ],
+      "defaultThinkingLevel": "high",
       "overridden": {}
     },
     {
@@ -528,6 +535,12 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 384000,
       "images": false,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "high",
+        "max"
+      ],
+      "defaultThinkingLevel": "high",
       "overridden": {}
     }
   ],
@@ -541,6 +554,15 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "minimal",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -552,6 +574,15 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "minimal",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -563,6 +594,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 64000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -574,6 +613,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 64000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -585,6 +632,15 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -596,6 +652,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 64000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -607,6 +671,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 64000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -618,6 +690,15 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high",
+        "max"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -629,6 +710,16 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -640,6 +731,16 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -651,6 +752,16 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -662,6 +773,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -673,6 +792,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 64000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -684,6 +811,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 64000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -695,6 +830,15 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high",
+        "max"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -706,6 +850,16 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -717,6 +871,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     }
   ],
@@ -730,6 +892,8 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 8192,
       "images": false,
       "reasoning": false,
+      "thinkingLevels": [],
+      "defaultThinkingLevel": null,
       "overridden": {}
     },
     {
@@ -741,6 +905,8 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 4096,
       "images": true,
       "reasoning": false,
+      "thinkingLevels": [],
+      "defaultThinkingLevel": null,
       "overridden": {}
     },
     {
@@ -752,6 +918,8 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 32768,
       "images": true,
       "reasoning": false,
+      "thinkingLevels": [],
+      "defaultThinkingLevel": null,
       "overridden": {}
     },
     {
@@ -763,6 +931,8 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 32768,
       "images": true,
       "reasoning": false,
+      "thinkingLevels": [],
+      "defaultThinkingLevel": null,
       "overridden": {}
     },
     {
@@ -774,6 +944,8 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 32768,
       "images": true,
       "reasoning": false,
+      "thinkingLevels": [],
+      "defaultThinkingLevel": null,
       "overridden": {}
     },
     {
@@ -785,6 +957,8 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 16384,
       "images": true,
       "reasoning": false,
+      "thinkingLevels": [],
+      "defaultThinkingLevel": null,
       "overridden": {}
     },
     {
@@ -796,6 +970,8 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 4096,
       "images": true,
       "reasoning": false,
+      "thinkingLevels": [],
+      "defaultThinkingLevel": null,
       "overridden": {}
     },
     {
@@ -807,6 +983,8 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 16384,
       "images": true,
       "reasoning": false,
+      "thinkingLevels": [],
+      "defaultThinkingLevel": null,
       "overridden": {}
     },
     {
@@ -818,6 +996,8 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 16384,
       "images": true,
       "reasoning": false,
+      "thinkingLevels": [],
+      "defaultThinkingLevel": null,
       "overridden": {}
     },
     {
@@ -829,6 +1009,8 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 16384,
       "images": true,
       "reasoning": false,
+      "thinkingLevels": [],
+      "defaultThinkingLevel": null,
       "overridden": {}
     },
     {
@@ -840,6 +1022,13 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -851,6 +1040,8 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 16384,
       "images": true,
       "reasoning": false,
+      "thinkingLevels": [],
+      "defaultThinkingLevel": null,
       "overridden": {}
     },
     {
@@ -862,6 +1053,13 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -873,6 +1071,13 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -884,6 +1089,10 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "high"
+      ],
+      "defaultThinkingLevel": "high",
       "overridden": {}
     },
     {
@@ -895,6 +1104,13 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -906,6 +1122,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "low",
+        "medium",
+        "high",
+        "xhigh"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -917,6 +1141,11 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 16384,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "medium",
+        "xhigh"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -928,6 +1157,12 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "medium",
+        "high",
+        "xhigh"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -939,6 +1174,8 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 16384,
       "images": true,
       "reasoning": false,
+      "thinkingLevels": [],
+      "defaultThinkingLevel": null,
       "overridden": {}
     },
     {
@@ -950,6 +1187,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "low",
+        "medium",
+        "high",
+        "xhigh"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -961,6 +1206,13 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 32000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "low",
+        "medium",
+        "high",
+        "xhigh"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -972,6 +1224,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "low",
+        "medium",
+        "high",
+        "xhigh"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -983,6 +1243,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "low",
+        "medium",
+        "high",
+        "xhigh"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -994,6 +1262,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "low",
+        "medium",
+        "high",
+        "xhigh"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -1005,6 +1281,12 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "medium",
+        "high",
+        "xhigh"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -1016,6 +1298,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "low",
+        "medium",
+        "high",
+        "xhigh"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -1027,6 +1317,12 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "medium",
+        "high",
+        "xhigh"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -1038,6 +1334,15 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -1049,6 +1354,15 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -1060,6 +1374,15 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -1071,6 +1394,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -1082,6 +1413,15 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -1093,6 +1433,15 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -1104,6 +1453,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -1115,6 +1472,15 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -1126,6 +1492,15 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -1137,6 +1512,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 32000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "minimal",
+        "low",
+        "medium",
+        "high",
+        "xhigh"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -1148,6 +1531,12 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 100000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -1159,6 +1548,12 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 100000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -1170,6 +1565,12 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 100000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -1181,6 +1582,12 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 100000,
       "images": false,
       "reasoning": true,
+      "thinkingLevels": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -1192,6 +1599,12 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 100000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -1203,6 +1616,12 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 100000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     }
   ],
@@ -1216,6 +1635,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 262144,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -1227,6 +1654,13 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 262144,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -1238,6 +1672,13 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 262144,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -1249,6 +1690,12 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 1048576,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "low",
+        "high",
+        "max"
+      ],
+      "defaultThinkingLevel": "high",
       "overridden": {}
     }
   ],
@@ -1262,6 +1709,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 131072,
       "images": false,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -1273,6 +1728,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 131072,
       "images": false,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -1284,6 +1747,12 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 131072,
       "images": false,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "high",
+        "max"
+      ],
+      "defaultThinkingLevel": "high",
       "overridden": {}
     },
     {
@@ -1295,6 +1764,12 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 131072,
       "images": false,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "high",
+        "max"
+      ],
+      "defaultThinkingLevel": "high",
       "overridden": {}
     },
     {
@@ -1306,6 +1781,12 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 131072,
       "images": false,
       "reasoning": true,
+      "thinkingLevels": [
+        "low",
+        "high",
+        "max"
+      ],
+      "defaultThinkingLevel": "high",
       "overridden": {}
     },
     {
@@ -1317,6 +1798,12 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 131072,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "low",
+        "high",
+        "max"
+      ],
+      "defaultThinkingLevel": "high",
       "overridden": {}
     },
     {
@@ -1328,6 +1815,12 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 131072,
       "images": false,
       "reasoning": true,
+      "thinkingLevels": [
+        "low",
+        "high",
+        "max"
+      ],
+      "defaultThinkingLevel": "high",
       "overridden": {}
     }
   ],
@@ -1341,6 +1834,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -1352,6 +1853,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -1363,6 +1872,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 64000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -1374,6 +1891,15 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -1385,6 +1911,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 32000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -1396,6 +1930,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 64000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -1407,6 +1949,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "low",
+        "medium",
+        "high",
+        "max"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -1418,6 +1968,15 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -1429,6 +1988,15 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -1440,6 +2008,15 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -1451,6 +2028,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -1462,6 +2047,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 64000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -1473,6 +2066,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "low",
+        "medium",
+        "high",
+        "max"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -1484,6 +2085,15 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -1495,6 +2105,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -1506,6 +2124,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -1517,6 +2143,15 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -1528,6 +2163,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -1539,6 +2182,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -1550,6 +2201,13 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 943718,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "low",
+        "high",
+        "max"
+      ],
+      "defaultThinkingLevel": "high",
       "overridden": {}
     },
     {
@@ -1561,6 +2219,13 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 393216,
       "images": false,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "low",
+        "high",
+        "max"
+      ],
+      "defaultThinkingLevel": "high",
       "overridden": {}
     },
     {
@@ -1572,6 +2237,13 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 943718,
       "images": false,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "low",
+        "high",
+        "max"
+      ],
+      "defaultThinkingLevel": "high",
       "overridden": {}
     },
     {
@@ -1583,6 +2255,12 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 65536,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -1594,6 +2272,12 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 65536,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -1605,6 +2289,13 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 131072,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "low",
+        "high",
+        "max"
+      ],
+      "defaultThinkingLevel": "high",
       "overridden": {}
     },
     {
@@ -1616,6 +2307,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -1627,6 +2326,15 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -1638,6 +2346,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "low",
+        "medium",
+        "high",
+        "xhigh"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -1649,6 +2365,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -1660,6 +2384,15 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -1671,6 +2404,8 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 131072,
       "images": true,
       "reasoning": false,
+      "thinkingLevels": [],
+      "defaultThinkingLevel": null,
       "overridden": {}
     },
     {
@@ -1682,6 +2417,13 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 450000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "low",
+        "medium",
+        "high",
+        "xhigh"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -1693,6 +2435,12 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 943718,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "low",
+        "high",
+        "max"
+      ],
+      "defaultThinkingLevel": "high",
       "overridden": {}
     },
     {
@@ -1704,6 +2452,12 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 131072,
       "images": false,
       "reasoning": true,
+      "thinkingLevels": [
+        "low",
+        "high",
+        "max"
+      ],
+      "defaultThinkingLevel": "high",
       "overridden": {}
     },
     {
@@ -1715,6 +2469,13 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 32768,
       "images": false,
       "reasoning": true,
+      "thinkingLevels": [
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -1726,6 +2487,13 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 32768,
       "images": false,
       "reasoning": true,
+      "thinkingLevels": [
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -1737,6 +2505,13 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 32768,
       "images": false,
       "reasoning": true,
+      "thinkingLevels": [
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -1748,6 +2523,12 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 32768,
       "images": false,
       "reasoning": true,
+      "thinkingLevels": [
+        "low",
+        "high",
+        "max"
+      ],
+      "defaultThinkingLevel": "high",
       "overridden": {}
     },
     {
@@ -1759,6 +2540,12 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 32768,
       "images": false,
       "reasoning": true,
+      "thinkingLevels": [
+        "low",
+        "high",
+        "max"
+      ],
+      "defaultThinkingLevel": "high",
       "overridden": {}
     },
     {
@@ -1770,6 +2557,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 65535,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -1781,6 +2576,8 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 5120,
       "images": true,
       "reasoning": false,
+      "thinkingLevels": [],
+      "defaultThinkingLevel": null,
       "overridden": {}
     },
     {
@@ -1792,6 +2589,8 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 5120,
       "images": false,
       "reasoning": false,
+      "thinkingLevels": [],
+      "defaultThinkingLevel": null,
       "overridden": {}
     },
     {
@@ -1803,6 +2602,8 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 32000,
       "images": true,
       "reasoning": false,
+      "thinkingLevels": [],
+      "defaultThinkingLevel": null,
       "overridden": {}
     },
     {
@@ -1814,6 +2615,8 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 5120,
       "images": true,
       "reasoning": false,
+      "thinkingLevels": [],
+      "defaultThinkingLevel": null,
       "overridden": {}
     },
     {
@@ -1825,6 +2628,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -1836,6 +2647,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -1847,6 +2666,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 64000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -1858,6 +2685,15 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -1869,6 +2705,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 32000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -1880,6 +2724,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 64000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -1891,6 +2743,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "low",
+        "medium",
+        "high",
+        "max"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -1902,6 +2762,15 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -1913,6 +2782,15 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -1924,6 +2802,15 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -1935,6 +2822,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -1946,6 +2841,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 64000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -1957,6 +2860,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "low",
+        "medium",
+        "high",
+        "max"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -1968,6 +2879,15 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -1979,6 +2899,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -1990,6 +2918,13 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 80000,
       "images": false,
       "reasoning": true,
+      "thinkingLevels": [
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -2001,6 +2936,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 30000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -2012,6 +2955,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 32768,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -2023,6 +2974,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 32768,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -2034,6 +2993,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 235929,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -2045,6 +3012,13 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 131072,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -2056,6 +3030,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 131072,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -2067,6 +3049,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 131072,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -2078,6 +3068,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 64000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -2089,6 +3087,8 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 4000,
       "images": false,
       "reasoning": false,
+      "thinkingLevels": [],
+      "defaultThinkingLevel": null,
       "overridden": {}
     },
     {
@@ -2100,6 +3100,8 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 4000,
       "images": false,
       "reasoning": false,
+      "thinkingLevels": [],
+      "defaultThinkingLevel": null,
       "overridden": {}
     },
     {
@@ -2111,6 +3113,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 64000,
       "images": false,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -2122,6 +3132,8 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 16384,
       "images": false,
       "reasoning": false,
+      "thinkingLevels": [],
+      "defaultThinkingLevel": null,
       "overridden": {}
     },
     {
@@ -2133,6 +3145,8 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 115200,
       "images": false,
       "reasoning": false,
+      "thinkingLevels": [],
+      "defaultThinkingLevel": null,
       "overridden": {}
     },
     {
@@ -2144,6 +3158,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 32768,
       "images": false,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -2155,6 +3177,13 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 16000,
       "images": false,
       "reasoning": true,
+      "thinkingLevels": [
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -2166,6 +3195,13 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 32768,
       "images": false,
       "reasoning": true,
+      "thinkingLevels": [
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -2177,6 +3213,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 147456,
       "images": false,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -2188,6 +3232,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 147456,
       "images": false,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -2199,6 +3251,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 147456,
       "images": false,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -2210,6 +3270,12 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 943717,
       "images": false,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "high",
+        "xhigh"
+      ],
+      "defaultThinkingLevel": "high",
       "overridden": {}
     },
     {
@@ -2221,6 +3287,13 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 943718,
       "images": false,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "low",
+        "high",
+        "max"
+      ],
+      "defaultThinkingLevel": "high",
       "overridden": {}
     },
     {
@@ -2232,6 +3305,13 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 262144,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "low",
+        "high",
+        "max"
+      ],
+      "defaultThinkingLevel": "high",
       "overridden": {}
     },
     {
@@ -2243,6 +3323,12 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 384000,
       "images": false,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "high",
+        "xhigh"
+      ],
+      "defaultThinkingLevel": "high",
       "overridden": {}
     },
     {
@@ -2254,6 +3340,13 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 393216,
       "images": false,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "low",
+        "high",
+        "max"
+      ],
+      "defaultThinkingLevel": "high",
       "overridden": {}
     },
     {
@@ -2265,6 +3358,13 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 943718,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "low",
+        "high",
+        "max"
+      ],
+      "defaultThinkingLevel": "high",
       "overridden": {}
     },
     {
@@ -2276,6 +3376,13 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 131072,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "low",
+        "high",
+        "max"
+      ],
+      "defaultThinkingLevel": "high",
       "overridden": {}
     },
     {
@@ -2287,6 +3394,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 460800,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -2298,6 +3413,13 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 943718,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "low",
+        "high",
+        "max"
+      ],
+      "defaultThinkingLevel": "high",
       "overridden": {}
     },
     {
@@ -2309,6 +3431,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 65535,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -2320,6 +3450,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 65535,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -2331,6 +3469,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 65535,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -2342,6 +3488,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 65535,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -2353,6 +3507,13 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 65536,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -2364,6 +3525,13 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 65536,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -2375,6 +3543,13 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 65536,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -2386,6 +3561,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 65536,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -2397,6 +3580,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 65536,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -2408,6 +3599,13 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 32768,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -2419,6 +3617,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 65536,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -2430,6 +3636,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 65536,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -2441,6 +3655,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 65536,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -2452,6 +3674,12 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 65536,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -2463,6 +3691,12 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 65536,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -2474,6 +3708,12 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 65536,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -2485,6 +3725,13 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 65536,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -2496,6 +3743,13 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 65536,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -2507,6 +3761,13 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 65536,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -2518,6 +3779,13 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 65536,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -2529,6 +3797,13 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 65536,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -2540,6 +3815,13 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 65536,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -2551,6 +3833,12 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 65536,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -2562,6 +3850,12 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 65536,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -2573,6 +3867,12 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 65536,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -2584,6 +3884,12 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 65536,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -2595,6 +3901,12 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 65536,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -2606,6 +3918,12 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 943718,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -2617,6 +3935,12 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 58982,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "high"
+      ],
+      "defaultThinkingLevel": "high",
       "overridden": {}
     },
     {
@@ -2628,6 +3952,8 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 16384,
       "images": true,
       "reasoning": false,
+      "thinkingLevels": [],
+      "defaultThinkingLevel": null,
       "overridden": {}
     },
     {
@@ -2639,6 +3965,8 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 117964,
       "images": true,
       "reasoning": false,
+      "thinkingLevels": [],
+      "defaultThinkingLevel": null,
       "overridden": {}
     },
     {
@@ -2650,6 +3978,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 235929,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -2661,6 +3997,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 32768,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -2672,6 +4016,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 16384,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -2683,6 +4035,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 32768,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -2694,6 +4054,12 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 117964,
       "images": false,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "low",
+        "high"
+      ],
+      "defaultThinkingLevel": "high",
       "overridden": {}
     },
     {
@@ -2705,6 +4071,12 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 50000,
       "images": false,
       "reasoning": true,
+      "thinkingLevels": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -2716,6 +4088,12 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 65536,
       "images": false,
       "reasoning": true,
+      "thinkingLevels": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -2727,6 +4105,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 32768,
       "images": false,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -2738,6 +4124,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 32768,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -2749,6 +4143,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 235929,
       "images": false,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -2760,6 +4162,13 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 8192,
       "images": false,
       "reasoning": true,
+      "thinkingLevels": [
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -2771,6 +4180,13 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 8192,
       "images": false,
       "reasoning": true,
+      "thinkingLevels": [
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -2782,6 +4198,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 262144,
       "images": false,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -2793,6 +4217,8 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 16384,
       "images": false,
       "reasoning": false,
+      "thinkingLevels": [],
+      "defaultThinkingLevel": null,
       "overridden": {}
     },
     {
@@ -2804,6 +4230,8 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 117964,
       "images": false,
       "reasoning": false,
+      "thinkingLevels": [],
+      "defaultThinkingLevel": null,
       "overridden": {}
     },
     {
@@ -2815,6 +4243,8 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 32768,
       "images": false,
       "reasoning": false,
+      "thinkingLevels": [],
+      "defaultThinkingLevel": null,
       "overridden": {}
     },
     {
@@ -2826,6 +4256,8 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 16384,
       "images": true,
       "reasoning": false,
+      "thinkingLevels": [],
+      "defaultThinkingLevel": null,
       "overridden": {}
     },
     {
@@ -2837,6 +4269,8 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 117964,
       "images": true,
       "reasoning": false,
+      "thinkingLevels": [],
+      "defaultThinkingLevel": null,
       "overridden": {}
     },
     {
@@ -2848,6 +4282,13 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 16384,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "low",
+        "medium",
+        "high",
+        "xhigh"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -2859,6 +4300,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 943718,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "minimal",
+        "low",
+        "medium",
+        "high",
+        "xhigh"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -2870,6 +4319,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 943718,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "minimal",
+        "low",
+        "medium",
+        "high",
+        "xhigh"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -2881,6 +4338,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 943718,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "minimal",
+        "low",
+        "medium",
+        "high",
+        "xhigh"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -2892,6 +4357,15 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 943718,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "minimal",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -2903,6 +4377,15 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 943718,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "minimal",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -2914,6 +4397,13 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 943718,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "low",
+        "medium",
+        "high",
+        "xhigh"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -2925,6 +4415,15 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 943718,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "minimal",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -2936,6 +4435,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 40000,
       "images": false,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -2947,6 +4454,13 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 131072,
       "images": false,
       "reasoning": true,
+      "thinkingLevels": [
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -2958,6 +4472,13 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 131072,
       "images": false,
       "reasoning": true,
+      "thinkingLevels": [
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -2969,6 +4490,13 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 32768,
       "images": false,
       "reasoning": true,
+      "thinkingLevels": [
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -2980,6 +4508,13 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 131072,
       "images": false,
       "reasoning": true,
+      "thinkingLevels": [
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -2991,6 +4526,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 512000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -3002,6 +4545,8 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 204800,
       "images": false,
       "reasoning": false,
+      "thinkingLevels": [],
+      "defaultThinkingLevel": null,
       "overridden": {}
     },
     {
@@ -3013,6 +4558,8 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 204800,
       "images": false,
       "reasoning": false,
+      "thinkingLevels": [],
+      "defaultThinkingLevel": null,
       "overridden": {}
     },
     {
@@ -3024,6 +4571,8 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 209715,
       "images": false,
       "reasoning": false,
+      "thinkingLevels": [],
+      "defaultThinkingLevel": null,
       "overridden": {}
     },
     {
@@ -3035,6 +4584,8 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 209715,
       "images": true,
       "reasoning": false,
+      "thinkingLevels": [],
+      "defaultThinkingLevel": null,
       "overridden": {}
     },
     {
@@ -3046,6 +4597,8 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 104857,
       "images": true,
       "reasoning": false,
+      "thinkingLevels": [],
+      "defaultThinkingLevel": null,
       "overridden": {}
     },
     {
@@ -3057,6 +4610,8 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 209715,
       "images": true,
       "reasoning": false,
+      "thinkingLevels": [],
+      "defaultThinkingLevel": null,
       "overridden": {}
     },
     {
@@ -3068,6 +4623,8 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 209715,
       "images": true,
       "reasoning": false,
+      "thinkingLevels": [],
+      "defaultThinkingLevel": null,
       "overridden": {}
     },
     {
@@ -3079,6 +4636,8 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 102400,
       "images": false,
       "reasoning": false,
+      "thinkingLevels": [],
+      "defaultThinkingLevel": null,
       "overridden": {}
     },
     {
@@ -3090,6 +4649,8 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 104857,
       "images": false,
       "reasoning": false,
+      "thinkingLevels": [],
+      "defaultThinkingLevel": null,
       "overridden": {}
     },
     {
@@ -3101,6 +4662,8 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 209715,
       "images": true,
       "reasoning": false,
+      "thinkingLevels": [],
+      "defaultThinkingLevel": null,
       "overridden": {}
     },
     {
@@ -3112,6 +4675,8 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 209715,
       "images": true,
       "reasoning": false,
+      "thinkingLevels": [],
+      "defaultThinkingLevel": null,
       "overridden": {}
     },
     {
@@ -3123,6 +4688,11 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 262144,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "high"
+      ],
+      "defaultThinkingLevel": "high",
       "overridden": {}
     },
     {
@@ -3134,6 +4704,8 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 104857,
       "images": true,
       "reasoning": false,
+      "thinkingLevels": [],
+      "defaultThinkingLevel": null,
       "overridden": {}
     },
     {
@@ -3145,6 +4717,11 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 209715,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "high"
+      ],
+      "defaultThinkingLevel": "high",
       "overridden": {}
     },
     {
@@ -3156,6 +4733,11 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 209715,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "high"
+      ],
+      "defaultThinkingLevel": "high",
       "overridden": {}
     },
     {
@@ -3167,6 +4749,8 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 104857,
       "images": true,
       "reasoning": false,
+      "thinkingLevels": [],
+      "defaultThinkingLevel": null,
       "overridden": {}
     },
     {
@@ -3178,6 +4762,8 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 104857,
       "images": true,
       "reasoning": false,
+      "thinkingLevels": [],
+      "defaultThinkingLevel": null,
       "overridden": {}
     },
     {
@@ -3189,6 +4775,8 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 16384,
       "images": false,
       "reasoning": false,
+      "thinkingLevels": [],
+      "defaultThinkingLevel": null,
       "overridden": {}
     },
     {
@@ -3200,6 +4788,8 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 26214,
       "images": false,
       "reasoning": false,
+      "thinkingLevels": [],
+      "defaultThinkingLevel": null,
       "overridden": {}
     },
     {
@@ -3211,6 +4801,11 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 209715,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "high"
+      ],
+      "defaultThinkingLevel": "high",
       "overridden": {}
     },
     {
@@ -3222,6 +4817,11 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 209715,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "high"
+      ],
+      "defaultThinkingLevel": "high",
       "overridden": {}
     },
     {
@@ -3233,6 +4833,8 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 102400,
       "images": true,
       "reasoning": false,
+      "thinkingLevels": [],
+      "defaultThinkingLevel": null,
       "overridden": {}
     },
     {
@@ -3244,6 +4846,8 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 16384,
       "images": true,
       "reasoning": false,
+      "thinkingLevels": [],
+      "defaultThinkingLevel": null,
       "overridden": {}
     },
     {
@@ -3255,6 +4859,8 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 52428,
       "images": false,
       "reasoning": false,
+      "thinkingLevels": [],
+      "defaultThinkingLevel": null,
       "overridden": {}
     },
     {
@@ -3266,6 +4872,8 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 26214,
       "images": false,
       "reasoning": false,
+      "thinkingLevels": [],
+      "defaultThinkingLevel": null,
       "overridden": {}
     },
     {
@@ -3277,6 +4885,8 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 98304,
       "images": false,
       "reasoning": false,
+      "thinkingLevels": [],
+      "defaultThinkingLevel": null,
       "overridden": {}
     },
     {
@@ -3288,6 +4898,8 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 98304,
       "images": false,
       "reasoning": false,
+      "thinkingLevels": [],
+      "defaultThinkingLevel": null,
       "overridden": {}
     },
     {
@@ -3299,6 +4911,13 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 98304,
       "images": false,
       "reasoning": true,
+      "thinkingLevels": [
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -3310,6 +4929,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 4096,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -3321,6 +4948,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 235929,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -3332,6 +4967,13 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 235929,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -3343,6 +4985,13 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 131072,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "low",
+        "high",
+        "max"
+      ],
+      "defaultThinkingLevel": "high",
       "overridden": {}
     },
     {
@@ -3354,6 +5003,13 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 16384,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "low",
+        "high",
+        "max"
+      ],
+      "defaultThinkingLevel": "high",
       "overridden": {}
     },
     {
@@ -3365,6 +5021,12 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 235929,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -3376,6 +5038,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 235929,
       "images": false,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -3387,6 +5057,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 65536,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -3398,6 +5076,12 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 235929,
       "images": false,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "low",
+        "medium"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -3409,6 +5093,12 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 235929,
       "images": false,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "low",
+        "medium"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -3420,6 +5110,12 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 182520,
       "images": false,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -3431,6 +5127,12 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 65536,
       "images": false,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -3442,6 +5144,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 235929,
       "images": false,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -3453,6 +5163,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 65536,
       "images": false,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -3464,6 +5182,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 235929,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -3475,6 +5201,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 131072,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -3486,6 +5220,8 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 4096,
       "images": false,
       "reasoning": false,
+      "thinkingLevels": [],
+      "defaultThinkingLevel": null,
       "overridden": {}
     },
     {
@@ -3497,6 +5233,8 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 3685,
       "images": false,
       "reasoning": false,
+      "thinkingLevels": [],
+      "defaultThinkingLevel": null,
       "overridden": {}
     },
     {
@@ -3508,6 +5246,8 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 4096,
       "images": false,
       "reasoning": false,
+      "thinkingLevels": [],
+      "defaultThinkingLevel": null,
       "overridden": {}
     },
     {
@@ -3519,6 +5259,8 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 4096,
       "images": false,
       "reasoning": false,
+      "thinkingLevels": [],
+      "defaultThinkingLevel": null,
       "overridden": {}
     },
     {
@@ -3530,6 +5272,8 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 4096,
       "images": false,
       "reasoning": false,
+      "thinkingLevels": [],
+      "defaultThinkingLevel": null,
       "overridden": {}
     },
     {
@@ -3541,6 +5285,8 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 4096,
       "images": true,
       "reasoning": false,
+      "thinkingLevels": [],
+      "defaultThinkingLevel": null,
       "overridden": {}
     },
     {
@@ -3552,6 +5298,8 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 4096,
       "images": true,
       "reasoning": false,
+      "thinkingLevels": [],
+      "defaultThinkingLevel": null,
       "overridden": {}
     },
     {
@@ -3563,6 +5311,8 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 32768,
       "images": true,
       "reasoning": false,
+      "thinkingLevels": [],
+      "defaultThinkingLevel": null,
       "overridden": {}
     },
     {
@@ -3574,6 +5324,8 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 32768,
       "images": true,
       "reasoning": false,
+      "thinkingLevels": [],
+      "defaultThinkingLevel": null,
       "overridden": {}
     },
     {
@@ -3585,6 +5337,8 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 32768,
       "images": true,
       "reasoning": false,
+      "thinkingLevels": [],
+      "defaultThinkingLevel": null,
       "overridden": {}
     },
     {
@@ -3596,6 +5350,8 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 32768,
       "images": true,
       "reasoning": false,
+      "thinkingLevels": [],
+      "defaultThinkingLevel": null,
       "overridden": {}
     },
     {
@@ -3607,6 +5363,8 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 32768,
       "images": true,
       "reasoning": false,
+      "thinkingLevels": [],
+      "defaultThinkingLevel": null,
       "overridden": {}
     },
     {
@@ -3618,6 +5376,8 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 32768,
       "images": true,
       "reasoning": false,
+      "thinkingLevels": [],
+      "defaultThinkingLevel": null,
       "overridden": {}
     },
     {
@@ -3629,6 +5389,8 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 16384,
       "images": true,
       "reasoning": false,
+      "thinkingLevels": [],
+      "defaultThinkingLevel": null,
       "overridden": {}
     },
     {
@@ -3640,6 +5402,8 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 4096,
       "images": true,
       "reasoning": false,
+      "thinkingLevels": [],
+      "defaultThinkingLevel": null,
       "overridden": {}
     },
     {
@@ -3651,6 +5415,8 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 16384,
       "images": true,
       "reasoning": false,
+      "thinkingLevels": [],
+      "defaultThinkingLevel": null,
       "overridden": {}
     },
     {
@@ -3662,6 +5428,8 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 16384,
       "images": true,
       "reasoning": false,
+      "thinkingLevels": [],
+      "defaultThinkingLevel": null,
       "overridden": {}
     },
     {
@@ -3673,6 +5441,8 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 16384,
       "images": true,
       "reasoning": false,
+      "thinkingLevels": [],
+      "defaultThinkingLevel": null,
       "overridden": {}
     },
     {
@@ -3684,6 +5454,8 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 16384,
       "images": true,
       "reasoning": false,
+      "thinkingLevels": [],
+      "defaultThinkingLevel": null,
       "overridden": {}
     },
     {
@@ -3695,6 +5467,8 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 16384,
       "images": true,
       "reasoning": false,
+      "thinkingLevels": [],
+      "defaultThinkingLevel": null,
       "overridden": {}
     },
     {
@@ -3706,6 +5480,8 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 16384,
       "images": true,
       "reasoning": false,
+      "thinkingLevels": [],
+      "defaultThinkingLevel": null,
       "overridden": {}
     },
     {
@@ -3717,6 +5493,13 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -3728,6 +5511,13 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -3739,6 +5529,13 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -3750,6 +5547,13 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -3761,6 +5565,13 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -3772,6 +5583,10 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "high"
+      ],
+      "defaultThinkingLevel": "high",
       "overridden": {}
     },
     {
@@ -3783,6 +5598,10 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "high"
+      ],
+      "defaultThinkingLevel": "high",
       "overridden": {}
     },
     {
@@ -3794,6 +5613,13 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -3805,6 +5631,13 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -3816,6 +5649,12 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -3827,6 +5666,13 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "low",
+        "medium",
+        "high",
+        "xhigh"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -3838,6 +5684,13 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -3849,6 +5702,13 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -3860,6 +5720,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "low",
+        "medium",
+        "high",
+        "xhigh"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -3871,6 +5739,8 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 32000,
       "images": true,
       "reasoning": false,
+      "thinkingLevels": [],
+      "defaultThinkingLevel": null,
       "overridden": {}
     },
     {
@@ -3882,6 +5752,13 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "low",
+        "medium",
+        "high",
+        "xhigh"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -3893,6 +5770,12 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "medium",
+        "high",
+        "xhigh"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -3904,6 +5787,12 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "medium",
+        "high",
+        "xhigh"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -3915,6 +5804,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "low",
+        "medium",
+        "high",
+        "xhigh"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -3926,6 +5823,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "low",
+        "medium",
+        "high",
+        "xhigh"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -3937,6 +5842,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "low",
+        "medium",
+        "high",
+        "xhigh"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -3948,6 +5861,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "low",
+        "medium",
+        "high",
+        "xhigh"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -3959,6 +5880,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "low",
+        "medium",
+        "high",
+        "xhigh"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -3970,6 +5899,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "low",
+        "medium",
+        "high",
+        "xhigh"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -3981,6 +5918,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "low",
+        "medium",
+        "high",
+        "xhigh"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -3992,6 +5937,12 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "medium",
+        "high",
+        "xhigh"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -4003,6 +5954,12 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "medium",
+        "high",
+        "xhigh"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -4014,6 +5971,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "low",
+        "medium",
+        "high",
+        "xhigh"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -4025,6 +5990,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "low",
+        "medium",
+        "high",
+        "xhigh"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -4036,6 +6009,12 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "medium",
+        "high",
+        "xhigh"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -4047,6 +6026,12 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "medium",
+        "high",
+        "xhigh"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -4058,6 +6043,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "low",
+        "medium",
+        "high",
+        "xhigh"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -4069,6 +6062,15 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -4080,6 +6082,15 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -4091,6 +6102,15 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -4102,6 +6122,15 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -4113,6 +6142,15 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -4124,6 +6162,15 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -4135,6 +6182,15 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -4146,6 +6202,15 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -4157,6 +6222,15 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -4168,6 +6242,15 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -4179,6 +6262,15 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -4190,6 +6282,15 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -4201,6 +6302,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -4212,6 +6321,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -4223,6 +6340,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -4234,6 +6359,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -4245,6 +6378,15 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -4256,6 +6398,15 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -4267,6 +6418,15 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -4278,6 +6438,15 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -4289,6 +6458,15 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -4300,6 +6478,15 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -4311,6 +6498,15 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -4322,6 +6518,15 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -4333,6 +6538,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -4344,6 +6557,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -4355,6 +6576,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -4366,6 +6595,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -4377,6 +6614,8 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 16384,
       "images": false,
       "reasoning": false,
+      "thinkingLevels": [],
+      "defaultThinkingLevel": null,
       "overridden": {}
     },
     {
@@ -4388,6 +6627,8 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 16384,
       "images": false,
       "reasoning": false,
+      "thinkingLevels": [],
+      "defaultThinkingLevel": null,
       "overridden": {}
     },
     {
@@ -4399,6 +6640,8 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": false,
+      "thinkingLevels": [],
+      "defaultThinkingLevel": null,
       "overridden": {}
     },
     {
@@ -4410,6 +6653,12 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 65536,
       "images": false,
       "reasoning": true,
+      "thinkingLevels": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -4421,6 +6670,12 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 117964,
       "images": false,
       "reasoning": true,
+      "thinkingLevels": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -4432,6 +6687,12 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 32768,
       "images": false,
       "reasoning": true,
+      "thinkingLevels": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -4443,6 +6704,12 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 117964,
       "images": false,
       "reasoning": true,
+      "thinkingLevels": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -4454,6 +6721,13 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 65536,
       "images": false,
       "reasoning": true,
+      "thinkingLevels": [
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -4465,6 +6739,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 100000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -4476,6 +6758,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 100000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -4487,6 +6777,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 100000,
       "images": false,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -4498,6 +6796,10 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 100000,
       "images": false,
       "reasoning": true,
+      "thinkingLevels": [
+        "high"
+      ],
+      "defaultThinkingLevel": "high",
       "overridden": {}
     },
     {
@@ -4509,6 +6811,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 100000,
       "images": false,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -4520,6 +6830,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 100000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -4531,6 +6849,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 100000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -4542,6 +6868,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 100000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -4553,6 +6887,10 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 100000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "high"
+      ],
+      "defaultThinkingLevel": "high",
       "overridden": {}
     },
     {
@@ -4564,6 +6902,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 100000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -4575,6 +6921,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 4096,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -4586,6 +6940,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 4096,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -4597,6 +6959,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 4096,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -4608,6 +6978,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 30000,
       "images": false,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -4619,6 +6997,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 4096,
       "images": false,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -4630,6 +7016,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 8192,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -4641,6 +7035,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 131072,
       "images": false,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -4652,6 +7054,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 32768,
       "images": false,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -4663,6 +7073,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 32768,
       "images": false,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -4674,6 +7092,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 32768,
       "images": false,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -4685,6 +7111,12 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 32768,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "medium",
+        "xhigh"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -4696,6 +7128,8 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 16384,
       "images": false,
       "reasoning": false,
+      "thinkingLevels": [],
+      "defaultThinkingLevel": null,
       "overridden": {}
     },
     {
@@ -4707,6 +7141,8 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 29491,
       "images": false,
       "reasoning": false,
+      "thinkingLevels": [],
+      "defaultThinkingLevel": null,
       "overridden": {}
     },
     {
@@ -4718,6 +7154,8 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 32768,
       "images": false,
       "reasoning": false,
+      "thinkingLevels": [],
+      "defaultThinkingLevel": null,
       "overridden": {}
     },
     {
@@ -4729,6 +7167,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 16384,
       "images": false,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -4740,6 +7186,8 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 16384,
       "images": false,
       "reasoning": false,
+      "thinkingLevels": [],
+      "defaultThinkingLevel": null,
       "overridden": {}
     },
     {
@@ -4751,6 +7199,13 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 16384,
       "images": false,
       "reasoning": true,
+      "thinkingLevels": [
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -4762,6 +7217,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 16384,
       "images": false,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -4773,6 +7236,8 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 235929,
       "images": false,
       "reasoning": false,
+      "thinkingLevels": [],
+      "defaultThinkingLevel": null,
       "overridden": {}
     },
     {
@@ -4784,6 +7249,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 16384,
       "images": false,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -4795,6 +7268,8 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 65536,
       "images": false,
       "reasoning": false,
+      "thinkingLevels": [],
+      "defaultThinkingLevel": null,
       "overridden": {}
     },
     {
@@ -4806,6 +7281,8 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 235929,
       "images": false,
       "reasoning": false,
+      "thinkingLevels": [],
+      "defaultThinkingLevel": null,
       "overridden": {}
     },
     {
@@ -4817,6 +7294,8 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 65536,
       "images": false,
       "reasoning": false,
+      "thinkingLevels": [],
+      "defaultThinkingLevel": null,
       "overridden": {}
     },
     {
@@ -4828,6 +7307,8 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 235929,
       "images": false,
       "reasoning": false,
+      "thinkingLevels": [],
+      "defaultThinkingLevel": null,
       "overridden": {}
     },
     {
@@ -4839,6 +7320,8 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 235929,
       "images": false,
       "reasoning": false,
+      "thinkingLevels": [],
+      "defaultThinkingLevel": null,
       "overridden": {}
     },
     {
@@ -4850,6 +7333,13 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 235929,
       "images": false,
       "reasoning": true,
+      "thinkingLevels": [
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -4861,6 +7351,8 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 32768,
       "images": true,
       "reasoning": false,
+      "thinkingLevels": [],
+      "defaultThinkingLevel": null,
       "overridden": {}
     },
     {
@@ -4872,6 +7364,8 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 16384,
       "images": true,
       "reasoning": false,
+      "thinkingLevels": [],
+      "defaultThinkingLevel": null,
       "overridden": {}
     },
     {
@@ -4883,6 +7377,13 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 235929,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -4894,6 +7395,8 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 235929,
       "images": true,
       "reasoning": false,
+      "thinkingLevels": [],
+      "defaultThinkingLevel": null,
       "overridden": {}
     },
     {
@@ -4905,6 +7408,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 65536,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -4916,6 +7427,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 81920,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -4927,6 +7446,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 16384,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -4938,6 +7465,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 235929,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -4949,6 +7484,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 32768,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -4960,6 +7503,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 65536,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -4971,6 +7522,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 65536,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -4982,6 +7541,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 65536,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -4993,6 +7560,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 65536,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -5004,6 +7579,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 235929,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -5015,6 +7598,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 65536,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -5026,6 +7617,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 65536,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -5037,6 +7636,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 65536,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -5048,6 +7655,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 131072,
       "images": false,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -5059,6 +7674,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 131072,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -5070,6 +7693,12 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 131072,
       "images": false,
       "reasoning": true,
+      "thinkingLevels": [
+        "low",
+        "medium",
+        "xhigh"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -5081,6 +7710,13 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 235929,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "low",
+        "medium",
+        "xhigh"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -5092,6 +7728,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 131072,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -5103,6 +7747,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 131072,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "minimal",
+        "low",
+        "medium",
+        "high",
+        "xhigh"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -5114,6 +7766,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 131072,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "minimal",
+        "low",
+        "medium",
+        "high",
+        "xhigh"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -5125,6 +7785,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 131072,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -5136,6 +7804,8 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 14745,
       "images": true,
       "reasoning": false,
+      "thinkingLevels": [],
+      "defaultThinkingLevel": null,
       "overridden": {}
     },
     {
@@ -5147,6 +7817,8 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": false,
       "reasoning": false,
+      "thinkingLevels": [],
+      "defaultThinkingLevel": null,
       "overridden": {}
     },
     {
@@ -5158,6 +7830,12 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "defaultThinkingLevel": "high",
       "overridden": {}
     },
     {
@@ -5169,6 +7847,12 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "defaultThinkingLevel": "high",
       "overridden": {}
     },
     {
@@ -5180,6 +7864,12 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "defaultThinkingLevel": "high",
       "overridden": {}
     },
     {
@@ -5191,6 +7881,11 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 65536,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "high"
+      ],
+      "defaultThinkingLevel": "high",
       "overridden": {}
     },
     {
@@ -5202,6 +7897,13 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 65536,
       "images": false,
       "reasoning": true,
+      "thinkingLevels": [
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -5213,6 +7915,12 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 230400,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -5224,6 +7932,12 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 64000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -5235,6 +7949,12 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": false,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "low",
+        "high"
+      ],
+      "defaultThinkingLevel": "high",
       "overridden": {}
     },
     {
@@ -5246,6 +7966,12 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 235929,
       "images": false,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "low",
+        "high"
+      ],
+      "defaultThinkingLevel": "high",
       "overridden": {}
     },
     {
@@ -5257,6 +7983,12 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 64000,
       "images": false,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "low",
+        "high"
+      ],
+      "defaultThinkingLevel": "high",
       "overridden": {}
     },
     {
@@ -5268,6 +8000,15 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 471859,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high",
+        "max"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -5279,6 +8020,15 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 262144,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high",
+        "max"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -5290,6 +8040,15 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 262144,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high",
+        "max"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -5301,6 +8060,15 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 262144,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high",
+        "max"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -5312,6 +8080,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 4096,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -5323,6 +8099,8 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 131072,
       "images": true,
       "reasoning": false,
+      "thinkingLevels": [],
+      "defaultThinkingLevel": null,
       "overridden": {}
     },
     {
@@ -5334,6 +8112,16 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 131072,
       "images": false,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -5345,6 +8133,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 117964,
       "images": false,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -5356,6 +8152,16 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 131072,
       "images": false,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -5367,6 +8173,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 1800000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -5378,6 +8192,13 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 900000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -5389,6 +8210,13 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 900000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -5400,6 +8228,12 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 450000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -5411,6 +8245,13 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 450000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "low",
+        "medium",
+        "high",
+        "xhigh"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -5422,6 +8263,13 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 450000,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "low",
+        "medium",
+        "high",
+        "xhigh"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -5433,6 +8281,13 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 230400,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -5444,6 +8299,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 131072,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -5455,6 +8318,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 131072,
       "images": false,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -5466,6 +8337,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 131072,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -5477,6 +8356,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 131072,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -5488,6 +8375,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 131072,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -5499,6 +8394,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 98304,
       "images": false,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -5510,6 +8413,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 98304,
       "images": false,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -5521,6 +8432,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 16384,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -5532,6 +8451,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 131072,
       "images": false,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -5543,6 +8470,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 32768,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -5554,6 +8489,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 131072,
       "images": false,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -5565,6 +8508,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 117964,
       "images": false,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -5576,6 +8527,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 131072,
       "images": false,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -5587,6 +8546,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 131072,
       "images": false,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -5598,6 +8565,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 128000,
       "images": false,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     },
     {
@@ -5609,6 +8584,12 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 943718,
       "images": false,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "high",
+        "xhigh"
+      ],
+      "defaultThinkingLevel": "high",
       "overridden": {}
     },
     {
@@ -5620,6 +8601,12 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 943718,
       "images": false,
       "reasoning": true,
+      "thinkingLevels": [
+        "low",
+        "high",
+        "max"
+      ],
+      "defaultThinkingLevel": "high",
       "overridden": {}
     },
     {
@@ -5631,6 +8618,12 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 943717,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "low",
+        "high",
+        "max"
+      ],
+      "defaultThinkingLevel": "high",
       "overridden": {}
     },
     {
@@ -5642,6 +8635,12 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 131072,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "low",
+        "high",
+        "max"
+      ],
+      "defaultThinkingLevel": "high",
       "overridden": {}
     },
     {
@@ -5653,6 +8652,12 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 131072,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "low",
+        "high",
+        "max"
+      ],
+      "defaultThinkingLevel": "high",
       "overridden": {}
     },
     {
@@ -5664,6 +8669,12 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 131072,
       "images": false,
       "reasoning": true,
+      "thinkingLevels": [
+        "low",
+        "high",
+        "max"
+      ],
+      "defaultThinkingLevel": "high",
       "overridden": {}
     },
     {
@@ -5675,6 +8686,12 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 131072,
       "images": false,
       "reasoning": true,
+      "thinkingLevels": [
+        "low",
+        "high",
+        "max"
+      ],
+      "defaultThinkingLevel": "high",
       "overridden": {}
     },
     {
@@ -5686,6 +8703,14 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
       "maxTokens": 131072,
       "images": true,
       "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
       "overridden": {}
     }
   ]

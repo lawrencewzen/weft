@@ -8,6 +8,6 @@ export default defineConfig({
   root: webRoot,
   test: {
     environment: 'node',
-    include: ['src/**/*.test.ts'],
+    include: ['src/**/*.test.{ts,tsx}'],
   },
 });

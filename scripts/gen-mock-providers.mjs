@@ -11,6 +11,7 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createBrandIcons, loadBrandData, brandIdOf } from '../src/v2/views/brand.ts';
 import { providerBrand } from '../web/src/data/providerBrand.ts';
+import { thinkingLevelsOf, defaultThinkingLevelOf } from '../src/core/thinking-level.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = path.join(ROOT, 'web', 'proto', 'mock', 'piCatalog.ts');
@@ -124,6 +125,8 @@ for (const pid of TARGET_MODEL_PROVIDERS) {
     maxTokens: m.maxTokens ?? null,
     images: Boolean(m.input?.includes('image')),
     reasoning: Boolean(m.reasoning),
+    thinkingLevels: thinkingLevelsOf(m),
+    defaultThinkingLevel: defaultThinkingLevelOf(m),
     overridden: {},
   }));
 }

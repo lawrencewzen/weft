@@ -35,6 +35,7 @@ import {
 } from './views';
 import { MOCK_AVAILABLE_PROVIDERS, MOCK_CATALOG_MODELS } from './piCatalog';
 import { sortAvailableProviders } from '../../src/data/providerFormat';
+import { clampThinkingLevel, THINKING_LEVEL_ORDER, type ThinkingLevel } from '../../src/data/composerModel';
 import type {
   CustomApiProtocol,
   ConversationSummary,
@@ -196,6 +197,7 @@ function createConversation(db: MockDb, hub: MockHub, workspaceId: string, title
       model: model && found
         ? { sourceId: model.providerId, modelId: model.modelId, label: modelLabel(db, model) }
         : null,
+      thinkingLevel: found ? (found.defaultThinkingLevel ?? null) : null,
       run: {
         status: 'idle',
         startedAt: null,
@@ -232,20 +234,54 @@ function patchConversation(
   conv: MockConv,
   body: Record<string, unknown>,
 ): MockReply {
-  const raw = body.model;
-  if (raw === null) {
-    conv.view.model = null;
-  } else if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
-    const row = raw as Record<string, unknown>;
-    const providerId = typeof row.providerId === 'string' ? row.providerId : '';
-    const modelId = typeof row.modelId === 'string' ? row.modelId : '';
-    if (!providerId || !modelId) return fail(400, 'model 需要 providerId 和 modelId', 'E_BAD_REQUEST');
-    conv.view.model = {
-      sourceId: providerId,
-      modelId,
-      label: modelLabel(db, { providerId, modelId }),
-    };
+  const hasModel = Object.prototype.hasOwnProperty.call(body, 'model');
+  const hasThinking = Object.prototype.hasOwnProperty.call(body, 'thinkingLevel');
+  if (!hasModel && !hasThinking) {
+    return fail(400, 'model or thinkingLevel required', 'E_BAD_REQUEST');
   }
+
+  if (hasModel) {
+    const raw = body.model;
+    if (raw === null) {
+      conv.view.model = null;
+    } else if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+      const row = raw as Record<string, unknown>;
+      const providerId = typeof row.providerId === 'string' ? row.providerId : '';
+      const modelId = typeof row.modelId === 'string' ? row.modelId : '';
+      if (!providerId || !modelId) return fail(400, 'model 需要 providerId 和 modelId', 'E_BAD_REQUEST');
+      conv.view.model = {
+        sourceId: providerId,
+        modelId,
+        label: modelLabel(db, { providerId, modelId }),
+      };
+    } else {
+      return fail(400, 'invalid model', 'E_BAD_REQUEST');
+    }
+  }
+
+  const currentRef = conv.view.model
+    ? { providerId: conv.view.model.sourceId, modelId: conv.view.model.modelId }
+    : db.defaultModel;
+  const currentProvider = db.providers.find((p) => p.id === currentRef?.providerId);
+  const currentModel = currentProvider?.models.find((m) => m.id === currentRef?.modelId);
+  const supportedLevels = currentModel?.thinkingLevels || [];
+
+  if (hasThinking) {
+    const rawThinking = body.thinkingLevel;
+    if (rawThinking === null) {
+      conv.view.thinkingLevel = currentModel?.defaultThinkingLevel ?? null;
+    } else if (typeof rawThinking === 'string') {
+      if (!THINKING_LEVEL_ORDER.includes(rawThinking as ThinkingLevel)) {
+        return fail(400, 'invalid thinkingLevel', 'E_BAD_REQUEST');
+      }
+      conv.view.thinkingLevel = clampThinkingLevel(supportedLevels, rawThinking as ThinkingLevel);
+    } else {
+      return fail(400, 'invalid thinkingLevel', 'E_BAD_REQUEST');
+    }
+  } else if (hasModel) {
+    conv.view.thinkingLevel = clampThinkingLevel(supportedLevels, conv.view.thinkingLevel);
+  }
+
   recomputeContext(db, conv);
   touch(conv);
   publishConversationView(conv, hub);

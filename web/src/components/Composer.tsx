@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent } from 'react';
-import { ApiError, getWorkspaceTree, patchConversationModel, putModelContextWindow, uploadWorkspaceFile, type SendMessageFile } from '../data/api';
+import { ApiError, getWorkspaceTree, patchConversation, putModelContextWindow, uploadWorkspaceFile, type SendMessageFile, type ThinkingLevel } from '../data/api';
 import {
   addImages,
   applyAtSelection,
@@ -37,6 +37,7 @@ import {
   type UploadAttachment,
 } from '../data/attachments';
 import {
+  clampThinkingLevel,
   contextIsWarn,
   groupComposerModels,
   hasAvailableModels,
@@ -72,10 +73,13 @@ type Props = {
   workspaceId?: string | null;
   workspacePath?: string | null;
   model?: ConversationModel | null;
+  thinkingLevel?: ThinkingLevel | null;
   context?: ContextUsage;
   isDraft?: boolean;
   draftModel?: ResolvedModel | null;
   onDraftModel?: (model: ResolvedModel) => void;
+  draftThinkingLevel?: ThinkingLevel | null;
+  onDraftThinkingLevel?: (level: ThinkingLevel | null) => void;
   showModelControls?: boolean;
   onNewWorkspace?: () => void;
   onSend: (
@@ -173,10 +177,13 @@ export function Composer({
   workspaceId = null,
   workspacePath = null,
   model = null,
+  thinkingLevel = null,
   context = FALLBACK_CONTEXT,
   isDraft = false,
   draftModel = null,
   onDraftModel,
+  draftThinkingLevel = null,
+  onDraftThinkingLevel,
   showModelControls = true,
   onNewWorkspace,
   onSend,
@@ -233,6 +240,18 @@ export function Composer({
     draft: draftModel,
     isDraft,
   }), [providers, model, defaultModel, draftModel, isDraft]);
+  const effectiveThinkingLevel = useMemo(() => {
+    if (isDraft) {
+      if (draftThinkingLevel !== undefined && draftThinkingLevel !== null) {
+        return clampThinkingLevel(selected?.thinkingLevels, draftThinkingLevel);
+      }
+      return selected?.defaultThinkingLevel ?? null;
+    }
+    if (thinkingLevel !== undefined && thinkingLevel !== null) {
+      return clampThinkingLevel(selected?.thinkingLevels, thinkingLevel);
+    }
+    return selected?.defaultThinkingLevel ?? null;
+  }, [isDraft, draftThinkingLevel, thinkingLevel, selected]);
   const noModel = showModelControls && !demo && providersReady && !available;
   const noWorkspace = isDraft && !workspaceId;
   const locked = !run.canSend || noModel || noWorkspace;
@@ -694,14 +713,44 @@ export function Composer({
     const next: ResolvedModel = { providerId: option.providerId, modelId: option.modelId };
     if (isDraft || !conversationId) {
       onDraftModel?.(next);
+      if (draftThinkingLevel !== undefined && draftThinkingLevel !== null) {
+        const clamped = clampThinkingLevel(option.thinkingLevels, draftThinkingLevel);
+        onDraftThinkingLevel?.(clamped);
+      }
       return;
     }
     try {
-      await patchConversationModel(conversationId, next);
+      await patchConversation(conversationId, { model: next });
     } catch (err) {
       setError(errorMessage(err, t(lang, 'send_failed')));
     }
-  }, [conversationId, isDraft, lang, onDraftModel]);
+  }, [conversationId, isDraft, lang, onDraftModel, draftThinkingLevel, onDraftThinkingLevel]);
+
+  const pickThinkingLevel = useCallback(async (level: ThinkingLevel) => {
+    if (isDraft || !conversationId) {
+      onDraftThinkingLevel?.(level);
+      return;
+    }
+    try {
+      await patchConversation(conversationId, { thinkingLevel: level });
+    } catch (err) {
+      setError(errorMessage(err, t(lang, 'send_failed')));
+    }
+  }, [conversationId, isDraft, lang, onDraftThinkingLevel]);
+
+  const pickRecent = useCallback(async (option: ComposerModelOption, level: ThinkingLevel | null) => {
+    const next: ResolvedModel = { providerId: option.providerId, modelId: option.modelId };
+    if (isDraft || !conversationId) {
+      onDraftModel?.(next);
+      onDraftThinkingLevel?.(level);
+      return;
+    }
+    try {
+      await patchConversation(conversationId, { model: next, thinkingLevel: level });
+    } catch (err) {
+      setError(errorMessage(err, t(lang, 'send_failed')));
+    }
+  }, [conversationId, isDraft, lang, onDraftModel, onDraftThinkingLevel]);
 
   const setWindow = useCallback(async (window: number | null) => {
     if (!selected?.providerId || !selected.modelId) return;
@@ -1236,7 +1285,10 @@ export function Composer({
                       lang={lang}
                       selected={selected}
                       groups={groups}
+                      thinkingLevel={effectiveThinkingLevel}
                       onPick={(option) => { void pickModel(option); }}
+                      onPickThinkingLevel={(lvl) => { void pickThinkingLevel(lvl); }}
+                      onPickRecent={(option, lvl) => { void pickRecent(option, lvl); }}
                       onManage={openManage}
                     />
                   ) : null}

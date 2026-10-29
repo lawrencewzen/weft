@@ -17,6 +17,7 @@ import { StatusBar } from './StatusBar';
 import { Thread } from './Thread';
 
 type ConversationView = components['schemas']['ConversationView'];
+type ThinkingLevel = components['schemas']['ThinkingLevel'];
 type Workspace = components['schemas']['Workspace'];
 
 type Props = {
@@ -100,10 +101,14 @@ export function CenterPane({
     [items, optimistic.pending],
   );
   const [draftModel, setDraftModel] = useState<ResolvedModel | null>(null);
+  const [draftThinkingLevel, setDraftThinkingLevel] = useState<ThinkingLevel | null>(null);
   const draftModelRef = useRef<ResolvedModel | null>(null);
   draftModelRef.current = draftModel;
+  const draftThinkingLevelRef = useRef<ThinkingLevel | null>(null);
+  draftThinkingLevelRef.current = draftThinkingLevel;
   const modelForCreate = useCallback(() => draftModelRef.current, []);
-  const draftActions = useDraftSend(workspaceId, modelForCreate);
+  const thinkingLevelForCreate = useCallback(() => draftThinkingLevelRef.current, []);
+  const draftActions = useDraftSend(workspaceId, modelForCreate, thinkingLevelForCreate);
   const [stickNonce, setStickNonce] = useState(0);
   const bumpStick = useCallback(() => setStickNonce((n) => n + 1), []);
   const refreshId = workspace?.id || workspaceId || conversation?.workspaceId || null;
@@ -147,6 +152,8 @@ export function CenterPane({
           isDraft
           draftModel={draftModel}
           onDraftModel={setDraftModel}
+          draftThinkingLevel={draftThinkingLevel}
+          onDraftThinkingLevel={setDraftThinkingLevel}
           onNewWorkspace={onNewWorkspace}
           workspacePath={workspace?.path}
           git={workspace?.git ?? null}
@@ -237,6 +244,7 @@ export function CenterPane({
           conversationId={cid}
           workspaceId={conversation.workspaceId || workspaceId}
           model={conversation.model}
+          thinkingLevel={conversation.thinkingLevel}
           context={conversation.context}
           onNewWorkspace={onNewWorkspace}
           workspacePath={workspace?.path}

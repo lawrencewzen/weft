@@ -1451,6 +1451,73 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.6; backgroun
   text-decoration: underline; text-underline-offset: 2px;
 }
 
+/* 方案 D：合并按钮 + 二级菜单 */
+.model-chip { font-size: 13px; gap: 6px; min-width: 0; max-width: 320px; }
+.model-chip-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex-shrink: 1; }
+.model-chip-thinking.lvs { font-size: 12.5px; white-space: nowrap; flex-shrink: 0; color: var(--mute); }
+.model-chip-thinking.lvs.hot { color: var(--ink2); }
+.model-chip-caret { font-size: 10px; color: var(--mute); flex-shrink: 0; }
+
+.dmenu {
+  position: absolute; bottom: calc(100% + 6px); left: 0; z-index: 60;
+  width: 300px; max-width: min(300px, calc(100vw - 16px)); max-height: 440px;
+  overflow-y: auto; overflow-x: visible; background: var(--panel); border: 1px solid var(--line);
+  border-radius: 14px; box-shadow: 0 10px 32px rgba(0, 0, 0, .14); padding: 6px; box-sizing: border-box;
+}
+.dr {
+  display: flex; align-items: center; gap: 10px; width: 100%; border: 0; background: none;
+  border-radius: 9px; padding: 8px 10px; cursor: pointer; text-align: left; font-size: 13.5px;
+  color: var(--ink); position: relative; box-sizing: border-box;
+}
+.dr:hover, .dr.act, .dr:focus-visible { background: var(--hover); outline: none; }
+.dr .k { flex-shrink: 0; }
+.dr .v {
+  margin-left: auto; color: var(--mute); font-size: 13px; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis; min-width: 0; display: flex; align-items: center; gap: 6px;
+}
+.dr .chev { color: var(--faint); font-size: 13px; flex-shrink: 0; }
+.dr.dis { cursor: default; color: var(--faint); }
+.dr.dis:hover { background: none; }
+.dr.dis .v { color: var(--faint); }
+.dsep { height: 1px; background: var(--line2); margin: 4px 6px; }
+.dsub {
+  position: absolute; left: calc(100% + 8px); bottom: -6px; cursor: default; width: 260px;
+  max-height: 400px; overflow-y: auto; background: var(--panel); border: 1px solid var(--line);
+  border-radius: 14px; box-shadow: 0 10px 32px rgba(0, 0, 0, .14); padding: 6px; z-index: 70;
+  box-sizing: border-box;
+}
+.dsub.models { width: 320px; }
+.back {
+  display: flex; align-items: center; gap: 6px; width: 100%; border: 0; background: none;
+  color: var(--mute); font-size: 12.5px; padding: 6px 8px; cursor: pointer; border-radius: 7px;
+  margin-bottom: 4px; text-align: left;
+}
+.back:hover, .back:focus-visible { background: var(--hover); color: var(--ink); outline: none; }
+.dr.recent .v { font-size: 12.5px; }
+.dmenu-label { font-size: 11.5px; color: var(--faint); padding: 8px 10px 4px; }
+.mi {
+  display: flex; align-items: center; gap: 10px; width: 100%; border: 0; background: none;
+  border-radius: 9px; padding: 7px 10px; cursor: pointer; text-align: left; box-sizing: border-box;
+  color: var(--ink);
+}
+.mi:hover, .mi:focus-visible { background: var(--hover); outline: none; }
+.mi.sel { background: var(--sel, var(--hover)); }
+.mi .tt { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.mi .tt b { font-weight: 400; font-size: 13.5px; color: var(--ink); }
+.mi .tt small {
+  font-family: var(--mono); font-size: 11.5px; color: var(--faint);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.mi .tt .hint { font-size: 12px; color: var(--mute); line-height: 1.4; }
+.mi .meta { font-size: 12px; color: var(--mute); white-space: nowrap; flex-shrink: 0; }
+.mi .ti { color: var(--mute); display: inline-flex; flex-shrink: 0; }
+.mi.sel .ti { color: var(--ink); }
+.mfoot {
+  padding: 8px 10px 4px; border-top: 1px solid var(--line2); margin-top: 4px;
+  font-size: 12px; color: var(--faint); line-height: 1.4;
+}
+.gauge-icon { display: block; flex-shrink: 0; }
+
 .context-chip { font-size: 12px; color: var(--mute); font-variant-numeric: tabular-nums; }
 .context-chip.is-warn { color: var(--warn-ink); font-weight: 600; }
 .context-chip.is-warn .ctx-ring-fill { stroke: var(--warn-ink); }
