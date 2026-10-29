@@ -62,7 +62,7 @@ export function catalogSupportsImages(entry) {
 
 /**
  * Look up whether (model id, source baseUrl) accepts images.
- * Grok sources store an empty baseUrl; fall back to the xAI catalog host.
+ * An empty baseUrl falls back to the xAI catalog host (grok-* model ids).
  */
 export function modelSupportsImages(modelId, baseUrl) {
   const id = typeof modelId === 'string' ? modelId.trim() : '';

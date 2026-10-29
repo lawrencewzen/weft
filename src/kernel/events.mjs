@@ -3,7 +3,7 @@
 import path from 'node:path';
 import { retryDelayMs } from '@earendil-works/pi-ai/utils/retry';
 import { DEFAULT_RETRY_POLICY } from '@earendil-works/pi-durable';
-import { redactAuthText } from '../core/grok-auth.mjs';
+import { redactAuthText } from '../core/redact.mjs';
 import { extractPasteTexts, parseUserMessageParts } from '../core/user-message-parts.mjs';
 import { overlayContextWindow, presentContext } from '../core/usage.mjs';
 import { isAutoContinueText } from './continuation.mjs';

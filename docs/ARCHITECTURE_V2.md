@@ -22,7 +22,7 @@
 │ stream/    SSE：快照、实体更新、文字增量、续传            │
 │ views/     视图模型：对话流、工具、子 Agent、运行状态…    │
 │ phrases/   服务端文案（按客户端语言）                     │
-│ providers/ Provider 抽象、钥匙串、Grok 登录               │
+│ providers/ Provider 抽象、钥匙串                          │
 │ daemon/    发现文件、单实例、空闲退出、版本握手            │
 │ kernel/    Pi Durable 门面（现有 src/kernel 演进而来）     │
 │ core/      Git、工作区、技能、插件（现有 src/core 复用）    │
@@ -143,8 +143,8 @@ Provider {
 
 - 对话绑定 `{ providerId, modelId }`；子 Agent 默认沿用主对话的。
 - 品牌识别（模型 ID 和服务商对应到哪个品牌）在服务端做，数据来自 T34-1 的 `brand-data.json`。图标文件由各端自己打包。
-- **密钥**：Weft 自己管理的 API Key 和令牌存在系统钥匙串里（mac Keychain、Windows 凭据管理器），候选库是 `@napi-rs/keyring`（有预编译二进制），要先确认内网 npm 镜像能装。`weft.sqlite` 里只存引用。`~/.grok/auth.json` 是和 grok 命令行共用的，照旧读写。
-- **账号登录**：先只做 Grok Build。其他 7 家（Claude Code、Codex、Antigravity、Gemini CLI、GitHub Copilot、Qwen Code、Kiro）逐家核实技术可行性和服务条款后再加，界面暂不显示。
+- **密钥**：Weft 自己管理的 API Key 和令牌存在系统钥匙串里（mac Keychain、Windows 凭据管理器），候选库是 `@napi-rs/keyring`（有预编译二进制），要先确认内网 npm 镜像能装。`weft.sqlite` 里只存引用。
+- **账号登录**：Claude Code、Codex、Antigravity、Gemini CLI、GitHub Copilot、Qwen Code、Kiro 等逐家核实技术可行性和服务条款后再加，界面暂不显示。
 - `runtime: agent` 只在契约里预留。以后实现时，外部 agent 作为 Pi Durable 的长任务运行（外部会话 id 存进检查点，abort 对应取消），不另写调度。
 
 ## 8. 数据和存储

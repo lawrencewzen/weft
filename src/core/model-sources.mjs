@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { maskApiKey, isMaskedOrEmptyApiKey } from './settings.mjs';
-import { redactAuthText, GROK_SESSION_MODEL } from './grok-auth.mjs';
+import { redactAuthText } from './redact.mjs';
 import { contextWindowFromEnv } from './usage.mjs';
 import { catalogContextWindow, lookupModelCatalog } from '../kernel/model-catalog.mjs';
 
@@ -19,7 +19,8 @@ export const VENDOR_PRESETS = [
   { id: 'custom', name: '自定义 API', baseUrl: '', needsKey: true },
 ];
 
-export const GROK_SOURCE_ID = 'grok';
+/** Legacy subscription source id; leftover rows with this id or kind are dropped. */
+const DROPPED_SOURCE_ID = 'grok';
 export const SETTINGS_VERSION = 2;
 
 const SOURCE_ID = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,31}$/;
@@ -123,7 +124,7 @@ export function mergeContextWindows(current, patch) {
 
 function lookupUrlForSource(source, lookupUrl) {
   if (lookupUrl != null && String(lookupUrl).trim()) return String(lookupUrl).trim();
-  if (!source || source.kind === 'grok') return '';
+  if (!source) return '';
   return effectiveBaseUrl(source) || source.baseUrl || '';
 }
 
@@ -160,27 +161,27 @@ export function defaultContextWindowsForSource(source, env = process.env) {
 }
 
 /**
- * Same source+model pair `modelFor` uses, without the Grok token check.
+ * Same source+model pair `modelFor` uses.
  * Missing or unavailable sources return null.
  */
-export function resolveConversationTarget(settings, conv, { grokSignedIn = false } = {}) {
+export function resolveConversationTarget(settings, conv) {
   const sourceId = typeof conv?.modelSourceId === 'string' ? conv.modelSourceId.trim() : '';
   const modelId = typeof conv?.modelId === 'string' ? conv.modelId.trim() : '';
   let target = null;
   if (sourceId && modelId) {
     const source = normalizeSources(settings?.sources).find((item) => item.id === sourceId);
-    if (source && sourceAvailable(source, { grokSignedIn })) {
+    if (source && sourceAvailable(source)) {
       target = { source, model: modelId };
     }
   }
-  if (!target) target = resolveRoleTarget(settings, { grokSignedIn });
+  if (!target) target = resolveRoleTarget(settings);
   if (!target?.source || !target.model) return null;
   return target;
 }
 
 /** Configured window for a conversation's resolved model, or null when none. */
-export function contextWindowForConversation(settings, conv, { grokSignedIn = false, env = process.env } = {}) {
-  const target = resolveConversationTarget(settings, conv, { grokSignedIn });
+export function contextWindowForConversation(settings, conv, { env = process.env } = {}) {
+  const target = resolveConversationTarget(settings, conv);
   if (!target) return null;
   return contextWindowForModel(target.source, target.model, env);
 }
@@ -253,30 +254,11 @@ function blankSource(partial) {
 export function normalizeSources(list) {
   if (!Array.isArray(list)) return [];
   const out = [];
-  let grokSeen = false;
   for (const item of list) {
     if (!item || typeof item !== 'object' || Array.isArray(item)) continue;
-    const kind = item.kind === 'grok' || item.id === GROK_SOURCE_ID ? 'grok' : 'api';
-    if (kind === 'grok') {
-      if (grokSeen) continue;
-      grokSeen = true;
-      const models = normalizeModelList(item.models) || [];
-      out.push(blankSource({
-        id: GROK_SOURCE_ID,
-        kind: 'grok',
-        vendor: 'grok',
-        name: cleanName(item.name, 'Grok 订阅'),
-        baseUrl: '',
-        apiKey: '',
-        models: models.length ? models : [GROK_SESSION_MODEL],
-        lastTest: item.lastTest,
-        catalog: item.catalog,
-        contextWindows: item.contextWindows,
-      }));
-      continue;
-    }
+    if (item.kind === 'grok' || item.id === DROPPED_SOURCE_ID) continue;
     const id = String(item.id || '').trim();
-    if (!SOURCE_ID.test(id) || id === GROK_SOURCE_ID) continue;
+    if (!SOURCE_ID.test(id)) continue;
     if (out.some((source) => source.id === id)) continue;
     const vendor = vendorPreset(item.vendor)?.id || String(item.vendor || 'custom').trim().toLowerCase().slice(0, 32) || 'custom';
     const models = normalizeModelList(item.models) || [];
@@ -307,7 +289,7 @@ export function normalizeRoleModels(models) {
   return { default: { sourceId, model: model.slice(0, 200) } };
 }
 
-export function publicSource(source, grokStatus) {
+export function publicSource(source) {
   const normalized = normalizeSources([source])[0];
   if (!normalized) return null;
   const body = {
@@ -325,13 +307,6 @@ export function publicSource(source, grokStatus) {
   if (normalized.contextWindows) body.contextWindows = { ...normalized.contextWindows };
   body.defaultContextWindow = contextWindowFromEnv();
   body.defaultContextWindows = defaultContextWindowsForSource(normalized);
-  if (normalized.kind === 'grok') {
-    body.session = {
-      signedIn: Boolean(grokStatus?.signedIn),
-      email: grokStatus?.email ?? null,
-      expiresAt: grokStatus?.expiresAt ?? null,
-    };
-  }
   return body;
 }
 
@@ -369,7 +344,7 @@ function pushModel(source, model) {
  * Already-versioned settings are returned unchanged.
  * Pass `createId` to keep the function deterministic.
  */
-export function migrateLegacySettings(raw, { grokSignedIn = false, createId = createSourceId } = {}) {
+export function migrateLegacySettings(raw, { createId = createSourceId } = {}) {
   const input = raw && typeof raw === 'object' && !Array.isArray(raw) ? { ...raw } : {};
   if (input.version === SETTINGS_VERSION) return input;
   delete input.grok;
@@ -383,7 +358,7 @@ export function migrateLegacySettings(raw, { grokSignedIn = false, createId = cr
     const preset = vendorPreset(provider);
     const vendor = preset?.id || (provider ? provider.toLowerCase().slice(0, 32) : 'custom');
     let id = createId();
-    if (!SOURCE_ID.test(id) || id === GROK_SOURCE_ID) id = createSourceId();
+    if (!SOURCE_ID.test(id) || id === DROPPED_SOURCE_ID) id = createSourceId();
     const storedUrl = normalizeHttpUrl(baseUrl) || (preset && preset.id !== 'custom' ? preset.baseUrl : '');
     apiSource = {
       id,
@@ -396,26 +371,12 @@ export function migrateLegacySettings(raw, { grokSignedIn = false, createId = cr
     };
     sources.push(apiSource);
   }
-  let grokSource = null;
-  if (grokSignedIn) {
-    grokSource = {
-      id: GROK_SOURCE_ID,
-      kind: 'grok',
-      vendor: 'grok',
-      name: 'Grok 订阅',
-      baseUrl: '',
-      apiKey: '',
-      models: [GROK_SESSION_MODEL],
-    };
-    sources.unshift(grokSource);
-  }
-  const target = grokSignedIn ? grokSource : apiSource;
   const models = {};
-  if (target) {
+  if (apiSource) {
     const model = legacyDefaultModel(input.models);
     if (model) {
-      pushModel(target, model);
-      models.default = { sourceId: target.id, model };
+      pushModel(apiSource, model);
+      models.default = { sourceId: apiSource.id, model };
     }
   }
   return {
@@ -430,14 +391,14 @@ export function migrateLegacySettings(raw, { grokSignedIn = false, createId = cr
 }
 
 export function sourceNeedsKey(source) {
-  if (!source || source.kind === 'grok') return false;
+  if (!source) return false;
   const preset = vendorPreset(source.vendor);
   if (preset) return preset.needsKey !== false;
   return true;
 }
 
 export function effectiveBaseUrl(source) {
-  if (!source || source.kind === 'grok') return '';
+  if (!source) return '';
   const stored = normalizeHttpUrl(source.baseUrl);
   if (stored) return stored;
   const preset = vendorPreset(source.vendor);
@@ -445,21 +406,21 @@ export function effectiveBaseUrl(source) {
   return '';
 }
 
-export function sourceAvailable(source, { grokSignedIn = false } = {}) {
+export function sourceAvailable(source) {
   if (!source) return false;
-  if (source.kind === 'grok') return Boolean(grokSignedIn);
+  if (source.kind === 'grok') return false;
   if (sourceNeedsKey(source) && !String(source.apiKey || '').trim()) return false;
   return Boolean(effectiveBaseUrl(source));
 }
 
-export function hasAvailableSource(settings, options) {
-  return normalizeSources(settings?.sources).some((source) => sourceAvailable(source, options));
+export function hasAvailableSource(settings) {
+  return normalizeSources(settings?.sources).some((source) => sourceAvailable(source));
 }
 
-function bindingTarget(sources, binding, options) {
+function bindingTarget(sources, binding) {
   if (!binding) return null;
   const source = sources.find((item) => item.id === binding.sourceId);
-  if (!source || !sourceAvailable(source, options)) return null;
+  if (!source || !sourceAvailable(source)) return null;
   if (!binding.model) return null;
   return { source, model: binding.model };
 }
@@ -500,14 +461,13 @@ export function resolveConversationModelPatch(settings, body = {}) {
 /**
  * Default binding, then the first model on the first usable source.
  */
-export function resolveRoleTarget(settings, { grokSignedIn = false } = {}) {
+export function resolveRoleTarget(settings) {
   const sources = normalizeSources(settings?.sources);
   const bindings = normalizeRoleModels(settings?.models);
-  const options = { grokSignedIn };
-  let resolved = bindingTarget(sources, bindings.default, options);
+  let resolved = bindingTarget(sources, bindings.default);
   if (!resolved) {
     for (const source of sources) {
-      if (!sourceAvailable(source, options)) continue;
+      if (!sourceAvailable(source)) continue;
       const name = (source.models || []).find((item) => typeof item === 'string' && item.trim());
       if (!name) continue;
       resolved = { source, model: name.trim() };
@@ -521,11 +481,11 @@ export function resolveRoleTarget(settings, { grokSignedIn = false } = {}) {
  * What settings should show for the default model. `follow` is true when
  * settings.models.default is unset and the first usable source is used.
  */
-export function effectiveModelFor(settings, { grokSignedIn = false } = {}) {
+export function effectiveModelFor(settings) {
   const bindings = normalizeRoleModels(settings?.models);
   const own = bindings.default;
   if (own) return { sourceId: own.sourceId, model: own.model, follow: false };
-  const resolved = resolveRoleTarget(settings, { grokSignedIn });
+  const resolved = resolveRoleTarget(settings);
   if (!resolved) return { sourceId: null, model: null, follow: true };
   return { sourceId: resolved.source.id, model: resolved.model, follow: true };
 }
@@ -562,7 +522,7 @@ export function createApiSource(input = {}, createId = createSourceId) {
   const apiKey = isMaskedOrEmptyApiKey(rawKey) ? '' : rawKey;
   if (preset.needsKey && !apiKey.trim()) return { error: 'api key required' };
   let id = createId();
-  if (!SOURCE_ID.test(String(id)) || id === GROK_SOURCE_ID) id = createSourceId();
+  if (!SOURCE_ID.test(String(id)) || id === DROPPED_SOURCE_ID) id = createSourceId();
   return {
     source: {
       id,
@@ -593,22 +553,6 @@ export function applySourcePatch(source, patch = {}) {
     ...(source.lastTest ? { lastTest: { ...source.lastTest } } : {}),
     ...(source.contextWindows ? { contextWindows: { ...source.contextWindows } } : {}),
   };
-  if (source.kind === 'grok') {
-    if (typeof patch.name === 'string' && patch.name.trim()) next.name = cleanName(patch.name, source.name);
-    if (patch.models != null) {
-      const models = normalizeModelList(patch.models);
-      if (!models) return { error: 'invalid models' };
-      next.models = models.length ? models : [GROK_SESSION_MODEL];
-    }
-    const windowError = applyContextWindowsPatch(next, patch);
-    if (windowError) return { error: windowError };
-    next.id = GROK_SOURCE_ID;
-    next.kind = 'grok';
-    next.vendor = 'grok';
-    next.baseUrl = '';
-    next.apiKey = '';
-    return { source: next };
-  }
   if (patch.vendor != null) {
     const preset = vendorPreset(patch.vendor);
     if (!preset) return { error: 'unknown vendor' };
@@ -639,18 +583,6 @@ export function applySourcePatch(source, patch = {}) {
   return { source: next };
 }
 
-export function grokSourceTemplate() {
-  return {
-    id: GROK_SOURCE_ID,
-    kind: 'grok',
-    vendor: 'grok',
-    name: 'Grok 订阅',
-    baseUrl: '',
-    apiKey: '',
-    models: [GROK_SESSION_MODEL],
-  };
-}
-
 /** Env prefill becomes one API source. Incomplete custom rows stay stored but unusable. */
 export function sourceFromEnv({ baseUrl = '', apiKey = '', model = '', createId = createSourceId } = {}) {
   const urlText = String(baseUrl || '').trim();
@@ -661,7 +593,7 @@ export function sourceFromEnv({ baseUrl = '', apiKey = '', model = '', createId 
   if (urlText && !normalized) return null;
   const preset = normalized ? vendorForBaseUrl(normalized) : null;
   let id = createId();
-  if (!SOURCE_ID.test(String(id)) || id === GROK_SOURCE_ID) id = createSourceId();
+  if (!SOURCE_ID.test(String(id)) || id === DROPPED_SOURCE_ID) id = createSourceId();
   const source = {
     id,
     kind: 'api',

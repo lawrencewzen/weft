@@ -15,7 +15,6 @@ export const PROVIDERS_TOPIC = 'providers';
 
 export type ProvidersLoader = {
   getSettings?: () => Promise<SettingsLike | null | undefined>;
-  grokSignedIn?: () => Promise<boolean>;
 };
 
 export type ProvidersTopicOpts = {
@@ -81,8 +80,7 @@ export function attachProvidersTopic(hub: EventHub, opts: ProvidersTopicOpts = {
 
   async function loadSnapshot(lang: Lang): Promise<ProvidersSnapshot> {
     const settings = opts.loader?.getSettings ? await opts.loader.getSettings() : null;
-    const grokSignedIn = opts.loader?.grokSignedIn ? await opts.loader.grokSignedIn() : false;
-    return providersSnapshot({ settings, grokSignedIn, lang });
+    return providersSnapshot({ settings, lang });
   }
 
   function publishRemove(entity: string, id: string): void {

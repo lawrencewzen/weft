@@ -1,8 +1,6 @@
 import { test, expect } from '@playwright/test';
 import http from 'node:http';
-import path from 'node:path';
-import { pathToFileURL } from 'node:url';
-import { startServer, prepareWorkspaces, ROOT } from './helpers/server.mjs';
+import { startServer, prepareWorkspaces } from './helpers/server.mjs';
 import { loginNext, openWorkspaceConversation } from './helpers/next.mjs';
 
 test.use({ locale: 'zh-CN', viewport: { width: 1440, height: 900 } });
@@ -10,7 +8,6 @@ test.describe.configure({ timeout: 90_000 });
 
 const WRONG_KEY = 'sk-e2e-wrong-key-9f3c';
 const RIGHT_KEY = 'sk-e2e-right-key-7a1b';
-const MOCK_GROK = pathToFileURL(path.join(ROOT, 'tests/e2e/helpers/mock-grok-oidc.mjs')).href;
 
 let srv;
 const closers = [];
@@ -209,39 +206,6 @@ test('add provider: failed 401, then pass, pick two models, default, rename, del
   expect(html.includes(RIGHT_KEY), 'page html has no right key').toBe(false);
   expect(leaked, 'network responses never include the key').toEqual([]);
   expect(fake.hits.some((hit) => String(hit.url).endsWith('/models'))).toBe(true);
-});
-
-test('Grok device-code login uses the test double and reaches the model step', async ({ page }) => {
-  const extraEnv = {
-    NODE_OPTIONS: [process.env.NODE_OPTIONS, `--import ${MOCK_GROK}`].filter(Boolean).join(' '),
-    WEFT_GROK_AUTH: '',
-  };
-  const prepared = await prepareWorkspaces(['repo']);
-  extraEnv.WEFT_WORKSPACE_ROOT = prepared.root;
-  extraEnv.WEFT_GROK_AUTH = path.join(prepared.root, 'grok-auth.json');
-  srv = await startServer({ extraEnv });
-  await loginNext(page, srv);
-  await openProviders(page);
-  await page.getByTestId('next-provider-add').click();
-  await page.locator('[data-testid=next-vendor-card][data-vendor=grok]').click();
-  await page.getByRole('button', { name: '下一步' }).click();
-  await expect(page.getByTestId('next-grok-code')).toHaveText('WXYZ-1234', { timeout: 15000 });
-  await expect(page.getByText('第 1 步 · 已完成')).toBeVisible();
-  await expect(page.getByText('已经在默认浏览器里打开了')).toBeVisible();
-  await expect(page.getByRole('button', { name: '重新打开 ↗' })).toBeVisible();
-  await expect(page.getByText('第 2 步 · 现在做这一步')).toBeVisible();
-  await expect(page.getByRole('button', { name: '复制', exact: true })).toBeVisible();
-  await expect(page.getByText('第 3 步')).toBeVisible();
-  await expect(page.getByText('等你确认，这里会自动往下走')).toBeVisible();
-  await expect(page.getByRole('heading', { name: '登录后' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: '遇到问题' })).toBeVisible();
-  await expect(page.getByRole('button', { name: /等待登录/ })).toBeDisabled();
-  await expect(page.getByTestId('next-model-row')).toBeVisible({ timeout: 20000 });
-  await page.getByTestId('next-model-row').locator('.ns-switch').click();
-  await page.getByTestId('next-provider-finish').click();
-  const grokRow = page.getByTestId('next-provider-row').filter({ hasText: /Grok|账号/ });
-  await expect(grokRow).toBeVisible();
-  await expect(grokRow.getByTestId('next-provider-delete')).toHaveCount(0);
 });
 
 test('wizard back: breadcrumb, header arrow, left nav, and sticky footer', async ({ page }) => {

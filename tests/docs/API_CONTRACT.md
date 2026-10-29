@@ -22,7 +22,7 @@
 | `WEFT_GIT_CA_FILE` | 设置后克隆命令增加 `-c http.sslCAInfo=<路径>`，用于自签或内网 CA | 不设 |
 启动完成后 stdout 打印一行 `WEFT_READY http://127.0.0.1:<port>`，紧接着一行 `打开新版界面：http://127.0.0.1:<port>/auth?code=…`。未设置 `WEFT_TOKEN` 时不打印 `WEFT_LOGIN` 或 `WEFT_TOKEN`。`GET /api/health` → `{ok:true}`。服务只监听 `127.0.0.1`。`Host` 不在白名单为 400；写请求带非同源 `Origin` 为 403；写请求的 `Content-Type` 不是 `application/json` 为 415。这三项与是否设置 `WEFT_TOKEN` 无关。
 
-未设置 `WEFT_LLM=faux`、`LLM_API=faux`、`WEFT_FAUX_SCRIPT` 时，没有已登录的 Grok 来源，也没有可用的 API 来源，就**不能**回落到 faux。此时发消息的运行以 `failed` 结束，不写助手回复。SSE `error` 与 `GET /conversations/:cid` 的 `llmError` 为 `{code:'E_NO_MODEL', message:'err_no_model'}`。`GET /api/settings` 增加 `runtime`：`faux` | `openai` | `none`。`runtime==='faux'` 时界面显示「演示模型」。模型来源与默认绑定见 §8。
+未设置 `WEFT_LLM=faux`、`LLM_API=faux`、`WEFT_FAUX_SCRIPT` 时，没有可用的 API 来源，就**不能**回落到 faux。此时发消息的运行以 `failed` 结束，不写助手回复。SSE `error` 与 `GET /conversations/:cid` 的 `llmError` 为 `{code:'E_NO_MODEL', message:'err_no_model'}`。`GET /api/settings` 增加 `runtime`：`faux` | `openai` | `none`。`runtime==='faux'` 时界面显示「演示模型」。模型来源与默认绑定见 §8。
 
 ## 2. 纯函数模块（单元测试直接 import，均为 ESM，路径相对仓库根）
 - `src/core/paths.mjs`
@@ -127,7 +127,6 @@ JSON：`{"turns":[ {"text":"..."} | {"text":"...","stopReason":"length"} | {"too
   "plugins": {},
   "skills": {},
   "vendors": [{ "id": "openai", "name": "OpenAI", "baseUrl": "https://api.openai.com/v1", "needsKey": true }],
-  "grok": { "signedIn": false },
   "runtime": "none"
 }
 ```
@@ -140,18 +139,18 @@ JSON：`{"turns":[ {"text":"..."} | {"text":"...","stopReason":"length"} | {"too
 
 - 有非空 `apiKey`，或 `provider` 是 `ollama` 且有 `baseUrl`，或 `baseUrl` 非空且不等于该 provider 的预设地址，才建一条 API 来源。
 - 默认的 `{ provider:'openai', baseUrl:'', apiKey:'' }`、只选了预设厂商但没填地址和密钥、以及 `baseUrl` 恰好等于预设地址且没有密钥，都不建来源。
-- 建不出 API 来源、也没有已登录的 Grok 时，旧的字符串 `models` 丢掉。
-- 已登录 Grok 时，字符串模型挂到 Grok 来源；否则挂到新建的那条 API 来源。
+- 建不出 API 来源时，旧的字符串 `models` 丢掉。
+- 有 API 来源时，字符串模型挂到新建的那条 API 来源。
 - 迁移后顶层 `apiKey`、`baseUrl` 清空，`provider` 回到 `openai`，库里的 JSON 不再保留这三个字段。
 
-来源对象：`{ id, kind:'api'|'grok', vendor, name, baseUrl, apiKey, hasApiKey, models:string[], catalog?:string[], lastTest?:{ ok, at, error?, code?, status? }, contextWindows?:{ [模型名]: number }, defaultContextWindow: number, defaultContextWindows:{ [模型名]: number } }`。`models` 是已启用、会出现在模型下拉里的名字。`catalog` 只在来源行探测成功后出现，是这次拉到的完整列表；编辑抽屉用它把还没启用的新模型显示成未勾选。`contextWindows` 只含用户改过的模型上限（正整数 token 数）；没有改过则省略。`defaultContextWindow` 等于 `contextWindowFromEnv()`（`LLM_CONTEXT_WINDOW`，默认 128000），仍是整源回落。`defaultContextWindows` 给每个已启用模型一个默认上下文：pi-ai 目录里该模型的 `contextWindow`，查不到则用 `defaultContextWindow`。匹配规则：模型 id 相同且源 `baseUrl` 主机名相同；否则 id 相同且全目录唯一。前端输入框和「恢复默认」先看 `defaultContextWindows[模型]`。Grok 的 id 固定为 `grok`，并带 `session:{ signedIn, email, expiresAt }`。`lastTest.error` 与探测失败文本都要去掉密钥（`sk-***`、以及原文里的完整 key）。`lastTest.code` 与下面探测响应的 `code` 相同；`lastTest.status` 只在 HTTP 响应失败时出现。
+来源对象：`{ id, kind:'api', vendor, name, baseUrl, apiKey, hasApiKey, models:string[], catalog?:string[], lastTest?:{ ok, at, error?, code?, status? }, contextWindows?:{ [模型名]: number }, defaultContextWindow: number, defaultContextWindows:{ [模型名]: number } }`。`models` 是已启用、会出现在模型下拉里的名字。`catalog` 只在来源行探测成功后出现，是这次拉到的完整列表；编辑抽屉用它把还没启用的新模型显示成未勾选。`contextWindows` 只含用户改过的模型上限（正整数 token 数）；没有改过则省略。`defaultContextWindow` 等于 `contextWindowFromEnv()`（`LLM_CONTEXT_WINDOW`，默认 128000），仍是整源回落。`defaultContextWindows` 给每个已启用模型一个默认上下文：pi-ai 目录里该模型的 `contextWindow`，查不到则用 `defaultContextWindow`。匹配规则：模型 id 相同且源 `baseUrl` 主机名相同；否则 id 相同且全目录唯一。前端输入框和「恢复默认」先看 `defaultContextWindows[模型]`。遗留的 `kind:'grok'` 源在 `normalizeSources` 里直接丢弃。`lastTest.error` 与探测失败文本都要去掉密钥（`sk-***`、以及原文里的完整 key）。`lastTest.code` 与下面探测响应的 `code` 相同；`lastTest.status` 只在 HTTP 响应失败时出现。
 
 | 方法 路径 | 请求 | 响应 |
 |---|---|---|
 | `GET /api/sources` | 无单独列表接口 | 来源在 `GET /api/settings` 的 `sources` |
 | `POST /api/sources` | `{ vendor, name?, baseUrl?, apiKey?, models? }` | `201` 公开来源。`vendor` 必须是预设 id |
-| `PUT /api/sources/:id` | 局部更新 `name` / `vendor` / `baseUrl` / `apiKey` / `models` / `contextWindows` | `200` 公开来源。掩码或空的 `apiKey` 表示不改密钥。`contextWindows` 与已有值合并；某模型值为 `null` 表示删除该项（恢复默认）。Grok 来源也支持 |
-| `DELETE /api/sources/:id` | | `200 {ok:true,id}`。引用该来源的默认绑定被去掉。删除 Grok 来源会退出登录 |
+| `PUT /api/sources/:id` | 局部更新 `name` / `vendor` / `baseUrl` / `apiKey` / `models` / `contextWindows` | `200` 公开来源。掩码或空的 `apiKey` 表示不改密钥。`contextWindows` 与已有值合并；某模型值为 `null` 表示删除该项（恢复默认） |
+| `DELETE /api/sources/:id` | | `200 {ok:true,id}`。引用该来源的默认绑定被去掉 |
 | `POST /api/sources/test` | `{ vendor, baseUrl?, apiKey? }` 或 `{ sourceId, vendor?, baseUrl?, apiKey? }` | `200 { ok, models?, error?, code?, status? }` |
 
 错误码：
@@ -184,7 +183,7 @@ JSON：`{"turns":[ {"text":"..."} | {"text":"...","stopReason":"length"} | {"too
 
 `POST /api/sources/test` 带 `sourceId` 时，把请求里的 `vendor` / `baseUrl` / `apiKey` 叠到已保存的来源上再探测，不写回这条来源。origin 变了又没带新密钥，同样 400 `api key required`，不探测。只有请求里完全没有这些覆盖字段时，才把结果写入该来源的 `lastTest`（含 `code` / `status`）。这次如果成功，还按下面的规则改 `models`，并把拉到的完整列表写入 `catalog`：刷新不删除已经启用的模型。当前没有启用任何模型时，`models` 变成拉到的全部；已经有启用模型时 `models` 保持不变，新出现的名字只进 `catalog`、不自动启用。失败不改 `models` 和 `catalog`。
 
-发消息时按这条链选来源：对话自己的 `{ modelSourceId, modelId }`，没有再用 `settings.models.default`，再没有就用第一个可用的来源上的第一个模型。目标是 Grok 但拿不到 access token，并且没有别的可用目标时，本轮以 `E_NO_MODEL` / `err_no_model` 失败，而不是拿空的 base URL 去请求。
+发消息时按这条链选来源：对话自己的 `{ modelSourceId, modelId }`，没有再用 `settings.models.default`，再没有就用第一个可用的来源上的第一个模型。目标源不可用、并且没有别的可用目标时，本轮以 `E_NO_MODEL` / `err_no_model` 失败。
 
 ## 9. Skills
 

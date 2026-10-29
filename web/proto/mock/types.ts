@@ -32,8 +32,23 @@ export type GitConnection = components['schemas']['GitConnection'];
 export type GitProject = components['schemas']['GitProject'];
 export type GitBranch = components['schemas']['GitBranch'];
 export type GitTestResult = components['schemas']['GitTestResult'];
-export type GrokPending = components['schemas']['GrokPending'];
-export type GrokSession = components['schemas']['GrokSession'];
+/** Local shapes for the prototype Grok login mock. T59-2 dropped these from the contract; T59-3 removes the UI. */
+export type GrokPending = {
+  loginId: string;
+  verificationUri: string;
+  userCode: string;
+  interval: number;
+  expiresAt: number;
+};
+export type GrokSession = {
+  signedIn: boolean;
+  account: null | string;
+  email: null | string;
+  expiresAt: null | number;
+  authMode: null | string;
+  source: null | string;
+  pending: null | GrokPending;
+};
 
 /** A tool row before it is folded into the language the client asked for. */
 export type MockTool = {

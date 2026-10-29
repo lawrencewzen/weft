@@ -2,23 +2,13 @@
 // Providers are pi-ai catalogs on the Harness. This module does not schedule
 // work, store checkpoints, or fall back to the faux provider.
 import { stream as completionsStream, streamSimple as completionsStreamSimple } from '@earendil-works/pi-ai/api/openai-completions';
-import { stream as responsesStream, streamSimple as responsesStreamSimple } from '@earendil-works/pi-ai/api/openai-responses';
 import { createProvider } from '@earendil-works/pi-ai/models';
-import {
-  GROK_SESSION_MODEL,
-  grokClientVersion,
-  grokProxyBase,
-  grokProxyHeaders,
-  selectChatRuntime,
-} from '../core/grok-auth.mjs';
 import { contextWindowFromEnv } from '../core/usage.mjs';
 import {
-  GROK_SOURCE_ID,
   contextWindowForModel,
   effectiveBaseUrl,
   normalizeSources,
   resolveConversationTarget,
-  resolveRoleTarget,
   sourceAvailable,
 } from '../core/model-sources.mjs';
 import {
@@ -28,7 +18,6 @@ import {
 } from './model-catalog.mjs';
 
 const COST = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
-export const GROK_PROVIDER_ID = 'grok-proxy';
 export const DEFAULT_MAX_OUTPUT_TOKENS = 32768;
 
 function clonePlain(value) {
@@ -60,6 +49,31 @@ function maxTokensForModel(catalog, contextWindow, env) {
   return capMaxTokens(tokens, contextWindow);
 }
 
+function namedRuntime(value) {
+  const text = String(value || '').trim().toLowerCase();
+  if (text === 'faux' || text === 'openai') return text;
+  return '';
+}
+
+/**
+ * A scripted model is used only when it is requested: `WEFT_LLM=faux`,
+ * `LLM_API=faux`, or `WEFT_FAUX_SCRIPT`. Explicit `openai` forces the real
+ * client. Otherwise an API key or base URL selects that client.
+ * With none of those, return `none` so the server refuses the turn.
+ */
+export function selectChatRuntime(explicit, {
+  hasApiKey = false,
+  hasBaseUrl = false,
+  llmApi = '',
+  fauxScript = false,
+} = {}) {
+  const chosen = namedRuntime(explicit);
+  if (chosen) return chosen;
+  if (namedRuntime(llmApi) === 'faux' || fauxScript) return 'faux';
+  if (hasApiKey || hasBaseUrl) return 'openai';
+  return 'none';
+}
+
 /**
  * Faux is on only when the process asks for it: `WEFT_LLM=faux`,
  * `LLM_API=faux`, or `WEFT_FAUX_SCRIPT`. Anything else stays off.
@@ -73,7 +87,6 @@ export function explicitDemo(env = process.env) {
 
 export function providerIdForSource(source) {
   if (!source) return '';
-  if (source.kind === 'grok' || source.id === GROK_SOURCE_ID) return GROK_PROVIDER_ID;
   return `src-${source.id}`;
 }
 
@@ -111,46 +124,6 @@ function modelIds(source, extra) {
     out.push(name);
   }
   return out;
-}
-
-function grokStaticHeaders(model, version) {
-  const headers = { ...grokProxyHeaders('placeholder', model, version) };
-  delete headers.authorization;
-  return headers;
-}
-
-/**
- * One 401 refresh per user turn. The OpenAI SDK retry on this call is forced
- * off (`maxRetries: 0`); Harness `settings.retry` may run the turn again, but
- * the budget is already spent, so those attempts do not refresh a second time.
- */
-function refreshingFetch(state) {
-  return async function grokFetch(input, init) {
-    const fetchImpl = state.fetchImpl || globalThis.fetch;
-    const first = await fetchImpl(input, init);
-    if (first.status !== 401) return first;
-    if (state.refreshesLeft <= 0) return first;
-    state.refreshesLeft -= 1;
-    try { await first.arrayBuffer(); } catch { /* drained */ }
-    let next = null;
-    try {
-      next = await state.refresh();
-    } catch {
-      return new Response('unauthorized', { status: 401 });
-    }
-    if (!next?.accessToken) return new Response('unauthorized', { status: 401 });
-    const headers = new Headers(init?.headers || (input instanceof Request ? input.headers : undefined));
-    headers.set('authorization', `Bearer ${next.accessToken}`);
-    return fetchImpl(input, { ...init, headers });
-  };
-}
-
-function withRefresh(base, state) {
-  return (model, context, options) => base(model, context, {
-    ...options,
-    maxRetries: 0,
-    fetch: refreshingFetch(state),
-  });
 }
 
 function withoutAuthorization(base) {
@@ -198,74 +171,18 @@ function createOpenAICompatProvider({ id, baseUrl, apiKey, modelList, contextWin
   });
 }
 
-function createGrokProxyProvider({ baseUrl, modelList, version, grokAuth, fetchImpl, contextWindows, env }) {
-  const state = {
-    refreshesLeft: 1,
-    fetchImpl,
-    async refresh() {
-      if (typeof grokAuth?.forceRefresh !== 'function') return null;
-      const next = await grokAuth.forceRefresh();
-      if (!next?.accessToken) return null;
-      return { accessToken: next.accessToken };
-    },
-    arm() { state.refreshesLeft = 1; },
-  };
-  const provider = createProvider({
-    id: GROK_PROVIDER_ID,
-    name: 'Grok subscription proxy',
-    baseUrl,
-    auth: {
-      apiKey: {
-        name: 'Grok session access token',
-        async resolve() {
-          if (typeof grokAuth?.resolveAccessToken !== 'function') return undefined;
-          const session = await grokAuth.resolveAccessToken();
-          if (!session?.accessToken) return undefined;
-          return { auth: { apiKey: session.accessToken }, source: 'grok-auth' };
-        },
-      },
-    },
-    models: modelList.map((modelId) => {
-      const headers = grokStaticHeaders(modelId, version);
-      return chatModel({
-        provider: GROK_PROVIDER_ID,
-        id: modelId,
-        api: 'openai-responses',
-        baseUrl,
-        headers,
-        source: { contextWindows },
-        env,
-      });
-    }),
-    api: {
-      stream: withRefresh(responsesStream, state),
-      streamSimple: withRefresh(responsesStreamSimple, state),
-    },
-  });
-  return { provider, arm: () => state.arm() };
-}
-
 /**
  * Register one provider per available source. Call again after settings change;
  * updated sources replace their provider and removed sources are dropped.
  * Returns the model ref for this turn, or null when nothing can be called.
  */
-export function createKernelModels({ models, getSettings, grokAuth, env = process.env, fetchImpl } = {}) {
+export function createKernelModels({ models, getSettings, env = process.env } = {}) {
   if (!models || typeof models.setProvider !== 'function') throw new Error('models is required');
   const apiFingerprints = new Map();
-  let grokFingerprint = '';
-  let armGrok = () => {};
 
   function dropApi(id) {
     models.deleteProvider(id);
     apiFingerprints.delete(id);
-  }
-
-  function dropGrok() {
-    if (!grokFingerprint) return;
-    models.deleteProvider(GROK_PROVIDER_ID);
-    grokFingerprint = '';
-    armGrok = () => {};
   }
 
   function installApi(source, extra) {
@@ -296,67 +213,12 @@ export function createKernelModels({ models, getSettings, grokAuth, env = proces
     apiFingerprints.set(id, fingerprint);
   }
 
-  function installGrok(source, extra) {
-    const ids = modelIds(source, extra);
-    if (!ids.length) ids.push(GROK_SESSION_MODEL);
-    const baseUrl = grokProxyBase(env);
-    const version = grokClientVersion(env);
-    const fingerprint = JSON.stringify([
-      baseUrl,
-      version,
-      ids,
-      source.contextWindows || null,
-      maxOutputTokensFromEnv(env),
-      ids.map((modelId) => catalogFingerprint(modelId, baseUrl)),
-    ]);
-    if (grokFingerprint === fingerprint) return;
-    const built = createGrokProxyProvider({
-      baseUrl,
-      modelList: ids,
-      version,
-      grokAuth,
-      fetchImpl,
-      contextWindows: source.contextWindows,
-      env,
-    });
-    models.setProvider(built.provider);
-    grokFingerprint = fingerprint;
-    armGrok = built.arm;
-  }
-
-  async function signedIn() {
-    if (typeof grokAuth?.status !== 'function') return false;
-    try {
-      const status = await grokAuth.status();
-      return Boolean(status?.signedIn);
-    } catch {
-      return false;
-    }
-  }
-
-  async function tokenReady() {
-    if (typeof grokAuth?.resolveAccessToken !== 'function') return false;
-    try {
-      const session = await grokAuth.resolveAccessToken();
-      return Boolean(session?.accessToken);
-    } catch {
-      return false;
-    }
-  }
-
-  function sync(settings, { grokSignedIn, target }) {
+  function sync(settings, { target }) {
     const sources = normalizeSources(settings?.sources);
     const wanted = new Set();
-    let wantGrok = false;
     for (const source of sources) {
       const extra = target?.source?.id === source.id ? target.model : '';
-      if (source.kind === 'grok') {
-        if (!grokSignedIn) continue;
-        installGrok(source, extra);
-        wantGrok = true;
-        continue;
-      }
-      if (!sourceAvailable(source, { grokSignedIn })) continue;
+      if (!sourceAvailable(source)) continue;
       installApi(source, extra);
       const id = providerIdForSource(source);
       if (id) wanted.add(id);
@@ -364,7 +226,6 @@ export function createKernelModels({ models, getSettings, grokAuth, env = proces
     for (const id of [...apiFingerprints.keys()]) {
       if (!wanted.has(id)) dropApi(id);
     }
-    if (!wantGrok) dropGrok();
   }
 
   return {
@@ -372,20 +233,14 @@ export function createKernelModels({ models, getSettings, grokAuth, env = proces
     async warm() {
       if (typeof getSettings !== 'function') return;
       const settings = await getSettings();
-      sync(settings, { grokSignedIn: await signedIn(), target: null });
+      sync(settings, { target: null });
     },
     async modelFor(conv) {
       if (typeof getSettings !== 'function') return null;
       const settings = await getSettings();
-      const grokSignedIn = await signedIn();
-      let target = resolveConversationTarget(settings, conv, { grokSignedIn });
-      if (target?.source?.kind === 'grok' && !(await tokenReady())) {
-        target = resolveRoleTarget(settings, { grokSignedIn: false });
-        if (target?.source?.kind === 'grok') target = null;
-      }
-      sync(settings, { grokSignedIn, target });
+      const target = resolveConversationTarget(settings, conv);
+      sync(settings, { target });
       if (!target?.source || !target.model) return null;
-      if (target.source.kind === 'grok') armGrok();
       return { provider: providerIdForSource(target.source), modelId: target.model };
     },
   };

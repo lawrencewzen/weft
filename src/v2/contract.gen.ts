@@ -80,7 +80,7 @@ export interface paths {
          *     - `provider`：id 为 Provider id，值为 Provider
          *     - `defaults`：id 为 `self`，值为 ProviderDefaults（`model` 为当前默认 `{ providerId, modelId }`，没有则为 null）
          *
-         *     快照是 GET /api/v2/providers 的 providers 与 defaultModel 拆成上述实体（vendors 是静态预设，不进推送）。任何 Provider 增删改、连通性测试、Grok 登录状态变化、上下文上限或默认模型修改后 upsert（新旧接口改动都要触发）；实体删除时 remove。
+         *     快照是 GET /api/v2/providers 的 providers 与 defaultModel 拆成上述实体（vendors 是静态预设，不进推送）。任何 Provider 增删改、连通性测试、上下文上限或默认模型修改后 upsert（新旧接口改动都要触发）；实体删除时 remove。
          *
          *     主题 `extensions` 注册为精确主题。实体：
          *     - `plugin`：id 为插件 id，值为 Plugin
@@ -592,7 +592,7 @@ export interface paths {
         put?: never;
         /**
          * 新增 API Provider
-         * @description 创建规则与旧 POST /api/sources 相同（createApiSource）。Grok 不能用此接口创建。
+         * @description 创建规则与旧 POST /api/sources 相同（createApiSource）。
          *     成功后推送 providers 主题。
          */
         post: operations["createProvider"];
@@ -623,107 +623,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v2/providers/grok/session": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Grok Build 账号会话
-         * @description 与旧 GET /api/grok/session 相同：读 ~/.grok/auth.json，不返回令牌。
-         *     expiresAt 为毫秒时间戳。
-         */
-        get: operations["getGrokSession"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v2/providers/grok/login": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * 开始 Grok Build 设备码登录
-         * @description 与旧 POST /api/grok/login 相同。返回验证网址和用户码。令牌写回 ~/.grok/auth.json。
-         */
-        post: operations["startGrokLogin"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v2/providers/grok/login/poll": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * 轮询 Grok 设备码登录
-         * @description 与旧 POST /api/grok/login/poll 相同。成功后确保存在 grok Provider，并推送 providers 主题。
-         */
-        post: operations["pollGrokLogin"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v2/providers/grok/login/cancel": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * 取消进行中的 Grok 设备码登录
-         * @description 与旧 POST /api/grok/login/cancel 相同。loginId 缺省则取消全部进行中的登录。
-         */
-        post: operations["cancelGrokLogin"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v2/providers/grok/logout": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * 退出 Grok Build 登录
-         * @description 与旧 POST /api/grok/logout 相同。只删除 OIDC 会话，保留 xai::api_key。推送 providers 主题。
-         */
-        post: operations["logoutGrok"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v2/providers/{id}": {
         parameters: {
             query?: never;
@@ -736,7 +635,7 @@ export interface paths {
         post?: never;
         /**
          * 删除 Provider
-         * @description Grok 不能删，返回 400。删除后若它是默认模型来源则清空默认。推送 providers 主题。
+         * @description 删除后若它是默认模型来源则清空默认。推送 providers 主题。
          */
         delete: operations["deleteProvider"];
         options?: never;
@@ -1504,7 +1403,7 @@ export interface components {
             models: components["schemas"]["ProviderModel"][];
             isDefault: boolean;
         };
-        /** @description 可添加的厂商预设（VENDOR_PRESETS）。不含 Grok。 */
+        /** @description 可添加的厂商预设（VENDOR_PRESETS）。 */
         Vendor: {
             id: string;
             name: string;
@@ -1577,48 +1476,6 @@ export interface components {
             /** @description 绑定的模型；null 回到默认 */
             model: null | components["schemas"]["ResolvedModel"];
         };
-        /** @description 进行中的设备码登录。 */
-        GrokPending: {
-            loginId: string;
-            verificationUri: string;
-            userCode: string;
-            /** @description 建议轮询间隔（秒） */
-            interval: number;
-            /** @description 设备码过期时间（毫秒） */
-            expiresAt: number;
-        };
-        /** @description Grok Build 会话。不含 access / refresh token。 */
-        GrokSession: {
-            signedIn: boolean;
-            account: null | string;
-            email: null | string;
-            /** @description 会话过期时间（毫秒）。未登录为 null */
-            expiresAt: null | number;
-            authMode: null | string;
-            source: null | string;
-            /** @description 进行中的设备码登录。没有则为 null */
-            pending: null | components["schemas"]["GrokPending"];
-        };
-        GrokLoginStart: components["schemas"]["GrokPending"];
-        GrokLoginPollRequest: {
-            loginId: string;
-        };
-        GrokLoginCancelRequest: {
-            loginId?: string;
-        };
-        GrokLoginPending: {
-            /** @constant */
-            status: "pending";
-            interval: number;
-            /** @description 设备码过期时间（毫秒） */
-            expiresAt: number;
-        };
-        GrokLoginDone: {
-            /** @constant */
-            status: "done";
-            grok: components["schemas"]["GrokSession"];
-        };
-        GrokLoginPollResult: components["schemas"]["GrokLoginPending"] | components["schemas"]["GrokLoginDone"];
         /** @description 侧栏工作区。 */
         Workspace: {
             id: string;
@@ -4422,293 +4279,6 @@ export interface operations {
             };
         };
     };
-    getGrokSession: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description 当前会话 */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["GrokSession"];
-                };
-            };
-            /** @description 未授权 */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["V2Error"];
-                };
-            };
-            /** @description 客户端错误 */
-            "4XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["V2Error"];
-                };
-            };
-            /** @description 服务端错误 */
-            "5XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["V2Error"];
-                };
-            };
-        };
-    };
-    startGrokLogin: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": Record<string, never>;
-            };
-        };
-        responses: {
-            /** @description 设备码已签发 */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["GrokLoginStart"];
-                };
-            };
-            /** @description 未授权 */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["V2Error"];
-                };
-            };
-            /** @description 登录服务不可用 */
-            502: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["V2Error"];
-                };
-            };
-            /** @description 客户端错误 */
-            "4XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["V2Error"];
-                };
-            };
-            /** @description 服务端错误 */
-            "5XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["V2Error"];
-                };
-            };
-        };
-    };
-    pollGrokLogin: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["GrokLoginPollRequest"];
-            };
-        };
-        responses: {
-            /** @description 仍在等待或已完成 */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["GrokLoginPollResult"];
-                };
-            };
-            /** @description 未授权 */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["V2Error"];
-                };
-            };
-            /** @description 没有进行中的登录 */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["V2Error"];
-                };
-            };
-            /** @description 登录失败或过期 */
-            502: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["V2Error"];
-                };
-            };
-            /** @description 客户端错误 */
-            "4XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["V2Error"];
-                };
-            };
-            /** @description 服务端错误 */
-            "5XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["V2Error"];
-                };
-            };
-        };
-    };
-    cancelGrokLogin: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["GrokLoginCancelRequest"];
-            };
-        };
-        responses: {
-            /** @description 当前会话 */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["GrokSession"];
-                };
-            };
-            /** @description 未授权 */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["V2Error"];
-                };
-            };
-            /** @description 客户端错误 */
-            "4XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["V2Error"];
-                };
-            };
-            /** @description 服务端错误 */
-            "5XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["V2Error"];
-                };
-            };
-        };
-    };
-    logoutGrok: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": Record<string, never>;
-            };
-        };
-        responses: {
-            /** @description 当前会话 */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["GrokSession"];
-                };
-            };
-            /** @description 未授权 */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["V2Error"];
-                };
-            };
-            /** @description 退出失败 */
-            502: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["V2Error"];
-                };
-            };
-            /** @description 客户端错误 */
-            "4XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["V2Error"];
-                };
-            };
-            /** @description 服务端错误 */
-            "5XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["V2Error"];
-                };
-            };
-        };
-    };
     deleteProvider: {
         parameters: {
             query?: never;
@@ -4728,15 +4298,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProviderRemoved"];
-                };
-            };
-            /** @description 不能删除 Grok */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["V2Error"];
                 };
             };
             /** @description 未授权 */

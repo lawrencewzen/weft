@@ -19,7 +19,7 @@
 
 ### 步骤
 
-1. 点「＋ 添加」。账号登录里除 Grok Build 外，ChatGPT（Codex）、GitHub Copilot、Claude 显示「即将支持」且点不了。
+1. 点「＋ 添加」。账号登录里 ChatGPT（Codex）、GitHub Copilot、Claude 显示「即将支持」且点不了。
 2. 点「添加 API」。选「自定义…」，地址填第一个假服务的 `/v1`，填一个测试 Key，名称填「甲」。点「测试并获取模型」，勾选它返回的模型，点「添加」。
 3. 同样再加来源「乙」，指向第二个假服务。
 
