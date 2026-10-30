@@ -4,6 +4,16 @@ import { expectClean, openProto } from './helpers/proto.mjs';
 test.use({ locale: 'zh-CN', viewport: { width: 1440, height: 900 } });
 test.describe.configure({ timeout: 120_000 });
 
+test('sidebar settings row uses the rounded gear icon (viewBox 24)', async ({ page }) => {
+  const state = await openProto(page);
+
+  const settings = page.getByTestId('next-open-settings');
+  await expect(settings).toBeVisible();
+  await expect(settings.locator('svg')).toHaveAttribute('viewBox', '0 0 24 24');
+
+  expectClean(state);
+});
+
 test('sidebar top actions: new chat row, search row, shortcuts, and zero subagents', async ({ page }) => {
   const state = await openProto(page);
 
