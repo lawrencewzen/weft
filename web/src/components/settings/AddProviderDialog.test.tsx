@@ -159,7 +159,7 @@ describe('AddProviderDialog', () => {
       })} />);
     });
     await act(async () => { resolveConnect?.(providerOf('xai', 'Grok')); });
-    const dd = host!.querySelector('[data-testid="next-model-dropdown"]') as HTMLButtonElement;
+    const dd = host!.querySelector('[data-testid="next-add-model-dropdown"]') as HTMLButtonElement;
     expect(dd.disabled).toBe(false);
     expect(dd.textContent).toContain('Grok 4.7');
   });
@@ -172,7 +172,7 @@ describe('AddProviderDialog', () => {
     const detected = host!.querySelector('[data-testid="next-grok-detected"]') as HTMLInputElement;
     expect(detected?.value).toContain('已检测到本机 Grok 登录 · lawrence@x.com');
     expect(host!.querySelector('[data-testid="next-detected-check"]')).toBeTruthy();
-    const dd = host!.querySelector('[data-testid="next-model-dropdown"]') as HTMLButtonElement;
+    const dd = host!.querySelector('[data-testid="next-add-model-dropdown"]') as HTMLButtonElement;
     expect(dd.disabled).toBe(false);
     expect(dd.textContent).toContain('Grok 4.7');
     expect(dd.textContent).not.toContain('grok-4-7');
@@ -183,7 +183,7 @@ describe('AddProviderDialog', () => {
     await act(async () => { await Promise.resolve(); });
     expect(host!.querySelector('[data-testid="next-grok-login"]')?.textContent).toContain('登录 Grok');
     expect(host!.textContent).not.toContain('已检测到本机 Grok 登录');
-    const dd = host!.querySelector('[data-testid="next-model-dropdown"]') as HTMLButtonElement;
+    const dd = host!.querySelector('[data-testid="next-add-model-dropdown"]') as HTMLButtonElement;
     expect(dd.disabled).toBe(true);
     expect(dd.textContent).toContain('连接后自动获取');
   });
@@ -192,9 +192,9 @@ describe('AddProviderDialog', () => {
     const onConnect = vi.fn(async () => providerOf('xai', 'Grok'));
     await render(<AddProviderDialog {...props({ onConnect })} />);
     await act(async () => { await Promise.resolve(); });
-    const dd = host!.querySelector('[data-testid="next-model-dropdown"]') as HTMLButtonElement;
+    const dd = host!.querySelector('[data-testid="next-add-model-dropdown"]') as HTMLButtonElement;
     await act(async () => { dd.click(); });
-    const options = [...host!.querySelectorAll('[data-testid="next-model-option"]')];
+    const options = [...host!.querySelectorAll('[data-testid="next-add-model-option"]')];
     expect(options).toHaveLength(2);
     expect(options[0].textContent).toContain('Grok 4.7');
     expect(options[0].textContent).toContain('256K');
@@ -214,7 +214,7 @@ describe('AddProviderDialog', () => {
     const path = host!.querySelector('.mp-add-form input.mono') as HTMLInputElement;
     expect(path.disabled).toBe(true);
     expect(path.placeholder).toBe('/path/to/claude');
-    expect(host!.querySelector('[data-testid="next-model-dropdown"]')).toBeNull();
+    expect(host!.querySelector('[data-testid="next-add-model-dropdown"]')).toBeNull();
   });
 
   it('rolls back a connect that finishes after cancel', async () => {
@@ -298,7 +298,7 @@ describe('AddProviderDialog', () => {
     const keyBack = host!.querySelector('[data-testid="next-key-input"]') as HTMLInputElement;
     expect(nameBack.value).toBe('Anthropic');
     expect(keyBack.value).toBe('');
-    const dd = host!.querySelector('[data-testid="next-model-dropdown"]') as HTMLButtonElement;
+    const dd = host!.querySelector('[data-testid="next-add-model-dropdown"]') as HTMLButtonElement;
     expect(dd.disabled).toBe(true);
     expect(dd.textContent).toContain('连接后自动获取');
   });

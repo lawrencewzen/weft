@@ -662,7 +662,7 @@ export function AddProviderDialog({
                     <button
                       type="button"
                       className={`mp-add-dd-btn${ddOpen ? ' open' : ''}`}
-                      data-testid="next-model-dropdown"
+                      data-testid="next-add-model-dropdown"
                       disabled={!isReady}
                       onClick={() => isReady && setDdOpen((open) => !open)}
                     >
@@ -677,7 +677,7 @@ export function AddProviderDialog({
                             <div
                               key={model.id}
                               className={`mp-add-dd-it${on ? ' on' : ''}`}
-                              data-testid="next-model-option"
+                              data-testid="next-add-model-option"
                               data-model={model.id}
                               onClick={() => {
                                 setChosenId(model.id);

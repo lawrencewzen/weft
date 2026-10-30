@@ -64,9 +64,11 @@ test('providers: rows, groups, expand, Grok auto-detect, Anthropic key, custom, 
   await page.getByTestId('next-settings-nav-providers').click();
 
   const rows = page.getByTestId('next-provider-row');
-  await expect(rows).toHaveCount(2);
+  await expect(rows).toHaveCount(3);
   await expect(rows.nth(0)).toContainText('DeepSeek');
-  await expect(rows.nth(1)).toContainText('内网网关');
+  await expect(rows.nth(1)).toContainText('Anthropic');
+  await expect(rows.nth(1)).toContainText('k7Qa');
+  await expect(rows.nth(2)).toContainText('内网网关');
   await expect(page.getByTestId('next-provider-group')).toHaveCount(1);
   await expect(page.locator('[data-testid=next-provider-group][data-group="apikey"]')).toBeVisible();
   await expect(page.locator('#root')).not.toContainText('服务商');
@@ -110,32 +112,32 @@ test('providers: rows, groups, expand, Grok auto-detect, Anthropic key, custom, 
   const addCloseBox = await addClose.boundingBox();
   expect(addCloseBox?.width).toBe(28);
   expect(addCloseBox?.height).toBe(28);
-  await expect(page.getByTestId('next-model-dropdown')).toBeEnabled({ timeout: 10_000 });
+  await expect(page.getByTestId('next-add-model-dropdown')).toBeEnabled({ timeout: 10_000 });
   await page.getByTestId('next-add-cancel').click();
   await expect(page.getByTestId('next-add-dialog')).toHaveCount(0);
-  await expect(rows).toHaveCount(2);
+  await expect(rows).toHaveCount(3);
 
   // Grok auto-detect → dropdown → create
   await page.getByTestId('next-provider-add').click();
-  await expect(page.getByTestId('next-model-dropdown')).toBeEnabled({ timeout: 10_000 });
+  await expect(page.getByTestId('next-add-model-dropdown')).toBeEnabled({ timeout: 10_000 });
   await expect(page.getByTestId('next-detected-check')).toBeVisible();
-  await page.getByTestId('next-model-dropdown').click();
-  await expect(page.getByTestId('next-model-option').first()).toBeVisible();
-  await expect(page.getByTestId('next-model-option').first()).not.toHaveText(/grok-/i);
+  await page.getByTestId('next-add-model-dropdown').click();
+  await expect(page.getByTestId('next-add-model-option').first()).toBeVisible();
+  await expect(page.getByTestId('next-add-model-option').first()).not.toHaveText(/grok-/i);
   await page.getByTestId('next-provider-finish').click();
   await expect(page.getByTestId('next-add-dialog')).toHaveCount(0);
-  await expect(rows).toHaveCount(3);
+  await expect(rows).toHaveCount(4);
   await expect(rows.filter({ hasText: 'Grok' })).toBeVisible();
   await expect(page.locator('[data-testid=next-provider-group][data-group="builtin"]')).toBeVisible();
 
-  // Anthropic: fill Key → 测试 → dropdown → create
+  // OpenAI: fill Key → 测试 → dropdown → create（Anthropic 已预置）
   await page.getByTestId('next-provider-add').click();
-  await page.locator('[data-testid=next-vendor-card][data-vendor="anthropic"]').click();
+  await page.locator('[data-testid=next-vendor-card][data-vendor="openai"]').click();
   await page.getByTestId('next-key-input').fill('sk-demo-1234');
   await page.getByTestId('next-add-test').click();
-  await expect(page.getByTestId('next-model-dropdown')).toBeEnabled({ timeout: 10_000 });
+  await expect(page.getByTestId('next-add-model-dropdown')).toBeEnabled({ timeout: 10_000 });
   await page.getByTestId('next-provider-finish').click();
-  await expect(rows.filter({ hasText: 'Anthropic' })).toBeVisible();
+  await expect(page.locator('[data-testid=next-provider-row][data-id="openai"]')).toBeVisible();
 
   // Custom
   await page.getByTestId('next-provider-add').click();
@@ -143,7 +145,7 @@ test('providers: rows, groups, expand, Grok auto-detect, Anthropic key, custom, 
   await page.getByTestId('next-custom-name').fill('Local vLLM');
   await page.getByTestId('next-custom-url').fill('http://127.0.0.1:8000/v1');
   await page.getByTestId('next-add-test').click();
-  await expect(page.getByTestId('next-model-dropdown')).toBeEnabled({ timeout: 10_000 });
+  await expect(page.getByTestId('next-add-model-dropdown')).toBeEnabled({ timeout: 10_000 });
   await page.getByTestId('next-provider-finish').click();
   await expect(rows.filter({ hasText: 'Local vLLM' })).toBeVisible();
 
@@ -160,10 +162,10 @@ test('deleting all providers shows the no-model state', async ({ page }) => {
   const state = await openProto(page);
   await page.getByTestId('next-open-settings').click();
   await page.getByTestId('next-settings-nav-providers').click();
-  await expect(page.getByTestId('next-provider-row')).toHaveCount(2);
+  await expect(page.getByTestId('next-provider-row')).toHaveCount(3);
 
   // Delete all seeded providers
-  for (let i = 0; i < 2; i++) {
+  for (let i = 0; i < 3; i++) {
     await page.getByTestId('next-provider-row').first().getByTestId('next-provider-more').click();
     await page.getByTestId('next-provider-delete').click();
     await page.getByTestId('next-confirm-ok').click();

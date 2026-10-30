@@ -131,7 +131,7 @@ test('add provider: failed 401, then pass, pick two models, default, rename, del
 
   await page.getByTestId('next-custom-key').fill(RIGHT_KEY);
   await page.getByTestId('next-add-test').click();
-  await expect(page.getByTestId('next-model-dropdown')).toBeEnabled();
+  await expect(page.getByTestId('next-add-model-dropdown')).toBeEnabled();
   await page.getByTestId('next-provider-finish').click();
   await expect(page.getByTestId('next-add-dialog')).toHaveCount(0);
 
@@ -201,7 +201,7 @@ test('add provider dialog cancel, close and Escape; cancel rolls back a tested c
   await page.getByTestId('next-custom-url').fill(fake.baseUrl);
   await page.getByTestId('next-custom-key').fill(RIGHT_KEY);
   await page.getByTestId('next-add-test').click();
-  await expect(page.getByTestId('next-model-dropdown')).toBeEnabled();
+  await expect(page.getByTestId('next-add-model-dropdown')).toBeEnabled();
   await page.getByTestId('next-add-cancel').click();
   await expect(page.getByTestId('next-add-dialog')).toHaveCount(0);
   await expect(page.getByTestId('next-provider-row')).toHaveCount(0);
