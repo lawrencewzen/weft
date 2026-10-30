@@ -27,7 +27,7 @@ function parseChunk(part) {
   return parseSSE(`${part}\n\n`).filter((ev) => ev.event);
 }
 
-async function collectSse(base, cid, { lastEventId, ready, quietMs = 500, timeout = 12000 } = {}) {
+async function collectSse(base, cid, { lastEventId, ready, quietMs = 500, timeout = 12000, onEvent } = {}) {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeout);
   const headers = { authorization: `Bearer ${TOKEN}`, accept: 'text/event-stream' };
@@ -51,10 +51,12 @@ async function collectSse(base, cid, { lastEventId, ready, quietMs = 500, timeou
       buf += dec.decode(value, { stream: true });
       const parts = buf.split('\n\n');
       buf = parts.pop() || '';
+      const before = events.length;
       for (const part of parts) {
         if (!part.trim() || part.trim() === ':') continue;
         events.push(...parseChunk(part));
       }
+      if (events.length > before) onEvent?.(events);
       arm();
     }
   } catch (err) {
@@ -691,19 +693,46 @@ test('kernel path: faux turn pushes live events, and a new connection starts at 
     assert.equal(Object.hasOwn(listed.body[0], 'harnessId'), false);
     assert.equal(Object.hasOwn(listed.body[0], 'messages'), false);
 
+    // streamEvents snapshots the current status for a new connection and does
+    // not replay. A faux turn can finish before a post-then-subscribe client
+    // connects, so the snapshot is already `done` and `running` never appears.
+    // Subscribe first and wait for that snapshot, then send.
+    let sawSnapshot = false;
+    let settleSnapshot;
+    const snapshot = new Promise((resolve, reject) => {
+      settleSnapshot = { resolve, reject };
+    });
+    const pending = collectSse(srv.base, conv.id, {
+      ready: (list) => list.some((ev) => ev.event === 'status' && ev.data?.status === 'done'),
+      onEvent: (list) => {
+        if (sawSnapshot || !list.some((ev) => ev.event === 'status')) return;
+        sawSnapshot = true;
+        settleSnapshot.resolve();
+      },
+    });
+    pending.then(
+      (events) => {
+        if (!sawSnapshot) {
+          settleSnapshot.reject(new Error(`sse ended before snapshot: ${JSON.stringify(events.map((ev) => ev.event))}`));
+        }
+      },
+      (err) => {
+        if (!sawSnapshot) settleSnapshot.reject(err);
+      },
+    );
+    await snapshot;
+
     const sent = await request(srv.base, 'POST', `/api/conversations/${conv.id}/messages`, { text: 'ping' });
     assert.equal(sent.status, 202);
     assert.match(sent.body.runId, /^\d+$/);
     assert.equal(sent.body.status, 'running');
 
-    const events = await collectSse(srv.base, conv.id, {
-      ready: (list) => list.some((ev) => ev.event === 'status' && ev.data?.status === 'done'),
-    });
+    const events = await pending;
     const statuses = events.filter((ev) => ev.event === 'status').map((ev) => ev.data.status);
-    assert.equal(statuses.includes('running'), true);
-    assert.equal(statuses.includes('done'), true);
+    assert.equal(statuses.includes('running'), true, JSON.stringify(statuses));
+    assert.equal(statuses.includes('done'), true, JSON.stringify(statuses));
     assert.equal(events.some((ev) => ev.event === 'message.done'), true);
-    assert.equal(statuses.indexOf('running') < statuses.indexOf('done'), true);
+    assert.equal(statuses.indexOf('running') < statuses.indexOf('done'), true, JSON.stringify(statuses));
     assert.equal(events.every((ev) => ev.id == null), true);
 
     const again = await collectSse(srv.base, conv.id, {
