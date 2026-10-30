@@ -45,10 +45,12 @@ test('GET /auth?code= exchanges a web-code for a session and shows protocol 2.0.
     await expect(page).toHaveURL(/http:\/\/127\.0\.0\.1:\d+\/$/);
     await expect(page.getByTestId('next-app')).toBeVisible();
     await expect(page.getByTestId('next-sidebar')).toBeVisible();
-    await expect(page.getByTestId('next-home-title')).toHaveText(/还没有项目|No projects yet/);
-    await expect(page.getByTestId('next-home-desc')).toHaveText(/添加一个本地目录或 Git 仓库后就可以开始对话|Add a local folder or a Git repository to start chatting/);
-    await expect(page.getByTestId('next-home-add')).toBeVisible();
-    await page.getByTestId('next-home-add').click();
+    await expect(page).toHaveURL(/\/new$/);
+    await expect(page.getByTestId('next-home-title')).toHaveCount(0);
+    await expect(page.getByTestId('next-home-add')).toHaveCount(0);
+    await expect(page.getByTestId('next-ws-chip')).toContainText(/不选项目|No project/);
+    await expect(page.getByTestId('next-composer-input')).toBeEnabled();
+    await page.getByTestId('next-ws-empty-add').click();
     await expect(page.getByTestId('next-ws-dialog')).toBeVisible();
     expect(csp, 'page console has no CSP errors').toEqual([]);
   } finally {

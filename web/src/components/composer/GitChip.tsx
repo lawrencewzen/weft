@@ -1,5 +1,6 @@
 import { formatComposerGitTitle } from '../../data/gitBar';
 import type { Lang } from '../../data/lang';
+import { isChatWorkspace } from '../../data/store';
 import { useWorkspaces } from '../../data/useWorkspaces';
 
 const GIT_BRANCH_ICON = (
@@ -23,7 +24,7 @@ export function GitChip({ lang, workspaceId = null }: GitChipProps) {
   const totalDiff = (git?.insertions || 0) + (git?.deletions || 0);
   const hasDiff = totalDiff > 0;
 
-  if (!git?.branch) return null;
+  if (isChatWorkspace(currentWorkspace) || !git?.branch) return null;
 
   return (
     <button

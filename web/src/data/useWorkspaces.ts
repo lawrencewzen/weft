@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { useSession } from './session';
 import {
   archivedConversations,
+  chatConversations,
   groupWorkspaces,
   latestConversation,
   type WorkspaceGroup,
@@ -13,6 +14,7 @@ export type WorkspacesState = {
   workspaces: Workspace[];
   conversations: ConversationSummary[];
   groups: WorkspaceGroup[];
+  chats: ConversationSummary[];
   archived: ConversationSummary[];
   latest: ConversationSummary | undefined;
   ready: boolean;
@@ -29,10 +31,14 @@ export function useWorkspaces(): WorkspacesState {
     () => groupWorkspaces(workspaces, conversations),
     [workspaces, conversations],
   );
+  const chats = useMemo(
+    () => chatConversations(workspaces, conversations),
+    [workspaces, conversations],
+  );
   const archived = useMemo(
     () => archivedConversations(conversations),
     [conversations],
   );
   const latest = useMemo(() => latestConversation(conversations), [conversations]);
-  return { workspaces, conversations, groups, archived, latest, ready, status };
+  return { workspaces, conversations, groups, chats, archived, latest, ready, status };
 }

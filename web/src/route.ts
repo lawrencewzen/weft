@@ -5,6 +5,7 @@ export type AppRoute =
   | { name: 'conversation'; id: string }
   | { name: 'subagent'; conversationId: string; agentId: string }
   | { name: 'draft'; workspaceId: string }
+  | { name: 'new' }
   | { name: 'settings'; page: SettingsPage };
 
 function decodePart(raw: string): string {
@@ -38,6 +39,9 @@ export function parseRoute(pathname: string): AppRoute {
   const draft = /^\/w\/([^/]+)\/new$/.exec(trimmed);
   if (draft) {
     return { name: 'draft', workspaceId: decodePart(draft[1]) };
+  }
+  if (trimmed === '/new') {
+    return { name: 'new' };
   }
   return { name: 'home' };
 }

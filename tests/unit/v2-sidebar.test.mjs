@@ -98,6 +98,7 @@ test('workspaceView counts conversations and running rows', () => {
   });
   assertWorkspace(ws, 'git');
   assert.equal(ws.source, 'git');
+  assert.equal(ws.kind, 'project');
   assert.equal(ws.conversationCount, 3);
   assert.equal(ws.runningCount, 2);
   const local = workspaceView({
@@ -106,8 +107,15 @@ test('workspaceView counts conversations and running rows', () => {
   });
   assertWorkspace(local, 'local');
   assert.equal(local.source, 'local');
+  assert.equal(local.kind, 'project');
   assert.equal(local.conversationCount, 0);
   assert.equal(local.runningCount, 0);
+  const chat = workspaceView({
+    workspace: { id: 'c', name: '对话', path: '/chats/x', kind: 'chat' },
+    conversations: [],
+  });
+  assertWorkspace(chat, 'chat');
+  assert.equal(chat.kind, 'chat');
 });
 
 test('buildWorkspacesSnapshot sorts each workspace by updatedAt desc and skips present', async () => {

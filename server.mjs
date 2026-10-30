@@ -49,6 +49,7 @@ import { openConversationKernel } from './src/kernel/conversations.mjs';
 import { createV2Runtime } from './src/v2/index.ts';
 import { NOT_BUILT_HINT } from './src/v2/auth.ts';
 import { loadSubagentFromStore } from './src/v2/load-subagent.ts';
+import { phrase } from './src/v2/phrases/index.ts';
 import fs from 'node:fs/promises';
 
 // 内置 fetch 默认不读 HTTP(S)_PROXY；配置了代理时让模型请求也走它（遵守 NO_PROXY）
@@ -148,6 +149,28 @@ const v2Opts = {
       workspaceId,
       workspacePath: ws.path,
       title: fields.title || 'New conversation',
+      status: 'idle',
+    });
+    return { status: 201, conv };
+  },
+  async createChatConversation({ title, lang } = {}) {
+    if (!kernelApi) return { status: 500 };
+    const convId = randomUUID();
+    // When a delete-conversation API exists, also remove this chats/<id> directory.
+    const chatDir = path.join(DATA_DIR, 'chats', convId);
+    await fs.mkdir(chatDir, { recursive: true });
+    const name = (title && String(title).trim()) || phrase(lang === 'en' ? 'en' : 'zh', 'chat_workspace');
+    const ws = await store.createWorkspace({
+      name,
+      path: chatDir,
+      source: 'local',
+      kind: 'chat',
+    });
+    const conv = await kernelApi.createConversation({
+      id: convId,
+      workspaceId: ws.id,
+      workspacePath: chatDir,
+      title: title || 'New conversation',
       status: 'idle',
     });
     return { status: 201, conv };

@@ -21,6 +21,7 @@ function ws(id: string, name = id): Workspace {
     git: null,
     conversationCount: 0,
     runningCount: 0,
+    kind: 'project',
   };
 }
 

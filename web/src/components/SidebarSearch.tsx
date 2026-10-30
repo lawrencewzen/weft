@@ -4,6 +4,7 @@ import type { Lang } from '../data/lang';
 import { formatRelativeTime } from '../data/relativeTime';
 import type { WorkspaceGroup } from '../data/sidebarModel';
 import { filterSearchConversations, type SearchItem } from '../data/sidebarSearchModel';
+import { isChatWorkspace } from '../data/store';
 import { t } from '../i18n';
 import { StatusIcon, statusIconFor } from './StatusIcon';
 
@@ -19,6 +20,7 @@ export interface SidebarSearchProps {
   open: boolean;
   onClose: () => void;
   groups: WorkspaceGroup[];
+  extra?: SearchItem[];
   onSelectConversation: (workspaceId: string, convId: string) => void;
 }
 
@@ -27,6 +29,7 @@ export function SidebarSearch({
   open,
   onClose,
   groups,
+  extra = [],
   onSelectConversation,
 }: SidebarSearchProps) {
   const [query, setQuery] = useState('');
@@ -36,8 +39,8 @@ export function SidebarSearch({
   const dialogRef = useRef<HTMLDivElement>(null);
 
   const results: SearchItem[] = useMemo(
-    () => filterSearchConversations(groups, query),
-    [groups, query],
+    () => filterSearchConversations(groups, query, extra),
+    [groups, query, extra],
   );
 
   useEffect(() => {
@@ -210,7 +213,9 @@ export function SidebarSearch({
                     <span className="search-result-title">
                       {conv.title || t(lang, 'default_conversation_title')}
                     </span>
-                    <span className="search-result-project">{workspace.name}</span>
+                    <span className="search-result-project">
+                      {isChatWorkspace(workspace) ? t(lang, 'chats_label') : workspace.name}
+                    </span>
                     <span className="search-result-time">{relTime}</span>
                   </div>
                 );

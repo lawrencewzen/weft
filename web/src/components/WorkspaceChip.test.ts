@@ -10,11 +10,11 @@ const { mockState, workspaces } = vi.hoisted(() => {
   const list: Workspace[] = [
     {
       id: 'w1', name: 'alpha', path: '/Users/alice/code/team/monorepo/apps/desktop/weft', source: 'local',
-      gitUrl: null, branch: null, git: null, conversationCount: 0, runningCount: 0,
+      gitUrl: null, branch: null, git: null, conversationCount: 0, runningCount: 0, kind: 'project',
     },
     {
       id: 'w2', name: 'beta', path: '/tmp/beta', source: 'local',
-      gitUrl: null, branch: null, git: null, conversationCount: 1, runningCount: 0,
+      gitUrl: null, branch: null, git: null, conversationCount: 1, runningCount: 0, kind: 'project',
     },
   ];
   return { workspaces: list, mockState: { list } };
@@ -77,13 +77,13 @@ describe('WorkspaceChip', () => {
     const menu = host!.querySelector('[data-testid=next-ws-chip-menu]');
     expect(menu).toBeTruthy();
     const options = [...host!.querySelectorAll<HTMLButtonElement>('[data-testid=next-ws-chip-option]')];
-    expect(options.map((el) => el.getAttribute('data-id'))).toEqual(['w1', 'w2']);
-    expect(options[0].getAttribute('aria-selected')).toBe('true');
-    expect(options[0].getAttribute('title')).toBe('/Users/alice/code/team/monorepo/apps/desktop/weft');
-    expect(options[0].querySelector('.ws-chip-path')?.textContent).toBe('~/…/weft');
-    expect(options[0].querySelector('.ws-chip-path')?.textContent).not.toContain('\n');
+    expect(options.map((el) => el.getAttribute('data-id'))).toEqual(['__none__', 'w1', 'w2']);
+    expect(options[1].getAttribute('aria-selected')).toBe('true');
+    expect(options[1].getAttribute('title')).toBe('/Users/alice/code/team/monorepo/apps/desktop/weft');
+    expect(options[1].querySelector('.ws-chip-path')?.textContent).toBe('~/…/weft');
+    expect(options[1].querySelector('.ws-chip-path')?.textContent).not.toContain('\n');
     await act(async () => {
-      options[1].click();
+      options[2].click();
     });
     expect(onPick).toHaveBeenCalledWith('w2');
     await act(async () => {
@@ -115,21 +115,66 @@ describe('WorkspaceChip', () => {
     expect(onNew).not.toHaveBeenCalled();
   });
 
-  it('shows 选择工作区 when none exist and opens the new-workspace flow', async () => {
+  it('shows 不选项目 when none exist and lists it first in the menu', async () => {
     mockState.list = [];
+    const onPick = vi.fn();
     const onNew = vi.fn();
     await render(createElement(WorkspaceChip, {
       lang: 'zh',
       selectedId: null,
       canSwitch: true,
-      onPick: vi.fn(),
+      onPick,
       onNew,
     }));
-    expect(host!.querySelector('[data-testid=next-ws-chip]')?.textContent).toContain('选择工作区');
+    expect(host!.querySelector('[data-testid=next-ws-chip]')?.textContent).toContain('不选项目');
     await act(async () => {
       host!.querySelector<HTMLButtonElement>('[data-testid=next-ws-chip]')?.click();
     });
-    expect(onNew).toHaveBeenCalledTimes(1);
+    const options = [...host!.querySelectorAll<HTMLButtonElement>('[data-testid=next-ws-chip-option]')];
+    expect(options.map((el) => el.getAttribute('data-id'))).toEqual(['__none__']);
+    expect(options[0].getAttribute('aria-selected')).toBe('true');
+    expect(onNew).not.toHaveBeenCalled();
+  });
+
+  it('puts 不选项目 first and reports null when it is picked', async () => {
+    const onPick = vi.fn();
+    await render(createElement(WorkspaceChip, {
+      lang: 'zh',
+      selectedId: 'w1',
+      canSwitch: true,
+      onPick,
+      onNew: vi.fn(),
+    }));
+    await act(async () => {
+      host!.querySelector<HTMLButtonElement>('[data-testid=next-ws-chip]')?.click();
+    });
+    const none = host!.querySelector<HTMLButtonElement>('[data-testid=next-ws-chip-option][data-id="__none__"]');
+    expect(none?.textContent).toContain('不选项目');
+    await act(async () => { none?.click(); });
+    expect(onPick).toHaveBeenCalledWith(null);
+  });
+
+  it('hides chat workspaces from the picker and treats them as 不选项目', async () => {
+    mockState.list = [
+      ...workspaces,
+      {
+        id: 'ws-chat', name: '代码咨询', path: 'D:\\data\\chats\\c-consult', source: 'local',
+        gitUrl: null, branch: null, git: null, conversationCount: 1, runningCount: 0, kind: 'chat',
+      },
+    ];
+    await render(createElement(WorkspaceChip, {
+      lang: 'zh',
+      selectedId: 'ws-chat',
+      canSwitch: true,
+      onPick: vi.fn(),
+      onNew: vi.fn(),
+    }));
+    expect(host!.querySelector('[data-testid=next-ws-chip]')?.textContent).toContain('不选项目');
+    await act(async () => {
+      host!.querySelector<HTMLButtonElement>('[data-testid=next-ws-chip]')?.click();
+    });
+    const options = [...host!.querySelectorAll<HTMLButtonElement>('[data-testid=next-ws-chip-option]')];
+    expect(options.map((el) => el.getAttribute('data-id'))).toEqual(['__none__', 'w1', 'w2']);
   });
 
   it('opens a project menu on right-click with open-in-terminal', async () => {
@@ -172,8 +217,8 @@ describe('WorkspaceChip', () => {
     await act(async () => { trigger?.click(); });
     expect(host!.querySelector('[data-testid=next-draft-hero-menu]')).toBeTruthy();
     const options = [...host!.querySelectorAll<HTMLButtonElement>('[data-testid=next-ws-chip-option]')];
-    expect(options.map((el) => el.getAttribute('data-id'))).toEqual(['w1', 'w2']);
-    await act(async () => { options[1].click(); });
+    expect(options.map((el) => el.getAttribute('data-id'))).toEqual(['__none__', 'w1', 'w2']);
+    await act(async () => { options[2].click(); });
     expect(onPick).toHaveBeenCalledWith('w2');
   });
 });

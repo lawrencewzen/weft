@@ -168,6 +168,7 @@ export type ConversationRow = {
 export type WorkspaceRow = {
   removedAt?: unknown;
   path?: unknown;
+  kind?: unknown;
   [key: string]: unknown;
 };
 
@@ -208,6 +209,9 @@ export type SubagentDigestsFn = (
 export type CreateConversationFn = (
   workspaceId: string,
   fields?: { title?: string },
+) => Promise<{ status: number; conv?: ConversationRow }>;
+export type CreateChatConversationFn = (
+  fields?: { title?: string; lang?: 'zh' | 'en' },
 ) => Promise<{ status: number; conv?: ConversationRow }>;
 export type RemoveWorkspaceFn = (id: string) => Promise<void>;
 export type SubscribeAllFn = (fn: (cid: string, ev: KernelEvent) => void) => () => void;
@@ -492,6 +496,10 @@ function workspacePathOf(ws: WorkspaceRow | null | undefined): string {
   return String(ws.path);
 }
 
+function workspaceKindOf(ws: WorkspaceRow | null | undefined): 'project' | 'chat' {
+  return ws && ws.kind === 'chat' ? 'chat' : 'project';
+}
+
 function sidebarLoader(opts: {
   listWorkspaces?: ListWorkspacesFn;
   listConversations?: ListConversationsFn;
@@ -546,6 +554,7 @@ export function createV2Handler(opts: {
   statusOf?: StatusOfFn;
   subagentDigests?: SubagentDigestsFn;
   createConversation?: CreateConversationFn;
+  createChatConversation?: CreateChatConversationFn;
   removeWorkspace?: RemoveWorkspaceFn;
   onSidebarChanged?: () => void;
   loadSubagent?: LoadSubagent;
@@ -642,6 +651,50 @@ export function createV2Handler(opts: {
         sendV2(res, pathname, method, 200, snapshot);
       } catch (err) {
         const message = err instanceof Error ? err.message : 'list workspaces failed';
+        sendV2(res, pathname, method, 500, { error: message, code: 'E_INTERNAL' } satisfies V2Error);
+      }
+      return true;
+    }
+
+    if (method === 'POST' && pathname === '/api/v2/conversations') {
+      const body = await readObjectBody(req, res, pathname, method);
+      if (!body) return true;
+      let title: string | undefined;
+      if (Object.prototype.hasOwnProperty.call(body, 'title') && body.title != null) {
+        if (typeof body.title !== 'string') {
+          sendV2(res, pathname, method, 400, { error: 'invalid title', code: 'E_BAD_REQUEST' } satisfies V2Error);
+          return true;
+        }
+        const trimmed = body.title.trim();
+        if (trimmed) title = trimmed;
+      }
+      if (!opts.createChatConversation) {
+        sendV2(res, pathname, method, 500, { error: 'kernel not ready', code: 'E_INTERNAL' } satisfies V2Error);
+        return true;
+      }
+      const lang = normalizeLang(url.searchParams.get('lang')) === 'en' ? 'en' : 'zh';
+      try {
+        const created = await opts.createChatConversation(title ? { title, lang } : { lang });
+        if (created.status !== 201 || !created.conv) {
+          sendV2(res, pathname, method, created.status >= 400 ? created.status : 500, {
+            error: 'create failed',
+            code: 'E_INTERNAL',
+          } satisfies V2Error);
+          return true;
+        }
+        const conv = created.conv;
+        const status = opts.statusOf ? await opts.statusOf(conv) : 'idle';
+        const digests = opts.subagentDigests ? await opts.subagentDigests([conv]) : new Map();
+        const cid = conv.id == null ? '' : String(conv.id);
+        const summary = conversationSummaryView({
+          conv,
+          status,
+          digest: cid ? digests.get(cid) : undefined,
+        });
+        opts.onSidebarChanged?.();
+        sendV2(res, pathname, method, 201, summary);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'create failed';
         sendV2(res, pathname, method, 500, { error: message, code: 'E_INTERNAL' } satisfies V2Error);
       }
       return true;
@@ -762,7 +815,9 @@ export function createV2Handler(opts: {
         return true;
       }
       try {
-        if (opts.gitStatus) await opts.gitStatus.refresh(workspaceId, root);
+        if (opts.gitStatus && workspaceKindOf(ws) !== 'chat') {
+          await opts.gitStatus.refresh(workspaceId, root);
+        }
         let snapshot = await buildWorkspacesSnapshot(sidebarLoader(opts));
         if (opts.gitStatus) snapshot = await opts.gitStatus.overlay(snapshot);
         const view = snapshot.workspaces.find((row) => row.id === workspaceId);
@@ -792,6 +847,13 @@ export function createV2Handler(opts: {
       }
       if (!ws || ws.removedAt != null) {
         sendV2(res, pathname, method, 404, { error: 'not found' } satisfies V2Error);
+        return true;
+      }
+      if (workspaceKindOf(ws) === 'chat') {
+        sendV2(res, pathname, method, 400, {
+          error: 'chat workspace cannot be removed',
+          code: 'E_BAD_REQUEST',
+        } satisfies V2Error);
         return true;
       }
       try {
@@ -1587,6 +1649,7 @@ export function createV2Runtime(opts: {
   statusOf?: StatusOfFn;
   subagentDigests?: SubagentDigestsFn;
   createConversation?: CreateConversationFn;
+  createChatConversation?: CreateChatConversationFn;
   removeWorkspace?: RemoveWorkspaceFn;
   subscribeAll?: SubscribeAllFn;
   loadSubagent?: LoadSubagent;
@@ -1705,6 +1768,7 @@ export function createV2Runtime(opts: {
     statusOf: opts.statusOf,
     subagentDigests: opts.subagentDigests,
     createConversation: opts.createConversation,
+    createChatConversation: opts.createChatConversation,
     removeWorkspace: opts.removeWorkspace,
     onSidebarChanged: () => workspacesTopic.notify(),
     loadSubagent: opts.loadSubagent,

@@ -19,9 +19,16 @@ export function createDb(): MockDb {
     try {
       const params = new URLSearchParams(window.location.search);
       if (params.has('empty') || params.get('state') === 'empty') {
-        db.workspaces = [];
-        db.conversations.clear();
-        db.repos.clear();
+        const chatIds = new Set(
+          db.workspaces.filter((ws) => ws.kind === 'chat').map((ws) => ws.id),
+        );
+        db.workspaces = db.workspaces.filter((ws) => ws.kind === 'chat');
+        for (const [id, conv] of [...db.conversations]) {
+          if (!chatIds.has(conv.view.workspaceId)) db.conversations.delete(id);
+        }
+        for (const id of [...db.repos.keys()]) {
+          if (!chatIds.has(id)) db.repos.delete(id);
+        }
       }
     } catch {
       // ignore

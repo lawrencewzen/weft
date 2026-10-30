@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
 import type { Lang } from '../data/lang';
+import { NO_PROJECT_ID } from '../data/sidebarModel';
+import { isProjectWorkspace } from '../data/store';
 import { useWorkspaces } from '../data/useWorkspaces';
 import { shortenWorkspacePath } from '../data/workspacePath';
 import { t } from '../i18n';
@@ -11,7 +13,7 @@ type Props = {
   canSwitch?: boolean;
   /** Draft empty-state title uses the same picker as the composer chip. */
   variant?: 'chip' | 'hero';
-  onPick: (workspaceId: string) => void;
+  onPick: (workspaceId: string | null) => void;
   onNew: () => void;
   onOpenTerminal?: () => void;
   onCopyPath?: (path: string) => void;
@@ -38,12 +40,13 @@ export function WorkspaceChip({
   const [boundHint, setBoundHint] = useState(false);
   const [ctx, setCtx] = useState<{ x: number; y: number } | null>(null);
   const wrap = useRef<HTMLDivElement>(null);
-  const selected = workspaces.find((ws) => ws.id === selectedId) || null;
-  const empty = workspaces.length === 0;
+  const projects = workspaces.filter(isProjectWorkspace);
+  const selected = projects.find((ws) => ws.id === selectedId) || null;
+  const noneSelected = !selected;
   const hero = variant === 'hero';
-  const emptyLabel = t(lang, hero ? 'pick_project' : 'pick_workspace');
-  const label = selected?.name || emptyLabel;
-  const title = selected?.path || selected?.name || emptyLabel;
+  const noneLabel = t(lang, 'no_project');
+  const label = selected?.name || noneLabel;
+  const title = selected?.path || selected?.name || noneLabel;
   const triggerId = hero ? 'next-draft-hero-ws' : 'next-ws-chip';
   const menuId = hero ? 'next-draft-hero-menu' : 'next-ws-chip-menu';
 
@@ -76,10 +79,6 @@ export function WorkspaceChip({
   }, [boundHint]);
 
   function onClick() {
-    if (empty) {
-      onNew();
-      return;
-    }
     if (!canSwitch) {
       setOpen(false);
       setBoundHint(true);
@@ -120,7 +119,7 @@ export function WorkspaceChip({
         className={`model-chip ws-chip${hero ? ' ws-chip-hero' : ''}${open || boundHint ? ' is-open' : ''}`}
         data-testid={triggerId}
         data-bound={canSwitch ? undefined : 'true'}
-        aria-haspopup={canSwitch && !empty ? 'listbox' : undefined}
+        aria-haspopup={canSwitch ? 'listbox' : undefined}
         aria-expanded={open}
         title={title}
         onClick={onClick}
@@ -128,7 +127,7 @@ export function WorkspaceChip({
       >
         {hero ? null : FOLDER_ICON}
         <span className="model-chip-name">{label}</span>
-        {canSwitch && !empty ? <span className="model-chip-caret" aria-hidden="true">▾</span> : null}
+        {canSwitch ? <span className="model-chip-caret" aria-hidden="true">▾</span> : null}
       </button>
       {boundHint ? (
         <div className="model-menu ws-chip-hint" data-testid="next-ws-chip-bound-hint" role="status">
@@ -137,7 +136,25 @@ export function WorkspaceChip({
       ) : null}
       {open && canSwitch ? (
         <div className="model-menu ws-chip-menu" data-testid={menuId} role="listbox">
-          {workspaces.map((ws) => {
+          <button
+            type="button"
+            className={`model-menu-item${noneSelected ? ' is-selected' : ''}`}
+            role="option"
+            aria-selected={noneSelected}
+            data-testid="next-ws-chip-option"
+            data-id={NO_PROJECT_ID}
+            title={noneLabel}
+            onClick={() => {
+              setOpen(false);
+              if (!noneSelected) onPick(null);
+            }}
+          >
+            <span className="model-menu-copy">
+              <span className="model-menu-title">{noneLabel}</span>
+            </span>
+            {noneSelected ? <span className="model-menu-check" aria-hidden="true">✓</span> : null}
+          </button>
+          {projects.map((ws) => {
             const selectedRow = ws.id === selected?.id;
             return (
               <button

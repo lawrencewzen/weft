@@ -2,12 +2,21 @@ import { useCallback, useEffect, useMemo, useState, type MouseEvent } from 'reac
 import { ApiError } from '../data/api';
 import { copyText } from '../data/copyText';
 import type { Lang } from '../data/lang';
-import { readWorkspaceOpen, writeActiveWorkspace, writeWorkspaceOpen } from '../data/layout';
-import { conversationPath, draftPath, navigate, openSettings } from '../data/nav';
+import { readActiveWorkspace, readWorkspaceOpen, writeActiveWorkspace, writeWorkspaceOpen } from '../data/layout';
+import { conversationPath, draftPath, navigate, newChatPath, openSettings } from '../data/nav';
 import { effectiveAppearance, subscribePrefs, toggleAppearance } from '../data/prefs';
 import { useSession } from '../data/session';
-import { deleteOpenRecord, setOpenRecord, toggleOpenRecord, workspaceIsOpen, type OpenRecord } from '../data/sidebarModel';
-import { isMac } from '../data/sidebarSearchModel';
+import {
+  deleteOpenRecord,
+  NO_PROJECT_ID,
+  pickDraftWorkspace,
+  setOpenRecord,
+  storedActiveWorkspaceId,
+  toggleOpenRecord,
+  workspaceIsOpen,
+  type OpenRecord,
+} from '../data/sidebarModel';
+import { isMac, type SearchItem } from '../data/sidebarSearchModel';
 import { readLastOpenedMap, writeLastOpened } from '../data/sidebarUnread';
 import type { ConversationSummary, Workspace } from '../data/store';
 import { useLeftPanel } from '../data/leftPanelContext';
@@ -17,7 +26,7 @@ import { t } from '../i18n';
 import { CtxMenu, type CtxMenuItem } from './CtxMenu';
 import type { ConfirmOpts } from './ConfirmDialog';
 import { SidebarArchived } from './SidebarArchived';
-import { SidebarGroup } from './SidebarGroup';
+import { SidebarConvRow, SidebarGroup } from './SidebarGroup';
 import {
   EDIT_ICON,
   GEAR_ICON,
@@ -61,7 +70,7 @@ export function Sidebar({
   onRemoveWorkspace,
   onNewWorkspace,
 }: Props) {
-  const { groups, archived } = useWorkspaces();
+  const { workspaces, groups, chats, archived } = useWorkspaces();
   const { status } = useSession();
   const { tab, setTab } = useRightLayout();
   const { showFiles, openInTerminal } = useRightActions();
@@ -117,13 +126,27 @@ export function Sidebar({
     navigate(draftPath(wsId));
   }, [openMap, persistOpen]);
 
+  const startNewChat = useCallback(() => {
+    // 先看当前所在的对话或草稿，再退回上次记住的选择。
+    const inChat = Boolean(activeConversationId && chats.some((conv) => conv.id === activeConversationId));
+    const current = inChat ? NO_PROJECT_ID : activeWorkspaceId;
+    const ws = pickDraftWorkspace(workspaces, current || readActiveWorkspace());
+    if (ws) {
+      startDraft(ws.id);
+      return;
+    }
+    writeActiveWorkspace(NO_PROJECT_ID);
+    navigate(newChatPath());
+  }, [activeConversationId, activeWorkspaceId, chats, startDraft, workspaces]);
+
   const openConversation = useCallback((wsId: string, cid: string) => {
-    writeActiveWorkspace(wsId);
+    const ws = workspaces.find((item) => item.id === wsId);
+    writeActiveWorkspace(storedActiveWorkspaceId(ws));
     writeLastOpened(cid);
     setLastOpenedMap((prev) => ({ ...prev, [cid]: Date.now() }));
     if (tab === 'subagents') setTab('changes');
     navigate(conversationPath(cid));
-  }, [setTab, tab]);
+  }, [setTab, tab, workspaces]);
 
   const copy = useCallback(async (text: string) => {
     const ok = await copyText(text);
@@ -192,7 +215,15 @@ export function Sidebar({
     buildConversationItems({ lang, wsId, conv, openConversation, copy })
   ), [copy, lang, openConversation]);
 
-  const newChatTarget = activeWorkspaceId || groups[0]?.workspace.id || null;
+  const chatSearchItems: SearchItem[] = useMemo(() => {
+    const byId = new Map(workspaces.map((ws) => [ws.id, ws]));
+    const items: SearchItem[] = [];
+    for (const conv of chats) {
+      const workspace = byId.get(conv.workspaceId);
+      if (workspace) items.push({ conv, workspace });
+    }
+    return items;
+  }, [chats, workspaces]);
   const modKey = isMac() ? '⌘' : 'Ctrl+';
 
   useEffect(() => {
@@ -204,15 +235,13 @@ export function Sidebar({
         ev.preventDefault();
         setSearchOpen(true);
       } else if (key === 'n' && !ev.shiftKey && !ev.altKey) {
-        if (newChatTarget) {
-          ev.preventDefault();
-          startDraft(newChatTarget);
-        }
+        ev.preventDefault();
+        startNewChat();
       }
     }
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [newChatTarget, startDraft]);
+  }, [startNewChat]);
 
   return (
     <aside
@@ -248,8 +277,7 @@ export function Sidebar({
           type="button"
           className="sb-row row sb-top-row"
           data-testid="next-new-chat"
-          disabled={!newChatTarget}
-          onClick={() => { if (newChatTarget) startDraft(newChatTarget); }}
+          onClick={() => startNewChat()}
         >
           <span className="sb-ic ic" aria-hidden="true">{EDIT_ICON}</span>
           <span className="sb-row-text">{t(lang, 'new_conversation')}</span>
@@ -301,7 +329,41 @@ export function Sidebar({
                 conversationItems={conversationItems}
               />
             ))}
+            {!groups.length ? (
+              <button
+                type="button"
+                className="sb-row row sb-add-project"
+                data-testid="next-ws-empty-add"
+                onClick={onNewWorkspace}
+              >
+                <span className="sb-ic ic" aria-hidden="true">{PLUS_ICON}</span>
+                <span className="sb-row-text">{t(lang, 'add_project')}</span>
+              </button>
+            ) : null}
           </div>
+
+          {chats.length ? (
+            <>
+              <div className="sb-sec sec" data-testid="next-chats-section">
+                <span>{t(lang, 'chats_label')}</span>
+              </div>
+              <div className="sb-tree-root tree-root" data-testid="next-chats-list">
+                {chats.map((conv) => (
+                  <SidebarConvRow
+                    key={conv.id}
+                    conv={conv}
+                    wsId={conv.workspaceId}
+                    activeConversationId={activeConversationId}
+                    lastOpenedMap={lastOpenedMap}
+                    lang={lang}
+                    onOpenConversation={openConversation}
+                    onOpenMenu={openMenu}
+                    conversationItems={conversationItems}
+                  />
+                ))}
+              </div>
+            </>
+          ) : null}
         </div>
 
         <SidebarArchived
@@ -356,6 +418,7 @@ export function Sidebar({
         open={searchOpen}
         onClose={() => setSearchOpen(false)}
         groups={groups}
+        extra={chatSearchItems}
         onSelectConversation={openConversation}
       />
 

@@ -1,7 +1,15 @@
 import type { Lang } from './lang';
 import { t } from '../i18n';
 import { formatRelativeTime } from './relativeTime';
-import type { ConversationSummary, Workspace } from './store';
+import {
+  isChatWorkspace,
+  isProjectWorkspace,
+  type ConversationSummary,
+  type Workspace,
+} from './store';
+
+/** localStorage value for "last draft was no project". Truthy so writeActiveWorkspace keeps it. */
+export const NO_PROJECT_ID = '__none__';
 
 export type WorkspaceGroup = {
   workspace: Workspace;
@@ -20,16 +28,36 @@ export function sortConversations(list: ConversationSummary[]): ConversationSumm
   );
 }
 
+export function projectWorkspaces(workspaces: Workspace[]): Workspace[] {
+  return workspaces.filter(isProjectWorkspace);
+}
+
 export function groupWorkspaces(
   workspaces: Workspace[],
   conversations: ConversationSummary[],
 ): WorkspaceGroup[] {
-  return workspaces.map((workspace) => ({
+  return projectWorkspaces(workspaces).map((workspace) => ({
     workspace,
     conversations: sortConversations(
       conversations.filter((conv) => conv.workspaceId === workspace.id && !conv.archived),
     ),
   }));
+}
+
+/** Unarchived conversations that belong to chat (no-project) workspaces. */
+export function chatConversations(
+  workspaces: Workspace[],
+  conversations: ConversationSummary[],
+): ConversationSummary[] {
+  const ids = new Set(workspaces.filter(isChatWorkspace).map((ws) => ws.id));
+  return sortConversations(
+    conversations.filter((conv) => ids.has(conv.workspaceId) && !conv.archived),
+  );
+}
+
+export function storedActiveWorkspaceId(ws: Workspace | null | undefined): string {
+  if (!ws || isChatWorkspace(ws)) return NO_PROJECT_ID;
+  return ws.id;
 }
 
 export function latestConversation(conversations: ConversationSummary[]): ConversationSummary | undefined {
@@ -124,6 +152,8 @@ export function pickDraftWorkspace(
   workspaces: Workspace[],
   savedId: string | null,
 ): Workspace | undefined {
-  if (!workspaces.length) return undefined;
-  return workspaces.find((ws) => ws.id === savedId) || workspaces[0];
+  const projects = projectWorkspaces(workspaces);
+  if (!projects.length) return undefined;
+  if (savedId === NO_PROJECT_ID) return undefined;
+  return projects.find((ws) => ws.id === savedId) || projects[0];
 }

@@ -24,7 +24,7 @@ export type WorkspacesTopicOpts = {
   log?: (line: string) => void;
   gitStatus?: GitStatusCache;
   getConversation?: (id: string) => Promise<{ workspaceId?: unknown } | null | undefined>;
-  getWorkspace?: (id: string) => Promise<{ path?: unknown; removedAt?: unknown } | null | undefined>;
+  getWorkspace?: (id: string) => Promise<{ path?: unknown; removedAt?: unknown; kind?: unknown } | null | undefined>;
 };
 
 type EntityKey = string;
@@ -108,6 +108,7 @@ export function attachWorkspacesTopic(hub: EventHub, opts: WorkspacesTopicOpts =
       if (!wsId) return;
       const ws = await opts.getWorkspace(wsId);
       if (!ws || ws.removedAt != null || ws.path == null || String(ws.path) === '') return;
+      if (ws.kind === 'chat') return;
       await opts.gitStatus.refresh(wsId, String(ws.path));
     } catch (err) {
       console.error('WEFT_V2_GIT_REFRESH', err);

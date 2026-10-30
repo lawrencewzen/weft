@@ -117,6 +117,7 @@ export const zh: Record<string, string> = {
   ws_err_path: '无法使用该本地路径',
   ws_err_path_root: '该路径不在允许的根目录内：{root}',
   ws_err_generic: '创建工作区失败',
+  chat_workspace: '对话',
   ws_err_conn_auth: '认证失败。令牌无效或已过期，请到设置 → Git 重新测试该连接。',
   ws_err_conn_cert: '证书错误。服务器证书不受信任。自建 GitLab 可在该连接的「高级」里填写自定义 CA 证书路径。',
   ws_err_conn_repo: '仓库不存在，或当前账号没有访问权限。',

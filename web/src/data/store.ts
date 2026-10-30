@@ -5,6 +5,19 @@ export type ConversationView = components['schemas']['ConversationView'];
 export type ConversationSend = components['schemas']['ConversationSend'];
 export type ConversationSummary = components['schemas']['ConversationSummary'];
 export type Workspace = components['schemas']['Workspace'];
+export type WorkspaceKind = Workspace['kind'];
+
+export function workspaceKind(ws: Pick<Workspace, 'kind'> | null | undefined): WorkspaceKind {
+  return ws?.kind === 'chat' ? 'chat' : 'project';
+}
+
+export function isChatWorkspace(ws: Pick<Workspace, 'kind'> | null | undefined): boolean {
+  return workspaceKind(ws) === 'chat';
+}
+
+export function isProjectWorkspace(ws: Pick<Workspace, 'kind'> | null | undefined): boolean {
+  return workspaceKind(ws) === 'project';
+}
 export type ThreadItem = components['schemas']['ThreadItem'];
 export type ToolCall = components['schemas']['ToolCall'];
 export type Subagent = components['schemas']['Subagent'];

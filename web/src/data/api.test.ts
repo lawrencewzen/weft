@@ -264,10 +264,31 @@ describe('api client', () => {
     });
   });
 
+  it('creates a no-project conversation without a workspace id', async () => {
+    const created = {
+      id: 'c-chat',
+      workspaceId: 'ws-chat-c-chat',
+      title: '新对话',
+      updatedAt: 1,
+      status: 'idle',
+      runningAgents: 0,
+      subagents: null,
+      archived: false,
+    };
+    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse(201, created));
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(createConversation(null)).resolves.toEqual(created);
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/v2/conversations');
+    expect(fetchMock.mock.calls[0][1]).toMatchObject({
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
+  });
+
   it('posts git refresh for a workspace', async () => {
     const gitWs = {
       id: 'w1', name: 'n', path: '/p', source: 'local' as const,
-      gitUrl: null, branch: null, git: null, conversationCount: 0, runningCount: 0,
+      gitUrl: null, branch: null, git: null, conversationCount: 0, runningCount: 0, kind: 'project' as const,
     };
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse(200, gitWs));
     vi.stubGlobal('fetch', fetchMock);
@@ -416,7 +437,7 @@ describe('api client', () => {
   it('creates a workspace and a git connection through v2 endpoints', async () => {
     const ws = {
       id: 'w1', name: 'widget', path: '/tmp/widget', source: 'git', gitUrl: 'https://gitlab.example/acme/widget.git',
-      branch: 'main', conversationCount: 0, runningCount: 0,
+      branch: 'main', conversationCount: 0, runningCount: 0, kind: 'project' as const, git: null,
     };
     const conn = {
       id: 'g1', name: 'Corp', kind: 'gitlab-self', baseUrl: 'http://127.0.0.1:1',

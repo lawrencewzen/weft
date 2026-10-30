@@ -21,8 +21,13 @@ import {
 import { usePanelMotionReady } from '../data/panelMotion';
 import { LeftPanelProvider, useLeftPanel } from '../data/leftPanelContext';
 import { RightPaneProvider, useRightLayout } from '../data/rightPaneContext';
-import { conversationPath, draftPath, navigate, rememberSettingsBehind } from '../data/nav';
-import { latestConversation, pickDraftWorkspace } from '../data/sidebarModel';
+import { conversationPath, draftPath, navigate, newChatPath, rememberSettingsBehind } from '../data/nav';
+import {
+  latestConversation,
+  NO_PROJECT_ID,
+  pickDraftWorkspace,
+  storedActiveWorkspaceId,
+} from '../data/sidebarModel';
 import { useWorkspaces } from '../data/useWorkspaces';
 import { t } from '../i18n';
 import type { SettingsPage } from '../data/settingsPages';
@@ -30,7 +35,6 @@ import type { AppRoute } from '../route';
 import { CenterPane } from './CenterPane';
 import { ConfirmDialog, type ConfirmOpts } from './ConfirmDialog';
 import { RightPane } from './RightPane';
-import { LeftOpenButton, RightToggle } from './RightToggle';
 import { SettingsOverlay } from './settings/SettingsOverlay';
 import type { AboutService } from './settings/AboutPage';
 import { Sidebar } from './Sidebar';
@@ -51,7 +55,7 @@ function overlayKeepOpen(target: HTMLElement): boolean {
 }
 
 export function AppShell({ route, lang, demo = false, service, settingsPage = null }: Props) {
-  const { workspaces, conversations, groups, latest, ready } = useWorkspaces();
+  const { workspaces, conversations, latest, ready } = useWorkspaces();
   const [toast, setToast] = useState<string | null>(null);
   const toastTimer = useRef<number | null>(null);
   const [homeStandIn, setHomeStandIn] = useState<AppRoute | null>(null);
@@ -63,7 +67,8 @@ export function AppShell({ route, lang, demo = false, service, settingsPage = nu
     }
     if (!ready) return;
     if (latest) {
-      writeActiveWorkspace(latest.workspaceId);
+      const latestWs = workspaces.find((item) => item.id === latest.workspaceId);
+      writeActiveWorkspace(storedActiveWorkspaceId(latestWs));
       const path = conversationPath(latest.id);
       if (settingsPage) {
         rememberSettingsBehind(path);
@@ -91,7 +96,16 @@ export function AppShell({ route, lang, demo = false, service, settingsPage = nu
         return;
       }
       navigate(path, { replace: true });
+      return;
     }
+    writeActiveWorkspace(NO_PROJECT_ID);
+    const path = newChatPath();
+    if (settingsPage) {
+      rememberSettingsBehind(path);
+      setHomeStandIn((current) => (current?.name === 'new' ? current : { name: 'new' }));
+      return;
+    }
+    navigate(path, { replace: true });
   }, [route.name, ready, latest, workspaces, settingsPage]);
 
   const viewRoute = route.name === 'home' && homeStandIn ? homeStandIn : route;
@@ -103,7 +117,7 @@ export function AppShell({ route, lang, demo = false, service, settingsPage = nu
       : null;
   const draftWorkspaceId = viewRoute.name === 'draft' ? viewRoute.workspaceId : null;
   const workspaceId = draftWorkspaceId
-    || groups.find((group) => group.conversations.some((conv) => conv.id === activeConversationId))?.workspace.id
+    || conversations.find((conv) => conv.id === activeConversationId)?.workspaceId
     || null;
 
   const showToast = useCallback((message: string) => {
@@ -130,8 +144,6 @@ export function AppShell({ route, lang, demo = false, service, settingsPage = nu
           onToast={showToast}
           workspaces={workspaces}
           conversations={conversations}
-          groups={groups}
-          ready={ready}
         />
       </RightPaneProvider>
     </LeftPanelProvider>
@@ -148,8 +160,6 @@ type LayoutProps = {
   onToast: (message: string) => void;
   workspaces: ReturnType<typeof useWorkspaces>['workspaces'];
   conversations: ReturnType<typeof useWorkspaces>['conversations'];
-  groups: ReturnType<typeof useWorkspaces>['groups'];
-  ready: boolean;
 };
 
 function AppShellLayout({
@@ -162,8 +172,6 @@ function AppShellLayout({
   onToast,
   workspaces,
   conversations,
-  groups,
-  ready,
 }: LayoutProps) {
   const { open, setOpen, width, setWidth, persistWidth } = useRightLayout();
   const { leftOpen, setLeftOpen, dragging, setDragging } = useLeftPanel();
@@ -173,7 +181,6 @@ function AppShellLayout({
     opts: ConfirmOpts;
     resolve: (ok: boolean) => void;
   } | null>(null);
-  const [removedIds, setRemovedIds] = useState<string[]>([]);
   const [wsDialog, setWsDialog] = useState(false);
   const leftWRef = useRef(leftW);
   leftWRef.current = leftW;
@@ -189,14 +196,20 @@ function AppShellLayout({
       ? route.conversationId
       : null;
   const activeAgentId = route.name === 'subagent' ? route.agentId : null;
+  const isDraftRoute = route.name === 'draft' || route.name === 'new';
   const draftWorkspaceId = route.name === 'draft' ? route.workspaceId : null;
 
-  const visibleWorkspaces = workspaces.filter((ws) => !removedIds.includes(ws.id));
+  useEffect(() => {
+    if (route.name === 'new') writeActiveWorkspace(NO_PROJECT_ID);
+  }, [route.name]);
 
-  const workspace = draftWorkspaceId
-    ? workspaces.find((item) => item.id === draftWorkspaceId)
-    : groups.find((group) => group.conversations.some((conv) => conv.id === activeConversationId))?.workspace;
-  const workspaceLabel = workspace?.path || workspace?.name || '';
+  const conversationWorkspaceId = activeConversationId
+    ? conversations.find((conv) => conv.id === activeConversationId)?.workspaceId
+    : null;
+  const workspace = (draftWorkspaceId || conversationWorkspaceId)
+    ? workspaces.find((item) => item.id === (draftWorkspaceId || conversationWorkspaceId))
+    : undefined;
+  const workspaceLabel = workspace?.path || workspace?.name || t(lang, 'chats_label');
 
   useEffect(() => {
     const onResize = () => {
@@ -228,27 +241,27 @@ function AppShellLayout({
 
   const onRemoveWorkspace = useCallback(async (workspaceId: string) => {
     await removeWorkspace(workspaceId);
-    setRemovedIds((ids) => (ids.includes(workspaceId) ? ids : [...ids, workspaceId]));
     const currentWs = draftWorkspaceId
-      || groups.find((group) => group.conversations.some((conv) => conv.id === activeConversationId))?.workspace.id
+      || conversations.find((conv) => conv.id === activeConversationId)?.workspaceId
       || null;
     if (currentWs !== workspaceId) return;
     const remaining = conversations.filter((conv) => conv.workspaceId !== workspaceId);
     const next = latestConversation(remaining);
     if (next) {
-      writeActiveWorkspace(next.workspaceId);
+      const nextWs = workspaces.find((ws) => ws.id === next.workspaceId);
+      writeActiveWorkspace(storedActiveWorkspaceId(nextWs));
       navigate(conversationPath(next.id), { replace: true });
       return;
     }
-    const nextWs = workspaces.find((ws) => ws.id !== workspaceId);
-    if (nextWs) {
+    const nextWs = pickDraftWorkspace(workspaces, null);
+    if (nextWs && nextWs.id !== workspaceId) {
       writeActiveWorkspace(nextWs.id);
       navigate(draftPath(nextWs.id), { replace: true });
       return;
     }
-    writeActiveWorkspace(null);
-    navigate('/', { replace: true });
-  }, [activeConversationId, conversations, draftWorkspaceId, groups, workspaces]);
+    writeActiveWorkspace(NO_PROJECT_ID);
+    navigate(newChatPath(), { replace: true });
+  }, [activeConversationId, conversations, draftWorkspaceId, workspaces]);
 
   function onDividerDown(ev: MouseEvent<HTMLDivElement>, side: 'left' | 'right') {
     if (ev.button !== 0) return;
@@ -295,8 +308,6 @@ function AppShellLayout({
     dragging ? 'is-dragging' : '',
   ].filter(Boolean).join(' ');
 
-  const emptyHome = route.name === 'home' && ready && visibleWorkspaces.length === 0;
-
   return (
     <div
       className={classes}
@@ -331,45 +342,19 @@ function AppShellLayout({
           writeLeftWidth(LEFT_W_DEFAULT);
         }}
       />
-      {emptyHome ? (
-        <main className="col-center" data-testid="next-center">
-          <header className="next-status">
-            <div className="next-status-inner">
-              <div className="top-heading">
-                <LeftOpenButton lang={lang} onOpen={() => setLeftOpen(true)} />
-              </div>
-              <div className="top-right">
-                <RightToggle lang={lang} />
-              </div>
-            </div>
-          </header>
-          <div className="thread-empty">
-            <div className="empty-home-title" data-testid="next-home-title">{t(lang, 'no_projects')}</div>
-            <div className="empty-home-desc" data-testid="next-home-desc">{t(lang, 'no_projects_desc')}</div>
-            <button
-              type="button"
-              className="btn"
-              data-testid="next-home-add"
-              onClick={() => setWsDialog(true)}
-            >
-              {t(lang, 'add_project')}
-            </button>
-          </div>
-        </main>
-      ) : (
-        <CenterPane
-          // 草稿页和对话页用不同的 key：从对话页切回草稿页时重新挂载，
-          // 草稿里记住的“已创建对话”（useDraftSend）只在这一次草稿访问内有效。
-          key={draftWorkspaceId ? 'draft' : 'conversation'}
-          cid={activeConversationId}
-          workspaceId={draftWorkspaceId}
-          workspace={workspace || null}
-          lang={lang}
-          demo={demo}
-          onOpenLeft={() => setLeftOpen(true)}
-          onNewWorkspace={() => setWsDialog(true)}
-        />
-      )}
+      <CenterPane
+        // 草稿页和对话页用不同的 key：从对话页切回草稿页时重新挂载，
+        // 草稿里记住的“已创建对话”（useDraftSend）只在这一次草稿访问内有效。
+        key={isDraftRoute ? 'draft' : 'conversation'}
+        cid={activeConversationId}
+        workspaceId={draftWorkspaceId}
+        workspace={workspace || null}
+        isDraft={isDraftRoute}
+        lang={lang}
+        demo={demo}
+        onOpenLeft={() => setLeftOpen(true)}
+        onNewWorkspace={() => setWsDialog(true)}
+      />
       <div
         className="col-divider"
         data-testid="next-right-divider"
