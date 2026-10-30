@@ -142,6 +142,9 @@ test('prototype runs from file:// with mock data, no network and no console erro
   await page.getByTestId('next-ws-chip').click();
   await expect(page.getByTestId('next-ws-chip-menu')).toBeVisible();
   await expect(page.getByTestId('next-ws-chip-option')).toHaveCount(3);
+  await expect(page.getByTestId('next-ws-chip-option').first()).toHaveAttribute('data-id', 'ws-weft');
+  await expect(page.locator('[data-testid=next-ws-chip-option][data-id="__none__"]')).toContainText('不选项目');
+  await expect(page.getByTestId('next-ws-chip-new')).toContainText('添加项目…');
   await page.locator('[data-testid=next-ws-chip-option][data-id="ws-website"]').click();
   await expect(page).toHaveURL(/#\/w\/ws-website\/new$/);
   await expect(page.getByTestId('next-ws-chip')).toContainText('website');

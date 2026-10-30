@@ -20,8 +20,21 @@ type Props = {
 };
 
 const FOLDER_ICON = (
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
-    <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+  <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" aria-hidden="true">
+    <path d="M2 4.5A1.5 1.5 0 0 1 3.5 3h2.6l1.4 1.5h5A1.5 1.5 0 0 1 14 6v5.5a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 2 11.5z" />
+  </svg>
+);
+
+const PLUS_ICON = (
+  <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" aria-hidden="true">
+    <path d="M8 3.5v9M3.5 8h9" />
+  </svg>
+);
+
+const NONE_ICON = (
+  <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" aria-hidden="true">
+    <circle cx="8" cy="8" r="5.5" />
+    <path d="M4.2 11.8l7.6-7.6" />
   </svg>
 );
 
@@ -44,9 +57,10 @@ export function WorkspaceChip({
   const selected = projects.find((ws) => ws.id === selectedId) || null;
   const noneSelected = !selected;
   const hero = variant === 'hero';
+  const chooseLabel = t(lang, 'ws_chip_choose');
   const noneLabel = t(lang, 'no_project');
-  const label = selected?.name || noneLabel;
-  const title = selected?.path || selected?.name || noneLabel;
+  const label = selected?.name || chooseLabel;
+  const title = selected?.path || selected?.name || chooseLabel;
   const triggerId = hero ? 'next-draft-hero-ws' : 'next-ws-chip';
   const menuId = hero ? 'next-draft-hero-menu' : 'next-ws-chip-menu';
 
@@ -116,7 +130,7 @@ export function WorkspaceChip({
     <div className={`chip-selector-wrap${hero ? ' is-hero' : ''}`} ref={wrap}>
       <button
         type="button"
-        className={`model-chip ws-chip${hero ? ' ws-chip-hero' : ''}${open || boundHint ? ' is-open' : ''}`}
+        className={`model-chip ws-chip${hero ? ' ws-chip-hero' : ''}${open || boundHint ? ' is-open' : ''}${noneSelected ? ' is-empty' : ''}`}
         data-testid={triggerId}
         data-bound={canSwitch ? undefined : 'true'}
         aria-haspopup={canSwitch ? 'listbox' : undefined}
@@ -136,25 +150,11 @@ export function WorkspaceChip({
       ) : null}
       {open && canSwitch ? (
         <div className="model-menu ws-chip-menu" data-testid={menuId} role="listbox">
-          <button
-            type="button"
-            className={`model-menu-item${noneSelected ? ' is-selected' : ''}`}
-            role="option"
-            aria-selected={noneSelected}
-            data-testid="next-ws-chip-option"
-            data-id={NO_PROJECT_ID}
-            title={noneLabel}
-            onClick={() => {
-              setOpen(false);
-              if (!noneSelected) onPick(null);
-            }}
-          >
-            <span className="model-menu-copy">
-              <span className="model-menu-title">{noneLabel}</span>
-            </span>
-            {noneSelected ? <span className="model-menu-check" aria-hidden="true">✓</span> : null}
-          </button>
-          {projects.map((ws) => {
+          {projects.length === 0 ? (
+            <div className="ws-chip-empty" data-testid="next-ws-chip-empty">
+              {t(lang, 'ws_chip_no_projects')}
+            </div>
+          ) : projects.map((ws) => {
             const selectedRow = ws.id === selected?.id;
             return (
               <button
@@ -171,6 +171,7 @@ export function WorkspaceChip({
                   if (ws.id !== selected?.id) onPick(ws.id);
                 }}
               >
+                <span className="ws-chip-ic" aria-hidden="true">{FOLDER_ICON}</span>
                 <span className="model-menu-copy">
                   <span className="model-menu-title">{ws.name}</span>
                   {ws.path ? (
@@ -181,19 +182,34 @@ export function WorkspaceChip({
               </button>
             );
           })}
-          <div className="model-menu-foot">
+          <div className="ws-chip-sep" />
+          {selected ? (
             <button
               type="button"
-              className="model-menu-manage"
-              data-testid="next-ws-chip-new"
+              className="ws-chip-act"
+              data-testid="next-ws-chip-option"
+              data-id={NO_PROJECT_ID}
               onClick={() => {
                 setOpen(false);
-                onNew();
+                onPick(null);
               }}
             >
-              {t(lang, 'ws_chip_new')}
+              <span className="ws-chip-ic" aria-hidden="true">{NONE_ICON}</span>
+              {noneLabel}
             </button>
-          </div>
+          ) : null}
+          <button
+            type="button"
+            className="ws-chip-act"
+            data-testid="next-ws-chip-new"
+            onClick={() => {
+              setOpen(false);
+              onNew();
+            }}
+          >
+            <span className="ws-chip-ic" aria-hidden="true">{PLUS_ICON}</span>
+            {t(lang, 'ws_chip_add_project')}
+          </button>
         </div>
       ) : null}
       {ctx && selected ? (

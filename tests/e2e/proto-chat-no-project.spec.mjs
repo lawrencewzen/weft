@@ -25,17 +25,26 @@ test('picking 不选项目 and sending creates a chat, not a project conversatio
 
   await page.getByTestId('next-new-chat').click();
   await expect(page).toHaveURL(/#\/w\/ws-weft\/new$/);
+  await expect(page.getByTestId('next-ws-chip')).toContainText('weft');
   await page.getByTestId('next-ws-chip').click();
   await expect(page.getByTestId('next-ws-chip-menu')).toBeVisible();
   const options = page.getByTestId('next-ws-chip-option');
-  await expect(options.first()).toHaveAttribute('data-id', '__none__');
-  await expect(options.first()).toContainText('不选项目');
+  await expect(options.first()).toHaveAttribute('data-id', 'ws-weft');
+  await expect(page.locator('[data-testid=next-ws-chip-option][data-id="__none__"]')).toContainText('不选项目');
+  await expect(page.getByTestId('next-ws-chip-new')).toContainText('添加项目…');
   await page.locator('[data-testid=next-ws-chip-option][data-id="__none__"]').click();
   await expect(page).toHaveURL(/#\/new$/);
-  await expect(page.getByTestId('next-ws-chip')).toContainText('不选项目');
+  await expect(page.getByTestId('next-ws-chip')).toContainText('选择项目');
+  await expect(page.getByTestId('next-ws-chip')).toHaveClass(/is-empty/);
   await expect(page.getByTestId('next-draft-hint')).toContainText('想做什么');
   await expect(page.getByTestId('next-draft-hint')).not.toContainText('要在');
   await expect(page.getByTestId('next-composer-git')).toHaveCount(0);
+
+  await page.getByTestId('next-ws-chip').click();
+  await expect(page.getByTestId('next-ws-chip-menu')).toBeVisible();
+  await expect(page.locator('[data-testid=next-ws-chip-option][data-id="__none__"]')).toHaveCount(0);
+  await expect(page.getByTestId('next-ws-chip-menu')).not.toContainText('不选项目');
+  await page.keyboard.press('Escape');
 
   await page.getByTestId('next-composer-input').fill('不选项目也能发');
   await page.getByTestId('next-send').click();
@@ -45,7 +54,7 @@ test('picking 不选项目 and sending creates a chat, not a project conversatio
   await expect(row).toBeVisible();
   await expect(page.getByTestId('next-chats-list').locator(`[data-id="${cid}"]`)).toHaveCount(1);
   await expect(page.getByTestId('next-ws-node').locator(`[data-id="${cid}"]`)).toHaveCount(0);
-  await expect(page.getByTestId('next-ws-chip')).toContainText('不选项目');
+  await expect(page.getByTestId('next-ws-chip')).toContainText('选择项目');
   await expect(page.getByTestId('next-composer-git')).toHaveCount(0);
 
   expectClean(state);
@@ -57,7 +66,7 @@ test('seeded no-project conversation hides git chip and still has a right pane',
   await page.locator('[data-testid=next-conv-row][data-id="c-regex"]').click();
   await expect(page).toHaveURL(/#\/c\/c-regex$/);
   await expect(page.getByTestId('next-status')).toContainText('正则怎么写');
-  await expect(page.getByTestId('next-ws-chip')).toContainText('不选项目');
+  await expect(page.getByTestId('next-ws-chip')).toContainText('选择项目');
   await expect(page.getByTestId('next-composer-git')).toHaveCount(0);
   await expect(page.getByTestId('next-tool-group')).toHaveCount(1);
   await page.getByTestId('next-right-tab-files').click();
@@ -80,7 +89,14 @@ test('clearing projects shows the no-project draft and can send', async ({ page 
   await expect(page.getByTestId('next-ws-node')).toHaveCount(0);
   await expect(page.getByTestId('next-ws-new')).toBeVisible();
   await expect(page.getByTestId('next-draft-hint')).toBeVisible();
-  await expect(page.getByTestId('next-ws-chip')).toContainText('不选项目');
+  await expect(page.getByTestId('next-ws-chip')).toContainText('选择项目');
+  await expect(page.getByTestId('next-ws-chip')).toHaveClass(/is-empty/);
+  await page.getByTestId('next-ws-chip').click();
+  await expect(page.getByTestId('next-ws-chip-menu')).toBeVisible();
+  await expect(page.getByTestId('next-ws-chip-empty')).toContainText('还没有项目');
+  await expect(page.getByTestId('next-ws-chip-new')).toContainText('添加项目…');
+  await expect(page.locator('[data-testid=next-ws-chip-option][data-id="__none__"]')).toHaveCount(0);
+  await page.keyboard.press('Escape');
   await expect(page.getByTestId('next-composer-input')).toBeEnabled();
 
   await page.getByTestId('next-composer-input').fill('没有项目也能发');
