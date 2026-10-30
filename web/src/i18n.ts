@@ -2,8 +2,6 @@ import type { Lang } from './data/lang';
 export type { Lang };
 
 const zh = {
-  no_projects: '还没有项目',
-  no_projects_desc: '添加一个本地目录或 Git 仓库后就可以开始对话',
   add_project: '添加项目',
   missing_conversation: '对话不存在',
   unauthenticated: '请用 weft open 打开新版网页端',
@@ -13,10 +11,7 @@ const zh = {
   draft_hero_after: '里做什么？',
   draft_hero_chat: '想做什么？',
   draft_hint: 'Agent 会在 {name} 这个目录里工作。',
-  draft_hint_no_project: '先在左侧添加一个项目，Agent 会在这个目录里工作。',
   draft_hint_chat: '没有指定项目，可以直接发消息。Agent 会在这个对话自己的目录里工作。',
-  pick_workspace: '选择工作区',
-  pick_project: '选择项目',
   no_project: '不选项目',
   ws_chip_bound: '已绑定，新对话可选择工作区',
   ws_chip_new: '新建工作区…',
@@ -516,8 +511,6 @@ const zh = {
 } as const;
 
 const en: Record<keyof typeof zh, string> = {
-  no_projects: 'No projects yet',
-  no_projects_desc: 'Add a local folder or a Git repository to start chatting',
   add_project: 'Add project',
   missing_conversation: 'Conversation not found',
   unauthenticated: '请用 weft open 打开新版网页端',
@@ -527,10 +520,7 @@ const en: Record<keyof typeof zh, string> = {
   draft_hero_after: '?',
   draft_hero_chat: 'What should we do?',
   draft_hint: 'The agent will work in the {name} folder.',
-  draft_hint_no_project: 'Add a project on the left first. The agent works inside that folder.',
   draft_hint_chat: 'No project selected. Send a message to start. The agent works in this chat’s own folder.',
-  pick_workspace: 'Select a workspace',
-  pick_project: 'Select a project',
   no_project: 'No project',
   ws_chip_bound: 'Already bound. Pick a workspace in a new chat.',
   ws_chip_new: 'New workspace…',

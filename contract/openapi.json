@@ -2263,7 +2263,7 @@
       "post": {
         "operationId": "refreshWorkspaceGit",
         "summary": "刷新工作区 git 状态",
-        "description": "用 git（execFile，无 shell，约 3 秒超时）读取工作区当前分支、未提交改动和相对上游的 ahead/behind。\n不是 git 仓库或未安装 git 时 `git` 为 null，不报错。同一工作区并发刷新合并为一次，避免同时起多个 git 进程。\n值变化时通过 `workspaces` 主题 upsert 该 Workspace。\n",
+        "description": "用 git（execFile，无 shell，约 3 秒超时）读取工作区当前分支、未提交改动和相对上游的 ahead/behind。\n不是 git 仓库或未安装 git 时 `git` 为 null，不报错。同一工作区并发刷新合并为一次，避免同时起多个 git 进程。\nkind=chat 的工作区不跑 git，直接返回 `git` 为 null。\n值变化时通过 `workspaces` 主题 upsert 该 Workspace。\n",
         "security": [
           {
             "bearerAuth": []
@@ -2462,7 +2462,7 @@
       "delete": {
         "operationId": "removeWorkspace",
         "summary": "移除工作区",
-        "description": "只隐藏工作区，磁盘文件和对话记录保留。有运行中的对话时 409 E_WS_BUSY，并返回这些对话 id。\n工作区不存在或已移除时 404。\n",
+        "description": "只隐藏工作区，磁盘文件和对话记录保留。有运行中的对话时 409 E_WS_BUSY，并返回这些对话 id。\n工作区不存在或已移除时 404。kind=chat 的工作区不能当项目移除，返回 400。\n",
         "security": [
           {
             "bearerAuth": []
@@ -2489,6 +2489,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/WorkspaceRemoved"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "chat 工作区不能当项目移除",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
                 }
               }
             }
@@ -3738,6 +3748,94 @@
           },
           "404": {
             "description": "会话不存在",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "客户端错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "服务端错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/conversations": {
+      "post": {
+        "operationId": "createConversation",
+        "summary": "不选项目新建对话",
+        "description": "不带 workspaceId。服务端先建一个 kind=chat 的工作区，目录为数据目录下 `chats/<对话id>`，\n名字用请求里的 title，没有则按 `lang` 用「对话」/「Chat」，再在该工作区下建对话。\n目录在建对话时创建。成功返回 ConversationSummary，`workspaceId` 指向这个 chat 工作区。\n已有工作区下建对话仍走 POST /api/v2/workspaces/{id}/conversations。\n",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "lang",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "default": "zh"
+            },
+            "description": "客户端语言。先支持 zh、en；缺省或不认识的按 zh。chat 工作区默认名随语言。"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateConversationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "已创建",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConversationSummary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "请求体无效",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "未授权",
             "content": {
               "application/json": {
                 "schema": {
@@ -7193,7 +7291,8 @@
           "branch",
           "git",
           "conversationCount",
-          "runningCount"
+          "runningCount",
+          "kind"
         ],
         "properties": {
           "id": {
@@ -7254,9 +7353,17 @@
             "type": "integer",
             "minimum": 0,
             "description": "状态为 running 的对话数（recovering、resuming 算 running）"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "project",
+              "chat"
+            ],
+            "description": "project 是用户添加的项目目录；chat 是无项目对话自动创建的工作目录"
           }
         },
-        "description": "侧栏工作区。"
+        "description": "侧栏工作区。kind 为 project（项目）或 chat（不选项目的对话目录）。"
       },
       "GitStatus": {
         "type": "object",

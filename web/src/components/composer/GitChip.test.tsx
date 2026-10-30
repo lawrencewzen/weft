@@ -31,6 +31,7 @@ function workspace(id: string, status: GitStatus | null): Workspace {
     git: status,
     conversationCount: 0,
     runningCount: 0,
+    kind: 'project',
   };
 }
 

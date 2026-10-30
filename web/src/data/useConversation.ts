@@ -15,6 +15,7 @@ import {
 
 type MessageImage = components['schemas']['MessageImage'];
 type SendMessageFile = components['schemas']['SendMessageFile'];
+import { getPreferredLang } from './lang';
 import { navigate, conversationPath } from './nav';
 import { useSession } from './session';
 import {
@@ -117,7 +118,7 @@ export function useDraftSend(
     pastes?: string[],
   ) => {
     if (!created.current || created.current.workspaceId !== wsId) {
-      const conversation = await createConversation(wsId || null);
+      const conversation = await createConversation(wsId || null, undefined, getPreferredLang());
       created.current = { workspaceId: wsId, conversationId: conversation.id };
       const model = modelForCreate?.() || null;
       const thinkingLevel = thinkingLevelForCreate?.() ?? null;

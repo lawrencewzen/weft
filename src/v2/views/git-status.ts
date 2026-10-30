@@ -190,6 +190,9 @@ export function createGitStatusCache(opts: CollectGitOpts = {}): GitStatusCache 
 
   async function overlay(snap: WorkspacesSnapshot): Promise<WorkspacesSnapshot> {
     const workspaces = await Promise.all(snap.workspaces.map(async (ws) => {
+      if (ws.kind === 'chat') {
+        return ws.git == null ? ws : { ...ws, git: null };
+      }
       const git = cache.has(ws.id) ? cache.get(ws.id)! : await compute(ws.id, ws.path);
       if (JSON.stringify(ws.git ?? null) === JSON.stringify(git)) return ws;
       return { ...ws, git };

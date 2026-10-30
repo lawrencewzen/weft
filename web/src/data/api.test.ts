@@ -288,7 +288,7 @@ describe('api client', () => {
   it('posts git refresh for a workspace', async () => {
     const gitWs = {
       id: 'w1', name: 'n', path: '/p', source: 'local' as const,
-      gitUrl: null, branch: null, git: null, conversationCount: 0, runningCount: 0,
+      gitUrl: null, branch: null, git: null, conversationCount: 0, runningCount: 0, kind: 'project' as const,
     };
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse(200, gitWs));
     vi.stubGlobal('fetch', fetchMock);
@@ -437,7 +437,7 @@ describe('api client', () => {
   it('creates a workspace and a git connection through v2 endpoints', async () => {
     const ws = {
       id: 'w1', name: 'widget', path: '/tmp/widget', source: 'git', gitUrl: 'https://gitlab.example/acme/widget.git',
-      branch: 'main', conversationCount: 0, runningCount: 0,
+      branch: 'main', conversationCount: 0, runningCount: 0, kind: 'project' as const, git: null,
     };
     const conn = {
       id: 'g1', name: 'Corp', kind: 'gitlab-self', baseUrl: 'http://127.0.0.1:1',

@@ -30,6 +30,7 @@ export type SidebarWorkspace = {
   source?: unknown;
   gitUrl?: unknown;
   branch?: unknown;
+  kind?: unknown;
   [key: string]: unknown;
 };
 
@@ -57,6 +58,10 @@ function asUpdatedAt(value: unknown): number {
 
 export function workspaceSource(source: unknown): Workspace['source'] {
   return source === 'git' ? 'git' : 'local';
+}
+
+export function workspaceKind(kind: unknown): Workspace['kind'] {
+  return kind === 'chat' ? 'chat' : 'project';
 }
 
 export function conversationSummaryView(input: {
@@ -98,6 +103,7 @@ export function workspaceView(input: {
     git: input.git === undefined ? null : input.git,
     conversationCount: conversations.length,
     runningCount: conversations.filter((row) => row.status === 'running').length,
+    kind: workspaceKind(input.workspace.kind),
   };
 }
 

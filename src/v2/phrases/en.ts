@@ -117,6 +117,7 @@ export const en: Record<string, string> = {
   ws_err_path: 'That local path cannot be used',
   ws_err_path_root: 'That path is outside the allowed root: {root}',
   ws_err_generic: 'Could not create workspace',
+  chat_workspace: 'Chat',
   ws_err_conn_auth: 'Authentication failed. The token is invalid or expired. Test the connection again in Settings → Git.',
   ws_err_conn_cert: 'Certificate error. The server certificate is not trusted. For self-hosted GitLab, set a custom CA path under Advanced on that connection.',
   ws_err_conn_repo: 'Repository not found, or this account cannot access it.',

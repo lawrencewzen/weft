@@ -337,11 +337,15 @@ export function patchConversationThinkingLevel(
   return patchConversation(cid, { thinkingLevel });
 }
 
-export function createConversation(workspaceId?: string | null, title?: string): Promise<ConversationSummary> {
+export function createConversation(
+  workspaceId?: string | null,
+  title?: string,
+  lang?: string,
+): Promise<ConversationSummary> {
   const body: { title?: string } = {};
   if (title != null && title !== '') body.title = title;
   if (!workspaceId) {
-    return requestJson<ConversationSummary>('/api/v2/conversations', {
+    return requestJson<ConversationSummary>(withLang('/api/v2/conversations', lang), {
       method: 'POST',
       body: JSON.stringify(body),
     });

@@ -17,9 +17,7 @@ export type ConversationSummary = components['schemas']['ConversationSummary'];
 export type ConversationSend = components['schemas']['ConversationSend'];
 export type ThreadItem = components['schemas']['ThreadItem'];
 export type ToolCall = components['schemas']['ToolCall'];
-export type Workspace = components['schemas']['Workspace'] & {
-  kind?: 'project' | 'chat';
-};
+export type Workspace = components['schemas']['Workspace'];
 export type { Available, CustomApiProtocol, DefaultModel, LoginSession, Model, Provider };
 export type ResolvedModel = { providerId: string; modelId: string };
 export type Change = components['schemas']['Change'];

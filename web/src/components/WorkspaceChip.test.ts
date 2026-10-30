@@ -10,11 +10,11 @@ const { mockState, workspaces } = vi.hoisted(() => {
   const list: Workspace[] = [
     {
       id: 'w1', name: 'alpha', path: '/Users/alice/code/team/monorepo/apps/desktop/weft', source: 'local',
-      gitUrl: null, branch: null, git: null, conversationCount: 0, runningCount: 0,
+      gitUrl: null, branch: null, git: null, conversationCount: 0, runningCount: 0, kind: 'project',
     },
     {
       id: 'w2', name: 'beta', path: '/tmp/beta', source: 'local',
-      gitUrl: null, branch: null, git: null, conversationCount: 1, runningCount: 0,
+      gitUrl: null, branch: null, git: null, conversationCount: 1, runningCount: 0, kind: 'project',
     },
   ];
   return { workspaces: list, mockState: { list } };

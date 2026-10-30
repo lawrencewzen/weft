@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { DEFAULT_SETTINGS, mergeSettings, normalizeSettings } from '../core/settings.mjs';
 
-const SCHEMA_VERSION = 8;
+const SCHEMA_VERSION = 9;
 const MESSAGE_META_KEYS = ['kind', 'fromAgent', 'toAgent', 'agentId'];
 export const APP_DB_FILE = 'weft.sqlite';
 export const LEGACY_APP_DB_FILE = 'pi-work.sqlite';
@@ -120,7 +120,8 @@ export function createSqliteStore(dir, { log = console } = {}) {
       git_url TEXT,
       branch TEXT,
       root_path TEXT,
-      worktrees_json TEXT
+      worktrees_json TEXT,
+      kind TEXT NOT NULL DEFAULT 'project'
     );
     CREATE TABLE IF NOT EXISTS settings (
       id TEXT PRIMARY KEY,
@@ -218,6 +219,7 @@ export function createSqliteStore(dir, { log = console } = {}) {
     addCol('worktrees_json', 'worktrees_json TEXT');
     // Removing a workspace only hides it; its conversations stay and come back when the path is added again.
     addCol('removed_at', 'removed_at INTEGER');
+    addCol('kind', "kind TEXT NOT NULL DEFAULT 'project'");
   }
 
   {
@@ -266,7 +268,7 @@ export function createSqliteStore(dir, { log = console } = {}) {
   `);
 
   const q = {
-    insWs: db.prepare('INSERT INTO workspaces (id, name, path, source, git_url, branch, root_path, worktrees_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'),
+    insWs: db.prepare('INSERT INTO workspaces (id, name, path, source, git_url, branch, root_path, worktrees_json, kind) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'),
     listWs: db.prepare('SELECT * FROM workspaces WHERE removed_at IS NULL'),
     removeWs: db.prepare('UPDATE workspaces SET removed_at = ? WHERE id = ? AND removed_at IS NULL'),
     findRemovedWs: db.prepare("SELECT * FROM workspaces WHERE removed_at IS NOT NULL AND path = ? AND COALESCE(source, 'local') = 'local' ORDER BY removed_at DESC LIMIT 1"),
@@ -345,6 +347,7 @@ export function createSqliteStore(dir, { log = console } = {}) {
       gitUrl: r.git_url ?? null,
       branch: r.branch ?? null,
       rootPath: r.root_path || r.path,
+      kind: r.kind === 'chat' ? 'chat' : 'project',
       // TODO: git worktrees are not implemented yet; reserved for future `git worktree add`.
       worktrees: p(r.worktrees_json) || [],
       ...(r.removed_at ? { removedAt: r.removed_at } : {}),
@@ -352,7 +355,7 @@ export function createSqliteStore(dir, { log = console } = {}) {
   }
 
   return {
-    async createWorkspace({ id, name, path: wsPath, source, gitUrl, branch, rootPath, worktrees } = {}) {
+    async createWorkspace({ id, name, path: wsPath, source, gitUrl, branch, rootPath, worktrees, kind } = {}) {
       const ws = {
         id: id || randomUUID(),
         name,
@@ -361,10 +364,11 @@ export function createSqliteStore(dir, { log = console } = {}) {
         gitUrl: gitUrl ?? null,
         branch: branch ?? null,
         rootPath: rootPath || wsPath,
+        kind: kind === 'chat' ? 'chat' : 'project',
         // TODO: git worktrees are not implemented yet; reserved for future `git worktree add`.
         worktrees: Array.isArray(worktrees) ? worktrees : [],
       };
-      q.insWs.run(ws.id, ws.name, ws.path, ws.source, ws.gitUrl, ws.branch, ws.rootPath, j(ws.worktrees));
+      q.insWs.run(ws.id, ws.name, ws.path, ws.source, ws.gitUrl, ws.branch, ws.rootPath, j(ws.worktrees), ws.kind);
       return ws;
     },
     async listWorkspaces() {

@@ -407,6 +407,7 @@ function workspace(id: string, extra?: Partial<Workspace>): Workspace {
     git: null,
     conversationCount: 0,
     runningCount: 0,
+    kind: 'project',
     ...extra,
   };
 }

@@ -468,6 +468,7 @@ export interface paths {
          * 刷新工作区 git 状态
          * @description 用 git（execFile，无 shell，约 3 秒超时）读取工作区当前分支、未提交改动和相对上游的 ahead/behind。
          *     不是 git 仓库或未安装 git 时 `git` 为 null，不报错。同一工作区并发刷新合并为一次，避免同时起多个 git 进程。
+         *     kind=chat 的工作区不跑 git，直接返回 `git` 为 null。
          *     值变化时通过 `workspaces` 主题 upsert 该 Workspace。
          */
         post: operations["refreshWorkspaceGit"];
@@ -516,7 +517,7 @@ export interface paths {
         /**
          * 移除工作区
          * @description 只隐藏工作区，磁盘文件和对话记录保留。有运行中的对话时 409 E_WS_BUSY，并返回这些对话 id。
-         *     工作区不存在或已移除时 404。
+         *     工作区不存在或已移除时 404。kind=chat 的工作区不能当项目移除，返回 400。
          */
         delete: operations["removeWorkspace"];
         options?: never;
@@ -767,6 +768,29 @@ export interface paths {
          * @description 中止进行中的登录（abort signal）。
          */
         post: operations["cancelLoginSession"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/conversations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 不选项目新建对话
+         * @description 不带 workspaceId。服务端先建一个 kind=chat 的工作区，目录为数据目录下 `chats/<对话id>`，
+         *     名字用请求里的 title，没有则按 `lang` 用「对话」/「Chat」，再在该工作区下建对话。
+         *     目录在建对话时创建。成功返回 ConversationSummary，`workspaceId` 指向这个 chat 工作区。
+         *     已有工作区下建对话仍走 POST /api/v2/workspaces/{id}/conversations。
+         */
+        post: operations["createConversation"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1658,7 +1682,7 @@ export interface components {
              */
             thinkingLevel?: null | components["schemas"]["ThinkingLevel"];
         };
-        /** @description 侧栏工作区。 */
+        /** @description 侧栏工作区。kind 为 project（项目）或 chat（不选项目的对话目录）。 */
         Workspace: {
             id: string;
             name: string;
@@ -1675,6 +1699,11 @@ export interface components {
             conversationCount: number;
             /** @description 状态为 running 的对话数（recovering、resuming 算 running） */
             runningCount: number;
+            /**
+             * @description project 是用户添加的项目目录；chat 是无项目对话自动创建的工作目录
+             * @enum {string}
+             */
+            kind: "project" | "chat";
         };
         /** @description 工作区实时 git 状态。 */
         GitStatus: {
@@ -3998,6 +4027,15 @@ export interface operations {
                     "application/json": components["schemas"]["WorkspaceRemoved"];
                 };
             };
+            /** @description chat 工作区不能当项目移除 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
             /** @description 未授权 */
             401: {
                 headers: {
@@ -4896,6 +4934,69 @@ export interface operations {
             };
             /** @description 会话不存在 */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 客户端错误 */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 服务端错误 */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+        };
+    };
+    createConversation: {
+        parameters: {
+            query?: {
+                /** @description 客户端语言。先支持 zh、en；缺省或不认识的按 zh。chat 工作区默认名随语言。 */
+                lang?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateConversationRequest"];
+            };
+        };
+        responses: {
+            /** @description 已创建 */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConversationSummary"];
+                };
+            };
+            /** @description 请求体无效 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 未授权 */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };
