@@ -32,6 +32,7 @@ import { useProviders } from '../data/useProviders';
 import type { components } from '../../../src/v2/contract.gen';
 import { t } from '../i18n';
 import { writeActiveWorkspace } from '../data/layout';
+import { subscribePrefs } from '../data/prefs';
 import { useRightActions } from '../data/rightPaneContext';
 import { ContextBanner, ContextChip } from './ContextChip';
 import { DemoModelBadge } from './DemoModelBadge';
@@ -74,8 +75,13 @@ type Props = {
 
 const FALLBACK_CONTEXT: ContextUsage = { used: 0, window: 128000, percent: 0, level: 'ok' };
 
-const TEXTAREA_MIN = 44;
+const TEXTAREA_MIN_FALLBACK = 44;
 const TEXTAREA_MAX = 200;
+
+function textareaMinHeight(el: HTMLTextAreaElement): number {
+  const n = parseFloat(getComputedStyle(el).minHeight);
+  return Number.isFinite(n) && n > 0 ? n : TEXTAREA_MIN_FALLBACK;
+}
 
 const SEND_ICON = (
   <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
@@ -162,8 +168,9 @@ export function Composer({
   function resize() {
     const el = area.current;
     if (!el) return;
-    el.style.height = `${TEXTAREA_MIN}px`;
-    el.style.height = `${Math.min(TEXTAREA_MAX, Math.max(TEXTAREA_MIN, el.scrollHeight))}px`;
+    const min = textareaMinHeight(el);
+    el.style.height = `${min}px`;
+    el.style.height = `${Math.min(TEXTAREA_MAX, Math.max(min, el.scrollHeight))}px`;
   }
 
   const att = useComposerAttachments({
@@ -214,6 +221,10 @@ export function Composer({
   useEffect(() => {
     resize();
   }, [draft]);
+
+  useEffect(() => subscribePrefs(() => {
+    requestAnimationFrame(resize);
+  }), []);
 
   async function submit(text = draft.trim(), mode?: SendMode) {
     const payload = text.trim();
