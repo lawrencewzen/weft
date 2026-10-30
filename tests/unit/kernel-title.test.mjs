@@ -6,7 +6,7 @@ import { createModels } from '@earendil-works/pi-ai/models';
 import { contentText } from '@earendil-works/pi-ai';
 import { fauxAssistantMessage } from '@earendil-works/pi-ai/providers/faux';
 import { CONTINUE_TEXT } from '../../src/kernel/continuation-text.mjs';
-import { scriptPool, titleReplyFromScript } from '../../src/kernel/faux-script.mjs';
+import { scriptPool, titleReplyFromScript, titleTurnFromScript } from '../../src/kernel/faux-script.mjs';
 import { FAUX_MODEL, registerFaux } from '../../src/kernel/index.mjs';
 import {
   TITLE_MAX_TOKENS,
@@ -75,6 +75,7 @@ async function generate(overrides = {}) {
     ? { models: overrides.models, calls: overrides.calls || [] }
     : titleModels(overrides.rawTitle ?? '登录功能');
   const emitted = [];
+  const metas = [];
   const result = await maybeGenerateConversationTitle(cid, {
     store,
     models,
@@ -86,11 +87,12 @@ async function generate(overrides = {}) {
       ],
     })),
     emit: overrides.emit || (async (id, event) => { emitted.push({ id, event }); }),
+    onConversationMeta: overrides.onConversationMeta || ((id) => { metas.push(id); }),
     status: overrides.status ?? 'done',
     isSubagent: overrides.isSubagent ?? false,
     now: overrides.now || (() => 1_700_000_000_000),
   });
-  return { result, store, calls, cid, emitted };
+  return { result, store, calls, cid, emitted, metas };
 }
 
 test('sanitizeGeneratedTitle strips quotes, prefixes, punctuation, and newlines', () => {
@@ -156,7 +158,7 @@ test('isTitleRequest only matches the host title completion', () => {
 test('scriptPool ignores title turns and titleReplyFromScript matches them', () => {
   const turns = [
     { text: 'conversation reply' },
-    { title: true, when: '帮我写一个用户登录页面', text: '登录功能' },
+    { title: true, when: '帮我写一个用户登录页面', delayMs: 2500, text: '登录功能' },
   ];
   const convCtx = { messages: [{ role: 'user', content: '帮我写一个用户登录页面' }] };
   assert.deepEqual(scriptPool(turns, convCtx).map((turn) => turn.text), ['conversation reply']);
@@ -165,6 +167,7 @@ test('scriptPool ignores title turns and titleReplyFromScript matches them', () 
   };
   const reply = titleReplyFromScript(turns, titleCtx);
   assert.equal(contentText(reply.content), '登录功能');
+  assert.equal(titleTurnFromScript(turns, titleCtx)?.delayMs, 2500);
   const empty = titleReplyFromScript([{ text: 'conversation reply' }], titleCtx);
   assert.equal(contentText(empty.content), '');
 });
@@ -196,12 +199,13 @@ test('completeTitle calls completeSimple with off thinking, 64 tokens, and the t
   assert.equal(seen[0].context.messages[0].content.includes(TITLE_PROMPT_MARKER), true);
 });
 
-test('maybeGenerateConversationTitle writes once and emits status done', async () => {
+test('maybeGenerateConversationTitle writes once and notifies conversation meta', async () => {
   const first = await generate();
   assert.equal(first.result.title, '登录功能');
   assert.equal(first.store.row.titleGeneratedAt, 1_700_000_000_000);
   assert.equal(first.calls.length, 1);
-  assert.deepEqual(first.emitted, [{ id: first.cid, event: { event: 'status', data: { status: 'done' } } }]);
+  assert.deepEqual(first.emitted, []);
+  assert.deepEqual(first.metas, [first.cid]);
 
   const again = titleModels('另一个标题');
   const retry = await maybeGenerateConversationTitle(first.cid, {
@@ -214,13 +218,62 @@ test('maybeGenerateConversationTitle writes once and emits status done', async (
         { role: 'assistant', text: '好的，开始写。' },
       ],
     }),
-    emit: async () => {},
+    onConversationMeta: () => {},
     status: 'done',
     now: () => 1_800_000_000_000,
   });
   assert.equal(retry, null);
   assert.equal(again.calls.length, 0);
   assert.equal(first.store.row.title, '登录功能');
+});
+
+test('title generation during a second running turn does not emit status', async () => {
+  let release;
+  const held = new Promise((resolve) => { release = resolve; });
+  let startedResolve;
+  const started = new Promise((resolve) => { startedResolve = resolve; });
+  const models = {
+    async completeSimple() {
+      startedResolve();
+      await held;
+      return { content: [{ type: 'text', text: '登录功能' }], stopReason: 'stop' };
+    },
+  };
+  const cid = 'c-running';
+  const store = memoryStore({
+    id: cid,
+    title: '帮我写一个用户登录页面',
+    titleSource: 'auto',
+    titleGeneratedAt: null,
+    harnessId: 1,
+    status: 'done',
+  });
+  const emitted = [];
+  const metas = [];
+  const pending = maybeGenerateConversationTitle(cid, {
+    store,
+    models,
+    resolveModel: async () => ({ id: 'faux-1', provider: 'faux' }),
+    readTranscript: async () => ({
+      messages: [
+        { role: 'user', text: '帮我写一个用户登录页面' },
+        { role: 'assistant', text: '好的，开始写。' },
+      ],
+    }),
+    emit: async (id, event) => { emitted.push({ id, event }); },
+    onConversationMeta: (id) => { metas.push(id); },
+    status: 'done',
+    now: () => 1_700_000_000_000,
+  });
+  await started;
+  store.row.status = 'running';
+  release();
+  const result = await pending;
+  assert.equal(result.title, '登录功能');
+  assert.equal(store.row.title, '登录功能');
+  assert.equal(store.row.status, 'running');
+  assert.deepEqual(emitted, []);
+  assert.deepEqual(metas, [cid]);
 });
 
 test('title_source user is not overwritten', async () => {

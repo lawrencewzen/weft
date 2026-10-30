@@ -1,0 +1,5 @@
+{ "turns": [
+  { "delayMs": 400, "text": "好的，这就写登录页。" },
+  { "title": true, "when": "帮我写一个用户登录页面", "delayMs": 2500, "text": "登录功能" },
+  { "delayMs": 5000, "text": "好的，补上注册。" }
+] }

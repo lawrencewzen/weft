@@ -159,7 +159,7 @@ export async function maybeGenerateConversationTitle(cid, {
   models,
   resolveModel,
   readTranscript,
-  emit,
+  onConversationMeta,
   status,
   isSubagent = false,
   now = Date.now,
@@ -204,7 +204,13 @@ export async function maybeGenerateConversationTitle(cid, {
       title,
       titleGeneratedAt: now(),
     });
-    if (typeof emit === 'function') await emit(cid, { event: 'status', data: { status: 'done' } });
+    if (typeof onConversationMeta === 'function') {
+      try {
+        await onConversationMeta(cid);
+      } catch (err) {
+        console.debug(`WEFT_TITLE ${cid} notify ${err instanceof Error ? err.message : err}`);
+      }
+    }
     return next;
   } catch (err) {
     console.debug(`WEFT_TITLE ${cid} ${err instanceof Error ? err.message : err}`);

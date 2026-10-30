@@ -125,6 +125,7 @@ export async function openConversationKernel({
   credentials,
   modelsStore,
   providerService,
+  onConversationMeta,
   env = process.env,
 } = {}) {
   if (!dataDir) throw new Error('dataDir is required');
@@ -309,7 +310,7 @@ export async function openConversationKernel({
           models,
           resolveModel: resolveTitleModel,
           readTranscript,
-          emit: (id, event) => deliver(id, event),
+          onConversationMeta,
           status: 'done',
         });
       }
