@@ -1,43 +1,22 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { AgentsStrip } from './AgentsStrip';
 import { StallStrip } from './StallStrip';
-import { ApiError, getWorkspaceTree, patchConversation, putModelContextWindow, uploadWorkspaceFile, type SendMessageFile, type ThinkingLevel } from '../data/api';
+import { getWorkspaceTree, patchConversation, putModelContextWindow, type SendMessageFile, type ThinkingLevel } from '../data/api';
 import {
-  addImages,
   applyAtSelection,
-  createPasteAttachment,
-  filePathOf,
-  fileToImageAttachment,
   filterAtFiles,
-  formatFileSize,
   IMAGE_MAX_COUNT,
-  imageFingerprint,
-  insertFileRef,
-  isFileRefInText,
   isImageFile,
-  isLongPaste,
   matchAtTrigger,
-  matchProjectPath,
-  PASTE_MAX_BYTES,
-  PASTE_MAX_COUNT,
-  pathsFromUriList,
-  readAsBase64,
-  removeFileRef,
   resolveAtSelection,
-  revokePreview,
   shouldResetAtActiveIndex,
   splitFilePath,
   stepAtActiveIndex,
-  toMessageImages,
-  UPLOAD_MAX_BYTES,
-  UPLOAD_MAX_FILES,
   type ComposerHint,
-  type FileRefAttachment,
-  type ImageAttachment,
   type MessageImage,
-  type PasteAttachment,
-  type UploadAttachment,
 } from '../data/attachments';
+import { ComposerTags } from './composer/ComposerTags';
+import { useComposerAttachments } from './composer/useComposerAttachments';
 import {
   clampThinkingLevel,
   contextIsWarn,
@@ -62,7 +41,6 @@ import { useRightPane } from '../data/rightPaneContext';
 import { ContextBanner, ContextChip } from './ContextChip';
 import { DemoModelBadge } from './DemoModelBadge';
 import { ModelChip } from './ModelChip';
-import { StatusIcon } from './StatusIcon';
 import { WorkspaceChip } from './WorkspaceChip';
 import { createSendRequest, errorMessage } from './sendRequest';
 
@@ -197,16 +175,10 @@ export function Composer({
   git: propGit,
 }: Props) {
   const [draft, setDraft] = useState('');
-  const [images, setImages] = useState<ImageAttachment[]>([]);
-  const [uploads, setUploads] = useState<UploadAttachment[]>([]);
-  const [pastes, setPastes] = useState<PasteAttachment[]>([]);
-  const [pastePeekId, setPastePeekId] = useState<string | null>(null);
-  const [fileRefs, setFileRefs] = useState<FileRefAttachment[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hint, setHint] = useState<ComposerHint | null>(null);
   const [focused, setFocused] = useState(false);
-  const [dragging, setDragging] = useState(false);
   const [plusOpen, setPlusOpen] = useState(false);
   const [atActiveIndex, setAtActiveIndex] = useState(0);
   const atActiveIndexRef = useRef(0);
@@ -223,10 +195,6 @@ export function Composer({
   const area = useRef<HTMLTextAreaElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const anyFileInput = useRef<HTMLInputElement>(null);
-  const pastePeekRef = useRef<HTMLDivElement>(null);
-  const dragDepth = useRef(0);
-  const imagesRef = useRef(images);
-  imagesRef.current = images;
   const { providers, defaultModel, ready: providersReady } = useProviders();
   const { openInTerminal, copyPath } = useRightPane();
   const { workspaces } = useWorkspaces();
@@ -321,20 +289,35 @@ export function Composer({
     prevOpenRef.current = atOpen;
   }, [atOpen, atTrigger?.query]);
 
-  // Sync file tags with text: if @path is removed or edited in draft, hide the tag
-  const visibleFileRefs = useMemo(() => {
-    return fileRefs.filter((ref) => isFileRefInText(draft, ref.path));
-  }, [fileRefs, draft]);
+  function resize() {
+    const el = area.current;
+    if (!el) return;
+    el.style.height = `${TEXTAREA_MIN}px`;
+    el.style.height = `${Math.min(TEXTAREA_MAX, Math.max(TEXTAREA_MIN, el.scrollHeight))}px`;
+  }
 
-  const hasUploading = uploads.some((u) => u.status === 'uploading');
-  const hasUploadError = uploads.some((u) => u.status === 'error');
+  const att = useComposerAttachments({
+    lang,
+    workspaceId,
+    workspacePath,
+    supportsImages,
+    allowAttach,
+    locked,
+    draft,
+    setDraft,
+    setError,
+    setHint,
+    textareaRef: area,
+    onResize: resize,
+  });
+
   const hasPayload =
     Boolean(draft.trim()) ||
-    images.length > 0 ||
-    visibleFileRefs.length > 0 ||
-    uploads.some((u) => u.status === 'done') ||
-    pastes.length > 0;
-  const canSend = hasPayload && !locked && !hasUploading && !hasUploadError;
+    att.images.length > 0 ||
+    att.visibleFileRefs.length > 0 ||
+    att.uploads.some((u) => u.status === 'done') ||
+    att.pastes.length > 0;
+  const canSend = hasPayload && !locked && !att.hasUploading && !att.hasUploadError;
   const stopMode = run.canStop && !hasPayload;
   const showBanner = showModelControls && !noModel && contextIsWarn(context.level);
   const running = run.status === 'running';
@@ -344,17 +327,6 @@ export function Composer({
     : run.status === 'running'
       ? t(lang, 'composer_placeholder_running')
       : t(lang, 'composer_placeholder');
-
-  useEffect(() => () => {
-    imagesRef.current.forEach(revokePreview);
-  }, []);
-
-  function resize() {
-    const el = area.current;
-    if (!el) return;
-    el.style.height = `${TEXTAREA_MIN}px`;
-    el.style.height = `${Math.min(TEXTAREA_MAX, Math.max(TEXTAREA_MIN, el.scrollHeight))}px`;
-  }
 
   useEffect(() => {
     resize();
@@ -384,181 +356,16 @@ export function Composer({
     };
   }, [plusOpen]);
 
-  useEffect(() => {
-    if (!pastePeekId) return;
-    function onDocClick(event: MouseEvent) {
-      const target = event.target as Element | null;
-      if (
-        pastePeekRef.current?.contains(target as Node) ||
-        target?.closest?.('[data-testid="next-attach-paste"]')
-      ) {
-        return;
-      }
-      setPastePeekId(null);
-    }
-    function onKey(event: globalThis.KeyboardEvent) {
-      if (event.key === 'Escape') {
-        setPastePeekId(null);
-      }
-    }
-    document.addEventListener('mousedown', onDocClick);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('mousedown', onDocClick);
-      document.removeEventListener('keydown', onKey);
-    };
-  }, [pastePeekId]);
-
-  const addImageFiles = useCallback(async (files: File[]) => {
-    if (!files.length) return;
-    if (!supportsImages) {
-      setHint({ kind: 'no_vision' });
-      return;
-    }
-    const incoming: ImageAttachment[] = [];
-    let localHint: ComposerHint | null = null;
-    for (const file of files) {
-      const result = await fileToImageAttachment(file);
-      if ('hint' in result) {
-        localHint = result.hint;
-        continue;
-      }
-      incoming.push(result);
-    }
-    const added = addImages(imagesRef.current, incoming);
-    imagesRef.current = added.next;
-    setImages(added.next);
-    setHint(added.hint || localHint);
-  }, [supportsImages]);
-
-  const addProjectFile = useCallback((relPath: string) => {
-    if (!relPath) return;
-    setFileRefs((current) => {
-      if (current.some((item) => item.path === relPath)) return current;
-      return [...current, { id: `file-${relPath}`, kind: 'file', path: relPath }];
-    });
-    setDraft((current) => insertFileRef(current, relPath));
-  }, []);
-
-  const uploadFiles = useCallback(async (files: File[]) => {
-    if (!files.length) return;
-    if (!workspaceId) {
-      setError(t(lang, 'composer_need_workspace'));
-      return;
-    }
-    if (uploads.length + files.length > UPLOAD_MAX_FILES) {
-      setError(t(lang, 'attach_too_many', { n: UPLOAD_MAX_FILES }));
-      return;
-    }
-    for (const file of files) {
-      const id = `upload-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-      if (file.size > UPLOAD_MAX_BYTES) {
-        const errorItem: UploadAttachment = {
-          id,
-          kind: 'upload',
-          name: file.name || 'file',
-          size: file.size,
-          status: 'error',
-          error: t(lang, 'upload_too_large', { name: file.name || 'file' }),
-        };
-        setUploads((prev) => [...prev, errorItem]);
-        continue;
-      }
-      const initialItem: UploadAttachment = {
-        id,
-        kind: 'upload',
-        name: file.name || 'file',
-        size: file.size,
-        status: 'uploading',
-      };
-      setUploads((prev) => [...prev, initialItem]);
-      void (async () => {
-        try {
-          const base64 = await readAsBase64(file);
-          const result = await uploadWorkspaceFile(workspaceId, {
-            name: file.name,
-            data: base64,
-          });
-          setUploads((prev) => prev.map((item) =>
-            item.id === id
-              ? {
-                  ...item,
-                  status: 'done',
-                  size: result.bytes,
-                  uploaded: result,
-                }
-              : item
-          ));
-        } catch (err) {
-          const msg = err instanceof ApiError && err.status === 413
-            ? t(lang, 'upload_too_large', { name: file.name || 'file' })
-            : errorMessage(err, t(lang, 'upload_failed', { name: file.name || 'file' }));
-          setUploads((prev) => prev.map((item) =>
-            item.id === id
-              ? {
-                  ...item,
-                  status: 'error',
-                  error: msg,
-                }
-              : item
-          ));
-        }
-      })();
-    }
-  }, [lang, workspaceId, uploads.length]);
-
-  const dropFiles = useCallback(async (fileList: File[], uriList = '') => {
-    const uriPaths = pathsFromUriList(uriList);
-    const imageFiles: File[] = [];
-    const others: File[] = [];
-    for (const file of fileList) {
-      if (isImageFile(file)) imageFiles.push(file);
-      else others.push(file);
-    }
-    if (imageFiles.length) await addImageFiles(imageFiles);
-    if (!others.length) return;
-    let treePaths: string[] = [];
-    if (workspaceId) {
-      try {
-        const tree = await getWorkspaceTree(workspaceId);
-        treePaths = tree.entries.filter((entry) => entry.type === 'file').map((entry) => entry.path);
-      } catch {
-        treePaths = [];
-      }
-    }
-    const toUpload: File[] = [];
-    for (const file of others) {
-      const rel = matchProjectPath({
-        fileName: file.name,
-        filePath: filePathOf(file),
-        uriPaths,
-        workspacePath,
-        treePaths,
-      });
-      if (rel) {
-        addProjectFile(rel);
-      } else {
-        toUpload.push(file);
-      }
-    }
-    if (toUpload.length) {
-      void uploadFiles(toUpload);
-    }
-  }, [addImageFiles, addProjectFile, uploadFiles, workspaceId, workspacePath]);
-
   const pickAtFile = useCallback((relPath: string) => {
     const el = area.current;
     const cur = el ? (el.selectionStart ?? activeCursor) : activeCursor;
     const trigger = matchAtTrigger(draft, cur) || atTrigger;
     if (!trigger) {
-      addProjectFile(relPath);
+      att.addProjectFile(relPath);
       return;
     }
     const applied = applyAtSelection(draft, relPath, trigger);
-    setFileRefs((current) => {
-      if (current.some((item) => item.path === relPath)) return current;
-      return [...current, { id: `file-${relPath}`, kind: 'file', path: relPath }];
-    });
+    att.addFileRef(relPath);
     setDraft(applied.text);
     setCursorPos(applied.nextCursor);
     if (el) {
@@ -575,47 +382,30 @@ export function Composer({
         resize();
       }
     });
-  }, [activeCursor, addProjectFile, atTrigger, draft]);
+  }, [activeCursor, att, atTrigger, draft]);
 
   async function submit(text = draft.trim(), mode?: SendMode) {
     const payload = text.trim();
-    const imagePayload = toMessageImages(images);
-    const sentUploads = uploads.filter((u) => u.status === 'done' && u.uploaded);
-    const sentFiles: SendMessageFile[] = sentUploads.map((u) => ({
-      path: u.uploaded!.path,
-      name: u.uploaded!.name,
-      bytes: u.uploaded!.bytes,
-    }));
-    const sentPastes: string[] = pastes.map((p) => p.text);
+    const { imagePayload, sentFiles, sentPastes, extraKey } = att.buildSendPayload();
 
     if (
       (!payload && !imagePayload.length && !sentFiles.length && !sentPastes.length) ||
       locked ||
       busy ||
-      uploads.some((u) => u.status === 'uploading') ||
-      uploads.some((u) => u.status === 'error')
+      att.hasUploading ||
+      att.hasUploadError
     ) {
       return;
     }
 
-    const filesKey = sentFiles.map((f) => f.path).join(',');
-    const pastesKey = sentPastes.map((p) => `${p.length}:${p.slice(0, 10)}`).join(',');
-    const requestId = req.current.begin(payload, `${imageFingerprint(imagePayload)}|${filesKey}|${pastesKey}`);
+    const requestId = req.current.begin(payload, extraKey);
     setBusy(true);
     setError(null);
     setHint(null);
-    const sentImages = images;
-    const sentRefs = fileRefs;
     const sentText = payload;
-    const sentUploadsList = uploads;
-    const sentPastesList = pastes;
+    const snapshot = att.takeAndClear();
 
     setDraft('');
-    setImages([]);
-    setFileRefs([]);
-    setUploads([]);
-    setPastes([]);
-    imagesRef.current = [];
     setCursorPos(null);
     setAtDismissed(false);
     requestAnimationFrame(resize);
@@ -629,18 +419,11 @@ export function Composer({
         sentPastes.length ? sentPastes : undefined,
       );
       req.current.succeed();
-      sentImages.forEach(revokePreview);
+      att.revokeSnapshot(snapshot);
       onSent?.();
     } catch (err) {
       setDraft((current) => (current ? current : sentText));
-      setImages((current) => {
-        if (current.length) return current;
-        imagesRef.current = sentImages;
-        return sentImages;
-      });
-      setFileRefs((current) => (current.length ? current : sentRefs));
-      setUploads((current) => (current.length ? current : sentUploadsList));
-      setPastes((current) => (current.length ? current : sentPastesList));
+      att.restore(snapshot);
       setError(errorMessage(err, t(lang, 'send_failed')));
       requestAnimationFrame(resize);
     } finally {
@@ -696,9 +479,9 @@ export function Composer({
       }
     }
     if (event.key === 'Escape') {
-      if (pastePeekId) {
+      if (att.pastePeekId) {
         event.preventDefault();
-        setPastePeekId(null);
+        att.setPastePeekId(null);
         return;
       }
       if (plusOpen) {
@@ -825,105 +608,13 @@ export function Composer({
     }
   }
 
-  function removeImage(id: string) {
-    setImages((current) => {
-      const hit = current.find((item) => item.id === id);
-      if (hit) revokePreview(hit);
-      const next = current.filter((item) => item.id !== id);
-      imagesRef.current = next;
-      return next;
-    });
-  }
-
-  function removeUpload(id: string) {
-    setUploads((prev) => prev.filter((item) => item.id !== id));
-  }
-
-  function removePaste(id: string) {
-    if (pastePeekId === id) setPastePeekId(null);
-    setPastes((prev) => prev.filter((item) => item.id !== id));
-  }
-
-  function removeFile(path: string) {
-    setFileRefs((current) => current.filter((item) => item.path !== path));
-    setDraft((current) => removeFileRef(current, path));
-  }
-
-  function onPaste(event: ClipboardEvent<HTMLTextAreaElement>) {
-    if (!allowAttach) return;
-    const files = [...(event.clipboardData?.files || [])];
-    const items = event.clipboardData?.items;
-    if (items) {
-      for (const item of items) {
-        if (item.kind !== 'file') continue;
-        const file = item.getAsFile();
-        if (file && !files.some((row) => row === file)) files.push(file);
-      }
-    }
-    if (files.length > 0) {
-      event.preventDefault();
-      const imageFiles = files.filter(isImageFile);
-      const nonImageFiles = files.filter((f) => !isImageFile(f));
-      if (imageFiles.length) void addImageFiles(imageFiles);
-      if (nonImageFiles.length) void uploadFiles(nonImageFiles);
-      return;
-    }
-    const text = event.clipboardData?.getData('text/plain') || '';
-    if (isLongPaste(text)) {
-      event.preventDefault();
-      if (pastes.length >= PASTE_MAX_COUNT) {
-        setError(t(lang, 'paste_too_many'));
-        return;
-      }
-      if (text.length > PASTE_MAX_BYTES) {
-        setError(t(lang, 'paste_too_large'));
-        return;
-      }
-      const newPaste = createPasteAttachment(text, t(lang, 'paste_default_name'));
-      setPastes((prev) => [...prev, newPaste]);
-    }
-  }
-
-  function hasFiles(event: DragEvent): boolean {
-    return Array.from(event.dataTransfer?.types || []).includes('Files');
-  }
-
-  function onDragEnter(event: DragEvent<HTMLDivElement>) {
-    if (!allowAttach || locked || !hasFiles(event)) return;
-    event.preventDefault();
-    dragDepth.current += 1;
-    setDragging(true);
-  }
-
-  function onDragOver(event: DragEvent<HTMLDivElement>) {
-    if (!allowAttach || locked || !hasFiles(event)) return;
-    event.preventDefault();
-    event.dataTransfer.dropEffect = 'copy';
-  }
-
-  function onDragLeave(event: DragEvent<HTMLDivElement>) {
-    if (!allowAttach || !hasFiles(event)) return;
-    dragDepth.current = Math.max(0, dragDepth.current - 1);
-    if (dragDepth.current === 0) setDragging(false);
-  }
-
-  function onDrop(event: DragEvent<HTMLDivElement>) {
-    if (!allowAttach || locked) return;
-    event.preventDefault();
-    dragDepth.current = 0;
-    setDragging(false);
-    const files = [...(event.dataTransfer?.files || [])];
-    const uriList = event.dataTransfer?.getData('text/uri-list') || '';
-    void dropFiles(files, uriList);
-  }
-
   const boxClass = [
     'composer-box',
     focused ? 'is-focused' : '',
     noModel ? 'is-no-model' : '',
     showBanner ? 'is-ctx-warn' : '',
-    dragging ? 'is-drop' : '',
-    images.length || fileRefs.length || uploads.length || pastes.length || queue.length ? 'is-tagged' : '',
+    att.dragging ? 'is-drop' : '',
+    att.hasTagItems || queue.length ? 'is-tagged' : '',
   ].filter(Boolean).join(' ');
 
   return (
@@ -938,14 +629,14 @@ export function Composer({
         <div
           className={boxClass}
           data-testid="next-composer"
-          onDragEnter={onDragEnter}
-          onDragOver={onDragOver}
-          onDragLeave={onDragLeave}
-          onDrop={onDrop}
+          onDragEnter={att.onDragEnter}
+          onDragOver={att.onDragOver}
+          onDragLeave={att.onDragLeave}
+          onDrop={att.onDrop}
         >
           {showBanner ? <ContextBanner lang={lang} context={context} onNewChat={openNewChat} /> : null}
           <div className="composer-body">
-            {queue.length || images.length || fileRefs.length || uploads.length || pastes.length ? (
+            {queue.length || att.hasTagItems ? (
               <div className="composer-tags" data-testid="next-composer-tags">
                 {queue.map((item) => (
                   <span key={item.requestId} className="composer-queue" data-testid="next-queue-chip">
@@ -977,153 +668,7 @@ export function Composer({
                     </button>
                   </span>
                 ))}
-                {images.map((item) => (
-                  <span key={item.id} className="composer-tag" data-testid="next-attach-image">
-                    <img className="composer-tag-thumb" src={item.previewUrl} alt="" />
-                    <span className="composer-tag-name">{item.name}</span>
-                    <span className="composer-tag-size">&middot; {formatFileSize(item.size)}</span>
-                    <button
-                      type="button"
-                      className="composer-tag-x"
-                      data-testid="next-attach-remove"
-                      aria-label={t(lang, 'attach_remove', { name: item.name })}
-                      onClick={() => removeImage(item.id)}
-                    >
-                      &times;
-                    </button>
-                  </span>
-                ))}
-                {visibleFileRefs.map((item) => (
-                  <span key={item.id} className="composer-tag is-file" data-testid="next-attach-file">
-                    <span className="composer-tag-file-icon">{FILE_ICON}</span>
-                    <span className="composer-tag-name">{item.path}</span>
-                    <button
-                      type="button"
-                      className="composer-tag-x"
-                      data-testid="next-attach-remove"
-                      aria-label={t(lang, 'attach_remove', { name: item.path })}
-                      onClick={() => removeFile(item.path)}
-                    >
-                      &times;
-                    </button>
-                  </span>
-                ))}
-                {uploads.map((item) => {
-                  const isUploading = item.status === 'uploading';
-                  const isError = item.status === 'error';
-                  return (
-                    <span
-                      key={item.id}
-                      className={`composer-tag is-file${isError ? ' is-error' : ''}`}
-                      data-testid="next-attach-upload"
-                      data-status={item.status}
-                      title={item.uploaded?.path || item.name}
-                    >
-                      {isUploading ? (
-                        <StatusIcon status="running" size={14} className="composer-tag-spin" aria-hidden="true" />
-                      ) : isError ? (
-                        <StatusIcon status="failed" size={14} className="composer-tag-file-icon" aria-hidden="true" />
-                      ) : (
-                        <span className="composer-tag-file-icon">{FILE_ICON}</span>
-                      )}
-                      <span className="composer-tag-name">{item.name}</span>
-                      {isUploading ? (
-                        <span className="composer-tag-size">&middot; {t(lang, 'uploading')}</span>
-                      ) : isError ? (
-                        <span className="composer-tag-error" data-testid="next-upload-error">
-                          &middot; {item.error}
-                        </span>
-                      ) : (
-                        <span className="composer-tag-size">&middot; {formatFileSize(item.size)}</span>
-                      )}
-                      <button
-                        type="button"
-                        className="composer-tag-x"
-                        data-testid="next-attach-remove"
-                        aria-label={t(lang, 'attach_remove', { name: item.name })}
-                        onClick={() => removeUpload(item.id)}
-                      >
-                        &times;
-                      </button>
-                    </span>
-                  );
-                })}
-                {pastes.map((item) => {
-                  const isPeekOpen = pastePeekId === item.id;
-                  const head = item.text.split('\n').slice(0, 8).join('\n');
-                  return (
-                    <span
-                      key={item.id}
-                      className="composer-tag is-paste"
-                      data-testid="next-attach-paste"
-                      title={t(lang, 'attach_paste_peek')}
-                      onClick={() => {
-                        setPastePeekId((cur) => (cur === item.id ? null : item.id));
-                      }}
-                    >
-                      <span className="composer-tag-paste-icon">
-                        <svg
-                          width="16"
-                          height="16"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="var(--mute)"
-                          strokeWidth="1.6"
-                          strokeLinecap="round"
-                          aria-hidden="true"
-                        >
-                          <path d="M4 6h16M4 10h16M4 14h10M4 18h7" />
-                        </svg>
-                      </span>
-                      <span className="composer-tag-name">{item.name || t(lang, 'paste_default_name')}</span>
-                      <span className="composer-tag-size">{t(lang, 'paste_tag_lines', { n: item.lines })}</span>
-                      {isPeekOpen ? (
-                        <div
-                          ref={pastePeekRef}
-                          className="composer-paste-peek"
-                          data-testid="next-paste-peek"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <div className="composer-paste-peek-head" data-testid="next-paste-peek-head">
-                            {head}
-                          </div>
-                          <div className="composer-paste-peek-bar">
-                            <span>{t(lang, 'paste_peek_all', { n: item.lines })}</span>
-                            <button
-                              type="button"
-                              className="composer-paste-peek-restore"
-                              data-testid="next-paste-peek-restore"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setPastePeekId(null);
-                                setPastes((prev) => prev.filter((p) => p.id !== item.id));
-                                setDraft((cur) => (cur ? `${cur}\n${item.text}` : item.text));
-                                requestAnimationFrame(() => {
-                                  area.current?.focus();
-                                  resize();
-                                });
-                              }}
-                            >
-                              {t(lang, 'paste_peek_restore')}
-                            </button>
-                          </div>
-                        </div>
-                      ) : null}
-                      <button
-                        type="button"
-                        className="composer-tag-x"
-                        data-testid="next-attach-remove"
-                        aria-label={t(lang, 'attach_remove', { name: item.name })}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          removePaste(item.id);
-                        }}
-                      >
-                        &times;
-                      </button>
-                    </span>
-                  );
-                })}
+                <ComposerTags lang={lang} {...att} />
               </div>
             ) : null}
             {atOpen ? (
@@ -1216,7 +761,7 @@ export function Composer({
                 resize();
               }}
               onKeyDown={onKeyDown}
-              onPaste={onPaste}
+              onPaste={att.onPaste}
             />
             <div className="composer-bar">
               {noModel ? (
@@ -1418,7 +963,7 @@ export function Composer({
               </div>
             </div>
           </div>
-          {dragging ? (
+          {att.dragging ? (
             <div className="composer-drop" data-testid="next-composer-drop">
               {DROP_ICON}
               <span className="composer-drop-title">{t(lang, 'attach_drop')}</span>
@@ -1440,7 +985,7 @@ export function Composer({
             onChange={(event) => {
               const files = [...(event.target.files || [])];
               event.target.value = '';
-              void addImageFiles(files);
+              void att.addImageFiles(files);
             }}
           />
           <input
@@ -1456,8 +1001,8 @@ export function Composer({
               if (!files.length) return;
               const imageFiles = files.filter(isImageFile);
               const nonImageFiles = files.filter((f) => !isImageFile(f));
-              if (imageFiles.length) void addImageFiles(imageFiles);
-              if (nonImageFiles.length) void uploadFiles(nonImageFiles);
+              if (imageFiles.length) void att.addImageFiles(imageFiles);
+              if (nonImageFiles.length) void att.uploadFiles(nonImageFiles);
             }}
           />
         </>
