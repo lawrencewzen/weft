@@ -1945,9 +1945,12 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.6; backgroun
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .stall-strip,
+  .stall-strip-stop,
   .agents-strip,
   .agents-strip-chevron {
     transition: none !important;
+    animation: none !important;
   }
 }
 

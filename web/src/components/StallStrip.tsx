@@ -33,13 +33,22 @@ export function StallStrip({
   }, [stalledSince]);
 
   useEffect(() => {
-    if (stalledSince == null) setStopping(false);
-  }, [stalledSince]);
+    setStopping(false);
+  }, [stalledSince, run.status, run.canStop]);
 
   if (stalledSince == null) return null;
 
   const minutes = stallMinutes(stalledSince, now);
   const tool = run.activeTool;
+
+  const handleStop = async () => {
+    setStopping(true);
+    try {
+      await onStop();
+    } catch {
+      setStopping(false);
+    }
+  };
 
   return (
     <div className="stall-strip" data-testid="next-stall-strip" role="status">
@@ -62,8 +71,7 @@ export function StallStrip({
           data-testid="next-stall-stop"
           disabled={stopping}
           onClick={() => {
-            setStopping(true);
-            void Promise.resolve(onStop()).catch(() => setStopping(false));
+            void handleStop();
           }}
         >
           {t(lang, 'stall_stop')}
