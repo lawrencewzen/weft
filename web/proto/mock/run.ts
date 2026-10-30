@@ -92,6 +92,14 @@ function clip(text: string, max: number): string {
 
 function planFor(text: string): Plan {
   const body = clip(text, 60);
+  if (/(卡住|stall)/i.test(text)) {
+    return {
+      tools: [
+        { kind: 'bash', command: 'npm run build -- --watch' },
+      ],
+      reply: '长时间运行的任务已完成输出。',
+    };
+  }
   if (/(测试|test|跑|run|命令|bash|npm|构建|build)/i.test(text)) {
     return {
       tools: [
@@ -506,20 +514,40 @@ async function runTool(
     conv.items.push(group);
     conv.view.itemIds.push(group.id);
     publishItem(conv, hub, group);
-    publishConversationView(conv, hub);
   }
+  const summary = plan.kind === 'bash' ? (plan.command || 'bash') : (plan.path || tool.title.zh || tool.kind);
+  conv.view.run.activeTool = {
+    name: tool.kind,
+    startedAt: Date.now(),
+    summary,
+  };
+  conv.view.run.lastActivityAt = Date.now();
+  publishConversationView(conv, hub);
   publishTool(conv, hub, tool, conversationGroupId(conv, tool.id));
   setPending(conv, hub, runningLine(tool));
+  if (plan.kind === 'bash' && plan.command?.includes('--watch')) {
+    conv.view.run.stalledSince = Date.now() - 120_000;
+    publishConversationView(conv, hub);
+    await sleep(1200);
+    if (run.cancelled) return;
+    conv.view.run.stalledSince = null;
+    conv.view.run.lastActivityAt = Date.now();
+    publishConversationView(conv, hub);
+  }
   if (tool.kind === 'bash') {
     await streamBash(conv, hub, run, tool);
   } else {
     await sleep(TOOL_MS);
   }
   if (run.cancelled) return;
+  conv.view.run.activeTool = null;
+  conv.view.run.stalledSince = null;
+  conv.view.run.lastActivityAt = Date.now();
   finishTool(tool);
   if (tool.kind === 'edit') applyEditChange(db, conv, hub, tool);
   publishTool(conv, hub, tool, conversationGroupId(conv, tool.id));
   refreshGroup(conv, hub, group, true);
+  publishConversationView(conv, hub);
   setPending(conv, hub, THINKING);
 }
 
@@ -769,6 +797,28 @@ export type SendResult =
   | { ok: true; runId: string }
   | { ok: false; status: number; error: string };
 
+async function resumeStalledSeed(
+  db: MockDb,
+  conv: MockConv,
+  hub: MockHub,
+  run: RunHandle,
+): Promise<void> {
+  await sleep(THINK_MS);
+  if (run.cancelled) return;
+  conv.view.run.stalledSince = null;
+  conv.view.run.activeTool = null;
+  conv.view.run.lastActivityAt = Date.now();
+  publishConversationView(conv, hub);
+
+  const steers = drainSteers(db, conv, hub, run);
+  const ack = steers.length
+    ? `收到插话：${steers.map((s) => `「${clip(s, 36)}」`).join('、')}。已终止 \`npm run build -- --watch\`，正在按新要求调整文案。\n\n已更新落地页首屏文案。`
+    : '收到，已终止后台命令并更新首屏文案。';
+  const ok = await streamAssistant(db, conv, hub, run, ack);
+  if (!ok || run.cancelled) return;
+  finishRun(db, conv, hub);
+}
+
 export function sendMessage(
   db: MockDb,
   conv: MockConv,
@@ -811,6 +861,9 @@ export function sendMessage(
     touch(conv);
     publishConversationView(conv, hub);
     publishSummary(db, hub, conv.view.id);
+    if (conv.run.id === 'run-seed-site-1') {
+      void resumeStalledSeed(db, conv, hub, conv.run);
+    }
     return { ok: true, runId: conv.run.id };
   }
   const id = nextId(db, 'u');

@@ -702,8 +702,10 @@ function gitConversation(now: number): MockConv {
   });
 }
 
-function siteOne(now: number): MockConv {
-  return conversation({
+function siteOne(now: number, threads: Map<string, MockSubThread>): MockConv {
+  const spawnTools = dispatchToolsOf(threads, 'c-site-1');
+  const spawnIds = Object.keys(spawnTools);
+  const conv = conversation({
     id: 'c-site-1',
     workspaceId: 'ws-website',
     title: '落地页首屏文案',
@@ -711,6 +713,10 @@ function siteOne(now: number): MockConv {
     used: 22_600,
     status: 'running',
     model: { sourceId: 'deepseek', modelId: 'deepseek-v4-pro', label: 'DeepSeek V4 Pro' },
+    tools: spawnTools,
+    subagents: [...threads.values()]
+      .filter((thread) => thread.view.parentConversationId === 'c-site-1')
+      .map((thread) => thread.view),
     items: [
       user('site-u1', '首屏那句 slogan 再收一点，别太像广告。'),
       assistant(
@@ -728,8 +734,27 @@ function siteOne(now: number): MockConv {
         ].join('\n'),
         'deepseek-v4-pro',
       ),
+      ...(spawnIds.length ? [group(
+        'site-g-sa',
+        spawnIds,
+        { zh: `调用了 ${spawnIds.length} 次工具`, en: `called a tool ${spawnIds.length} times` },
+      )] : []),
     ],
   });
+  conv.view.run = {
+    status: 'running',
+    startedAt: now - 9 * MINUTE,
+    pendingText: null,
+    canSend: true,
+    canStop: true,
+    lockedReason: null,
+    error: null,
+    lastActivityAt: now - 4 * MINUTE,
+    stalledSince: now - 4 * MINUTE,
+    activeTool: { name: 'bash', startedAt: now - 5 * MINUTE, summary: 'npm run build -- --watch' },
+  };
+  conv.run = { id: 'run-seed-site-1', cancelled: false, steers: [], followUps: [] };
+  return conv;
 }
 
 function siteTwo(now: number): MockConv {
@@ -880,7 +905,7 @@ export function createSeed(now: number): MockDb {
     docsConversation(now, subagents),
     scriptsConversation(now),
     gitConversation(now),
-    siteOne(now),
+    siteOne(now, subagents),
     siteTwo(now),
     archivedOne(now),
     archivedTwo(now),

@@ -288,3 +288,79 @@ test('kill -9 server mid-task, restart -> resumes to done without duplicate writ
     await srv.kill();
   }
 });
+
+test('main run stall strip appears after WEFT_MAIN_STALL_MS with tool summary, and disappears on activity or stop', async ({ page }) => {
+  const prepared = await prepareWorkspaces(['stall']);
+  const ws = prepared.dirs[0];
+  const scriptPath = path.join(prepared.root, 'stall.json');
+  await fs.writeFile(scriptPath, JSON.stringify({
+    turns: [
+      { tool: 'bash', args: { command: 'node -e "setTimeout(() => console.log(\'resumed\'), 3500)"' } },
+      { text: 'done after stall' },
+    ],
+  }));
+  const srv = await startServer({
+    extraEnv: {
+      WEFT_FAUX_SCRIPT: scriptPath,
+      WEFT_WORKSPACE_ROOT: prepared.root,
+      WEFT_MAIN_STALL_MS: '1500',
+    },
+  });
+  try {
+    const { conv } = await openWorkspaceConversation(srv, 'stall', ws);
+    await openNextChat(page, srv, conv.id);
+    await sendNext(page, 'run stall tool');
+
+    const stallStrip = page.getByTestId('next-stall-strip');
+    await expect(stallStrip).toBeVisible({ timeout: 20000 });
+    const toolEl = page.getByTestId('next-stall-tool');
+    await expect(toolEl).toBeVisible();
+    await expect(toolEl).toContainText('node -e');
+
+    const stopBtn = page.getByTestId('next-stall-stop');
+    await expect(stopBtn).toBeVisible();
+
+    // After tool finishes, output arrives and stall strip disappears
+    await expect(stallStrip).toBeHidden({ timeout: 20000 });
+    await waitRunDone(page);
+    await expect(page.getByTestId('next-item-assistant')).toContainText('done after stall');
+  } finally {
+    await srv.kill();
+  }
+});
+
+test('clicking stop on main stall strip terminates run and removes strip', async ({ page }) => {
+  const prepared = await prepareWorkspaces(['stall-stop']);
+  const ws = prepared.dirs[0];
+  const scriptPath = path.join(prepared.root, 'stall-stop.json');
+  await fs.writeFile(scriptPath, JSON.stringify({
+    turns: [
+      { tool: 'bash', args: { command: 'node -e "setTimeout(() => {}, 20000)"' } },
+      { text: 'never reached' },
+    ],
+  }));
+  const srv = await startServer({
+    extraEnv: {
+      WEFT_FAUX_SCRIPT: scriptPath,
+      WEFT_WORKSPACE_ROOT: prepared.root,
+      WEFT_MAIN_STALL_MS: '1500',
+    },
+  });
+  try {
+    const { conv } = await openWorkspaceConversation(srv, 'stall-stop', ws);
+    await openNextChat(page, srv, conv.id);
+    await sendNext(page, 'run forever');
+
+    const stallStrip = page.getByTestId('next-stall-strip');
+    await expect(stallStrip).toBeVisible({ timeout: 20000 });
+    const stopBtn = page.getByTestId('next-stall-stop');
+    await expect(stopBtn).toBeVisible();
+    await stopBtn.click();
+    await expect(stopBtn).toBeDisabled();
+    await expect(stallStrip).toBeHidden({ timeout: 15000 });
+    await waitRunStopped(page);
+  } finally {
+    await srv.kill();
+  }
+});
+

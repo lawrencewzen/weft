@@ -336,6 +336,41 @@ export function seedSubThreads(now: number): Map<string, MockSubThread> {
     });
   }
 
+  // c-site-1 is the stalled main-run seed; attach one running subagent so the
+  // stall strip and agents strip can stack without mutating mock internals.
+  const siteCid = 'c-site-1';
+  const siteRead = tool({
+    id: 'site-sa1-t1',
+    kind: 'read',
+    title: hint('index.html', 'index.html'),
+    path: 'index.html',
+    hint: hint('86 行', '86 lines'),
+    preview: '<h1>把需求交给一个会拆活的 Agent</h1>',
+    totalLines: 86,
+  });
+  const siteRunning = agent({
+    cid: siteCid,
+    agentId: 'sa-1',
+    title: '核对落地页 slogan 长度',
+    name: 'sub-slogan-len',
+    status: 'running',
+    startedAt: now - 3 * MINUTE,
+    lastActivityAt: now - 20_000,
+    currentAction: '正在读取 `index.html`',
+    progress: { step: 1, total: 2 },
+    toolCallId: 'site-sa-1',
+  });
+  out.set(subagentKey(siteCid, siteRunning.id), {
+    view: siteRunning,
+    items: [
+      user('site-sa1-u1', '看一下首屏 slogan 是不是太长。'),
+      group('site-sa1-g1', [siteRead.id], { zh: '读了 1 个文件', en: 'read 1 file' }),
+      assistant('site-sa1-a1', '正在对照三个方向的文案长度。'),
+    ],
+    tools: { [siteRead.id]: siteRead },
+    run: null,
+  });
+
   return out;
 }
 
