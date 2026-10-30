@@ -73,6 +73,9 @@ async function waitUntil(pred, label, inspect) {
     if (pred()) return;
     await Promise.resolve();
     await new Promise((resolve) => setImmediate(resolve));
+    // Coalesce uses real setTimeout(0), not the fake clock. A setImmediate-only
+    // pump can finish in < 1ms and miss it (CI: frames.length 2 !== 1).
+    await new Promise((resolve) => setTimeout(resolve, 0));
   }
   throw new Error(`${label}${inspect ? `: ${inspect()}` : ''}`);
 }
@@ -333,15 +336,21 @@ test('in-process: run end clears the stall timer', async () => {
 
     data.presented = presentedFixture({ status: 'done' });
     emit({ event: 'status', data: { status: 'done' } });
-    await drain();
-    clock.fireDue();
-    await drain();
-    assert.equal(watch.timerCount(), 0);
+    // Timer clears in applyStatus (microtask); idle upsert is coalesce + recompute.
+    await waitUntil(
+      () => (
+        watch.timerCount() === 0
+        && conversationUpserts(frames).some((frame) => frame.data.value?.run?.status !== 'running')
+      ),
+      'run end clears stall and upserts idle',
+      () => `timers=${watch.timerCount()} ${inspectRuns(frames)}`,
+    );
 
     const before = frames.length;
     clock.advance(501);
     clock.fireDue();
     await drain();
+    assert.equal(watch.timerCount(), 0);
     assert.equal(frames.length, before);
     const stalled = conversationUpserts(frames).filter((frame) => frame.data.value?.run?.stalledSince != null);
     assert.equal(stalled.length, 0, inspectRuns(frames));
