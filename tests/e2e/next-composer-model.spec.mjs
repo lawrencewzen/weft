@@ -230,13 +230,35 @@ test('context menu sets the model window and keeps it after refresh', async ({ p
       },
     });
 
+    // Re-open model menu, restore default -> without reload, context updates back to 8%
+    await page.getByTestId('next-model-chip').click();
+    await expect(page.getByTestId('next-model-menu')).toBeVisible();
+    await page.getByTestId('next-menu-context').hover();
+    await expect(page.getByTestId('next-sub-context')).toBeVisible();
+
+    const restoreDone = page.waitForResponse((res) => (
+      res.request().method() === 'PATCH'
+      && res.url().includes(`/api/v2/providers/${sourceId}`)
+      && res.ok()
+    ));
+    await page.getByTestId('next-context-restore').click();
+    await restoreDone;
+    await expect(page.getByTestId('next-model-menu')).toBeHidden();
+    await expect(page.getByTestId('next-context-chip')).toHaveText('8%');
+    expect(patches).toHaveLength(2);
+    expect(patches[1].body).toEqual({
+      overrides: {
+        'grok-4.6': { contextWindow: null },
+      },
+    });
+
     await page.reload();
-    await expect(page.getByTestId('next-context-chip')).toHaveText('6%');
+    await expect(page.getByTestId('next-context-chip')).toHaveText('8%');
     const listed = await apiV2(srv, 'GET', '/api/v2/providers');
     const saved = (listed.body.providers || []).find((item) => item.id === sourceId);
     const row = (saved?.models || []).find((item) => item.id === 'grok-4.6');
-    expect(row?.contextWindow).toBe(256000);
-    expect(row?.overridden?.contextWindow).toBe(true);
+    expect(row?.contextWindow).toBe(200000);
+    expect(row?.overridden?.contextWindow).toBeFalsy();
   } finally {
     await srv.kill();
   }

@@ -248,20 +248,6 @@ export function contextIsWarn(level: ContextUsage['level'] | undefined): boolean
   return level === 'warn' || level === 'full';
 }
 
-export function computeContextUsage(used: number, window: number): ContextUsage {
-  const resolvedWindow = window > 0 && Number.isFinite(window) ? window : 128_000;
-  const resolvedUsed = used > 0 && Number.isFinite(used) ? used : 0;
-  const ratio = resolvedWindow > 0 ? Math.min(1, resolvedUsed / resolvedWindow) : 0;
-  const percent = Math.min(100, Math.round(ratio * 100));
-  const level: ContextUsage['level'] = percent >= 95 ? 'full' : percent >= 80 ? 'warn' : 'ok';
-  return {
-    used: resolvedUsed,
-    window: resolvedWindow,
-    percent,
-    level,
-  };
-}
-
 export function clampThinkingLevel(
   levels: readonly ThinkingLevel[] | undefined | null,
   requested: ThinkingLevel | string | null | undefined,
