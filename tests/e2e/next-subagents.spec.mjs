@@ -402,6 +402,7 @@ test('dispatch card appears in thread when spawning sub-agent, transitioning fro
     const row = card.getByTestId('next-dispatch-row').first();
     await expect(row).toBeVisible();
     await expect(row.getByTestId('next-dispatch-name')).toHaveText('worker');
+    await expect(row.getByTestId('next-dispatch-task')).toHaveCount(0);
 
     // Status is initially running
     await expect(row).toHaveAttribute('data-status', /running|waiting/);
@@ -410,6 +411,37 @@ test('dispatch card appears in thread when spawning sub-agent, transitioning fro
     // After child finishes, status transitions to done
     await expect(row).toHaveAttribute('data-status', 'done', { timeout: 30000 });
     await expect(row.getByTestId('next-dispatch-status')).toHaveText('完成');
+  } finally {
+    await srv.kill();
+  }
+});
+
+test('dispatch card and report display title instead of internal name when spawn provides title', async ({ page }) => {
+  const prepared = await prepareWorkspaces(['repo']);
+  const script = await writeScript(prepared.root, 'spawn-title.json', [
+    { tool: 'subagent', args: { action: 'spawn', name: 'worker-a', title: '核对代码覆盖率', message: HOLD } },
+    { text: 'parent-idle' },
+    { when: HOLD, delayMs: 4000, text: 'child-done' },
+  ]);
+  const srv = await startServer({
+    extraEnv: { WEFT_FAUX_SCRIPT: script, WEFT_WORKSPACE_ROOT: prepared.root },
+  });
+  try {
+    const { conv } = await openWorkspaceConversation(srv, 'demo', prepared.dirs[0]);
+    await openNextChat(page, srv, conv.id);
+    await sendNext(page, '请派子代理');
+
+    const card = page.getByTestId('next-dispatch-card');
+    await expect(card).toBeVisible({ timeout: 45000 });
+
+    const row = card.getByTestId('next-dispatch-row').first();
+    await expect(row).toBeVisible();
+    await expect(row.getByTestId('next-dispatch-name')).toHaveText('核对代码覆盖率');
+    await expect(row.getByTestId('next-dispatch-task')).toHaveCount(0);
+    await expect(row).not.toContainText('worker-a');
+
+    // Wait until done
+    await expect(row).toHaveAttribute('data-status', 'done', { timeout: 30000 });
   } finally {
     await srv.kill();
   }

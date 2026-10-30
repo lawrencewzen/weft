@@ -62,7 +62,7 @@ export function DispatchCard({ cid, agents, lang }: Props) {
     setMenu({
       x: ev.clientX,
       y: ev.clientY,
-      title: agent.title || agent.name,
+      title: (agent.title && agent.title.trim()) || agent.name || '',
       items,
     });
   }, [cid, lang, onToast, openSubagent, store]);
@@ -70,8 +70,7 @@ export function DispatchCard({ cid, agents, lang }: Props) {
   return (
     <div className="dispatch-card" data-testid="next-dispatch-card">
       {agents.map((agent) => {
-        const displayName = agent.name || agent.title || '';
-        const showTask = Boolean(agent.title && agent.title !== displayName);
+        const displayName = (agent.title && agent.title.trim()) || agent.name || '';
         const action = subagentActionText(agent);
         const tooltip = action ? `${displayName}：${action}` : displayName;
 
@@ -97,9 +96,6 @@ export function DispatchCard({ cid, agents, lang }: Props) {
               aria-hidden="true"
             />
             <span className="dispatch-card-name" data-testid="next-dispatch-name">{displayName}</span>
-            {showTask ? (
-              <span className="dispatch-card-task" data-testid="next-dispatch-task">{agent.title}</span>
-            ) : null}
             <span className="dispatch-card-status" data-testid="next-dispatch-status">
               {statusLabel(agent.status, lang)}
             </span>

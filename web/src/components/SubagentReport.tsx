@@ -1,7 +1,10 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import type { Lang } from '../data/lang';
 import type { components } from '../../../src/v2/contract.gen';
 import { focusSubagent } from '../data/focusSubagent';
+import { useSession } from '../data/session';
+import { conversationTopic, subagentTopic } from '../data/store';
+import { useStoreTopics } from '../data/useStoreTopic';
 import { t } from '../i18n';
 import { Markdown } from './Markdown';
 import { StatusIcon } from './StatusIcon';
@@ -18,10 +21,31 @@ export function SubagentReport({
   conversationId?: string | null;
 }) {
   const [open, setOpen] = useState(false);
+  const { store } = useSession();
+
+  const topicsToWatch = useMemo(() => {
+    if (!conversationId) return [];
+    const list = [
+      conversationTopic(conversationId),
+      `${conversationTopic(conversationId)}#subagent`,
+    ];
+    if (item.subagentId) {
+      list.push(subagentTopic(conversationId, item.subagentId));
+      list.push(`${subagentTopic(conversationId, item.subagentId)}#subagent`);
+    }
+    return list;
+  }, [conversationId, item.subagentId]);
+
+  useStoreTopics(store, topicsToWatch);
+
+  const agent = conversationId && item.subagentId
+    ? store.subagent(conversationId, item.subagentId) || store.subagents(conversationId).find((a) => a.id === item.subagentId)
+    : undefined;
+  const name = (agent?.title && agent.title.trim()) || item.name;
   const failed = item.reportKind === 'failed';
   const title = failed
-    ? t(lang, 'subagent_report_failed', { name: item.name })
-    : t(lang, 'subagent_report_answered', { name: item.name });
+    ? t(lang, 'subagent_report_failed', { name })
+    : t(lang, 'subagent_report_answered', { name });
   const reason = failed ? item.body.replace(/\s+/g, ' ').trim().slice(0, 48) : '';
 
   return (

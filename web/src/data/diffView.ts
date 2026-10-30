@@ -1,5 +1,6 @@
 import type { Change, Diff, DiffHunk } from './api';
 import type { Lang } from './lang';
+import type { EntityStore, Subagent } from './store';
 import { t } from '../i18n';
 
 export type DiffOp = 'ctx' | 'add' | 'del';
@@ -104,10 +105,18 @@ export function subagentDisplayName(agentId: string, name?: string | null): stri
   return last || rawId;
 }
 
+export type SubagentTitleLookup =
+  | EntityStore
+  | readonly Subagent[]
+  | {
+      subagent?: (cid: string, agentId: string) => Subagent | undefined;
+      subagents?: (cid: string) => Subagent[];
+    };
+
 /**
  * Format the attribution text for a file change header.
  * - main -> "主 Agent" / "Main agent"
- * - subagent -> "子 · <name>" / "Sub · <name>" (falls back to the last segment of agentId if name is empty)
+ * - subagent -> "子 Agent" / "Sub-agent"
  * - null / missing -> null (do not display)
  */
 export function formatChangeBy(
@@ -119,16 +128,39 @@ export function formatChangeBy(
     return t(lang, 'change_by_main');
   }
   if (by.kind === 'subagent') {
-    const name = subagentDisplayName(by.agentId, by.name);
-    return t(lang, 'change_by_subagent', { name });
+    return t(lang, 'change_by_subagent');
   }
   return null;
 }
 
-/** Full name / title of the subagent responsible for this change, for hover tooltips. */
+/**
+ * Full name / title of the subagent responsible for this change, for hover tooltips.
+ * Looks up agent title in store / subagent list; falls back to name / id last segment.
+ */
 export function changeByTitle(
   by: Change['by'] | null | undefined,
+  storeOrSubagents?: SubagentTitleLookup | null,
+  conversationId?: string | null,
 ): string | undefined {
   if (!by || by.kind !== 'subagent') return undefined;
+  let title: string | undefined;
+  if (Array.isArray(storeOrSubagents)) {
+    const found = storeOrSubagents.find((a) => a.id === by.agentId);
+    title = found?.title;
+  } else if (storeOrSubagents && typeof storeOrSubagents === 'object') {
+    const cid = conversationId || '';
+    const lookup = storeOrSubagents as {
+      subagent?: (cid: string, agentId: string) => Subagent | undefined;
+      subagents?: (cid: string) => Subagent[];
+    };
+    if (typeof lookup.subagent === 'function') {
+      title = lookup.subagent(cid, by.agentId)?.title;
+    }
+    if (!title && typeof lookup.subagents === 'function') {
+      title = lookup.subagents(cid)?.find((a: Subagent) => a.id === by.agentId)?.title;
+    }
+  }
+  const trimmed = typeof title === 'string' ? title.trim() : '';
+  if (trimmed) return trimmed;
   return subagentDisplayName(by.agentId, by.name);
 }

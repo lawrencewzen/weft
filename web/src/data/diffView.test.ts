@@ -115,22 +115,20 @@ describe('formatChangeBy', () => {
     expect(formatChangeBy({ kind: 'main' }, 'en')).toBe('Main agent');
   });
 
-  it('formats subagent attribution with name in zh and en', () => {
+  it('formats subagent attribution as fixed label in zh and en', () => {
     const sub = { kind: 'subagent' as const, agentId: 'c1:sub:sa-1', name: 'sub-load-order' };
-    expect(formatChangeBy(sub, 'zh')).toBe('子 · sub-load-order');
-    expect(formatChangeBy(sub, 'en')).toBe('Sub · sub-load-order');
-  });
+    expect(formatChangeBy(sub, 'zh')).toBe('子 Agent');
+    expect(formatChangeBy(sub, 'en')).toBe('Sub-agent');
 
-  it('falls back to the last segment of agentId when subagent name is empty or whitespace', () => {
     const emptyName = { kind: 'subagent' as const, agentId: 'c1:sub:sa-2', name: '' };
-    expect(formatChangeBy(emptyName, 'zh')).toBe('子 · sa-2');
-    expect(formatChangeBy(emptyName, 'en')).toBe('Sub · sa-2');
+    expect(formatChangeBy(emptyName, 'zh')).toBe('子 Agent');
+    expect(formatChangeBy(emptyName, 'en')).toBe('Sub-agent');
 
     const spacesName = { kind: 'subagent' as const, agentId: 'c1:sub:worker-1', name: '   ' };
-    expect(formatChangeBy(spacesName, 'zh')).toBe('子 · worker-1');
+    expect(formatChangeBy(spacesName, 'zh')).toBe('子 Agent');
 
     const bareId = { kind: 'subagent' as const, agentId: 'standalone-agent', name: '' };
-    expect(formatChangeBy(bareId, 'zh')).toBe('子 · standalone-agent');
+    expect(formatChangeBy(bareId, 'zh')).toBe('子 Agent');
     expect(subagentDisplayName('standalone-agent', '')).toBe('standalone-agent');
   });
 
@@ -140,9 +138,73 @@ describe('formatChangeBy', () => {
     expect(formatChangeBy({ kind: 'other' } as unknown as { kind: 'main' }, 'zh')).toBeNull();
   });
 
-  it('provides hover title for subagent (full name) and undefined for main/null', () => {
-    expect(changeByTitle({ kind: 'subagent', agentId: 'c1:sub:sa-1', name: 'sub-load-order' })).toBe('sub-load-order');
+  it('provides hover title for subagent (title first, falls back to name / id last segment)', () => {
+    const sub = { kind: 'subagent' as const, agentId: 'c1:sub:sa-1', name: 'sub-load-order' };
+    const mockStore = {
+      subagent: (_cid: string, id: string) => {
+        if (id === 'c1:sub:sa-1') {
+          return {
+            id: 'c1:sub:sa-1',
+            parentConversationId: 'c1',
+            title: '核对加载顺序',
+            name: 'sub-load-order',
+            mode: 'background' as const,
+            status: 'running' as const,
+            startedAt: 1000,
+            lastActivityAt: 2000,
+            endedAt: null,
+            currentAction: null,
+            progress: null,
+            toolCallId: null,
+          };
+        }
+        return undefined;
+      },
+    };
+
+    // Store has title -> returns title
+    expect(changeByTitle(sub, mockStore, 'c1')).toBe('核对加载顺序');
+
+    // Subagent array has title -> returns title
+    expect(changeByTitle(sub, [{
+      id: 'c1:sub:sa-1',
+      parentConversationId: 'c1',
+      title: '从列表查找的标题',
+      name: 'sub-load-order',
+      mode: 'background' as const,
+      status: 'running' as const,
+      startedAt: 1000,
+      lastActivityAt: 2000,
+      endedAt: null,
+      currentAction: null,
+      progress: null,
+      toolCallId: null,
+    }])).toBe('从列表查找的标题');
+
+    // Store has empty title -> falls back to name
+    const mockStoreEmptyTitle = {
+      subagent: () => ({
+        id: 'c1:sub:sa-1',
+        parentConversationId: 'c1',
+        title: '',
+        name: 'sub-load-order',
+        mode: 'background' as const,
+        status: 'running' as const,
+        startedAt: 1000,
+        lastActivityAt: 2000,
+        endedAt: null,
+        currentAction: null,
+        progress: null,
+        toolCallId: null,
+      }),
+    };
+    expect(changeByTitle(sub, mockStoreEmptyTitle, 'c1')).toBe('sub-load-order');
+
+    // Not found in store -> falls back to name / id last segment
+    expect(changeByTitle(sub, null, 'c1')).toBe('sub-load-order');
     expect(changeByTitle({ kind: 'subagent', agentId: 'c1:sub:sa-2', name: '' })).toBe('sa-2');
+
+    // Main agent or null -> returns undefined
     expect(changeByTitle({ kind: 'main' })).toBeUndefined();
     expect(changeByTitle(null)).toBeUndefined();
   });

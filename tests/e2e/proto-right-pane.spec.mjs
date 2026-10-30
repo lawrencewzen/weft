@@ -24,12 +24,12 @@ test('diff, file tree, preview, save and the 409 conflict demo', async ({ page }
   const testRow = page.locator('[data-testid=next-change-row][data-path="web/src/data/store.test.ts"]');
   const storeRow = page.locator('[data-testid=next-change-row][data-path="web/src/data/store.ts"]');
 
-  // Attribution: main agent displays "主 Agent", subagent displays "子 · <name>".
-  await expect(changesPaneRow.getByTestId('next-change-by')).toHaveText('子 · sub-load-order');
-  await expect(changesPaneRow.getByTestId('next-change-by')).toHaveAttribute('title', 'sub-load-order');
+  // Attribution: main agent displays "主 Agent", subagent displays fixed "子 Agent" with title tooltip.
+  await expect(changesPaneRow.getByTestId('next-change-by')).toHaveText('子 Agent');
+  await expect(changesPaneRow.getByTestId('next-change-by')).toHaveAttribute('title', '核对 store.ts 的加载顺序');
   await expect(diffViewRow.getByTestId('next-change-by')).toHaveText('主 Agent');
-  await expect(testRow.getByTestId('next-change-by')).toHaveText('子 · sub-delta-test');
-  await expect(testRow.getByTestId('next-change-by')).toHaveAttribute('title', 'sub-delta-test');
+  await expect(testRow.getByTestId('next-change-by')).toHaveText('子 Agent');
+  await expect(testRow.getByTestId('next-change-by')).toHaveAttribute('title', '补 text.delta 偏移的用例');
   await expect(storeRow.getByTestId('next-change-by')).toHaveText('主 Agent');
 
   // Clicking subagent attribution focuses that subagent in the status strip without collapsing the file diff.
