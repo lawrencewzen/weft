@@ -1,8 +1,11 @@
-import { useState, type KeyboardEvent, type MouseEvent } from 'react';
+import { useMemo, useState, type KeyboardEvent, type MouseEvent } from 'react';
 import type { Lang } from '../data/lang';
 import { changeByTitle, flattenDiff, formatChangeBy } from '../data/diffView';
 import { focusSubagent } from '../data/focusSubagent';
 import { useRightPane } from '../data/rightPaneContext';
+import { useSession } from '../data/session';
+import { conversationTopic } from '../data/store';
+import { useStoreTopics } from '../data/useStoreTopic';
 import { t } from '../i18n';
 import { CtxMenu, type CtxMenuItem } from './CtxMenu';
 
@@ -15,7 +18,9 @@ const CHEV = (
 type MenuState = { x: number; y: number; path: string };
 
 export function ChangesPane({ lang }: { lang: Lang }) {
+  const { store } = useSession();
   const {
+    conversationId,
     visibleChanges,
     totals,
     openPaths,
@@ -25,6 +30,15 @@ export function ChangesPane({ lang }: { lang: Lang }) {
     copyPath,
   } = useRightPane();
   const [menu, setMenu] = useState<MenuState | null>(null);
+
+  const subagentTopics = useMemo(() => {
+    if (!conversationId) return [];
+    return [
+      conversationTopic(conversationId),
+      `${conversationTopic(conversationId)}#subagent`,
+    ];
+  }, [conversationId]);
+  useStoreTopics(store, subagentTopics);
 
   function onCtx(ev: MouseEvent, path: string) {
     ev.preventDefault();
@@ -56,7 +70,7 @@ export function ChangesPane({ lang }: { lang: Lang }) {
         const diff = diffs[change.path];
         const by = change.by;
         const byLabel = formatChangeBy(by, lang);
-        const byTitle = changeByTitle(by);
+        const byTitle = changeByTitle(by, store, conversationId);
         const isSubagent = by?.kind === 'subagent';
         const subagentId = by?.kind === 'subagent' ? by.agentId : null;
 

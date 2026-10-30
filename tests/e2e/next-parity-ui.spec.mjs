@@ -24,7 +24,7 @@ test('background sub-agent report is a folded card, not a user bubble, including
   const scriptPath = path.join(prepared.root, 'subagent-report.json');
   await fs.writeFile(scriptPath, JSON.stringify({
     turns: [
-      { tool: 'subagent', args: { action: 'spawn', name: BACKGROUND_NAME, message: BACKGROUND_MESSAGE } },
+      { tool: 'subagent', args: { action: 'spawn', name: BACKGROUND_NAME, title: '工作区检查', message: BACKGROUND_MESSAGE } },
       { text: '已派出巡查。' },
       { when: BACKGROUND_MESSAGE, text: CHILD_TEXT },
       { when: 'no reply needed', text: '已记下巡查结果。' },
@@ -46,8 +46,8 @@ test('background sub-agent report is a folded card, not a user bubble, including
     await expect(card).toHaveAttribute('data-kind', 'subagent-report');
     await expect(card).toHaveClass(/msg-side-agent/);
     await expect(card).not.toHaveClass(/is-open/);
-    await expect(card.getByTestId('next-subagent-report-summary')).toContainText('子 Agent「');
-    await expect(card.getByTestId('next-subagent-report-summary')).toContainText('已交回结果');
+    await expect(card.getByTestId('next-subagent-report-summary')).toContainText('子 Agent「工作区检查」已交回结果');
+    await expect(card.getByTestId('next-subagent-report-summary')).not.toContainText(BACKGROUND_NAME);
     await expect(card.getByTestId('next-subagent-report-body')).toBeHidden();
 
     const users = page.getByTestId('next-item-user');

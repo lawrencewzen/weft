@@ -109,6 +109,18 @@ test('dispatch card click opens status strip and focuses that subagent row', asy
   const card = page.getByTestId('next-dispatch-card');
   await expect(card).toBeVisible();
 
+  // Dispatch card rows display title and not internal subagent name (e.g. sub-delta-test)
+  const dispatchRows = card.getByTestId('next-dispatch-row');
+  const sa2Row = card.locator('[data-agent-id="c-rich:sub:sa-2"]');
+  await expect(sa2Row.getByTestId('next-dispatch-name')).toHaveText('补 text.delta 偏移的用例');
+  await expect(sa2Row).not.toContainText('sub-delta-test');
+  await expect(card.getByTestId('next-dispatch-task')).toHaveCount(0);
+
+  // Subagent reports display subagent titles
+  const reportSummary = page.locator('[data-testid=next-item-subagent-report][data-id="rich-r1"] .subagent-report-summary');
+  await expect(reportSummary).toContainText('子 Agent「补 text.delta 偏移的用例」已交回结果');
+  await expect(reportSummary).not.toContainText('sub-delta-test');
+
   const strip = page.getByTestId('next-agents-strip');
   await expect(strip).toBeVisible();
   // Initially strip is collapsed
@@ -116,7 +128,6 @@ test('dispatch card click opens status strip and focuses that subagent row', asy
   await expect(strip).toHaveAttribute('data-open', 'false');
 
   // Click row 0 (sa-1) in dispatch card
-  const dispatchRows = card.getByTestId('next-dispatch-row');
   await dispatchRows.nth(0).click();
 
   // Strip should now be expanded and the sa-1 row opened in-place

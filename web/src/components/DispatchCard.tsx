@@ -62,7 +62,7 @@ export function DispatchCard({ cid, agents, lang }: Props) {
     setMenu({
       x: ev.clientX,
       y: ev.clientY,
-      title: agent.title || agent.name,
+      title: (agent.title && agent.title.trim()) || agent.name || '',
       items,
     });
   }, [cid, lang, onToast, openSubagent, store]);
@@ -70,7 +70,7 @@ export function DispatchCard({ cid, agents, lang }: Props) {
   return (
     <div className="dispatch-card" data-testid="next-dispatch-card">
       {agents.map((agent) => {
-        const displayName = agent.title || agent.name || '';
+        const displayName = (agent.title && agent.title.trim()) || agent.name || '';
         const action = subagentActionText(agent);
         const tooltip = action ? `${displayName}：${action}` : displayName;
 
