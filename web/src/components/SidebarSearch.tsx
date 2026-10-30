@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { createPortal } from 'react-dom';
 import type { Lang } from '../data/lang';
 import { formatRelativeTime } from '../data/relativeTime';
 import type { WorkspaceGroup } from '../data/sidebarModel';
@@ -103,26 +104,26 @@ export function SidebarSearch({
     }
   }
 
-  return (
+  return createPortal(
     <div
-      className="modal-overlay search-modal-overlay"
+      className="search-palette-overlay"
       data-testid="next-search-modal"
-      onClick={onClose}
+      onMouseDown={onClose}
     >
       <div
-        className="modal-dialog search-modal-dialog"
+        className="search-palette"
         role="dialog"
         aria-modal="true"
         aria-label={t(lang, 'search')}
-        onClick={(ev) => ev.stopPropagation()}
+        onMouseDown={(ev) => ev.stopPropagation()}
         onKeyDown={handleKeyDown}
       >
-        <div className="search-modal-header">
-          <span className="search-modal-ic">{SEARCH_ICON}</span>
+        <div className="search-palette-head">
+          <span className="search-palette-ic">{SEARCH_ICON}</span>
           <input
             ref={inputRef}
             type="text"
-            className="search-modal-input"
+            className="search-palette-input"
             data-testid="next-search-input"
             placeholder={t(lang, 'search_placeholder')}
             value={query}
@@ -130,57 +131,65 @@ export function SidebarSearch({
           />
           <button
             type="button"
-            className="confirm-close"
+            className="search-palette-esc"
             onClick={onClose}
             aria-label={t(lang, 'btn_cancel')}
           >
-            ×
+            Esc
           </button>
         </div>
 
-        <div className="search-modal-list" data-testid="next-search-results" ref={listRef}>
+        <div className="search-palette-list" data-testid="next-search-results" ref={listRef}>
           {results.length > 0 ? (
-            results.map((item, index) => {
-              const { conv, workspace } = item;
-              const isSelected = index === selectedIndex;
-              const iconStatus = statusIconFor(conv.status);
-              const relTime = formatRelativeTime(lang, conv.updatedAt);
-              return (
-                <div
-                  key={conv.id}
-                  className={`search-result-row${isSelected ? ' is-selected' : ''}`}
-                  data-testid="next-search-result"
-                  data-id={conv.id}
-                  onMouseEnter={() => setSelectedIndex(index)}
-                  onClick={() => {
-                    onSelectConversation(workspace.id, conv.id);
-                    onClose();
-                  }}
-                >
-                  <span className="search-result-status">
-                    {iconStatus ? (
-                      <StatusIcon status={iconStatus} size={14} lang={lang} />
-                    ) : null}
-                  </span>
-                  <span className="search-result-title">
-                    {conv.title || t(lang, 'default_conversation_title')}
-                  </span>
-                  <span className="search-result-project">{workspace.name}</span>
-                  <span className="search-result-time">{relTime}</span>
-                </div>
-              );
-            })
+            <>
+              {!query.trim() ? (
+                <div className="search-palette-label">{t(lang, 'search_recent')}</div>
+              ) : null}
+              {results.map((item, index) => {
+                const { conv, workspace } = item;
+                const isSelected = index === selectedIndex;
+                const iconStatus = statusIconFor(conv.status);
+                const relTime = formatRelativeTime(lang, conv.updatedAt);
+                return (
+                  <div
+                    key={conv.id}
+                    className={`search-result-row${isSelected ? ' is-selected' : ''}`}
+                    data-testid="next-search-result"
+                    data-id={conv.id}
+                    onMouseEnter={() => setSelectedIndex(index)}
+                    onClick={() => {
+                      onSelectConversation(workspace.id, conv.id);
+                      onClose();
+                    }}
+                  >
+                    <span className="search-result-status">
+                      {iconStatus ? (
+                        <StatusIcon status={iconStatus} size={14} lang={lang} />
+                      ) : null}
+                    </span>
+                    <span className="search-result-title">
+                      {conv.title || t(lang, 'default_conversation_title')}
+                    </span>
+                    <span className="search-result-project">{workspace.name}</span>
+                    <span className="search-result-time">{relTime}</span>
+                  </div>
+                );
+              })}
+            </>
           ) : (
-            <div className="search-modal-empty" data-testid="next-search-empty">
+            <div className="search-palette-empty" data-testid="next-search-empty">
               {t(lang, 'search_no_results')}
             </div>
           )}
         </div>
 
-        <div className="search-modal-footer">
-          <span>{t(lang, 'search_hint')}</span>
+        <div className="search-palette-foot">
+          <span><kbd>↑</kbd><kbd>↓</kbd>{t(lang, 'search_kbd_move')}</span>
+          <span><kbd>↵</kbd>{t(lang, 'search_kbd_open')}</span>
+          <span><kbd>Esc</kbd>{t(lang, 'search_kbd_close')}</span>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
