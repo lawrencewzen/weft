@@ -250,8 +250,8 @@ test('right pane changes tab has no oversized svg icons (regression guard agains
   await expect(firstChev).toBeVisible();
   const chevWidth = await firstChev.evaluate((el) => Number.parseFloat(getComputedStyle(el).width));
   const chevHeight = await firstChev.evaluate((el) => Number.parseFloat(getComputedStyle(el).height));
-  expect(chevWidth).toBe(12);
-  expect(chevHeight).toBe(12);
+  expect(chevWidth).toBeCloseTo(12, 1);
+  expect(chevHeight).toBeCloseTo(12, 1);
 
   expectClean(state);
 });

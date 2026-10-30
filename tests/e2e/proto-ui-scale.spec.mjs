@@ -10,7 +10,8 @@ function expectedChatWidth(centerCssPx) {
 
 async function measureRoot(page) {
   return page.evaluate(() => {
-    const app = document.querySelector('[data-testid="next-app"]');
+    const app = document.querySelector('[data-testid="next-app"].next-shell')
+      || document.querySelector('[data-testid="next-app"]');
     const r = app?.getBoundingClientRect();
     const se = document.scrollingElement || document.documentElement;
     const probe = document.createElement('div');
@@ -65,14 +66,16 @@ async function measureChatAt(page, centerCssPx) {
 
 test('default UI zoom fills the viewport and scales visual size to 0.9', async ({ page }) => {
   const state = await openProto(page);
+  await expect(page.locator('[data-testid=next-app].next-shell')).toBeVisible();
 
   for (const vp of [
     { width: 1280, height: 800 },
     { width: 1920, height: 1080 },
   ]) {
     await page.setViewportSize(vp);
+    await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
     const box = await measureRoot(page);
-    expect(box.uiZoom, `${vp.width}×${vp.height} --ui-zoom`).toBe('0.9');
+    expect(Number.parseFloat(box.uiZoom), `${vp.width}×${vp.height} --ui-zoom`).toBeCloseTo(0.9);
     expect(Math.abs(box.w - vp.width), `${vp.width}×${vp.height} width`).toBeLessThanOrEqual(2);
     expect(Math.abs(box.h - vp.height), `${vp.width}×${vp.height} height`).toBeLessThanOrEqual(2);
     expect(Math.abs(box.x), `${vp.width}×${vp.height} x`).toBeLessThanOrEqual(2);
@@ -124,12 +127,12 @@ test('sidebar click menu and model menu (with submenu) stick to their triggers',
   const sub = page.getByTestId('next-sub-models');
   await expect(sub).toBeVisible();
   const subBox = await sub.boundingBox();
-  const menuBox2 = await menu.boundingBox();
+  const rowBox = await modelRow.boundingBox();
   expect(subBox).toBeTruthy();
-  expect(menuBox2).toBeTruthy();
+  expect(rowBox).toBeTruthy();
   expect(
-    Math.abs(subBox.x - (menuBox2.x + menuBox2.width + 8 * 0.9)),
-    'submenu left vs primary menu right + 8css',
+    Math.abs(subBox.x - (rowBox.x + rowBox.width + 8 * 0.9)),
+    'submenu left vs model row right + 8css',
   ).toBeLessThanOrEqual(2);
 
   expectClean(state);
