@@ -534,7 +534,7 @@ const en: Record<keyof typeof zh, string> = {
   draft_hero_after: '?',
   draft_hero_chat: 'What should we do?',
   draft_hint: 'The agent will work in the {name} folder.',
-  draft_hint_chat: 'No project selected. Send a message to start. The agent works in this chat’s own folder.',
+  draft_hint_chat: 'No project selected. You can send a message right away. The agent works in this chat’s folder.',
   no_project: 'No project',
   ws_chip_bound: 'Already bound. Pick a workspace in a new chat.',
   ws_chip_new: 'New workspace…',

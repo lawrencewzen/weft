@@ -1,6 +1,8 @@
 import { test, expect } from '@playwright/test';
 import { readDiscovery, startServer, prepareWorkspaces, api } from './helpers/server.mjs';
 
+test.use({ locale: 'zh-CN' });
+
 function attachCspLog(page) {
   const csp = [];
   page.on('console', (msg) => {

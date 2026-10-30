@@ -1,6 +1,8 @@
 import { test, expect } from '@playwright/test';
 import { readDiscovery, startServer } from './helpers/server.mjs';
 
+test.use({ locale: 'zh-CN' });
+
 function attachCspLog(page) {
   const csp = [];
   page.on('console', (msg) => {
@@ -10,18 +12,29 @@ function attachCspLog(page) {
   return csp;
 }
 
-test('GET / without a session prompts to use weft open', async ({ page }) => {
+async function expectUnauthenticatedPrompt(page, message) {
   const srv = await startServer();
   const csp = attachCspLog(page);
   try {
     await page.goto(`${srv.url}/`);
     await expect(page.getByTestId('next-app')).toBeVisible();
     await expect(page.locator('.next-home h1')).toHaveText('Weft');
-    await expect(page.getByTestId('next-error')).toHaveText('请用 weft open 打开新版网页端');
+    await expect(page.getByTestId('next-error')).toHaveText(message);
     expect(csp, 'page console has no CSP errors').toEqual([]);
   } finally {
     await srv.kill();
   }
+}
+
+test('GET / without a session prompts to use weft open', async ({ page }) => {
+  await expectUnauthenticatedPrompt(page, '请用 weft open 打开新版网页端');
+});
+
+test.describe('en-US', () => {
+  test.use({ locale: 'en-US' });
+  test('GET / without a session prompts in English', async ({ page }) => {
+    await expectUnauthenticatedPrompt(page, 'Open the new web UI with weft open');
+  });
 });
 
 test('GET /auth?code= exchanges a web-code for a session and shows protocol 2.0.0', async ({ page }) => {
@@ -48,7 +61,7 @@ test('GET /auth?code= exchanges a web-code for a session and shows protocol 2.0.
     await expect(page).toHaveURL(/\/new$/);
     await expect(page.getByTestId('next-home-title')).toHaveCount(0);
     await expect(page.getByTestId('next-home-add')).toHaveCount(0);
-    await expect(page.getByTestId('next-ws-chip')).toContainText(/不选项目|No project/);
+    await expect(page.getByTestId('next-ws-chip')).toContainText('不选项目');
     await expect(page.getByTestId('next-composer-input')).toBeEnabled();
     await page.getByTestId('next-ws-empty-add').click();
     await expect(page.getByTestId('next-ws-dialog')).toBeVisible();

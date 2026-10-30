@@ -20,7 +20,7 @@ describe('i18n empty home and branding', () => {
     expect(t('en', 'no_project')).toBe('No project');
     expect(t('en', 'chats_label')).toBe('Chats');
     expect(t('en', 'draft_hero_chat')).toBe('What should we do?');
-    expect(t('en', 'draft_hint_chat')).toBe('No project selected. Send a message to start. The agent works in this chat’s own folder.');
+    expect(t('en', 'draft_hint_chat')).toBe('No project selected. You can send a message right away. The agent works in this chat’s folder.');
   });
 
   it('english unauthenticated copy is English', () => {

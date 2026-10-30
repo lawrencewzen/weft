@@ -50,7 +50,6 @@ const EXCLUDE_SEL = [
   '.ws-chip-path',
   '[data-testid="next-change-by"]',
   '.composer-queue-text',
-  '[data-testid="next-draft-hero-ws"]',
 ].join(',');
 
 /**
@@ -123,24 +122,26 @@ test('english UI chrome has no Chinese on the main surfaces', async ({ page }) =
   await page.keyboard.press('Escape');
   await expect(page.getByTestId('next-settings')).toHaveCount(0);
 
-  // Conversation page (default seeded chat)
+  // Conversation page (default seeded chat) + T67 Chats section
   await expect(page.getByTestId('next-composer-input')).toBeVisible();
+  await expect(page.getByTestId('next-chats-section')).toHaveText('Chats');
   await assertNoChineseChrome(page, 'conversation');
 
-  // New chat
+  // New chat: pick No project (T67)
   await page.getByTestId('next-new-chat').click();
   await expect(page).toHaveURL(/\/new/);
   await expect(page.getByTestId('next-draft-hint')).toBeVisible();
-  await assertNoChineseChrome(page, 'new chat');
-
-  // Workspace chip menu on the draft hero
   const heroChip = page.getByTestId('next-draft-hero-ws');
-  if (await heroChip.count()) {
-    await heroChip.click();
-    await expect(page.getByTestId('next-draft-hero-menu')).toBeVisible();
-    await assertNoChineseChrome(page, 'project chip menu');
-    await page.keyboard.press('Escape');
-  }
+  await expect(heroChip).toBeVisible();
+  await heroChip.click();
+  await expect(page.getByTestId('next-draft-hero-menu')).toBeVisible();
+  const noneOpt = page.locator('[data-testid=next-ws-chip-option][data-id="__none__"]');
+  await expect(noneOpt).toContainText('No project');
+  await assertNoChineseChrome(page, 'project chip menu');
+  await noneOpt.click();
+  await expect(page.getByTestId('next-draft-hint')).toContainText('What should we do?');
+  await expect(heroChip).toContainText('No project');
+  await assertNoChineseChrome(page, 'new chat no project');
 
   // ⌘K search
   await page.getByTestId('next-search').click();
@@ -191,6 +192,15 @@ test('english UI chrome has no Chinese on the main surfaces', async ({ page }) =
   await expect(page).toHaveURL(/#\/c\/c-site-1$/);
   await expect(page.getByTestId('next-stall-strip')).toBeVisible();
   await assertNoChineseChrome(page, 'stall strip');
+
+  // Empty project list: Add project row (T67)
+  await page.getByTestId('proto-clear-projects').click();
+  await expect(page.getByTestId('next-ws-empty-add')).toBeVisible();
+  await expect(page.getByTestId('next-ws-empty-add')).toContainText('Add project');
+  await expect(page.getByTestId('next-chats-section')).toHaveText('Chats');
+  await expect(page.getByTestId('next-ws-chip')).toContainText('No project');
+  await expect(page.getByTestId('next-draft-hint')).toContainText('What should we do?');
+  await assertNoChineseChrome(page, 'empty projects add row');
 
   expectClean(state);
 });
