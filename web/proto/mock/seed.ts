@@ -703,7 +703,7 @@ function gitConversation(now: number): MockConv {
 }
 
 function siteOne(now: number): MockConv {
-  return conversation({
+  const conv = conversation({
     id: 'c-site-1',
     workspaceId: 'ws-website',
     title: '落地页首屏文案',
@@ -730,6 +730,20 @@ function siteOne(now: number): MockConv {
       ),
     ],
   });
+  conv.view.run = {
+    status: 'running',
+    startedAt: now - 9 * MINUTE,
+    pendingText: null,
+    canSend: true,
+    canStop: true,
+    lockedReason: null,
+    error: null,
+    lastActivityAt: now - 4 * MINUTE,
+    stalledSince: now - 4 * MINUTE,
+    activeTool: { name: 'bash', startedAt: now - 5 * MINUTE, summary: 'npm run build -- --watch' },
+  };
+  conv.run = { id: 'run-seed-site-1', cancelled: false, steers: [], followUps: [] };
+  return conv;
 }
 
 function siteTwo(now: number): MockConv {

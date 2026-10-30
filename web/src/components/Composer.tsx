@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent } from 'react';
 import { AgentsStrip } from './AgentsStrip';
+import { StallStrip } from './StallStrip';
 import { ApiError, getWorkspaceTree, patchConversation, putModelContextWindow, uploadWorkspaceFile, type SendMessageFile, type ThinkingLevel } from '../data/api';
 import {
   addImages,
@@ -928,6 +929,9 @@ export function Composer({
   return (
     <footer className="center-composer">
       <div className="composer-stack">
+        {conversationId ? (
+          <StallStrip run={run} lang={lang} onStop={onStop} />
+        ) : null}
         {conversationId ? (
           <AgentsStrip cid={conversationId} lang={lang} />
         ) : null}
