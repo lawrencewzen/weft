@@ -1,6 +1,5 @@
 /**
- * Maps a provider ID to a known brand identifier in public/brand-data.json
- * and public/vendor/brand-icons/.
+ * Maps a provider ID to a known brand identifier used by /vendor/brand-icons/<id>.svg.
  */
 export function providerBrand(providerId: string | null | undefined): string | null {
   if (!providerId) return null;

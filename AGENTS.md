@@ -18,7 +18,7 @@ Weft 是基于 Pi Durable（`@earendil-works/pi-durable`，作为库嵌入）的
 ## 文档
 - 计划与设计：`docs/PLAN.md`、`docs/ARCHITECTURE.md`、`design/`。接口契约以测试仓库的 `docs/API_CONTRACT.md` 为准。
 - Pi API 以 `node_modules/@earendil-works/*/dist/**/*.d.ts` 和 `node_modules/@earendil-works/pi-durable/README.md` 为准，不凭记忆编 API。
-- v2 目标架构：`docs/ARCHITECTURE_V2.md`（迁移中）。迁移期间旧接口 `/api/*` 保持可用；网页端只有新端（`web/` 构建到 `public-next/`，挂在 `/`）。旧前端 `public/*.js` 已在 T47-1 删除，`/legacy` 302 回 `/`。新功能做在 `/api/v2` 和新网页端。
+- v2 目标架构：`docs/ARCHITECTURE_V2.md`（迁移中）。迁移期间旧接口 `/api/*` 保持可用；网页端只有新端（`web/` 构建到 `public-next/`，挂在 `/`）。旧前端已在 T47-1 删除，`/legacy` 302 回 `/`。新功能做在 `/api/v2` 和新网页端。
 - 可交互网页原型：`design/prototype/README.md`。`npm run build:proto` 生成单文件 `design/prototype/index.html`（不入库），模拟后端在 `web/proto/mock/`；改界面先出原型给用户确认。
 
 ## 分工
@@ -43,5 +43,5 @@ Weft 是基于 Pi Durable（`@earendil-works/pi-durable`，作为库嵌入）的
 - 不读取、不打印 `.env` 和密钥；不访问未授权的远程服务器。
 - 交付前运行 `npm run check`、`npm test` 及适用的本地验证；交付时列出改了哪些文件、怎么验证的、哪些没验证。
 - UI 风格：简洁、低饱和；效果图一律 4K。
-- 前端品牌图标来自 `@lobehub/icons-static-svg`（MIT），由 `postinstall` 拷到 `public/vendor/brand-icons/`。品牌映射数据由 `scripts/gen-brand-data.mjs` 从 `@lobehub/icons` 生成到 `public/brand-data.json` 并提交；不要把 `@lobehub/icons`（React 组件包）加进 dependencies 或 devDependencies，也不要走 CDN。
+- 前端品牌图标来自 `@lobehub/icons-static-svg`（MIT），构建时由 `web/vite.config.ts` 拷到 `public-next/vendor/brand-icons/`。品牌映射数据由 `scripts/gen-brand-data.mjs` 从 `@lobehub/icons` 生成到 `src/v2/views/brand-data.json` 并提交；不要把 `@lobehub/icons`（React 组件包）加进 dependencies 或 devDependencies，也不要走 CDN。
 

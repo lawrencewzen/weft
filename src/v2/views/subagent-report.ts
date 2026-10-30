@@ -1,6 +1,5 @@
 // Shared background-subagent report text. Kernel, browser, and tests all match this.
 // Stored as a user input so the main agent reads it; the UI must not draw a user bubble.
-// Ported from public/subagent-report.js — do not import from public/.
 
 export type SubagentReportKind = 'answered' | 'failed';
 

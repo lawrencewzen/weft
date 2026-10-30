@@ -37,7 +37,7 @@ export function interpolate(template: string, params?: Record<string, unknown>):
   return text;
 }
 
-/** Server-side sentence for `lang`. Placeholders are `{name}`, same as public/i18n.js. */
+/** Server-side sentence for `lang`. Placeholders are `{name}`. */
 export function phrase(lang: Lang, key: string, params?: Record<string, unknown>): string {
   return interpolate(lookupPhrase(lang, key), params);
 }

@@ -702,7 +702,7 @@ export function clipOutputText(text: unknown, showAll: boolean, limit = OUTPUT_P
   return { text: lines.slice(0, limit).join('\n'), clipped: true };
 }
 
-/** Command rows keep the last `limit` lines, matching public/app.js clipTailLines. */
+/** Command rows keep the last `limit` lines. */
 export function clipTailLines(text: unknown, limit = TOOL_COMMAND_PREVIEW_LINES): { text: string; clipped: boolean } {
   const raw = text == null ? '' : String(text);
   const lines = raw.split(/\r?\n/);

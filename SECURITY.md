@@ -1,6 +1,6 @@
 # Weft security
 
-This document describes the backend hardening applied from the 2026-10-13 audit. Frontend XSS in `public/` was already patched and is not re-touched here.
+This document describes the backend hardening applied from the 2026-10-13 audit. Frontend XSS in the legacy frontend was already patched and is not re-touched here.
 
 The process binds to `127.0.0.1`. Login is off unless `WEFT_TOKEN` is set. Treat it as a **single-user local agent**, not a multi-tenant service. Host allowlisting, cross-origin rejection, and the JSON content-type check stay on even when login is off, so a malicious web page cannot call the local server.
 
@@ -57,7 +57,7 @@ Changing `baseUrl` or `provider` without a new non-masked `apiKey` **clears** th
 
 ### Tool name allowlist (finding 5, server half)
 
-Before `tool.start` / execute, the tool name must be in the default registry (`read`, `write`, `edit`, `ls`, `grep`, `bash`) **and** in the role's tools list. Otherwise the kernel records `tool.end` with `E_UNKNOWN_TOOL` and does not run the tool. Frontend XSS escaping in `public/` was already done.
+Before `tool.start` / execute, the tool name must be in the default registry (`read`, `write`, `edit`, `ls`, `grep`, `bash`) **and** in the role's tools list. Otherwise the kernel records `tool.end` with `E_UNKNOWN_TOOL` and does not run the tool. Frontend XSS escaping in the legacy frontend was already done.
 
 ### Git import (finding 6)
 
@@ -103,7 +103,7 @@ Same-origin `EventSource` sends the cookie. `POST /api/sse-ticket` returns `{ ti
 | 2 | High | **Partial** — env allow-list (`inheritEnv: false`), process-tree kill, official output window, cwd; full OS sandbox / bwrap **deferred** |
 | 3 | High | **Fixed** — realpath + allowlisted roots; `/` and similar rejected |
 | 4 | High | **Fixed** — `baseUrl` / `provider` change without a new key clears `apiKey` |
-| 5 | Medium | **Fixed** (server) — registry/role allowlist + CSP; frontend XSS already done in `public/` |
+| 5 | Medium | **Fixed** (server) — registry/role allowlist + CSP; frontend XSS already done in the legacy frontend |
 | 6 | Medium | **Fixed** — https/ssh/`git@` only, dash hosts rejected, git flags, stripped credentials, generic errors |
 | 7 | Medium | **Fixed** — write/edit journal + hashes + atomic rename; bash interrupted text |
 | 8 | Medium | **Partial** — documented custom SQLite journal; WAL, lock, schema version added; not migrated to pi-durable |

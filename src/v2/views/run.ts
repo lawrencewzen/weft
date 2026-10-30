@@ -1,6 +1,6 @@
 /**
  * RunState view. Status buckets match docs/ARCHITECTURE_V2.md §6.1 / §6.2.
- * pendingText matches public/app.js pendingStatusText.
+ * pendingText is the status line shown while a run is in flight.
  *
  * Pi Durable `SubmissionRecord` has no start timestamp (see
  * node_modules/@earendil-works/pi-durable/dist/types.d.ts). startedAt is null

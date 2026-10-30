@@ -1,4 +1,4 @@
-/** Brand lookup for model / provider ids. Port of public/brand-icons.js; data from public/brand-data.json. */
+/** Brand lookup for model / provider ids. Data from brand-data.json next to this file. */
 
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -27,7 +27,7 @@ export type BrandIcons = {
   displayName: (modelId: unknown) => string;
 };
 
-const BRAND_DATA_PATH = join(dirname(fileURLToPath(import.meta.url)), '../../../public/brand-data.json');
+const BRAND_DATA_PATH = join(dirname(fileURLToPath(import.meta.url)), 'brand-data.json');
 
 let cachedIcons: BrandIcons | null = null;
 
@@ -96,7 +96,7 @@ function restStartsWithBrand(rest: string, brand: BrandRecord): boolean {
   return false;
 }
 
-/** Same matching rules as public/brand-icons.js `createBrandIcons`. */
+/** Match model ids against keyword regexes; first hit wins. */
 export function createBrandIcons(data: BrandData | null | undefined): BrandIcons {
   const brands = Array.isArray(data?.brands) ? data.brands : [];
   const byId = new Map<unknown, BrandRecord>();
@@ -172,7 +172,7 @@ export function loadBrandData(path = BRAND_DATA_PATH): BrandData {
   return JSON.parse(readFileSync(path, 'utf8')) as BrandData;
 }
 
-/** Shared server-side brand table. Reads public/brand-data.json once. */
+/** Shared server-side brand table. Reads brand-data.json once. */
 export function brandIcons(): BrandIcons {
   if (!cachedIcons) cachedIcons = createBrandIcons(loadBrandData());
   return cachedIcons;
