@@ -66,7 +66,7 @@ test('⌘K search modal filters all conversations across projects, navigates wit
   }, { x: tabBox.x + tabBox.width / 2, y: tabBox.y + tabBox.height / 2 });
   expect(topElement?.isOverlay).toBe(true);
 
-  // Palette position and dimensions: ~14vh top, ~600px width
+  // Palette position and dimensions: ~14vh top, 600px CSS × --ui-zoom 0.9 → ~540 visual
   const palette = modal.locator('.search-palette');
   const paletteBox = await palette.boundingBox();
   expect(paletteBox).not.toBeNull();
@@ -74,7 +74,7 @@ test('⌘K search modal filters all conversations across projects, navigates wit
   expect(viewport).not.toBeNull();
   const expectedTop = viewport.height * 0.14;
   expect(Math.abs(paletteBox.y - expectedTop)).toBeLessThan(15);
-  expect(Math.abs(paletteBox.width - 600)).toBeLessThan(15);
+  expect(Math.abs(paletteBox.width - 540)).toBeLessThan(15);
 
   // Empty query shows "最近" label
   await expect(modal.locator('.search-palette-label')).toHaveText('最近');

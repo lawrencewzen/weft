@@ -16,6 +16,7 @@ import {
   persistLeftOpen,
   readPref,
 } from './layout';
+import { cssViewportWidth, visualToCss } from './uiZoom';
 
 export type LeftPanelValue = {
   leftOpen: boolean;
@@ -38,25 +39,25 @@ export type LeftPanelValue = {
 const LeftPanelContext = createContext<LeftPanelValue | null>(null);
 
 export function LeftPanelProvider({ children }: { children: ReactNode }) {
-  const [leftOpen, setLeftOpenState] = useState(() => defaultLeftOpen(typeof window !== 'undefined' ? window.innerWidth : 1440));
+  const [leftOpen, setLeftOpenState] = useState(() => defaultLeftOpen(cssViewportWidth()));
   const [leftOpening, setLeftOpening] = useState(false);
   const [lbDx, setLbDx] = useState(0);
   const [lbAnim, setLbAnim] = useState(false);
   const [dragging, setDragging] = useState(false);
   const lbOffRef = useRef<number | null>(null);
   const leftTimer = useRef<number | null>(null);
-  const lastWidth = useRef(typeof window !== 'undefined' ? window.innerWidth : 1440);
+  const lastWidth = useRef(cssViewportWidth());
 
   const setLeftOpen = useCallback((open: boolean) => {
     setLeftOpenState(open);
     setLeftOpening(false);
     setLbAnim(false);
     setLbDx(0);
-    persistLeftOpen(open, typeof window !== 'undefined' ? window.innerWidth : 1440);
+    persistLeftOpen(open, cssViewportWidth());
   }, []);
 
   const toggleLeft = useCallback(() => {
-    if (typeof window !== 'undefined' && isOverlayWidth(window.innerWidth)) {
+    if (isOverlayWidth(cssViewportWidth())) {
       setLeftOpen(!leftOpen);
       return;
     }
@@ -65,13 +66,13 @@ export function LeftPanelProvider({ children }: { children: ReactNode }) {
       const sb = document.querySelector<HTMLElement>('[data-testid="next-left-collapse"]');
       const as = sb?.closest('aside');
       if (sb && as) {
-        lbOffRef.current = as.getBoundingClientRect().right - sb.getBoundingClientRect().left;
+        lbOffRef.current = visualToCss(as.getBoundingClientRect().right - sb.getBoundingClientRect().left);
       }
     }
     const dx = -Math.round((lbOffRef.current || 46) + 13);
     if (closing) {
       setLeftOpenState(false);
-      persistLeftOpen(false, typeof window !== 'undefined' ? window.innerWidth : 1440);
+      persistLeftOpen(false, cssViewportWidth());
       setLeftOpening(false);
       setLbAnim(false);
       setLbDx(dx);
@@ -85,7 +86,7 @@ export function LeftPanelProvider({ children }: { children: ReactNode }) {
       }
     } else {
       setLeftOpenState(true);
-      persistLeftOpen(true, typeof window !== 'undefined' ? window.innerWidth : 1440);
+      persistLeftOpen(true, cssViewportWidth());
       setLeftOpening(true);
       setLbAnim(true);
       setLbDx(dx);
@@ -101,7 +102,7 @@ export function LeftPanelProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const onResize = () => {
-      const vw = window.innerWidth;
+      const vw = cssViewportWidth();
       if (lastWidth.current > LEFT_OVERLAY_MAX && vw <= LEFT_OVERLAY_MAX) {
         setLeftOpen(false);
       }

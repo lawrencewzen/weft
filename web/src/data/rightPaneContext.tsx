@@ -37,6 +37,7 @@ import {
 } from './layout';
 import { useSession } from './session';
 import { conversationTopic, type Change, type ToolCall } from './store';
+import { cssViewportWidth, visualToCss } from './uiZoom';
 import { useStoreTopics } from './useStoreTopic';
 import { t } from '../i18n';
 
@@ -133,7 +134,7 @@ export function RightPaneProvider({
   ), [cid]);
   const storeVersion = useStoreTopics(store, rightPaneTopics);
 
-  const [open, setOpenState] = useState(() => defaultRightOpen(window.innerWidth));
+  const [open, setOpenState] = useState(() => defaultRightOpen(cssViewportWidth()));
   const [tab, setTabState] = useState<RightTab>(() => readRightTab());
   const [width, setWidth] = useState(() => readRightWidth());
   const [openPaths, setOpenPaths] = useState<Set<string>>(() => new Set());
@@ -195,11 +196,11 @@ export function RightPaneProvider({
     setRightOpening(false);
     setRbAnim(false);
     setRbDx(0);
-    persistRightOpen(next, typeof window !== 'undefined' ? window.innerWidth : 1440);
+    persistRightOpen(next, cssViewportWidth());
   }, []);
 
   const toggleRight = useCallback(() => {
-    if (typeof window !== 'undefined' && isRightOverlayWidth(window.innerWidth)) {
+    if (isRightOverlayWidth(cssViewportWidth())) {
       setOpen(!open);
       return;
     }
@@ -208,13 +209,15 @@ export function RightPaneProvider({
       const rb = document.querySelector<HTMLElement>('[data-testid="next-right-collapse"]');
       const hb = document.querySelector<HTMLElement>('[data-testid="next-right-toggle"]');
       if (rb && hb) {
-        rbDxRef.current = Math.round(rb.getBoundingClientRect().left - (hb.getBoundingClientRect().left - (rbDxRef.current || 0)));
+        const rbLeft = visualToCss(rb.getBoundingClientRect().left);
+        const hbLeft = visualToCss(hb.getBoundingClientRect().left);
+        rbDxRef.current = Math.round(rbLeft - (hbLeft - (rbDxRef.current || 0)));
       }
     }
     const dx = rbDxRef.current || 50;
     if (closing) {
       setOpenState(false);
-      persistRightOpen(false, typeof window !== 'undefined' ? window.innerWidth : 1440);
+      persistRightOpen(false, cssViewportWidth());
       setRightOpening(false);
       setRbAnim(false);
       setRbDx(dx);
@@ -228,7 +231,7 @@ export function RightPaneProvider({
       }
     } else {
       setOpenState(true);
-      persistRightOpen(true, typeof window !== 'undefined' ? window.innerWidth : 1440);
+      persistRightOpen(true, cssViewportWidth());
       setRightOpening(true);
       setRbAnim(true);
       setRbDx(dx);
@@ -524,7 +527,7 @@ export function RightPaneProvider({
     }
   }, [wsId, lang, onToast]);
 
-  const isRightOverlay = typeof window !== 'undefined' ? isRightOverlayWidth(window.innerWidth) : false;
+  const isRightOverlay = isRightOverlayWidth(cssViewportWidth());
   const rightBtnOp = !open || rightOpening || isRightOverlay ? 1 : 0;
   const rightBtnPe: 'auto' | 'none' = (!open || isRightOverlay) ? 'auto' : 'none';
   const rpBtnOp = open && (!rightOpening || isRightOverlay) ? 1 : 0;
