@@ -61,7 +61,7 @@ test('GET /auth?code= exchanges a web-code for a session and shows protocol 2.0.
     await expect(page).toHaveURL(/\/new$/);
     await expect(page.getByTestId('next-home-title')).toHaveCount(0);
     await expect(page.getByTestId('next-home-add')).toHaveCount(0);
-    await expect(page.getByTestId('next-ws-chip')).toContainText('不选项目');
+    await expect(page.getByTestId('next-ws-chip')).toContainText('选择项目');
     await expect(page.getByTestId('next-composer-input')).toBeEnabled();
     await page.getByTestId('next-ws-empty-add').click();
     await expect(page.getByTestId('next-ws-dialog')).toBeVisible();

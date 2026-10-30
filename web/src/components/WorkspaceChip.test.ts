@@ -77,18 +77,20 @@ describe('WorkspaceChip', () => {
     const menu = host!.querySelector('[data-testid=next-ws-chip-menu]');
     expect(menu).toBeTruthy();
     const options = [...host!.querySelectorAll<HTMLButtonElement>('[data-testid=next-ws-chip-option]')];
-    expect(options.map((el) => el.getAttribute('data-id'))).toEqual(['__none__', 'w1', 'w2']);
-    expect(options[1].getAttribute('aria-selected')).toBe('true');
-    expect(options[1].getAttribute('title')).toBe('/Users/alice/code/team/monorepo/apps/desktop/weft');
-    expect(options[1].querySelector('.ws-chip-path')?.textContent).toBe('~/…/weft');
-    expect(options[1].querySelector('.ws-chip-path')?.textContent).not.toContain('\n');
+    expect(options.map((el) => el.getAttribute('data-id'))).toEqual(['w1', 'w2', '__none__']);
+    expect(options[0].getAttribute('aria-selected')).toBe('true');
+    expect(options[0].getAttribute('title')).toBe('/Users/alice/code/team/monorepo/apps/desktop/weft');
+    expect(options[0].querySelector('.ws-chip-path')?.textContent).toBe('~/…/weft');
+    expect(options[0].querySelector('.ws-chip-path')?.textContent).not.toContain('\n');
+    expect(options[2].textContent).toContain('不选项目');
     await act(async () => {
-      options[2].click();
+      options[1].click();
     });
     expect(onPick).toHaveBeenCalledWith('w2');
     await act(async () => {
       host!.querySelector<HTMLButtonElement>('[data-testid=next-ws-chip]')?.click();
     });
+    expect(host!.querySelector('[data-testid=next-ws-chip-new]')?.textContent).toContain('添加项目…');
     await act(async () => {
       host!.querySelector<HTMLButtonElement>('[data-testid=next-ws-chip-new]')?.click();
     });
@@ -115,7 +117,31 @@ describe('WorkspaceChip', () => {
     expect(onNew).not.toHaveBeenCalled();
   });
 
-  it('shows 不选项目 when none exist and lists it first in the menu', async () => {
+  it('shows muted 选择项目 when none is selected and hides 不选项目 from the menu', async () => {
+    const onPick = vi.fn();
+    const onNew = vi.fn();
+    await render(createElement(WorkspaceChip, {
+      lang: 'zh',
+      selectedId: null,
+      canSwitch: true,
+      onPick,
+      onNew,
+    }));
+    const chip = host!.querySelector('[data-testid=next-ws-chip]');
+    expect(chip?.textContent).toContain('选择项目');
+    expect(chip?.classList.contains('is-empty')).toBe(true);
+    await act(async () => {
+      host!.querySelector<HTMLButtonElement>('[data-testid=next-ws-chip]')?.click();
+    });
+    const options = [...host!.querySelectorAll<HTMLButtonElement>('[data-testid=next-ws-chip-option]')];
+    expect(options.map((el) => el.getAttribute('data-id'))).toEqual(['w1', 'w2']);
+    expect(host!.querySelector('[data-id="__none__"]')).toBeNull();
+    expect(host!.querySelector('[data-testid=next-ws-chip-menu]')?.textContent).not.toContain('不选项目');
+    expect(host!.querySelector('[data-testid=next-ws-chip-new]')?.textContent).toContain('添加项目…');
+    expect(onNew).not.toHaveBeenCalled();
+  });
+
+  it('shows 还没有项目 and 添加项目… when the list is empty', async () => {
     mockState.list = [];
     const onPick = vi.fn();
     const onNew = vi.fn();
@@ -126,17 +152,20 @@ describe('WorkspaceChip', () => {
       onPick,
       onNew,
     }));
-    expect(host!.querySelector('[data-testid=next-ws-chip]')?.textContent).toContain('不选项目');
+    const chip = host!.querySelector('[data-testid=next-ws-chip]');
+    expect(chip?.textContent).toContain('选择项目');
+    expect(chip?.classList.contains('is-empty')).toBe(true);
     await act(async () => {
       host!.querySelector<HTMLButtonElement>('[data-testid=next-ws-chip]')?.click();
     });
-    const options = [...host!.querySelectorAll<HTMLButtonElement>('[data-testid=next-ws-chip-option]')];
-    expect(options.map((el) => el.getAttribute('data-id'))).toEqual(['__none__']);
-    expect(options[0].getAttribute('aria-selected')).toBe('true');
+    expect(host!.querySelector('[data-testid=next-ws-chip-empty]')?.textContent).toBe('还没有项目');
+    expect(host!.querySelectorAll('[data-testid=next-ws-chip-option]')).toHaveLength(0);
+    expect(host!.querySelector('[data-id="__none__"]')).toBeNull();
+    expect(host!.querySelector('[data-testid=next-ws-chip-new]')?.textContent).toContain('添加项目…');
     expect(onNew).not.toHaveBeenCalled();
   });
 
-  it('puts 不选项目 first and reports null when it is picked', async () => {
+  it('puts 不选项目 at the bottom after a project is chosen and reports null when it is picked', async () => {
     const onPick = vi.fn();
     await render(createElement(WorkspaceChip, {
       lang: 'zh',
@@ -150,11 +179,13 @@ describe('WorkspaceChip', () => {
     });
     const none = host!.querySelector<HTMLButtonElement>('[data-testid=next-ws-chip-option][data-id="__none__"]');
     expect(none?.textContent).toContain('不选项目');
+    const options = [...host!.querySelectorAll<HTMLButtonElement>('[data-testid=next-ws-chip-option]')];
+    expect(options.at(-1)?.getAttribute('data-id')).toBe('__none__');
     await act(async () => { none?.click(); });
     expect(onPick).toHaveBeenCalledWith(null);
   });
 
-  it('hides chat workspaces from the picker and treats them as 不选项目', async () => {
+  it('hides chat workspaces from the picker and treats them as 选择项目', async () => {
     mockState.list = [
       ...workspaces,
       {
@@ -169,12 +200,58 @@ describe('WorkspaceChip', () => {
       onPick: vi.fn(),
       onNew: vi.fn(),
     }));
-    expect(host!.querySelector('[data-testid=next-ws-chip]')?.textContent).toContain('不选项目');
+    expect(host!.querySelector('[data-testid=next-ws-chip]')?.textContent).toContain('选择项目');
+    expect(host!.querySelector('[data-testid=next-ws-chip]')?.classList.contains('is-empty')).toBe(true);
     await act(async () => {
       host!.querySelector<HTMLButtonElement>('[data-testid=next-ws-chip]')?.click();
     });
     const options = [...host!.querySelectorAll<HTMLButtonElement>('[data-testid=next-ws-chip-option]')];
-    expect(options.map((el) => el.getAttribute('data-id'))).toEqual(['__none__', 'w1', 'w2']);
+    expect(options.map((el) => el.getAttribute('data-id'))).toEqual(['w1', 'w2']);
+  });
+
+  it('uses English copy from the design', async () => {
+    await render(createElement(WorkspaceChip, {
+      lang: 'en',
+      selectedId: null,
+      canSwitch: true,
+      onPick: vi.fn(),
+      onNew: vi.fn(),
+    }));
+    const chip = host!.querySelector('[data-testid=next-ws-chip]');
+    expect(chip?.textContent).toContain('Choose project');
+    expect(chip?.classList.contains('is-empty')).toBe(true);
+    await act(async () => {
+      host!.querySelector<HTMLButtonElement>('[data-testid=next-ws-chip]')?.click();
+    });
+    expect(host!.querySelector('[data-testid=next-ws-chip-new]')?.textContent).toContain('Add project…');
+    expect(host!.querySelector('[data-testid=next-ws-chip-menu]')?.textContent).not.toContain('No project');
+    await cleanup();
+    mockState.list = [];
+    await render(createElement(WorkspaceChip, {
+      lang: 'en',
+      selectedId: null,
+      canSwitch: true,
+      onPick: vi.fn(),
+      onNew: vi.fn(),
+    }));
+    await act(async () => {
+      host!.querySelector<HTMLButtonElement>('[data-testid=next-ws-chip]')?.click();
+    });
+    expect(host!.querySelector('[data-testid=next-ws-chip-empty]')?.textContent).toBe('No projects yet');
+    expect(host!.querySelector('[data-testid=next-ws-chip-new]')?.textContent).toContain('Add project…');
+    await cleanup();
+    mockState.list = workspaces;
+    await render(createElement(WorkspaceChip, {
+      lang: 'en',
+      selectedId: 'w1',
+      canSwitch: true,
+      onPick: vi.fn(),
+      onNew: vi.fn(),
+    }));
+    await act(async () => {
+      host!.querySelector<HTMLButtonElement>('[data-testid=next-ws-chip]')?.click();
+    });
+    expect(host!.querySelector('[data-id="__none__"]')?.textContent).toContain('No project');
   });
 
   it('opens a project menu on right-click with open-in-terminal', async () => {
@@ -217,8 +294,8 @@ describe('WorkspaceChip', () => {
     await act(async () => { trigger?.click(); });
     expect(host!.querySelector('[data-testid=next-draft-hero-menu]')).toBeTruthy();
     const options = [...host!.querySelectorAll<HTMLButtonElement>('[data-testid=next-ws-chip-option]')];
-    expect(options.map((el) => el.getAttribute('data-id'))).toEqual(['__none__', 'w1', 'w2']);
-    await act(async () => { options[2].click(); });
+    expect(options.map((el) => el.getAttribute('data-id'))).toEqual(['w1', 'w2', '__none__']);
+    await act(async () => { options[1].click(); });
     expect(onPick).toHaveBeenCalledWith('w2');
   });
 });

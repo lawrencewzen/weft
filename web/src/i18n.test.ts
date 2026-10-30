@@ -10,6 +10,9 @@ describe('i18n empty home and branding', () => {
   it('provides no-project chat texts in zh', () => {
     expect(t('zh', 'add_project')).toBe('添加项目');
     expect(t('zh', 'no_project')).toBe('不选项目');
+    expect(t('zh', 'ws_chip_choose')).toBe('选择项目');
+    expect(t('zh', 'ws_chip_no_projects')).toBe('还没有项目');
+    expect(t('zh', 'ws_chip_add_project')).toBe('添加项目…');
     expect(t('zh', 'chats_label')).toBe('对话');
     expect(t('zh', 'draft_hero_chat')).toBe('想做什么？');
     expect(t('zh', 'draft_hint_chat')).toBe('没有指定项目，可以直接发消息。Agent 会在这个对话自己的目录里工作。');
@@ -18,6 +21,9 @@ describe('i18n empty home and branding', () => {
   it('provides no-project chat texts in en', () => {
     expect(t('en', 'add_project')).toBe('Add project');
     expect(t('en', 'no_project')).toBe('No project');
+    expect(t('en', 'ws_chip_choose')).toBe('Choose project');
+    expect(t('en', 'ws_chip_no_projects')).toBe('No projects yet');
+    expect(t('en', 'ws_chip_add_project')).toBe('Add project…');
     expect(t('en', 'chats_label')).toBe('Chats');
     expect(t('en', 'draft_hero_chat')).toBe('What should we do?');
     expect(t('en', 'draft_hint_chat')).toBe('No project selected. You can send a message right away. The agent works in this chat’s folder.');
