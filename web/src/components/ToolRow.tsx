@@ -1,6 +1,6 @@
 import { useState, type MouseEvent } from 'react';
 import type { Lang } from '../data/lang';
-import { useRightPane } from '../data/rightPaneContext';
+import { useRightActions } from '../data/rightPaneContext';
 import type { ToolCall } from '../data/store';
 import { t, toolActionLabel } from '../i18n';
 
@@ -68,7 +68,7 @@ function KindIcon({ kind }: { kind: ToolCall['kind'] }) {
 }
 
 export function ToolRow({ tool, lang, onLoadOutput }: Props) {
-  const { openChangeDiff, openTerminal } = useRightPane();
+  const { openChangeDiff, openTerminal } = useRightActions();
   const realFail = tool.failure === 'real';
   const changeKind = tool.kind === 'write' || tool.kind === 'edit';
   const [toggled, setToggled] = useState<boolean | null>(null);

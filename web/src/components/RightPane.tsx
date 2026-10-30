@@ -2,7 +2,7 @@ import { useEffect, useMemo } from 'react';
 import { agentCommands, commandTopics } from '../data/agentCommands';
 import type { Lang } from '../data/lang';
 import type { RightTab } from '../data/layout';
-import { useRightPane } from '../data/rightPaneContext';
+import { useRightChanges, useRightLayout } from '../data/rightPaneContext';
 import { useSession } from '../data/session';
 import { subagentTopic } from '../data/store';
 import { useStoreTopics } from '../data/useStoreTopic';
@@ -23,9 +23,8 @@ export function RightPane({ lang, workspaceLabel }: Props) {
     open,
     toggleRight,
     rpBtnOp,
-    totals,
-    hasChanges,
-  } = useRightPane();
+  } = useRightLayout();
+  const { totals, hasChanges } = useRightChanges();
   const { store, conversationId, retainTopic, releaseTopic } = useSession();
   const agents = conversationId ? store.subagents(conversationId) : [];
   const agentIdsKey = agents.map((agent) => agent.id).join(';');

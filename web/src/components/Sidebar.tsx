@@ -11,7 +11,7 @@ import { isMac } from '../data/sidebarSearchModel';
 import { readLastOpenedMap, writeLastOpened } from '../data/sidebarUnread';
 import type { ConversationSummary, Workspace } from '../data/store';
 import { useLeftPanel } from '../data/leftPanelContext';
-import { useRightPane } from '../data/rightPaneContext';
+import { useRightActions, useRightLayout } from '../data/rightPaneContext';
 import { useWorkspaces } from '../data/useWorkspaces';
 import { t } from '../i18n';
 import { CtxMenu, type CtxMenuItem } from './CtxMenu';
@@ -63,7 +63,8 @@ export function Sidebar({
 }: Props) {
   const { groups, archived } = useWorkspaces();
   const { status } = useSession();
-  const { tab, setTab, showFiles, openInTerminal } = useRightPane();
+  const { tab, setTab } = useRightLayout();
+  const { showFiles, openInTerminal } = useRightActions();
   const { toggleLeft, sbBtnOp } = useLeftPanel();
   const [openMap, setOpenMap] = useState<OpenRecord>(() => readWorkspaceOpen());
   const [archivedOpen, setArchivedOpen] = useState(false);

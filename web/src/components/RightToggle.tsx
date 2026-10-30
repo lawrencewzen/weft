@@ -1,6 +1,6 @@
 import { t } from '../i18n';
 import { useLeftPanel } from '../data/leftPanelContext';
-import { useRightPane } from '../data/rightPaneContext';
+import { useRightChanges, useRightLayout } from '../data/rightPaneContext';
 import type { Lang } from '../data/lang';
 
 export function LeftOpenButton({ lang, onOpen }: { lang: Lang; onOpen?: () => void }) {
@@ -41,7 +41,8 @@ export function LeftOpenButton({ lang, onOpen }: { lang: Lang; onOpen?: () => vo
 }
 
 export function RightToggle({ lang }: { lang: Lang }) {
-  const { open, toggleRight, rbDx, rbTr, rightBtnOp, rightBtnPe, hasChanges } = useRightPane();
+  const { open, toggleRight, rbDx, rbTr, rightBtnOp, rightBtnPe } = useRightLayout();
+  const { hasChanges } = useRightChanges();
   return (
     <button
       type="button"

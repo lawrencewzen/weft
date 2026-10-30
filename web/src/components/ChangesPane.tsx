@@ -2,7 +2,7 @@ import { useMemo, useState, type KeyboardEvent, type MouseEvent } from 'react';
 import type { Lang } from '../data/lang';
 import { changeByTitle, flattenDiff, formatChangeBy } from '../data/diffView';
 import { focusSubagent } from '../data/focusSubagent';
-import { useRightPane } from '../data/rightPaneContext';
+import { useRightActions, useRightChanges } from '../data/rightPaneContext';
 import { useSession } from '../data/session';
 import { conversationTopic } from '../data/store';
 import { useStoreTopics } from '../data/useStoreTopic';
@@ -26,9 +26,8 @@ export function ChangesPane({ lang }: { lang: Lang }) {
     openPaths,
     toggleChange,
     diffs,
-    openFile,
-    copyPath,
-  } = useRightPane();
+  } = useRightChanges();
+  const { openFile, copyPath } = useRightActions();
   const [menu, setMenu] = useState<MenuState | null>(null);
 
   const subagentTopics = useMemo(() => {

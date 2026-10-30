@@ -1,7 +1,7 @@
 import { useMemo, type MouseEvent } from 'react';
 import type { components } from '../../../src/v2/contract.gen';
 import { pathChipFromEvent } from '../data/pathChip';
-import { useRightPane } from '../data/rightPaneContext';
+import { useRightActions } from '../data/rightPaneContext';
 import { pathResolver, renderMarkdown } from '../markdown';
 
 type PathRef = components['schemas']['PathRef'];
@@ -14,7 +14,7 @@ type Props = {
 };
 
 export function Markdown({ text, pathRefs, copyLabel, copiedLabel }: Props) {
-  const { openFile } = useRightPane();
+  const { openFile } = useRightActions();
   const html = useMemo(
     () => renderMarkdown(text, { resolvePath: pathResolver(pathRefs), copyLabel }),
     [text, pathRefs, copyLabel],

@@ -20,7 +20,7 @@ import {
 } from '../data/layout';
 import { usePanelMotionReady } from '../data/panelMotion';
 import { LeftPanelProvider, useLeftPanel } from '../data/leftPanelContext';
-import { RightPaneProvider, useRightPane } from '../data/rightPaneContext';
+import { RightPaneProvider, useRightLayout } from '../data/rightPaneContext';
 import { conversationPath, draftPath, navigate, rememberSettingsBehind } from '../data/nav';
 import { latestConversation, pickDraftWorkspace } from '../data/sidebarModel';
 import { useWorkspaces } from '../data/useWorkspaces';
@@ -101,7 +101,6 @@ export function AppShell({ route, lang, demo = false, service, settingsPage = nu
     : viewRoute.name === 'subagent'
       ? viewRoute.conversationId
       : null;
-  const activeAgentId = viewRoute.name === 'subagent' ? viewRoute.agentId : null;
   const draftWorkspaceId = viewRoute.name === 'draft' ? viewRoute.workspaceId : null;
   const workspaceId = draftWorkspaceId
     || groups.find((group) => group.conversations.some((conv) => conv.id === activeConversationId))?.workspace.id
@@ -117,7 +116,6 @@ export function AppShell({ route, lang, demo = false, service, settingsPage = nu
     <LeftPanelProvider>
       <RightPaneProvider
         conversationId={activeConversationId}
-        agentId={activeAgentId}
         workspaceId={workspaceId}
         lang={lang}
         onToast={showToast}
@@ -167,7 +165,7 @@ function AppShellLayout({
   groups,
   ready,
 }: LayoutProps) {
-  const right = useRightPane();
+  const { open, setOpen, width, setWidth, persistWidth } = useRightLayout();
   const { leftOpen, setLeftOpen, dragging, setDragging } = useLeftPanel();
   const [leftW, setLeftW] = useState(() => readLeftWidth());
   const motionReady = usePanelMotionReady();
@@ -179,8 +177,8 @@ function AppShellLayout({
   const [wsDialog, setWsDialog] = useState(false);
   const leftWRef = useRef(leftW);
   leftWRef.current = leftW;
-  const rightWRef = useRef(right.width);
-  rightWRef.current = right.width;
+  const rightWRef = useRef(width);
+  rightWRef.current = width;
   const leftOpenRef = useRef(leftOpen);
   leftOpenRef.current = leftOpen;
   const lastWidth = useRef(window.innerWidth);
@@ -204,16 +202,16 @@ function AppShellLayout({
     const onResize = () => {
       const vw = window.innerWidth;
       if (lastWidth.current >= RIGHT_OVERLAY_MAX && vw < RIGHT_OVERLAY_MAX) {
-        right.setOpen(false);
+        setOpen(false);
       }
       if (lastWidth.current < RIGHT_OVERLAY_MAX && vw >= RIGHT_OVERLAY_MAX) {
-        right.setOpen(defaultRightOpen(vw));
+        setOpen(defaultRightOpen(vw));
       }
       lastWidth.current = vw;
     };
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
-  }, [right]);
+  }, [setOpen]);
 
   const askConfirm = useCallback((opts: ConfirmOpts) => {
     return new Promise<boolean>((resolve) => {
@@ -268,14 +266,14 @@ function AppShellLayout({
         RIGHT_W_MAX,
         Math.max(RIGHT_W_MIN, window.innerWidth - (leftOpenRef.current ? leftWRef.current : 0) - 420),
       );
-      right.setWidth(clampNum(startRight - (e.clientX - startX), RIGHT_W_MIN, max));
+      setWidth(clampNum(startRight - (e.clientX - startX), RIGHT_W_MIN, max));
     };
     const up = () => {
       window.removeEventListener('mousemove', move);
       window.removeEventListener('mouseup', up);
       setDragging(false);
       if (side === 'left') writeLeftWidth(leftWRef.current);
-      else right.persistWidth(rightWRef.current);
+      else persistWidth(rightWRef.current);
     };
     window.addEventListener('mousemove', move);
     window.addEventListener('mouseup', up);
@@ -286,14 +284,14 @@ function AppShellLayout({
     if (!target.closest?.('.col-center')) return;
     if (overlayKeepOpen(target)) return;
     if (isOverlayWidth(window.innerWidth) && leftOpen) setLeftOpen(false);
-    if (isRightOverlayWidth(window.innerWidth) && right.open) right.setOpen(false);
+    if (isRightOverlayWidth(window.innerWidth) && open) setOpen(false);
   }
 
   const classes = [
     'next-shell',
     motionReady ? 'is-ready' : '',
     !leftOpen ? 'left-closed' : '',
-    !right.open ? 'right-closed' : '',
+    !open ? 'right-closed' : '',
     dragging ? 'is-dragging' : '',
   ].filter(Boolean).join(' ');
 
@@ -306,7 +304,7 @@ function AppShellLayout({
       data-panel-ready={motionReady ? '1' : '0'}
       style={{
         ['--left-w' as string]: `${leftW}px`,
-        ['--right-w' as string]: `${right.width}px`,
+        ['--right-w' as string]: `${width}px`,
       }}
       onPointerDown={onShellPointerDown}
     >
@@ -379,8 +377,8 @@ function AppShellLayout({
         title={t(lang, 'drag_resize')}
         onMouseDown={(ev) => onDividerDown(ev, 'right')}
         onDoubleClick={() => {
-          right.setWidth(RIGHT_W_DEFAULT);
-          right.persistWidth(RIGHT_W_DEFAULT);
+          setWidth(RIGHT_W_DEFAULT);
+          persistWidth(RIGHT_W_DEFAULT);
         }}
       />
       <RightPane lang={lang} workspaceLabel={workspaceLabel} />
