@@ -1,7 +1,11 @@
-import { useEffect, useRef, useState, useCallback, useId } from 'react';
+import { useEffect, useRef, useState, useCallback, useId, type FormEvent } from 'react';
 import type { Lang } from '../data/lang';
 import {
+  CONTEXT_WINDOW_MAX,
+  CONTEXT_WINDOW_MIN,
   clampThinkingLevel,
+  contextWindowOptions,
+  parseContextWindowInput,
   getRecentModelEntries,
   isSelectedOption,
   readRecentModels,
@@ -29,6 +33,8 @@ type Props = {
   onPickThinkingLevel?: (level: ThinkingLevel) => void;
   onPickRecent?: (option: ComposerModelOption, level: ThinkingLevel | null) => void;
   onManage: () => void;
+  contextWindow?: number;
+  onSetContextWindow?: (window: number | null) => void;
 };
 
 export function ModelChip({
@@ -40,9 +46,13 @@ export function ModelChip({
   onPickThinkingLevel,
   onPickRecent,
   onManage,
+  contextWindow = 0,
+  onSetContextWindow,
 }: Props) {
   const [open, setOpen] = useState(false);
-  const [subMenu, setSubMenu] = useState<'model' | 'thinking' | null>(null);
+  const [subMenu, setSubMenu] = useState<'model' | 'thinking' | 'context' | null>(null);
+  const [ctxCustom, setCtxCustom] = useState('');
+  const [ctxError, setCtxError] = useState<string | null>(null);
   const [isInline, setIsInline] = useState(false);
   const [recentRaw, setRecentRaw] = useState(() => readRecentModels());
   const wrap = useRef<HTMLDivElement>(null);
@@ -53,6 +63,10 @@ export function ModelChip({
   const effectiveThinkingLevel = supportsThinking
     ? clampThinkingLevel(selected?.thinkingLevels, thinkingLevel ?? selected?.defaultThinkingLevel)
     : null;
+
+  const canSetContext = Boolean(selected?.providerId && selected.modelId && onSetContextWindow);
+  const ctxOptions = contextWindowOptions(contextWindow);
+  const ctxIsCustom = ctxOptions.some((o) => o.selected && o.custom);
 
   const checkFit = useCallback(() => {
     if (!wrap.current) return;
@@ -66,6 +80,8 @@ export function ModelChip({
     setRecentRaw(readRecentModels());
     checkFit();
     setSubMenu(null);
+    setCtxCustom('');
+    setCtxError(null);
     setOpen((prev) => !prev);
   }, [checkFit]);
 
@@ -103,6 +119,9 @@ export function ModelChip({
           } else if (focused?.getAttribute('data-testid') === 'next-menu-thinking' && supportsThinking) {
             ev.preventDefault();
             setSubMenu('thinking');
+          } else if (focused?.getAttribute('data-testid') === 'next-menu-context' && canSetContext) {
+            ev.preventDefault();
+            setSubMenu('context');
           }
         }
       }
@@ -116,7 +135,7 @@ export function ModelChip({
       window.removeEventListener('mousedown', onDown);
       window.removeEventListener('keydown', onKey);
     };
-  }, [open, subMenu, supportsThinking, checkFit]);
+  }, [open, subMenu, supportsThinking, canSetContext, checkFit]);
 
   const handlePickModel = useCallback((option: ComposerModelOption) => {
     const clampedLevel = clampThinkingLevel(option.thinkingLevels, effectiveThinkingLevel);
@@ -142,6 +161,24 @@ export function ModelChip({
     setSubMenu(null);
     onPickThinkingLevel?.(lvl);
   }, [selected, onPickThinkingLevel]);
+
+  const handlePickContext = useCallback((tokens: number | null) => {
+    setOpen(false);
+    setSubMenu(null);
+    setCtxCustom('');
+    setCtxError(null);
+    onSetContextWindow?.(tokens);
+  }, [onSetContextWindow]);
+
+  function submitContextCustom(event: FormEvent) {
+    event.preventDefault();
+    const parsed = parseContextWindowInput(ctxCustom);
+    if (parsed == null) {
+      setCtxError(t(lang, 'ctx_window_range', { min: CONTEXT_WINDOW_MIN, max: CONTEXT_WINDOW_MAX }));
+      return;
+    }
+    handlePickContext(parsed);
+  }
 
   const handlePickRecent = useCallback((option: ComposerModelOption, lvl: ThinkingLevel | null) => {
     saveRecentModel({
@@ -254,6 +291,63 @@ export function ModelChip({
     </div>
   ) : null;
 
+  const contextListContent = selected && canSetContext ? (
+    <div className="context-menu-list">
+      <div className="model-menu-label dmenu-label">
+        {t(lang, 'ctx_sub_title', { model: selected.displayName })}
+      </div>
+      {ctxOptions.map((option) => (
+        <button
+          key={option.tokens}
+          type="button"
+          className={`mi${option.selected ? ' sel' : ''}`}
+          role="option"
+          aria-selected={option.selected}
+          data-testid="next-context-option"
+          data-tokens={option.tokens}
+          onClick={() => handlePickContext(option.tokens)}
+        >
+          <span className="tt">
+            <b>{formatTokenCount(option.tokens)}</b>
+          </span>
+          {option.custom ? <span className="meta">{t(lang, 'ctx_custom_mark')}</span> : null}
+          <span className="model-menu-check-slot">
+            {option.selected ? CHECK_ICON : null}
+          </span>
+        </button>
+      ))}
+      <form className="context-custom" onSubmit={submitContextCustom}>
+        <input
+          className="context-custom-input"
+          data-testid="next-context-custom"
+          inputMode="numeric"
+          placeholder={t(lang, 'ctx_custom_placeholder')}
+          value={ctxCustom}
+          onChange={(event) => {
+            setCtxCustom(event.target.value);
+            setCtxError(null);
+          }}
+        />
+        <button type="submit" className="context-custom-apply" data-testid="next-context-apply">
+          {t(lang, 'ctx_custom_apply')}
+        </button>
+      </form>
+      {ctxError ? <div className="context-custom-error">{ctxError}</div> : null}
+      <div className="mfoot">
+        <button
+          type="button"
+          className="model-menu-manage"
+          data-testid="next-context-restore"
+          onClick={() => handlePickContext(null)}
+        >
+          {t(lang, 'ctx_restore')}
+        </button>
+        <span className="model-menu-dot" aria-hidden="true">{' · '}</span>
+        <span>{t(lang, 'ctx_foot_per_model')}</span>
+      </div>
+    </div>
+  ) : null;
+
   return (
     <div className="chip-selector-wrap" ref={wrap}>
       <button
@@ -291,9 +385,11 @@ export function ModelChip({
                 data-testid="next-menu-back"
                 onClick={() => setSubMenu(null)}
               >
-                {subMenu === 'model' ? t(lang, 'back_to_model') : t(lang, 'back_to_thinking')}
+                {subMenu === 'model'
+                  ? t(lang, 'back_to_model')
+                  : subMenu === 'thinking' ? t(lang, 'back_to_thinking') : t(lang, 'back_to_context')}
               </button>
-              {subMenu === 'model' ? modelListContent : thinkingListContent}
+              {subMenu === 'model' ? modelListContent : subMenu === 'thinking' ? thinkingListContent : contextListContent}
             </div>
           ) : (
             <>
@@ -398,6 +494,49 @@ export function ModelChip({
                 >
                   <span className="k">{t(lang, 'thinking_menu_title')}</span>
                   <span className="v">{t(lang, 'thinking_unsupported')}</span>
+                </div>
+              )}
+
+              {/* Context row */}
+              {canSetContext ? (
+                <div
+                  role="button"
+                  tabIndex={0}
+                  className={`dr${subMenu === 'context' ? ' act' : ''}`}
+                  data-testid="next-menu-context"
+                  onMouseEnter={() => {
+                    if (!isInline) setSubMenu('context');
+                  }}
+                  onClick={() => {
+                    setSubMenu((prev) => (isInline ? 'context' : (prev === 'context' ? null : 'context')));
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ' || e.key === 'ArrowRight') {
+                      e.preventDefault();
+                      setSubMenu('context');
+                    }
+                  }}
+                >
+                  <span className="k">{t(lang, 'ctx_menu_title')}</span>
+                  <span className="v">
+                    {formatTokenCount(contextWindow)}
+                    {ctxIsCustom ? ` · ${t(lang, 'ctx_custom_mark')}` : ''}
+                  </span>
+                  <span className="chev">›</span>
+                  {!isInline && subMenu === 'context' ? (
+                    <div
+                      className="dsub"
+                      data-testid="next-sub-context"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {contextListContent}
+                    </div>
+                  ) : null}
+                </div>
+              ) : (
+                <div className="dr dis" data-testid="next-menu-context" aria-disabled="true">
+                  <span className="k">{t(lang, 'ctx_menu_title')}</span>
+                  <span className="v">{contextWindow ? formatTokenCount(contextWindow) : ''}</span>
                 </div>
               )}
 

@@ -51,8 +51,10 @@ export function refreshCounts(db: MockDb): void {
 }
 
 export function selectedModel(db: MockDb, conv: MockConv): { window: number } {
-  const provider = db.providers.find((row) => row.id === conv.view.model?.sourceId);
-  const model = provider?.models.find((row) => row.id === conv.view.model?.modelId);
+  const sourceId = conv.view.model?.sourceId || db.defaultModel?.providerId;
+  const modelId = conv.view.model?.modelId || db.defaultModel?.modelId;
+  const provider = db.providers.find((row) => row.id === sourceId);
+  const model = provider?.models.find((row) => row.id === modelId);
   return { window: model?.contextWindow || conv.view.context.window || 200_000 };
 }
 

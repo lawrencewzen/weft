@@ -1307,6 +1307,8 @@ export function Composer({
                       onPickThinkingLevel={(lvl) => { void pickThinkingLevel(lvl); }}
                       onPickRecent={(option, lvl) => { void pickRecent(option, lvl); }}
                       onManage={openManage}
+                      contextWindow={selected?.contextWindow || context.window}
+                      onSetContextWindow={(w) => { void setWindow(w); }}
                     />
                   ) : null}
                   <WorkspaceChip
@@ -1381,7 +1383,6 @@ export function Composer({
                     lang={lang}
                     context={context}
                     selected={selected}
-                    onSetWindow={setWindow}
                   />
                 ) : null}
                 {stopMode ? (
