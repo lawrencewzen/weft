@@ -127,12 +127,8 @@ export function RightPaneProvider({
   ), [cid]);
   const storeVersion = useStoreTopics(store, rightPaneTopics);
 
-  const [open, setOpenState] = useState(() => (
-    agentId ? true : defaultRightOpen(window.innerWidth)
-  ));
-  const [tab, setTabState] = useState<RightTab>(() => (
-    agentId ? 'subagents' : readRightTab()
-  ));
+  const [open, setOpenState] = useState(() => defaultRightOpen(window.innerWidth));
+  const [tab, setTabState] = useState<RightTab>(() => readRightTab());
   const [width, setWidth] = useState(() => readRightWidth());
   const [openPaths, setOpenPaths] = useState<Set<string>>(() => new Set());
   const [diffs, setDiffs] = useState<Record<string, Diff | 'loading' | 'error'>>({});
@@ -249,13 +245,6 @@ export function RightPaneProvider({
   }, [setOpen]);
 
   const selectedSubagentId = agentId || null;
-
-  useEffect(() => {
-    if (!agentId) return;
-    setTabState('subagents');
-    writeRightTab('subagents');
-    setOpen(true);
-  }, [cid, agentId, setOpen]);
 
   const persistWidth = useCallback((next: number) => {
     writeRightWidth(next);

@@ -107,7 +107,7 @@ export function persistRightOpen(open: boolean, viewportWidth: number): void {
 
 export type RightTab = 'changes' | 'files' | 'term' | 'subagents';
 
-const RIGHT_TABS = new Set<RightTab>(['changes', 'files', 'term', 'subagents']);
+const RIGHT_TABS = new Set<RightTab>(['changes', 'files', 'term']);
 
 export function readRightTab(): RightTab {
   const raw = storage()?.getItem(LS_RIGHT_TAB);

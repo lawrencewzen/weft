@@ -107,6 +107,22 @@ export function seedSubThreads(now: number): Map<string, MockSubThread> {
     ].join('\n'),
     totalLines: 304,
   });
+  const storeGrep = tool({
+    id: 'sa1-t2',
+    kind: 'grep',
+    title: hint('applySnapshot', 'applySnapshot'),
+    hint: hint('3 处匹配', '3 matches'),
+    preview: 'applySnapshot(event: SnapshotEvent): void;',
+    totalLines: 3,
+  });
+  const storeTest = tool({
+    id: 'sa1-t3',
+    kind: 'bash',
+    title: hint('npm run test:web -- store', 'npm run test:web -- store'),
+    hint: hint('3 条通过', '3 passed'),
+    preview: '✓ web/src/data/store.test.ts (3 tests)',
+    totalLines: 1,
+  });
 
   const running = agent({
     cid,
@@ -124,11 +140,20 @@ export function seedSubThreads(now: number): Map<string, MockSubThread> {
     view: running,
     items: [
       user('sa1-u1', '把 `web/src/data/store.ts` 的加载顺序核对一遍，重点看 `text.delta` 的偏移。'),
-      group('sa1-g1', [storeRead.id], { zh: '读了 1 个文件', en: 'read 1 file' }),
+      group('sa1-g1', [storeRead.id, storeGrep.id, storeTest.id], { zh: '读了 1 个文件 · 搜索了 1 处 · 执行了 1 条命令', en: 'read 1 file · searched 1 place · ran 1 command' }),
       assistant('sa1-a1', '已经把 `applySnapshot` 和 `items(cid)` 对上了，接下来看 `text.delta` 的偏移分支。'),
     ],
-    tools: { [storeRead.id]: storeRead },
+    tools: { [storeRead.id]: storeRead, [storeGrep.id]: storeGrep, [storeTest.id]: storeTest },
     run: null,
+  });
+
+  const gitStatusTool = tool({
+    id: 'sa5-t1',
+    kind: 'bash',
+    title: hint('git status --porcelain', 'git status --porcelain'),
+    hint: hint('干净', 'clean'),
+    preview: '',
+    totalLines: 0,
   });
 
   const stuck = agent({
@@ -139,15 +164,48 @@ export function seedSubThreads(now: number): Map<string, MockSubThread> {
     status: 'stuck',
     startedAt: now - 4 * MINUTE,
     lastActivityAt: now - 72_000,
+    currentAction: '运行 git status --porcelain',
     toolCallId: 'rich-sa-5',
   });
   out.set(subagentKey(cid, stuck.id), {
     view: stuck,
     items: [
       user('sa5-u1', '看一下工作树是不是干净的，有没有漏提交。'),
+      group('sa5-g1', [gitStatusTool.id], { zh: '执行了 1 条命令', en: 'ran 1 command' }),
       assistant('sa5-a1', '已经列出 `git status`，接下来对变更文件分类。'),
     ],
-    tools: {},
+    tools: { [gitStatusTool.id]: gitStatusTool },
+    run: null,
+  });
+
+  const refsGrep = tool({
+    id: 'sa6-t1',
+    kind: 'grep',
+    title: hint('useRightPane', 'useRightPane'),
+    hint: hint('5 处匹配', '5 matches'),
+    preview: 'const { totals } = useRightPane();',
+    totalLines: 5,
+  });
+  const running2 = agent({
+    cid,
+    agentId: 'sa-6',
+    title: '搜索变更引用',
+    name: 'sub-search-refs',
+    status: 'running',
+    startedAt: now - 1 * MINUTE,
+    lastActivityAt: now - 5_000,
+    currentAction: '搜索 `useRightPane` 引用',
+    progress: { step: 1, total: 3 },
+    toolCallId: 'rich-sa-6',
+  });
+  out.set(subagentKey(cid, running2.id), {
+    view: running2,
+    items: [
+      user('sa6-u1', '搜一下所有用到 useRightPane 的地方。'),
+      group('sa6-g1', [refsGrep.id], { zh: '搜索了 1 处', en: 'searched 1 place' }),
+      assistant('sa6-a1', '正在整理使用列表。'),
+    ],
+    tools: { [refsGrep.id]: refsGrep },
     run: null,
   });
 

@@ -105,12 +105,12 @@ describe('layout prefs', () => {
     writeRightTab('files');
     expect(readRightTab()).toBe('files');
     expect(mem.getItem(LS_RIGHT_TAB)).toBe('files');
-    writeRightTab('subagents');
-    expect(readRightTab()).toBe('subagents');
-    expect(mem.getItem(LS_RIGHT_TAB)).toBe('subagents');
     writeRightTab('term');
     expect(readRightTab()).toBe('term');
     expect(mem.getItem(LS_RIGHT_TAB)).toBe('term');
+    writeRightTab('changes');
+    expect(readRightTab()).toBe('changes');
+    expect(mem.getItem(LS_RIGHT_TAB)).toBe('changes');
     expect(mem.getItem(LS_RIGHT_OPEN)).toBeNull();
   });
 

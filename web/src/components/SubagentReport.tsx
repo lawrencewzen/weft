@@ -1,8 +1,7 @@
 import { useState } from 'react';
 import type { Lang } from '../data/lang';
 import type { components } from '../../../src/v2/contract.gen';
-import { subagentPath, navigate } from '../data/nav';
-import { useRightPane } from '../data/rightPaneContext';
+import { focusSubagent } from '../data/focusSubagent';
 import { t } from '../i18n';
 import { Markdown } from './Markdown';
 import { StatusIcon } from './StatusIcon';
@@ -19,7 +18,6 @@ export function SubagentReport({
   conversationId?: string | null;
 }) {
   const [open, setOpen] = useState(false);
-  const { setTab } = useRightPane();
   const failed = item.reportKind === 'failed';
   const title = failed
     ? t(lang, 'subagent_report_failed', { name: item.name })
@@ -65,8 +63,7 @@ export function SubagentReport({
             onClick={(ev) => {
               ev.preventDefault();
               ev.stopPropagation();
-              setTab('subagents');
-              navigate(subagentPath(conversationId, item.subagentId as string));
+              focusSubagent(item.subagentId as string);
             }}
           >
             {t(lang, 'subagent_open')}

@@ -1,7 +1,7 @@
 import { useCallback, useState, type MouseEvent } from 'react';
 import type { Lang } from '../data/lang';
 import { copyText } from '../data/copyText';
-import { navigate, subagentPath } from '../data/nav';
+import { focusSubagent } from '../data/focusSubagent';
 import { useRightPane } from '../data/rightPaneContext';
 import { useSession } from '../data/session';
 import type { Subagent } from '../data/store';
@@ -38,13 +38,12 @@ function statusLabel(status: Subagent['status'], lang: Lang): string {
 
 export function DispatchCard({ cid, agents, lang }: Props) {
   const { store } = useSession();
-  const { open, tab, selectedSubagentId, setTab, onToast } = useRightPane();
+  const { onToast } = useRightPane();
   const [menu, setMenu] = useState<{ x: number; y: number; title: string; items: CtxMenuItem[] } | null>(null);
 
   const openSubagent = useCallback((agentId: string) => {
-    setTab('subagents');
-    navigate(subagentPath(cid, agentId));
-  }, [cid, setTab]);
+    focusSubagent(agentId);
+  }, []);
 
   const onContextMenu = useCallback((ev: MouseEvent, agent: Subagent) => {
     ev.preventDefault();
@@ -71,7 +70,6 @@ export function DispatchCard({ cid, agents, lang }: Props) {
   return (
     <div className="dispatch-card" data-testid="next-dispatch-card">
       {agents.map((agent) => {
-        const isSelected = open && tab === 'subagents' && selectedSubagentId === agent.id;
         const displayName = agent.name || agent.title || '';
         const showTask = Boolean(agent.title && agent.title !== displayName);
         const action = subagentActionText(agent);
@@ -80,7 +78,7 @@ export function DispatchCard({ cid, agents, lang }: Props) {
         return (
           <div
             key={agent.id}
-            className={`dispatch-card-row${isSelected ? ' is-selected' : ''}`}
+            className="dispatch-card-row"
             data-testid="next-dispatch-row"
             data-agent-id={agent.id}
             data-status={agent.status}
