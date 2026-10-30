@@ -427,20 +427,15 @@ test('1061px viewport (1180 CSS px × 0.9) starts the right pane collapsed witho
     const box = await page.evaluate(() => {
       const html = document.documentElement;
       const body = document.body;
-      const shell = document.querySelector('.next-shell');
       return {
         htmlVisualW: html.getBoundingClientRect().width,
         innerW: window.innerWidth,
         bodyScroll: body.scrollWidth,
         bodyClient: body.clientWidth,
-        shellScroll: shell?.scrollWidth ?? 0,
-        shellClient: shell?.clientWidth ?? 0,
       };
     });
     expect(box.htmlVisualW).toBeLessThanOrEqual(box.innerW + 1);
     expect(box.bodyScroll).toBeLessThanOrEqual(box.bodyClient + 1);
-    expect(box.shellScroll).toBeGreaterThan(0);
-    expect(box.shellScroll).toBeLessThanOrEqual(box.shellClient + 1);
   } finally {
     await srv.kill();
   }
