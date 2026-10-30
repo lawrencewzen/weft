@@ -25,7 +25,8 @@ import {
   type ResolvedModel,
 } from '../data/composerModel';
 import type { Lang } from '../data/lang';
-import { draftPath, navigate, openSettings } from '../data/nav';
+import { draftPath, navigate, newChatPath, openSettings } from '../data/nav';
+import { NO_PROJECT_ID } from '../data/sidebarModel';
 import type { QueueChip, SendMode } from '../data/pendingSend';
 import { useProviders } from '../data/useProviders';
 import type { components } from '../../../src/v2/contract.gen';
@@ -154,8 +155,7 @@ export function Composer({
     return selected?.defaultThinkingLevel ?? null;
   }, [isDraft, draftThinkingLevel, thinkingLevel, selected]);
   const noModel = showModelControls && !demo && providersReady && !available;
-  const noWorkspace = isDraft && !workspaceId;
-  const locked = !run.canSend || noModel || noWorkspace;
+  const locked = !run.canSend || noModel;
   const allowAttach = showModelControls && !noModel;
   const supportsImages = demo || selected?.images === true;
 
@@ -506,8 +506,13 @@ export function Composer({
                     selectedId={workspaceId}
                     canSwitch={isDraft}
                     onPick={(id) => {
-                      writeActiveWorkspace(id);
-                      navigate(draftPath(id), { replace: true });
+                      if (id) {
+                        writeActiveWorkspace(id);
+                        navigate(draftPath(id), { replace: true });
+                      } else {
+                        writeActiveWorkspace(NO_PROJECT_ID);
+                        navigate(newChatPath(), { replace: true });
+                      }
                     }}
                     onNew={() => onNewWorkspace?.()}
                     onOpenTerminal={workspaceId
@@ -519,9 +524,7 @@ export function Composer({
                   {demo ? <DemoModelBadge lang={lang} testId="next-demo-model-chip" /> : null}
                 </div>
               )}
-              {noWorkspace ? (
-                <span className="composer-lock" data-testid="next-composer-need-ws">{t(lang, 'composer_need_workspace')}</span>
-              ) : locked && !noModel && run.lockedReason === 'no_workspace' ? (
+              {locked && !noModel && run.lockedReason === 'no_workspace' ? (
                 <span className="composer-lock">{t(lang, 'locked_no_workspace')}</span>
               ) : null}
               {hint ? (
@@ -566,7 +569,7 @@ export function Composer({
                     type="button"
                     className={`btn-send${canSend ? ' is-ready' : ''}`}
                     data-testid="next-send"
-                    title={noWorkspace ? t(lang, 'composer_need_workspace') : t(lang, 'send_title')}
+                    title={t(lang, 'send_title')}
                     aria-label={t(lang, 'btn_send')}
                     disabled={locked || busy || !canSend}
                     onClick={() => { void submit(draft.trim(), running ? 'steer' : undefined); }}

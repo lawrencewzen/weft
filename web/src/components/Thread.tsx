@@ -35,7 +35,7 @@ type Props = {
   isDraft?: boolean;
   draftWorkspaceId?: string | null;
   draftWorkspaceName?: string | null;
-  onPickWorkspace?: (workspaceId: string) => void;
+  onPickWorkspace?: (workspaceId: string | null) => void;
   onNewWorkspace?: () => void;
   className?: string;
   testId?: string;
@@ -53,27 +53,44 @@ function DraftHero({
   lang: Lang;
   workspaceId?: string | null;
   workspaceName?: string | null;
-  onPickWorkspace?: (workspaceId: string) => void;
+  onPickWorkspace?: (workspaceId: string | null) => void;
   onNewWorkspace?: () => void;
 }) {
+  const hasProject = Boolean(workspaceName);
   return (
     <div className="draft-hero" data-testid="next-draft-hint">
       <div className="draft-hero-title">
-        <span>{t(lang, 'draft_hero_before')}</span>
-        <WorkspaceChip
-          lang={lang}
-          variant="hero"
-          selectedId={workspaceId}
-          canSwitch
-          onPick={(id) => onPickWorkspace?.(id)}
-          onNew={() => onNewWorkspace?.()}
-        />
-        <span>{t(lang, 'draft_hero_after')}</span>
+        {hasProject ? (
+          <>
+            <span>{t(lang, 'draft_hero_before')}</span>
+            <WorkspaceChip
+              lang={lang}
+              variant="hero"
+              selectedId={workspaceId}
+              canSwitch
+              onPick={(id) => onPickWorkspace?.(id)}
+              onNew={() => onNewWorkspace?.()}
+            />
+            <span>{t(lang, 'draft_hero_after')}</span>
+          </>
+        ) : (
+          <>
+            <span>{t(lang, 'draft_hero_chat')}</span>
+            <WorkspaceChip
+              lang={lang}
+              variant="hero"
+              selectedId={workspaceId}
+              canSwitch
+              onPick={(id) => onPickWorkspace?.(id)}
+              onNew={() => onNewWorkspace?.()}
+            />
+          </>
+        )}
       </div>
       <p className="draft-hero-hint">
-        {workspaceName
-          ? t(lang, 'draft_hint', { name: workspaceName })
-          : t(lang, 'draft_hint_no_project')}
+        {hasProject
+          ? t(lang, 'draft_hint', { name: workspaceName || '' })
+          : t(lang, 'draft_hint_chat')}
       </p>
     </div>
   );

@@ -3,9 +3,10 @@ import { refreshWorkspaceGit } from '../data/api';
 import type { ResolvedModel } from '../data/composerModel';
 import type { Lang } from '../data/lang';
 import { writeActiveWorkspace } from '../data/layout';
-import { draftPath, navigate } from '../data/nav';
+import { draftPath, navigate, newChatPath } from '../data/nav';
+import { NO_PROJECT_ID } from '../data/sidebarModel';
+import { isChatWorkspace, WORKSPACES_TOPIC, type Workspace } from '../data/store';
 import { useSession } from '../data/session';
-import { WORKSPACES_TOPIC } from '../data/store';
 import { useStoreTopic } from '../data/useStoreTopic';
 import { useConversation, useDraftSend } from '../data/useConversation';
 import { usePendingSend, waitingForAgent } from '../data/usePendingSend';
@@ -18,12 +19,12 @@ import { Thread } from './Thread';
 
 type ConversationView = components['schemas']['ConversationView'];
 type ThinkingLevel = components['schemas']['ThinkingLevel'];
-type Workspace = components['schemas']['Workspace'];
 
 type Props = {
   cid?: string | null;
   workspaceId?: string | null;
   workspace?: Workspace | null;
+  isDraft?: boolean;
   lang: Lang;
   demo?: boolean;
   onOpenLeft?: () => void;
@@ -61,12 +62,13 @@ export function CenterPane({
   cid,
   workspaceId,
   workspace = null,
+  isDraft: isDraftProp = false,
   lang,
   demo = false,
   onOpenLeft,
   onNewWorkspace,
 }: Props) {
-  const isDraft = !cid && Boolean(workspaceId);
+  const isDraft = isDraftProp || (!cid && Boolean(workspaceId));
   const { store } = useSession();
   const { conversation, items, toolsById, changes, missing, actions } = useConversation(cid);
   const [showDelayedLoading, setShowDelayedLoading] = useState(false);
@@ -90,9 +92,14 @@ export function CenterPane({
   );
   const knownTitle = summary?.title || t(lang, 'default_conversation_title');
 
-  const pickDraftWorkspace = useCallback((id: string) => {
-    writeActiveWorkspace(id);
-    navigate(draftPath(id), { replace: true });
+  const pickDraftWorkspace = useCallback((id: string | null) => {
+    if (id) {
+      writeActiveWorkspace(id);
+      navigate(draftPath(id), { replace: true });
+      return;
+    }
+    writeActiveWorkspace(NO_PROJECT_ID);
+    navigate(newChatPath(), { replace: true });
   }, []);
   // 乐观发送：回车即上屏，服务端按 requestId → entry 收回（草稿页直接跳转，暂不接）
   const optimistic = usePendingSend(items, actions.send, conversation?.sends, cid ?? null);
@@ -118,8 +125,9 @@ export function CenterPane({
     void refreshWorkspaceGit(refreshId).catch(() => {});
   }, [refreshId, cid]);
 
-  if (isDraft && workspaceId) {
-    const draft = draftView(workspaceId, lang);
+  if (isDraft) {
+    const draft = draftView(workspaceId || '', lang);
+    const projectName = workspace && !isChatWorkspace(workspace) ? workspace.name : null;
     return (
       <main className="col-center" data-testid="next-center">
         <StatusBar
@@ -138,7 +146,7 @@ export function CenterPane({
           stickNonce={stickNonce}
           isDraft
           draftWorkspaceId={workspaceId}
-          draftWorkspaceName={workspace?.name || null}
+          draftWorkspaceName={projectName}
           onPickWorkspace={pickDraftWorkspace}
           onNewWorkspace={onNewWorkspace}
         />
@@ -155,7 +163,7 @@ export function CenterPane({
           draftThinkingLevel={draftThinkingLevel}
           onDraftThinkingLevel={setDraftThinkingLevel}
           onNewWorkspace={onNewWorkspace}
-          workspacePath={workspace?.path}
+          workspacePath={workspace && !isChatWorkspace(workspace) ? workspace.path : undefined}
           onSend={draftActions.send}
           onStop={draftActions.stop}
           onSent={bumpStick}

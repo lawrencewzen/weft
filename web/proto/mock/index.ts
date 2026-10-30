@@ -92,17 +92,10 @@ function installEventSource(hub: MockHub): void {
   window.EventSource = ProtoEventSource as unknown as typeof EventSource;
 }
 
-function installResetButton(): void {
-  if (document.querySelector('.proto-reset')) return;
-  const button = document.createElement('button');
-  button.type = 'button';
-  button.className = 'proto-reset';
-  button.dataset.testid = 'proto-reset';
-  button.textContent = '重置原型数据';
-  button.title = '原型数据只存在内存里：点这里或刷新页面都会回到预置状态';
-  Object.assign(button.style, {
+function protoButtonStyle(right: string): Record<string, string> {
+  return {
     position: 'fixed',
-    right: '10px',
+    right,
     bottom: '8px',
     zIndex: '2147483647',
     padding: '3px 8px',
@@ -113,16 +106,47 @@ function installResetButton(): void {
     font: '11px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
     cursor: 'pointer',
     opacity: '0.7',
-  });
+  };
+}
+
+function installResetButton(): void {
+  if (document.querySelector('.proto-reset')) return;
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'proto-reset';
+  button.dataset.testid = 'proto-reset';
+  button.textContent = '重置原型数据';
+  button.title = '原型数据只存在内存里：点这里或刷新页面都会回到预置状态';
+  Object.assign(button.style, protoButtonStyle('10px'));
   button.addEventListener('mouseenter', () => { button.style.opacity = '1'; });
   button.addEventListener('mouseleave', () => { button.style.opacity = '0.7'; });
   button.addEventListener('click', () => {
     try {
       localStorage.removeItem('weft_conv_last_opened');
-    } catch {}
-    window.location.reload();
+    } catch { /* ignore */ }
+    const url = new URL(window.location.href);
+    url.searchParams.delete('empty');
+    url.searchParams.delete('state');
+    window.location.replace(url.toString());
   });
   document.body.appendChild(button);
+
+  const clear = document.createElement('button');
+  clear.type = 'button';
+  clear.className = 'proto-clear-projects';
+  clear.dataset.testid = 'proto-clear-projects';
+  clear.textContent = '清空项目';
+  clear.title = '去掉所有项目，保留不选项目的对话，中栏进入不选项目的新对话';
+  Object.assign(clear.style, protoButtonStyle('108px'));
+  clear.addEventListener('mouseenter', () => { clear.style.opacity = '1'; });
+  clear.addEventListener('mouseleave', () => { clear.style.opacity = '0.7'; });
+  clear.addEventListener('click', () => {
+    const url = new URL(window.location.href);
+    url.searchParams.set('empty', '1');
+    url.hash = '#/new';
+    window.location.replace(url.toString());
+  });
+  document.body.appendChild(clear);
 }
 
 function seedLastOpened(): void {
@@ -140,6 +164,8 @@ function seedLastOpened(): void {
         'c-git': now - DAY,
         'c-site-1': now - 10 * MINUTE,
         'c-site-2': now - DAY,
+        'c-consult': now - 2 * HOUR,
+        'c-regex': now - 50 * MINUTE,
       }));
     }
   } catch {

@@ -31,6 +31,11 @@ describe('parseRoute', () => {
     expect(parseRoute('/w/ws%2F1/new/')).toEqual({ name: 'draft', workspaceId: 'ws/1' });
   });
 
+  it('reads /new as a no-project draft', () => {
+    expect(parseRoute('/new')).toEqual({ name: 'new' });
+    expect(parseRoute('/new/')).toEqual({ name: 'new' });
+  });
+
   it('reads /settings/<page>', () => {
     expect(parseRoute('/settings')).toEqual({ name: 'settings', page: 'general' });
     expect(parseRoute('/settings/')).toEqual({ name: 'settings', page: 'general' });
@@ -56,6 +61,11 @@ describe('viewRouteWhileSettings', () => {
       name: 'draft',
       workspaceId: 'ws1',
     });
+  });
+
+  it('keeps a no-project draft under the overlay', () => {
+    expect(viewRouteWhileSettings({ name: 'new' })).toEqual({ name: 'new' });
+    expect(viewRouteWhileSettings({ name: 'home' }, '/new')).toEqual({ name: 'new' });
   });
 
   it('falls back to the path remembered before opening settings', () => {

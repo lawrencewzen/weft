@@ -24,6 +24,73 @@ export interface SidebarGroupProps {
   conversationItems: (wsId: string, conv: ConversationSummary) => CtxMenuItem[];
 }
 
+export function SidebarConvRow({
+  conv,
+  wsId,
+  activeConversationId,
+  lastOpenedMap,
+  lang,
+  onOpenConversation,
+  onOpenMenu,
+  conversationItems,
+}: {
+  conv: ConversationSummary;
+  wsId: string;
+  activeConversationId: string | null;
+  lastOpenedMap: Record<string, number>;
+  lang: Lang;
+  onOpenConversation: (wsId: string, cid: string) => void;
+  onOpenMenu: (ev: MouseEvent, items: CtxMenuItem[], title: string) => void;
+  conversationItems: (wsId: string, conv: ConversationSummary) => CtxMenuItem[];
+}) {
+  const isCurrent = conv.id === activeConversationId;
+  const iconStatus = statusIconFor(conv.status);
+  const isUnread = isConversationUnread(conv, activeConversationId, lastOpenedMap);
+  return (
+    <div
+      className={[
+        'sb-row',
+        'row',
+        'sb-conv',
+        'conv',
+        'conv-node-header',
+        isCurrent ? 'sel conv-active' : '',
+        isUnread ? 'unread' : '',
+      ].filter(Boolean).join(' ')}
+      data-testid="next-conv-row"
+      data-id={conv.id}
+      data-status={conv.status || 'idle'}
+      data-ws-id={wsId}
+      aria-current={isCurrent ? 'page' : undefined}
+      title={conv.title || ''}
+      onClick={() => onOpenConversation(wsId, conv.id)}
+      onContextMenu={(ev) => onOpenMenu(ev, conversationItems(wsId, conv), conv.title || '')}
+    >
+      <span className="sb-st st v2 conv-status-slot">
+        {iconStatus ? (
+          <StatusIcon status={iconStatus} size={14} lang={lang} />
+        ) : null}
+      </span>
+      <span className="sb-conv-title t conv-node-title">
+        {conv.title || t(lang, 'default_conversation_title')}
+      </span>
+      <span className="sb-conv-meta meta conv-node-meta">
+        {formatRelativeTime(lang, conv.updatedAt)}
+      </span>
+      <button
+        type="button"
+        className="sb-act act sb-conv-more more"
+        data-testid="next-conv-more"
+        title={t(lang, 'more_actions')}
+        aria-label={t(lang, 'more_actions')}
+        onClick={(ev) => onOpenMenu(ev, conversationItems(wsId, conv), conv.title || '')}
+      >
+        {MORE_ICON}
+      </button>
+    </div>
+  );
+}
+
 export function SidebarGroup({
   ws,
   conversations,
@@ -85,55 +152,19 @@ export function SidebarGroup({
       </div>
 
       <div className="sb-conv-list ws-node-children">
-        {conversations.map((conv) => {
-          const isCurrent = conv.id === activeConversationId;
-          const iconStatus = statusIconFor(conv.status);
-          const isUnread = isConversationUnread(conv, activeConversationId, lastOpenedMap);
-          return (
-            <div
-              key={conv.id}
-              className={[
-                'sb-row',
-                'row',
-                'sb-conv',
-                'conv',
-                'conv-node-header',
-                isCurrent ? 'sel conv-active' : '',
-                isUnread ? 'unread' : '',
-              ].filter(Boolean).join(' ')}
-              data-testid="next-conv-row"
-              data-id={conv.id}
-              data-status={conv.status || 'idle'}
-              data-ws-id={ws.id}
-              aria-current={isCurrent ? 'page' : undefined}
-              title={conv.title || ''}
-              onClick={() => onOpenConversation(ws.id, conv.id)}
-              onContextMenu={(ev) => onOpenMenu(ev, conversationItems(ws.id, conv), conv.title || '')}
-            >
-              <span className="sb-st st v2 conv-status-slot">
-                {iconStatus ? (
-                  <StatusIcon status={iconStatus} size={14} lang={lang} />
-                ) : null}
-              </span>
-              <span className="sb-conv-title t conv-node-title">
-                {conv.title || t(lang, 'default_conversation_title')}
-              </span>
-              <span className="sb-conv-meta meta conv-node-meta">
-                {formatRelativeTime(lang, conv.updatedAt)}
-              </span>
-              <button
-                type="button"
-                className="sb-act act sb-conv-more more"
-                data-testid="next-conv-more"
-                title={t(lang, 'more_actions')}
-                aria-label={t(lang, 'more_actions')}
-                onClick={(ev) => onOpenMenu(ev, conversationItems(ws.id, conv), conv.title || '')}
-              >
-                {MORE_ICON}
-              </button>
-            </div>
-          );
-        })}
+        {conversations.map((conv) => (
+          <SidebarConvRow
+            key={conv.id}
+            conv={conv}
+            wsId={ws.id}
+            activeConversationId={activeConversationId}
+            lastOpenedMap={lastOpenedMap}
+            lang={lang}
+            onOpenConversation={onOpenConversation}
+            onOpenMenu={onOpenMenu}
+            conversationItems={conversationItems}
+          />
+        ))}
         {!conversations.length ? (
           <div className="ws-empty-note">{t(lang, 'ws_no_conversations')}</div>
         ) : null}

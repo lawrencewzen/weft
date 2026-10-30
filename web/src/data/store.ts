@@ -4,7 +4,26 @@ export type ConversationView = components['schemas']['ConversationView'];
 /** Where one send landed: the requestId the client sent and the entry it became. */
 export type ConversationSend = components['schemas']['ConversationSend'];
 export type ConversationSummary = components['schemas']['ConversationSummary'];
-export type Workspace = components['schemas']['Workspace'];
+export type WorkspaceKind = 'project' | 'chat';
+/**
+ * Prototype extension: `kind` is not in contract.gen.ts yet. Default `'project'`.
+ * Real backend should add this field when T67 wires the server.
+ */
+export type Workspace = components['schemas']['Workspace'] & {
+  kind?: WorkspaceKind;
+};
+
+export function workspaceKind(ws: Pick<Workspace, 'kind'> | null | undefined): WorkspaceKind {
+  return ws?.kind === 'chat' ? 'chat' : 'project';
+}
+
+export function isChatWorkspace(ws: Pick<Workspace, 'kind'> | null | undefined): boolean {
+  return workspaceKind(ws) === 'chat';
+}
+
+export function isProjectWorkspace(ws: Pick<Workspace, 'kind'> | null | undefined): boolean {
+  return workspaceKind(ws) === 'project';
+}
 export type ThreadItem = components['schemas']['ThreadItem'];
 export type ToolCall = components['schemas']['ToolCall'];
 export type Subagent = components['schemas']['Subagent'];

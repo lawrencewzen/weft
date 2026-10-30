@@ -15,7 +15,7 @@ import type {
   Workspace,
 } from './types';
 import { MOCK_CATALOG_MODELS } from './piCatalog';
-import { seedWebsiteRepo, seedWeftRepo, mockDiff } from './repo';
+import { seedWebsiteRepo, seedWeftRepo, mockDiff, createRepo } from './repo';
 import { seedGitConnections, seedGitProjects, seedPlugins, seedSkills } from './extensions';
 import { seedSubThreads, seedSubagentReports } from './subagents';
 
@@ -893,8 +893,72 @@ function workspace(
     branch: null,
     conversationCount: 0,
     runningCount: 0,
+    kind: 'project',
     ...input,
   };
+}
+
+function consultConversation(now: number): MockConv {
+  return conversation({
+    id: 'c-consult',
+    workspaceId: 'ws-chat-consult',
+    title: '代码咨询',
+    updatedAt: now - 2 * HOUR,
+    used: 2_400,
+    items: [
+      user('consult-u1', 'TypeScript 里把可选字段默认成某个值，一般怎么写比较干净？'),
+      assistant(
+        'consult-a1',
+        [
+          '读的时候用空值合并，别在类型上硬改：',
+          '',
+          '```ts',
+          'const kind = ws.kind ?? \'project\';',
+          '```',
+          '',
+          '`??` 只把 `null` / `undefined` 换成默认值，空字符串和 `0` 会留下来。',
+        ].join('\n'),
+      ),
+    ],
+  });
+}
+
+function regexConversation(now: number): MockConv {
+  const bash = tool({
+    id: 'regex-t1',
+    kind: 'bash',
+    title: hint('node -e "console.log(/\\d+/.test(\'id-42\'))"', 'node -e "console.log(/\\d+/.test(\'id-42\'))"'),
+    hint: hint('退出码 0 · 1 行', 'exit 0 · 1 line'),
+    exitCode: 0,
+    preview: 'true',
+    totalLines: 1,
+    output: 'true',
+  });
+  return conversation({
+    id: 'c-regex',
+    workspaceId: 'ws-chat-regex',
+    title: '正则怎么写',
+    updatedAt: now - 50 * MINUTE,
+    used: 6_800,
+    tools: { [bash.id]: bash },
+    items: [
+      user('regex-u1', '从 `id-42` 这种字符串里取出数字，正则怎么写？'),
+      group('regex-g1', [bash.id], { zh: '执行了 1 条命令', en: 'ran 1 command' }),
+      assistant(
+        'regex-a1',
+        [
+          '用 `/(\\d+)/` 取第一组：',
+          '',
+          '```js',
+          'const m = \'id-42\'.match(/(\\d+)/);',
+          'const n = m ? Number(m[1]) : null; // 42',
+          '```',
+          '',
+          '上面那条命令验证 `/\\d+/` 能匹配到这段文字。',
+        ].join('\n'),
+      ),
+    ],
+  });
 }
 
 export function createSeed(now: number): MockDb {
@@ -909,6 +973,8 @@ export function createSeed(now: number): MockDb {
     siteTwo(now),
     archivedOne(now),
     archivedTwo(now),
+    consultConversation(now),
+    regexConversation(now),
   ];
   const workspaces: Workspace[] = [
     workspace({
@@ -939,6 +1005,20 @@ export function createSeed(now: number): MockDb {
         behind: 1,
       },
     }),
+    workspace({
+      id: 'ws-chat-consult',
+      name: '代码咨询',
+      path: 'D:\\data\\chats\\c-consult',
+      git: null,
+      kind: 'chat',
+    }),
+    workspace({
+      id: 'ws-chat-regex',
+      name: '正则怎么写',
+      path: 'D:\\data\\chats\\c-regex',
+      git: null,
+      kind: 'chat',
+    }),
   ];
   for (const ws of workspaces) {
     const rows = conversations.filter((conv) => conv.view.workspaceId === ws.id && !conv.archived);
@@ -954,6 +1034,14 @@ export function createSeed(now: number): MockDb {
     repos: new Map([
       ['ws-weft', seedWeftRepo()],
       ['ws-website', seedWebsiteRepo()],
+      ['ws-chat-consult', createRepo([{
+        path: 'README.md',
+        text: '# 代码咨询\n\n这个对话自己的工作目录。\n',
+      }])],
+      ['ws-chat-regex', createRepo([{
+        path: 'README.md',
+        text: '# 正则怎么写\n\n这个对话自己的工作目录。\n',
+      }])],
     ]),
     plugins: seedPlugins(),
     skills: seedSkills(),

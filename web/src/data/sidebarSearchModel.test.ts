@@ -73,4 +73,16 @@ describe('filterSearchConversations', () => {
     expect(results[0].workspace.id).toBe('ws-web');
     expect(results[0].workspace.name).toBe('website');
   });
+
+  it('includes extra chat conversations in the results', () => {
+    const chatWs = ws('ws-chat', '代码咨询');
+    chatWs.kind = 'chat';
+    const extra = [{
+      conv: conv('c-consult', 'ws-chat', { title: '代码咨询', updatedAt: 5000 }),
+      workspace: chatWs,
+    }];
+    const results = filterSearchConversations(mockGroups, '咨询', extra);
+    expect(results.map((r) => r.conv.id)).toEqual(['c-consult']);
+    expect(results[0].workspace.kind).toBe('chat');
+  });
 });

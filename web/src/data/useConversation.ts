@@ -116,9 +116,8 @@ export function useDraftSend(
     files?: SendMessageFile[],
     pastes?: string[],
   ) => {
-    if (!wsId) throw new Error('no workspace');
     if (!created.current || created.current.workspaceId !== wsId) {
-      const conversation = await createConversation(wsId);
+      const conversation = await createConversation(wsId || null);
       created.current = { workspaceId: wsId, conversationId: conversation.id };
       const model = modelForCreate?.() || null;
       const thinkingLevel = thinkingLevelForCreate?.() ?? null;

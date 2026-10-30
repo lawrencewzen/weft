@@ -14,8 +14,9 @@ export function isMac(): boolean {
 export function filterSearchConversations(
   groups: WorkspaceGroup[],
   query: string,
+  extra: SearchItem[] = [],
 ): SearchItem[] {
-  const all: SearchItem[] = [];
+  const all: SearchItem[] = [...extra];
   for (const group of groups) {
     for (const conv of group.conversations) {
       if (conv.archived) continue;

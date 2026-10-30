@@ -12,6 +12,11 @@ export function draftPath(workspaceId: string): string {
   return `/w/${encodeURIComponent(workspaceId)}/new`;
 }
 
+/** New chat that is not bound to a project. Prototype hash form: `#/new`. */
+export function newChatPath(): string {
+  return '/new';
+}
+
 export function homePath(): string {
   return '/';
 }

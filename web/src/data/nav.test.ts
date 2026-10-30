@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   closeSettings,
   navigate,
+  newChatPath,
   openSettings,
   peekSettingsBehind,
   readAddressPath,
@@ -11,6 +12,12 @@ import {
   setAddressMode,
   subscribeAddress,
 } from './nav';
+
+describe('newChatPath', () => {
+  it('is /new', () => {
+    expect(newChatPath()).toBe('/new');
+  });
+});
 
 describe('openSettings', () => {
   afterEach(() => {

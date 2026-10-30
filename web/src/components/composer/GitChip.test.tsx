@@ -80,6 +80,15 @@ describe('GitChip', () => {
     await cleanup();
   });
 
+  it('renders nothing for a chat workspace even if git is present', async () => {
+    mockState.list = [{
+      ...workspace('w1', git({ branch: 'main', insertions: 3 })),
+      kind: 'chat',
+    }];
+    await renderChip();
+    expect(host!.querySelector('[data-testid="next-composer-git"]')).toBeNull();
+  });
+
   it('renders nothing when git is missing', async () => {
     mockState.list = [workspace('w1', null)];
     await renderChip();

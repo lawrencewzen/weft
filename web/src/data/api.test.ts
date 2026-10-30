@@ -264,6 +264,27 @@ describe('api client', () => {
     });
   });
 
+  it('creates a no-project conversation without a workspace id', async () => {
+    const created = {
+      id: 'c-chat',
+      workspaceId: 'ws-chat-c-chat',
+      title: '新对话',
+      updatedAt: 1,
+      status: 'idle',
+      runningAgents: 0,
+      subagents: null,
+      archived: false,
+    };
+    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse(201, created));
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(createConversation(null)).resolves.toEqual(created);
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/v2/conversations');
+    expect(fetchMock.mock.calls[0][1]).toMatchObject({
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
+  });
+
   it('posts git refresh for a workspace', async () => {
     const gitWs = {
       id: 'w1', name: 'n', path: '/p', source: 'local' as const,

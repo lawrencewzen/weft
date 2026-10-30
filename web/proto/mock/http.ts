@@ -179,10 +179,32 @@ function removeWorkspace(db: MockDb, hub: MockHub, workspaceId: string): MockRep
   return ok({ removed: true });
 }
 
-function createConversation(db: MockDb, hub: MockHub, workspaceId: string, title: string): MockReply {
-  const ws = db.workspaces.find((row) => row.id === workspaceId);
-  if (!ws) return fail(404, '工作区不存在');
+function createChatWorkspace(db: MockDb, convId: string, title: string): Workspace {
+  const name = title || '对话';
+  const ws: Workspace = {
+    id: `ws-chat-${convId}`,
+    name,
+    path: `D:\\data\\chats\\${convId}`,
+    source: 'local',
+    gitUrl: null,
+    branch: null,
+    git: null,
+    kind: 'chat',
+    conversationCount: 0,
+    runningCount: 0,
+  };
+  db.workspaces.push(ws);
+  db.repos.set(ws.id, workspaceRepo(name));
+  return ws;
+}
+
+function createConversation(db: MockDb, hub: MockHub, workspaceId: string | null, title: string): MockReply {
+  let ws = workspaceId ? db.workspaces.find((row) => row.id === workspaceId) : undefined;
+  if (workspaceId && !ws) return fail(404, '工作区不存在');
   const id = nextId(db, 'c');
+  if (!ws) {
+    ws = createChatWorkspace(db, id, title);
+  }
   const model = db.defaultModel;
   const provider = db.providers.find((row) => row.id === model?.providerId);
   const found = provider?.models.find((row) => row.id === model?.modelId);
@@ -190,7 +212,7 @@ function createConversation(db: MockDb, hub: MockHub, workspaceId: string, title
   const conv: MockConv = {
     view: {
       id,
-      workspaceId,
+      workspaceId: ws.id,
       title: title || '新对话',
       updatedAt: Date.now(),
       status: 'idle',
@@ -643,6 +665,7 @@ function createWorkspace(db: MockDb, hub: MockHub, body: Record<string, unknown>
         behind: 0,
       }
       : null,
+    kind: 'project',
     conversationCount: 0,
     runningCount: 0,
   };
@@ -996,6 +1019,9 @@ export function handleMockRequest(db: MockDb, hub: MockHub, rawUrl: string, init
     return dirsView(url.searchParams.get('path') || WORK_ROOT, lang);
   }
 
+  if (path === '/api/v2/conversations' && method === 'POST') {
+    return createConversation(db, hub, null, String(body.title || ''));
+  }
   const wsConvMatch = /^\/api\/v2\/workspaces\/([^/]+)\/conversations$/.exec(path);
   if (wsConvMatch && method === 'POST') {
     const workspaceId = decodeURIComponent(wsConvMatch[1]);

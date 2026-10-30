@@ -1,15 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import {
+  chatConversations,
   conversationMeta,
   conversationStatusKind,
   deleteOpenRecord,
   groupWorkspaces,
   hasLiveSubagents,
   latestConversation,
+  NO_PROJECT_ID,
   pickDraftWorkspace,
   recordedFlag,
   runningCount,
   setOpenRecord,
+  storedActiveWorkspaceId,
   subagentTreeIsOpen,
   toggleOpenRecord,
   workspaceIsOpen,
@@ -74,6 +77,39 @@ describe('sidebarModel', () => {
     expect(pickDraftWorkspace(list, 'w2')?.id).toBe('w2');
     expect(pickDraftWorkspace(list, 'gone')?.id).toBe('w1');
     expect(pickDraftWorkspace([], 'w1')).toBeUndefined();
+  });
+
+  it('keeps chat workspaces out of the project list and in the chats section', () => {
+    const chat = { ...ws('ws-chat', '代码咨询'), kind: 'chat' as const };
+    const groups = groupWorkspaces(
+      [ws('w1', 'alpha'), chat],
+      [
+        conv('p1', 'w1', { updatedAt: 10 }),
+        conv('c1', 'ws-chat', { updatedAt: 40 }),
+        conv('c2', 'ws-chat', { updatedAt: 20, archived: true }),
+      ],
+    );
+    expect(groups.map((group) => group.workspace.id)).toEqual(['w1']);
+    expect(groups[0].conversations.map((item) => item.id)).toEqual(['p1']);
+    expect(chatConversations(
+      [ws('w1'), chat],
+      [
+        conv('p1', 'w1', { updatedAt: 10 }),
+        conv('c1', 'ws-chat', { updatedAt: 40 }),
+        conv('c2', 'ws-chat', { updatedAt: 20, archived: true }),
+      ],
+    ).map((item) => item.id)).toEqual(['c1']);
+    expect(chatConversations([ws('w1')], [conv('p1', 'w1')])).toEqual([]);
+  });
+
+  it('treats no-project as the last draft choice and skips chat workspaces', () => {
+    const chat = { ...ws('ws-chat'), kind: 'chat' as const };
+    const list = [ws('w1'), ws('w2'), chat];
+    expect(pickDraftWorkspace(list, NO_PROJECT_ID)).toBeUndefined();
+    expect(pickDraftWorkspace([chat], 'ws-chat')).toBeUndefined();
+    expect(pickDraftWorkspace(list, 'ws-chat')?.id).toBe('w1');
+    expect(storedActiveWorkspaceId(chat)).toBe(NO_PROJECT_ID);
+    expect(storedActiveWorkspaceId(ws('w1'))).toBe('w1');
   });
 
   it('builds conversation meta like the old quiet list', () => {

@@ -141,7 +141,7 @@ test('prototype runs from file:// with mock data, no network and no console erro
   // The draft workspace chip really retargets the conversation.
   await page.getByTestId('next-ws-chip').click();
   await expect(page.getByTestId('next-ws-chip-menu')).toBeVisible();
-  await expect(page.getByTestId('next-ws-chip-option')).toHaveCount(2);
+  await expect(page.getByTestId('next-ws-chip-option')).toHaveCount(3);
   await page.locator('[data-testid=next-ws-chip-option][data-id="ws-website"]').click();
   await expect(page).toHaveURL(/#\/w\/ws-website\/new$/);
   await expect(page.getByTestId('next-ws-chip')).toContainText('website');
