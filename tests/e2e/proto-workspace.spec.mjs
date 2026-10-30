@@ -31,6 +31,8 @@ test('local directory browse, create, then start a conversation inside it', asyn
   await expect(page.getByTestId('next-ws-node').filter({ hasText: 'playground' })).toBeVisible();
   await expect(page).toHaveURL(/\/w\/ws-\d+\/new/);
   await expect(page.getByTestId('next-draft-hint')).toContainText('playground');
+  await expect(page.getByTestId('next-draft-hero-ws')).toContainText('playground');
+  await expect(page.locator('.draft-hero-hint')).toContainText('playground');
 
   // The new workspace takes conversations.
   await page.getByTestId('next-composer-input').fill('这个工作区里第一条消息');

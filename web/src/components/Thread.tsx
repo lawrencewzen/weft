@@ -74,24 +74,14 @@ function DraftHero({
             <span>{t(lang, 'draft_hero_after')}</span>
           </>
         ) : (
-          <>
-            <span>{t(lang, 'draft_hero_chat')}</span>
-            <WorkspaceChip
-              lang={lang}
-              variant="hero"
-              selectedId={workspaceId}
-              canSwitch
-              onPick={(id) => onPickWorkspace?.(id)}
-              onNew={() => onNewWorkspace?.()}
-            />
-          </>
+          <span>{t(lang, 'draft_hero_chat')}</span>
         )}
       </div>
-      <p className="draft-hero-hint">
-        {hasProject
-          ? t(lang, 'draft_hint', { name: workspaceName || '' })
-          : t(lang, 'draft_hint_chat')}
-      </p>
+      {hasProject ? (
+        <p className="draft-hero-hint">
+          {t(lang, 'draft_hint', { name: workspaceName || '' })}
+        </p>
+      ) : null}
     </div>
   );
 }
