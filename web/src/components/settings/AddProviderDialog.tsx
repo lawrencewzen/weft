@@ -209,7 +209,12 @@ export function AddProviderDialog({
 
   useEffect(() => {
     if (!isOpen) return;
-    if (selectedId === 'custom' || selectedId === 'claude-code' || selectedId === 'antigravity') return;
+    if (selectedId === 'custom') return;
+    const acp = ACP_CATALOG.find((item) => item.id === selectedId);
+    if (acp) {
+      setConfigName(acp.name);
+      return;
+    }
     const hit = available.find((item) => item.id === selectedId);
     if (hit) setConfigName(hit.name);
   }, [isOpen, selectedId, available]);
@@ -419,18 +424,21 @@ export function AddProviderDialog({
   }
 
   function handleSelect(item: LeftItem) {
+    if (item.id === selectedId) return;
     setSelectedId(item.id);
+    setConfigName(item.kind === 'custom' ? '' : item.name);
+    setApiKeyInput('');
+    setCustomUrl('');
+    setCustomKey('');
     setErrorMsg(null);
     setDdOpen(false);
     setOauthOpen(false);
-    setApiKeyInput('');
+    setAcpFoldOpen(false);
     setLoading(false);
-    if (item.id !== connectedId) {
-      setModels([]);
-      setChosenId('');
-      setConnectedId(null);
-      autoKeyRef.current = '';
-    }
+    setModels([]);
+    setChosenId('');
+    setConnectedId(null);
+    autoKeyRef.current = '';
   }
 
   const q = search.trim().toLowerCase();

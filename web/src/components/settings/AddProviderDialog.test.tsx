@@ -267,6 +267,40 @@ describe('AddProviderDialog', () => {
     expect(onClose).toHaveBeenCalled();
   });
 
+  it('resets config name and API key when switching left-column selection A to B', async () => {
+    await render(<AddProviderDialog {...props({ available: [grokMissing, anthropic] })} />);
+    await act(async () => {
+      (host!.querySelector('[data-vendor="anthropic"]') as HTMLElement).click();
+    });
+    const nameA = host!.querySelector('[data-testid="next-config-name"]') as HTMLInputElement;
+    expect(nameA.value).toBe('Anthropic');
+    const keyA = host!.querySelector('[data-testid="next-key-input"]') as HTMLInputElement;
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
+      setter?.call(keyA, 'sk-ant');
+      keyA.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    expect(keyA.value).toBe('sk-ant');
+
+    await act(async () => {
+      (host!.querySelector('[data-vendor="claude-code"]') as HTMLElement).click();
+    });
+    const nameB = host!.querySelector('[data-testid="next-config-name"]') as HTMLInputElement;
+    expect(nameB.value).toBe('Claude Code');
+    expect(host!.querySelector('[data-testid="next-key-input"]')).toBeNull();
+
+    await act(async () => {
+      (host!.querySelector('[data-vendor="anthropic"]') as HTMLElement).click();
+    });
+    const nameBack = host!.querySelector('[data-testid="next-config-name"]') as HTMLInputElement;
+    const keyBack = host!.querySelector('[data-testid="next-key-input"]') as HTMLInputElement;
+    expect(nameBack.value).toBe('Anthropic');
+    expect(keyBack.value).toBe('');
+    const dd = host!.querySelector('[data-testid="next-model-dropdown"]') as HTMLButtonElement;
+    expect(dd.disabled).toBe(true);
+    expect(dd.textContent).toContain('连接后自动获取');
+  });
+
   it('connects API Key vendors via Test', async () => {
     const onConnect = vi.fn(async (id: string) => providerOf(id, 'Anthropic', models()));
     await render(<AddProviderDialog {...props({ onConnect })} />);

@@ -751,6 +751,22 @@ html[data-theme$="-dark"] .ns-ws-dialog {
 .mp-add-head b { font-size: 16px; font-weight: 500; display: block; color: var(--ink); }
 .mp-add-head small { color: var(--mute); font-size: 12.5px; }
 .mp-add-sp { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+.mp-add-head .mp-x {
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  border-radius: 7px;
+  color: var(--mute);
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+.mp-add-head .mp-x:hover { background: var(--hover); color: var(--ink); }
 .mp-add-form { flex: 1; overflow: auto; padding: 8px 20px 20px; }
 .mp-add-f { margin-bottom: 18px; }
 .mp-add-f > label { display: block; font-size: 13px; font-weight: 500; color: var(--ink); margin-bottom: 8px; }

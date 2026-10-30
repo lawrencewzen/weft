@@ -96,6 +96,11 @@ test('providers: rows, groups, expand, Grok auto-detect, Anthropic key, custom, 
   await page.getByTestId('next-provider-add').click();
   await expect(page.getByTestId('next-add-dialog')).toBeVisible();
   await expect(page.locator('[data-testid=next-vendor-card][data-vendor="xai"]')).toBeVisible();
+  const addClose = page.getByTestId('next-add-close');
+  await expect(addClose).toHaveCSS('border-style', 'none');
+  const addCloseBox = await addClose.boundingBox();
+  expect(addCloseBox?.width).toBe(28);
+  expect(addCloseBox?.height).toBe(28);
   await expect(page.getByTestId('next-model-dropdown')).toBeEnabled({ timeout: 10_000 });
   await page.getByTestId('next-add-cancel').click();
   await expect(page.getByTestId('next-add-dialog')).toHaveCount(0);
