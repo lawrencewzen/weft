@@ -4,10 +4,6 @@ import { t } from '../i18n';
 
 export type SubagentStatus = Subagent['status'];
 
-const DOT_STATUSES = new Set<SubagentStatus>(['running', 'stuck', 'waiting', 'failed']);
-const LIVE_STATUSES = new Set<SubagentStatus>(['running', 'stuck', 'waiting']);
-const ENDED_STATUSES = new Set<SubagentStatus>(['done', 'stopped', 'failed']);
-
 export function finiteTs(value: unknown): number {
   const n = Number(value);
   return Number.isFinite(n) && n > 0 ? n : 0;
@@ -19,30 +15,6 @@ export function formatMmSs(ms: number): string {
   const m = Math.floor(sec / 60);
   const ss = String(sec % 60).padStart(2, '0');
   return `${String(m).padStart(2, '0')}:${ss}`;
-}
-
-export function subagentDotKind(status: SubagentStatus | string): SubagentStatus | '' {
-  const st = status as SubagentStatus;
-  return DOT_STATUSES.has(st) ? st : '';
-}
-
-export type SubagentTreeVisual = 'running' | 'stuck' | 'done' | 'stopped' | 'failed';
-
-/** Tree-A row icon: waiting uses the running spinner. */
-export function subagentTreeVisual(status: SubagentStatus | string): SubagentTreeVisual {
-  if (status === 'failed') return 'failed';
-  if (status === 'done') return 'done';
-  if (status === 'stopped') return 'stopped';
-  if (status === 'stuck') return 'stuck';
-  return 'running';
-}
-
-export function isLiveSubagentStatus(status: SubagentStatus | string): boolean {
-  return LIVE_STATUSES.has(status as SubagentStatus);
-}
-
-export function isEndedSubagentStatus(status: SubagentStatus | string): boolean {
-  return ENDED_STATUSES.has(status as SubagentStatus);
 }
 
 export function progressLabel(progress: Subagent['progress'] | null | undefined): string {
@@ -68,18 +40,6 @@ export function subagentTimeText(agent: Pick<Subagent, 'status' | 'startedAt' | 
   const started = finiteTs(agent.startedAt);
   if (!started) return '';
   return formatMmSs(now - started);
-}
-
-/** Sidebar tree: done does not write 完成 (T33); stuck uses 「静默」. */
-export function subagentTreeTimeText(agent: Pick<Subagent, 'status' | 'startedAt' | 'lastActivityAt'>, lang: Lang, now = Date.now()): string {
-  const st = agent.status || '';
-  if (st === 'done') return '';
-  if (st === 'stuck') {
-    const last = finiteTs(agent.lastActivityAt);
-    const clock = last ? formatMmSs(now - last) : '';
-    return clock ? t(lang, 'subagent_silent_for', { time: clock }) : '';
-  }
-  return subagentTimeText(agent, lang, now);
 }
 
 export function stripActionMarks(text: string): string {

@@ -9,7 +9,6 @@ import {
   type ReactNode,
 } from 'react';
 import type { Lang } from './lang';
-import { readSubagentTrees } from './layout';
 import { createStream, type StreamStatus } from './stream';
 import {
   createEntityStore,
@@ -48,10 +47,7 @@ export function SessionProvider({
 }: Props) {
   const store = useMemo(() => createEntityStore(), []);
   const [status, setStatus] = useState<StreamStatus>('connecting');
-  const [extraConversationIds, setExtraConversationIdsState] = useState<string[]>(() => {
-    const trees = readSubagentTrees();
-    return Object.entries(trees).filter(([, open]) => open).map(([id]) => id).sort();
-  });
+  const [extraConversationIds, setExtraConversationIdsState] = useState<string[]>([]);
   const extraTopicCounts = useRef(new Map<string, number>());
   const [extraTopics, setExtraTopics] = useState<string[]>([]);
   const stream = useMemo(() => createStream({
