@@ -34,6 +34,7 @@ export function providerBrand(providerId: string | null | undefined): string | n
   if (id === 'openai') return 'openai';
   if (id === 'google') return 'google';
   if (id === 'openrouter') return 'openrouter';
+  if (id === 'xai') return 'xai';
 
   return null;
 }

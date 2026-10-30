@@ -1,6 +1,6 @@
 /**
  * 生成 web/proto/mock/piCatalog.ts 的静态数据：
- * - available 列表全量（38 家，排除 xai、openai-codex、radius、typesafe）
+ * - available 列表全量（排除 openai-codex、radius、typesafe；github-copilot 因仅 oauth 也不返回）
  * - deepseek / anthropic / openai / moonshotai-cn / zai 的 chat 模型
  *
  * 重新生成命令：
@@ -33,7 +33,7 @@ const POPULAR = [
   'xiaomi',
 ];
 
-const EXCLUDED = new Set(['xai', 'openai-codex', 'radius', 'typesafe']);
+const EXCLUDED = new Set(['openai-codex', 'radius', 'typesafe']);
 
 const CN_NAME = {
   'moonshotai-cn': 'Kimi（国内）',
@@ -41,6 +41,7 @@ const CN_NAME = {
   'qwen-token-plan-cn': '通义千问 Token Plan（国内）',
   'minimax-cn': 'MiniMax（国内）',
   xiaomi: '小米 MiMo',
+  xai: 'Grok',
 };
 
 const ENV_MAP = {
@@ -83,16 +84,19 @@ const ENV_MAP = {
   anthropic: 'ANTHROPIC_API_KEY',
 };
 
-const TARGET_MODEL_PROVIDERS = ['deepseek', 'anthropic', 'openai', 'moonshotai-cn', 'zai', 'openrouter'];
+const TARGET_MODEL_PROVIDERS = ['deepseek', 'anthropic', 'openai', 'moonshotai-cn', 'zai', 'openrouter', 'xai'];
 
 const available = [];
 for (const p of builtinProviders) {
   if (EXCLUDED.has(p.id)) continue;
-  const authMethods = [];
-  if (p.auth?.apiKey || !p.auth) authMethods.push('api_key');
-  if (p.auth?.oauth) authMethods.push('oauth');
+  const authMethods = p.id === 'xai'
+    ? ['oauth']
+    : (p.id === 'github-copilot' ? [] : (
+      (p.auth?.apiKey || !p.auth?.oauth) ? ['api_key'] : []
+    ));
+  if (authMethods.length === 0) continue;
   const chatModels = p.getModels ? p.getModels().filter((m) => m.type === 'chat' || !m.type) : [];
-  available.push({
+  const item = {
     id: p.id,
     name: CN_NAME[p.id] || p.name || p.id,
     brand: providerBrand(p.id),
@@ -100,9 +104,13 @@ for (const p of builtinProviders) {
     modelCount: chatModels.length,
     popular: POPULAR.includes(p.id),
     ...(ENV_MAP[p.id] ? { envVar: ENV_MAP[p.id] } : {}),
-    envDetected: p.id === 'moonshotai-cn',
+    envDetected: p.id === 'moonshotai-cn' || p.id === 'google',
     connected: false,
-  });
+  };
+  if (p.id === 'xai') {
+    item.localLogin = { detected: true, account: 'lawrence@x.com' };
+  }
+  available.push(item);
 }
 
 // popular 优先，其余按 name 排序
@@ -129,6 +137,11 @@ for (const pid of TARGET_MODEL_PROVIDERS) {
     defaultThinkingLevel: defaultThinkingLevelOf(m),
     overridden: {},
   }));
+}
+
+const xaiModels = catalogModels.xai;
+if (Array.isArray(xaiModels) && xaiModels.length > 1) {
+  xaiModels[xaiModels.length - 1].contextWindow = null;
 }
 
 const fileContent = `/**

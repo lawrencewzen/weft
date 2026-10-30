@@ -364,6 +364,7 @@ test('normalizeProvidersV3 drops illegal items and duplicate ids', () => {
   assert.deepEqual(out[0], {
     id: 'openai',
     kind: 'builtin',
+    name: 'strip me',
     enabled: ['gpt-4o'],
     overrides: {
       'gpt-4o': { contextWindow: 128000, maxTokens: 32000 },

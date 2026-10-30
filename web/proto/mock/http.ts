@@ -332,15 +332,14 @@ function handleConnect(
     }
     const avail = MOCK_AVAILABLE_PROVIDERS.find((p) => p.id === id);
     const catModels = MOCK_CATALOG_MODELS[id] || [];
-    const autoEnable = catModels.length <= 6;
     const provider: Provider = {
       id,
       kind: 'builtin',
-      brand: id === 'deepseek' ? 'DeepSeek' : id === 'anthropic' ? 'Anthropic' : id === 'openai' ? 'OpenAI' : id === 'zai' ? 'ZAI' : id === 'moonshotai-cn' ? 'Moonshot' : (avail?.name || null),
+      brand: id === 'xai' ? 'xai' : id === 'deepseek' ? 'DeepSeek' : id === 'anthropic' ? 'Anthropic' : id === 'openai' ? 'OpenAI' : id === 'zai' ? 'ZAI' : id === 'moonshotai-cn' ? 'Moonshot' : (avail?.name || null),
       name: avail?.name || id,
       auth: { type: 'api_key', keyTail: apiKey.slice(-4) },
       status: { state: 'ok', testedAt: Date.now() },
-      models: catModels.map((m) => ({ ...m, enabled: autoEnable })),
+      models: catModels.map((m) => ({ ...m, enabled: true })),
     };
     const idx = db.providers.findIndex((p) => p.id === id);
     if (idx >= 0) db.providers[idx] = provider;
@@ -356,7 +355,6 @@ function handleConnect(
   if (method === 'env') {
     const avail = MOCK_AVAILABLE_PROVIDERS.find((p) => p.id === id);
     const catModels = MOCK_CATALOG_MODELS[id] || [];
-    const autoEnable = catModels.length <= 6;
     const provider: Provider = {
       id,
       kind: 'builtin',
@@ -364,7 +362,31 @@ function handleConnect(
       name: avail?.name || id,
       auth: { type: 'env', envVar: avail?.envVar || 'MOONSHOT_API_KEY' },
       status: { state: 'ok', testedAt: Date.now() },
-      models: catModels.map((m) => ({ ...m, enabled: autoEnable })),
+      models: catModels.map((m) => ({ ...m, enabled: true })),
+    };
+    const idx = db.providers.findIndex((p) => p.id === id);
+    if (idx >= 0) db.providers[idx] = provider;
+    else db.providers.push(provider);
+    if (!db.defaultModel && provider.models.some((m) => m.enabled)) {
+      const first = provider.models.find((m) => m.enabled);
+      if (first) db.defaultModel = { providerId: id, modelId: first.id };
+    }
+    publishProviders(db, hub);
+    return ok({ provider: providerView(provider, lang) });
+  }
+
+  if (method === 'local_login') {
+    if (id !== 'xai') return fail(400, 'local login not supported', 'E_BAD_REQUEST');
+    const avail = MOCK_AVAILABLE_PROVIDERS.find((p) => p.id === id);
+    const catModels = MOCK_CATALOG_MODELS[id] || [];
+    const provider: Provider = {
+      id,
+      kind: 'builtin',
+      brand: 'xai',
+      name: avail?.name || 'Grok',
+      auth: { type: 'oauth', account: avail?.localLogin?.account || 'lawrence@x.com' },
+      status: { state: 'ok', testedAt: Date.now() },
+      models: catModels.map((m) => ({ ...m, enabled: true })),
     };
     const idx = db.providers.findIndex((p) => p.id === id);
     if (idx >= 0) db.providers[idx] = provider;

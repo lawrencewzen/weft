@@ -458,7 +458,7 @@ export function getAvailableProviders(lang?: string): Promise<GetAvailableRespon
 
 export function connectProvider(
   id: string,
-  body: ConnectApiKeyRequest | ConnectEnvRequest,
+  body: ConnectApiKeyRequest | ConnectEnvRequest | { method: 'local_login' },
   lang?: string,
 ): Promise<{ provider: Provider }> {
   return requestJson<{ provider: Provider }>(withLang(providerPath(id, '/connect'), lang), {

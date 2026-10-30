@@ -90,7 +90,7 @@ export const zh: Record<string, string> = {
   src_err_model: '模型不在这个来源里',
   src_err_missing: '找不到这个来源',
   src_err_models: '模型列表无效',
-  src_err_provider: '服务商不存在',
+  src_err_provider: 'Provider 不存在',
   src_err_session: '登录会话不存在',
   src_err_session_state: '当前不能回答',
   src_err_method: '不支持这种接入方式',
@@ -100,6 +100,7 @@ export const zh: Record<string, string> = {
   src_err_cancelled: '已取消',
   src_err_no_model: '没有可测试的模型',
   src_err_env: '未检测到环境变量',
+  src_err_local_login: '未检测到本机 Grok 登录',
   ws_name_required: '请填写工作区名称',
   ws_path_required: '请填写本地路径',
   ws_git_required: '请填写 Git 仓库地址',
@@ -170,4 +171,5 @@ export const zh: Record<string, string> = {
   provider_name_qwen_token_plan_cn: '通义千问 Token Plan（国内）',
   provider_name_minimax_cn: 'MiniMax（国内）',
   provider_name_xiaomi: '小米 MiMo',
+  provider_name_xai: 'Grok',
 };

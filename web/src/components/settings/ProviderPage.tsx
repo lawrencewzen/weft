@@ -17,7 +17,6 @@ import { formatNumber, parseContextInput } from '../../data/providerFormat';
 import type {
   Available,
   LoginSession,
-  Model,
   Provider,
 } from '../../data/providerTypes';
 import { useProviders } from '../../data/useProviders';
@@ -65,7 +64,6 @@ export function ProviderPage({ lang, onConfirm }: Props) {
   }, []);
 
   const handleOpenAdd = async () => {
-    setIsAddOpen(true);
     setLoginSession(null);
     try {
       const res = await getAvailableProviders(lang);
@@ -73,6 +71,7 @@ export function ProviderPage({ lang, onConfirm }: Props) {
     } catch {
       // ignore
     }
+    setIsAddOpen(true);
   };
 
   const handleTest = async (id: string) => {
@@ -158,18 +157,6 @@ export function ProviderPage({ lang, onConfirm }: Props) {
     setLoginSession(null);
   };
 
-  const handleFinishAdd = async (models: Model[]) => {
-    if (loginSession && loginSession.providerId) {
-      setOpenId(loginSession.providerId);
-    }
-    setLoginSession(null);
-    if (sessionPollRef.current) {
-      window.clearTimeout(sessionPollRef.current);
-      sessionPollRef.current = null;
-    }
-    await Promise.resolve(models);
-  };
-
   const handleCloseAdd = () => {
     setIsAddOpen(false);
     setLoginSession(null);
@@ -211,19 +198,13 @@ export function ProviderPage({ lang, onConfirm }: Props) {
   return (
     <div className="next-settings-content" data-testid="next-provider-page">
       <div className="next-settings-head">
-        <div>
-          <h2>{t(lang, 'provider_title')}</h2>
-          <p className="next-settings-sub">{t(lang, 'provider_subtitle')}</p>
-        </div>
+        <h2>{t(lang, 'provider_title')}</h2>
       </div>
 
       {/* 默认模型 */}
       <div className="mp-sec">
         <div className="mp-card mp-def">
-          <span className="mp-def-l">
-            <span>{t(lang, 'provider_default_title')}</span>
-            <span>{t(lang, 'provider_default_hint')}</span>
-          </span>
+          <span className="mp-def-l">{t(lang, 'provider_default_title')}</span>
           <span
             className="mp-pick"
             data-testid="next-provider-default-picker"
@@ -259,11 +240,10 @@ export function ProviderPage({ lang, onConfirm }: Props) {
         </div>
       </div>
 
-      {/* 服务商列表 */}
+      {/* Provider 列表 */}
       <div className="mp-sec">
         <div className="mp-sec-h">
           <b>{t(lang, 'provider_sec_title')}</b>
-          <small>{t(lang, 'provider_sec_hint')}</small>
           <span className="mp-sp" />
           <button
             type="button"
@@ -315,23 +295,26 @@ export function ProviderPage({ lang, onConfirm }: Props) {
         loginSession={loginSession}
         onAnswerOAuth={handleAnswerOAuth}
         onCancelOAuth={handleCancelOAuth}
-        onConnectBuiltinKey={async (id, key) => {
-          const res = await connectProvider(id, { method: 'api_key', apiKey: key }, lang);
-          setOpenId(id);
-          return res.provider.models;
-        }}
-        onConnectBuiltinEnv={async (id) => {
-          const res = await connectProvider(id, { method: 'env' }, lang);
-          setOpenId(id);
-          return res.provider.models;
-        }}
         onStartOAuth={handleStartOAuth}
+        onConnect={async (id, body) => {
+          const res = await connectProvider(id, body, lang);
+          setOpenId(id);
+          return res.provider;
+        }}
         onConnectCustom={async (form) => {
           const res = await addCustomProvider(form, lang);
           setOpenId(res.provider.id);
-          return res.provider.models;
+          return res.provider;
         }}
-        onFinish={handleFinishAdd}
+        onCreate={async (id, patch) => {
+          await patchProvider(id, patch, lang);
+          setOpenId(id);
+        }}
+        onRollback={async (ids) => {
+          for (const id of ids) {
+            try { await deleteProvider(id); } catch { /* already gone */ }
+          }
+        }}
       />
     </div>
   );

@@ -35,6 +35,7 @@ describe('providerBrand', () => {
     expect(providerBrand('openai')).toBe('openai');
     expect(providerBrand('google')).toBe('google');
     expect(providerBrand('openrouter')).toBe('openrouter');
+    expect(providerBrand('xai')).toBe('xai');
   });
 
   it('handles empty or unrecognized provider ids gracefully', () => {

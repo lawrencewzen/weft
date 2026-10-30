@@ -131,9 +131,19 @@ export function ProviderList({
     );
   };
 
+  const groups = [
+    { key: 'builtin' as const, items: providers.filter((p) => p.id === 'xai') },
+    { key: 'apikey' as const, items: providers.filter((p) => p.id !== 'xai') },
+  ].filter((g) => g.items.length > 0);
+
   return (
     <>
-      {providers.map((p, i) => {
+      {groups.map((group) => (
+        <Fragment key={group.key}>
+          <div className="mp-pgrp" data-testid="next-provider-group" data-group={group.key}>
+            {t(lang, group.key === 'builtin' ? 'dlg_add_grp_builtin' : 'dlg_add_grp_apikey')}
+          </div>
+          {group.items.map((p, i) => {
         const enabledCount = p.models.filter((m) => m.enabled).length;
         const isOpen = openId === p.id;
         const iconBrand = p.brand || providerBrand(p.id);
@@ -142,7 +152,7 @@ export function ProviderList({
         return (
           <Fragment key={p.id}>
             <div
-              className={`mp-prow ${i === 0 ? 'mp-first' : ''} ${isOpen ? 'mp-open' : ''}`}
+              className={`mp-prow ${i === 0 ? 'mp-gfirst' : ''} ${isOpen ? 'mp-open' : ''}`}
               data-testid="next-provider-row"
               data-id={p.id}
               onClick={() => onToggleOpen(p.id)}
@@ -249,7 +259,9 @@ export function ProviderList({
             )}
           </Fragment>
         );
-      })}
+          })}
+        </Fragment>
+      ))}
 
       {/* Key Change Modal */}
       {keyTarget && (

@@ -817,7 +817,7 @@ function seedProviders(now: number): Provider[] {
       kind: 'builtin',
       brand: 'anthropic',
       name: 'Anthropic',
-      auth: { type: 'oauth', account: 'Claude Max · lawrence@…' },
+      auth: { type: 'api_key', keyTail: 'k7Qa' },
       status: { state: 'untested' },
       models: (MOCK_CATALOG_MODELS.anthropic || []).map((m, idx) => ({
         ...m,

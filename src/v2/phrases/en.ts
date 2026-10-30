@@ -100,6 +100,7 @@ export const en: Record<string, string> = {
   src_err_cancelled: 'Cancelled',
   src_err_no_model: 'No model available to test',
   src_err_env: 'Environment variable not detected',
+  src_err_local_login: 'Local Grok login was not detected',
   ws_name_required: 'Name is required',
   ws_path_required: 'A local path is required',
   ws_git_required: 'Git repository URL is required',
@@ -170,4 +171,5 @@ export const en: Record<string, string> = {
   provider_name_qwen_token_plan_cn: 'Qwen Token Plan (China)',
   provider_name_minimax_cn: 'MiniMax (China)',
   provider_name_xiaomi: 'Xiaomi MiMo',
+  provider_name_xai: 'Grok',
 };

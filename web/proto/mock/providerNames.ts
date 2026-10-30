@@ -7,6 +7,7 @@ const NAMES: Record<string, Record<Lang, string>> = {
   'qwen-token-plan-cn': { zh: '通义千问 Token Plan（国内）', en: 'Qwen Token Plan (China)' },
   'minimax-cn': { zh: 'MiniMax（国内）', en: 'MiniMax (China)' },
   xiaomi: { zh: '小米 MiMo', en: 'Xiaomi MiMo' },
+  xai: { zh: 'Grok', en: 'Grok' },
 };
 
 export function mockProviderName(id: string, fallback: string, lang: Lang): string {

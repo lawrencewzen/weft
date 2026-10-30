@@ -34,7 +34,7 @@ export const POPULAR_PROVIDER_IDS = Object.freeze([
   'xiaomi',
 ]);
 
-export const EXCLUDED_PROVIDER_IDS = Object.freeze(['xai', 'openai-codex', 'radius', 'typesafe']);
+export const EXCLUDED_PROVIDER_IDS = Object.freeze(['openai-codex', 'radius', 'typesafe']);
 
 /**
  * Maps a provider id to a brand-data.json icon id.
@@ -73,6 +73,7 @@ export function providerBrand(providerId: string | null | undefined): string | n
   if (id === 'openai') return 'openai';
   if (id === 'google') return 'google';
   if (id === 'openrouter') return 'openrouter';
+  if (id === 'xai') return 'xai';
 
   return null;
 }
@@ -106,6 +107,7 @@ export type RawProvider = {
   id: string;
   kind: 'builtin' | 'custom';
   name: string;
+  nameCustom?: boolean;
   api?: 'openai-completions' | 'openai-responses' | 'anthropic-messages';
   baseUrl?: string;
   auth: ProviderAuth;
@@ -123,6 +125,7 @@ export type RawAvailable = {
   envVar?: string;
   envDetected: boolean;
   connected: boolean;
+  localLogin?: { detected: boolean; account?: string };
 };
 
 export type RawLoginSession = {
@@ -205,7 +208,9 @@ export function providerView(raw: RawProvider, lang: Lang): Provider {
     id: raw.id,
     kind: raw.kind,
     brand: raw.kind === 'custom' ? null : providerBrand(raw.id),
-    name: raw.kind === 'custom' ? raw.name : displayProviderName(raw.id, raw.name, lang),
+    name: raw.kind === 'custom' || raw.nameCustom
+      ? raw.name
+      : displayProviderName(raw.id, raw.name, lang),
     auth: raw.auth,
     status: raw.status?.state === 'testing'
       ? { state: 'testing', ...(typeof raw.status.testedAt === 'number' ? { testedAt: raw.status.testedAt } : {}) }
@@ -233,6 +238,15 @@ export function availableView(raw: RawAvailable, lang: Lang): AvailableProvider 
   if (brand) item.brand = brand;
   else item.brand = null;
   if (raw.envVar) item.envVar = raw.envVar;
+  if (raw.localLogin) {
+    const localLogin: NonNullable<AvailableProvider['localLogin']> = {
+      detected: raw.localLogin.detected === true,
+    };
+    if (typeof raw.localLogin.account === 'string' && raw.localLogin.account.trim()) {
+      localLogin.account = raw.localLogin.account.trim();
+    }
+    item.localLogin = localLogin;
+  }
   return item;
 }
 

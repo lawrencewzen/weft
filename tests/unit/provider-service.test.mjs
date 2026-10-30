@@ -2,6 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createSqliteStore } from '../../src/store/sqlite.mjs';
 import { createCredentialStore, createModelsStore } from '../../src/core/provider-stores.mjs';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import path from 'node:path';
 import {
   createProviderService,
   EXCLUDED_PROVIDER_IDS,
@@ -37,7 +39,7 @@ async function withService(fn, {
       store,
       credentials,
       modelsStore,
-      env,
+      env: { GROK_HOME: dir, ...env },
       extraProviders,
       fetchImpl,
       now,
@@ -653,3 +655,151 @@ test('patch defaultModel and DELETE clear credentials and the default', async ()
     assert.deepEqual((await store.getSettings()).providers, []);
   }, { extraProviders: [deepseekFake()] });
 });
+
+test('listAvailable includes xai as Grok oauth-only, drops oauth elsewhere, excludes copilot', async () => {
+  await withService(async ({ service }) => {
+    const listed = await service.listAvailable();
+    const ids = listed.map((item) => item.id);
+    assert.equal(ids.includes('xai'), true);
+    assert.equal(ids.includes('github-copilot'), false);
+    assert.equal(EXCLUDED_PROVIDER_IDS.has('xai'), false);
+    const xai = listed.find((item) => item.id === 'xai');
+    assert.equal(xai.name, 'Grok');
+    assert.deepEqual(xai.authMethods, ['oauth']);
+    assert.equal(xai.localLogin.detected, false);
+    assert.equal('account' in xai.localLogin, false);
+    const dumped = JSON.stringify(xai);
+    assert.equal(dumped.includes('refresh_token'), false);
+    assert.equal(/"access"/.test(dumped), false);
+    const anthropic = listed.find((item) => item.id === 'anthropic');
+    assert.ok(anthropic);
+    assert.deepEqual(anthropic.authMethods, ['api_key']);
+    const openai = listed.find((item) => item.id === 'openai');
+    assert.deepEqual(openai.authMethods, ['api_key']);
+    for (const item of listed) {
+      if (item.id === 'xai') continue;
+      assert.equal(item.authMethods.includes('oauth'), false, item.id);
+      assert.equal(item.authMethods.length > 0, true, item.id);
+    }
+  });
+});
+
+function writeGrokAuth(home, entry) {
+  mkdirSync(path.join(home, '.grok'), { recursive: true });
+  writeFileSync(path.join(home, '.grok', 'auth.json'), JSON.stringify({
+    'https://auth.x.ai::b1a00492-073a-47ea-816f-4c329264a828': entry,
+  }), 'utf8');
+}
+
+test('listAvailable localLogin detects Grok CLI auth and never returns tokens', async () => {
+  const access = 'access-fixture-list';
+  const refresh = 'refresh-fixture-list';
+  const home = await makeTempDir('weft-grok-home-');
+  try {
+    writeGrokAuth(home, {
+      key: access,
+      refresh_token: refresh,
+      expires_at: Math.floor(Date.now() / 1000) + 3600,
+      email: 'lawrence@x.com',
+    });
+    await withService(async ({ service }) => {
+      const listed = await service.listAvailable();
+      const xai = listed.find((item) => item.id === 'xai');
+      assert.equal(xai.localLogin.detected, true);
+      assert.equal(xai.localLogin.account, 'lawrence@x.com');
+      const dumped = JSON.stringify(listed);
+      assert.equal(dumped.includes(access), false);
+      assert.equal(dumped.includes(refresh), false);
+      assert.equal('credential' in xai.localLogin, false);
+      assert.equal('key' in xai.localLogin, false);
+      assert.equal('access' in xai.localLogin, false);
+    }, { env: { GROK_HOME: home } });
+  } finally {
+    await removeTempDir(home);
+  }
+});
+
+test('listAvailable localLogin is false when auth.json is missing or malformed', async () => {
+  const home = await makeTempDir('weft-grok-bad-');
+  try {
+    await withService(async ({ service }) => {
+      const xai = (await service.listAvailable()).find((item) => item.id === 'xai');
+      assert.deepEqual(xai.localLogin, { detected: false });
+    }, { env: { GROK_HOME: home } });
+
+    mkdirSync(path.join(home, '.grok'), { recursive: true });
+    writeFileSync(path.join(home, '.grok', 'auth.json'), '{not-json', 'utf8');
+    await withService(async ({ service }) => {
+      const xai = (await service.listAvailable()).find((item) => item.id === 'xai');
+      assert.equal(xai.localLogin.detected, false);
+    }, { env: { GROK_HOME: home } });
+
+    writeGrokAuth(home, { email: 'nobody@x.com' });
+    await withService(async ({ service }) => {
+      const xai = (await service.listAvailable()).find((item) => item.id === 'xai');
+      assert.equal(xai.localLogin.detected, false);
+    }, { env: { GROK_HOME: home } });
+  } finally {
+    await removeTempDir(home);
+  }
+});
+
+test('connectLocalLogin imports Grok CLI oauth creds and probes', async () => {
+  const access = 'access-fixture-connect';
+  const refresh = 'refresh-fixture-connect';
+  const home = await makeTempDir('weft-grok-connect-');
+  try {
+    writeGrokAuth(home, {
+      key: access,
+      refresh_token: refresh,
+      expires_at: Math.floor(Date.now() / 1000) + 3600,
+      email: 'tester@x.com',
+    });
+    await withService(async ({ service, credentials }) => {
+      const saved = await service.connectLocalLogin('xai');
+      assert.equal(saved.id, 'xai');
+      assert.equal(saved.auth.type, 'oauth');
+      assert.equal(saved.auth.account, 'tester@x.com');
+      const dumped = JSON.stringify(saved);
+      assert.equal(dumped.includes(access), false);
+      assert.equal(dumped.includes(refresh), false);
+      const cred = await credentials.read('xai');
+      assert.equal(cred.type, 'oauth');
+      assert.equal(cred.access, access);
+      assert.equal(cred.refresh, refresh);
+    }, {
+      env: { GROK_HOME: home },
+      extraProviders: [fakeOAuthProvider({ id: 'xai', name: 'Grok', models: ['grok-3'] })],
+    });
+  } finally {
+    await removeTempDir(home);
+  }
+});
+
+test('connectLocalLogin rejects non-xai and missing local login', async () => {
+  await withService(async ({ service }) => {
+    await assert.rejects(() => service.connectLocalLogin('anthropic'), (err) => {
+      assert.equal(err.code, 'E_BAD_REQUEST');
+      return true;
+    });
+    await assert.rejects(() => service.connectLocalLogin('xai'), (err) => {
+      assert.equal(err.code, 'E_BAD_REQUEST');
+      assert.equal(err.phrase, 'src_err_local_login');
+      return true;
+    });
+  }, {
+    extraProviders: [fakeOAuthProvider({ id: 'xai', name: 'Grok', models: ['grok-3'] })],
+  });
+});
+
+test('patchProvider can rename a builtin provider', async () => {
+  await withService(async ({ service }) => {
+    await service.connectApiKey('deepseek', 'sk-ok-123456');
+    await service.patchProvider('deepseek', { name: 'My DeepSeek' });
+    const listed = await service.listProviders();
+    assert.equal(listed[0].name, 'My DeepSeek');
+    assert.equal(listed[0].nameCustom, true);
+  }, { extraProviders: [deepseekFake()] });
+});
+
+

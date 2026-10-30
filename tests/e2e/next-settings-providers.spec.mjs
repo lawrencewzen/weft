@@ -70,6 +70,10 @@ async function openProviders(page) {
   await expect(page.getByTestId('next-settings')).toBeVisible();
   await page.getByTestId('next-settings-nav-providers').click();
   await expect(page.getByTestId('next-provider-add')).toBeVisible();
+  await expect(page.getByTestId('next-provider-page')).not.toContainText('接入 Provider');
+  await expect(page.getByTestId('next-provider-page')).not.toContainText('点一行展开');
+  await expect(page.getByTestId('next-provider-page')).not.toContainText('新对话使用');
+  await expect(page.getByTestId('next-provider-page')).not.toContainText('只保存在本机');
 }
 
 test('settings overlay opens from the sidebar, Esc returns, and other tabs are placeholders', async ({ page }) => {
@@ -113,32 +117,23 @@ test('add provider: failed 401, then pass, pick two models, default, rename, del
   await openProviders(page);
 
   await page.getByTestId('next-provider-add').click();
-  await expect(page.locator('.mp-dlg')).toBeVisible();
+  await expect(page.getByTestId('next-add-dialog')).toBeVisible();
 
-  // Step 0: click Custom card
   await page.locator('[data-testid=next-vendor-card][data-vendor="custom"]').click();
   await expect(page.getByTestId('next-custom-name')).toBeVisible();
 
-  // Step 1: fill form with wrong key -> 401 error
   await page.getByTestId('next-custom-name').fill('Local Fake');
   await page.getByTestId('next-custom-url').fill(fake.baseUrl);
   await page.getByTestId('next-custom-key').fill(WRONG_KEY);
-  await page.locator('.mp-dlg .mp-df .mp-btn.mp-pri').click();
+  await page.getByTestId('next-add-test').click();
   await expect(page.getByTestId('next-test-result')).toBeVisible();
   await expect(page.getByTestId('next-test-result')).toContainText(/401|鉴权失败|失败|unauthorized/i);
 
-  // Step 1: fix key -> pass to step 2
   await page.getByTestId('next-custom-key').fill(RIGHT_KEY);
-  await page.locator('.mp-dlg .mp-df .mp-btn.mp-pri').click();
-
-  // Step 2: select both models and finish
-  await expect(page.getByTestId('next-provider-finish')).toBeVisible();
-  const checkboxes = page.locator('.mp-pickm input[type="checkbox"]');
-  await expect(checkboxes).toHaveCount(2);
-  await checkboxes.nth(0).check();
-  await checkboxes.nth(1).check();
+  await page.getByTestId('next-add-test').click();
+  await expect(page.getByTestId('next-add-model-dropdown')).toBeEnabled();
   await page.getByTestId('next-provider-finish').click();
-  await expect(page.locator('.mp-dlg')).toHaveCount(0);
+  await expect(page.getByTestId('next-add-dialog')).toHaveCount(0);
 
   // Provider list: row exists and models enabled
   const row = page.getByTestId('next-provider-row').first();
@@ -155,6 +150,9 @@ test('add provider: failed 401, then pass, pick two models, default, rename, del
   // In-place edit context window
   const modelRow = page.locator('[data-testid=next-model-row][data-model="alpha-one"]');
   await expect(modelRow).toBeVisible();
+  await expect(modelRow.locator('.mp-mt-name')).toHaveText('alpha-one');
+  await expect(modelRow.locator('.mp-mt-name')).toHaveAttribute('title', 'alpha-one');
+  await expect(modelRow.locator('.mp-mt-id')).toHaveCount(0);
   const ctxVal = modelRow.locator('.mp-num .mp-v').first();
   await ctxVal.click();
   const ctxInput = page.getByTestId('next-ctx-input');
@@ -176,27 +174,35 @@ test('add provider: failed 401, then pass, pick two models, default, rename, del
   expect(fake.hits.some((hit) => String(hit.url).endsWith('/models'))).toBe(true);
 });
 
-test('add provider dialog back, cancel and close navigation', async ({ page }) => {
+test('add provider dialog cancel, close and Escape; cancel rolls back a tested custom', async ({ page }) => {
+  const fake = await startFakeModels();
   await boot(page);
   await openProviders(page);
 
   await page.getByTestId('next-provider-add').click();
-  await expect(page.locator('.mp-dlg')).toBeVisible();
+  await expect(page.getByTestId('next-add-dialog')).toBeVisible();
   await expect(page.locator('[data-testid=next-vendor-card][data-vendor="custom"]')).toBeVisible();
 
   await page.locator('[data-testid=next-vendor-card][data-vendor="custom"]').click();
   await expect(page.getByTestId('next-custom-name')).toBeVisible();
-
-  await page.locator('.mp-df .mp-btn').filter({ hasText: '上一步' }).click();
-  await expect(page.locator('[data-testid=next-vendor-card][data-vendor="custom"]')).toBeVisible();
-
-  await page.locator('.mp-dh .mp-x').click();
-  await expect(page.locator('.mp-dlg')).toHaveCount(0);
+  await page.getByTestId('next-add-close').click();
+  await expect(page.getByTestId('next-add-dialog')).toHaveCount(0);
 
   await page.getByTestId('next-provider-add').click();
-  await expect(page.locator('.mp-dlg')).toBeVisible();
+  await expect(page.getByTestId('next-add-dialog')).toBeVisible();
   await page.locator('[data-testid=next-vendor-card][data-vendor="custom"]').click();
   await expect(page.getByTestId('next-custom-name')).toBeVisible();
   await page.keyboard.press('Escape');
-  await expect(page.locator('.mp-dlg')).toHaveCount(0);
+  await expect(page.getByTestId('next-add-dialog')).toHaveCount(0);
+
+  await page.getByTestId('next-provider-add').click();
+  await page.locator('[data-testid=next-vendor-card][data-vendor="custom"]').click();
+  await page.getByTestId('next-custom-name').fill('Temp Fake');
+  await page.getByTestId('next-custom-url').fill(fake.baseUrl);
+  await page.getByTestId('next-custom-key').fill(RIGHT_KEY);
+  await page.getByTestId('next-add-test').click();
+  await expect(page.getByTestId('next-add-model-dropdown')).toBeEnabled();
+  await page.getByTestId('next-add-cancel').click();
+  await expect(page.getByTestId('next-add-dialog')).toHaveCount(0);
+  await expect(page.getByTestId('next-provider-row')).toHaveCount(0);
 });

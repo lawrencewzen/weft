@@ -28,8 +28,6 @@ export function ModelTable({
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [editingVal, setEditingVal] = useState<string>('');
 
-  const unknownCount = provider.models.filter((m) => m.contextWindow == null).length;
-
   const handleStartEdit = (
     modelId: string,
     key: 'contextWindow' | 'maxTokens',
@@ -123,12 +121,12 @@ export function ModelTable({
 
           return (
             <div key={m.id} style={{ display: 'contents' }} data-testid="next-model-row" data-model={m.id}>
-              {/* Col 1: Model name & id */}
-              <span className="mp-c">
-                <span className={`mp-mt-mn ${m.enabled ? '' : 'mp-mt-off'}`}>
-                  <span className="mp-mt-nm">{m.name}</span>
-                  {m.name !== m.id ? <span className="mp-mt-id">{m.id}</span> : null}
-                </span>
+              {/* Col 1: Model name; id only on hover */}
+              <span
+                className={`mp-c mp-mt-name${m.enabled ? '' : ' mp-mt-off'}`}
+                title={m.id}
+              >
+                {m.name}
               </span>
 
               {/* Col 2: Context Window */}
@@ -167,22 +165,15 @@ export function ModelTable({
         })}
       </div>
 
-      {(unknownCount > 0 || provider.kind === 'custom') && (
+      {provider.kind === 'custom' && onRefreshModels && (
         <div className="mp-mnote">
-          {unknownCount > 0 && (
-            <span>
-              {t(lang, 'model_unknown_note', { count: unknownCount })}
-            </span>
-          )}
-          {provider.kind === 'custom' && onRefreshModels && (
-            <a
-              style={{ marginLeft: 'auto' }}
-              data-testid="next-refresh-models"
-              onClick={() => void onRefreshModels(provider.id)}
-            >
-              {isRefreshing ? t(lang, 'provider_status_run') : t(lang, 'model_refresh_custom')}
-            </a>
-          )}
+          <a
+            style={{ marginLeft: 'auto' }}
+            data-testid="next-refresh-models"
+            onClick={() => void onRefreshModels(provider.id)}
+          >
+            {isRefreshing ? t(lang, 'provider_status_run') : t(lang, 'model_refresh_custom')}
+          </a>
         </div>
       )}
     </div>
