@@ -98,8 +98,6 @@ export type RightActionsValue = {
   onToast: (message: string) => void;
 };
 
-export type RightPaneValue = RightLayoutValue & RightChangesValue & RightFilesValue & RightActionsValue;
-
 const RightLayoutContext = createContext<RightLayoutValue | null>(null);
 const RightChangesContext = createContext<RightChangesValue | null>(null);
 const RightFilesContext = createContext<RightFilesValue | null>(null);
@@ -628,17 +626,6 @@ export function useRightFiles(): RightFilesValue {
 
 export function useRightActions(): RightActionsValue {
   return requiredContext(useContext(RightActionsContext), 'useRightActions');
-}
-
-export function useRightPane(): RightPaneValue {
-  const layout = useRightLayout();
-  const changes = useRightChanges();
-  const files = useRightFiles();
-  const actions = useRightActions();
-  return useMemo(
-    () => ({ ...layout, ...changes, ...files, ...actions }),
-    [layout, changes, files, actions],
-  );
 }
 
 export function isMarkdownFile(path: string | null | undefined): boolean {

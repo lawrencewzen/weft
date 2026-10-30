@@ -156,7 +156,6 @@ export function CenterPane({
           onDraftThinkingLevel={setDraftThinkingLevel}
           onNewWorkspace={onNewWorkspace}
           workspacePath={workspace?.path}
-          git={workspace?.git ?? null}
           onSend={draftActions.send}
           onStop={draftActions.stop}
           onSent={bumpStick}
@@ -248,7 +247,6 @@ export function CenterPane({
           context={conversation.context}
           onNewWorkspace={onNewWorkspace}
           workspacePath={workspace?.path}
-          git={workspace?.git ?? null}
           onSend={optimistic.send}
           onStop={actions.stop}
           onSent={bumpStick}

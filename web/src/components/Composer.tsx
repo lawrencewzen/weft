@@ -1,21 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { AgentsStrip } from './AgentsStrip';
 import { StallStrip } from './StallStrip';
-import { getWorkspaceTree, patchConversation, putModelContextWindow, type SendMessageFile, type ThinkingLevel } from '../data/api';
+import { patchConversation, putModelContextWindow, type SendMessageFile, type ThinkingLevel } from '../data/api';
 import {
-  applyAtSelection,
-  filterAtFiles,
   IMAGE_MAX_COUNT,
-  isImageFile,
-  matchAtTrigger,
-  resolveAtSelection,
-  shouldResetAtActiveIndex,
-  splitFilePath,
-  stepAtActiveIndex,
   type ComposerHint,
   type MessageImage,
 } from '../data/attachments';
+import { AtMentionMenu } from './composer/AtMentionMenu';
 import { ComposerTags } from './composer/ComposerTags';
+import { GitChip } from './composer/GitChip';
+import { PlusMenu } from './composer/PlusMenu';
+import { useAtMention } from './composer/useAtMention';
 import { useComposerAttachments } from './composer/useComposerAttachments';
 import {
   clampThinkingLevel,
@@ -28,16 +24,14 @@ import {
   type ContextUsage,
   type ResolvedModel,
 } from '../data/composerModel';
-import { formatComposerGitTitle, type GitStatus } from '../data/gitBar';
 import type { Lang } from '../data/lang';
 import { draftPath, navigate, openSettings } from '../data/nav';
 import type { QueueChip, SendMode } from '../data/pendingSend';
 import { useProviders } from '../data/useProviders';
-import { useWorkspaces } from '../data/useWorkspaces';
 import type { components } from '../../../src/v2/contract.gen';
 import { t } from '../i18n';
 import { writeActiveWorkspace } from '../data/layout';
-import { useRightPane } from '../data/rightPaneContext';
+import { useRightActions } from '../data/rightPaneContext';
 import { ContextBanner, ContextChip } from './ContextChip';
 import { DemoModelBadge } from './DemoModelBadge';
 import { ModelChip } from './ModelChip';
@@ -75,7 +69,6 @@ type Props = {
   onSent?: () => void;
   queue?: QueueChip[];
   onWithdrawQueue?: (requestId: string) => Promise<unknown>;
-  git?: GitStatus | null;
 };
 
 const FALLBACK_CONTEXT: ContextUsage = { used: 0, window: 128000, percent: 0, level: 'ok' };
@@ -83,11 +76,6 @@ const FALLBACK_CONTEXT: ContextUsage = { used: 0, window: 128000, percent: 0, le
 const TEXTAREA_MIN = 44;
 const TEXTAREA_MAX = 200;
 
-const PLUS_ICON = (
-  <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
-    <path d="M12 5v14M5 12h14" />
-  </svg>
-);
 const SEND_ICON = (
   <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
     <path d="M12 19V5M6 11l6-6 6 6" />
@@ -101,44 +89,6 @@ const STOP_ICON = (
 const DROP_ICON = (
   <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true">
     <path d="M12 16V4M7 9l5-5 5 5M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3" />
-  </svg>
-);
-
-const GIT_BRANCH_ICON = (
-  <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
-    <circle cx="4" cy="3.5" r="1.6" />
-    <circle cx="4" cy="12.5" r="1.6" />
-    <circle cx="12" cy="5" r="1.6" />
-    <path d="M4 5v6M12 6.6c0 3-4 2.2-8 4.4" />
-  </svg>
-);
-
-const PLUS_IMAGE_ICON = (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
-    <rect x="3" y="4" width="18" height="16" rx="2" />
-    <circle cx="9" cy="10" r="1.8" />
-    <path d="M21 16l-5-5-8 8" />
-  </svg>
-);
-
-const PLUS_AT_ICON = (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
-    <circle cx="12" cy="12" r="4" />
-    <path d="M16 12v1.5a2.5 2.5 0 0 0 5 0V12a9 9 0 1 0-3.5 7.1" />
-  </svg>
-);
-
-const FILE_ICON = (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
-    <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
-    <path d="M14 3v5h5" />
-  </svg>
-);
-
-const AT_MENU_FILE_ICON = (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
-    <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
-    <path d="M14 3v5h5" />
   </svg>
 );
 
@@ -172,36 +122,16 @@ export function Composer({
   onSent,
   queue = [],
   onWithdrawQueue,
-  git: propGit,
 }: Props) {
   const [draft, setDraft] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hint, setHint] = useState<ComposerHint | null>(null);
   const [focused, setFocused] = useState(false);
-  const [plusOpen, setPlusOpen] = useState(false);
-  const [atActiveIndex, setAtActiveIndex] = useState(0);
-  const atActiveIndexRef = useRef(0);
-  atActiveIndexRef.current = atActiveIndex;
-  const prevQueryRef = useRef<string | null>(null);
-  const prevOpenRef = useRef(false);
-  const [atDismissed, setAtDismissed] = useState(false);
-  const [treeCache, setTreeCache] = useState<Record<string, { files: string[]; error: boolean }>>({});
-  const [cursorPos, setCursorPos] = useState<number | null>(null);
-  const plusMenuRef = useRef<HTMLDivElement>(null);
-  const plusBtnRef = useRef<HTMLButtonElement>(null);
-  const atMenuRef = useRef<HTMLDivElement>(null);
   const req = useRef(createSendRequest());
   const area = useRef<HTMLTextAreaElement>(null);
-  const fileInput = useRef<HTMLInputElement>(null);
-  const anyFileInput = useRef<HTMLInputElement>(null);
   const { providers, defaultModel, ready: providersReady } = useProviders();
-  const { openInTerminal, copyPath } = useRightPane();
-  const { workspaces } = useWorkspaces();
-  const currentWorkspace = workspaces.find((ws) => ws.id === workspaceId) || null;
-  const git = propGit !== undefined ? propGit : (currentWorkspace?.git ?? null);
-  const totalDiff = (git?.insertions || 0) + (git?.deletions || 0);
-  const hasDiff = totalDiff > 0;
+  const { openInTerminal, copyPath } = useRightActions();
   const groups = useMemo(() => groupComposerModels(providers, defaultModel), [providers, defaultModel]);
   const available = hasAvailableModels(providers);
   const selected = useMemo(() => resolveComposerSelection({
@@ -229,66 +159,6 @@ export function Composer({
   const allowAttach = showModelControls && !noModel;
   const supportsImages = demo || selected?.images === true;
 
-  const activeCursor = cursorPos !== null
-    ? Math.min(cursorPos, draft.length)
-    : (area.current?.selectionStart ?? draft.length);
-  const atTrigger = useMemo(() => {
-    return matchAtTrigger(draft, activeCursor);
-  }, [draft, activeCursor]);
-
-  const atOpen = Boolean(atTrigger && focused && !locked && !atDismissed);
-
-  useEffect(() => {
-    if (!atTrigger) {
-      setAtDismissed(false);
-    }
-  }, [atTrigger]);
-
-  useEffect(() => {
-    if (!atOpen || !workspaceId) return;
-    if (treeCache[workspaceId]) return;
-    let cancelled = false;
-    void (async () => {
-      try {
-        const tree = await getWorkspaceTree(workspaceId);
-        if (cancelled) return;
-        const files = tree.entries.filter((e) => e.type === 'file').map((e) => e.path);
-        setTreeCache((prev) => ({ ...prev, [workspaceId]: { files, error: false } }));
-      } catch {
-        if (cancelled) return;
-        setTreeCache((prev) => ({ ...prev, [workspaceId]: { files: [], error: true } }));
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [atOpen, workspaceId, treeCache]);
-
-  const cachedTree = workspaceId ? treeCache[workspaceId] : null;
-  const treeError = Boolean(cachedTree?.error);
-  const treeLoading = atOpen && Boolean(workspaceId && !cachedTree);
-
-  const matchedFiles = useMemo(() => {
-    if (!atTrigger || treeError) return [];
-    const files = cachedTree?.files || [];
-    return filterAtFiles(files, atTrigger.query, 6);
-  }, [atTrigger, treeError, cachedTree]);
-
-  useEffect(() => {
-    if (atOpen) {
-      const currentQuery = atTrigger?.query ?? '';
-      const isOpening = !prevOpenRef.current;
-      if (shouldResetAtActiveIndex(prevQueryRef.current, currentQuery, isOpening)) {
-        atActiveIndexRef.current = 0;
-        setAtActiveIndex(0);
-      }
-      prevQueryRef.current = currentQuery;
-    } else {
-      prevQueryRef.current = null;
-    }
-    prevOpenRef.current = atOpen;
-  }, [atOpen, atTrigger?.query]);
-
   function resize() {
     const el = area.current;
     if (!el) return;
@@ -309,6 +179,19 @@ export function Composer({
     setHint,
     textareaRef: area,
     onResize: resize,
+  });
+
+  const at = useAtMention({
+    workspaceId,
+    draft,
+    setDraft,
+    locked,
+    focused,
+    setFocused,
+    textareaRef: area,
+    onResize: resize,
+    addFileRef: att.addFileRef,
+    addProjectFile: att.addProjectFile,
   });
 
   const hasPayload =
@@ -332,58 +215,6 @@ export function Composer({
     resize();
   }, [draft]);
 
-  useEffect(() => {
-    if (!plusOpen) return;
-    function onDocClick(event: MouseEvent) {
-      if (
-        plusMenuRef.current?.contains(event.target as Node) ||
-        plusBtnRef.current?.contains(event.target as Node)
-      ) {
-        return;
-      }
-      setPlusOpen(false);
-    }
-    function onKey(event: globalThis.KeyboardEvent) {
-      if (event.key === 'Escape') {
-        setPlusOpen(false);
-      }
-    }
-    document.addEventListener('mousedown', onDocClick);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('mousedown', onDocClick);
-      document.removeEventListener('keydown', onKey);
-    };
-  }, [plusOpen]);
-
-  const pickAtFile = useCallback((relPath: string) => {
-    const el = area.current;
-    const cur = el ? (el.selectionStart ?? activeCursor) : activeCursor;
-    const trigger = matchAtTrigger(draft, cur) || atTrigger;
-    if (!trigger) {
-      att.addProjectFile(relPath);
-      return;
-    }
-    const applied = applyAtSelection(draft, relPath, trigger);
-    att.addFileRef(relPath);
-    setDraft(applied.text);
-    setCursorPos(applied.nextCursor);
-    if (el) {
-      el.focus();
-      el.setSelectionRange(applied.nextCursor, applied.nextCursor);
-    }
-    requestAnimationFrame(() => {
-      if (el) {
-        if (el.value === applied.text) {
-          el.focus();
-          el.setSelectionRange(applied.nextCursor, applied.nextCursor);
-          setCursorPos(applied.nextCursor);
-        }
-        resize();
-      }
-    });
-  }, [activeCursor, att, atTrigger, draft]);
-
   async function submit(text = draft.trim(), mode?: SendMode) {
     const payload = text.trim();
     const { imagePayload, sentFiles, sentPastes, extraKey } = att.buildSendPayload();
@@ -406,8 +237,8 @@ export function Composer({
     const snapshot = att.takeAndClear();
 
     setDraft('');
-    setCursorPos(null);
-    setAtDismissed(false);
+    at.setCursorPos(null);
+    at.setAtDismissed(false);
     requestAnimationFrame(resize);
     try {
       await onSend(
@@ -436,57 +267,11 @@ export function Composer({
   }
 
   function onKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
-    if (atOpen) {
-      if (
-        event.key === 'ArrowDown' ||
-        event.key === 'ArrowUp' ||
-        event.key === 'Enter' ||
-        event.key === 'Tab' ||
-        event.key === 'Escape'
-      ) {
-        event.preventDefault();
-      }
-      if (event.key === 'Escape') {
-        setAtDismissed(true);
-        return;
-      }
-      if (event.key === 'ArrowDown') {
-        if (matchedFiles.length > 0) {
-          const next = stepAtActiveIndex(atActiveIndexRef.current, matchedFiles.length, 'down');
-          atActiveIndexRef.current = next;
-          setAtActiveIndex(next);
-        }
-        return;
-      }
-      if (event.key === 'ArrowUp') {
-        if (matchedFiles.length > 0) {
-          const next = stepAtActiveIndex(atActiveIndexRef.current, matchedFiles.length, 'up');
-          atActiveIndexRef.current = next;
-          setAtActiveIndex(next);
-        }
-        return;
-      }
-      if (event.key === 'Enter' || event.key === 'Tab') {
-        if (!event.nativeEvent.isComposing && event.keyCode !== 229) {
-          if (matchedFiles.length > 0) {
-            const picked = resolveAtSelection(matchedFiles, atActiveIndexRef.current);
-            if (picked) {
-              pickAtFile(picked);
-            }
-          }
-        }
-        return;
-      }
-    }
+    if (at.handleKeyDown(event)) return;
     if (event.key === 'Escape') {
       if (att.pastePeekId) {
         event.preventDefault();
         att.setPastePeekId(null);
-        return;
-      }
-      if (plusOpen) {
-        event.preventDefault();
-        setPlusOpen(false);
         return;
       }
     }
@@ -562,52 +347,6 @@ export function Composer({
     navigate(draftPath(workspaceId));
   }
 
-  function openAttach() {
-    if (!allowAttach || locked) return;
-    if (!supportsImages) {
-      setHint({ kind: 'no_vision' });
-      return;
-    }
-    fileInput.current?.click();
-  }
-
-  function pickImages() {
-    setPlusOpen(false);
-    openAttach();
-  }
-
-  function pickAnyFiles() {
-    setPlusOpen(false);
-    anyFileInput.current?.click();
-  }
-
-  function insertFileAt() {
-    setPlusOpen(false);
-    const el = area.current;
-    if (el) {
-      const start = el.selectionStart ?? draft.length;
-      const end = el.selectionEnd ?? draft.length;
-      const next = draft.slice(0, start) + '@' + draft.slice(end);
-      const nextPos = start + 1;
-      setDraft(next);
-      setCursorPos(nextPos);
-      setFocused(true);
-      el.focus();
-      el.setSelectionRange(nextPos, nextPos);
-      requestAnimationFrame(() => {
-        if (el.value === next) {
-          el.focus();
-          el.setSelectionRange(nextPos, nextPos);
-        }
-        resize();
-      });
-    } else {
-      setDraft((cur) => cur + '@');
-      setCursorPos(draft.length + 1);
-      setFocused(true);
-    }
-  }
-
   const boxClass = [
     'composer-box',
     focused ? 'is-focused' : '',
@@ -671,56 +410,15 @@ export function Composer({
                 <ComposerTags lang={lang} {...att} />
               </div>
             ) : null}
-            {atOpen ? (
-              <div
-                ref={atMenuRef}
-                className="composer-at-menu"
-                data-testid="next-composer-at-menu"
-                role="listbox"
-                aria-label={t(lang, 'composer_at_header')}
-              >
-                <div className="composer-at-header">{t(lang, 'composer_at_header')}</div>
-                <div className="composer-at-list">
-                  {treeError ? (
-                    <div className="composer-at-empty" data-testid="next-composer-at-empty">
-                      {t(lang, 'composer_at_unavailable')}
-                    </div>
-                  ) : treeLoading ? (
-                    <div className="composer-at-empty" data-testid="next-composer-at-empty">
-                      {t(lang, 'loading')}
-                    </div>
-                  ) : matchedFiles.length === 0 ? (
-                    <div className="composer-at-empty" data-testid="next-composer-at-empty">
-                      {t(lang, 'composer_at_empty')}
-                    </div>
-                  ) : (
-                    matchedFiles.map((file, idx) => {
-                      const { name, dir } = splitFilePath(file);
-                      const isActive = idx === atActiveIndex;
-                      return (
-                        <button
-                          key={file}
-                          type="button"
-                          className={`composer-at-item${isActive ? ' is-active' : ''}`}
-                          data-testid="next-composer-at-item"
-                          data-active={isActive ? 'true' : 'false'}
-                          role="option"
-                          aria-selected={isActive}
-                          onMouseDown={(e) => {
-                            e.preventDefault();
-                            pickAtFile(file);
-                          }}
-                        >
-                          <span className="composer-at-icon">{AT_MENU_FILE_ICON}</span>
-                          <span className="composer-at-name">{name}</span>
-                          {dir ? <span className="composer-at-dir">{dir}</span> : null}
-                        </button>
-                      );
-                    })
-                  )}
-                </div>
-                <div className="composer-at-footer">{t(lang, 'composer_at_footer')}</div>
-              </div>
+            {at.atOpen ? (
+              <AtMentionMenu
+                lang={lang}
+                treeError={at.treeError}
+                treeLoading={at.treeLoading}
+                matchedFiles={at.matchedFiles}
+                atActiveIndex={at.atActiveIndex}
+                onPick={at.pickAtFile}
+              />
             ) : null}
             <textarea
               ref={area}
@@ -732,9 +430,9 @@ export function Composer({
               value={draft}
               onFocus={() => {
                 setFocused(true);
-                setAtDismissed(false);
+                at.setAtDismissed(false);
                 if (area.current) {
-                  setCursorPos(area.current.selectionStart ?? draft.length);
+                  at.setCursorPos(area.current.selectionStart ?? draft.length);
                 }
               }}
               onBlur={() => {
@@ -742,22 +440,22 @@ export function Composer({
               }}
               onSelect={(event) => {
                 const target = event.target as HTMLTextAreaElement;
-                setCursorPos(target.selectionStart ?? target.value.length);
+                at.setCursorPos(target.selectionStart ?? target.value.length);
               }}
               onClick={(event) => {
                 const target = event.target as HTMLTextAreaElement;
-                setCursorPos(target.selectionStart ?? target.value.length);
+                at.setCursorPos(target.selectionStart ?? target.value.length);
               }}
               onKeyUp={(event) => {
                 const target = event.target as HTMLTextAreaElement;
-                setCursorPos(target.selectionStart ?? target.value.length);
+                at.setCursorPos(target.selectionStart ?? target.value.length);
               }}
               onChange={(event) => {
                 const target = event.target;
                 const nextCursor = target.selectionStart ?? target.value.length;
                 setDraft(target.value);
-                setCursorPos(nextCursor);
-                setAtDismissed(false);
+                at.setCursorPos(nextCursor);
+                at.setAtDismissed(false);
                 resize();
               }}
               onKeyDown={onKeyDown}
@@ -779,72 +477,15 @@ export function Composer({
               ) : (
                 <div className="composer-chips">
                   {allowAttach ? (
-                    <>
-                      {plusOpen ? (
-                        <div
-                          ref={plusMenuRef}
-                          className="composer-plus-menu"
-                          data-testid="next-composer-plus-menu"
-                          role="menu"
-                        >
-                          <button
-                            type="button"
-                            className="composer-plus-item"
-                            data-testid="next-composer-plus-image"
-                            role="menuitem"
-                            onClick={pickImages}
-                          >
-                            <span className="composer-plus-icon">{PLUS_IMAGE_ICON}</span>
-                            <span className="composer-plus-text">
-                              <span className="composer-plus-label">{t(lang, 'composer_plus_image')}</span>
-                              <span className="composer-plus-hint">{t(lang, 'composer_plus_image_hint')}</span>
-                            </span>
-                          </button>
-                          <button
-                            type="button"
-                            className="composer-plus-item"
-                            data-testid="next-composer-plus-file"
-                            role="menuitem"
-                            onClick={pickAnyFiles}
-                          >
-                            <span className="composer-plus-icon">{FILE_ICON}</span>
-                            <span className="composer-plus-text">
-                              <span className="composer-plus-label">{t(lang, 'composer_plus_file')}</span>
-                              <span className="composer-plus-hint">{t(lang, 'composer_plus_file_hint')}</span>
-                            </span>
-                          </button>
-                          <button
-                            type="button"
-                            className="composer-plus-item"
-                            data-testid="next-composer-plus-at"
-                            role="menuitem"
-                            onClick={insertFileAt}
-                          >
-                            <span className="composer-plus-icon">{PLUS_AT_ICON}</span>
-                            <span className="composer-plus-text">
-                              <span className="composer-plus-label">{t(lang, 'composer_plus_at')}</span>
-                              <span className="composer-plus-hint">{t(lang, 'composer_plus_at_hint')}</span>
-                            </span>
-                          </button>
-                        </div>
-                      ) : null}
-                      <button
-                        ref={plusBtnRef}
-                        type="button"
-                        className={`composer-attach${plusOpen ? ' is-open' : ''}`}
-                        data-testid="next-composer-attach"
-                        aria-label={t(lang, 'composer_attach')}
-                        title={t(lang, 'composer_attach')}
-                        aria-expanded={plusOpen}
-                        disabled={locked}
-                        onClick={() => {
-                          if (!locked) setPlusOpen((open) => !open);
-                        }}
-                      >
-                        {PLUS_ICON}
-                      </button>
-                      <span className="composer-divider" aria-hidden="true" />
-                    </>
+                    <PlusMenu
+                      lang={lang}
+                      locked={locked}
+                      supportsImages={supportsImages}
+                      setHint={setHint}
+                      addImageFiles={att.addImageFiles}
+                      uploadFiles={att.uploadFiles}
+                      insertFileAt={at.insertFileAt}
+                    />
                   ) : null}
                   {showModelControls && available ? (
                     <ModelChip
@@ -874,34 +515,7 @@ export function Composer({
                       : undefined}
                     onCopyPath={copyPath}
                   />
-                  {git?.branch ? (
-                    <button
-                      type="button"
-                      className="composer-git-chip"
-                      data-testid="next-composer-git"
-                      title={formatComposerGitTitle(lang, git)}
-                    >
-                      {GIT_BRANCH_ICON}
-                      <span className="composer-git-branch" data-testid="next-composer-git-branch">
-                        {git.branch}
-                      </span>
-                      {hasDiff ? (
-                        <>
-                          <span className="composer-git-ins" data-testid="next-composer-git-ins">
-                            +{git.insertions || 0}
-                          </span>
-                          <span className="composer-git-del" data-testid="next-composer-git-del">
-                            {"−" + (git.deletions || 0)}
-                          </span>
-                        </>
-                      ) : null}
-                      {git.ahead != null && git.ahead > 0 ? (
-                        <span className="composer-git-ahead" data-testid="next-composer-git-ahead">
-                          {"↑" + git.ahead}
-                        </span>
-                      ) : null}
-                    </button>
-                  ) : null}
+                  <GitChip lang={lang} workspaceId={workspaceId} />
                   {demo ? <DemoModelBadge lang={lang} testId="next-demo-model-chip" /> : null}
                 </div>
               )}
@@ -972,41 +586,6 @@ export function Composer({
           ) : null}
         </div>
       </div>
-      {allowAttach ? (
-        <>
-          <input
-            ref={fileInput}
-            type="file"
-            accept="image/png,image/jpeg,image/gif,image/webp"
-            multiple
-            hidden
-            tabIndex={-1}
-            data-testid="next-composer-attach-input"
-            onChange={(event) => {
-              const files = [...(event.target.files || [])];
-              event.target.value = '';
-              void att.addImageFiles(files);
-            }}
-          />
-          <input
-            ref={anyFileInput}
-            type="file"
-            multiple
-            hidden
-            tabIndex={-1}
-            data-testid="next-composer-file-input"
-            onChange={(event) => {
-              const files = [...(event.target.files || [])];
-              event.target.value = '';
-              if (!files.length) return;
-              const imageFiles = files.filter(isImageFile);
-              const nonImageFiles = files.filter((f) => !isImageFile(f));
-              if (imageFiles.length) void att.addImageFiles(imageFiles);
-              if (nonImageFiles.length) void att.uploadFiles(nonImageFiles);
-            }}
-          />
-        </>
-      ) : null}
     </footer>
   );
 }

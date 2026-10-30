@@ -3,7 +3,7 @@ import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Change } from './store';
-import type { RightPaneValue } from './rightPaneContext';
+import type { RightChangesValue, RightFilesValue } from './rightPaneContext';
 
 /**
  * Regression tests for the right-pane diff effect (T50-B).
@@ -30,9 +30,11 @@ import {
   RightPaneProvider,
   useRightActions,
   useRightChanges,
+  useRightFiles,
   useRightLayout,
-  useRightPane,
 } from './rightPaneContext';
+
+type ProbeValue = RightChangesValue & RightFilesValue;
 
 type FakeStore = {
   changes: (cid: string) => Change[];
@@ -88,11 +90,13 @@ const DIFF = {
 
 let container: HTMLDivElement;
 let root: Root | null = null;
-let latest: RightPaneValue | null = null;
+let latest: ProbeValue | null = null;
 let seenChanges: Change[][] = [];
 
 function Probe() {
-  latest = useRightPane();
+  const changes = useRightChanges();
+  const files = useRightFiles();
+  latest = { ...changes, ...files };
   seenChanges.push(latest.visibleChanges);
   return null;
 }
@@ -231,7 +235,7 @@ describe('RightPaneProvider context split', () => {
     let layoutRenders = 0;
     let actionsRenders = 0;
     let changesRenders = 0;
-    let diffsSnapshot: RightPaneValue['diffs'] | null = null;
+    let diffsSnapshot: RightChangesValue['diffs'] | null = null;
 
     function LayoutProbe() {
       layoutRenders += 1;
