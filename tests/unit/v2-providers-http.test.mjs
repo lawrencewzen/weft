@@ -16,7 +16,6 @@ import { readDiscovery, startServer, stopServer } from './_server.mjs';
 import { makeTempDir, removeTempDir } from './_tmp.mjs';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { XAI_OAUTH_CLIENT_ID } from '../../src/core/grok-local-login.mjs';
 import {
   fakeKeyProvider,
   fakeOAuthProvider,
@@ -107,7 +106,7 @@ async function withHttp(fn, serviceOpts = {}) {
     store,
     credentials,
     modelsStore,
-    env: serviceOpts.env || {},
+    env: { GROK_HOME: dir, ...(serviceOpts.env || {}) },
     extraProviders: serviceOpts.extraProviders,
     fetchImpl: serviceOpts.fetchImpl,
     now: serviceOpts.now,
@@ -557,7 +556,7 @@ test('POST connect local_login imports Grok login and does not leak tokens', asy
   try {
     mkdirSync(path.join(home, '.grok'), { recursive: true });
     writeFileSync(path.join(home, '.grok', 'auth.json'), JSON.stringify({
-      [`https://auth.x.ai::${XAI_OAUTH_CLIENT_ID}`]: {
+      'https://auth.x.ai::b1a00492-073a-47ea-816f-4c329264a828': {
         key: access,
         refresh_token: refresh,
         expires_at: Math.floor(Date.now() / 1000) + 3600,
@@ -572,6 +571,7 @@ test('POST connect local_login imports Grok login and does not leak tokens', asy
       assert.equal(xai.localLogin.detected, true);
       assert.equal(xai.localLogin.account, 'tester@x.com');
       assert.equal(JSON.stringify(listed.body).includes(access), false);
+      assert.equal('credential' in xai.localLogin, false);
 
       const denied = await send(base, 'POST', '/api/v2/providers/anthropic/connect', { method: 'local_login' });
       assert.equal(denied.status, 400);
@@ -590,7 +590,7 @@ test('POST connect local_login imports Grok login and does not leak tokens', asy
       assert.equal(cred.type, 'oauth');
       assert.equal(cred.access, access);
     }, {
-      env: { HOME: home, USERPROFILE: home },
+      env: { GROK_HOME: home },
       extraProviders: [fakeOAuthProvider({ id: 'xai', name: 'Grok', models: ['grok-3'] })],
     });
   } finally {

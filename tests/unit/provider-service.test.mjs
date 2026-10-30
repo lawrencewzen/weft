@@ -9,7 +9,6 @@ import {
   EXCLUDED_PROVIDER_IDS,
   POPULAR_PROVIDER_IDS,
 } from '../../src/core/provider-service.mjs';
-import { XAI_OAUTH_CLIENT_ID } from '../../src/core/grok-local-login.mjs';
 import { makeTempDir, removeTempDir } from './_tmp.mjs';
 import { parseFetchedChatModels } from '../../src/kernel/models.mjs';
 import {
@@ -40,7 +39,7 @@ async function withService(fn, {
       store,
       credentials,
       modelsStore,
-      env,
+      env: { GROK_HOME: dir, ...env },
       extraProviders,
       fetchImpl,
       now,
@@ -685,20 +684,24 @@ test('listAvailable includes xai as Grok oauth-only, drops oauth elsewhere, excl
   });
 });
 
-test('listAvailable localLogin reads stub HOME and never returns tokens', async () => {
+function writeGrokAuth(home, entry) {
+  mkdirSync(path.join(home, '.grok'), { recursive: true });
+  writeFileSync(path.join(home, '.grok', 'auth.json'), JSON.stringify({
+    'https://auth.x.ai::b1a00492-073a-47ea-816f-4c329264a828': entry,
+  }), 'utf8');
+}
+
+test('listAvailable localLogin detects Grok CLI auth and never returns tokens', async () => {
   const access = 'access-fixture-list';
   const refresh = 'refresh-fixture-list';
   const home = await makeTempDir('weft-grok-home-');
   try {
-    mkdirSync(path.join(home, '.grok'), { recursive: true });
-    writeFileSync(path.join(home, '.grok', 'auth.json'), JSON.stringify({
-      [`https://auth.x.ai::${XAI_OAUTH_CLIENT_ID}`]: {
-        key: access,
-        refresh_token: refresh,
-        expires_at: Math.floor(Date.now() / 1000) + 3600,
-        email: 'lawrence@x.com',
-      },
-    }), 'utf8');
+    writeGrokAuth(home, {
+      key: access,
+      refresh_token: refresh,
+      expires_at: Math.floor(Date.now() / 1000) + 3600,
+      email: 'lawrence@x.com',
+    });
     await withService(async ({ service }) => {
       const listed = await service.listAvailable();
       const xai = listed.find((item) => item.id === 'xai');
@@ -707,8 +710,35 @@ test('listAvailable localLogin reads stub HOME and never returns tokens', async 
       const dumped = JSON.stringify(listed);
       assert.equal(dumped.includes(access), false);
       assert.equal(dumped.includes(refresh), false);
-      assert.equal(dumped.includes('refresh_token'), false);
-    }, { env: { HOME: home, USERPROFILE: home } });
+      assert.equal('credential' in xai.localLogin, false);
+      assert.equal('key' in xai.localLogin, false);
+      assert.equal('access' in xai.localLogin, false);
+    }, { env: { GROK_HOME: home } });
+  } finally {
+    await removeTempDir(home);
+  }
+});
+
+test('listAvailable localLogin is false when auth.json is missing or malformed', async () => {
+  const home = await makeTempDir('weft-grok-bad-');
+  try {
+    await withService(async ({ service }) => {
+      const xai = (await service.listAvailable()).find((item) => item.id === 'xai');
+      assert.deepEqual(xai.localLogin, { detected: false });
+    }, { env: { GROK_HOME: home } });
+
+    mkdirSync(path.join(home, '.grok'), { recursive: true });
+    writeFileSync(path.join(home, '.grok', 'auth.json'), '{not-json', 'utf8');
+    await withService(async ({ service }) => {
+      const xai = (await service.listAvailable()).find((item) => item.id === 'xai');
+      assert.equal(xai.localLogin.detected, false);
+    }, { env: { GROK_HOME: home } });
+
+    writeGrokAuth(home, { email: 'nobody@x.com' });
+    await withService(async ({ service }) => {
+      const xai = (await service.listAvailable()).find((item) => item.id === 'xai');
+      assert.equal(xai.localLogin.detected, false);
+    }, { env: { GROK_HOME: home } });
   } finally {
     await removeTempDir(home);
   }
@@ -719,15 +749,12 @@ test('connectLocalLogin imports Grok CLI oauth creds and probes', async () => {
   const refresh = 'refresh-fixture-connect';
   const home = await makeTempDir('weft-grok-connect-');
   try {
-    mkdirSync(path.join(home, '.grok'), { recursive: true });
-    writeFileSync(path.join(home, '.grok', 'auth.json'), JSON.stringify({
-      [`https://auth.x.ai::${XAI_OAUTH_CLIENT_ID}`]: {
-        key: access,
-        refresh_token: refresh,
-        expires_at: Math.floor(Date.now() / 1000) + 3600,
-        email: 'tester@x.com',
-      },
-    }), 'utf8');
+    writeGrokAuth(home, {
+      key: access,
+      refresh_token: refresh,
+      expires_at: Math.floor(Date.now() / 1000) + 3600,
+      email: 'tester@x.com',
+    });
     await withService(async ({ service, credentials }) => {
       const saved = await service.connectLocalLogin('xai');
       assert.equal(saved.id, 'xai');
@@ -741,7 +768,7 @@ test('connectLocalLogin imports Grok CLI oauth creds and probes', async () => {
       assert.equal(cred.access, access);
       assert.equal(cred.refresh, refresh);
     }, {
-      env: { HOME: home, USERPROFILE: home },
+      env: { GROK_HOME: home },
       extraProviders: [fakeOAuthProvider({ id: 'xai', name: 'Grok', models: ['grok-3'] })],
     });
   } finally {

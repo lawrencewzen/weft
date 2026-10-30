@@ -1,9 +1,11 @@
 import { randomBytes } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import { homedir } from 'node:os';
+import path from 'node:path';
 import { createModels } from '@earendil-works/pi-ai/models';
 import { builtinProviders, getBuiltinModels, getBuiltinProviders } from '@earendil-works/pi-ai/providers/all';
 import { contextWindowFromEnv } from './usage.mjs';
 import { redactAuthText } from './redact.mjs';
-import { detectGrokLocalLogin, loadGrokXaiCredential } from './grok-local-login.mjs';
 import {
   CUSTOM_PROVIDER_ID,
   CUSTOM_PROVIDER_APIS,
@@ -86,6 +88,45 @@ const CUSTOM_API = new Set(CUSTOM_PROVIDER_APIS);
 
 function asRecord(value) {
   return value && typeof value === 'object' && !Array.isArray(value) ? value : null;
+}
+
+const GROK_REFRESH_SKEW_MS = 5 * 60 * 1000;
+
+/**
+ * Grok CLI `~/.grok/auth.json` → `{ detected, account?, credential? }`.
+ * Current CLI format only: object values with `key` + `refresh_token`.
+ * Missing file / bad JSON / unknown shape → not detected. Never throws or logs.
+ */
+function readGrokLocalLogin(env) {
+  try {
+    const root = asRecord(JSON.parse(readFileSync(
+      path.join(env.GROK_HOME || homedir(), '.grok', 'auth.json'),
+      'utf8',
+    )));
+    if (!root) return { detected: false };
+    for (const value of Object.values(root)) {
+      const entry = asRecord(value);
+      if (!entry) continue;
+      const access = typeof entry.key === 'string' ? entry.key.trim() : '';
+      const refresh = typeof entry.refresh_token === 'string' ? entry.refresh_token.trim() : '';
+      if (!access || !refresh) continue;
+      const account = typeof entry.email === 'string' ? entry.email.trim() : '';
+      const exp = entry.expires_at;
+      const expires = typeof exp === 'number' && Number.isFinite(exp) && exp > 0
+        ? (exp < 1e12 ? exp * 1000 : exp) - GROK_REFRESH_SKEW_MS
+        : Date.now();
+      const credential = { type: 'oauth', access, refresh, expires };
+      if (account) credential.account = account;
+      return account ? { detected: true, account, credential } : { detected: true, credential };
+    }
+  } catch { /* missing or invalid */ }
+  return { detected: false };
+}
+
+function grokLocalLoginPublic(env) {
+  const grok = readGrokLocalLogin(env);
+  if (!grok.detected) return { detected: false };
+  return grok.account ? { detected: true, account: grok.account } : { detected: true };
 }
 
 function providersOf(settings) {
@@ -742,7 +783,7 @@ export function createProviderService({
         connected: connected.has(id),
       };
       if (envVar) item.envVar = envVar;
-      if (id === 'xai') item.localLogin = detectGrokLocalLogin(env);
+      if (id === 'xai') item.localLogin = grokLocalLoginPublic(env);
       out.push(item);
     }
 
@@ -822,10 +863,11 @@ export function createProviderService({
       fail('E_BAD_REQUEST', 'local login not supported', { phrase: 'src_err_method' });
     }
     requireBuiltin(id);
-    const cred = loadGrokXaiCredential(env);
-    if (!cred) {
+    const grok = readGrokLocalLogin(env);
+    if (!grok.detected) {
       fail('E_BAD_REQUEST', 'local grok login not detected', { phrase: 'src_err_local_login' });
     }
+    const cred = grok.credential;
     const settings = await loadSettings();
     const existing = providersOf(settings).find((item) => item.id === id);
     const modelsList = await builtinModels(id);
