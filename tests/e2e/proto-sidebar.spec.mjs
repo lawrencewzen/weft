@@ -42,6 +42,33 @@ test('⌘K search modal filters all conversations across projects, navigates wit
   const input = page.getByTestId('next-search-input');
   await expect(input).toBeFocused();
 
+  // Right pane tab is covered by the palette overlay (cannot be clicked)
+  const changesTab = page.getByTestId('next-right-tab-changes');
+  await expect(changesTab).toBeVisible();
+  const tabBox = await changesTab.boundingBox();
+  expect(tabBox).not.toBeNull();
+  const topElement = await page.evaluate(({ x, y }) => {
+    const el = document.elementFromPoint(x, y);
+    return el ? {
+      className: el.className,
+      isOverlay: !!el.closest('.search-palette-overlay'),
+    } : null;
+  }, { x: tabBox.x + tabBox.width / 2, y: tabBox.y + tabBox.height / 2 });
+  expect(topElement?.isOverlay).toBe(true);
+
+  // Palette position and dimensions: ~14vh top, ~600px width
+  const palette = modal.locator('.search-palette');
+  const paletteBox = await palette.boundingBox();
+  expect(paletteBox).not.toBeNull();
+  const viewport = page.viewportSize();
+  expect(viewport).not.toBeNull();
+  const expectedTop = viewport.height * 0.14;
+  expect(Math.abs(paletteBox.y - expectedTop)).toBeLessThan(15);
+  expect(Math.abs(paletteBox.width - 600)).toBeLessThan(15);
+
+  // Empty query shows "最近" label
+  await expect(modal.locator('.search-palette-label')).toHaveText('最近');
+
   // Initially lists all conversations from active workspaces
   const allResults = modal.getByTestId('next-search-result');
   expect(await allResults.count()).toBeGreaterThan(3);
@@ -49,12 +76,14 @@ test('⌘K search modal filters all conversations across projects, navigates wit
   // Filter conversations
   await input.fill('架构');
   await expect(modal.getByTestId('next-search-result')).toHaveCount(1);
+  await expect(modal.locator('.search-palette-label')).toHaveCount(0);
   const result = modal.getByTestId('next-search-result').first();
   await expect(result.locator('.search-result-title')).toContainText('把架构文档的图补上');
   await expect(result.locator('.search-result-project')).toContainText('weft');
 
   // Clear query and test arrow key navigation
   await input.fill('');
+  await expect(modal.locator('.search-palette-label')).toHaveText('最近');
   await expect(allResults.nth(0)).toHaveClass(/is-selected/);
   await input.press('ArrowDown');
   await expect(allResults.nth(1)).toHaveClass(/is-selected/);
@@ -75,6 +104,12 @@ test('⌘K search modal filters all conversations across projects, navigates wit
   await page.keyboard.press(process.platform === 'darwin' ? 'Meta+k' : 'Control+k');
   await expect(modal).toBeVisible();
   await page.keyboard.press('Escape');
+  await expect(modal).toHaveCount(0);
+
+  // Open via keyboard shortcut and close via clicking backdrop overlay
+  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+k' : 'Control+k');
+  await expect(modal).toBeVisible();
+  await page.locator('.search-palette-overlay').click({ position: { x: 20, y: 20 } });
   await expect(modal).toHaveCount(0);
 
   expectClean(state);

@@ -33,6 +33,7 @@ export function SidebarSearch({
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
 
   const results: SearchItem[] = useMemo(
     () => filterSearchConversations(groups, query),
@@ -41,11 +42,19 @@ export function SidebarSearch({
 
   useEffect(() => {
     if (open) {
+      const prev = (document.activeElement as HTMLElement) ?? null;
       setQuery('');
       setSelectedIndex(0);
-      requestAnimationFrame(() => {
+      inputRef.current?.focus();
+      const raf = requestAnimationFrame(() => {
         inputRef.current?.focus();
       });
+      return () => {
+        cancelAnimationFrame(raf);
+        if (prev && document.contains(prev)) {
+          prev.focus();
+        }
+      };
     }
   }, [open]);
 
@@ -58,7 +67,7 @@ export function SidebarSearch({
     if (!listRef.current) return;
     const selectedEl = listRef.current.querySelector<HTMLElement>('.search-result-row.is-selected');
     if (selectedEl) {
-      selectedEl.scrollIntoView({ block: 'nearest' });
+      selectedEl.scrollIntoView?.({ block: 'nearest' });
     }
   }, [selectedIndex]);
 
@@ -68,6 +77,32 @@ export function SidebarSearch({
       if (ev.key === 'Escape') {
         ev.stopPropagation();
         onClose();
+        return;
+      }
+      if (ev.key === 'Tab') {
+        if (!dialogRef.current) return;
+        const focusable = Array.from(
+          dialogRef.current.querySelectorAll<HTMLElement>(
+            'input:not([disabled]), button:not([disabled]), [tabindex]:not([tabindex="-1"])',
+          ),
+        );
+        if (focusable.length === 0) {
+          ev.preventDefault();
+          return;
+        }
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (ev.shiftKey) {
+          if (document.activeElement === first || !dialogRef.current.contains(document.activeElement)) {
+            ev.preventDefault();
+            last.focus();
+          }
+        } else {
+          if (document.activeElement === last || !dialogRef.current.contains(document.activeElement)) {
+            ev.preventDefault();
+            first.focus();
+          }
+        }
       }
     };
     window.addEventListener('keydown', onKey);
@@ -109,13 +144,18 @@ export function SidebarSearch({
       className="search-palette-overlay"
       data-testid="next-search-modal"
       onMouseDown={onClose}
+      onClick={(ev) => {
+        if (ev.target === ev.currentTarget) onClose();
+      }}
     >
       <div
+        ref={dialogRef}
         className="search-palette"
         role="dialog"
         aria-modal="true"
         aria-label={t(lang, 'search')}
         onMouseDown={(ev) => ev.stopPropagation()}
+        onClick={(ev) => ev.stopPropagation()}
         onKeyDown={handleKeyDown}
       >
         <div className="search-palette-head">
