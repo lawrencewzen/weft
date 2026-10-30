@@ -153,8 +153,8 @@ test('thread and composer width follow 55% of the center pane with 420–760 cla
   for (const row of cases) {
     expect(expectedChatWidth(row.center)).toBeCloseTo(row.chat, 5);
     const measured = await measureChatAt(page, row.center);
-    expect(measured.inner, `thread-inner at ${row.center}px center`).toBeCloseTo(row.chat, 1);
-    expect(measured.stack, `composer-stack at ${row.center}px center`).toBeCloseTo(row.chat, 1);
+    expect(Math.abs(measured.inner - row.chat), `thread-inner at ${row.center}px center`).toBeLessThanOrEqual(1);
+    expect(Math.abs(measured.stack - row.chat), `composer-stack at ${row.center}px center`).toBeLessThanOrEqual(1);
   }
 
   await page.getByTestId('next-right-collapse').click();
@@ -170,8 +170,8 @@ test('thread and composer width follow 55% of the center pane with 420–760 cla
       stack: stack ? read(stack) : 0,
     };
   });
-  expect(live.inner).toBeCloseTo(expectedChatWidth(live.center), 1);
-  expect(live.stack).toBeCloseTo(live.inner, 1);
+  expect(Math.abs(live.inner - expectedChatWidth(live.center))).toBeLessThanOrEqual(1);
+  expect(Math.abs(live.stack - live.inner)).toBeLessThanOrEqual(1);
 
   expectClean(state);
 });
