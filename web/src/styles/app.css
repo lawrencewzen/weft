@@ -8,11 +8,33 @@
   --radius-xl: 12px;
   --font-sans: var(--font);
   --font-mono: var(--mono);
+  --fs-body: 14.5px;
+  --fs-h2: 17px;
+  --fs-h3: 15px;
+  --fs-input: var(--fs-body);
 }
 
-[data-font-size="sm"] { font-size: 13px; }
-[data-font-size="md"] { font-size: 14px; }
-[data-font-size="lg"] { font-size: 15px; }
+[data-font-size="sm"] {
+  font-size: 13px;
+  --fs-body: 13.5px;
+  --fs-h2: 16px;
+  --fs-h3: 14px;
+  --fs-input: var(--fs-body);
+}
+[data-font-size="md"] {
+  font-size: 14px;
+  --fs-body: 14.5px;
+  --fs-h2: 17px;
+  --fs-h3: 15px;
+  --fs-input: var(--fs-body);
+}
+[data-font-size="lg"] {
+  font-size: 15px;
+  --fs-body: 15.5px;
+  --fs-h2: 18px;
+  --fs-h3: 16px;
+  --fs-input: var(--fs-body);
+}
 
 *, *::before, *::after {
   box-sizing: border-box;
@@ -573,7 +595,7 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.6; backgroun
   display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; width: 100%;
 }
 .top-heading { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1; overflow: hidden; }
-.top-title { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex-shrink: 1; }
+.top-title { font-size: 14px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex-shrink: 1; }
 
 /* Thread */
 .center-thread { flex: 1; min-height: 0; overflow: auto; scrollbar-gutter: stable both-edges; }
@@ -593,7 +615,7 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.6; backgroun
 .msg-side-agent { gap: 12px; }
 .msg-side-user { align-self: flex-end; max-width: 80%; }
 .msg-side-user .msg-header { display: none; }
-.msg-group[data-role="user"] .msg-body { background: var(--line2); padding: 10px 16px; border-radius: 18px; text-wrap: pretty; font-size: 15px; line-height: 1.6; }
+.msg-group[data-role="user"] .msg-body { background: var(--line2); padding: 10px 16px; border-radius: 18px; text-wrap: pretty; font-size: var(--fs-body); line-height: 1.6; }
 .msg-user-images { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
 .msg-user-files { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
 .msg-user-file-tag {
@@ -651,32 +673,32 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.6; backgroun
   font-family: var(--mono); font-size: 11px; color: var(--faint);
 }
 .msg-body {
-  color: var(--ink); font-size: 15px; line-height: 1.75; letter-spacing: .01em;
+  color: var(--ink); font-size: var(--fs-body); line-height: 1.7; letter-spacing: 0;
   min-width: 0; overflow-wrap: anywhere; text-wrap: pretty; display: flow-root;
 }
-.msg-body p { margin: 0 0 14px; }
+.msg-body p { margin: 0 0 12px; }
 .msg-body strong { font-weight: 600; color: var(--ink); }
 .msg-body h1, .msg-body h2, .msg-body h3, .msg-body h4, .msg-body h5, .msg-body h6 {
   font-weight: 600; line-height: 1.4; letter-spacing: 0;
 }
-.msg-body h1 { font-size: 20px; margin: 32px 0 10px; }
-.msg-body h2 { font-size: 18px; margin: 32px 0 10px; }
-.msg-body h3 { font-size: 15px; margin: 24px 0 8px; }
-.msg-body h4 { font-size: 15px; margin: 24px 0 8px; }
-.msg-body h5 { font-size: 14px; margin: 24px 0 8px; }
-.msg-body h6 { font-size: 14px; margin: 24px 0 8px; color: var(--ink3); }
+.msg-body h1 { font-size: calc(var(--fs-h2) + 2px); margin: 28px 0 8px; }
+.msg-body h2 { font-size: var(--fs-h2); margin: 28px 0 8px; }
+.msg-body h3 { font-size: var(--fs-h3); margin: 22px 0 6px; }
+.msg-body h4 { font-size: var(--fs-h3); margin: 22px 0 6px; }
+.msg-body h5 { font-size: var(--fs-body); margin: 22px 0 6px; }
+.msg-body h6 { font-size: var(--fs-body); margin: 22px 0 6px; color: var(--ink3); }
 .msg-body > :first-child { margin-top: 0; }
 .msg-body > :last-child { margin-bottom: 0; }
-.msg-body ul, .msg-body ol { margin: 0 0 14px; padding-left: 1.6em; }
-.msg-body li { margin: 6px 0; padding-left: 2px; }
-.msg-body ul ul, .msg-body ol ol, .msg-body ul ol, .msg-body ol ul { margin: 6px 0 0; }
+.msg-body ul, .msg-body ol { margin: 0 0 12px; padding-left: 1.6em; }
+.msg-body li { margin: 5px 0; padding-left: 2px; }
+.msg-body ul ul, .msg-body ol ol, .msg-body ul ol, .msg-body ol ul { margin: 5px 0 0; }
 .msg-body li::marker { color: var(--faint); }
 .msg-body ol > li::marker { font-variant-numeric: tabular-nums; }
 .msg-body a { color: var(--ink); text-decoration: underline; text-decoration-thickness: 1px; text-decoration-color: var(--faint2); text-underline-offset: 4px; }
 .msg-body a:hover { text-decoration-color: var(--ink); }
 .msg-body code:not(pre code) {
   font-family: var(--mono); font-size: 0.86em; color: var(--ink2); background: var(--sub2);
-  border: 1px solid var(--line); padding: 1px 6px; border-radius: 6px; white-space: nowrap;
+  border: 0; padding: 1.5px 5px; border-radius: 5px; white-space: nowrap;
 }
 .msg-body code.md-path {
   display: inline-flex; align-items: center; gap: 4px; padding: 0 6px 0 5px;
@@ -685,14 +707,14 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.6; backgroun
 .msg-body code.md-path svg {
   width: 12px; height: 12px; flex-shrink: 0; display: block; color: var(--faint);
 }
-.msg-body code.md-path:hover { background: var(--hover); border-color: var(--bd3); }
+.msg-body code.md-path:hover { background: var(--hover); }
 .msg-body .md-path-line { color: var(--faint); }
 .msg-body blockquote {
   border: none; border-left: 3px solid var(--bd2); padding: 2px 0 2px 16px;
   color: var(--ink3); margin: 0 0 14px; background: none; border-radius: 0;
 }
 .msg-body blockquote > :last-child { margin-bottom: 0; }
-.msg-body hr { border: none; border-top: 1px solid var(--line); margin: 28px 0; }
+.msg-body hr { border: none; border-top: 1px solid var(--line); margin: 24px 0; }
 .msg-body .md-table {
   border: 1px solid var(--line); border-radius: 12px; overflow: auto; margin: 0 0 16px;
 }
@@ -1140,8 +1162,8 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.6; backgroun
   margin-top: 4px; font-size: 12px; color: var(--mute); text-align: right;
 }
 .composer-textarea {
-  border: none; outline: none; resize: none; font-family: inherit; font-size: 15px; line-height: 1.65;
-  height: 44px; min-height: 44px; max-height: 200px; overflow-y: auto;
+  border: none; outline: none; resize: none; font-family: inherit; font-size: var(--fs-input); line-height: 1.65;
+  height: 3.3em; min-height: 3.3em; max-height: 200px; overflow-y: auto;
   background: transparent; color: var(--ink); padding: 0;
 }
 .composer-textarea::placeholder { color: var(--faint); }
