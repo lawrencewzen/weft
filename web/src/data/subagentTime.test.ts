@@ -8,8 +8,6 @@ import {
   subagentDotStatus,
   subagentOverviewNow,
   subagentTimeText,
-  subagentTreeTimeText,
-  subagentTreeVisual,
 } from './subagentTime';
 import type { Subagent } from './store';
 
@@ -38,7 +36,6 @@ describe('subagent time text', () => {
     expect(formatMmSs(5_000)).toBe('00:05');
     expect(formatMmSs(65_000)).toBe('01:05');
     expect(subagentTimeText(agent({ status: 'running', startedAt: NOW - 5_000 }), 'zh', NOW)).toBe('00:05');
-    expect(subagentTreeTimeText(agent({ status: 'running', startedAt: NOW - 5_000 }), 'zh', NOW)).toBe('00:05');
   });
 
   it('shows idle mm:ss when stuck', () => {
@@ -49,26 +46,13 @@ describe('subagent time text', () => {
     });
     expect(subagentTimeText(stuck, 'zh', NOW)).toBe('无动作 01:05');
     expect(subagentTimeText(stuck, 'en', NOW)).toBe('idle 01:05');
-    expect(subagentTreeTimeText(stuck, 'zh', NOW)).toBe('静默 01:05');
-    expect(subagentTreeTimeText(stuck, 'en', NOW)).toBe('silent 01:05');
   });
 
-  it('shows terminal labels; tree hides 完成', () => {
+  it('shows terminal labels for done, stopped and failed', () => {
     expect(subagentTimeText(agent({ status: 'done' }), 'zh', NOW)).toBe('完成');
     expect(subagentTimeText(agent({ status: 'done' }), 'en', NOW)).toBe('Done');
-    expect(subagentTreeTimeText(agent({ status: 'done' }), 'zh', NOW)).toBe('');
     expect(subagentTimeText(agent({ status: 'stopped' }), 'zh', NOW)).toBe('已停止');
     expect(subagentTimeText(agent({ status: 'failed' }), 'zh', NOW)).toBe('失败');
-    expect(subagentTreeTimeText(agent({ status: 'failed' }), 'zh', NOW)).toBe('失败');
-  });
-
-  it('maps tree visuals: waiting uses the running spinner, failed keeps the x', () => {
-    expect(subagentTreeVisual('running')).toBe('running');
-    expect(subagentTreeVisual('waiting')).toBe('running');
-    expect(subagentTreeVisual('stuck')).toBe('stuck');
-    expect(subagentTreeVisual('done')).toBe('done');
-    expect(subagentTreeVisual('stopped')).toBe('stopped');
-    expect(subagentTreeVisual('failed')).toBe('failed');
   });
 
   it('joins currentAction and progress while running', () => {
@@ -82,7 +66,7 @@ describe('subagent time text', () => {
     expect(subagentActionText(agent({ status: 'done', currentAction: 'x', progress: { step: 1, total: 1 } }))).toBe('');
   });
 
-  it('strips backticks from the current action so the tree does not show markup', () => {
+  it('strips backticks from the current action so markup is not shown', () => {
     expect(stripActionMarks('正在读取 `web/src/data/store.ts`')).toBe('正在读取 web/src/data/store.ts');
     expect(subagentActionText(agent({
       status: 'running',

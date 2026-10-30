@@ -12,7 +12,6 @@ export const LS_LEFT_OPEN = 'weft_next_left_open';
 export const LS_LEFT_W = 'weft_next_left_w';
 export const LS_OPEN_WORKSPACES = 'weft_next_open_workspaces';
 export const LS_WORKSPACE_OPEN = 'weft_next_workspace_open';
-export const LS_SUBAGENT_TREES = 'weft_next_subagent_trees';
 export const LS_ACTIVE_WS = 'weft_next_active_ws';
 export const LS_RIGHT_OPEN = 'weft_next_right_open';
 export const LS_RIGHT_W = 'weft_next_right_w';
@@ -170,14 +169,6 @@ export function readWorkspaceOpen(): OpenRecord {
 
 export function writeWorkspaceOpen(record: OpenRecord): void {
   writeBoolRecord(LS_WORKSPACE_OPEN, record);
-}
-
-export function readSubagentTrees(): OpenRecord {
-  return readBoolRecord(LS_SUBAGENT_TREES);
-}
-
-export function writeSubagentTrees(record: OpenRecord): void {
-  writeBoolRecord(LS_SUBAGENT_TREES, record);
 }
 
 export function readActiveWorkspace(): string | null {
