@@ -412,11 +412,11 @@ test('a 409 conflict offers overwrite and reload', async ({ page }) => {
   }
 });
 
-test('below 1180px the right pane starts collapsed without horizontal scroll', async ({ page }) => {
+test('1061px viewport (1180 CSS px × 0.9) starts the right pane collapsed without horizontal scroll', async ({ page }) => {
   const prepared = await prepareWorkspaces(['narrow']);
   const srv = await startServer({ extraEnv: { WEFT_WORKSPACE_ROOT: prepared.root } });
   try {
-    await page.setViewportSize({ width: 1179, height: 800 });
+    await page.setViewportSize({ width: 1061, height: 800 });
     const { conv } = await openWorkspaceConversation(srv, 'demo', prepared.dirs[0]);
     await loginNext(page, srv);
     await page.goto(`${srv.url}/c/${encodeURIComponent(conv.id)}`);

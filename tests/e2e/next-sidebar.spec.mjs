@@ -250,11 +250,11 @@ test('a conversation created through the old API appears in the new UI without a
   }
 });
 
-test('860px width collapses the sidebar and does not scroll horizontally', async ({ page }) => {
+test('774px viewport (860 CSS px × 0.9) collapses the sidebar and does not scroll horizontally', async ({ page }) => {
   const prepared = await prepareWorkspaces(['narrow']);
   const srv = await startServer({ extraEnv: { WEFT_WORKSPACE_ROOT: prepared.root } });
   try {
-    await page.setViewportSize({ width: 860, height: 800 });
+    await page.setViewportSize({ width: 774, height: 800 });
     const ws = await createWorkspace(srv, 'narrow', prepared.dirs[0]);
     await createConversation(srv, ws.id, 'chat');
     await loginNext(page, srv);
