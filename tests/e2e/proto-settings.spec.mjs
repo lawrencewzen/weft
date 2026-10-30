@@ -83,8 +83,12 @@ test('providers: rows, groups, expand, Grok auto-detect, Anthropic key, custom, 
   expect(box1).not.toBeNull();
   expect(Math.round(box0.x)).toBe(Math.round(box1.x));
 
-  await expect(page.locator('[data-testid=next-model-row][data-model="deepseek-flash"]')).toBeVisible();
-  const modelToggle = page.locator('[data-testid=next-model-row][data-model="deepseek-flash"] [data-testid=next-model-toggle]');
+  const flashRow = page.locator('[data-testid=next-model-row][data-model="deepseek-flash"]');
+  await expect(flashRow).toBeVisible();
+  await expect(flashRow).toContainText('DeepSeek V4.1 Flash');
+  await expect(flashRow).not.toContainText('deepseek-flash');
+  await expect(flashRow.locator('.mp-mt-name')).toHaveAttribute('title', 'deepseek-flash');
+  const modelToggle = flashRow.getByTestId('next-model-toggle');
   const hadOn = await modelToggle.evaluate((el) => el.classList.contains('mp-on'));
   await modelToggle.click();
   await expect(modelToggle).toHaveClass(hadOn ? /^mp-sw(?!.*mp-on)/ : /mp-sw mp-on/);

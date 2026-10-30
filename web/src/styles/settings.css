@@ -234,6 +234,13 @@ html[data-theme$="-dark"] .ns-ws-dialog {
 .mp-mt .mp-h { font-size: 11.5px; font-weight: normal; color: var(--faint); height: 30px; display: flex; align-items: center; border-top: 1px solid var(--line2); }
 .mp-mt .mp-h.mp-r { justify-content: flex-end; }
 .mp-mt .mp-c { height: 40px; display: flex; align-items: center; border-top: 1px solid var(--line3); font-size: 13px; min-width: 0; color: var(--ink); }
+.mp-mt-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink);
+}
+.mp-mt-name.mp-mt-off { color: var(--faint); }
 .mp-num { font-family: var(--mono); font-size: 12.5px; font-variant-numeric: tabular-nums; justify-content: flex-end; }
 .mp-num .mp-v { padding: 2px 6px; margin-right: -6px; border-radius: 5px; cursor: pointer; position: relative; color: var(--ink); }
 .mp-num .mp-v:hover { background: var(--hover); }

@@ -150,6 +150,9 @@ test('add provider: failed 401, then pass, pick two models, default, rename, del
   // In-place edit context window
   const modelRow = page.locator('[data-testid=next-model-row][data-model="alpha-one"]');
   await expect(modelRow).toBeVisible();
+  await expect(modelRow.locator('.mp-mt-name')).toHaveText('alpha-one');
+  await expect(modelRow.locator('.mp-mt-name')).toHaveAttribute('title', 'alpha-one');
+  await expect(modelRow.locator('.mp-mt-id')).toHaveCount(0);
   const ctxVal = modelRow.locator('.mp-num .mp-v').first();
   await ctxVal.click();
   const ctxInput = page.getByTestId('next-ctx-input');

@@ -121,12 +121,12 @@ export function ModelTable({
 
           return (
             <div key={m.id} style={{ display: 'contents' }} data-testid="next-model-row" data-model={m.id}>
-              {/* Col 1: Model name & id */}
-              <span className="mp-c">
-                <span className={`mp-mt-mn ${m.enabled ? '' : 'mp-mt-off'}`}>
-                  <span className="mp-mt-nm">{m.name}</span>
-                  {m.name !== m.id ? <span className="mp-mt-id">{m.id}</span> : null}
-                </span>
+              {/* Col 1: Model name; id only on hover */}
+              <span
+                className={`mp-c mp-mt-name${m.enabled ? '' : ' mp-mt-off'}`}
+                title={m.id}
+              >
+                {m.name}
               </span>
 
               {/* Col 2: Context Window */}
