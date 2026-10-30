@@ -26,7 +26,13 @@ vi.mock('./session', () => ({
 }));
 
 // Imported after the mock so the provider picks up the fake session.
-import { RightPaneProvider, useRightPane } from './rightPaneContext';
+import {
+  RightPaneProvider,
+  useRightActions,
+  useRightChanges,
+  useRightLayout,
+  useRightPane,
+} from './rightPaneContext';
 
 type FakeStore = {
   changes: (cid: string) => Change[];
@@ -216,5 +222,78 @@ describe('RightPaneProvider diff effect', () => {
     await renderProvider(store, 'c1');
     expect(latest?.openPaths.has('small.ts')).toBe(true);
     expect(latest?.openPaths.has('big.ts')).toBe(false);
+  });
+});
+
+describe('RightPaneProvider context split', () => {
+  it('does not re-render layout or actions consumers when diffs change', async () => {
+    const store = fakeStore(CHANGES);
+    let layoutRenders = 0;
+    let actionsRenders = 0;
+    let changesRenders = 0;
+    let diffsSnapshot: RightPaneValue['diffs'] | null = null;
+
+    function LayoutProbe() {
+      layoutRenders += 1;
+      useRightLayout();
+      return null;
+    }
+    function ActionsProbe() {
+      actionsRenders += 1;
+      useRightActions();
+      return null;
+    }
+    function ChangesProbe() {
+      changesRenders += 1;
+      diffsSnapshot = useRightChanges().diffs;
+      return null;
+    }
+
+    const resolve: Array<() => void> = [];
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/diff')) {
+        return new Promise<Response>((settle) => {
+          resolve.push(() => settle(new Response(JSON.stringify(DIFF), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          })));
+        });
+      }
+      return Promise.resolve(new Response('{}', { status: 200 }));
+    }));
+
+    hoisted.session = { store };
+    await act(async () => {
+      root = createRoot(container);
+      root.render(createElement(RightPaneProvider, {
+        conversationId: 'c1',
+        workspaceId: 'ws-weft',
+        lang: 'zh',
+        onToast: () => {},
+        children: [
+          createElement(LayoutProbe, { key: 'layout' }),
+          createElement(ActionsProbe, { key: 'actions' }),
+          createElement(ChangesProbe, { key: 'changes' }),
+        ],
+      }));
+    });
+
+    expect(resolve.length).toBeGreaterThan(0);
+    const layoutAfterMount = layoutRenders;
+    const actionsAfterMount = actionsRenders;
+    const changesAfterMount = changesRenders;
+    expect(layoutAfterMount).toBeGreaterThan(0);
+    expect(actionsAfterMount).toBeGreaterThan(0);
+    expect(changesAfterMount).toBeGreaterThan(0);
+
+    await act(async () => {
+      for (const settle of resolve.splice(0)) settle();
+    });
+
+    expect(diffsSnapshot?.['web/src/data/store.ts']).toMatchObject({ path: 'web/src/data/store.ts' });
+    expect(changesRenders).toBeGreaterThan(changesAfterMount);
+    expect(layoutRenders).toBe(layoutAfterMount);
+    expect(actionsRenders).toBe(actionsAfterMount);
   });
 });

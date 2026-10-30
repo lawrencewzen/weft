@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type MouseEvent } from 'react';
 import type { Lang } from '../data/lang';
-import { isMarkdownFile, useRightPane } from '../data/rightPaneContext';
+import { isMarkdownFile, useRightActions, useRightChanges, useRightFiles } from '../data/rightPaneContext';
 import { visibleTreeRows } from '../data/fileTree';
 import { t } from '../i18n';
 import { CtxMenu, type CtxMenuItem } from './CtxMenu';
@@ -42,7 +42,8 @@ function FileLines({
 }
 
 function FilePreview({ lang }: { lang: Lang }) {
-  const { file, activeFilePath, fileTargetLine, visibleChanges } = useRightPane();
+  const { file, activeFilePath, fileTargetLine } = useRightFiles();
+  const { visibleChanges } = useRightChanges();
   if (!activeFilePath || !file) {
     return <div className="file-preview-empty">{t(lang, 'select_file_to_preview')}</div>;
   }
@@ -76,7 +77,7 @@ function FileEditor({ lang }: { lang: Lang }) {
     saveFile,
     saveState,
     reloadFile,
-  } = useRightPane();
+  } = useRightFiles();
   const area = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -177,12 +178,10 @@ export function FileBrowser({ lang, workspaceLabel }: { lang: Lang; workspaceLab
     treeReady,
     expandedDirs,
     toggleDirectory,
-    openFile,
     activeFilePath,
-    visibleChanges,
-    copyPath,
-    openInTerminal,
-  } = useRightPane();
+  } = useRightFiles();
+  const { visibleChanges } = useRightChanges();
+  const { openFile, copyPath, openInTerminal } = useRightActions();
   const [dirMenu, setDirMenu] = useState<DirMenu | null>(null);
   const rows = treeReady ? visibleTreeRows(tree, expandedDirs) : [];
   const changed = new Set(visibleChanges.map((item) => item.path));

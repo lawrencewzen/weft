@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { agentCommands, commandTopics } from '../data/agentCommands';
 import { toolOutput } from '../data/api';
 import type { Lang } from '../data/lang';
-import { useRightPane } from '../data/rightPaneContext';
+import { useRightLayout } from '../data/rightPaneContext';
 import { useSession } from '../data/session';
 import { useStoreTopics } from '../data/useStoreTopic';
 import { t } from '../i18n';
@@ -23,7 +23,7 @@ function commandText(
 }
 
 export function TerminalPane({ lang }: Props) {
-  const { selectedCommandId } = useRightPane();
+  const { selectedCommandId } = useRightLayout();
   const { store, conversationId } = useSession();
   const cid = conversationId || '';
   const agents = cid ? store.subagents(cid) : [];

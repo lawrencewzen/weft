@@ -2,7 +2,7 @@ import { useCallback, useState, type MouseEvent } from 'react';
 import type { Lang } from '../data/lang';
 import { copyText } from '../data/copyText';
 import { focusSubagent } from '../data/focusSubagent';
-import { useRightPane } from '../data/rightPaneContext';
+import { useRightActions } from '../data/rightPaneContext';
 import { useSession } from '../data/session';
 import type { Subagent } from '../data/store';
 import { createSubagentMenuItems } from '../data/subagentMenu';
@@ -38,7 +38,7 @@ function statusLabel(status: Subagent['status'], lang: Lang): string {
 
 export function DispatchCard({ cid, agents, lang }: Props) {
   const { store } = useSession();
-  const { onToast } = useRightPane();
+  const { onToast } = useRightActions();
   const [menu, setMenu] = useState<{ x: number; y: number; title: string; items: CtxMenuItem[] } | null>(null);
 
   const openSubagent = useCallback((agentId: string) => {

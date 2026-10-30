@@ -43,35 +43,34 @@ import { t } from '../i18n';
 const TREE_KINDS = new Set<ToolCall['kind']>(['write', 'edit', 'bash']);
 const TREE_REFRESH_MS = 300;
 
-export type RightPaneValue = {
-  conversationId: string | null;
+export type RightLayoutValue = {
   open: boolean;
   setOpen: (open: boolean) => void;
   toggleRight: () => void;
-  rightOpening: boolean;
   rbDx: number;
-  rbAnim: boolean;
   rbTr: string;
   rightBtnOp: number;
   rightBtnPe: 'auto' | 'none';
   rpBtnOp: number;
   tab: RightTab;
   setTab: (tab: RightTab) => void;
-  selectedSubagentId: string | null;
   width: number;
   setWidth: (width: number) => void;
   persistWidth: (width: number) => void;
+  selectedCommandId: string | null;
+};
+
+export type RightChangesValue = {
+  conversationId: string | null;
   hasChanges: boolean;
   totals: { added: number; removed: number };
   visibleChanges: Change[];
   openPaths: Set<string>;
   toggleChange: (path: string) => void;
   diffs: Record<string, Diff | 'loading' | 'error'>;
-  openFile: (path: string, line?: number) => void;
-  openChangeDiff: (path: string) => void;
-  openTerminal: (toolId?: string) => void;
-  selectedCommandId: string | null;
-  showFiles: () => void;
+};
+
+export type RightFilesValue = {
   tree: FileNode[];
   treeTruncated: boolean;
   treeReady: boolean;
@@ -80,7 +79,6 @@ export type RightPaneValue = {
   activeFilePath: string | null;
   fileTargetLine: number | null;
   file: FileContent | null;
-  fileBusy: boolean;
   editorMode: 'preview' | 'edit';
   setEditorMode: (mode: 'preview' | 'edit') => void;
   draftText: string;
@@ -88,12 +86,24 @@ export type RightPaneValue = {
   saveState: SaveState;
   saveFile: (overwrite?: boolean) => Promise<void>;
   reloadFile: () => Promise<void>;
+};
+
+export type RightActionsValue = {
+  openFile: (path: string, line?: number) => void;
+  openChangeDiff: (path: string) => void;
+  openTerminal: (toolId?: string) => void;
+  showFiles: () => void;
   copyPath: (path: string) => void;
   openInTerminal: (relPath?: string, targetWorkspaceId?: string) => Promise<void>;
   onToast: (message: string) => void;
 };
 
-const RightPaneContext = createContext<RightPaneValue | null>(null);
+export type RightPaneValue = RightLayoutValue & RightChangesValue & RightFilesValue & RightActionsValue;
+
+const RightLayoutContext = createContext<RightLayoutValue | null>(null);
+const RightChangesContext = createContext<RightChangesValue | null>(null);
+const RightFilesContext = createContext<RightFilesValue | null>(null);
+const RightActionsContext = createContext<RightActionsValue | null>(null);
 
 function toolDoneKey(tools: Record<string, ToolCall>): string {
   return Object.values(tools)
@@ -105,7 +115,6 @@ function toolDoneKey(tools: Record<string, ToolCall>): string {
 
 type Props = {
   conversationId: string | null;
-  agentId?: string | null;
   workspaceId: string | null;
   lang: Lang;
   onToast: (message: string) => void;
@@ -114,7 +123,6 @@ type Props = {
 
 export function RightPaneProvider({
   conversationId,
-  agentId = null,
   workspaceId,
   lang,
   onToast,
@@ -139,7 +147,6 @@ export function RightPaneProvider({
   const [activeFilePath, setActiveFilePath] = useState<string | null>(null);
   const [fileTargetLine, setFileTargetLine] = useState<number | null>(null);
   const [file, setFile] = useState<FileContent | null>(null);
-  const [fileBusy, setFileBusy] = useState(false);
   const [editorMode, setEditorMode] = useState<'preview' | 'edit'>('preview');
   const [draftText, setDraftText] = useState('');
   const [saveState, setSaveState] = useState<SaveState>(IDLE_SAVE);
@@ -243,8 +250,6 @@ export function RightPaneProvider({
     writeRightTab(next);
     setOpen(true);
   }, [setOpen]);
-
-  const selectedSubagentId = agentId || null;
 
   const persistWidth = useCallback((next: number) => {
     writeRightWidth(next);
@@ -421,7 +426,6 @@ export function RightPaneProvider({
       return;
     }
     const gen = ++fileGen.current;
-    setFileBusy(true);
     try {
       const content = await getWorkspaceFile(wsId, path);
       if (gen !== fileGen.current) return;
@@ -440,8 +444,6 @@ export function RightPaneProvider({
         return;
       }
       onToast(err instanceof Error ? err.message : t(lang, 'file_cannot_open'));
-    } finally {
-      if (gen === fileGen.current) setFileBusy(false);
     }
   }, [wsId, lang, onToast]);
 
@@ -532,35 +534,37 @@ export function RightPaneProvider({
   const rpBtnOp = open && (!rightOpening || isRightOverlay) ? 1 : 0;
   const rbTr = rbAnim ? 'transform .22s cubic-bezier(.3,.8,.3,1)' : 'none';
 
-  const value = useMemo<RightPaneValue>(() => ({
-    conversationId: cid || null,
+  const layoutValue = useMemo<RightLayoutValue>(() => ({
     open,
     setOpen,
     toggleRight,
-    rightOpening,
     rbDx,
-    rbAnim,
     rbTr,
     rightBtnOp,
     rightBtnPe,
     rpBtnOp,
     tab,
     setTab,
-    selectedSubagentId,
     width,
     setWidth,
     persistWidth,
+    selectedCommandId,
+  }), [
+    open, setOpen, toggleRight, rbDx, rbTr, rightBtnOp, rightBtnPe, rpBtnOp,
+    tab, setTab, width, setWidth, persistWidth, selectedCommandId,
+  ]);
+
+  const changesValue = useMemo<RightChangesValue>(() => ({
+    conversationId: cid || null,
     hasChanges,
     totals,
     visibleChanges,
     openPaths,
     toggleChange,
     diffs,
-    openFile,
-    openChangeDiff,
-    openTerminal,
-    selectedCommandId,
-    showFiles,
+  }), [cid, hasChanges, totals, visibleChanges, openPaths, toggleChange, diffs]);
+
+  const filesValue = useMemo<RightFilesValue>(() => ({
     tree,
     treeTruncated,
     treeReady,
@@ -569,7 +573,6 @@ export function RightPaneProvider({
     activeFilePath,
     fileTargetLine,
     file,
-    fileBusy,
     editorMode,
     setEditorMode,
     draftText,
@@ -577,25 +580,65 @@ export function RightPaneProvider({
     saveState,
     saveFile,
     reloadFile,
+  }), [
+    tree, treeTruncated, treeReady, expandedDirs, toggleDirectory,
+    activeFilePath, fileTargetLine, file, editorMode, setEditorMode, draftText,
+    setDraftText, saveState, saveFile, reloadFile,
+  ]);
+
+  const actionsValue = useMemo<RightActionsValue>(() => ({
+    openFile,
+    openChangeDiff,
+    openTerminal,
+    showFiles,
     copyPath,
     openInTerminal,
     onToast,
-  }), [
-    cid,
-    open, setOpen, toggleRight, rightOpening, rbDx, rbAnim, rbTr, rightBtnOp, rightBtnPe, rpBtnOp,
-    tab, setTab, selectedSubagentId, width, persistWidth, hasChanges, totals, visibleChanges,
-    openPaths, toggleChange, diffs, openFile, openChangeDiff, openTerminal, selectedCommandId, showFiles, tree, treeTruncated,
-    treeReady, expandedDirs, toggleDirectory, activeFilePath, fileTargetLine, file, fileBusy,
-    editorMode, draftText, saveState, saveFile, reloadFile, copyPath, openInTerminal, onToast,
-  ]);
+  }), [openFile, openChangeDiff, openTerminal, showFiles, copyPath, openInTerminal, onToast]);
 
-  return <RightPaneContext.Provider value={value}>{children}</RightPaneContext.Provider>;
+  return (
+    <RightLayoutContext.Provider value={layoutValue}>
+      <RightChangesContext.Provider value={changesValue}>
+        <RightFilesContext.Provider value={filesValue}>
+          <RightActionsContext.Provider value={actionsValue}>
+            {children}
+          </RightActionsContext.Provider>
+        </RightFilesContext.Provider>
+      </RightChangesContext.Provider>
+    </RightLayoutContext.Provider>
+  );
+}
+
+function requiredContext<T>(value: T | null, hook: string): T {
+  if (!value) throw new Error(`${hook} requires RightPaneProvider`);
+  return value;
+}
+
+export function useRightLayout(): RightLayoutValue {
+  return requiredContext(useContext(RightLayoutContext), 'useRightLayout');
+}
+
+export function useRightChanges(): RightChangesValue {
+  return requiredContext(useContext(RightChangesContext), 'useRightChanges');
+}
+
+export function useRightFiles(): RightFilesValue {
+  return requiredContext(useContext(RightFilesContext), 'useRightFiles');
+}
+
+export function useRightActions(): RightActionsValue {
+  return requiredContext(useContext(RightActionsContext), 'useRightActions');
 }
 
 export function useRightPane(): RightPaneValue {
-  const value = useContext(RightPaneContext);
-  if (!value) throw new Error('useRightPane requires RightPaneProvider');
-  return value;
+  const layout = useRightLayout();
+  const changes = useRightChanges();
+  const files = useRightFiles();
+  const actions = useRightActions();
+  return useMemo(
+    () => ({ ...layout, ...changes, ...files, ...actions }),
+    [layout, changes, files, actions],
+  );
 }
 
 export function isMarkdownFile(path: string | null | undefined): boolean {

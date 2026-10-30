@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { Lang } from '../data/lang';
-import { useRightPane } from '../data/rightPaneContext';
+import { useRightActions, useRightLayout } from '../data/rightPaneContext';
 import type { Change } from '../data/store';
 import {
   getShownChanges,
@@ -63,7 +63,8 @@ const CHEV_ICON = (
 );
 
 export function ChangeSummary({ changes, lang }: Props) {
-  const { openChangeDiff, setOpen, setTab } = useRightPane();
+  const { setOpen, setTab } = useRightLayout();
+  const { openChangeDiff } = useRightActions();
   const [expanded, setExpanded] = useState(false);
 
   const sorted = useMemo(() => sortChanges(changes), [changes]);
