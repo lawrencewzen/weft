@@ -110,6 +110,10 @@ export type MockConv = {
   run: RunHandle | null;
   /** requestId → runId, so a retried POST stays idempotent. */
   requestRuns: Map<string, string>;
+  /** First send replaced the placeholder title; a generated title may overwrite it. */
+  titleAuto?: boolean;
+  titleGenerated?: boolean;
+  titleTimer?: number;
 };
 
 /** One subagent of a conversation: view plus its own thread (`subagent:<cid>:<id>` topic). */

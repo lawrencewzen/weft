@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { DEFAULT_SETTINGS, mergeSettings, normalizeSettings } from '../core/settings.mjs';
 
-const SCHEMA_VERSION = 9;
+const SCHEMA_VERSION = 10;
 const MESSAGE_META_KEYS = ['kind', 'fromAgent', 'toAgent', 'agentId'];
 export const APP_DB_FILE = 'weft.sqlite';
 export const LEGACY_APP_DB_FILE = 'pi-work.sqlite';
@@ -99,6 +99,8 @@ function convFromRow(row) {
     modelSourceId: row.model_source_id || null,
     modelId: row.model_id || null,
     thinkingLevel: row.thinking_level || null,
+    titleSource: row.title_source === 'user' ? 'user' : 'auto',
+    titleGeneratedAt: row.title_generated_at == null ? null : Number(row.title_generated_at),
   };
 }
 
@@ -148,7 +150,9 @@ export function createSqliteStore(dir, { log = console } = {}) {
       last_submission_id INTEGER,
       model_source_id TEXT,
       model_id TEXT,
-      thinking_level TEXT
+      thinking_level TEXT,
+      title_source TEXT NOT NULL DEFAULT 'auto',
+      title_generated_at INTEGER
     );
     CREATE TABLE IF NOT EXISTS messages (
       id TEXT PRIMARY KEY,
@@ -242,6 +246,8 @@ export function createSqliteStore(dir, { log = console } = {}) {
     if (!convCols.has('model_source_id')) db.exec('ALTER TABLE conversations ADD COLUMN model_source_id TEXT');
     if (!convCols.has('model_id')) db.exec('ALTER TABLE conversations ADD COLUMN model_id TEXT');
     if (!convCols.has('thinking_level')) db.exec('ALTER TABLE conversations ADD COLUMN thinking_level TEXT');
+    if (!convCols.has('title_source')) db.exec("ALTER TABLE conversations ADD COLUMN title_source TEXT NOT NULL DEFAULT 'auto'");
+    if (!convCols.has('title_generated_at')) db.exec('ALTER TABLE conversations ADD COLUMN title_generated_at INTEGER');
     if (convCols.has('role_id')) {
       try { db.exec('ALTER TABLE conversations DROP COLUMN role_id'); } catch { /* keep the column, stop reading it */ }
     }
@@ -282,15 +288,17 @@ export function createSqliteStore(dir, { log = console } = {}) {
       id, workspace_id, title, status, auto_continues, retries, last_checkpoint_at,
       current_step, updated_at, created_at,
       workspace_path, last_progress_at, original_text, usage_json, harness_id, host_mark,
-      last_submission_id, model_source_id, model_id, thinking_level
-    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`),
+      last_submission_id, model_source_id, model_id, thinking_level,
+      title_source, title_generated_at
+    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`),
     getConv: db.prepare('SELECT * FROM conversations WHERE id = ?'),
     listRecoverable: db.prepare("SELECT * FROM conversations WHERE status IN ('running','recovering') AND harness_id IS NULL"),
     listKernel: db.prepare('SELECT * FROM conversations WHERE harness_id IS NOT NULL'),
     updConv: db.prepare(`UPDATE conversations SET
       workspace_id=?, title=?, updated_at=?,
       workspace_path=?, last_progress_at=?, original_text=?, usage_json=?, harness_id=?,
-      last_submission_id=?, model_source_id=?, model_id=?, thinking_level=?
+      last_submission_id=?, model_source_id=?, model_id=?, thinking_level=?,
+      title_source=?, title_generated_at=?
       WHERE id=?`),
     listConv: db.prepare('SELECT * FROM conversations WHERE workspace_id = ? AND harness_id IS NOT NULL ORDER BY updated_at DESC'),
     insTomb: db.prepare('INSERT OR IGNORE INTO catalog_tombstones (kind, id) VALUES (?, ?)'),
@@ -406,6 +414,8 @@ export function createSqliteStore(dir, { log = console } = {}) {
         modelSourceId: modelSourceId ?? null,
         modelId: modelId ?? null,
         thinkingLevel: null,
+        titleSource: 'auto',
+        titleGeneratedAt: null,
       };
       q.insConv.run(
         conv.id, conv.workspaceId, conv.title, null, null, null,
@@ -413,6 +423,7 @@ export function createSqliteStore(dir, { log = console } = {}) {
         conv.workspacePath, conv.lastProgressAt, conv.originalText,
         usageToSql(conv.usage), conv.harnessId, null, null,
         conv.modelSourceId, conv.modelId, conv.thinkingLevel,
+        conv.titleSource, conv.titleGeneratedAt,
       );
       return conv;
     },
@@ -451,6 +462,8 @@ export function createSqliteStore(dir, { log = console } = {}) {
           modelSourceId: null,
           modelId: null,
           thinkingLevel: null,
+          titleSource: 'auto',
+          titleGeneratedAt: null,
         };
         q.insConv.run(
           conv.id, conv.workspaceId, conv.title, null, null, null,
@@ -458,14 +471,18 @@ export function createSqliteStore(dir, { log = console } = {}) {
           conv.workspacePath, conv.lastProgressAt, conv.originalText,
           usageToSql(conv.usage), null, null, patch.lastSubmissionId ?? null,
           conv.modelSourceId, conv.modelId, conv.thinkingLevel,
+          conv.titleSource, conv.titleGeneratedAt,
         );
       }
       const next = { ...conv, ...patch, updatedAt: Date.now() };
+      next.titleSource = next.titleSource === 'user' ? 'user' : 'auto';
+      next.titleGeneratedAt = next.titleGeneratedAt == null ? null : Number(next.titleGeneratedAt);
       q.updConv.run(
         next.workspaceId, next.title, next.updatedAt,
         next.workspacePath, next.lastProgressAt, next.originalText, usageToSql(next.usage),
         next.harnessId ?? null, next.lastSubmissionId ?? null,
-        next.modelSourceId ?? null, next.modelId ?? null, next.thinkingLevel ?? null, id,
+        next.modelSourceId ?? null, next.modelId ?? null, next.thinkingLevel ?? null,
+        next.titleSource, next.titleGeneratedAt, id,
       );
       return next;
     },

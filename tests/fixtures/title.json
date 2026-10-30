@@ -1,0 +1,6 @@
+{ "turns": [
+  { "when": "帮我写一个用户登录页面", "delayMs": 1500, "text": "好的，这就写登录页。" },
+  { "title": true, "when": "帮我写一个用户登录页面", "text": "登录功能" },
+  { "when": "Help me write a user login page", "delayMs": 1500, "text": "Sure, I will write a login page." },
+  { "title": true, "when": "Help me write a user login page", "text": "Login form" }
+] }

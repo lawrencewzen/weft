@@ -10,7 +10,7 @@ import { openConversationKernel } from '../../src/kernel/conversations.mjs';
 import { createSqliteStore } from '../../src/store/sqlite.mjs';
 import { ROOT } from './_root.mjs';
 import { withHarnessLock } from './_harness-lock.mjs';
-import { startFakeModel } from './kernel-models-fake.mjs';
+import { chatCompletionHits, startFakeModel } from './kernel-models-fake.mjs';
 import { readDiscovery, request as serverRequest, startServer, stopServer } from './_server.mjs';
 
 const TOKEN = 'unit-kernel-thinking-token';
@@ -143,7 +143,7 @@ test('DeepSeek request body: off is thinking disabled, high enables thinking', {
     assert.equal(sentOff.status, 202, sentOff.text);
     const doneOff = await waitTurn(base, conv.body.id, (body) => assistantTexts(body).includes('from-flash'));
     assert.equal(doneOff.status, 'done', JSON.stringify(doneOff?.llmError || doneOff));
-    const offHit = fake.seen.filter((item) => item.path.endsWith('/chat/completions'))[0];
+    const offHit = chatCompletionHits(fake.seen)[0];
     assert.ok(offHit, JSON.stringify(fake.seen));
     assert.deepEqual(offHit.body.thinking, { type: 'disabled' });
     assert.equal(Object.prototype.hasOwnProperty.call(offHit.body, 'reasoning_effort'), false);
@@ -165,12 +165,12 @@ test('DeepSeek request body: off is thinking disabled, high enables thinking', {
       text: 'ping-high',
     }, TOKEN);
     assert.equal(sentHigh.status, 202, sentHigh.text);
-    const beforeHigh = fake.seen.filter((item) => item.path.endsWith('/chat/completions')).length;
+    const beforeHigh = chatCompletionHits(fake.seen).length;
     const doneHigh = await waitTurn(base, conv.body.id, (body) => (
       assistantTexts(body).filter((text) => text === 'from-flash').length >= 2
     ));
     assert.equal(doneHigh.status, 'done', JSON.stringify(doneHigh?.llmError || doneHigh));
-    const hits = fake.seen.filter((item) => item.path.endsWith('/chat/completions'));
+    const hits = chatCompletionHits(fake.seen);
     assert.equal(hits.length > beforeHigh, true, JSON.stringify(hits.map((hit) => hit.body)));
     const highHit = hits[hits.length - 1];
     assert.deepEqual(highHit.body.thinking, { type: 'enabled' });

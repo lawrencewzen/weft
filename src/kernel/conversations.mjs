@@ -32,6 +32,7 @@ import { FAUX_MODEL, openKernel } from './index.mjs';
 import { createKernelModels, explicitDemo } from './models.mjs';
 import { installPluginReload } from './plugins.mjs';
 import { createAgentHost, installAgentExtensions } from './agent-config.mjs';
+import { maybeGenerateConversationTitle } from './title.mjs';
 import { createSubagentControl } from './subagent-control.mjs';
 import { createSubagentExtension, createSubagentHost } from './subagents.mjs';
 import { createWorkspaceExtension, workspaceTools } from './tools.mjs';
@@ -124,6 +125,7 @@ export async function openConversationKernel({
   credentials,
   modelsStore,
   providerService,
+  onConversationMeta,
   env = process.env,
 } = {}) {
   if (!dataDir) throw new Error('dataDir is required');
@@ -288,12 +290,30 @@ export async function openConversationKernel({
     return { ...mapped, entries: view.entries || [] };
   }
 
+  async function resolveTitleModel(conv) {
+    if (faux) return models.getModel(FAUX_MODEL.provider, FAUX_MODEL.modelId) || null;
+    if (!routes) return null;
+    const ref = await routes.modelFor(conv);
+    if (!ref) return null;
+    return models.getModel(ref.provider, ref.modelId) || null;
+  }
+
   async function deliver(cid, ev) {
     push(cid, ev);
     if (ev.event === 'status') {
       const conv = await store.getConversation(cid);
       const messages = conv?.harnessId ? (await readTranscript(conv.harnessId)).messages : [];
       await emitAgent(cid, ev.data.status, messages);
+      if (ev.data?.status === 'done') {
+        void maybeGenerateConversationTitle(cid, {
+          store,
+          models,
+          resolveModel: resolveTitleModel,
+          readTranscript,
+          onConversationMeta,
+          status: 'done',
+        });
+      }
     }
   }
 

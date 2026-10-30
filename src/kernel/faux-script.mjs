@@ -7,6 +7,7 @@ import { getCurrentTools } from '@earendil-works/pi-ai/utils/transcript';
 import { defineExtension, GenerationTask, hook, ProviderDoc } from '@earendil-works/pi-durable';
 import { EXT_FAUX_SCRIPT } from './ids.mjs';
 import { registerFaux } from './index.mjs';
+import { isTitleRequest } from './title.mjs';
 import { stampScriptTurn } from './usage.mjs';
 
 const DEMO_RESPONSE_COUNT = 100;
@@ -131,9 +132,39 @@ export function planScriptTurns(turns) {
 export function scriptPool(turns, context) {
   const plan = planScriptTurns(turns);
   const last = lastUserText(context);
-  const scoped = plan.filter((turn) => turn.when && last.includes(turn.when));
+  const convTurns = plan.filter((turn) => !turn.title);
+  const scoped = convTurns.filter((turn) => turn.when && last.includes(turn.when));
   if (scoped.length) return scoped;
-  return plan.filter((turn) => !turn.when);
+  return convTurns.filter((turn) => !turn.when);
+}
+
+/** Matching `{ title: true }` turn for this title completion, if any. */
+export function titleTurnFromScript(turns, context) {
+  const plan = planScriptTurns(turns);
+  const last = lastUserText(context);
+  const titleTurns = plan.filter((turn) => turn.title);
+  const scoped = titleTurns.filter((turn) => turn.when && last.includes(String(turn.when)));
+  const pool = scoped.length ? scoped : titleTurns.filter((turn) => !turn.when);
+  return pool[0] || null;
+}
+
+async function waitScriptDelay(delayMs, streamOptions) {
+  const delay = Number(delayMs);
+  if (!Number.isFinite(delay) || delay <= 0) return;
+  const signal = streamOptions?.signal;
+  const end = Date.now() + delay;
+  while (Date.now() < end && !signal?.aborted) {
+    const slice = Math.min(50, end - Date.now());
+    if (slice > 0) await new Promise((resolve) => setTimeout(resolve, slice));
+  }
+  if (signal?.aborted) throw new Error('Request was aborted');
+}
+
+/** Title completions are tagged `title: true` so they never consume a conversation turn. */
+export function titleReplyFromScript(turns, context) {
+  const turn = titleTurnFromScript(turns, context);
+  if (!turn || turn.text == null) return fauxAssistantMessage('');
+  return fauxAssistantMessage(String(turn.text));
 }
 
 export function scriptAssistantCount(context) {
@@ -371,6 +402,12 @@ export function installDemo(models, env) {
   const scripted = !holdAll && !plan && scriptPath ? scriptedDemoStep(scriptPath, env) : null;
   let cursor = 0;
   const step = async (context, streamOptions) => {
+    if (isTitleRequest(context)) {
+      const turns = loadScriptTurns(env);
+      const turn = titleTurnFromScript(turns, context);
+      await waitScriptDelay(turn?.delayMs, streamOptions);
+      return titleReplyFromScript(turns, context);
+    }
     if (recordPath) await appendFile(recordPath, `${JSON.stringify(requestSnapshot(context))}\n`);
     if (holdAll) {
       if (ready) await writeFile(ready, 'seen');

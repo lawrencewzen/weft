@@ -341,6 +341,8 @@ function publicConversation(conv) {
   if (!conv) return conv;
   const out = { ...conv };
   delete out.harnessId;
+  delete out.titleSource;
+  delete out.titleGeneratedAt;
   delete out.lastSubmissionId;
   delete out.autoContinues;
   delete out.retries;
@@ -519,6 +521,10 @@ try {
     credentials: credentialStore,
     modelsStore,
     providerService,
+    onConversationMeta(cid) {
+      v2.notifyConversation(cid);
+      v2.notifySidebarChanged();
+    },
   });
 } catch (err) {
   console.error(`WEFT_KERNEL_OPEN_FAILED ${err instanceof Error ? err.message : err}`);

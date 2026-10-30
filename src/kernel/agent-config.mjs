@@ -242,6 +242,15 @@ export function createAgentHost({
       if (!thinkingChoice.ok) return { status: 400, body: { error: thinkingChoice.error } };
       patch.thinkingLevel = thinkingChoice.value;
     }
+    if (Object.prototype.hasOwnProperty.call(input, 'title')) {
+      if (typeof input.title !== 'string') {
+        return { status: 400, body: { error: 'invalid title' } };
+      }
+      const trimmed = input.title.trim();
+      if (!trimmed) return { status: 400, body: { error: 'invalid title' } };
+      patch.title = trimmed;
+      patch.titleSource = 'user';
+    }
     if (!Object.keys(patch).length) {
       // Unknown keys (pipeline leftovers, retired fields) are ignored.
       if (Object.keys(input).length) {
