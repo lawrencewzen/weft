@@ -9,6 +9,19 @@ function readBody(req) {
   });
 }
 
+const TITLE_PROMPT_MARKER = 'Write a short conversation title.';
+
+/** Completions that are the host's one-shot title call, not a harness turn. */
+export function isTitleCompletionHit(hit) {
+  return String(hit?.raw || '').includes(TITLE_PROMPT_MARKER);
+}
+
+export function chatCompletionHits(seen) {
+  return (seen || []).filter((hit) => (
+    String(hit?.path || '').endsWith('/chat/completions') && !isTitleCompletionHit(hit)
+  ));
+}
+
 function chatCompletionSse(text) {
   const chunk = (delta, finish) => JSON.stringify({
     id: 'chatcmpl-kernel',

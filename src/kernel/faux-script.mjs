@@ -7,6 +7,7 @@ import { getCurrentTools } from '@earendil-works/pi-ai/utils/transcript';
 import { defineExtension, GenerationTask, hook, ProviderDoc } from '@earendil-works/pi-durable';
 import { EXT_FAUX_SCRIPT } from './ids.mjs';
 import { registerFaux } from './index.mjs';
+import { isTitleRequest } from './title.mjs';
 import { stampScriptTurn } from './usage.mjs';
 
 const DEMO_RESPONSE_COUNT = 100;
@@ -131,9 +132,22 @@ export function planScriptTurns(turns) {
 export function scriptPool(turns, context) {
   const plan = planScriptTurns(turns);
   const last = lastUserText(context);
-  const scoped = plan.filter((turn) => turn.when && last.includes(turn.when));
+  const convTurns = plan.filter((turn) => !turn.title);
+  const scoped = convTurns.filter((turn) => turn.when && last.includes(turn.when));
   if (scoped.length) return scoped;
-  return plan.filter((turn) => !turn.when);
+  return convTurns.filter((turn) => !turn.when);
+}
+
+/** Title completions are tagged `title: true` so they never consume a conversation turn. */
+export function titleReplyFromScript(turns, context) {
+  const plan = planScriptTurns(turns);
+  const last = lastUserText(context);
+  const titleTurns = plan.filter((turn) => turn.title);
+  const scoped = titleTurns.filter((turn) => turn.when && last.includes(String(turn.when)));
+  const pool = scoped.length ? scoped : titleTurns.filter((turn) => !turn.when);
+  const turn = pool[0];
+  if (!turn || turn.text == null) return fauxAssistantMessage('');
+  return fauxAssistantMessage(String(turn.text));
 }
 
 export function scriptAssistantCount(context) {
@@ -371,6 +385,7 @@ export function installDemo(models, env) {
   const scripted = !holdAll && !plan && scriptPath ? scriptedDemoStep(scriptPath, env) : null;
   let cursor = 0;
   const step = async (context, streamOptions) => {
+    if (isTitleRequest(context)) return titleReplyFromScript(loadScriptTurns(env), context);
     if (recordPath) await appendFile(recordPath, `${JSON.stringify(requestSnapshot(context))}\n`);
     if (holdAll) {
       if (ready) await writeFile(ready, 'seen');

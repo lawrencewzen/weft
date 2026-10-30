@@ -633,6 +633,7 @@ function finishRun(db: MockDb, conv: MockConv, hub: MockHub): void {
   conv.run = null;
   conv.pending = null;
   recomputeContext(db, conv, conv.view.context.used + 20_000);
+  if (!run.cancelled) scheduleGeneratedTitle(db, conv, hub);
   if (next && !run.cancelled) {
     const id = nextId(db, 'u');
     const images = attachThreadImages(db, conv.view.id, id, next.images);
@@ -756,6 +757,39 @@ function trimSends(conv: MockConv): void {
 function titleFrom(text: string): string {
   const oneLine = text.replace(/\s+/g, ' ').trim();
   return oneLine.length > 28 ? `${oneLine.slice(0, 27)}…` : oneLine || '新对话';
+}
+
+const TITLE_MAP: Record<string, string> = {
+  '帮我写一个用户登录页面': '登录功能',
+  'Help me write a login page': 'Login form',
+  'Help me write a user login page': 'Login form',
+};
+
+function generatedTitleFor(text: string): string {
+  const key = text.replace(/\s+/g, ' ').trim();
+  if (TITLE_MAP[key]) return TITLE_MAP[key];
+  if (/[\u3400-\u9fff]/.test(key)) return key.slice(0, 8) || key;
+  return key.split(' ').filter(Boolean).slice(0, 4).join(' ') || key;
+}
+
+function firstUserText(conv: MockConv): string {
+  const item = conv.items.find((row) => row.kind === 'user');
+  return item && 'text' in item ? String(item.text || '') : '';
+}
+
+function scheduleGeneratedTitle(db: MockDb, conv: MockConv, hub: MockHub): void {
+  if (!conv.titleAuto || conv.titleGenerated || conv.titleTimer) return;
+  conv.titleTimer = window.setTimeout(() => {
+    conv.titleTimer = 0;
+    if (!conv.titleAuto || conv.titleGenerated) return;
+    const next = generatedTitleFor(firstUserText(conv));
+    if (!next) return;
+    conv.view.title = next;
+    conv.titleGenerated = true;
+    touch(conv);
+    publishConversationView(conv, hub);
+    publishSummary(db, hub, conv.view.id);
+  }, 1000);
 }
 
 export function startRun(
@@ -895,6 +929,7 @@ export function sendMessage(
   sends.push({ requestId, entryId: id, dropped: false, mode: 'steer', text });
   trimSends(conv);
   if (conv.items.filter((row) => row.kind === 'user').length === 1 && conv.view.title === '新对话') {
+    conv.titleAuto = true;
     conv.view.title = text.trim()
       ? titleFrom(text)
       : (imageList?.[0]?.name

@@ -12,7 +12,7 @@ import {
   parseFetchedChatModels,
   selectChatRuntime,
 } from '../../src/kernel/models.mjs';
-import { rewriteDeepseekFetch, startFakeModel } from './kernel-models-fake.mjs';
+import { chatCompletionHits, rewriteDeepseekFetch, startFakeModel } from './kernel-models-fake.mjs';
 import { makeTempDir, removeTempDir } from './_tmp.mjs';
 import { readDiscovery, request as serverRequest, startServer, stopServer } from './_server.mjs';
 import { ROOT } from './_root.mjs';
@@ -479,14 +479,14 @@ test('kernel models call each custom provider and hide keys', { timeout: 60000 }
     assert.equal(sentMain.status, 202);
     const mainDone = await waitTurn(base, mainConv.body.id, (body) => assistantTexts(body).includes('from-default'));
     assert.equal(mainDone.status, 'done');
-    assert.deepEqual(defaultFake.seen.filter((hit) => hit.path.endsWith('/chat/completions')).map((hit) => hit.keyTail), [KEY_DEFAULT.slice(-4)]);
-    assert.equal(coderFake.seen.filter((hit) => hit.path.endsWith('/chat/completions')).length, 0);
+    assert.deepEqual(chatCompletionHits(defaultFake.seen).map((hit) => hit.keyTail), [KEY_DEFAULT.slice(-4)]);
+    assert.equal(chatCompletionHits(coderFake.seen).length, 0);
 
     const sentCoder = await request(base, 'POST', `/api/conversations/${coderConv.body.id}/messages`, { text: 'ping-coder' });
     assert.equal(sentCoder.status, 202);
     const coderDone = await waitTurn(base, coderConv.body.id, (body) => assistantTexts(body).includes('from-coder'));
     assert.equal(coderDone.status, 'done');
-    assert.deepEqual(coderFake.seen.filter((hit) => hit.path.endsWith('/chat/completions')).map((hit) => hit.keyTail), [KEY_CODER.slice(-4)]);
+    assert.deepEqual(chatCompletionHits(coderFake.seen).map((hit) => hit.keyTail), [KEY_CODER.slice(-4)]);
     assertClean(srv.logs(), 'server log');
   } finally {
     await stopServer(srv);

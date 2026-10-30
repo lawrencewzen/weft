@@ -341,6 +341,8 @@ function publicConversation(conv) {
   if (!conv) return conv;
   const out = { ...conv };
   delete out.harnessId;
+  delete out.titleSource;
+  delete out.titleGeneratedAt;
   delete out.lastSubmissionId;
   delete out.autoContinues;
   delete out.retries;
