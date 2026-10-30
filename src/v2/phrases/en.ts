@@ -1,4 +1,4 @@
-/** 服务端视图文案（英文）。键名和措辞与 public/i18n.js 的 en 一致。 */
+/** 服务端视图文案（英文）。 */
 export const en: Record<string, string> = {
   pending_thinking: 'Thinking',
   pending_subagents: '· {n} sub-agents',

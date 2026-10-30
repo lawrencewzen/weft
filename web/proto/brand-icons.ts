@@ -1,44 +1,44 @@
-import xai from '../../public/vendor/brand-icons/xai.svg?raw';
-import grok from '../../public/vendor/brand-icons/grok.svg?raw';
-import openai from '../../public/vendor/brand-icons/openai.svg?raw';
-import anthropic from '../../public/vendor/brand-icons/anthropic.svg?raw';
-import gemini from '../../public/vendor/brand-icons/gemini.svg?raw';
-import qwen from '../../public/vendor/brand-icons/qwen.svg?raw';
-import githubcopilot from '../../public/vendor/brand-icons/githubcopilot.svg?raw';
-import kiro from '../../public/vendor/brand-icons/kiro.svg?raw';
-import deepseek from '../../public/vendor/brand-icons/deepseek.svg?raw';
-import moonshot from '../../public/vendor/brand-icons/moonshot.svg?raw';
-import kimi from '../../public/vendor/brand-icons/kimi.svg?raw';
-import zhipu from '../../public/vendor/brand-icons/zhipu.svg?raw';
-import openrouter from '../../public/vendor/brand-icons/openrouter.svg?raw';
-import ollama from '../../public/vendor/brand-icons/ollama.svg?raw';
-import lmstudio from '../../public/vendor/brand-icons/lmstudio.svg?raw';
-import mistral from '../../public/vendor/brand-icons/mistral.svg?raw';
-import meta from '../../public/vendor/brand-icons/meta.svg?raw';
-import google from '../../public/vendor/brand-icons/google.svg?raw';
-import minimax from '../../public/vendor/brand-icons/minimax.svg?raw';
-import xiaomimimo from '../../public/vendor/brand-icons/xiaomimimo.svg?raw';
-import aws from '../../public/vendor/brand-icons/aws.svg?raw';
-import azure from '../../public/vendor/brand-icons/azure.svg?raw';
-import googlecloud from '../../public/vendor/brand-icons/googlecloud.svg?raw';
-import antgroup from '../../public/vendor/brand-icons/antgroup.svg?raw';
-import baseten from '../../public/vendor/brand-icons/baseten.svg?raw';
-import cerebras from '../../public/vendor/brand-icons/cerebras.svg?raw';
-import cloudflare from '../../public/vendor/brand-icons/cloudflare.svg?raw';
-import fireworks from '../../public/vendor/brand-icons/fireworks.svg?raw';
-import groq from '../../public/vendor/brand-icons/groq.svg?raw';
-import huggingface from '../../public/vendor/brand-icons/huggingface.svg?raw';
-import nvidia from '../../public/vendor/brand-icons/nvidia.svg?raw';
-import opencode from '../../public/vendor/brand-icons/opencode.svg?raw';
-import together from '../../public/vendor/brand-icons/together.svg?raw';
-import vercel from '../../public/vendor/brand-icons/vercel.svg?raw';
-import alibaba from '../../public/vendor/brand-icons/alibaba.svg?raw';
-import bedrock from '../../public/vendor/brand-icons/bedrock.svg?raw';
-import vertexai from '../../public/vendor/brand-icons/vertexai.svg?raw';
+import xai from '@lobehub/icons-static-svg/icons/xai.svg?raw';
+import grok from '@lobehub/icons-static-svg/icons/grok.svg?raw';
+import openai from '@lobehub/icons-static-svg/icons/openai.svg?raw';
+import anthropic from '@lobehub/icons-static-svg/icons/anthropic.svg?raw';
+import gemini from '@lobehub/icons-static-svg/icons/gemini.svg?raw';
+import qwen from '@lobehub/icons-static-svg/icons/qwen.svg?raw';
+import githubcopilot from '@lobehub/icons-static-svg/icons/githubcopilot.svg?raw';
+import kiro from '@lobehub/icons-static-svg/icons/kiro.svg?raw';
+import deepseek from '@lobehub/icons-static-svg/icons/deepseek.svg?raw';
+import moonshot from '@lobehub/icons-static-svg/icons/moonshot.svg?raw';
+import kimi from '@lobehub/icons-static-svg/icons/kimi.svg?raw';
+import zhipu from '@lobehub/icons-static-svg/icons/zhipu.svg?raw';
+import openrouter from '@lobehub/icons-static-svg/icons/openrouter.svg?raw';
+import ollama from '@lobehub/icons-static-svg/icons/ollama.svg?raw';
+import lmstudio from '@lobehub/icons-static-svg/icons/lmstudio.svg?raw';
+import mistral from '@lobehub/icons-static-svg/icons/mistral.svg?raw';
+import meta from '@lobehub/icons-static-svg/icons/meta.svg?raw';
+import google from '@lobehub/icons-static-svg/icons/google.svg?raw';
+import minimax from '@lobehub/icons-static-svg/icons/minimax.svg?raw';
+import xiaomimimo from '@lobehub/icons-static-svg/icons/xiaomimimo.svg?raw';
+import aws from '@lobehub/icons-static-svg/icons/aws.svg?raw';
+import azure from '@lobehub/icons-static-svg/icons/azure.svg?raw';
+import googlecloud from '@lobehub/icons-static-svg/icons/googlecloud.svg?raw';
+import antgroup from '@lobehub/icons-static-svg/icons/antgroup.svg?raw';
+import baseten from '@lobehub/icons-static-svg/icons/baseten.svg?raw';
+import cerebras from '@lobehub/icons-static-svg/icons/cerebras.svg?raw';
+import cloudflare from '@lobehub/icons-static-svg/icons/cloudflare.svg?raw';
+import fireworks from '@lobehub/icons-static-svg/icons/fireworks.svg?raw';
+import groq from '@lobehub/icons-static-svg/icons/groq.svg?raw';
+import huggingface from '@lobehub/icons-static-svg/icons/huggingface.svg?raw';
+import nvidia from '@lobehub/icons-static-svg/icons/nvidia.svg?raw';
+import opencode from '@lobehub/icons-static-svg/icons/opencode.svg?raw';
+import together from '@lobehub/icons-static-svg/icons/together.svg?raw';
+import vercel from '@lobehub/icons-static-svg/icons/vercel.svg?raw';
+import alibaba from '@lobehub/icons-static-svg/icons/alibaba.svg?raw';
+import bedrock from '@lobehub/icons-static-svg/icons/bedrock.svg?raw';
+import vertexai from '@lobehub/icons-static-svg/icons/vertexai.svg?raw';
 
 /**
  * Only the brand icons the prototype data actually shows are bundled; inlining
- * all 950 from `public/vendor/brand-icons` would add megabytes to the file.
+ * all 950 from `@lobehub/icons-static-svg` would add megabytes to the file.
  */
 const ICONS: Record<string, string> = {
   xai,

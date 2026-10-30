@@ -1,4 +1,5 @@
-import { cpSync, existsSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import react from '@vitejs/plugin-react';
@@ -6,6 +7,7 @@ import { defineConfig } from 'vite';
 
 const webRoot = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(webRoot, '..');
+const require = createRequire(import.meta.url);
 
 const INLINE_SCRIPT_RE = /<script\b(?![^>]*\bsrc\s*=)[^>]*>/i;
 
@@ -31,10 +33,18 @@ export default defineConfig({
       name: 'copy-brand-icons',
       apply: 'build',
       closeBundle() {
-        const src = path.resolve(repoRoot, 'public/vendor/brand-icons');
+        const src = path.resolve(
+          path.dirname(require.resolve('@lobehub/icons-static-svg/package.json')),
+          'icons',
+        );
         const dest = path.resolve(repoRoot, 'public-next/vendor/brand-icons');
         if (!existsSync(src)) return;
-        cpSync(src, dest, { recursive: true });
+        rmSync(dest, { recursive: true, force: true });
+        mkdirSync(dest, { recursive: true });
+        for (const name of readdirSync(src)) {
+          if (!name.endsWith('.svg')) continue;
+          copyFileSync(path.join(src, name), path.join(dest, name));
+        }
       },
     },
   ],

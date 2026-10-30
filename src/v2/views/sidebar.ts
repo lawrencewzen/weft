@@ -1,7 +1,7 @@
 /**
  * Sidebar view models: Workspace and ConversationSummary.
  * Status buckets match views/run.ts conversationStatus (ARCHITECTURE_V2.md §6.1).
- * runningAgents matches public/app.js conversationMeta "N 个 Agent 运行中":
+ * runningAgents counts "N 个 Agent 运行中":
  * main agent running counts as 1, plus live sub-agents from subagentDigests.
  */
 

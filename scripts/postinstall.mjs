@@ -1,4 +1,3 @@
-import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import path from 'node:path';
@@ -55,23 +54,6 @@ export function tryBuildWeb({
   return status == null ? 1 : status;
 }
 
-/** Copy the flat brand SVG set from @lobehub/icons-static-svg into public/vendor/brand-icons. */
-export function copyBrandIcons({
-  srcDir = path.resolve(path.dirname(require.resolve('@lobehub/icons-static-svg/package.json')), 'icons'),
-  destDir = path.join(ROOT, 'public', 'vendor', 'brand-icons'),
-} = {}) {
-  if (!existsSync(srcDir)) return 0;
-  rmSync(destDir, { recursive: true, force: true });
-  mkdirSync(destDir, { recursive: true });
-  let copied = 0;
-  for (const name of readdirSync(srcDir)) {
-    if (!name.endsWith('.svg')) continue;
-    copyFileSync(path.join(srcDir, name), path.join(destDir, name));
-    copied += 1;
-  }
-  return copied;
-}
-
 function isMain() {
   const entry = process.argv[1];
   if (!entry) return false;
@@ -79,8 +61,6 @@ function isMain() {
 }
 
 function main() {
-  const icons = copyBrandIcons();
-  if (icons) process.stdout.write(`copied ${icons} brand icons -> public/vendor/brand-icons\n`);
   process.exit(tryBuildWeb());
 }
 

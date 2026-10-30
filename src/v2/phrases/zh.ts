@@ -1,4 +1,4 @@
-/** 服务端视图文案（中文）。键名和措辞与 public/i18n.js 的 zh 一致。 */
+/** 服务端视图文案（中文）。 */
 export const zh: Record<string, string> = {
   pending_thinking: '思考中',
   pending_subagents: '· {n} 个子 Agent',

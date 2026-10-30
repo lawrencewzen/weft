@@ -1,4 +1,4 @@
-/** Probe-failure classification. Port of public/probe-error.js; sentences from phrases. */
+/** Probe-failure classification. Sentences from phrases. */
 
 import { phrase, type Lang } from '../phrases/index.ts';
 

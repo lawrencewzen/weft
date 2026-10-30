@@ -103,4 +103,4 @@ Harness 的 `data/harness/session.sqlite` 文件名没有改。包名由 `pi-wor
 ## License
 MIT，保留原作者版权声明。
 
-前端品牌图标来自 [@lobehub/icons-static-svg](https://github.com/lobehub/lobe-icons)（MIT）：`postinstall` 拷到 `public/vendor/brand-icons/`，品牌/模型/服务商映射由 `scripts/gen-brand-data.mjs` 从 `@lobehub/icons` 生成到 `public/brand-data.json`。不要把 `@lobehub/icons` 加进依赖，也不要走 CDN。
+前端品牌图标来自 [@lobehub/icons-static-svg](https://github.com/lobehub/lobe-icons)（MIT）：构建时拷到 `public-next/vendor/brand-icons/`，品牌/模型/服务商映射由 `scripts/gen-brand-data.mjs` 从 `@lobehub/icons` 生成到 `src/v2/views/brand-data.json`。不要把 `@lobehub/icons` 加进依赖，也不要走 CDN。

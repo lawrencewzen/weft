@@ -1,4 +1,4 @@
-// Shared auto-continue prefix. Ported from public/continuation.js — do not import from public/.
+// Shared auto-continue prefix.
 import { isSubagentReportText } from './subagent-report.ts';
 
 export const AUTO_CONTINUE_PREFIX = '[auto-continue]';

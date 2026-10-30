@@ -15,7 +15,7 @@ const ICONS_PACKAGE = '@lobehub/icons';
 const ICONS_VERSION = '5.23.0';
 const SVG_PACKAGE = '@lobehub/icons-static-svg';
 const SVG_VERSION = '1.95.1';
-const OUT = path.join(ROOT, 'public', 'brand-data.json');
+const OUT = path.join(ROOT, 'src', 'v2', 'views', 'brand-data.json');
 const require = createRequire(import.meta.url);
 
 function npmCmd() {

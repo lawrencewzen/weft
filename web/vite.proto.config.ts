@@ -1,3 +1,4 @@
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import react from '@vitejs/plugin-react';
@@ -14,6 +15,11 @@ import { defineConfig, type Plugin } from 'vite';
 const webRoot = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(webRoot, '..');
 const protoRoot = path.resolve(webRoot, 'proto');
+const require = createRequire(import.meta.url);
+const brandIconsDir = path.join(
+  path.dirname(require.resolve('@lobehub/icons-static-svg/package.json')),
+  'icons',
+);
 
 function inlineScript(code: string): string {
   // A literal "</script" inside the bundle would end the inline block.
@@ -68,6 +74,11 @@ export default defineConfig({
   base: './',
   publicDir: false,
   plugins: [react(), singleFile()],
+  resolve: {
+    alias: {
+      '@lobehub/icons-static-svg/icons': brandIconsDir,
+    },
+  },
   build: {
     outDir: path.resolve(repoRoot, 'design/prototype'),
     emptyOutDir: false,

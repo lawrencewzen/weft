@@ -116,7 +116,7 @@ function toThreadUserFiles(
   return out;
 }
 
-/** Last non-empty, non-correction assistant. Same walk as public/app.js lastVisibleAssistant. */
+/** Last non-empty, non-correction assistant. */
 export function lastVisibleAssistant(messages: ThreadMessage[] | null | undefined): ThreadMessage | null {
   const msgs = messages || [];
   for (let i = msgs.length - 1; i >= 0; i -= 1) {
@@ -130,7 +130,7 @@ function isRealSubagent(agent: ThreadSubagent | null | undefined): boolean {
   return String(agent?.id || '').includes(':sub:');
 }
 
-/** Same lookup as public/app.js findAgentForReport. */
+/** Find a real subagent (`:sub:` in id) by exact name. */
 export function findAgentForReport(
   name: unknown,
   subagents: ThreadSubagent[] | null | undefined,
@@ -150,7 +150,7 @@ async function pathRefsFor(
 }
 
 /**
- * Messages → thread items. Rules match public/app.js threadBlocksHtml:
+ * Messages → thread items. Rules:
  * consecutive tools form one group; empty assistants are skipped (and do not split a group);
  * subagent reports and auto-continues are not user bubbles.
  */

@@ -46,13 +46,13 @@ export function resolveStuckAfterMs(env: NodeJS.ProcessEnv = process.env): numbe
   return Math.trunc(n);
 }
 
-/** Same as public/app.js finiteTs: positive finite timestamps only. */
+/** Positive finite timestamps only. */
 export function finiteTs(value: unknown): number {
   const n = Number(value);
   return Number.isFinite(n) && n > 0 ? n : 0;
 }
 
-/** Same as public/app.js firstBriefLine. */
+/** First non-empty line of a brief, collapsed whitespace. */
 export function firstBriefLine(text: unknown): string {
   const raw = String(text || '');
   if (!raw) return '';
@@ -60,7 +60,7 @@ export function firstBriefLine(text: unknown): string {
   return String(line || raw).replace(/\s+/g, ' ').trim();
 }
 
-/** Same as public/app.js subagentTitle. */
+/** Collapsed-whitespace title, or empty. */
 export function subagentTitle(agent: SubagentLike | null | undefined): string {
   return String(agent?.title || '').replace(/\s+/g, ' ').trim();
 }
