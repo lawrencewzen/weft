@@ -6,6 +6,7 @@ import {
   RECENT_MODELS_STORAGE_KEY,
   brandIconUrl,
   clampThinkingLevel,
+  computeContextUsage,
   contextIsWarn,
   contextWindowOptions,
   conversationToResolved,
@@ -289,5 +290,37 @@ describe('recent models storage and deduplication', () => {
     expect(readRecentModels()).toEqual([]);
 
     vi.unstubAllGlobals();
+  });
+
+  describe('computeContextUsage', () => {
+    it('computes correct percent and ok level for lower usage', () => {
+      const res = computeContextUsage(48_200, 64_000);
+      expect(res.used).toBe(48_200);
+      expect(res.window).toBe(64_000);
+      expect(res.percent).toBe(75);
+      expect(res.level).toBe('ok');
+    });
+
+    it('computes warn level at 80% and above', () => {
+      const res = computeContextUsage(52_000, 64_000);
+      expect(res.percent).toBe(81);
+      expect(res.level).toBe('warn');
+    });
+
+    it('computes full level at 95% and above', () => {
+      const res = computeContextUsage(62_000, 64_000);
+      expect(res.percent).toBe(97);
+      expect(res.level).toBe('full');
+    });
+
+    it('handles zero used and invalid window fallback', () => {
+      const zero = computeContextUsage(0, 64_000);
+      expect(zero.percent).toBe(0);
+      expect(zero.level).toBe('ok');
+
+      const fallback = computeContextUsage(0, 0);
+      expect(fallback.window).toBe(128_000);
+      expect(fallback.percent).toBe(0);
+    });
   });
 });

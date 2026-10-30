@@ -507,6 +507,17 @@ function handlePatchProvider(
     provider.status = { state: 'ok', testedAt: Date.now() };
   }
   publishProviders(db, hub);
+  if (body.overrides && typeof body.overrides === 'object' && !Array.isArray(body.overrides)) {
+    const patchedModelIds = new Set(Object.keys(body.overrides as Record<string, unknown>));
+    for (const conv of db.conversations.values()) {
+      const sourceId = conv.view.model?.sourceId || db.defaultModel?.providerId;
+      const modelId = conv.view.model?.modelId || db.defaultModel?.modelId;
+      if (sourceId === provider.id && modelId && patchedModelIds.has(modelId)) {
+        recomputeContext(db, conv);
+        publishConversationView(conv, hub);
+      }
+    }
+  }
   return ok({ provider: providerView(provider) });
 }
 

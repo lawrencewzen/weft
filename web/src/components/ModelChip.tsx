@@ -80,6 +80,8 @@ export function ModelChip({
     setRecentRaw(readRecentModels());
     checkFit();
     setSubMenu(null);
+    setCtxCustom('');
+    setCtxError(null);
     setOpen((prev) => !prev);
   }, [checkFit]);
 

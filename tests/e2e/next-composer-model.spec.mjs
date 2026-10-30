@@ -199,18 +199,29 @@ test('context menu sets the model window and keeps it after refresh', async ({ p
     await waitRunDone(page);
 
     await page.getByTestId('next-context-chip').click();
-    const menu = page.getByTestId('next-context-menu');
-    await expect(menu).toBeVisible();
-    await expect(menu).toContainText(/已用\s+16\.4k · 8%|Used\s+16\.4k · 8%/);
-    await expect(menu).toContainText(/剩余\s+(184k|183\.6k) · 92%|Left\s+(184k|183\.6k) · 92%/);
+    await expect(page.getByTestId('next-context-menu')).toHaveCount(0);
+    await expect(page.getByTestId('next-model-menu')).toBeHidden();
+
+    await page.getByTestId('next-model-chip').click();
+    await expect(page.getByTestId('next-model-menu')).toBeVisible();
+
+    const ctxRow = page.getByTestId('next-menu-context');
+    await expect(ctxRow).toBeVisible();
+    await expect(ctxRow).toContainText('200k');
+
+    await ctxRow.hover();
+    const sub = page.getByTestId('next-sub-context');
+    await expect(sub).toBeVisible();
+    await expect(sub).toContainText(/上下文上限|Context window/);
+
     const patchDone = page.waitForResponse((res) => (
       res.request().method() === 'PATCH'
       && res.url().includes(`/api/v2/providers/${sourceId}`)
       && res.ok()
     ));
-    await menu.locator('[data-testid=next-context-option][data-tokens="256000"]').click();
+    await sub.locator('[data-testid=next-context-option][data-tokens="256000"]').click();
     await patchDone;
-    await expect(menu).toBeHidden();
+    await expect(page.getByTestId('next-model-menu')).toBeHidden();
     await expect(page.getByTestId('next-context-chip')).toHaveText('6%');
     expect(patches).toHaveLength(1);
     expect(patches[0].body).toEqual({

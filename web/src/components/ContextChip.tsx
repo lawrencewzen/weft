@@ -10,7 +10,7 @@ import { formatTokenCount, t } from '../i18n';
 type Props = {
   lang: Lang;
   context: ContextUsage;
-  selected: ComposerModelOption | null;
+  selected?: ComposerModelOption | null;
 };
 
 export function ContextBanner({
@@ -43,7 +43,7 @@ export function ContextChip({ lang, context, selected }: Props) {
   const remain = contextRemainPercent(context);
   const ringRadius = 7.5;
   const circumference = 2 * Math.PI * ringRadius;
-  const windowTokens = selected?.contextWindow || context.window;
+  const windowTokens = context.window || selected?.contextWindow || 0;
 
   return (
     <span

@@ -1561,13 +1561,12 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.6; backgroun
   width: auto; max-width: min(280px, calc(100vw - 24px)); padding: 10px 12px;
   font-size: 12px; color: var(--ink3); line-height: 1.45;
 }
-.model-menu, .context-menu {
+.model-menu {
   position: absolute; bottom: calc(100% + 6px); left: 0; z-index: 60;
   width: 400px; max-width: min(400px, calc(100vw - 24px)); max-height: 360px; overflow: auto;
   background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
   box-shadow: var(--shadow-raise); padding: 6px;
 }
-.context-chip-wrap .context-menu { left: auto; right: 0; width: 260px; }
 .model-menu-group { padding-bottom: 0; }
 .model-menu-label {
   display: flex; align-items: center; gap: 6px; padding: 8px 8px 4px;
@@ -1679,11 +1678,6 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.6; backgroun
 .ctx-ring-fill {
   stroke: var(--mute); transform: rotate(-90deg); transform-origin: 10px 10px; stroke-linecap: round;
 }
-.chip-menu-title { padding: 6px 8px 4px; font-size: 12px; color: var(--ink); }
-.chip-menu-stat {
-  width: 100%; padding: 4px 8px; font-family: var(--mono); font-size: 11px; color: var(--mute);
-}
-.chip-menu-sep { height: 1px; background: var(--line3); margin: 4px 2px; }
 .context-custom { display: flex; gap: 6px; padding: 6px 8px; }
 .context-custom-input {
   flex: 1; min-width: 0; border: 1px solid var(--bd2); border-radius: 8px; padding: 5px 8px;

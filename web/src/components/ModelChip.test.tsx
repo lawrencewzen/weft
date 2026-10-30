@@ -9,6 +9,13 @@ import type { ComposerModelGroup, ComposerModelOption } from '../data/composerMo
 let root: Root | null = null;
 let host: HTMLDivElement | null = null;
 
+function setInputValue(input: HTMLInputElement, value: string) {
+  const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
+  setter?.call(input, value);
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  input.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
 async function render(node: Parameters<Root['render']>[0]) {
   host = document.createElement('div');
   document.body.appendChild(host);
@@ -234,5 +241,196 @@ describe('ModelChip component', () => {
     });
 
     expect(onPickThinking).toHaveBeenCalledWith('max');
+  });
+
+  it('displays current context window value in the primary menu', async () => {
+    await render(
+      <ModelChip
+        lang="zh"
+        selected={flashOption}
+        groups={groups}
+        contextWindow={1000000}
+        onPick={vi.fn()}
+        onManage={vi.fn()}
+        onSetContextWindow={vi.fn()}
+      />
+    );
+
+    const chip = host?.querySelector('[data-testid="next-model-chip"]') as HTMLButtonElement;
+    await act(async () => {
+      chip.click();
+    });
+
+    const ctxRow = host?.querySelector('[data-testid="next-menu-context"]');
+    expect(ctxRow).not.toBeNull();
+    expect(ctxRow?.textContent).toContain('上下文');
+    expect(ctxRow?.textContent).toContain('1M');
+    expect(ctxRow?.textContent).not.toContain('自定义');
+  });
+
+  it('displays custom mark when context window is not a preset', async () => {
+    await render(
+      <ModelChip
+        lang="zh"
+        selected={flashOption}
+        groups={groups}
+        contextWindow={50000}
+        onPick={vi.fn()}
+        onManage={vi.fn()}
+        onSetContextWindow={vi.fn()}
+      />
+    );
+
+    const chip = host?.querySelector('[data-testid="next-model-chip"]') as HTMLButtonElement;
+    await act(async () => {
+      chip.click();
+    });
+
+    const ctxRow = host?.querySelector('[data-testid="next-menu-context"]');
+    expect(ctxRow?.textContent).toContain('50k · 自定义');
+  });
+
+  it('opens context submenu and picks a preset', async () => {
+    const onSetContext = vi.fn();
+    await render(
+      <ModelChip
+        lang="zh"
+        selected={flashOption}
+        groups={groups}
+        contextWindow={1000000}
+        onPick={vi.fn()}
+        onManage={vi.fn()}
+        onSetContextWindow={onSetContext}
+      />
+    );
+
+    const chip = host?.querySelector('[data-testid="next-model-chip"]') as HTMLButtonElement;
+    await act(async () => {
+      chip.click();
+    });
+
+    const ctxRow = host?.querySelector('[data-testid="next-menu-context"]') as HTMLDivElement;
+    await act(async () => {
+      ctxRow.click();
+    });
+
+    const sub = host?.querySelector('[data-testid="next-sub-context"]');
+    expect(sub).not.toBeNull();
+    expect(sub?.textContent).toContain('DeepSeek V4.1 Flash 的上下文上限');
+
+    const opt128 = host?.querySelector('[data-testid="next-context-option"][data-tokens="128000"]') as HTMLButtonElement;
+    expect(opt128).not.toBeNull();
+
+    await act(async () => {
+      opt128.click();
+    });
+
+    expect(onSetContext).toHaveBeenCalledWith(128000);
+  });
+
+  it('validates custom input and submits parsed token count', async () => {
+    const onSetContext = vi.fn();
+    await render(
+      <ModelChip
+        lang="zh"
+        selected={flashOption}
+        groups={groups}
+        contextWindow={1000000}
+        onPick={vi.fn()}
+        onManage={vi.fn()}
+        onSetContextWindow={onSetContext}
+      />
+    );
+
+    const chip = host?.querySelector('[data-testid="next-model-chip"]') as HTMLButtonElement;
+    await act(async () => {
+      chip.click();
+    });
+
+    const ctxRow = host?.querySelector('[data-testid="next-menu-context"]') as HTMLDivElement;
+    await act(async () => {
+      ctxRow.click();
+    });
+
+    const input = host?.querySelector('[data-testid="next-context-custom"]') as HTMLInputElement;
+    const form = host?.querySelector('form.context-custom') as HTMLFormElement;
+
+    // Invalid input: below range
+    await act(async () => {
+      setInputValue(input, '100');
+    });
+    await act(async () => {
+      form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    });
+
+    expect(host?.querySelector('.context-custom-error')?.textContent).toContain('范围');
+    expect(onSetContext).not.toHaveBeenCalled();
+
+    // Valid input: 65536
+    await act(async () => {
+      setInputValue(input, '65536');
+    });
+    await act(async () => {
+      form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    });
+
+    expect(onSetContext).toHaveBeenCalledWith(65536);
+  });
+
+  it('restores default context window with null', async () => {
+    const onSetContext = vi.fn();
+    await render(
+      <ModelChip
+        lang="zh"
+        selected={flashOption}
+        groups={groups}
+        contextWindow={65536}
+        onPick={vi.fn()}
+        onManage={vi.fn()}
+        onSetContextWindow={onSetContext}
+      />
+    );
+
+    const chip = host?.querySelector('[data-testid="next-model-chip"]') as HTMLButtonElement;
+    await act(async () => {
+      chip.click();
+    });
+
+    const ctxRow = host?.querySelector('[data-testid="next-menu-context"]') as HTMLDivElement;
+    await act(async () => {
+      ctxRow.click();
+    });
+
+    const restoreBtn = host?.querySelector('[data-testid="next-context-restore"]') as HTMLButtonElement;
+    expect(restoreBtn).not.toBeNull();
+    expect(restoreBtn.textContent).toContain('恢复默认');
+
+    await act(async () => {
+      restoreBtn.click();
+    });
+
+    expect(onSetContext).toHaveBeenCalledWith(null);
+  });
+
+  it('disables context row when no model is selected', async () => {
+    await render(
+      <ModelChip
+        lang="zh"
+        selected={null}
+        groups={groups}
+        onPick={vi.fn()}
+        onManage={vi.fn()}
+        onSetContextWindow={vi.fn()}
+      />
+    );
+
+    const chip = host?.querySelector('[data-testid="next-model-chip"]') as HTMLButtonElement;
+    await act(async () => {
+      chip.click();
+    });
+
+    const ctxRow = host?.querySelector('[data-testid="next-menu-context"]');
+    expect(ctxRow?.classList.contains('dis')).toBe(true);
+    expect(ctxRow?.getAttribute('aria-disabled')).toBe('true');
   });
 });

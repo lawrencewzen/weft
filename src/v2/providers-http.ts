@@ -168,6 +168,7 @@ export async function handleProvidersApi(ctx: ProvidersHttpCtx, opts: ProvidersH
         api: body.api,
         apiKey: body.apiKey,
       });
+      opts.onProvidersChanged?.();
       await sendProvider(created);
       return true;
     }
@@ -184,11 +185,13 @@ export async function handleProvidersApi(ctx: ProvidersHttpCtx, opts: ProvidersH
       const connectMethod = String(body.method || '').trim();
       if (connectMethod === 'api_key') {
         const created = await service.connectApiKey(id, String(body.apiKey ?? ''));
+        opts.onProvidersChanged?.();
         await sendProvider(created);
         return true;
       }
       if (connectMethod === 'env') {
         const created = await service.connectEnv(id);
+        opts.onProvidersChanged?.();
         await sendProvider(created);
         return true;
       }
@@ -223,6 +226,7 @@ export async function handleProvidersApi(ctx: ProvidersHttpCtx, opts: ProvidersH
       }
       if (method === 'DELETE') {
         await service.removeProvider(id);
+        opts.onProvidersChanged?.();
         sendV2(res, pathname, method, 204, null);
         return true;
       }
@@ -233,6 +237,7 @@ export async function handleProvidersApi(ctx: ProvidersHttpCtx, opts: ProvidersH
         return true;
       }
       await service.patchProvider(id, body);
+      opts.onProvidersChanged?.();
       await sendProvider(await service.getProvider(id));
       return true;
     }

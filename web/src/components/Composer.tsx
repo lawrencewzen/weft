@@ -39,6 +39,7 @@ import {
 } from '../data/attachments';
 import {
   clampThinkingLevel,
+  computeContextUsage,
   contextIsWarn,
   groupComposerModels,
   hasAvailableModels,
@@ -335,7 +336,15 @@ export function Composer({
     pastes.length > 0;
   const canSend = hasPayload && !locked && !hasUploading && !hasUploadError;
   const stopMode = run.canStop && !hasPayload;
-  const showBanner = showModelControls && !noModel && contextIsWarn(context.level);
+  const effectiveWindow = selected?.contextWindow || context.window;
+  const effectiveContext: ContextUsage = useMemo(() => {
+    if (effectiveWindow === context.window) return context;
+    if (selected?.contextWindowCustom) {
+      return computeContextUsage(context.used, effectiveWindow);
+    }
+    return context;
+  }, [context, effectiveWindow, selected?.contextWindowCustom]);
+  const showBanner = showModelControls && !noModel && contextIsWarn(effectiveContext.level);
   const running = run.status === 'running';
   const showNewline = !running && Boolean(draft.trim());
   const placeholder = noModel
@@ -939,7 +948,7 @@ export function Composer({
           onDragLeave={onDragLeave}
           onDrop={onDrop}
         >
-          {showBanner ? <ContextBanner lang={lang} context={context} onNewChat={openNewChat} /> : null}
+          {showBanner ? <ContextBanner lang={lang} context={effectiveContext} onNewChat={openNewChat} /> : null}
           <div className="composer-body">
             {queue.length || images.length || fileRefs.length || uploads.length || pastes.length ? (
               <div className="composer-tags" data-testid="next-composer-tags">
@@ -1307,7 +1316,7 @@ export function Composer({
                       onPickThinkingLevel={(lvl) => { void pickThinkingLevel(lvl); }}
                       onPickRecent={(option, lvl) => { void pickRecent(option, lvl); }}
                       onManage={openManage}
-                      contextWindow={selected?.contextWindow || context.window}
+                      contextWindow={effectiveWindow}
                       onSetContextWindow={(w) => { void setWindow(w); }}
                     />
                   ) : null}
@@ -1381,7 +1390,7 @@ export function Composer({
                 {showModelControls && !noModel ? (
                   <ContextChip
                     lang={lang}
-                    context={context}
+                    context={effectiveContext}
                     selected={selected}
                   />
                 ) : null}
