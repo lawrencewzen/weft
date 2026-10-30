@@ -70,6 +70,11 @@ test('providers: rows, groups, expand, Grok auto-detect, Anthropic key, custom, 
   await expect(page.getByTestId('next-provider-group')).toHaveCount(1);
   await expect(page.locator('[data-testid=next-provider-group][data-group="apikey"]')).toBeVisible();
   await expect(page.locator('#root')).not.toContainText('服务商');
+  await expect(page.getByTestId('next-provider-page')).not.toContainText('接入 Provider');
+  await expect(page.getByTestId('next-provider-page')).not.toContainText('点一行展开');
+  await expect(page.getByTestId('next-provider-page')).not.toContainText('新对话使用');
+  await expect(page.getByTestId('next-provider-page')).not.toContainText('只保存在本机');
+  await expect(page.getByTestId('next-provider-page')).not.toContainText('上下文接口没返回');
 
   const testBtns = page.getByTestId('next-provider-test');
   const box0 = await testBtns.nth(0).boundingBox();

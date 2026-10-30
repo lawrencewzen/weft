@@ -198,19 +198,13 @@ export function ProviderPage({ lang, onConfirm }: Props) {
   return (
     <div className="next-settings-content" data-testid="next-provider-page">
       <div className="next-settings-head">
-        <div>
-          <h2>{t(lang, 'provider_title')}</h2>
-          <p className="next-settings-sub">{t(lang, 'provider_subtitle')}</p>
-        </div>
+        <h2>{t(lang, 'provider_title')}</h2>
       </div>
 
       {/* 默认模型 */}
       <div className="mp-sec">
         <div className="mp-card mp-def">
-          <span className="mp-def-l">
-            <span>{t(lang, 'provider_default_title')}</span>
-            <span>{t(lang, 'provider_default_hint')}</span>
-          </span>
+          <span className="mp-def-l">{t(lang, 'provider_default_title')}</span>
           <span
             className="mp-pick"
             data-testid="next-provider-default-picker"
@@ -250,7 +244,6 @@ export function ProviderPage({ lang, onConfirm }: Props) {
       <div className="mp-sec">
         <div className="mp-sec-h">
           <b>{t(lang, 'provider_sec_title')}</b>
-          <small>{t(lang, 'provider_sec_hint')}</small>
           <span className="mp-sp" />
           <button
             type="button"

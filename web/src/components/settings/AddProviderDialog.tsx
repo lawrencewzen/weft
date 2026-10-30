@@ -523,7 +523,6 @@ export function AddProviderDialog({
                 <input
                   data-testid={isCustom ? 'next-custom-name' : 'next-config-name'}
                   value={configName}
-                  placeholder={t(lang, 'dlg_add_config_placeholder')}
                   disabled={alreadyConnected}
                   onChange={(e) => setConfigName(e.target.value)}
                 />

@@ -28,8 +28,6 @@ export function ModelTable({
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [editingVal, setEditingVal] = useState<string>('');
 
-  const unknownCount = provider.models.filter((m) => m.contextWindow == null).length;
-
   const handleStartEdit = (
     modelId: string,
     key: 'contextWindow' | 'maxTokens',
@@ -167,22 +165,15 @@ export function ModelTable({
         })}
       </div>
 
-      {(unknownCount > 0 || provider.kind === 'custom') && (
+      {provider.kind === 'custom' && onRefreshModels && (
         <div className="mp-mnote">
-          {unknownCount > 0 && (
-            <span>
-              {t(lang, 'model_unknown_note', { count: unknownCount })}
-            </span>
-          )}
-          {provider.kind === 'custom' && onRefreshModels && (
-            <a
-              style={{ marginLeft: 'auto' }}
-              data-testid="next-refresh-models"
-              onClick={() => void onRefreshModels(provider.id)}
-            >
-              {isRefreshing ? t(lang, 'provider_status_run') : t(lang, 'model_refresh_custom')}
-            </a>
-          )}
+          <a
+            style={{ marginLeft: 'auto' }}
+            data-testid="next-refresh-models"
+            onClick={() => void onRefreshModels(provider.id)}
+          >
+            {isRefreshing ? t(lang, 'provider_status_run') : t(lang, 'model_refresh_custom')}
+          </a>
         </div>
       )}
     </div>

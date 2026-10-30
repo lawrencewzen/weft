@@ -70,6 +70,10 @@ async function openProviders(page) {
   await expect(page.getByTestId('next-settings')).toBeVisible();
   await page.getByTestId('next-settings-nav-providers').click();
   await expect(page.getByTestId('next-provider-add')).toBeVisible();
+  await expect(page.getByTestId('next-provider-page')).not.toContainText('接入 Provider');
+  await expect(page.getByTestId('next-provider-page')).not.toContainText('点一行展开');
+  await expect(page.getByTestId('next-provider-page')).not.toContainText('新对话使用');
+  await expect(page.getByTestId('next-provider-page')).not.toContainText('只保存在本机');
 }
 
 test('settings overlay opens from the sidebar, Esc returns, and other tabs are placeholders', async ({ page }) => {

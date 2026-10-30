@@ -137,6 +137,8 @@ describe('AddProviderDialog', () => {
     expect(text).toContain('Claude Code');
     expect(text).toContain('Antigravity');
     expect(text).toContain('已接入');
+    expect(text).not.toContain('只保存在本机');
+    expect(text).not.toContain('显示在 Provider 列表');
     expect(text).not.toMatch(/\d+\s*个模型/);
     expect(host!.querySelector('[data-vendor="xai"]')?.textContent).toContain('✓');
     expect(host!.querySelector('[data-vendor="deepseek"]')?.className).toContain('dis');
