@@ -74,7 +74,7 @@ async function openProviders(page) {
 
 test('settings overlay opens from the sidebar, Esc returns, and other tabs are placeholders', async ({ page }) => {
   await boot(page);
-  await expect(page).toHaveURL(/http:\/\/127\.0\.0\.1:\d+\/$/);
+  await expect(page).toHaveURL(/\/new$/);
   await page.getByTestId('next-open-settings').click();
   await expect(page.getByTestId('next-settings')).toBeVisible();
   await expect(page).toHaveURL(/\/settings\/general/);
@@ -86,7 +86,7 @@ test('settings overlay opens from the sidebar, Esc returns, and other tabs are p
   await expect(page.getByTestId('next-git-add')).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(page.getByTestId('next-settings')).toHaveCount(0);
-  await expect(page).toHaveURL(/http:\/\/127\.0\.0\.1:\d+\/$/);
+  await expect(page).toHaveURL(/\/new$/);
 });
 
 test('opening /settings/providers keeps the overlay on the Provider page', async ({ page }) => {
