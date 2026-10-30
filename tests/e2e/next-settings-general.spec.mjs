@@ -72,6 +72,12 @@ test('switching language updates UI and server phrases, persists, and old UI fol
   await page.getByTestId('next-open-settings').click();
   await expect(page.getByTestId('next-settings-general')).toBeVisible();
   await expect(page.getByTestId('next-settings')).toContainText('系统设置');
+  const zhOpt = page.getByTestId('next-pref-lang').locator('[data-lang=zh]');
+  const enOpt = page.getByTestId('next-pref-lang').locator('[data-lang=en]');
+  await expect(zhOpt).toHaveText('中文');
+  await expect(zhOpt).toHaveAttribute('lang', 'zh-CN');
+  await expect(enOpt).toHaveText('English');
+  await expect(enOpt).toHaveAttribute('lang', 'en');
   await expect(page.getByTestId('next-status')).not.toContainText(/加载中|Loading/);
   await expect(page.getByTestId('next-item-user')).toBeVisible();
   await expect(page.getByTestId('next-item-user')).toContainText('看看');
@@ -84,6 +90,8 @@ test('switching language updates UI and server phrases, persists, and old UI fol
   await savedLang;
   await expect(page.getByTestId('next-settings')).toContainText('Settings');
   await expect(page.getByTestId('next-settings-nav-general')).toHaveText('General');
+  await expect(zhOpt).toHaveText('中文');
+  await expect(enOpt).toHaveText('English');
   await expect(page.getByTestId('next-open-settings')).toHaveText('Settings');
   await expect(page.getByTestId('next-tool-group-text')).toContainText(/read/i, { timeout: 15000 });
 
