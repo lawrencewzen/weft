@@ -421,7 +421,7 @@ export function ModelChip({
               <div
                 role="button"
                 tabIndex={0}
-                className={`dr${subMenu === 'model' ? ' act' : ''}`}
+                className={`dr${subMenu === 'model' ? ' is-open' : ''}`}
                 data-testid="next-menu-model"
                 onMouseEnter={() => {
                   if (!isInline) setSubMenu('model');
@@ -455,7 +455,7 @@ export function ModelChip({
                 <div
                   role="button"
                   tabIndex={0}
-                  className={`dr${subMenu === 'thinking' ? ' act' : ''}`}
+                  className={`dr${subMenu === 'thinking' ? ' is-open' : ''}`}
                   data-testid="next-menu-thinking"
                   onMouseEnter={() => {
                     if (!isInline) setSubMenu('thinking');
@@ -502,7 +502,7 @@ export function ModelChip({
                 <div
                   role="button"
                   tabIndex={0}
-                  className={`dr${subMenu === 'context' ? ' act' : ''}`}
+                  className={`dr${subMenu === 'context' ? ' is-open' : ''}`}
                   data-testid="next-menu-context"
                   onMouseEnter={() => {
                     if (!isInline) setSubMenu('context');
