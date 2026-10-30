@@ -15,7 +15,6 @@ describe('i18n empty home and branding', () => {
     expect(t('zh', 'ws_chip_add_project')).toBe('添加项目…');
     expect(t('zh', 'chats_label')).toBe('对话');
     expect(t('zh', 'draft_hero_chat')).toBe('想做什么？');
-    expect(t('zh', 'draft_hint_chat')).toBe('没有指定项目，可以直接发消息。Agent 会在这个对话自己的目录里工作。');
   });
 
   it('provides no-project chat texts in en', () => {
@@ -26,7 +25,6 @@ describe('i18n empty home and branding', () => {
     expect(t('en', 'ws_chip_add_project')).toBe('Add project…');
     expect(t('en', 'chats_label')).toBe('Chats');
     expect(t('en', 'draft_hero_chat')).toBe('What should we do?');
-    expect(t('en', 'draft_hint_chat')).toBe('No project selected. You can send a message right away. The agent works in this chat’s folder.');
   });
 
   it('language option labels are autonyms in both UI languages', () => {

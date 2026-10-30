@@ -158,8 +158,10 @@ test('english UI chrome has no Chinese on the main surfaces', async ({ page }) =
   await expect(page.getByTestId('next-ws-chip-new')).toContainText('Add project…');
   await assertNoChineseChrome(page, 'project chip menu');
   await noneOpt.click();
-  await expect(page.getByTestId('next-draft-hint')).toContainText('What should we do?');
-  await expect(heroChip).toContainText('Choose project');
+  await expect(page.getByTestId('next-draft-hint')).toHaveText('What should we do?');
+  await expect(page.getByTestId('next-draft-hero-ws')).toHaveCount(0);
+  await expect(page.locator('.draft-hero-hint')).toHaveCount(0);
+  await expect(page.getByTestId('next-ws-chip')).toContainText('Choose project');
   await assertNoChineseChrome(page, 'new chat no project');
 
   // ⌘K search
@@ -218,7 +220,9 @@ test('english UI chrome has no Chinese on the main surfaces', async ({ page }) =
   await expect(page.getByTestId('next-ws-empty-add')).toContainText('Add project');
   await expect(page.getByTestId('next-chats-section')).toHaveText('Chats');
   await expect(page.getByTestId('next-ws-chip')).toContainText('Choose project');
-  await expect(page.getByTestId('next-draft-hint')).toContainText('What should we do?');
+  await expect(page.getByTestId('next-draft-hint')).toHaveText('What should we do?');
+  await expect(page.getByTestId('next-draft-hero-ws')).toHaveCount(0);
+  await expect(page.locator('.draft-hero-hint')).toHaveCount(0);
   await page.getByTestId('next-ws-chip').click();
   await expect(page.getByTestId('next-ws-chip-empty')).toContainText('No projects yet');
   await expect(page.getByTestId('next-ws-chip-new')).toContainText('Add project…');

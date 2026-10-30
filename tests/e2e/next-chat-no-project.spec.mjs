@@ -20,6 +20,9 @@ test('new chat defaults to 选择项目 and sending creates a chat in the 对话
     await expect(page).toHaveURL(/\/new$/);
     await expect(page.getByTestId('next-ws-chip')).toContainText('选择项目');
     await expect(page.getByTestId('next-ws-chip')).toHaveClass(/is-empty/);
+    await expect(page.getByTestId('next-draft-hint')).toHaveText('想做什么？');
+    await expect(page.getByTestId('next-draft-hero-ws')).toHaveCount(0);
+    await expect(page.locator('.draft-hero-hint')).toHaveCount(0);
     await page.getByTestId('next-ws-chip').click();
     await expect(page.getByTestId('next-ws-chip-menu')).toBeVisible();
     await expect(page.locator(`[data-testid=next-ws-chip-option][data-id="${ws.body.id}"]`)).toBeVisible();
@@ -67,6 +70,9 @@ test('home with no projects is a no-project draft and can send', async ({ page }
     await expect(page.getByTestId('next-home-title')).toHaveCount(0);
     await expect(page.getByTestId('next-home-add')).toHaveCount(0);
     await expect(page.getByTestId('next-ws-chip')).toContainText('选择项目');
+    await expect(page.getByTestId('next-draft-hint')).toHaveText('想做什么？');
+    await expect(page.getByTestId('next-draft-hero-ws')).toHaveCount(0);
+    await expect(page.locator('.draft-hero-hint')).toHaveCount(0);
     await expect(page.getByTestId('next-composer-input')).toBeEnabled();
     await expect(page.getByTestId('next-ws-empty-add')).toBeVisible();
     await page.getByTestId('next-ws-chip').click();
@@ -93,6 +99,9 @@ test('English UI uses Chats and Choose project', async ({ page }) => {
     await loginNext(page, srv);
     await expect(page).toHaveURL(/\/new$/);
     await expect(page.getByTestId('next-ws-chip')).toContainText('Choose project');
+    await expect(page.getByTestId('next-draft-hint')).toHaveText('What should we do?');
+    await expect(page.getByTestId('next-draft-hero-ws')).toHaveCount(0);
+    await expect(page.locator('.draft-hero-hint')).toHaveCount(0);
     await expect(page.getByTestId('next-composer-git')).toHaveCount(0);
 
     await page.getByTestId('next-composer-input').fill('hello without a project');

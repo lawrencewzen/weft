@@ -128,6 +128,7 @@ test('prototype runs from file:// with mock data, no network and no console erro
   await expect(page.getByTestId('next-draft-hero-ws')).toContainText('weft');
   await expect(page.getByTestId('next-draft-hero-ws')).toHaveCSS('font-size', '28px');
   await expect(page.getByTestId('next-draft-hint')).toContainText('要在');
+  await expect(page.locator('.draft-hero-hint')).toContainText('weft');
   await expect(page.getByTestId('next-ws-chip')).toContainText('weft');
 
   // New chat right pane has changes, files, and term tabs.
