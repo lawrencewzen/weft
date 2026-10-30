@@ -250,23 +250,28 @@ test('a conversation created through the old API appears in the new UI without a
   }
 });
 
-test('860px width collapses the sidebar and does not scroll horizontally', async ({ page }) => {
+test('774px viewport (860 CSS px × 0.9) collapses the sidebar and does not scroll horizontally', async ({ page }) => {
   const prepared = await prepareWorkspaces(['narrow']);
   const srv = await startServer({ extraEnv: { WEFT_WORKSPACE_ROOT: prepared.root } });
   try {
-    await page.setViewportSize({ width: 860, height: 800 });
+    await page.setViewportSize({ width: 774, height: 800 });
     const ws = await createWorkspace(srv, 'narrow', prepared.dirs[0]);
     await createConversation(srv, ws.id, 'chat');
     await loginNext(page, srv);
     // Closed overlay panels stay in the tree (no display:none); assert they are not visible.
     await expect(page.getByTestId('next-sidebar')).toBeHidden();
-    const box = await page.evaluate(() => ({
-      scrollWidth: document.documentElement.scrollWidth,
-      clientWidth: document.documentElement.clientWidth,
-      bodyScroll: document.body.scrollWidth,
-    }));
-    expect(box.scrollWidth).toBeLessThanOrEqual(box.clientWidth + 1);
-    expect(box.bodyScroll).toBeLessThanOrEqual(box.clientWidth + 1);
+    const box = await page.evaluate(() => {
+      const html = document.documentElement;
+      const body = document.body;
+      return {
+        htmlVisualW: html.getBoundingClientRect().width,
+        innerW: window.innerWidth,
+        bodyScroll: body.scrollWidth,
+        bodyClient: body.clientWidth,
+      };
+    });
+    expect(box.htmlVisualW).toBeLessThanOrEqual(box.innerW + 1);
+    expect(box.bodyScroll).toBeLessThanOrEqual(box.bodyClient + 1);
   } finally {
     await srv.kill();
   }

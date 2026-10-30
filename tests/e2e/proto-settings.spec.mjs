@@ -110,8 +110,9 @@ test('providers: rows, groups, expand, Grok auto-detect, Anthropic key, custom, 
   const addClose = page.getByTestId('next-add-close');
   await expect(addClose).toHaveCSS('border-style', 'none');
   const addCloseBox = await addClose.boundingBox();
-  expect(addCloseBox?.width).toBe(28);
-  expect(addCloseBox?.height).toBe(28);
+  // 28px CSS × --ui-zoom 0.9 → 25.2 visual (Playwright boundingBox)
+  expect(Math.abs((addCloseBox?.width ?? 0) - 25.2)).toBeLessThan(1);
+  expect(Math.abs((addCloseBox?.height ?? 0) - 25.2)).toBeLessThan(1);
   await expect(page.getByTestId('next-add-model-dropdown')).toBeEnabled({ timeout: 10_000 });
   await page.getByTestId('next-add-cancel').click();
   await expect(page.getByTestId('next-add-dialog')).toHaveCount(0);

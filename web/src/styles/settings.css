@@ -595,7 +595,7 @@ html[data-theme$="-dark"] .ns-ws-dialog {
 .ns-proj > span { color: var(--ns-mute2); font-size: 12px; }
 .ns-ws-progress { display: flex; align-items: center; gap: 8px; color: var(--ns-mute2); font-size: 12.5px; }
 
-@media (max-width: 900px) {
+@media (max-width: 810px) {
   .ns-card-grid { grid-template-columns: 1fr; }
   .ns-git-row { grid-template-columns: 16px minmax(0, 1fr); }
   .ns-git-acts { grid-column: 1 / -1; justify-content: flex-end; }

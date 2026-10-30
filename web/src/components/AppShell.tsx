@@ -19,6 +19,7 @@ import {
   writeLeftWidth,
 } from '../data/layout';
 import { usePanelMotionReady } from '../data/panelMotion';
+import { cssViewportWidth, readUiZoom } from '../data/uiZoom';
 import { LeftPanelProvider, useLeftPanel } from '../data/leftPanelContext';
 import { RightPaneProvider, useRightLayout } from '../data/rightPaneContext';
 import { conversationPath, draftPath, navigate, newChatPath, rememberSettingsBehind } from '../data/nav';
@@ -188,7 +189,7 @@ function AppShellLayout({
   rightWRef.current = width;
   const leftOpenRef = useRef(leftOpen);
   leftOpenRef.current = leftOpen;
-  const lastWidth = useRef(window.innerWidth);
+  const lastWidth = useRef(cssViewportWidth());
 
   const activeConversationId = route.name === 'conversation'
     ? route.id
@@ -213,7 +214,7 @@ function AppShellLayout({
 
   useEffect(() => {
     const onResize = () => {
-      const vw = window.innerWidth;
+      const vw = cssViewportWidth();
       if (lastWidth.current >= RIGHT_OVERLAY_MAX && vw < RIGHT_OVERLAY_MAX) {
         setOpen(false);
       }
@@ -269,17 +270,19 @@ function AppShellLayout({
     const startX = ev.clientX;
     const startLeft = leftWRef.current;
     const startRight = rightWRef.current;
+    const zoom = readUiZoom();
     setDragging(true);
     const move = (e: globalThis.MouseEvent) => {
+      const dx = (e.clientX - startX) / zoom;
       if (side === 'left') {
-        setLeftW(clampNum(startLeft + (e.clientX - startX), LEFT_W_MIN, LEFT_W_MAX));
+        setLeftW(clampNum(startLeft + dx, LEFT_W_MIN, LEFT_W_MAX));
         return;
       }
       const max = Math.min(
         RIGHT_W_MAX,
-        Math.max(RIGHT_W_MIN, window.innerWidth - (leftOpenRef.current ? leftWRef.current : 0) - 420),
+        Math.max(RIGHT_W_MIN, cssViewportWidth() - (leftOpenRef.current ? leftWRef.current : 0) - 420),
       );
-      setWidth(clampNum(startRight - (e.clientX - startX), RIGHT_W_MIN, max));
+      setWidth(clampNum(startRight - dx, RIGHT_W_MIN, max));
     };
     const up = () => {
       window.removeEventListener('mousemove', move);
@@ -296,8 +299,8 @@ function AppShellLayout({
     const target = ev.target as HTMLElement;
     if (!target.closest?.('.col-center')) return;
     if (overlayKeepOpen(target)) return;
-    if (isOverlayWidth(window.innerWidth) && leftOpen) setLeftOpen(false);
-    if (isRightOverlayWidth(window.innerWidth) && open) setOpen(false);
+    if (isOverlayWidth(cssViewportWidth()) && leftOpen) setLeftOpen(false);
+    if (isRightOverlayWidth(cssViewportWidth()) && open) setOpen(false);
   }
 
   const classes = [

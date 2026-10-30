@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef } from 'react';
+import { cssViewportHeight, cssViewportWidth, visualToCss } from '../data/uiZoom';
 
 export type CtxMenuItem =
   | { sep: true; action?: undefined; label?: undefined }
@@ -27,10 +28,10 @@ export function CtxMenu({ x, y, title, items, onClose }: Props) {
     if (!menu) return;
     const w = menu.offsetWidth || 220;
     const h = menu.offsetHeight || 120;
-    let left = x;
-    let top = y;
-    left = Math.max(8, Math.min(left, window.innerWidth - w - 8));
-    top = Math.max(8, Math.min(top, window.innerHeight - h - 8));
+    let left = visualToCss(x);
+    let top = visualToCss(y);
+    left = Math.max(8, Math.min(left, cssViewportWidth() - w - 8));
+    top = Math.max(8, Math.min(top, cssViewportHeight() - h - 8));
     menu.style.left = `${left}px`;
     menu.style.top = `${top}px`;
   }, [x, y, items, title]);
@@ -51,7 +52,7 @@ export function CtxMenu({ x, y, title, items, onClose }: Props) {
   }, [onClose]);
 
   return (
-    <div ref={ref} className="ctx-menu" data-testid="next-ctx-menu" role="menu" style={{ left: x, top: y }}>
+    <div ref={ref} className="ctx-menu" data-testid="next-ctx-menu" role="menu" style={{ left: visualToCss(x), top: visualToCss(y) }}>
       {title ? <div className="ctx-menu-title">{title}</div> : null}
       {items.map((item, i) => (
         item.sep ? (

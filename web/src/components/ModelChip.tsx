@@ -14,6 +14,7 @@ import {
   type ComposerModelOption,
   type ThinkingLevel,
 } from '../data/composerModel';
+import { cssViewportWidth, visualToCss } from '../data/uiZoom';
 import { formatTokenCount, t } from '../i18n';
 import { BrandIcon } from './BrandIcon';
 import { GaugeIcon } from './GaugeIcon';
@@ -72,8 +73,9 @@ export function ModelChip({
     if (!wrap.current) return;
     const rect = wrap.current.getBoundingClientRect();
     // Primary menu ~300px + gap 8px + submenu ~300px + 16px padding
-    const needed = rect.left + 300 + 8 + 300 + 16;
-    setIsInline(needed > window.innerWidth || window.innerWidth < 640);
+    const needed = visualToCss(rect.left) + 300 + 8 + 300 + 16;
+    const cssW = cssViewportWidth();
+    setIsInline(needed > cssW || cssW < 640);
   }, []);
 
   const handleOpen = useCallback(() => {
