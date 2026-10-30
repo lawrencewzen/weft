@@ -156,8 +156,6 @@ declare global {
   interface Window {
     /** Every mocked `/api` call, in order. Read by the prototype e2e tests. */
     __protoRequests?: Array<{ method: string; url: string }>;
-    __protoDb?: ReturnType<typeof createDb>;
-    __protoHub?: MockHub;
   }
 }
 
@@ -173,8 +171,6 @@ export function installMockBackend(): void {
   seedLastOpened();
   const db = createDb();
   const hub = createHub(readTopic(db));
-  window.__protoDb = db;
-  window.__protoHub = hub;
   installFetch(db, hub);
   installEventSource(hub);
   installResetButton();

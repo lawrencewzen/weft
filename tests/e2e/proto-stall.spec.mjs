@@ -53,41 +53,16 @@ test('c-rich has no stall strip', async ({ page }) => {
 
 test('stall strip and agents strip stack correctly without inner border-radius when both present', async ({ page }) => {
   const state = await openProto(page);
-  await page.locator('[data-testid=next-conv-row][data-id="c-rich"]').click();
-  await expect(page).toHaveURL(/#\/c\/c-rich$/);
+  const websiteNode = page.locator('[data-testid=next-ws-node][data-id="ws-website"]');
+  if (await websiteNode.locator('.sb-conv-list').isHidden()) {
+    await websiteNode.getByTestId('next-ws-toggle').click();
+  }
+  await page.locator('[data-testid=next-conv-row][data-id="c-site-1"]').click();
+  await expect(page).toHaveURL(/#\/c\/c-site-1$/);
 
-  // c-rich initially has agents strip
-  const agentsStrip = page.getByTestId('next-agents-strip');
-  await expect(agentsStrip).toBeVisible();
-
-  // Construct stalled state on c-rich while keeping unended subagents
-  await page.evaluate(() => {
-    const db = window.__protoDb;
-    const hub = window.__protoHub;
-    const conv = db?.conversations.get('c-rich');
-    if (conv && hub) {
-      conv.view.run = {
-        status: 'running',
-        startedAt: Date.now() - 300_000,
-        pendingText: null,
-        canSend: true,
-        canStop: true,
-        lockedReason: null,
-        error: null,
-        lastActivityAt: Date.now() - 180_000,
-        stalledSince: Date.now() - 180_000,
-        activeTool: { name: 'bash', startedAt: Date.now() - 200_000, summary: 'npm test' },
-      };
-      conv.run = { id: 'run-stall-test', cancelled: false, steers: [], followUps: [] };
-      hub.publish({
-        topic: `conversations/${conv.view.id}`,
-        event: 'upsert',
-        data: { entity: 'conversation', value: conv.view },
-      });
-    }
-  });
-
+  // c-site-1 seed is stalled and has an unended subagent; no mock flow auto-advances.
   const stallStrip = page.getByTestId('next-stall-strip');
+  const agentsStrip = page.getByTestId('next-agents-strip');
   await expect(stallStrip).toBeVisible();
   await expect(agentsStrip).toBeVisible();
 
