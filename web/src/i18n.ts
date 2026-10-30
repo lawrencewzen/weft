@@ -357,8 +357,6 @@ const zh = {
   dlg_connected_models_found: '已连接，获取到 {count} 个模型',
   lang_label: '语言',
   lang_desc: '界面显示语言',
-  lang_zh: '中文',
-  lang_en: 'English',
   appearance_label: '外观',
   appearance_desc: '跟随系统或固定浅色 / 深色',
   mode_light: '浅色',
@@ -876,8 +874,6 @@ const en: Record<keyof typeof zh, string> = {
   dlg_connected_models_found: 'Connected, found {count} models',
   lang_label: 'Language',
   lang_desc: 'Interface display language',
-  lang_zh: 'Chinese',
-  lang_en: 'English',
   appearance_label: 'Appearance',
   appearance_desc: 'Follow system or fixed light / dark',
   mode_light: 'Light',
@@ -1042,6 +1038,12 @@ const en: Record<keyof typeof zh, string> = {
 const DICT: Record<Lang, Record<keyof typeof zh, string>> = { zh, en };
 
 export type I18nKey = keyof typeof zh;
+
+/** Autonyms: always shown in the language they name, so a mis-switched UI is recoverable. */
+export const LANGUAGE_NAMES: Record<Lang, string> = {
+  zh: '中文',
+  en: 'English',
+};
 
 export function t(lang: Lang, key: I18nKey, params?: Record<string, string | number>): string {
   let out = DICT[lang]?.[key] || zh[key] || key;

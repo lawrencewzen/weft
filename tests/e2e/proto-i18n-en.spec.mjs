@@ -50,6 +50,8 @@ const EXCLUDE_SEL = [
   '.ws-chip-path',
   '[data-testid="next-change-by"]',
   '.composer-queue-text',
+  // Language autonyms stay in their own script (T68-2).
+  '[lang="zh-CN"]',
 ].join(',');
 
 /**
@@ -96,14 +98,30 @@ async function assertNoChineseChrome(page, label, rootSel) {
   expect(hits, `${label}: ${hits.slice(0, 15).join(' | ')}`).toEqual([]);
 }
 
+/**
+ * Language options always use autonyms, regardless of the current UI language.
+ * @param {import('@playwright/test').Page} page
+ */
+async function assertLanguageAutonyms(page) {
+  const zh = page.locator('[data-testid=next-pref-lang] button[data-lang="zh"]');
+  const en = page.locator('[data-testid=next-pref-lang] button[data-lang="en"]');
+  await expect(zh).toHaveText('中文');
+  await expect(zh).toHaveAttribute('lang', 'zh-CN');
+  await expect(en).toHaveText('English');
+  await expect(en).toHaveAttribute('lang', 'en');
+}
+
 test('english UI chrome has no Chinese on the main surfaces', async ({ page }) => {
   const state = await openProto(page);
 
   await page.getByTestId('next-open-settings').click();
   await expect(page.getByTestId('next-settings-general')).toBeVisible();
+  await expect(page.getByTestId('next-settings-nav-general')).toHaveText('通用');
+  await assertLanguageAutonyms(page);
   await page.locator('[data-testid=next-pref-lang] button[data-lang="en"]').click();
   await expect(page.getByTestId('next-settings-nav-general')).toHaveText('General');
   await expect(page.locator('html')).toHaveAttribute('lang', 'en');
+  await assertLanguageAutonyms(page);
 
   const settingsPages = [
     ['general', 'next-settings-general'],

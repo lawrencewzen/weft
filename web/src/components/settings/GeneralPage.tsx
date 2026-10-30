@@ -18,7 +18,7 @@ import {
   type FontSize,
   type ThemeFamily,
 } from '../../data/prefs';
-import { t, type I18nKey } from '../../i18n';
+import { LANGUAGE_NAMES, t, type I18nKey } from '../../i18n';
 
 const APPEARANCE_KEYS: Record<Appearance, I18nKey> = {
   light: 'mode_light',
@@ -96,17 +96,19 @@ export function GeneralPage({ lang }: Props) {
             type="button"
             className={lang === 'zh' ? 'is-on' : ''}
             data-lang="zh"
+            lang="zh-CN"
             onClick={() => persist({ lang: 'zh' })}
           >
-            {t(lang, 'lang_zh')}
+            {LANGUAGE_NAMES.zh}
           </button>
           <button
             type="button"
             className={lang === 'en' ? 'is-on' : ''}
             data-lang="en"
+            lang="en"
             onClick={() => persist({ lang: 'en' })}
           >
-            {t(lang, 'lang_en')}
+            {LANGUAGE_NAMES.en}
           </button>
         </div>
       </div>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { t } from './i18n';
+import { LANGUAGE_NAMES, t } from './i18n';
 
 describe('i18n empty home and branding', () => {
   it('translates app_name to Weft in both languages', () => {
@@ -21,6 +21,11 @@ describe('i18n empty home and branding', () => {
     expect(t('en', 'chats_label')).toBe('Chats');
     expect(t('en', 'draft_hero_chat')).toBe('What should we do?');
     expect(t('en', 'draft_hint_chat')).toBe('No project selected. You can send a message right away. The agent works in this chat’s folder.');
+  });
+
+  it('language option labels are autonyms in both UI languages', () => {
+    expect(LANGUAGE_NAMES.zh).toBe('中文');
+    expect(LANGUAGE_NAMES.en).toBe('English');
   });
 
   it('english unauthenticated copy is English', () => {
