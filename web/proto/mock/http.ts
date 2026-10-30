@@ -15,8 +15,9 @@ import {
 } from './db';
 import { continueConversation, sendMessage, stopConversation, withdrawMessage } from './run';
 import { parseSendImages } from '../../../src/v2/views/message-images';
+import { mockProviderName } from './providerNames';
 import { replyInSubThread, stopSubThread, subagentKey } from './subagents';
-import { branchesOf, tokenFails } from './extensions';
+import { branchesOf, pluginForLang, tokenFails } from './extensions';
 import {
   EXTERNAL_TOUCH_MS,
   createRepo,
@@ -148,8 +149,14 @@ function subagentSnapshot(thread: MockSubThread, lang: Lang): unknown {
   };
 }
 
-function providerView(provider: Provider): Provider {
-  return { ...provider, models: provider.models.map((model) => ({ ...model })) };
+function providerView(provider: Provider, lang: Lang): Provider {
+  return {
+    ...provider,
+    name: provider.kind === 'custom'
+      ? provider.name
+      : mockProviderName(provider.id, provider.name, lang),
+    models: provider.models.map((model) => ({ ...model })),
+  };
 }
 
 function publishProviderGone(hub: MockHub, id: string): void {
@@ -343,7 +350,7 @@ function handleConnect(
       if (first) db.defaultModel = { providerId: id, modelId: first.id };
     }
     publishProviders(db, hub);
-    return ok({ provider: providerView(provider) });
+    return ok({ provider: providerView(provider, lang) });
   }
 
   if (method === 'env') {
@@ -367,7 +374,7 @@ function handleConnect(
       if (first) db.defaultModel = { providerId: id, modelId: first.id };
     }
     publishProviders(db, hub);
-    return ok({ provider: providerView(provider) });
+    return ok({ provider: providerView(provider, lang) });
   }
 
   if (method === 'oauth') {
@@ -407,7 +414,7 @@ function handleCustomProvider(
   body: Record<string, unknown>,
   lang: Lang,
 ): MockReply {
-  const name = str(body.name).trim() || '自定义接口';
+  const name = str(body.name).trim() || (lang === 'en' ? 'Custom endpoint' : '自定义接口');
   const baseUrl = str(body.baseUrl).trim();
   const api = (str(body.api) as CustomApiProtocol) || 'openai-completions';
   const apiKey = str(body.apiKey).trim();
@@ -471,7 +478,7 @@ function handleCustomProvider(
     if (first) db.defaultModel = { providerId: id, modelId: first.id };
   }
   publishProviders(db, hub);
-  return ok({ provider: providerView(provider) });
+  return ok({ provider: providerView(provider, lang) });
 }
 
 function handlePatchProvider(
@@ -479,6 +486,7 @@ function handlePatchProvider(
   hub: MockHub,
   provider: Provider,
   body: Record<string, unknown>,
+  lang: Lang,
 ): MockReply {
   if (Array.isArray(body.enabled)) {
     const set = new Set(body.enabled.map(String));
@@ -540,7 +548,7 @@ function handlePatchProvider(
       }
     }
   }
-  return ok({ provider: providerView(provider) });
+  return ok({ provider: providerView(provider, lang) });
 }
 
 /* ---------- workspace directory browser ---------- */
@@ -882,7 +890,7 @@ export function handleMockRequest(db: MockDb, hub: MockHub, rawUrl: string, init
   /* ---- providers ---- */
   if (path === '/api/v2/providers' && method === 'GET') {
     return ok({
-      providers: db.providers.map((provider) => providerView(provider)),
+      providers: db.providers.map((provider) => providerView(provider, lang)),
       defaultModel: db.defaultModel,
     });
   }
@@ -890,6 +898,7 @@ export function handleMockRequest(db: MockDb, hub: MockHub, rawUrl: string, init
     const connectedIds = new Set(db.providers.map((p) => p.id));
     const list = MOCK_AVAILABLE_PROVIDERS.map((item) => ({
       ...item,
+      name: mockProviderName(item.id, item.name, lang),
       connected: connectedIds.has(item.id),
     }));
     return ok({
@@ -990,8 +999,8 @@ export function handleMockRequest(db: MockDb, hub: MockHub, rawUrl: string, init
     const id = decodeURIComponent(providerMatch[1]);
     const provider = db.providers.find((row) => row.id === id);
     if (!provider) return fail(404, 'Provider 不存在');
-    if (method === 'PATCH') return handlePatchProvider(db, hub, provider, body);
-    if (method === 'GET') return ok({ provider: providerView(provider) });
+    if (method === 'PATCH') return handlePatchProvider(db, hub, provider, body, lang);
+    if (method === 'GET') return ok({ provider: providerView(provider, lang) });
     if (method === 'DELETE') {
       db.providers = db.providers.filter((row) => row.id !== id);
       publishProviderGone(hub, id);
@@ -1169,7 +1178,7 @@ export function handleMockRequest(db: MockDb, hub: MockHub, rawUrl: string, init
 
   /* ---- extensions ---- */
   if (path === '/api/v2/plugins' && method === 'GET') {
-    return ok({ plugins: db.plugins });
+    return ok({ plugins: db.plugins.map((plugin) => pluginForLang(plugin, lang)) });
   }
   if (path === '/api/v2/plugins' && method === 'POST') {
     return installPlugin(db, hub, body, lang);

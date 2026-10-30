@@ -1,4 +1,6 @@
 import type { Entity } from './hub';
+import { pluginForLang } from './extensions';
+import { mockProviderName } from './providerNames';
 import { tr, type ConversationSummary, type EntityValue, type Lang, type MockConv, type MockDb, type MockGroup, type MockItem, type MockTool, type Subagent, type ToolCall } from './types';
 
 const LIVE_SUBAGENT_STATUS = new Set<Subagent['status']>(['running', 'stuck', 'waiting']);
@@ -49,7 +51,12 @@ export function providersEntities(db: MockDb): TopicEntities {
   const out: TopicEntities = db.providers.map((provider) => ({
     entity: 'provider',
     id: provider.id,
-    value: provider as unknown as object,
+    value: (lang: Lang) => ({
+      ...provider,
+      name: provider.kind === 'custom'
+        ? provider.name
+        : mockProviderName(provider.id, provider.name, lang),
+    }),
   }));
   out.push({ entity: 'defaults', id: 'self', value: { model: db.defaultModel } });
   return out;
@@ -57,7 +64,9 @@ export function providersEntities(db: MockDb): TopicEntities {
 
 export function extensionsEntities(db: MockDb): TopicEntities {
   const out: TopicEntities = [];
-  for (const plugin of db.plugins) out.push({ entity: 'plugin', id: plugin.id, value: plugin as unknown as object });
+  for (const plugin of db.plugins) {
+    out.push({ entity: 'plugin', id: plugin.id, value: (lang: Lang) => pluginForLang(plugin, lang) });
+  }
   for (const skill of db.skills) out.push({ entity: 'skill', id: skill.id, value: skill as unknown as object });
   for (const conn of db.gitConnections) {
     out.push({ entity: 'git_connection', id: conn.id, value: conn as unknown as object });

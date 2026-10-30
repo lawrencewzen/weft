@@ -133,7 +133,7 @@ describe('StallStrip component', () => {
         'en'
       );
       const enToolEl = host!.querySelector('[data-testid="next-stall-tool"]');
-      expect(enToolEl!.textContent).toContain('running');
+      expect(enToolEl!.textContent).toContain('Running');
       expect(enToolEl!.querySelector('code')!.textContent).toBe('npm run build -- --watch');
     });
 

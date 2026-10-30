@@ -20,6 +20,12 @@ describe('i18n empty home and branding', () => {
     expect(t('en', 'no_project')).toBe('No project');
     expect(t('en', 'chats_label')).toBe('Chats');
     expect(t('en', 'draft_hero_chat')).toBe('What should we do?');
-    expect(t('en', 'draft_hint_chat')).toBe('No project selected. Send a message to start. The agent works in this chat’s own folder.');
+    expect(t('en', 'draft_hint_chat')).toBe('No project selected. You can send a message right away. The agent works in this chat’s folder.');
+  });
+
+  it('english unauthenticated copy is English', () => {
+    expect(t('en', 'unauthenticated')).toBe('Open the new web UI with weft open');
+    expect(t('en', 'unauthenticated')).not.toMatch(/[\u4e00-\u9fff]/);
+    expect(t('zh', 'unauthenticated')).toBe('请用 weft open 打开新版网页端');
   });
 });

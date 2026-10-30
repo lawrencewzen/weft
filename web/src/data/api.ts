@@ -1,4 +1,6 @@
 import type { components } from '../../../src/v2/contract.gen';
+import { t } from '../i18n';
+import { getPreferredLang } from './lang';
 
 export type ConversationSnapshot = components['schemas']['ConversationSnapshot'];
 export type ConversationSummary = components['schemas']['ConversationSummary'];
@@ -120,7 +122,7 @@ export function isConflictError(err: unknown): err is ConflictError {
 }
 
 export class UnauthenticatedError extends ApiError {
-  constructor(message = '未登录') {
+  constructor(message = t(getPreferredLang(), 'err_unauthenticated')) {
     super(message, { status: 401, code: 'E_UNAUTHORIZED' });
     this.name = 'UnauthenticatedError';
   }
@@ -172,7 +174,7 @@ function parseErrorBody(
     }
     return { error: trimmed };
   }
-  return { error: `${status} ${statusText}`.trim() || 'request failed' };
+  return { error: `${status} ${statusText}`.trim() || t(getPreferredLang(), 'err_request_failed') };
 }
 
 function isMutating(method: string): boolean {
@@ -204,12 +206,12 @@ async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
     if (res.status === 204 || res.ok) {
       return undefined as T;
     }
-    throw new ApiError('empty response', { status: res.status });
+    throw new ApiError(t(getPreferredLang(), 'err_empty_response'), { status: res.status });
   }
   try {
     return JSON.parse(text) as T;
   } catch {
-    throw new ApiError('invalid json', { status: res.status });
+    throw new ApiError(t(getPreferredLang(), 'err_invalid_json'), { status: res.status });
   }
 }
 

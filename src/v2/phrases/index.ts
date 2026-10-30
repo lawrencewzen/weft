@@ -41,3 +41,18 @@ export function interpolate(template: string, params?: Record<string, unknown>):
 export function phrase(lang: Lang, key: string, params?: Record<string, unknown>): string {
   return interpolate(lookupPhrase(lang, key), params);
 }
+
+const PROVIDER_NAME_KEYS: Record<string, string> = {
+  'moonshotai-cn': 'provider_name_moonshotai_cn',
+  zai: 'provider_name_zai',
+  'qwen-token-plan-cn': 'provider_name_qwen_token_plan_cn',
+  'minimax-cn': 'provider_name_minimax_cn',
+  xiaomi: 'provider_name_xiaomi',
+};
+
+/** Localized display name for a built-in provider id. Falls back to `fallback`. */
+export function localizedProviderName(id: string, fallback: string, lang: Lang): string {
+  const key = PROVIDER_NAME_KEYS[id];
+  if (key && hasPhrase(lang, key)) return phrase(lang, key);
+  return fallback || id;
+}

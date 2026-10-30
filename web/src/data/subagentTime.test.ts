@@ -45,7 +45,7 @@ describe('subagent time text', () => {
       lastActivityAt: NOW - 65_000,
     });
     expect(subagentTimeText(stuck, 'zh', NOW)).toBe('无动作 01:05');
-    expect(subagentTimeText(stuck, 'en', NOW)).toBe('idle 01:05');
+    expect(subagentTimeText(stuck, 'en', NOW)).toBe('Idle 01:05');
   });
 
   it('shows terminal labels for done, stopped and failed', () => {

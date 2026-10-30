@@ -8,8 +8,6 @@ import { parseRoute, viewRouteWhileSettings, type AppRoute } from './route';
 import { AppShell } from './components/AppShell';
 import type { AboutService } from './components/settings/AboutPage';
 
-const UNAUTH = '请用 weft open 打开新版网页端';
-
 function usePathname(): string {
   const [path, setPath] = useState(() => readAddressPath());
   useEffect(() => subscribeAddress(() => setPath(readAddressPath())), []);
@@ -48,7 +46,6 @@ export function App() {
         const res = await fetch('/api/v2/service', { signal: ac.signal, credentials: 'same-origin' });
         if (res.status === 401) {
           setUnauth(true);
-          setError(UNAUTH);
           return;
         }
         if (!res.ok) {
@@ -83,7 +80,7 @@ export function App() {
       <div data-testid="next-app">
         <div className="next-home">
           <h1>{t(lang, 'app_name')}</h1>
-          <p className="next-error" data-testid="next-error">{error || UNAUTH}</p>
+          <p className="next-error" data-testid="next-error">{t(lang, 'unauthenticated')}</p>
         </div>
       </div>
     );
