@@ -153,6 +153,8 @@ export function normalizeProvidersV3(raw) {
     if (kind === 'builtin') {
       const provider = { id, kind, enabled, overrides };
       if (lastTest) provider.lastTest = lastTest;
+      const name = typeof item.name === 'string' ? item.name.trim().slice(0, 80) : '';
+      if (name) provider.name = name;
       out.push(provider);
       continue;
     }

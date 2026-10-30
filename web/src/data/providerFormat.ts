@@ -58,7 +58,7 @@ export function parseContextInput(raw: string | number | null | undefined): numb
 }
 
 /**
- * 新接入的内置或自定义服务商默认启用规则：
+ * 新接入的内置或自定义 Provider 默认启用规则：
  * 模型 ≤ 6 个时全部启用，否则都不启用。
  */
 export function defaultEnabledRule(modelCount: number): boolean {
@@ -66,7 +66,7 @@ export function defaultEnabledRule(modelCount: number): boolean {
 }
 
 /**
- * Available 服务商列表排序规则：
+ * Available Provider 列表排序规则：
  * popular 优先，其余按 name 排序。
  */
 export function sortAvailableProviders(providers: readonly Available[]): Available[] {

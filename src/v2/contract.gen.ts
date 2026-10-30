@@ -585,7 +585,7 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * 已接入的模型服务商和默认模型
+         * 已接入的模型 Provider 和默认模型
          * @description 返回当前 settings.providers 里的 Provider 视图，以及默认模型。
          *     `defaultModel` 是实际会用的默认：已显式设置且仍有效则用它，未显式设置时为自动选择的第一个可用模型。
          *     `status.error` 按 `lang` 出成句。密钥只以 auth.keyTail（末 4 位）出现，响应不含明文 key。
@@ -608,11 +608,13 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * 可接入的内置服务商目录
-         * @description 返回全部内置服务商（排除 xai、openai-codex、radius、typesafe）。
+         * 可接入的内置 Provider 目录
+         * @description 返回全部内置 Provider（排除 openai-codex、radius、typesafe；github-copilot 等去掉 oauth 后无认证方式的也不返回）。
+         *     xai 显示为 Grok，authMethods 只有 oauth，并带 `localLogin`（本机 Grok CLI 登录检测，不含 token）。
+         *     其余 Provider 的 authMethods 不含 oauth（界面只走 API Key）。
          *     popular 优先（固定顺序），其余按 name 排序。
-         *     `envVar` / `envDetected` 按内置服务商的环境变量规则；`connected` 表示已在 settings.providers 里。
-         *     中文环境下少量本地化名：moonshotai-cn、zai、qwen-token-plan-cn、minimax-cn、xiaomi。
+         *     `envVar` / `envDetected` 按内置 Provider 的环境变量规则；`connected` 表示已在 settings.providers 里。
+         *     中文环境下少量本地化名：moonshotai-cn、zai、qwen-token-plan-cn、minimax-cn、xiaomi；xai 中英文都叫 Grok。
          */
         get: operations["getAvailableProviders"];
         put?: never;
@@ -654,11 +656,12 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * 接入内置服务商
-         * @description `method=api_key` 或 `env`：用该服务商第一个启用的模型（没有启用的就用目录第一个 chat 模型）发一次 max_tokens=1 的请求；
-         *     验证通过后 `{ provider }`。新接入的内置服务商默认启用：模型 ≤6 个时全部，否则一个都不启用。
+         * 接入内置 Provider
+         * @description `method=api_key` 或 `env`：用该 Provider 第一个启用的模型（没有启用的就用目录第一个 chat 模型）发一次 max_tokens=1 的请求；
+         *     验证通过后 `{ provider }`。新接入的内置 Provider 默认启用：模型 ≤6 个时全部，否则一个都不启用。
          *     验证失败 400 `{ error, code: E_AUTH | E_NETWORK | E_HTTP }`，不保存凭据。
-         *     `method=oauth`：开始登录会话，返回 `{ session }`。同一服务商同时只允许一个进行中的会话。
+         *     `method=oauth`：开始登录会话，返回 `{ session }`。同一 Provider 同时只允许一个进行中的会话。
+         *     `method=local_login`：仅 xai。把本机 Grok CLI（`~/.grok/auth.json`）的凭据转换成 pi-ai xai OAuth 凭据后写入 CredentialStore，再探测。响应不含 token。
          */
         post: operations["connectProvider"];
         delete?: never;
@@ -677,7 +680,7 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * 测试已保存的服务商
+         * 测试已保存的 Provider
          * @description 内置：用第一个启用的模型发一次 max_tokens=1 的请求。
          *     自定义：重新拉 /models 并合并，已启用和覆盖保留。
          *     结果写进 lastTest，推送 providers 主题。响应不含明文 key。
@@ -1480,7 +1483,7 @@ export interface components {
         };
         /** @enum {string} */
         ProviderAuthType: "api_key" | "oauth" | "env" | "none";
-        /** @description 服务商凭据视图。响应和日志都不含明文 API key。 */
+        /** @description Provider 凭据视图。响应和日志都不含明文 API key。 */
         ProviderAuth: {
             type: components["schemas"]["ProviderAuthType"];
             /** @description API Key 末 4 位。没有 key 时省略。永远不是明文。 */
@@ -1536,7 +1539,7 @@ export interface components {
             defaultThinkingLevel?: null | components["schemas"]["ThinkingLevel"];
             overridden: components["schemas"]["ModelOverridden"];
         };
-        /** @description 模型服务商视图。响应和日志都不含明文 API key。 */
+        /** @description 模型 Provider 视图。响应和日志都不含明文 API key。 */
         Provider: {
             /** @description 内置为 catalog id（如 deepseek）；自定义为 custom- + 8 位 hex */
             id: string;
@@ -1550,7 +1553,7 @@ export interface components {
             status: components["schemas"]["ProviderStatus"];
             models: components["schemas"]["ProviderModel"][];
         };
-        /** @description 可接入的内置服务商。 */
+        /** @description 可接入的内置 Provider。 */
         AvailableProvider: {
             id: string;
             name: string;
@@ -1562,6 +1565,11 @@ export interface components {
             envVar?: string;
             envDetected: boolean;
             connected: boolean;
+            /** @description 本机 Grok CLI 登录检测。只出现在 xai。不含 token。 */
+            localLogin?: {
+                detected: boolean;
+                account?: string;
+            };
         };
         LoginSessionEvent: {
             /** @constant */
@@ -1640,8 +1648,12 @@ export interface components {
             /** @constant */
             method: "oauth";
         };
-        /** @description 接入内置服务商。 */
-        ConnectProviderRequest: components["schemas"]["ConnectApiKeyRequest"] | components["schemas"]["ConnectEnvRequest"] | components["schemas"]["ConnectOAuthRequest"];
+        ConnectLocalLoginRequest: {
+            /** @constant */
+            method: "local_login";
+        };
+        /** @description 接入内置 Provider。 */
+        ConnectProviderRequest: components["schemas"]["ConnectApiKeyRequest"] | components["schemas"]["ConnectEnvRequest"] | components["schemas"]["ConnectOAuthRequest"] | components["schemas"]["ConnectLocalLoginRequest"];
         /** @description 新增自定义接口。先拉 /models，成功才保存。 */
         CreateCustomProviderRequest: {
             name: string;
@@ -1655,7 +1667,7 @@ export interface components {
             /** @description 新的 max tokens；null 清除覆盖 */
             maxTokens?: null | number;
         };
-        /** @description 修改已保存的 Provider。后四个仅自定义；apiKey 内置也可用来换 Key。 */
+        /** @description 修改已保存的 Provider。name 内置和自定义都可改显示名；baseUrl / api 仅自定义；apiKey 内置也可用来换 Key。 */
         PatchProviderRequest: {
             enabled?: string[];
             overrides?: {
@@ -4489,7 +4501,7 @@ export interface operations {
             };
             header?: never;
             path: {
-                /** @description 内置服务商 id */
+                /** @description 内置 Provider id */
                 id: string;
             };
             cookie?: never;
@@ -4527,7 +4539,7 @@ export interface operations {
                     "application/json": components["schemas"]["V2Error"];
                 };
             };
-            /** @description 服务商不存在 */
+            /** @description Provider 不存在 */
             404: {
                 headers: {
                     [name: string]: unknown;

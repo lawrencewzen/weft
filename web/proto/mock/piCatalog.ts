@@ -49,8 +49,7 @@ export const MOCK_AVAILABLE_PROVIDERS: Available[] = [
     "name": "Anthropic",
     "brand": "anthropic",
     "authMethods": [
-      "api_key",
-      "oauth"
+      "api_key"
     ],
     "modelCount": 17,
     "popular": true,
@@ -81,7 +80,7 @@ export const MOCK_AVAILABLE_PROVIDERS: Available[] = [
     "modelCount": 23,
     "popular": true,
     "envVar": "GEMINI_API_KEY",
-    "envDetected": false,
+    "envDetected": true,
     "connected": false
   },
   {
@@ -115,8 +114,7 @@ export const MOCK_AVAILABLE_PROVIDERS: Available[] = [
     "name": "OpenAI",
     "brand": "openai",
     "authMethods": [
-      "api_key",
-      "oauth"
+      "api_key"
     ],
     "modelCount": 44,
     "popular": true,
@@ -129,8 +127,7 @@ export const MOCK_AVAILABLE_PROVIDERS: Available[] = [
     "name": "OpenRouter",
     "brand": "openrouter",
     "authMethods": [
-      "api_key",
-      "oauth"
+      "api_key"
     ],
     "modelCount": 396,
     "popular": true,
@@ -242,20 +239,6 @@ export const MOCK_AVAILABLE_PROVIDERS: Available[] = [
     "connected": false
   },
   {
-    "id": "github-copilot",
-    "name": "GitHub Copilot",
-    "brand": "githubcopilot",
-    "authMethods": [
-      "api_key",
-      "oauth"
-    ],
-    "modelCount": 36,
-    "popular": false,
-    "envVar": "COPILOT_GITHUB_TOKEN",
-    "envDetected": false,
-    "connected": false
-  },
-  {
     "id": "google-vertex",
     "name": "Google Vertex AI",
     "brand": "googlecloud",
@@ -267,6 +250,22 @@ export const MOCK_AVAILABLE_PROVIDERS: Available[] = [
     "envVar": "GOOGLE_CLOUD_API_KEY",
     "envDetected": false,
     "connected": false
+  },
+  {
+    "id": "xai",
+    "name": "Grok",
+    "brand": "xai",
+    "authMethods": [
+      "oauth"
+    ],
+    "modelCount": 4,
+    "popular": false,
+    "envDetected": false,
+    "connected": false,
+    "localLogin": {
+      "detected": true,
+      "account": "lawrence@x.com"
+    }
   },
   {
     "id": "groq",
@@ -299,8 +298,7 @@ export const MOCK_AVAILABLE_PROVIDERS: Available[] = [
     "name": "Kimi For Coding",
     "brand": "kimi",
     "authMethods": [
-      "api_key",
-      "oauth"
+      "api_key"
     ],
     "modelCount": 4,
     "popular": false,
@@ -313,8 +311,7 @@ export const MOCK_AVAILABLE_PROVIDERS: Available[] = [
     "name": "Meta",
     "brand": "meta",
     "authMethods": [
-      "api_key",
-      "oauth"
+      "api_key"
     ],
     "modelCount": 6,
     "popular": false,
@@ -8709,6 +8706,79 @@ export const MOCK_CATALOG_MODELS: Record<string, Model[]> = {
         "low",
         "medium",
         "high"
+      ],
+      "defaultThinkingLevel": "medium",
+      "overridden": {}
+    }
+  ],
+  "xai": [
+    {
+      "id": "grok-4.3",
+      "name": "Grok 4.3",
+      "brand": "Grok",
+      "enabled": false,
+      "contextWindow": 1000000,
+      "maxTokens": 30000,
+      "images": true,
+      "reasoning": true,
+      "thinkingLevels": [
+        "off",
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
+      "overridden": {}
+    },
+    {
+      "id": "grok-4.5",
+      "name": "Grok 4.5",
+      "brand": "Grok",
+      "enabled": false,
+      "contextWindow": 500000,
+      "maxTokens": 500000,
+      "images": true,
+      "reasoning": true,
+      "thinkingLevels": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "defaultThinkingLevel": "medium",
+      "overridden": {}
+    },
+    {
+      "id": "grok-4.6",
+      "name": "Grok 4.6",
+      "brand": "Grok",
+      "enabled": false,
+      "contextWindow": 500000,
+      "maxTokens": 500000,
+      "images": true,
+      "reasoning": true,
+      "thinkingLevels": [
+        "low",
+        "medium",
+        "high",
+        "xhigh"
+      ],
+      "defaultThinkingLevel": "medium",
+      "overridden": {}
+    },
+    {
+      "id": "grok-4.7",
+      "name": "Grok 4.7",
+      "brand": "Grok",
+      "enabled": false,
+      "contextWindow": null,
+      "maxTokens": 500000,
+      "images": true,
+      "reasoning": true,
+      "thinkingLevels": [
+        "low",
+        "medium",
+        "high",
+        "xhigh"
       ],
       "defaultThinkingLevel": "medium",
       "overridden": {}

@@ -813,18 +813,6 @@ function seedProviders(now: number): Provider[] {
       models: (MOCK_CATALOG_MODELS.deepseek || []).map((m) => ({ ...m, enabled: true })),
     },
     {
-      id: 'anthropic',
-      kind: 'builtin',
-      brand: 'anthropic',
-      name: 'Anthropic',
-      auth: { type: 'oauth', account: 'Claude Max · lawrence@…' },
-      status: { state: 'untested' },
-      models: (MOCK_CATALOG_MODELS.anthropic || []).map((m, idx) => ({
-        ...m,
-        enabled: idx === 1 || idx === 4,
-      })),
-    },
-    {
       id: 'custom-9f01',
       kind: 'custom',
       brand: null,

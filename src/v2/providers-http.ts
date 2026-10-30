@@ -47,6 +47,7 @@ export type ProviderServiceLike = {
   removeProvider: (id: string) => Promise<unknown>;
   connectApiKey: (id: string, apiKey: string) => Promise<RawProvider | null>;
   connectEnv: (id: string) => Promise<RawProvider | null>;
+  connectLocalLogin: (id: string) => Promise<RawProvider | null>;
   startOAuth: (id: string) => Promise<RawLoginSession>;
   getSession: (sid: string) => RawLoginSession | Promise<RawLoginSession>;
   answerSession: (sid: string, value: string) => RawLoginSession | Promise<RawLoginSession>;
@@ -198,6 +199,12 @@ export async function handleProvidersApi(ctx: ProvidersHttpCtx, opts: ProvidersH
       if (connectMethod === 'oauth') {
         const session = await service.startOAuth(id);
         sendV2(res, pathname, method, 200, { session: loginSessionView(session, lang) });
+        return true;
+      }
+      if (connectMethod === 'local_login') {
+        const created = await service.connectLocalLogin(id);
+        opts.onProvidersChanged?.();
+        await sendProvider(created);
         return true;
       }
       sendV2(res, pathname, method, 400, serviceErrorBody({ code: 'E_BAD_REQUEST', phrase: 'src_err_method' }, lang));

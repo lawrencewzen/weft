@@ -3,6 +3,7 @@ import { createModels } from '@earendil-works/pi-ai/models';
 import { builtinProviders, getBuiltinModels, getBuiltinProviders } from '@earendil-works/pi-ai/providers/all';
 import { contextWindowFromEnv } from './usage.mjs';
 import { redactAuthText } from './redact.mjs';
+import { detectGrokLocalLogin, loadGrokXaiCredential } from './grok-local-login.mjs';
 import {
   CUSTOM_PROVIDER_ID,
   CUSTOM_PROVIDER_APIS,
@@ -34,7 +35,7 @@ export const POPULAR_PROVIDER_IDS = Object.freeze([
   'xiaomi',
 ]);
 
-export const EXCLUDED_PROVIDER_IDS = new Set(['xai', 'openai-codex', 'radius', 'typesafe']);
+export const EXCLUDED_PROVIDER_IDS = new Set(['openai-codex', 'radius', 'typesafe']);
 
 const ENABLE_ALL_MAX = 6;
 const LOGIN_TTL_MS = 10 * 60 * 1000;
@@ -353,12 +354,15 @@ export function createProviderService({
     for (const entry of providersOf(settings)) {
       const auth = await authView(entry);
       const builtin = entry.kind === 'builtin' ? builtinProviderById(entry.id) : null;
+      const catalogName = builtin?.name || extraById.get(entry.id)?.name || entry.id;
+      const customName = typeof entry.name === 'string' && entry.name.trim() ? entry.name.trim() : '';
       const item = {
         id: entry.id,
         kind: entry.kind,
         name: entry.kind === 'custom'
-          ? (entry.name || '自定义 API')
-          : (builtin?.name || extraById.get(entry.id)?.name || entry.id),
+          ? (customName || '自定义 API')
+          : (customName || catalogName),
+        nameCustom: entry.kind !== 'custom' && Boolean(customName),
         auth,
         lastTest: entry.lastTest || null,
         status: lastTestStatus(entry.lastTest),
@@ -462,10 +466,10 @@ export function createProviderService({
         };
       }
     }
+    if (typeof patch.name === 'string' && patch.name.trim()) {
+      current.name = patch.name.trim().slice(0, 80);
+    }
     if (current.kind === 'custom') {
-      if (typeof patch.name === 'string' && patch.name.trim()) {
-        current.name = patch.name.trim().slice(0, 80);
-      }
       if (patch.baseUrl != null) {
         const url = normalizeHttpUrl(patch.baseUrl);
         if (!url) {
@@ -710,18 +714,27 @@ export function createProviderService({
     const seen = new Set();
     const out = [];
 
+    function availableAuthMethods(provider) {
+      const id = provider?.id;
+      if (id === 'xai') return ['oauth'];
+      // GitHub Copilot's env token is not a user-facing API key in this dialog.
+      if (id === 'github-copilot') return [];
+      const methods = [];
+      if (provider.auth?.apiKey || !provider.auth?.oauth) methods.push('api_key');
+      return methods;
+    }
+
     function pushProvider(provider) {
       const id = provider?.id;
       if (!id || seen.has(id) || EXCLUDED_PROVIDER_IDS.has(id)) return;
+      const authMethods = availableAuthMethods(provider);
+      if (authMethods.length === 0) return;
       seen.add(id);
-      const authMethods = [];
-      if (provider.auth?.apiKey || !provider.auth?.oauth) authMethods.push('api_key');
-      if (provider.auth?.oauth) authMethods.push('oauth');
       const chatModels = typeof provider.getModels === 'function' ? provider.getModels() : [];
       const envVar = ENV_VAR[id];
       const item = {
         id,
-        name: provider.name || id,
+        name: id === 'xai' ? 'Grok' : (provider.name || id),
         authMethods,
         modelCount: Array.isArray(chatModels) ? chatModels.length : 0,
         popular: popularIndex.has(id),
@@ -729,6 +742,7 @@ export function createProviderService({
         connected: connected.has(id),
       };
       if (envVar) item.envVar = envVar;
+      if (id === 'xai') item.localLogin = detectGrokLocalLogin(env);
       out.push(item);
     }
 
@@ -797,6 +811,41 @@ export function createProviderService({
     };
     await registerForProbe(entry);
     await probeChat(entry);
+    const lastTest = { ok: true, at: now() };
+    if (existing) await writeLastTest(id, lastTest);
+    else await upsertEntry({ ...entry, lastTest });
+    return getProvider(id);
+  }
+
+  async function connectLocalLogin(id) {
+    if (id !== 'xai') {
+      fail('E_BAD_REQUEST', 'local login not supported', { phrase: 'src_err_method' });
+    }
+    requireBuiltin(id);
+    const cred = loadGrokXaiCredential(env);
+    if (!cred) {
+      fail('E_BAD_REQUEST', 'local grok login not detected', { phrase: 'src_err_local_login' });
+    }
+    const settings = await loadSettings();
+    const existing = providersOf(settings).find((item) => item.id === id);
+    const modelsList = await builtinModels(id);
+    const enabled = existing?.enabled || defaultEnabledIds(modelsList.map((item) => item.id));
+    const entry = {
+      id,
+      kind: 'builtin',
+      enabled,
+      overrides: existing?.overrides || {},
+    };
+    await credentials.modify(id, async () => cred);
+    try {
+      await registerForProbe(entry);
+      await probeChat(entry);
+    } catch (err) {
+      if (!existing) {
+        try { await credentials.delete(id); } catch { /* ignore */ }
+      }
+      throw err;
+    }
     const lastTest = { ok: true, at: now() };
     if (existing) await writeLastTest(id, lastTest);
     else await upsertEntry({ ...entry, lastTest });
@@ -1120,6 +1169,7 @@ export function createProviderService({
     removeProvider,
     connectApiKey,
     connectEnv,
+    connectLocalLogin,
     startOAuth,
     getSession,
     answerSession,

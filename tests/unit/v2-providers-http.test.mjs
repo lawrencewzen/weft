@@ -14,6 +14,9 @@ import {
 } from '../../src/core/provider-service.mjs';
 import { readDiscovery, startServer, stopServer } from './_server.mjs';
 import { makeTempDir, removeTempDir } from './_tmp.mjs';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import path from 'node:path';
+import { XAI_OAUTH_CLIENT_ID } from '../../src/core/grok-local-login.mjs';
 import {
   fakeKeyProvider,
   fakeOAuthProvider,
@@ -272,6 +275,15 @@ test('GET /api/v2/providers/available sorts popular, excludes blocked ids, local
     assert.equal(byId.deepseek?.brand, 'deepseek');
     assert.equal(byId.deepseek?.envVar, 'DEEPSEEK_API_KEY');
     assert.equal(byId.deepseek?.connected, false);
+    assert.equal(ids.includes('xai'), true);
+    assert.equal(ids.includes('github-copilot'), false);
+    assert.equal(byId.xai?.name, 'Grok');
+    assert.deepEqual(byId.xai?.authMethods, ['oauth']);
+    assert.equal(byId.xai?.localLogin?.detected, false);
+    assert.deepEqual(byId.anthropic?.authMethods, ['api_key']);
+    assert.equal(byId.anthropic?.authMethods.includes('oauth'), false);
+    const dumped = JSON.stringify(zh.body);
+    assert.equal(dumped.includes('refresh_token'), false);
 
     const en = await send(base, 'GET', '/api/v2/providers/available?lang=en');
     assert.equal(en.status, 200, en.text);
@@ -282,6 +294,7 @@ test('GET /api/v2/providers/available sorts popular, excludes blocked ids, local
     assert.equal(enById['qwen-token-plan-cn']?.name, 'Qwen Token Plan (China)');
     assert.equal(enById['minimax-cn']?.name, 'MiniMax (China)');
     assert.equal(enById.xiaomi?.name, 'Xiaomi MiMo');
+    assert.equal(enById.xai?.name, 'Grok');
   });
 });
 
@@ -536,3 +549,52 @@ test('POST connect rejects unknown methods', async () => {
     assertChecked('/api/v2/providers/deepseek/connect', 'POST', 400, got.body);
   }, { extraProviders: [deepseekFake()] });
 });
+
+test('POST connect local_login imports Grok login and does not leak tokens', async () => {
+  const access = 'access-fixture-http';
+  const refresh = 'refresh-fixture-http';
+  const home = await makeTempDir('weft-grok-http-');
+  try {
+    mkdirSync(path.join(home, '.grok'), { recursive: true });
+    writeFileSync(path.join(home, '.grok', 'auth.json'), JSON.stringify({
+      [`https://auth.x.ai::${XAI_OAUTH_CLIENT_ID}`]: {
+        key: access,
+        refresh_token: refresh,
+        expires_at: Math.floor(Date.now() / 1000) + 3600,
+        email: 'tester@x.com',
+      },
+    }), 'utf8');
+    await withHttp(async ({ base, credentials }) => {
+      const listed = await send(base, 'GET', '/api/v2/providers/available');
+      assert.equal(listed.status, 200, listed.text);
+      assertChecked('/api/v2/providers/available', 'GET', 200, listed.body);
+      const xai = listed.body.providers.find((item) => item.id === 'xai');
+      assert.equal(xai.localLogin.detected, true);
+      assert.equal(xai.localLogin.account, 'tester@x.com');
+      assert.equal(JSON.stringify(listed.body).includes(access), false);
+
+      const denied = await send(base, 'POST', '/api/v2/providers/anthropic/connect', { method: 'local_login' });
+      assert.equal(denied.status, 400);
+      assert.equal(denied.body.code, 'E_BAD_REQUEST');
+
+      const got = await send(base, 'POST', '/api/v2/providers/xai/connect', { method: 'local_login' });
+      assert.equal(got.status, 200, got.text);
+      assertChecked('/api/v2/providers/xai/connect', 'POST', 200, got.body);
+      assert.equal(got.body.provider.id, 'xai');
+      assert.equal(got.body.provider.auth.type, 'oauth');
+      assert.equal(got.body.provider.auth.account, 'tester@x.com');
+      const dumped = JSON.stringify(got.body);
+      assert.equal(dumped.includes(access), false);
+      assert.equal(dumped.includes(refresh), false);
+      const cred = await credentials.read('xai');
+      assert.equal(cred.type, 'oauth');
+      assert.equal(cred.access, access);
+    }, {
+      env: { HOME: home, USERPROFILE: home },
+      extraProviders: [fakeOAuthProvider({ id: 'xai', name: 'Grok', models: ['grok-3'] })],
+    });
+  } finally {
+    await removeTempDir(home);
+  }
+});
+
