@@ -24,7 +24,7 @@ const LINE_COLON_RE = /:(\d+)(?::(\d+))?$/;
 export type PathResolve = { path: string; line?: number };
 
 let currentResolvePath: ((raw: string) => PathResolve | null) | null = null;
-let currentCopyLabel = '复制';
+let currentCopyLabel = '';
 
 function parseLineSuffix(text: string): { path: string; line?: number; suffix: string } {
   const raw = String(text ?? '');
@@ -226,7 +226,7 @@ export function renderMarkdown(
 ): string {
   if (!src) return '';
   currentResolvePath = typeof opts.resolvePath === 'function' ? opts.resolvePath : null;
-  currentCopyLabel = opts.copyLabel || '复制';
+  currentCopyLabel = opts.copyLabel || '';
   try {
     const html = marked.parse(String(src), { async: false });
     return getPurify().sanitize(scrubInlineHandlers(String(html)), PURIFY_CONFIG);

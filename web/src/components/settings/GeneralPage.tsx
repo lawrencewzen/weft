@@ -98,7 +98,7 @@ export function GeneralPage({ lang }: Props) {
             data-lang="zh"
             onClick={() => persist({ lang: 'zh' })}
           >
-            中文
+            {t(lang, 'lang_zh')}
           </button>
           <button
             type="button"
@@ -106,7 +106,7 @@ export function GeneralPage({ lang }: Props) {
             data-lang="en"
             onClick={() => persist({ lang: 'en' })}
           >
-            English
+            {t(lang, 'lang_en')}
           </button>
         </div>
       </div>

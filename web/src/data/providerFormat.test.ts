@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   defaultEnabledRule,
+  formatTimeAgo,
   formatTokenNum,
   parseContextInput,
   sortAvailableProviders,
@@ -8,9 +9,10 @@ import {
 import type { Available } from './providerTypes';
 
 describe('formatTokenNum', () => {
-  it('formats null and undefined as unknown', () => {
-    expect(formatTokenNum(null)).toBe('未知');
-    expect(formatTokenNum(undefined)).toBe('未知');
+  it('formats null and undefined with the caller-supplied unknown label', () => {
+    expect(formatTokenNum(null)).toBe('');
+    expect(formatTokenNum(undefined)).toBe('');
+    expect(formatTokenNum(null, '未知')).toBe('未知');
     expect(formatTokenNum(null, 'Unknown')).toBe('Unknown');
   });
 
@@ -94,5 +96,24 @@ describe('sortAvailableProviders', () => {
 
     const sorted = sortAvailableProviders(list);
     expect(sorted.map((item) => item.id)).toEqual(['deepseek', 'openai', 'azure', 'baseten']);
+  });
+});
+
+describe('formatTimeAgo', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('uses i18n keys for zh and en', () => {
+    const now = 1_700_000_000_000;
+    vi.spyOn(Date, 'now').mockReturnValue(now);
+    expect(formatTimeAgo(now - 10_000, 'zh')).toBe('刚刚');
+    expect(formatTimeAgo(now - 10_000, 'en')).toBe('Just now');
+    expect(formatTimeAgo(now - 5 * 60_000, 'zh')).toBe('5 分钟前');
+    expect(formatTimeAgo(now - 5 * 60_000, 'en')).toBe('5m ago');
+    expect(formatTimeAgo(now - 3 * 3_600_000, 'zh')).toBe('3 小时前');
+    expect(formatTimeAgo(now - 3 * 3_600_000, 'en')).toBe('3h ago');
+    expect(formatTimeAgo(now - 2 * 86_400_000, 'zh')).toBe('2 天前');
+    expect(formatTimeAgo(now - 2 * 86_400_000, 'en')).toBe('2d ago');
   });
 });

@@ -33,6 +33,8 @@ import {
   UnauthenticatedError,
   workspaceFileUrl,
 } from './api';
+import { t } from '../i18n';
+import { getPreferredLang } from './lang';
 
 function jsonResponse(status: number, body: unknown, statusText = 'Error'): Response {
   return new Response(body == null ? '' : JSON.stringify(body), {
@@ -54,7 +56,7 @@ describe('api client', () => {
     await expect(getSnapshot('c1', 'zh')).rejects.toSatisfy((err: unknown) => {
       expect(err).toBeInstanceOf(UnauthenticatedError);
       expect(isUnauthenticatedError(err)).toBe(true);
-      expect((err as UnauthenticatedError).message).toBe('未登录');
+      expect((err as UnauthenticatedError).message).toBe(t(getPreferredLang(), 'err_unauthenticated'));
       expect((err as UnauthenticatedError).status).toBe(401);
       return true;
     });

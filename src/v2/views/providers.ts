@@ -2,7 +2,7 @@
 
 import { CONTEXT_WINDOW_MAX, CONTEXT_WINDOW_MIN } from '../../core/model-sources.mjs';
 import type { components } from '../contract.gen.ts';
-import { hasPhrase, phrase, type Lang } from '../phrases/index.ts';
+import { hasPhrase, localizedProviderName, phrase, type Lang } from '../phrases/index.ts';
 import { formatProbeFailureForLang } from './probe-error.ts';
 import { brandIcons, brandIdOf } from './brand.ts';
 
@@ -35,14 +35,6 @@ export const POPULAR_PROVIDER_IDS = Object.freeze([
 ]);
 
 export const EXCLUDED_PROVIDER_IDS = Object.freeze(['xai', 'openai-codex', 'radius', 'typesafe']);
-
-const CN_NAME: Record<string, string> = {
-  'moonshotai-cn': 'Kimi（国内）',
-  zai: '智谱 Z.AI',
-  'qwen-token-plan-cn': '通义千问 Token Plan（国内）',
-  'minimax-cn': 'MiniMax（国内）',
-  xiaomi: '小米 MiMo',
-};
 
 /**
  * Maps a provider id to a brand-data.json icon id.
@@ -86,8 +78,7 @@ export function providerBrand(providerId: string | null | undefined): string | n
 }
 
 export function displayProviderName(id: string, fallback: string, lang: Lang): string {
-  if (lang === 'zh' && CN_NAME[id]) return CN_NAME[id];
-  return fallback || id;
+  return localizedProviderName(id, fallback, lang);
 }
 
 export type RawLastTest = {

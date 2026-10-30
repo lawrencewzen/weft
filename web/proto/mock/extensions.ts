@@ -1,4 +1,14 @@
-import type { GitConnection, GitProject, Plugin, Skill } from './types';
+import type { GitConnection, GitProject, Lang, Plugin, Skill } from './types';
+
+const PLUGIN_MAIN_MISSING: Record<Lang, string> = {
+  zh: '找不到插件 main 指向的 .mjs 文件',
+  en: 'The plugin main .mjs file was not found',
+};
+
+export function pluginForLang(plugin: Plugin, lang: Lang): Plugin {
+  if (plugin.errorCode !== 'err_plugin_main_missing') return plugin;
+  return { ...plugin, error: PLUGIN_MAIN_MISSING[lang] };
+}
 
 const HOUR = 3_600_000;
 
@@ -36,7 +46,7 @@ export function seedPlugins(): Plugin[] {
       source: 'local',
       enabled: true,
       loaded: false,
-      error: '插件主文件加载失败：main 必须是插件目录内的相对 .mjs 路径',
+      error: PLUGIN_MAIN_MISSING.zh,
       errorCode: 'err_plugin_main_missing',
       tools: [],
     },

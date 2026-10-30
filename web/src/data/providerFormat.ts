@@ -1,13 +1,15 @@
+import { t } from '../i18n';
+import type { Lang } from './lang';
 import type { Available } from './providerTypes';
 
 /**
  * 格式化 token 数值：
- * - null / undefined -> '未知' (或指定兜底词)
+ * - null / undefined -> unknownText（调用方传入 i18n 文案）
  * - >= 1M: 1M, 1.05M 等 (去除末尾多余的 0 和点)
  * - >= 1000: Math.round(n / 1000) + 'K' (例如 262K, 128K)
  * - 其他: String(n)
  */
-export function formatTokenNum(n: number | null | undefined, unknownText = '未知'): string {
+export function formatTokenNum(n: number | null | undefined, unknownText = ''): string {
   if (n == null) return unknownText;
   if (!Number.isFinite(n) || n < 0) return unknownText;
   if (n >= 1_000_000) {
@@ -76,14 +78,14 @@ export function sortAvailableProviders(providers: readonly Available[]): Availab
 
 export { formatTokenNum as formatNumber };
 
-export function formatTimeAgo(ts: number | null | undefined, lang: string): string {
+export function formatTimeAgo(ts: number | null | undefined, lang: Lang): string {
   if (!ts) return '';
   const sec = Math.max(0, Math.floor((Date.now() - ts) / 1000));
-  if (sec < 60) return lang === 'en' ? 'just now' : '刚刚';
+  if (sec < 60) return t(lang, 'just_now');
   const mins = Math.floor(sec / 60);
-  if (mins < 60) return lang === 'en' ? `${mins}m ago` : `${mins} 分钟前`;
+  if (mins < 60) return t(lang, 'time_min_ago', { n: mins });
   const hours = Math.floor(mins / 60);
-  if (hours < 24) return lang === 'en' ? `${hours}h ago` : `${hours} 小时前`;
+  if (hours < 24) return t(lang, 'time_hour_ago', { n: hours });
   const days = Math.floor(hours / 24);
-  return lang === 'en' ? `${days}d ago` : `${days} 天前`;
+  return t(lang, 'time_day_ago', { n: days });
 }

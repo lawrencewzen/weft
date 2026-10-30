@@ -205,10 +205,8 @@ export function RightPaneProvider({
     }
     const closing = open;
     if (closing) {
-      const rb = document.querySelector<HTMLElement>('[data-testid="next-right-collapse"]')
-        || document.querySelector<HTMLElement>('aside [title="收起右栏"]');
-      const hb = document.querySelector<HTMLElement>('[data-testid="next-right-toggle"]')
-        || document.querySelector<HTMLElement>('[title="展开右栏"]');
+      const rb = document.querySelector<HTMLElement>('[data-testid="next-right-collapse"]');
+      const hb = document.querySelector<HTMLElement>('[data-testid="next-right-toggle"]');
       if (rb && hb) {
         rbDxRef.current = Math.round(rb.getBoundingClientRect().left - (hb.getBoundingClientRect().left - (rbDxRef.current || 0)));
       }

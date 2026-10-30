@@ -165,4 +165,9 @@ export const zh: Record<string, string> = {
   term_err_path: '路径超出工作区',
   term_err_not_dir: '只能打开目录',
   term_err_spawn: '无法打开系统终端',
+  provider_name_moonshotai_cn: 'Kimi（国内）',
+  provider_name_zai: '智谱 Z.AI',
+  provider_name_qwen_token_plan_cn: '通义千问 Token Plan（国内）',
+  provider_name_minimax_cn: 'MiniMax（国内）',
+  provider_name_xiaomi: '小米 MiMo',
 };

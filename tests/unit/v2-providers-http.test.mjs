@@ -276,8 +276,12 @@ test('GET /api/v2/providers/available sorts popular, excludes blocked ids, local
     const en = await send(base, 'GET', '/api/v2/providers/available?lang=en');
     assert.equal(en.status, 200, en.text);
     assertChecked('/api/v2/providers/available', 'GET', 200, en.body);
-    const enZai = en.body.providers.find((item) => item.id === 'zai');
-    assert.notEqual(enZai.name, '智谱 Z.AI');
+    const enById = Object.fromEntries(en.body.providers.map((item) => [item.id, item]));
+    assert.equal(enById['moonshotai-cn']?.name, 'Kimi (China)');
+    assert.equal(enById.zai?.name, 'Zhipu Z.AI');
+    assert.equal(enById['qwen-token-plan-cn']?.name, 'Qwen Token Plan (China)');
+    assert.equal(enById['minimax-cn']?.name, 'MiniMax (China)');
+    assert.equal(enById.xiaomi?.name, 'Xiaomi MiMo');
   });
 });
 

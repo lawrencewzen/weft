@@ -62,8 +62,7 @@ export function LeftPanelProvider({ children }: { children: ReactNode }) {
     }
     const closing = leftOpen;
     if (closing) {
-      const sb = document.querySelector<HTMLElement>('[data-testid="next-left-collapse"]')
-        || document.querySelector<HTMLElement>('[title="收起侧栏"]');
+      const sb = document.querySelector<HTMLElement>('[data-testid="next-left-collapse"]');
       const as = sb?.closest('aside');
       if (sb && as) {
         lbOffRef.current = as.getBoundingClientRect().right - sb.getBoundingClientRect().left;

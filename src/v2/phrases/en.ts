@@ -92,7 +92,7 @@ export const en: Record<string, string> = {
   src_err_models: 'Invalid model list',
   src_err_provider: 'Provider not found',
   src_err_session: 'Login session not found',
-  src_err_session_state: 'This login step cannot take an answer',
+  src_err_session_state: 'This sign-in step cannot accept an answer',
   src_err_method: 'That sign-in method is not supported',
   src_err_name: 'Name is required',
   src_err_api: 'That API is not supported',
@@ -165,4 +165,9 @@ export const en: Record<string, string> = {
   term_err_path: 'Path is outside the workspace',
   term_err_not_dir: 'Only directories can be opened',
   term_err_spawn: 'Could not open a system terminal',
+  provider_name_moonshotai_cn: 'Kimi (China)',
+  provider_name_zai: 'Zhipu Z.AI',
+  provider_name_qwen_token_plan_cn: 'Qwen Token Plan (China)',
+  provider_name_minimax_cn: 'MiniMax (China)',
+  provider_name_xiaomi: 'Xiaomi MiMo',
 };

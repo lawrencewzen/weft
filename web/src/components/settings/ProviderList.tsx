@@ -340,7 +340,7 @@ export function ProviderList({
                   className="mp-mono"
                   data-testid="next-custom-edit-key"
                   value={editForm.apiKey}
-                  placeholder="sk-... (留空保持不变)"
+                  placeholder={t(lang, 'dlg_key_keep_placeholder')}
                   onChange={(e) => setEditForm({ ...editForm, apiKey: e.target.value })}
                 />
               </div>

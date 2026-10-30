@@ -103,7 +103,7 @@ describe('agentsStripUtils', () => {
         makeAgent({ id: '3', status: 'failed' }),
       ];
       expect(formatAgentsHeadline(agents, 'zh')).toBe('2 个已完成 · 1 个没完成');
-      expect(formatAgentsHeadline(agents, 'en')).toBe('2 completed · 1 uncompleted');
+      expect(formatAgentsHeadline(agents, 'en')).toBe('2 completed · 1 unfinished');
     });
 
     it('formats all-done headline', () => {
@@ -120,7 +120,7 @@ describe('agentsStripUtils', () => {
         makeAgent({ id: '1', status: 'failed' }),
       ];
       expect(formatAgentsHeadline(agents, 'zh')).toBe('1 个没完成');
-      expect(formatAgentsHeadline(agents, 'en')).toBe('1 uncompleted');
+      expect(formatAgentsHeadline(agents, 'en')).toBe('1 unfinished');
     });
   });
 

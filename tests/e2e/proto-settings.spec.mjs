@@ -209,7 +209,7 @@ test('git connections, plugins, skills and about', async ({ page }) => {
   // Plugins: toggle one, import another.
   await page.getByTestId('next-settings-nav-plugins').click();
   await expect(page.getByTestId('next-plugin-row')).toHaveCount(3);
-  await expect(page.getByTestId('next-plugin-fail').first()).toContainText('加载失败');
+  await expect(page.getByTestId('next-plugin-fail').first()).toContainText('找不到插件 main');
   const firstSwitch = page.getByTestId('next-plugin-row').first().getByTestId('next-plugin-toggle');
   await firstSwitch.click();
   await expect(firstSwitch).toHaveAttribute('aria-pressed', 'false');
