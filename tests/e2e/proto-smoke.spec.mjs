@@ -303,3 +303,17 @@ test('sidebar archived section is fixed at bottom above footer, expands, and sho
   await toggle.click();
   await expect(page.getByTestId('next-archived-list')).toHaveCount(0);
 });
+
+test('focused composer uses a soft gradient shadow, not a 3px solid ring', async ({ page }) => {
+  expect(
+    fs.existsSync(protoFile),
+    'prototype build missing: run `npm run build:proto` first',
+  ).toBe(true);
+
+  await page.goto(pathToFileURL(protoFile).href);
+  await expect(page.getByTestId('next-composer-input')).toBeVisible();
+  await page.getByTestId('next-composer-input').focus();
+  await expect(page.getByTestId('next-composer')).toHaveClass(/is-focused/);
+  const shadow = await page.getByTestId('next-composer').evaluate((el) => getComputedStyle(el).boxShadow);
+  expect(shadow).not.toContain('0px 0px 0px 3px');
+});
