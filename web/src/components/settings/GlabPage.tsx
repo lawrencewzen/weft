@@ -46,8 +46,23 @@ export function GlabPage({ lang, onToast, onNavigate }: Props) {
   const [customPath, setCustomPath] = useState('');
   const [showCustomPath, setShowCustomPath] = useState(false);
   const [detecting, setDetecting] = useState(false);
+  const [detectSuccess, setDetectSuccess] = useState(false);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<GlabTestResult | null>(null);
+
+  const mountedRef = useRef(true);
+  const revertTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      if (revertTimerRef.current) {
+        clearTimeout(revertTimerRef.current);
+        revertTimerRef.current = null;
+      }
+    };
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -99,19 +114,63 @@ export function GlabPage({ lang, onToast, onNavigate }: Props) {
   }
 
   async function handleDetect() {
+    if (revertTimerRef.current) {
+      clearTimeout(revertTimerRef.current);
+      revertTimerRef.current = null;
+    }
+    setDetectSuccess(false);
     setDetecting(true);
+
+    const minDelay = new Promise((resolve) => {
+      setTimeout(resolve, 500);
+    });
+
+    let patchErr: unknown = null;
+    let detectErr: unknown = null;
+    let updated: GlabSettings | null = null;
+
     try {
       if (customPath !== settingsRef.current.customPath) {
         await patchGlabSettings({ customPath }, lang);
       }
-      const updated = await detectGlab(lang);
+    } catch (err) {
+      patchErr = err;
+    }
+
+    if (!patchErr) {
+      try {
+        const [res] = await Promise.all([detectGlab(lang), minDelay]);
+        updated = res;
+      } catch (err) {
+        detectErr = err;
+        await minDelay;
+      }
+    } else {
+      await minDelay;
+    }
+
+    if (!mountedRef.current) return;
+    setDetecting(false);
+
+    const err = patchErr || detectErr;
+    if (err) {
+      onToast(failText(err));
+      return;
+    }
+
+    if (updated) {
       settingsRef.current = updated;
       setSettings(updated);
       setCustomPath(updated.customPath || '');
-    } catch (err) {
-      onToast(failText(err));
-    } finally {
-      setDetecting(false);
+
+      if (updated.binary.source !== 'missing') {
+        setDetectSuccess(true);
+        revertTimerRef.current = setTimeout(() => {
+          if (!mountedRef.current) return;
+          setDetectSuccess(false);
+          revertTimerRef.current = null;
+        }, 1500);
+      }
     }
   }
 
@@ -202,18 +261,34 @@ export function GlabPage({ lang, onToast, onNavigate }: Props) {
   async function handleTest() {
     setTesting(true);
     setTestResult(null);
+
+    const minDelay = new Promise((resolve) => {
+      setTimeout(resolve, 500);
+    });
+
+    let res: GlabTestResult | null = null;
+    let testErr: unknown = null;
+
     try {
-      const res = await testGlab(lang);
-      setTestResult(res);
+      const [testRes] = await Promise.all([testGlab(lang), minDelay]);
+      res = testRes;
     } catch (err) {
+      testErr = err;
+      await minDelay;
+    }
+
+    if (!mountedRef.current) return;
+    setTesting(false);
+
+    if (res) {
+      setTestResult(res);
+    } else {
       setTestResult({
         ok: false,
         host: '',
         username: '',
-        output: failText(err),
+        output: failText(testErr),
       });
-    } finally {
-      setTesting(false);
     }
   }
 
@@ -237,10 +312,7 @@ export function GlabPage({ lang, onToast, onNavigate }: Props) {
   return (
     <div className="next-settings-content ns-git-page" data-testid="next-settings-glab">
       <div className="next-settings-head">
-        <div>
-          <h2>{t(lang, 'glab_title')}</h2>
-          <p className="next-settings-sub">{t(lang, 'glab_lead')}</p>
-        </div>
+        <h2>{t(lang, 'glab_title')}</h2>
       </div>
 
       <div className="ns-git-scroll">
@@ -259,10 +331,14 @@ export function GlabPage({ lang, onToast, onNavigate }: Props) {
             type="button"
             className="ns-btn ns-btn-sm"
             data-testid="next-glab-detect"
-            disabled={detecting}
+            disabled={detecting || detectSuccess}
             onClick={() => { void handleDetect(); }}
           >
-            {detecting ? t(lang, 'glab_detecting') : t(lang, 'glab_detect')}
+            {detecting
+              ? t(lang, 'glab_detecting')
+              : detectSuccess
+                ? t(lang, 'glab_detected')
+                : t(lang, 'glab_detect')}
           </button>
         </div>
 
@@ -290,14 +366,12 @@ export function GlabPage({ lang, onToast, onNavigate }: Props) {
                 if (e.key === 'Enter') void handleDetect();
               }}
             />
-            <p className="ns-field-hint">{t(lang, 'glab_custom_path_hint')}</p>
           </div>
         ) : null}
 
         <div className="ns-pref-row">
           <div className="ns-pref-copy">
             <b>{t(lang, 'glab_enabled_label')}</b>
-            <span>{t(lang, 'glab_enabled_desc')}</span>
           </div>
           <button
             type="button"
@@ -334,25 +408,20 @@ export function GlabPage({ lang, onToast, onNavigate }: Props) {
               {gitlabConnections.map((conn) => {
                 const checked = settings.connectionIds.includes(conn.id);
                 const isDefault = settings.defaultConnectionId === conn.id;
-                const statusDot = conn.lastTest?.ok
-                  ? 'is-ok'
-                  : conn.lastTest && conn.lastTest.ok === false
-                    ? 'is-bad'
-                    : '';
                 return (
                   <div key={conn.id} className="ns-git-row" data-id={conn.id}>
-                    <label className="ns-chk" style={{ margin: 0 }}>
+                    <label style={{ display: 'flex', alignItems: 'center', margin: 0 }}>
                       <input
                         type="checkbox"
                         data-testid="next-glab-conn"
                         checked={checked}
                         disabled={!settings.enabled}
+                        style={{ margin: 0 }}
                         onChange={() => { void toggleConn(conn.id); }}
                       />
                     </label>
                     <div className="ns-git-main">
                       <div className="ns-git-name">
-                        <span className={`ns-dot ${statusDot}`} />
                         <b>{conn.name}</b>
                         <span className="ns-tag is-key">
                           {t(lang, conn.kind === 'gitlab-com' ? 'git_kind_com' : 'git_kind_self')}

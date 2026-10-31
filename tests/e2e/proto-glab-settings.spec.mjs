@@ -15,6 +15,13 @@ test('glab settings: enable switch, select two connections, pick default host, r
   await page.getByTestId('next-settings-nav-glab').click();
   await expect(page.getByTestId('next-settings-glab')).toBeVisible();
 
+  // 检测按钮状态过渡：点击后看到「检测中…」随后看到「✓ 已检测」
+  const detectBtn = page.getByTestId('next-glab-detect');
+  await expect(detectBtn).toHaveText('检测');
+  await detectBtn.click();
+  await expect(detectBtn).toHaveText('正在检测…');
+  await expect(detectBtn).toHaveText('✓ 已检测');
+
   // 初始状态：总开关关闭，连接区域禁用
   const enabledSwitch = page.getByTestId('next-glab-enabled');
   await expect(enabledSwitch).toHaveAttribute('aria-pressed', 'false');
@@ -28,6 +35,14 @@ test('glab settings: enable switch, select two connections, pick default host, r
   // 此时列出 2 个连接
   const connCheckboxes = page.getByTestId('next-glab-conn');
   await expect(connCheckboxes).toHaveCount(2);
+
+  // 连接列表对齐：第一行连接的名称元素与地址元素的 boundingBox().x 相差不超过 1px
+  const firstRow = page.locator('.ns-git-row').first();
+  const nameBox = await firstRow.locator('.ns-git-name b').boundingBox();
+  const addrBox = await firstRow.locator('.ns-git-meta .mono').boundingBox();
+  expect(nameBox).not.toBeNull();
+  expect(addrBox).not.toBeNull();
+  expect(Math.abs(nameBox.x - addrBox.x)).toBeLessThanOrEqual(1);
 
   // 勾选第一个连接，此时只勾选了 1 个，默认主机单选不出现
   await connCheckboxes.nth(0).check();

@@ -87,6 +87,7 @@ const SAMPLE_CONNECTIONS: GitConnection[] = [
 
 describe('GlabPage', () => {
   beforeEach(() => {
+    vi.useFakeTimers();
     vi.clearAllMocks();
     mockUseExtensions.mockReturnValue({
       gitConnections: SAMPLE_CONNECTIONS,
@@ -99,6 +100,7 @@ describe('GlabPage', () => {
 
   afterEach(async () => {
     await cleanup();
+    vi.useRealTimers();
   });
 
   it('开关控制连接区域禁用状态', async () => {
@@ -278,6 +280,9 @@ describe('GlabPage', () => {
     await act(async () => {
       testBtn.click();
     });
+    await act(async () => {
+      vi.advanceTimersByTime(500);
+    });
 
     expect(mockTestGlab).toHaveBeenCalledWith('zh');
     let resultBox = host!.querySelector('[data-testid="next-glab-test-result"]');
@@ -295,6 +300,9 @@ describe('GlabPage', () => {
 
     await act(async () => {
       testBtn.click();
+    });
+    await act(async () => {
+      vi.advanceTimersByTime(500);
     });
 
     resultBox = host!.querySelector('[data-testid="next-glab-test-result"]');
@@ -352,6 +360,9 @@ describe('GlabPage', () => {
     await act(async () => {
       detectBtn!.click();
     });
+    await act(async () => {
+      vi.advanceTimersByTime(2000);
+    });
 
     expect(mockDetectGlab).toHaveBeenCalled();
   });
@@ -400,5 +411,187 @@ describe('GlabPage', () => {
 
     expect(checkboxes[0].checked).toBe(false);
     expect(onToast).toHaveBeenCalledWith('网络请求失败');
+  });
+
+  it('detectGlab 立即 resolve：499ms 时仍是「检测中…」，500ms 后变「✓ 已检测」，再 1500ms 恢复「检测」', async () => {
+    const currentSettings: GlabSettings = {
+      enabled: true,
+      customPath: '',
+      binary: { source: 'bundled', version: '1.46.1', path: '/usr/local/bin/glab' },
+      connectionIds: ['gl-intra'],
+      defaultConnectionId: 'gl-intra',
+    };
+
+    mockGetGlabSettings.mockResolvedValue(currentSettings);
+    mockDetectGlab.mockResolvedValue(currentSettings);
+
+    await render(<GlabPage lang="zh" onToast={vi.fn()} />);
+
+    const detectBtn = host!.querySelector<HTMLButtonElement>('[data-testid="next-glab-detect"]')!;
+    expect(detectBtn.textContent).toBe('检测');
+    expect(detectBtn.disabled).toBe(false);
+
+    // 点击检测
+    await act(async () => {
+      detectBtn.click();
+    });
+
+    // 刚点击后处于检测中
+    expect(detectBtn.textContent).toBe('正在检测…');
+    expect(detectBtn.disabled).toBe(true);
+
+    // 499ms 时仍是「检测中…」
+    await act(async () => {
+      vi.advanceTimersByTime(499);
+    });
+    expect(detectBtn.textContent).toBe('正在检测…');
+    expect(detectBtn.disabled).toBe(true);
+
+    // 500ms 后变「✓ 已检测」并处于禁用状态
+    await act(async () => {
+      vi.advanceTimersByTime(1);
+    });
+    expect(detectBtn.textContent).toBe('✓ 已检测');
+    expect(detectBtn.disabled).toBe(true);
+
+    // 1499ms（未满 1500ms）仍为「✓ 已检测」
+    await act(async () => {
+      vi.advanceTimersByTime(1499);
+    });
+    expect(detectBtn.textContent).toBe('✓ 已检测');
+    expect(detectBtn.disabled).toBe(true);
+
+    // 满 1500ms 后恢复「检测」并解除禁用
+    await act(async () => {
+      vi.advanceTimersByTime(1);
+    });
+    expect(detectBtn.textContent).toBe('检测');
+    expect(detectBtn.disabled).toBe(false);
+  });
+
+  it('检测结果为缺失时不出现「✓ 已检测」', async () => {
+    const currentSettings: GlabSettings = {
+      enabled: true,
+      customPath: '',
+      binary: { source: 'bundled', version: '1.46.1', path: '/usr/local/bin/glab' },
+      connectionIds: ['gl-intra'],
+      defaultConnectionId: 'gl-intra',
+    };
+
+    mockGetGlabSettings.mockResolvedValue(currentSettings);
+    mockDetectGlab.mockResolvedValue({
+      ...currentSettings,
+      binary: { source: 'missing', version: '', path: '' },
+    });
+
+    await render(<GlabPage lang="zh" onToast={vi.fn()} />);
+
+    const detectBtn = host!.querySelector<HTMLButtonElement>('[data-testid="next-glab-detect"]')!;
+
+    await act(async () => {
+      detectBtn.click();
+    });
+
+    expect(detectBtn.textContent).toBe('正在检测…');
+
+    // 500ms 后直接恢复「检测」，不出现「✓ 已检测」
+    await act(async () => {
+      vi.advanceTimersByTime(500);
+    });
+    expect(detectBtn.textContent).toBe('检测');
+    expect(detectBtn.disabled).toBe(false);
+
+    // 再过 1500ms 依然是「检测」
+    await act(async () => {
+      vi.advanceTimersByTime(1500);
+    });
+    expect(detectBtn.textContent).toBe('检测');
+  });
+
+  it('testGlab 立即 resolve：499ms 时仍是「测试中…」', async () => {
+    mockGetGlabSettings.mockResolvedValue({
+      enabled: true,
+      customPath: '',
+      binary: { source: 'bundled', version: '1.46.1', path: '/usr/local/bin/glab' },
+      connectionIds: ['gl-intra'],
+      defaultConnectionId: 'gl-intra',
+    });
+
+    mockTestGlab.mockResolvedValue({
+      ok: true,
+      host: 'gitlab.intra.local',
+      username: 'lawrence',
+      output: '',
+    });
+
+    await render(<GlabPage lang="zh" onToast={vi.fn()} />);
+
+    const testBtn = host!.querySelector<HTMLButtonElement>('[data-testid="next-glab-test"]')!;
+    expect(testBtn.disabled).toBe(false);
+
+    await act(async () => {
+      testBtn.click();
+    });
+
+    // 499ms 时仍是「测试中…」且禁用，未显示结果卡片
+    await act(async () => {
+      vi.advanceTimersByTime(499);
+    });
+    expect(testBtn.textContent).toBe('正在测试…');
+    expect(testBtn.disabled).toBe(true);
+    expect(host!.querySelector('[data-testid="next-glab-test-result"]')).toBeNull();
+
+    // 500ms 后变为「测试」，解除禁用并显示结果
+    await act(async () => {
+      vi.advanceTimersByTime(1);
+    });
+    expect(testBtn.textContent).toBe('测试');
+    expect(testBtn.disabled).toBe(false);
+    expect(host!.querySelector('[data-testid="next-glab-test-result"]')).toBeTruthy();
+  });
+
+  it('500ms 内卸载组件不报错、无 React 警告', async () => {
+    const errorSpy = vi.spyOn(console, 'error');
+    const warnSpy = vi.spyOn(console, 'warn');
+
+    mockGetGlabSettings.mockResolvedValue({
+      enabled: true,
+      customPath: '',
+      binary: { source: 'bundled', version: '1.46.1', path: '/usr/local/bin/glab' },
+      connectionIds: ['gl-intra'],
+      defaultConnectionId: 'gl-intra',
+    });
+    mockDetectGlab.mockResolvedValue({
+      enabled: true,
+      customPath: '',
+      binary: { source: 'bundled', version: '1.46.1', path: '/usr/local/bin/glab' },
+      connectionIds: ['gl-intra'],
+      defaultConnectionId: 'gl-intra',
+    });
+
+    await render(<GlabPage lang="zh" onToast={vi.fn()} />);
+
+    const detectBtn = host!.querySelector<HTMLButtonElement>('[data-testid="next-glab-detect"]')!;
+    await act(async () => {
+      detectBtn.click();
+    });
+
+    // 运行 200ms 后卸载
+    await act(async () => {
+      vi.advanceTimersByTime(200);
+    });
+    await cleanup();
+
+    // 继续推移时间越过 500ms 和 1500ms
+    await act(async () => {
+      vi.advanceTimersByTime(3000);
+    });
+
+    // 确认没有 setState 警告或未捕获错误
+    expect(errorSpy).not.toHaveBeenCalled();
+    expect(warnSpy).not.toHaveBeenCalled();
+
+    errorSpy.mockRestore();
+    warnSpy.mockRestore();
   });
 });
