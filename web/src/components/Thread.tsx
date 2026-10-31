@@ -19,6 +19,20 @@ import { WorkspaceChip } from './WorkspaceChip';
 
 const STICK_PX = 80;
 
+/** Right-edge classic scrollbar strip, in CSS px. Overlay scrollbars are 0.
+ *  `scrollbar-gutter: stable both-edges` makes offsetWidth-clientWidth the
+ *  sum of both gutters; the scrollbar itself occupies only the right one. */
+function rightScrollbarStripPx(el: HTMLElement): number {
+  const total = Math.max(0, el.offsetWidth - el.clientWidth);
+  if (total === 0) return 0;
+  const gutter = getComputedStyle(el).scrollbarGutter || '';
+  return /\bboth-edges\b/.test(gutter) ? total / 2 : total;
+}
+
+function syncThreadScrollbarGutter(el: HTMLElement) {
+  el.style.setProperty('--thread-sb', `${rightScrollbarStripPx(el)}px`);
+}
+
 type Props = {
   items: ThreadItem[];
   toolsById: Record<string, ToolCall>;
@@ -199,6 +213,17 @@ export function Thread({
     const maxScroll = Math.max(0, el.scrollHeight - el.clientHeight);
     el.scrollTop = maxScroll <= padBottom + 1 ? 0 : maxScroll;
   }, [items, pending, stickNonce]);
+
+  useLayoutEffect(() => {
+    const el = scroller.current;
+    if (!el) return;
+    const sync = () => syncThreadScrollbarGutter(el);
+    sync();
+    if (typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(sync);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   function onScroll() {
     const el = scroller.current;

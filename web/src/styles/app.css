@@ -13,6 +13,7 @@
   --fs-h2: 17px;
   --fs-h3: 15px;
   --fs-input: var(--fs-body);
+  --thread-fade: 64px;
 }
 
 [data-font-size="sm"] {
@@ -606,7 +607,25 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.6; backgroun
 .top-title { font-size: 14px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex-shrink: 1; }
 
 /* Thread */
-.center-thread { flex: 1; min-height: 0; overflow: auto; scrollbar-gutter: stable both-edges; }
+.center-thread {
+  flex: 1; min-height: 0; overflow: auto; scrollbar-gutter: stable both-edges;
+  --thread-sb: 0px;
+  /* Two-layer mask: fade the last --thread-fade of the content; keep the
+     classic scrollbar strip (right) fully opaque. --thread-sb is measured
+     in Thread.tsx (half of offsetWidth-clientWidth when both-edges). */
+  -webkit-mask-image:
+    linear-gradient(to bottom, #000 calc(100% - var(--thread-fade)), transparent),
+    linear-gradient(#000, #000);
+  mask-image:
+    linear-gradient(to bottom, #000 calc(100% - var(--thread-fade)), transparent),
+    linear-gradient(#000, #000);
+  -webkit-mask-size: calc(100% - var(--thread-sb)) 100%, var(--thread-sb) 100%;
+  mask-size: calc(100% - var(--thread-sb)) 100%, var(--thread-sb) 100%;
+  -webkit-mask-position: 0 0, 100% 0;
+  mask-position: 0 0, 100% 0;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+}
 .thread-inner { padding: 20px 0 96px; display: flex; flex-direction: column; gap: 18px; }
 .thread-inner > * { flex-shrink: 0; }
 .thread-inner.is-empty {
