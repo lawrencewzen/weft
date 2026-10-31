@@ -56,7 +56,6 @@ export function SidebarArchived({
                 data-status={conv.status || 'idle'}
                 data-ws-id={conv.workspaceId}
                 aria-current={isCurrent ? 'page' : undefined}
-                title={conv.title || ''}
                 onClick={() => onOpenConversation(conv.workspaceId, conv.id)}
                 onContextMenu={(ev) => onOpenMenu(ev, conversationItems(conv.workspaceId, conv), conv.title || '')}
               >
