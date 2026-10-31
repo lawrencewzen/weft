@@ -62,7 +62,6 @@ export function SidebarConvRow({
       data-status={conv.status || 'idle'}
       data-ws-id={wsId}
       aria-current={isCurrent ? 'page' : undefined}
-      title={conv.title || ''}
       onClick={() => onOpenConversation(wsId, conv.id)}
       onContextMenu={(ev) => onOpenMenu(ev, conversationItems(wsId, conv), conv.title || '')}
     >

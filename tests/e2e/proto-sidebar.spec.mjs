@@ -156,6 +156,33 @@ test('workspace project row collapse and expand toggles folder icon and conversa
   expectClean(state);
 });
 
+test('conversation rows have no native title tooltip; action buttons keep theirs', async ({ page }) => {
+  const state = await openProto(page);
+
+  const liveRows = page.getByTestId('next-conv-row');
+  expect(await liveRows.count()).toBeGreaterThan(0);
+  for (const row of await liveRows.all()) {
+    await expect(row).not.toHaveAttribute('title');
+  }
+
+  await page.getByTestId('next-archived-toggle').click();
+  const archivedList = page.getByTestId('next-archived-list');
+  await expect(archivedList).toBeVisible();
+  const archivedRows = archivedList.getByTestId('next-conv-row');
+  expect(await archivedRows.count()).toBeGreaterThan(0);
+  for (const row of await archivedRows.all()) {
+    await expect(row).not.toHaveAttribute('title');
+  }
+
+  const moreBtn = page.locator('[data-testid=next-conv-row][data-id="c-rich"]').getByTestId('next-conv-more');
+  await expect(moreBtn).toHaveAttribute('title', '更多');
+  await expect(page.getByTestId('next-ws-toggle').first()).toHaveAttribute('title');
+  await expect(page.getByTestId('next-ws-add').first()).toHaveAttribute('title');
+  await expect(page.locator('.ws-node-more').first()).toHaveAttribute('title', '更多');
+
+  expectClean(state);
+});
+
 test('conversation row status icons, hover more menu, and context menu', async ({ page }) => {
   const state = await openProto(page);
 
