@@ -65,7 +65,7 @@ test('glab settings: enable switch, select two connections, pick default host, r
 
   // 刷新后设置仍保留
   await page.reload();
-  await page.getByTestId('next-open-settings').click();
+  await expect(page.getByTestId('next-settings')).toBeVisible();
   await page.getByTestId('next-settings-nav-glab').click();
   await expect(page.getByTestId('next-settings-glab')).toBeVisible();
   await expect(page.getByTestId('next-glab-enabled')).toHaveAttribute('aria-pressed', 'true');
