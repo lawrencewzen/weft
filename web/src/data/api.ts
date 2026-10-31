@@ -1,6 +1,7 @@
 import type { components } from '../../../src/v2/contract.gen';
 import { t } from '../i18n';
 import { getPreferredLang } from './lang';
+import { randomId } from './uuid';
 
 export type ConversationSnapshot = components['schemas']['ConversationSnapshot'];
 export type ConversationSummary = components['schemas']['ConversationSummary'];
@@ -232,7 +233,7 @@ export function sendMessage(
   files?: components['schemas']['SendMessageFile'][],
   pastes?: string[],
 ): Promise<RunAccepted> {
-  const id = requestId ?? crypto.randomUUID();
+  const id = requestId ?? randomId();
   const body: {
     text: string;
     requestId: string;
@@ -297,7 +298,7 @@ export function stop(cid: string): Promise<StopAccepted> {
 }
 
 export function continueRun(cid: string, requestId?: string): Promise<RunAccepted> {
-  const id = requestId ?? crypto.randomUUID();
+  const id = requestId ?? randomId();
   return requestJson<RunAccepted>(conversationPath(cid, '/continue'), {
     method: 'POST',
     body: JSON.stringify({ requestId: id }),

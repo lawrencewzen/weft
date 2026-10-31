@@ -1,9 +1,13 @@
 export async function copyText(text: string): Promise<boolean> {
   try {
-    await navigator.clipboard.writeText(text);
-    return true;
+    if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+    throw new Error('Clipboard API unavailable');
   } catch {
     try {
+      if (typeof document === 'undefined') return false;
       const el = document.createElement('textarea');
       el.value = text;
       el.setAttribute('readonly', '');

@@ -317,3 +317,48 @@ test('focused composer uses a soft gradient shadow, not a 3px solid ring', async
   const shadow = await page.getByTestId('next-composer').evaluate((el) => getComputedStyle(el).boxShadow);
   expect(shadow).not.toContain('0px 0px 0px 3px');
 });
+
+test('can send message when crypto.randomUUID is undefined (e.g. non-HTTPS LAN access)', async ({ page }) => {
+  expect(
+    fs.existsSync(protoFile),
+    'prototype build missing: run `npm run build:proto` first',
+  ).toBe(true);
+
+  await page.addInitScript(() => {
+    try {
+      delete window.crypto.randomUUID;
+    } catch {}
+    try {
+      Object.defineProperty(window.crypto, 'randomUUID', {
+        value: undefined,
+        configurable: true,
+        writable: true,
+      });
+    } catch {}
+    if (typeof Crypto !== 'undefined' && Crypto.prototype) {
+      try {
+        delete Crypto.prototype.randomUUID;
+      } catch {}
+      try {
+        Object.defineProperty(Crypto.prototype, 'randomUUID', {
+          value: undefined,
+          configurable: true,
+          writable: true,
+        });
+      } catch {}
+    }
+  });
+
+  await page.goto(pathToFileURL(protoFile).href);
+  await expect(page.getByTestId('next-app')).toBeVisible();
+
+  await page.locator('[data-testid=next-conv-row][data-id="c-docs"]').click();
+  const input = page.getByTestId('next-composer-input');
+  await expect(input).toBeVisible();
+
+  const msgText = '测试在非安全上下文中发送消息';
+  await input.fill(msgText);
+  await input.press('Enter');
+
+  await expect(page.getByTestId('next-item-user').last()).toContainText(msgText);
+});
