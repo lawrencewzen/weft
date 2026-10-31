@@ -1334,7 +1334,7 @@ export interface components {
         };
         /** @description 行内代码里在工作区中真实存在的文件路径。各端渲染 Markdown 时把这些变成可点的标签。 */
         PathRef: {
-            /** @description 行内代码的原文 */
+            /** @description 行内代码原文，或 Markdown 链接的 href 原文 */
             text: string;
             /** @description 相对工作区的路径（统一用 /） */
             path: string;

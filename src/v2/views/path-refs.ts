@@ -1,6 +1,7 @@
-/** Resolve inline-code text to a file that exists in the workspace. */
+/** Resolve inline-code text and Markdown link hrefs to files in the workspace. */
 
 import fs from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
 import { lexer, walkTokens, type Token } from 'marked';
 import { resolveInWorkspace } from '../../core/paths.mjs';
 import type { components } from '../contract.gen.ts';
@@ -24,8 +25,13 @@ export type ExtractPathRefsOptions = {
 
 const EXT_RE = /\.[A-Za-z0-9]{1,10}$/;
 const LINE_HASH_RE = /#L(\d+)$/;
+const LINE_HASH_RANGE_RE = /#L(\d+)(?:-L?\d+)?$/;
 const LINE_COLON_RE = /:(\d+)(?::(\d+))?$/;
 const DRIVE_RE = /^[A-Za-z]:/;
+const DRIVE_PREFIX_RE = /^[A-Za-z]:[\\/]/;
+const SCHEME_RE = /^[A-Za-z][A-Za-z0-9+.-]*:/;
+/** fileURLToPath on a non-Windows host leaves a leading slash: `/C:/...`. */
+const POSIX_FILE_DRIVE_RE = /^\/([A-Za-z]:\/.*)$/;
 
 function slash(p: unknown): string {
   return String(p ?? '').replaceAll('\\', '/');
@@ -103,6 +109,92 @@ function treeFilePath(rel: string, tree: PathRefTreeEntry[] | undefined, workspa
   return null;
 }
 
+/** `#L12`, `#L12-L20`, or `#L12-20` → the start line. Anything else is not a line fragment. */
+function lineFromHash(hash: string): number | undefined {
+  const m = /^#L(\d+)(?:-L?\d+)?$/.exec(hash);
+  if (!m) return undefined;
+  const line = Number(m[1]);
+  return line >= 1 ? line : undefined;
+}
+
+/**
+ * Split `#L12`, `#L12-L20`, `#L12-20`, `:12`, or `:12:3` off a link href
+ * or a decoded file path. Inline code keeps using `parseLineSuffix`.
+ */
+function parseLinkLocation(raw: string): { path: string; line: number | undefined } {
+  let m = raw.match(LINE_HASH_RANGE_RE);
+  if (m && m.index != null) {
+    return { path: raw.slice(0, m.index), line: Number(m[1]) };
+  }
+  m = raw.match(LINE_COLON_RE);
+  if (m && m.index != null) {
+    return { path: raw.slice(0, m.index), line: Number(m[1]) };
+  }
+  return { path: raw, line: undefined };
+}
+
+function isOtherScheme(href: string): boolean {
+  // `README.md:3` matches a scheme grammar (`README.md:`). Peel a trailing
+  // line suffix first so only real schemes (http, mailto, …) are ignored.
+  const peeled = href.replace(LINE_COLON_RE, '');
+  if (DRIVE_PREFIX_RE.test(href) || DRIVE_PREFIX_RE.test(peeled)) return false;
+  return SCHEME_RE.test(peeled);
+}
+
+/**
+ * `file://` href → filesystem path with the fragment removed.
+ * Percent-decoding follows `fileURLToPath` (`%20`, UTF-8 sequences).
+ * `file:///C:/...` becomes `C:/...` on every host.
+ */
+function decodeFileHref(href: string): { path: string; line: number | undefined } | null {
+  let url: URL;
+  try {
+    url = new URL(href);
+  } catch {
+    return null;
+  }
+  if (url.protocol !== 'file:') return null;
+  const pathUrl = new URL(url.href);
+  pathUrl.hash = '';
+  let fsPath: string;
+  try {
+    fsPath = slash(fileURLToPath(pathUrl));
+  } catch {
+    return null;
+  }
+  const drive = POSIX_FILE_DRIVE_RE.exec(fsPath);
+  if (drive) fsPath = drive[1];
+  const parsed = parseLinkLocation(fsPath);
+  return { path: parsed.path, line: lineFromHash(url.hash) ?? parsed.line };
+}
+
+function locatedPathRef(pathText: string, line: number | undefined, workspacePath: string): PathRefHit | null {
+  const normalized = normalizePathCandidate(pathText);
+  if (!normalized || hasDotDot(normalized)) return null;
+  const rel = toWorkspaceRelative(normalized, workspacePath);
+  if (!rel || hasDotDot(rel)) return null;
+  if (!lastSegmentHasExt(rel)) return null;
+  return withLine(rel, line);
+}
+
+/**
+ * Link href that names a workspace file, without checking that the file exists.
+ * `text` stored by the caller is the href unchanged. `http`, `https`, `mailto`,
+ * and any other non-file scheme are ignored.
+ */
+function candidateLinkPathRef(href: string, workspacePath: string): PathRefHit | null {
+  const raw = href.trim();
+  if (!raw) return null;
+  if (/^file:/i.test(raw)) {
+    const decoded = decodeFileHref(raw);
+    if (!decoded) return null;
+    return locatedPathRef(decoded.path, decoded.line, workspacePath);
+  }
+  if (isOtherScheme(raw) || /\s/.test(raw)) return null;
+  const parsed = parseLinkLocation(raw);
+  return locatedPathRef(parsed.path, parsed.line, workspacePath);
+}
+
 /**
  * Path-like inline code without checking that the file exists.
  * Same rules as `resolvePathRef`, minus the workspace tree lookup.
@@ -134,11 +226,17 @@ export function resolvePathRef(
   return withLine(path, cand.line);
 }
 
-function collectCodespans(markdown: string): string[] {
+type PathText = { kind: 'code' | 'link'; text: string };
+
+function collectPathTexts(markdown: string): PathText[] {
   const tokens = lexer(markdown);
-  const out: string[] = [];
+  const out: PathText[] = [];
   walkTokens(tokens, (token: Token) => {
-    if (token.type === 'codespan') out.push(String(token.text ?? ''));
+    if (token.type === 'codespan') {
+      out.push({ kind: 'code', text: String(token.text ?? '') });
+    } else if (token.type === 'link' && token.href) {
+      out.push({ kind: 'link', text: token.href });
+    }
   });
   return out;
 }
@@ -155,8 +253,10 @@ export async function fileExistsInWorkspace(workspacePath: string, rel: string):
 }
 
 /**
- * Inline-code spans whose text names a real file in the workspace.
- * Skips fenced and indented code blocks. Dedupes by `text`, first occurrence wins.
+ * Inline-code spans and Markdown link hrefs that name a real file in the workspace.
+ * A link's `text` is the href as marked parsed it, with no rewriting.
+ * Codespan rules are unchanged. Skips fenced and indented code blocks.
+ * Dedupes by `text`, first occurrence wins.
  */
 export async function extractPathRefs(
   markdown: unknown,
@@ -165,13 +265,15 @@ export async function extractPathRefs(
   const check = exists ?? ((rel: string) => fileExistsInWorkspace(workspacePath, rel));
   const seen = new Set<string>();
   const out: PathRef[] = [];
-  for (const text of collectCodespans(String(markdown ?? ''))) {
-    if (seen.has(text)) continue;
-    const cand = candidatePathRef(text, workspacePath);
+  for (const hit of collectPathTexts(String(markdown ?? ''))) {
+    if (seen.has(hit.text)) continue;
+    const cand = hit.kind === 'link'
+      ? candidateLinkPathRef(hit.text, workspacePath)
+      : candidatePathRef(hit.text, workspacePath);
     if (!cand) continue;
     if (!await Promise.resolve(check(cand.path))) continue;
-    seen.add(text);
-    const item: PathRef = { text, path: cand.path };
+    seen.add(hit.text);
+    const item: PathRef = { text: hit.text, path: cand.path };
     if (cand.line != null) item.line = cand.line;
     out.push(item);
   }
