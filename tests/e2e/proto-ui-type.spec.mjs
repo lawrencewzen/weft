@@ -83,6 +83,7 @@ async function collectTextFontSizes(page) {
     for (const el of all) {
       if (skip.has(el)) continue;
       if (el.closest('svg')) continue;
+      if (el.closest('[data-testid^="proto-"]')) continue;
       const style = getComputedStyle(el);
       if (style.display === 'none' || style.visibility === 'hidden') continue;
       const hasText = [...el.childNodes].some(
