@@ -52,9 +52,30 @@ async function cleanup() {
 }
 
 function createFakeWindow() {
+  const children: Array<{ tagName?: string; textContent?: string; style?: Record<string, string> }> = [];
+  const body = {
+    children,
+    firstChild: null as unknown,
+    appendChild: vi.fn((node: { tagName?: string; textContent?: string; style?: Record<string, string> }) => {
+      children.push(node);
+      body.firstChild = children[0] ?? null;
+      return node;
+    }),
+    removeChild: vi.fn((node: unknown) => {
+      const idx = children.indexOf(node as { tagName?: string; textContent?: string; style?: Record<string, string> });
+      if (idx >= 0) children.splice(idx, 1);
+      body.firstChild = children[0] ?? null;
+      return node;
+    }),
+  };
   const doc = {
     title: '',
-    body: { innerHTML: '' },
+    body,
+    createElement: vi.fn((tag: string) => ({
+      tagName: tag.toUpperCase(),
+      textContent: '',
+      style: {} as Record<string, string>,
+    })),
   };
   return {
     closed: false,
@@ -132,7 +153,9 @@ describe('ProviderPage OAuth tab management', () => {
     // Synchronously called before connectProviderOAuth resolved!
     expect(openSpy).toHaveBeenCalledWith('', '_blank');
     expect(fakeTab.document.title).toBe('正在跳转到授权页面…');
-    expect(fakeTab.document.body.innerHTML).toContain('正在跳转到授权页面…');
+    const child = fakeTab.document.body.children[0];
+    expect(child?.textContent).toBe('正在跳转到授权页面…');
+    expect(child?.style?.display).toBe('flex');
     expect(fakeTab.opener).toBeNull();
     expect(fakeTab.location.href).toBe('');
 

@@ -131,12 +131,24 @@ export function ProviderPage({ lang, onConfirm }: Props) {
       const popup = window.open('', '_blank');
       if (popup) {
         try {
-          popup.document.title = lang === 'en' ? 'Redirecting to sign-in…' : '正在跳转到授权页面…';
-          popup.document.body.innerHTML = `
-            <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; color: #555;">
-              ${lang === 'en' ? 'Redirecting to sign-in…' : '正在跳转到授权页面…'}
-            </div>
-          `;
+          const text = t(lang, 'dlg_oauth_redirecting');
+          popup.document.title = text;
+          const doc = popup.document;
+          if (doc && doc.body) {
+            while (doc.body.firstChild) {
+              doc.body.removeChild(doc.body.firstChild);
+            }
+            const div = doc.createElement('div');
+            div.textContent = text;
+            div.style.display = 'flex';
+            div.style.alignItems = 'center';
+            div.style.justifyContent = 'center';
+            div.style.height = '100vh';
+            div.style.margin = '0';
+            div.style.color = '#555';
+            div.style.fontFamily = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+            doc.body.appendChild(div);
+          }
         } catch {
           // ignore
         }

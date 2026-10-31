@@ -268,12 +268,14 @@ export function AddProviderDialog({
     }
   }, [loginSession, selectedId]);
 
+  const sessionId = loginSession?.id;
   useEffect(() => {
     if (loginSession && isOpen) {
       setSelectedId(loginSession.providerId);
       setOauthOpen(true);
     }
-  }, [loginSession, isOpen]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId, isOpen]);
 
   useEffect(() => {
     if (!isOpen) return;
