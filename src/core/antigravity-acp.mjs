@@ -1,9 +1,16 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { readFileSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import path from 'node:path';
 
 export const ANTIGRAVITY_ACP_ID = 'antigravity-acp';
 export const ANTIGRAVITY_ACP_MARKER = 'pi-antigravity-acp:managed-by-antigravity';
+/** Phrase key. A turn with no conversation workspace fails with this instead of process.cwd(). */
+export const AGY_ERR_NO_WORKSPACE = 'agy_err_no_workspace';
+
+const sessionCwds = new Map();
+const turns = new AsyncLocalStorage();
+const STREAM_CAPTURED = Symbol('weftAntigravityCwd');
 
 function asRecord(value) {
   return value && typeof value === 'object' && !Array.isArray(value) ? value : null;
@@ -94,11 +101,86 @@ export function antigravityAcpCredential() {
   };
 }
 
+function workspaceError() {
+  const error = new Error(AGY_ERR_NO_WORKSPACE);
+  error.code = 'E_AGY_NO_WORKSPACE';
+  error.phrase = AGY_ERR_NO_WORKSPACE;
+  return error;
+}
+
+/**
+ * Remember which workspace an ACP session belongs to.
+ * An empty cwd is stored on purpose: the turn must fail, not fall back to process.cwd().
+ */
+export function bindAntigravitySessionCwd(sessionId, cwd) {
+  const id = typeof sessionId === 'string' ? sessionId.trim() : '';
+  if (!id) return;
+  sessionCwds.set(id, typeof cwd === 'string' ? cwd.trim() : '');
+}
+
+/** Workspace for the conversation whose model request is running on this async resource. */
+export function noteAntigravityTurn(cwd) {
+  turns.enterWith({ cwd: typeof cwd === 'string' ? cwd.trim() : '' });
+}
+
+export function clearAntigravityCwdBindings() {
+  sessionCwds.clear();
+}
+
+/**
+ * Workspace directory for one ACP session. Missing or blank throws.
+ * Never returns process.cwd().
+ */
+export function resolveAntigravityWorkspaceCwd(options = {}) {
+  const sessionId = typeof options?.sessionId === 'string' ? options.sessionId.trim() : '';
+  let cwd;
+  if (sessionId && sessionCwds.has(sessionId)) {
+    cwd = sessionCwds.get(sessionId);
+  } else {
+    const turn = turns.getStore();
+    if (turn && typeof turn.cwd === 'string') cwd = turn.cwd;
+    if (sessionId && cwd !== undefined) sessionCwds.set(sessionId, cwd);
+  }
+  if (typeof cwd !== 'string' || !cwd.trim()) throw workspaceError();
+  return cwd;
+}
+
+function rememberStreamWorkspace(options) {
+  const sessionId = typeof options?.sessionId === 'string' ? options.sessionId.trim() : '';
+  if (!sessionId || sessionCwds.has(sessionId)) return;
+  const turn = turns.getStore();
+  if (!turn) return;
+  sessionCwds.set(sessionId, typeof turn.cwd === 'string' ? turn.cwd : '');
+}
+
+/**
+ * Copy the in-flight conversation workspace onto options.sessionId before the
+ * plugin awaits. Concurrent conversations each call this on their own async resource.
+ */
+export function captureAntigravityWorkspaceOnStream(provider) {
+  if (!provider || provider[STREAM_CAPTURED]) return provider;
+  for (const name of ['stream', 'streamSimple']) {
+    const fn = provider[name];
+    if (typeof fn !== 'function') continue;
+    provider[name] = function antigravityWorkspaceStream(model, context, options) {
+      rememberStreamWorkspace(options);
+      return fn.call(provider, model, context, options);
+    };
+  }
+  provider[STREAM_CAPTURED] = true;
+  return provider;
+}
+
 export async function loadAntigravityAcp() {
   try {
     const mod = await import('../vendor/antigravity-acp.mjs');
     if (typeof mod.createAntigravityProvider !== 'function') return null;
-    return mod.createAntigravityProvider();
+    if (typeof mod.setCwdResolver === 'function') {
+      mod.setCwdResolver((options) => resolveAntigravityWorkspaceCwd(options));
+    }
+    const bundle = mod.createAntigravityProvider();
+    captureAntigravityWorkspaceOnStream(bundle?.provider);
+    return bundle;
   } catch (err) {
     console.error(`WEFT_WARN antigravity-acp ${err instanceof Error ? err.message : err}`);
     return null;

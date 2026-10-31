@@ -102,6 +102,7 @@ export const en: Record<string, string> = {
   src_err_env: 'Environment variable not detected',
   src_err_local_login: 'Local Grok login was not detected',
   src_err_agy_login: 'Local Antigravity ACP login was not detected',
+  agy_err_no_workspace: 'This conversation has no workspace. Antigravity needs a workspace directory and will not use the directory Weft was started in.',
   ws_name_required: 'Name is required',
   ws_path_required: 'A local path is required',
   ws_git_required: 'Git repository URL is required',

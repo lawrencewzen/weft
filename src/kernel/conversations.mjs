@@ -38,6 +38,7 @@ import { createSubagentExtension, createSubagentHost } from './subagents.mjs';
 import { createWorkspaceExtension, workspaceTools } from './tools.mjs';
 import { installUsageExtension } from './usage.mjs';
 import { installContinuationExtension } from './continuation.mjs';
+import { createAntigravityCwdExtension } from './antigravity-cwd.mjs';
 import { createWorkspaceEnv } from './workspace-env.mjs';
 
 const DETAIL_CAP = 1024 * 1024;
@@ -180,6 +181,8 @@ export async function openConversationKernel({
   ];
   registry.install(subagentExtension);
   if (String(env.WEFT_FAUX_SCRIPT || '').trim()) registry.install(createScriptFloorExtension());
+  const antigravityCwd = { harness: null, context: null };
+  registry.install(createAntigravityCwdExtension(antigravityCwd));
   const kernel = await openKernel({
     dataDir,
     models,
@@ -188,6 +191,8 @@ export async function openConversationKernel({
     env: async ({ cwd }) => (cwd ? createWorkspaceEnv({ cwd }) : undefined), // main Agent and sub-agents; bash env allow-list lives here
   });
   const { harness, context } = kernel;
+  antigravityCwd.harness = harness;
+  antigravityCwd.context = context;
 
   function enqueue(cid, fn) {
     const prev = tails.get(cid) || Promise.resolve();
