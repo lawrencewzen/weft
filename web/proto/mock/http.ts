@@ -402,26 +402,30 @@ function handleConnect(
   if (method === 'oauth') {
     const sid = nextId(db, 'session');
     const avail = MOCK_AVAILABLE_PROVIDERS.find((p) => p.id === id);
+    const isXai = id === 'xai';
+    const progressEvent = {
+      type: 'progress' as const,
+      message: lang === 'en' ? 'Waiting for authorization…' : '等待授权…',
+    };
     const session: LoginSession = {
       id: sid,
       providerId: id,
       state: 'pending',
-      events: [
-        {
-          type: 'auth_url',
-          url: `https://auth.${id}.com/oauth/authorize`,
-          instructions: `用 ${avail?.name || id} 账号授权（订阅额度可直接用）`,
-        },
-        {
-          type: 'device_code',
-          userCode: 'WFT-7Q2K',
-          verificationUri: `https://auth.${id}.com/device`,
-        },
-        {
-          type: 'progress',
-          message: lang === 'en' ? 'Waiting for authorization…' : '等待授权…',
-        },
-      ],
+      events: isXai
+        ? [progressEvent]
+        : [
+            {
+              type: 'auth_url',
+              url: `https://auth.${id}.com/oauth/authorize`,
+              instructions: `用 ${avail?.name || id} 账号授权（订阅额度可直接用）`,
+            },
+            {
+              type: 'device_code',
+              userCode: 'WFT-7Q2K',
+              verificationUri: `https://auth.${id}.com/device`,
+            },
+            progressEvent,
+          ],
     };
     db.loginSessions.set(sid, { session, pollCount: 0 });
     return ok({ session });
@@ -918,11 +922,20 @@ export function handleMockRequest(db: MockDb, hub: MockHub, rawUrl: string, init
   }
   if (path === '/api/v2/providers/available' && method === 'GET') {
     const connectedIds = new Set(db.providers.map((p) => p.id));
-    const list = MOCK_AVAILABLE_PROVIDERS.map((item) => ({
-      ...item,
-      name: mockProviderName(item.id, item.name, lang),
-      connected: connectedIds.has(item.id),
-    }));
+    const search = typeof window !== 'undefined' ? window.location.search : '';
+    const noLocalGrok = search.includes('no-local-grok') || search.includes('grok=oauth');
+    const list = MOCK_AVAILABLE_PROVIDERS.map((item) => {
+      let localLogin = item.localLogin;
+      if (item.id === 'xai' && noLocalGrok) {
+        localLogin = { detected: false };
+      }
+      return {
+        ...item,
+        localLogin,
+        name: mockProviderName(item.id, item.name, lang),
+        connected: connectedIds.has(item.id),
+      };
+    });
     return ok({
       providers: sortAvailableProviders(list),
     });
@@ -943,6 +956,19 @@ export function handleMockRequest(db: MockDb, hub: MockHub, rawUrl: string, init
     const sessionRec = db.loginSessions.get(sid);
     if (!sessionRec) return fail(404, 'Login session not found');
     sessionRec.pollCount += 1;
+    if (sessionRec.session.providerId === 'xai') {
+      const hasDevice = sessionRec.session.events?.some((e) => e.type === 'device_code');
+      if (!hasDevice) {
+        sessionRec.session.events = [
+          {
+            type: 'device_code',
+            userCode: 'WFT-7Q2K',
+            verificationUri: 'https://accounts.x.ai/oauth2/device?user_code=WFT-7Q2K',
+          },
+          ...(sessionRec.session.events || []),
+        ];
+      }
+    }
     if (sessionRec.pollCount >= 3 && sessionRec.session.state === 'pending') {
       sessionRec.session.state = 'done';
       const id = sessionRec.session.providerId;

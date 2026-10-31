@@ -45,6 +45,7 @@ export function ProviderPage({ lang, onConfirm }: Props) {
   const [available, setAvailable] = useState<Available[]>([]);
   const [loginSession, setLoginSession] = useState<LoginSession | null>(null);
   const sessionPollRef = useRef<number | null>(null);
+  const oauthTabRef = useRef<Window | null>(null);
 
   useEffect(() => {
     if (!defMenuOpen) return;
@@ -60,10 +61,12 @@ export function ProviderPage({ lang, onConfirm }: Props) {
   useEffect(() => {
     return () => {
       if (sessionPollRef.current) window.clearTimeout(sessionPollRef.current);
+      closeOAuthTab();
     };
   }, []);
 
   const handleOpenAdd = async () => {
+    closeOAuthTab();
     setLoginSession(null);
     try {
       const res = await getAvailableProviders(lang);
@@ -122,7 +125,74 @@ export function ProviderPage({ lang, onConfirm }: Props) {
     await patchProvider(providerId, { defaultModel: modelId });
   };
 
-  // OAuth Session flow
+  // OAuth Session flow & tab management
+  const openOAuthTab = () => {
+    try {
+      const popup = window.open('', '_blank');
+      if (popup) {
+        try {
+          popup.document.title = lang === 'en' ? 'Redirecting to sign-in…' : '正在跳转到授权页面…';
+          popup.document.body.innerHTML = `
+            <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; color: #555;">
+              ${lang === 'en' ? 'Redirecting to sign-in…' : '正在跳转到授权页面…'}
+            </div>
+          `;
+        } catch {
+          // ignore
+        }
+        try {
+          popup.opener = null;
+        } catch {
+          // ignore
+        }
+        oauthTabRef.current = popup;
+      } else {
+        oauthTabRef.current = null;
+      }
+    } catch {
+      oauthTabRef.current = null;
+    }
+  };
+
+  const redirectOAuthTab = (session: LoginSession | null | undefined) => {
+    const tab = oauthTabRef.current;
+    if (!tab) return;
+    if (!session?.events) return;
+
+    const deviceEvt = session.events.find(
+      (e): e is { type: 'device_code'; userCode: string; verificationUri: string } => e.type === 'device_code',
+    );
+    const authUrlEvt = session.events.find(
+      (e): e is { type: 'auth_url'; url: string; instructions?: string } => e.type === 'auth_url',
+    );
+
+    const targetUrl = deviceEvt?.verificationUri || authUrlEvt?.url;
+    if (targetUrl) {
+      try {
+        if (!tab.closed) {
+          tab.location.href = targetUrl;
+        }
+      } catch {
+        // ignore
+      }
+      oauthTabRef.current = null;
+    }
+  };
+
+  const closeOAuthTab = () => {
+    const tab = oauthTabRef.current;
+    if (tab) {
+      try {
+        if (!tab.closed) {
+          tab.close();
+        }
+      } catch {
+        // ignore
+      }
+      oauthTabRef.current = null;
+    }
+  };
+
   const pollSession = (sid: string) => {
     if (sessionPollRef.current) window.clearTimeout(sessionPollRef.current);
     sessionPollRef.current = window.setTimeout(async () => {
@@ -130,6 +200,11 @@ export function ProviderPage({ lang, onConfirm }: Props) {
         const res = await getLoginSession(sid, lang);
         const s = (res as { session?: LoginSession }).session || (res as unknown as LoginSession);
         setLoginSession(s);
+        if (s?.state === 'error') {
+          closeOAuthTab();
+        } else {
+          redirectOAuthTab(s);
+        }
         if (s && (s.state === 'pending' || s.state === 'prompt')) pollSession(sid);
       } catch {
         // ignore
@@ -138,19 +213,47 @@ export function ProviderPage({ lang, onConfirm }: Props) {
   };
 
   const handleStartOAuth = async (vendor: Available) => {
-    const res = await connectProviderOAuth(vendor.id, lang);
-    setLoginSession(res.session);
-    pollSession(res.session.id);
+    openOAuthTab();
+    try {
+      const res = await connectProviderOAuth(vendor.id, lang);
+      setLoginSession(res.session);
+      if (res.session.state === 'error') {
+        closeOAuthTab();
+      } else {
+        redirectOAuthTab(res.session);
+      }
+      pollSession(res.session.id);
+    } catch (err) {
+      closeOAuthTab();
+      setLoginSession({
+        id: '',
+        providerId: vendor.id,
+        state: 'error',
+        events: [],
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
   };
 
   const handleAnswerOAuth = async (input: string) => {
     if (!loginSession) return;
-    const res = await answerLoginSession(loginSession.id, input, lang);
-    setLoginSession(res.session);
-    if (res.session.state === 'pending' || res.session.state === 'prompt') pollSession(res.session.id);
+    try {
+      const res = await answerLoginSession(loginSession.id, input, lang);
+      setLoginSession(res.session);
+      if (res.session.state === 'error') {
+        closeOAuthTab();
+      } else {
+        redirectOAuthTab(res.session);
+      }
+      if (res.session.state === 'pending' || res.session.state === 'prompt') pollSession(res.session.id);
+    } catch (err) {
+      closeOAuthTab();
+      throw err;
+    }
   };
 
   const handleCancelOAuth = async () => {
+    closeOAuthTab();
     if (!loginSession) return;
     if (sessionPollRef.current) window.clearTimeout(sessionPollRef.current);
     await cancelLoginSession(loginSession.id, lang);
@@ -158,6 +261,7 @@ export function ProviderPage({ lang, onConfirm }: Props) {
   };
 
   const handleCloseAdd = () => {
+    closeOAuthTab();
     setIsAddOpen(false);
     setLoginSession(null);
     if (sessionPollRef.current) {
@@ -264,11 +368,9 @@ export function ProviderPage({ lang, onConfirm }: Props) {
               testing={testing}
               onTest={handleTest}
               onOpenRelogin={(p) => {
-                const vendor = available.find((a) => a.id === p.id);
-                if (vendor) {
-                  setIsAddOpen(true);
-                  void handleStartOAuth(vendor);
-                }
+                const vendor = available.find((a) => a.id === p.id) || ({ id: p.id, name: p.name, authMethods: ['oauth'] } as Available);
+                setIsAddOpen(true);
+                void handleStartOAuth(vendor);
               }}
               onKeyChange={async (id, apiKey) => {
                 await patchProvider(id, { apiKey });

@@ -37,7 +37,11 @@ export function LoginSessionView({ session, lang, onAnswer, onCancel }: Props) {
   };
 
   const authUrl = session.events?.find((e): e is { type: 'auth_url'; url: string; instructions?: string } => e.type === 'auth_url')?.url;
-  const userCode = session.events?.find((e): e is { type: 'device_code'; userCode: string; verificationUri: string } => e.type === 'device_code')?.userCode;
+  const deviceEvent = session.events?.find(
+    (e): e is { type: 'device_code'; userCode: string; verificationUri: string } => e.type === 'device_code',
+  );
+  const userCode = deviceEvent?.userCode;
+  const verificationUri = deviceEvent?.verificationUri;
   const prompt = session.prompt;
 
   return (
@@ -60,6 +64,19 @@ export function LoginSessionView({ session, lang, onAnswer, onCancel }: Props) {
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
           <div className="mp-oauth-code">{userCode}</div>
           <p>{t(lang, 'dlg_oauth_code_tip')}</p>
+          {verificationUri && (
+            <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, textAlign: 'center' }}>
+              <p style={{ margin: 0 }}>{t(lang, 'dlg_oauth_verify_tip')}</p>
+              <a
+                href={verificationUri}
+                target="_blank"
+                rel="noopener noreferrer"
+                data-testid="next-oauth-verify-link"
+              >
+                {verificationUri}
+              </a>
+            </div>
+          )}
         </div>
       )}
 

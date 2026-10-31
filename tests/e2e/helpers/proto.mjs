@@ -57,10 +57,11 @@ export function expectClean(state) {
   expect(state.external, 'no external requests').toEqual([]);
 }
 
-export async function openProto(page) {
+export async function openProto(page, query = '') {
   expect(fs.existsSync(protoFile), 'prototype build missing: run `npm run build:proto`').toBe(true);
   const state = watch(page);
-  await page.goto(pathToFileURL(protoFile).href);
+  const href = pathToFileURL(protoFile).href + (query ? (query.startsWith('?') ? query : `?${query}`) : '');
+  await page.goto(href);
   await expect(page.getByTestId('next-app')).toBeVisible();
   return state;
 }

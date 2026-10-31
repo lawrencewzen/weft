@@ -177,7 +177,8 @@ export function AddProviderDialog({
 
   const selected = leftItems.find((item) => item.id === selectedId) || leftItems[0] || null;
   const vendor = selected?.kind === 'vendor' ? selected.vendor : undefined;
-  const alreadyConnected = Boolean(vendor?.connected && !sessionIds.includes(vendor.id));
+  const isRelogin = Boolean(loginSession && vendor && loginSession.providerId === vendor.id);
+  const alreadyConnected = Boolean(vendor?.connected && !sessionIds.includes(vendor.id) && !isRelogin);
   const grokDetected = Boolean(vendor?.id === 'xai' && vendor.localLogin?.detected);
   const envDetected = Boolean(vendor?.envDetected);
   const isReady = Boolean(connectedId && models.length > 0 && !alreadyConnected);
@@ -266,6 +267,13 @@ export function AddProviderDialog({
       setOauthOpen(false);
     }
   }, [loginSession, selectedId]);
+
+  useEffect(() => {
+    if (loginSession && isOpen) {
+      setSelectedId(loginSession.providerId);
+      setOauthOpen(true);
+    }
+  }, [loginSession, isOpen]);
 
   useEffect(() => {
     if (!isOpen) return;
