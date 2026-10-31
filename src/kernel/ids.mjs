@@ -16,6 +16,7 @@ export const EXT_USAGE = `${BRAND}-usage`;
 export const EXT_CONTINUATION = `${BRAND}-continuation`;
 export const EXT_WORKSPACE = `${BRAND}-workspace`;
 export const EXT_FAUX_SCRIPT = `${BRAND}-faux-script`;
+export const EXT_ANTIGRAVITY_CWD = `${BRAND}-antigravity-cwd`;
 
 export const KIND_NAMES = Object.freeze([
   SUBAGENTS_DOC_KIND,
@@ -34,4 +35,5 @@ export const EXTENSION_NAMES = Object.freeze([
   EXT_CONTINUATION,
   EXT_WORKSPACE,
   EXT_FAUX_SCRIPT,
+  EXT_ANTIGRAVITY_CWD,
 ]);

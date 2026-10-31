@@ -21,11 +21,11 @@ export const ACP_CATALOG = [
     pathPlaceholder: '/path/to/claude',
   },
   {
-    id: 'antigravity',
+    id: 'antigravity-acp',
     name: 'Antigravity',
     subtitleKey: 'dlg_add_acp_agy_sub' as const,
-    brand: 'google',
-    pathPlaceholder: '/path/to/agy',
+    brand: 'antigravity',
+    pathPlaceholder: '/path/to/agy_acp_server',
   },
 ] as const;
 
@@ -141,7 +141,8 @@ export function AddProviderDialog({
   isOpenRef.current = isOpen;
 
   const grokVendor = available.find((item) => item.id === 'xai') || null;
-  const apiVendors = available.filter((item) => item.id !== 'xai');
+  const apiVendors = available.filter((item) => item.id !== 'xai' && item.id !== 'antigravity-acp');
+  const agyAvailable = available.find((item) => item.id === 'antigravity-acp') || null;
 
   const leftItems: LeftItem[] = [
     ...(grokVendor
@@ -169,26 +170,37 @@ export function AddProviderDialog({
       brand: null,
       connected: false,
     },
-    ...ACP_CATALOG.map((acp) => ({
-      kind: 'acp' as const,
-      id: acp.id,
-      name: acp.name,
-      brand: acp.brand,
-      connected: false,
-      acp,
-    })),
+    ...ACP_CATALOG.map((acp) => {
+      const hit = available.find((item) => item.id === acp.id);
+      return {
+        kind: 'acp' as const,
+        id: acp.id,
+        name: acp.name,
+        brand: acp.brand,
+        connected: Boolean(hit?.connected && !sessionIds.includes(acp.id)),
+        acp,
+      };
+    }),
   ];
 
   const selected = leftItems.find((item) => item.id === selectedId) || leftItems[0] || null;
   const vendor = selected?.kind === 'vendor' ? selected.vendor : undefined;
   const isRelogin = Boolean(loginSession && vendor && loginSession.providerId === vendor.id);
-  const alreadyConnected = Boolean(vendor?.connected && !sessionIds.includes(vendor.id) && !isRelogin);
-  const grokDetected = Boolean(vendor?.id === 'xai' && vendor.localLogin?.detected);
-  const envDetected = Boolean(vendor?.envDetected);
-  const isReady = Boolean(connectedId && models.length > 0 && !alreadyConnected);
   const isAcp = selected?.kind === 'acp';
+  const isAgy = selected?.id === 'antigravity-acp' && Boolean(agyAvailable);
+  const isAcpComingSoon = isAcp && !isAgy;
   const isCustom = selected?.kind === 'custom';
   const isGrok = vendor?.id === 'xai';
+  const agyVendor = isAgy ? agyAvailable : undefined;
+  const alreadyConnected = Boolean(
+    ((vendor?.connected && !sessionIds.includes(vendor.id))
+      || (agyVendor?.connected && !sessionIds.includes(agyVendor.id)))
+    && !isRelogin,
+  );
+  const grokDetected = Boolean(vendor?.id === 'xai' && vendor.localLogin?.detected);
+  const agyDetected = Boolean(agyVendor?.localLogin?.detected);
+  const envDetected = Boolean(vendor?.envDetected);
+  const isReady = Boolean(connectedId && models.length > 0 && !alreadyConnected);
 
   function clearRevertTimer() {
     if (revertTimerRef.current) {
@@ -244,12 +256,13 @@ export function AddProviderDialog({
     if (!isOpen) return;
     const hit = available.find((item) => item.id === selectedId);
     if (!hit || hit.connected) return;
-    const key = hit.id === 'xai'
+    const localLogin = hit.id === 'xai' || hit.id === 'antigravity-acp';
+    const key = localLogin
       ? (hit.localLogin?.detected ? `local:${hit.id}` : '')
       : (hit.envDetected ? `env:${hit.id}` : '');
     if (!key || autoKeyRef.current === key) return;
     const id = hit.id;
-    const body: ConnectBody = hit.id === 'xai' ? { method: 'local_login' } : { method: 'env' };
+    const body: ConnectBody = localLogin ? { method: 'local_login' } : { method: 'env' };
     setTesting(true);
     setErrorMsg(null);
     void Promise.resolve(onConnectRef.current(id, body)).then((provider) => {
@@ -406,12 +419,13 @@ export function AddProviderDialog({
   }
 
   async function runConnect(body: ConnectBody, isExplicit = false) {
-    if (!vendor || alreadyConnected) return;
+    const target = vendor || agyVendor;
+    if (!target || alreadyConnected) return;
     try {
-      const connectPromise = Promise.resolve(onConnect(vendor.id, body));
-      await executeConnect(connectPromise, vendor.id, isExplicit);
+      const connectPromise = Promise.resolve(onConnect(target.id, body));
+      await executeConnect(connectPromise, target.id, isExplicit);
     } catch (err) {
-      if (!isOpenRef.current || closingRef.current || selectedIdRef.current !== vendor.id) {
+      if (!isOpenRef.current || closingRef.current || selectedIdRef.current !== target.id) {
         return;
       }
       setErrorMsg(err instanceof Error ? err.message : String(err));
@@ -449,9 +463,17 @@ export function AddProviderDialog({
   }
 
   async function handleTest() {
-    if (isAcp || alreadyConnected || testing || testSuccess || creating) return;
+    if (isAcpComingSoon || alreadyConnected || testing || testSuccess || creating) return;
     if (isCustom) {
       await runCustomConnect(true);
+      return;
+    }
+    if (isAgy && agyVendor) {
+      if (agyVendor.localLogin?.detected) await runConnect({ method: 'local_login' }, true);
+      else {
+        setOauthOpen(true);
+        await onStartOAuth(agyVendor);
+      }
       return;
     }
     if (!vendor) return;
@@ -469,7 +491,7 @@ export function AddProviderDialog({
   }
 
   async function handleKeyBlur(e?: React.FocusEvent<HTMLInputElement>) {
-    if (alreadyConnected || testing || creating || isAcp) return;
+    if (alreadyConnected || testing || creating || isAcpComingSoon || isAgy) return;
     if (e?.relatedTarget && e.relatedTarget === testBtnRef.current) {
       return;
     }
@@ -611,7 +633,7 @@ export function AddProviderDialog({
                 type="button"
                 className="mp-btn"
                 data-testid="next-add-test"
-                disabled={testing || testSuccess || creating || isAcp || alreadyConnected}
+                disabled={testing || testSuccess || creating || isAcpComingSoon || alreadyConnected}
                 onClick={() => void handleTest()}
               >
                 {testing
@@ -639,6 +661,48 @@ export function AddProviderDialog({
 
             {alreadyConnected && (
               <div className="mp-add-sub">{t(lang, 'dlg_add_already_connected')}</div>
+            )}
+
+            {!alreadyConnected && isAgy && agyVendor && (
+              <div className="mp-add-f">
+                <label>{t(lang, 'dlg_add_agy_account')}</label>
+                <div className="mp-add-in">
+                  {agyDetected && !(errorMsg && !connectedId) ? (
+                    <>
+                      <input
+                        data-testid="next-agy-detected"
+                        value={t(lang, 'dlg_add_agy_detected')}
+                        disabled
+                      />
+                      <span className="mp-add-det ok" data-testid="next-detected-check">{CHECK_SVG}</span>
+                    </>
+                  ) : oauthOpen ? (
+                    <div style={{ flex: 1 }}>
+                      <LoginSessionView
+                        session={loginSession}
+                        lang={lang}
+                        onAnswer={onAnswerOAuth}
+                        onCancel={async () => {
+                          setOauthOpen(false);
+                          await onCancelOAuth();
+                        }}
+                      />
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      className="mp-btn mp-pri"
+                      data-testid="next-agy-login"
+                      onClick={() => {
+                        setOauthOpen(true);
+                        void onStartOAuth(agyVendor);
+                      }}
+                    >
+                      {t(lang, 'dlg_add_agy_login')}
+                    </button>
+                  )}
+                </div>
+              </div>
             )}
 
             {!alreadyConnected && isGrok && (
@@ -747,7 +811,7 @@ export function AddProviderDialog({
               </div>
             )}
 
-            {isAcp && selected.acp && (
+            {isAcp && selected.acp && !isAgy && (
               <>
                 <div className="mp-add-f">
                   <label>{t(lang, 'dlg_add_runtime_path')}</label>
@@ -771,7 +835,7 @@ export function AddProviderDialog({
               </>
             )}
 
-            {!isAcp && !alreadyConnected && (
+            {!isAcpComingSoon && !alreadyConnected && (
               <div className="mp-add-f">
                 <label>{t(lang, 'dlg_add_default_model')}</label>
                 <div className="mp-add-in">
@@ -823,7 +887,7 @@ export function AddProviderDialog({
             <button type="button" className="mp-btn" data-testid="next-add-cancel" onClick={() => void handleCancel()}>
               {t(lang, 'dlg_cancel')}
             </button>
-            {isAcp ? (
+            {isAcpComingSoon ? (
               <button type="button" className="mp-btn mp-pri" data-testid="next-acp-coming" disabled>
                 {t(lang, 'dlg_add_coming')}
               </button>

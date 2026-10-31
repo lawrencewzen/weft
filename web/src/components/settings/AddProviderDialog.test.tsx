@@ -204,6 +204,42 @@ describe('AddProviderDialog', () => {
     expect(options[1].textContent).not.toContain('grok-unknown');
   });
 
+  it('enables Antigravity ACP when available and auto-connects local login', async () => {
+    const agy: Available = vendor({
+      id: 'antigravity-acp',
+      name: 'Google Antigravity (ACP)',
+      authMethods: ['oauth'],
+      localLogin: { detected: true },
+    });
+    const onConnect = vi.fn(async () => providerOf('antigravity-acp', 'Antigravity', [{
+      id: 'gemini-3.8-flash',
+      name: 'Gemini 3.8 Flash',
+      brand: 'google',
+      enabled: true,
+      contextWindow: 1000000,
+      maxTokens: 65536,
+      images: true,
+      reasoning: true,
+      thinkingLevels: ['low', 'medium', 'high'],
+      defaultThinkingLevel: 'medium',
+      overridden: {},
+    }]));
+    await render(<AddProviderDialog {...props({
+      available: [grokMissing, agy],
+      onConnect,
+    })} />);
+    await act(async () => {
+      (host!.querySelector('[data-vendor="antigravity-acp"]') as HTMLElement).click();
+    });
+    await act(async () => { await Promise.resolve(); });
+    expect(onConnect).toHaveBeenCalledWith('antigravity-acp', { method: 'local_login' });
+    expect(host!.querySelector('[data-testid="next-agy-detected"]')).toBeTruthy();
+    expect(host!.querySelector('[data-testid="next-acp-coming"]')).toBeNull();
+    const finish = host!.querySelector('[data-testid="next-provider-finish"]') as HTMLButtonElement;
+    expect(finish.disabled).toBe(false);
+    expect(finish.textContent).toContain('创建');
+  });
+
   it('disables ACP fields and the coming-soon button', async () => {
     await render(<AddProviderDialog {...props()} />);
     await act(async () => {

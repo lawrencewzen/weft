@@ -101,6 +101,8 @@ export const zh: Record<string, string> = {
   src_err_no_model: '没有可测试的模型',
   src_err_env: '未检测到环境变量',
   src_err_local_login: '未检测到本机 Grok 登录',
+  src_err_agy_login: '未检测到本机 Antigravity ACP 登录',
+  agy_err_no_workspace: '这条对话没有绑定工作区。Antigravity 需要工作区目录，不会使用 Weft 的启动目录。',
   ws_name_required: '请填写工作区名称',
   ws_path_required: '请填写本地路径',
   ws_git_required: '请填写 Git 仓库地址',
@@ -172,4 +174,5 @@ export const zh: Record<string, string> = {
   provider_name_minimax_cn: 'MiniMax（国内）',
   provider_name_xiaomi: '小米 MiMo',
   provider_name_xai: 'Grok',
+  provider_name_antigravity_acp: 'Antigravity',
 };

@@ -611,6 +611,7 @@ export interface paths {
          * 可接入的内置 Provider 目录
          * @description 返回全部内置 Provider（排除 openai-codex、radius、typesafe；github-copilot 等去掉 oauth 后无认证方式的也不返回）。
          *     xai 显示为 Grok，authMethods 只有 oauth，并带 `localLogin`（本机 Grok CLI 登录检测，不含 token）。
+         *     antigravity-acp 显示为 Antigravity，authMethods 只有 oauth，并带 `localLogin`（本机 Antigravity ACP 登录检测，不含 token）。
          *     其余 Provider 的 authMethods 不含 oauth（界面只走 API Key）。
          *     popular 优先（固定顺序），其余按 name 排序。
          *     `envVar` / `envDetected` 按内置 Provider 的环境变量规则；`connected` 表示已在 settings.providers 里。
@@ -661,7 +662,7 @@ export interface paths {
          *     验证通过后 `{ provider }`。新接入的内置 Provider 默认启用：模型 ≤6 个时全部，否则一个都不启用。
          *     验证失败 400 `{ error, code: E_AUTH | E_NETWORK | E_HTTP }`，不保存凭据。
          *     `method=oauth`：开始登录会话，返回 `{ session }`。同一 Provider 同时只允许一个进行中的会话。
-         *     `method=local_login`：仅 xai。把本机 Grok CLI（`~/.grok/auth.json`）的凭据转换成 pi-ai xai OAuth 凭据后写入 CredentialStore，再探测。响应不含 token。
+         *     `method=local_login`：xai 或 antigravity-acp。xai 把本机 Grok CLI（`~/.grok/auth.json`）的凭据转换成 pi-ai xai OAuth 凭据后写入 CredentialStore，再探测。antigravity-acp 检测本机 Antigravity ACP 登录（`~/.gemini/antigravity-acp/` 或钥匙串），写入非密钥标记凭据，不发探测请求。响应不含 token。
          */
         post: operations["connectProvider"];
         delete?: never;
@@ -1565,7 +1566,7 @@ export interface components {
             envVar?: string;
             envDetected: boolean;
             connected: boolean;
-            /** @description 本机 Grok CLI 登录检测。只出现在 xai。不含 token。 */
+            /** @description 本机登录检测。出现在 xai（Grok CLI）和 antigravity-acp（Antigravity ACP）。不含 token。 */
             localLogin?: {
                 detected: boolean;
                 account?: string;

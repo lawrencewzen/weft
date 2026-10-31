@@ -11,6 +11,7 @@ import { publicSettings } from './src/core/settings.mjs';
 import { VENDOR_PRESETS } from './src/core/model-sources.mjs';
 import { createCredentialStore, createModelsStore } from './src/core/provider-stores.mjs';
 import { createProviderService } from './src/core/provider-service.mjs';
+import { loadAntigravityAcp } from './src/core/antigravity-acp.mjs';
 import { migrateAppSettingsToV3 } from './src/core/provider-migrate.mjs';
 import { cloneGitRepo, stripGitUrlCredentials } from './src/core/git-import.mjs';
 import { gitFailureBody, planWorkspaceGit as planGitImport, usesConnectionClone } from './src/core/workspace-git.mjs';
@@ -443,10 +444,13 @@ function isSsePath(p) {
 const store = createSqliteStore(DATA_DIR);
 const credentialStore = createCredentialStore(store);
 const modelsStore = createModelsStore(store);
+const antigravityAcp = await loadAntigravityAcp();
+const extraProviders = antigravityAcp?.provider ? [antigravityAcp.provider] : [];
 const providerService = createProviderService({
   store,
   credentials: credentialStore,
   modelsStore,
+  extraProviders,
   onChange() {
     try { v2.notifyProvidersChanged(); } catch { /* v2 may still be starting */ }
   },
@@ -472,11 +476,18 @@ function shutdown() {
   try { store.close(); } catch { /* ignore */ }
   try { dataLock?.release?.(); } catch { /* ignore */ }
   dataLock = null;
+  const closeAcp = () => {
+    try {
+      const closed = antigravityAcp?.runtime?.close?.();
+      if (closed && typeof closed.then === 'function') return closed.catch(() => {});
+    } catch { /* ignore */ }
+    return Promise.resolve();
+  };
   if (!kernelApi) {
-    process.exit(0);
+    closeAcp().finally(() => process.exit(0));
     return;
   }
-  kernelApi.close().finally(() => process.exit(0));
+  kernelApi.close().finally(() => closeAcp().finally(() => process.exit(0)));
 }
 process.on('exit', () => {
   try { v2.removeDiscoveryFile(); } catch { /* ignore */ }
@@ -521,6 +532,7 @@ try {
     credentials: credentialStore,
     modelsStore,
     providerService,
+    extraProviders,
     onConversationMeta(cid) {
       v2.notifyConversation(cid);
       v2.notifySidebarChanged();
