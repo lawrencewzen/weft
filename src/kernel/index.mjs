@@ -31,7 +31,7 @@ function formatClosedError(error) {
 }
 
 /**
- * Storage errors close the Harness. Log the reason and exit so scripts/dev.sh and Docker restart the process.
+ * Storage errors close the Harness. Log the reason and exit so scripts/dev.sh restarts the process.
  * Do not retry or reopen here.
  */
 export function watchHarnessClosed(harness) {

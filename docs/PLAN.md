@@ -51,7 +51,7 @@
   - 对外提供 REST + SSE 接口：工作区、会话、消息、工具事件、文件读写、diff、运行控制。
   - 模型统一走 OpenAI 兼容接口（`LLM_API` / `LLM_BASE_URL` / `LLM_MODEL`）。
 - **前端**：Vite + 轻量框架（建议 Preact 或 Vue），构建产物放进 `public/`，内网只部署静态文件和 Node 服务。
-- **部署**：Windows 上直接用 `node server.mjs` 跑（便携版 Node 22），不依赖 Docker；Linux 上可以用 Docker Compose。
+- **部署**：Windows 上直接用 `node server.mjs` 跑（便携版 Node 22）。
 
 ## 4. 分工
 | 角色 | 执行者 | 产出 |
@@ -94,7 +94,7 @@
 - **工具补齐**：Pi Durable 本身是否自带编码工具集还要确认，可能需要我们自己写，工作量会增加。
 - **恢复语义**：`bash` 和写文件这类有副作用的操作，恢复时要避免重复执行，需要靠幂等设计和检查点粒度来保证。
 - **原项目状态**：原项目是作者个人的实验项目（v0.1，依赖 pi-durable 1.1.0，目前最新是 1.2.0），之后合并上游更新可能有冲突。
-- **本机环境**：机器上的 Node 是 v20，项目要求 22.13 以上；没有 Docker；Playwright 浏览器也需要安装。
+- **本机环境**：机器上的 Node 是 v20，项目要求 22.13 以上；Playwright 浏览器也需要安装。
 
 
 架构图见 [ARCHITECTURE.md](ARCHITECTURE.md)。

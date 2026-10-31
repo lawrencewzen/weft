@@ -22,7 +22,7 @@
 - 监控：卡住检测、模型中断自动续跑与重试，SQLite 检查点
 - 工作区内的 read / write / edit / grep / bash 工具，自动记录 diff
 - 任意 OpenAI 兼容模型接口（xAI、DeepSeek、内网）
-- Windows 内网可直接 `node server.mjs` 运行，无需 Docker
+- Windows 内网可直接 `node server.mjs` 运行
 
 ## Windows 下导入 GitLab 仓库
 
