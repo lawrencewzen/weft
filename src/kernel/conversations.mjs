@@ -125,6 +125,7 @@ export async function openConversationKernel({
   credentials,
   modelsStore,
   providerService,
+  extraProviders = [],
   onConversationMeta,
   env = process.env,
 } = {}) {
@@ -140,8 +141,9 @@ export async function openConversationKernel({
     credentials: credStore,
     modelsStore: modelCache,
     env,
+    extraProviders,
   });
-  const modelRoutes = createKernelModels({ models, getSettings, env });
+  const modelRoutes = createKernelModels({ models, getSettings, env, extraProviders });
   const routes = faux ? null : modelRoutes;
   const registry = createRegistry();
   const agentBridge = {};
