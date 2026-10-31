@@ -63,10 +63,10 @@ jobs:
 
           $root = Join-Path $env:RUNNER_TEMP 'weft smoke 中文'
           if (Test-Path -LiteralPath $root) { Remove-Item -LiteralPath $root -Recurse -Force }
-          New-Item -ItemType Directory -Path $root | Out-Null
-          # Drive-letter paths contain a colon. bsdtar treats "C:\..." as a remote archive unless --force-local is set.
-          & tar.exe --force-local -xf $zip.FullName -C $root
-          if ($LASTEXITCODE -ne 0) { throw "tar exit $LASTEXITCODE" }
+          # Windows tar.exe does not accept --force-local, and a drive-letter archive path is easy to misread.
+          # ZipFile takes a normal Windows path, including spaces and Chinese in the destination.
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          [System.IO.Compression.ZipFile]::ExtractToDirectory($zip.FullName, $root)
 
           $node = Join-Path $root 'node\node.exe'
           $cli = Join-Path $root 'app\bin\weft.mjs'
