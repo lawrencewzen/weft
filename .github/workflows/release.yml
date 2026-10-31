@@ -145,8 +145,8 @@ jobs:
             $url = "$url".Trim()
             Write-Host "login=$url"
 
-            $home = $url -replace '/auth\?code=.*$', '/'
-            $resp = Invoke-WebRequest -Uri $home -UseBasicParsing
+            $homeUrl = $url -replace '/auth\?code=.*$', '/'
+            $resp = Invoke-WebRequest -Uri $homeUrl -UseBasicParsing
             if ([int]$resp.StatusCode -ne 200) { throw "home HTTP $($resp.StatusCode)" }
             $html = [string]$resp.Content
             if ($html -notmatch '<title>Weft</title>') { throw 'homepage is not the Weft frontend' }
