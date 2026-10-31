@@ -38,6 +38,8 @@ export type GitConnection = components['schemas']['GitConnection'];
 export type GitProject = components['schemas']['GitProject'];
 export type GitBranch = components['schemas']['GitBranch'];
 export type GitTestResult = components['schemas']['GitTestResult'];
+import type { GlabBinaryInfo, GlabBinarySource, GlabSettings } from '../../src/data/api';
+export type { GlabBinaryInfo, GlabBinarySource, GlabSettings };
 
 
 /** A tool row before it is folded into the language the client asked for. */
@@ -145,6 +147,7 @@ export type MockDb = {
   messagePastes: Map<string, string>;
   /** `${wsId}\t${uploadPath}` → upload result. */
   workspaceUploads: Map<string, components['schemas']['UploadResult']>;
+  glab: GlabSettings;
 };
 
 export type EntityValue = object | ((lang: Lang) => object);

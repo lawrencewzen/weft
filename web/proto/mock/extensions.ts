@@ -100,11 +100,17 @@ export function seedGitConnections(now: number): GitConnection[] {
       name: 'GitLab.com',
       kind: 'gitlab-com',
       baseUrl: 'https://gitlab.com',
-      token: '',
-      hasToken: false,
+      token: 'glpat-…9b2c',
+      hasToken: true,
       allowHttp: false,
       caFile: '',
-      lastTest: null,
+      lastTest: {
+        ok: true,
+        username: 'lawrence',
+        error: '',
+        errorText: '',
+        at: new Date(now - 1 * HOUR).toISOString(),
+      },
     },
   ];
 }

@@ -2,6 +2,7 @@ import type {
   Bilingual,
   Change,
   ConversationView,
+  GlabSettings,
   MockConv,
   MockDb,
   MockGroup,
@@ -961,6 +962,29 @@ function regexConversation(now: number): MockConv {
   });
 }
 
+function seedGlab(): GlabSettings {
+  const defaults: GlabSettings = {
+    enabled: false,
+    customPath: '',
+    binary: {
+      source: 'bundled',
+      version: '1.46.1',
+      path: '/usr/local/bin/glab',
+    },
+    connectionIds: [],
+    defaultConnectionId: null,
+  };
+  if (typeof sessionStorage !== 'undefined') {
+    try {
+      const saved = sessionStorage.getItem('weft_proto_glab');
+      if (saved) return { ...defaults, ...JSON.parse(saved) };
+    } catch {
+      // ignore
+    }
+  }
+  return defaults;
+}
+
 export function createSeed(now: number): MockDb {
   const subagents = seedSubThreads(now);
   const conversations = [
@@ -1052,5 +1076,6 @@ export function createSeed(now: number): MockDb {
     messageImages: new Map(),
     messagePastes: new Map(),
     workspaceUploads: new Map(),
+    glab: seedGlab(),
   };
 }
