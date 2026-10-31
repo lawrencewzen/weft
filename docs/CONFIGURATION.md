@@ -1,6 +1,6 @@
 # 配置参考（当前 main）
 
-本页列出当前主分支会读的环境变量。部署方式见 [本地/内网 Windows 部署](DEPLOYMENT.md)，不要再用 Docker Compose。请先按 [快速开始](GETTING_STARTED.md) 确认项目可启动，再填写真实凭据。
+本页列出当前主分支会读的环境变量。部署方式见 [本地/内网 Windows 部署](DEPLOYMENT.md)。请先按 [快速开始](GETTING_STARTED.md) 确认项目可启动，再填写真实凭据。
 
 ## 对话运行（Pi Durable）
 
@@ -27,7 +27,6 @@
 | `LLM_CONTEXT_WINDOW` | `128000` | 提供给模型目录的上下文窗口配置，并非真实配额保证 |
 | `LLM_MAX_TOKENS` | `8192` | 模型目录的最大输出 token 配置 |
 | `DEMO_PASSWORD` | 空 | HTTP Basic Auth 密码；生产模式必须配置，用户名固定 `demo` |
-| `HOST_PORT` | `3300` | Docker 映射到宿主机 `127.0.0.1` 的端口 |
 | `NOTIFY_WEBHOOK_URL` | 空 | 通用 Webhook 或飞书机器人的完整 URL，含签名时视为敏感凭据 |
 | `NOTIFY_WEBHOOK_KIND` | `generic` | `generic` JSON / `feishu` 文本机器人 |
 | `NOTIFY_MODE` | `errors` | `errors`：仅明确失败的后台任务；`all`：也发成功/提醒/计划触发；`off`：不发送 |
@@ -35,7 +34,7 @@
 | `OBSIDIAN_ROOT` | 空 | 只读 Obsidian 仓库根目录。留空时知识库工具会说明未启用，不影响聊天 |
 | `OBSIDIAN_ALLOW` | 空 | 额外允许的相对路径，用英文逗号分隔。默认已包含 AI学习、X灵感、VPS小白教程 |
 
-另外，`PORT`（本地默认 `3000`）和 `DATA_DIR`（本地默认 `./data`、Docker 默认 `/data`）在代码中读取，可用于开发或容器环境；它们不是当前示例 `.env.example` 的主要部署配置。
+另外，`PORT`（默认 `3000`）和 `WEFT_DATA_DIR`（默认仓库下的 `data/`）在代码中读取；它们不是当前示例 `.env.example` 的主要部署配置。
 
 ## v2 服务进程
 
@@ -84,7 +83,7 @@ LLM_MODEL=your-model-id
 ENABLE_CRASH_DEMO=0
 ```
 
-本地/内网按 [DEPLOYMENT.md](DEPLOYMENT.md) 用 `npm ci` 和 `npm start` 部署，不要再用 Docker Compose。服务只绑定 `127.0.0.1`。
+本地/内网按 [DEPLOYMENT.md](DEPLOYMENT.md) 用 `npm ci` 和 `npm start` 部署。服务只绑定 `127.0.0.1`。
 
 ## 运行模式与可选通道
 

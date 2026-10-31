@@ -1,5 +1,5 @@
 #!/bin/sh
-# 本地开发：进程退出后 1 秒自动拉起，模拟 Docker 的 restart；Ctrl+C 整体退出
+# 本地开发：进程退出后 1 秒自动拉起；Ctrl+C 整体退出
 trap 'kill "$child" 2>/dev/null; exit 0' INT TERM
 while true; do
 	node server.mjs &

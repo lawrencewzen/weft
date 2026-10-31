@@ -1,6 +1,6 @@
 # 本地 / 内网 Windows 部署
 
-Weft 是单用户本机服务，只监听 `127.0.0.1`。目标环境是内网 Windows + Node 22，用 `npm install` 和 `npm start` 即可，不使用 Docker。
+Weft 是单用户本机服务，只监听 `127.0.0.1`。目标环境是内网 Windows + Node 22，用 `npm install` 和 `npm start` 即可。
 
 先按 [快速开始](GETTING_STARTED.md) 在本机跑通，再按本文做成常驻服务。
 
