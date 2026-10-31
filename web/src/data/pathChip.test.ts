@@ -12,6 +12,12 @@ describe('path chip click', () => {
     const inner = document.createElement('span');
     chip.appendChild(inner);
     expect(pathChipFromElement(inner)).toEqual({ path: 'notes/today.md', line: 3 });
+
+    const linkChip = document.createElement('a');
+    linkChip.className = 'md-path';
+    linkChip.setAttribute('data-path', 'src/calc.py');
+    linkChip.setAttribute('data-line', '1');
+    expect(pathChipFromElement(linkChip)).toEqual({ path: 'src/calc.py', line: 1 });
   });
 
   it('omits an invalid or missing line and ignores non-chips', () => {

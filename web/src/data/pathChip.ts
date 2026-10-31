@@ -10,7 +10,7 @@ export type PathChipRef = {
  */
 export function pathChipFromElement(el: Element | null | undefined): PathChipRef | null {
   if (!el || !(el instanceof Element)) return null;
-  const chip = el.closest('code.md-path');
+  const chip = el.closest('.md-path');
   if (!chip) return null;
   const path = chip.getAttribute('data-path');
   if (path == null || path === '') return null;
