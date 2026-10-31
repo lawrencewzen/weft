@@ -3857,7 +3857,7 @@ components:
       properties:
         text:
           type: string
-          description: 行内代码的原文
+          description: 行内代码原文，或 Markdown 链接的 href 原文
         path:
           type: string
           description: 相对工作区的路径（统一用 /）
