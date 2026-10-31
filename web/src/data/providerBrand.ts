@@ -35,6 +35,7 @@ export function providerBrand(providerId: string | null | undefined): string | n
   if (id === 'google') return 'google';
   if (id === 'openrouter') return 'openrouter';
   if (id === 'xai') return 'xai';
+  if (id === 'antigravity-acp' || id === 'antigravity') return 'antigravity';
 
   return null;
 }
