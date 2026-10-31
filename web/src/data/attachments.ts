@@ -5,6 +5,7 @@ import {
   normalizeMediaType,
   type MessageImage,
 } from '../../../src/v2/views/message-images';
+import { randomId } from './uuid';
 
 export { IMAGE_MAX_BYTES, IMAGE_MAX_COUNT, IMAGE_MEDIA_TYPES, type MessageImage };
 
@@ -109,10 +110,7 @@ export type ComposerHint = {
 };
 
 function newId(): string {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-    return crypto.randomUUID();
-  }
-  return `att-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  return randomId();
 }
 
 export function formatFileSize(bytes: number): string {

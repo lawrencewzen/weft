@@ -1,5 +1,6 @@
 import { useMemo, type MouseEvent } from 'react';
 import type { components } from '../../../src/v2/contract.gen';
+import { copyText } from '../data/copyText';
 import { pathChipFromEvent } from '../data/pathChip';
 import { useRightActions } from '../data/rightPaneContext';
 import { pathResolver, renderMarkdown } from '../markdown';
@@ -40,11 +41,13 @@ export function Markdown({ text, pathRefs, copyLabel, copiedLabel }: Props) {
       if (label) label.textContent = copiedLabel;
       window.setTimeout(restore, 1200);
     };
-    if (navigator.clipboard?.writeText) {
-      navigator.clipboard.writeText(code).then(ok, restore);
-    } else {
-      restore();
-    }
+    void copyText(code).then((success) => {
+      if (success) {
+        ok();
+      } else {
+        restore();
+      }
+    });
   }
 
   return (

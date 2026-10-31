@@ -1,5 +1,7 @@
+import { randomId } from '../data/uuid';
+
 /** Holds the requestId for one send/continue attempt so retries stay idempotent. */
-export function createSendRequest(generate: () => string = () => crypto.randomUUID()) {
+export function createSendRequest(generate: () => string = randomId) {
   let id: string | null = null;
   let text: string | null = null;
   return {
