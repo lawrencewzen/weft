@@ -175,7 +175,8 @@ function planFor(text: string): Plan {
       '',
       '先做了两件事：',
       '',
-      '- 读了 `docs/ARCHITECTURE_V2.md`，确认服务端只做视图，不存对话状态',
+      '- 读了 [架构文档](file:///Users/lawrence/Projects/weft/docs/ARCHITECTURE_V2.md#L1-L5)，确认服务端只做视图，不存对话状态',
+      '- 样式参考 [app.css](web/src/styles/app.css)',
       '- 跑了一次 `git status --short`，工作区是干净的',
       '',
       '接下来可以继续拆成具体改动，你说方向就行。',
@@ -551,15 +552,52 @@ async function runTool(
   setPending(conv, hub, THINKING);
 }
 
-function refsIn(text: string): { text: string; path: string }[] {
-  const found = text.match(/(?:web|src|docs|scripts|tests|contract|design)\/[A-Za-z0-9._/-]+\.(?:ts|tsx|mjs|js|md|json|css)/g) || [];
+const PROJECT_PATH_RE = /(?:web|src|docs|scripts|tests|contract|design)\/[A-Za-z0-9._/-]+\.(?:ts|tsx|mjs|js|md|json|css|py)/;
+const MD_LINK_RE = /\[([^\]]*)\]\(([^)\s]+)(?:\s+["'][^"']*["'])?\)/g;
+
+function refsIn(text: string): { text: string; path: string; line?: number }[] {
   const seen = new Set<string>();
-  const out: { text: string; path: string }[] = [];
+  const out: { text: string; path: string; line?: number }[] = [];
+
+  let match: RegExpExecArray | null;
+  while ((match = MD_LINK_RE.exec(text)) !== null) {
+    let href = match[2];
+    if (href.startsWith('<') && href.endsWith('>')) {
+      href = href.slice(1, -1);
+    }
+    if (/^https?:\/\/|^mailto:/i.test(href)) continue;
+
+    const pathMatch = href.match(PROJECT_PATH_RE);
+    if (!pathMatch) continue;
+    const relPath = pathMatch[0];
+
+    let line: number | undefined;
+    const hashLineMatch = href.match(/#L(\d+)(?:-L?(\d+))?/i);
+    if (hashLineMatch) {
+      line = Number(hashLineMatch[1]);
+    } else {
+      const colonLineMatch = href.match(/:(\d+)(?::\d+)?$/);
+      if (colonLineMatch) {
+        line = Number(colonLineMatch[1]);
+      }
+    }
+
+    if (seen.has(href)) continue;
+    seen.add(href);
+    out.push({
+      text: href,
+      path: relPath,
+      ...(line != null && Number.isFinite(line) && line >= 1 ? { line } : {}),
+    });
+  }
+
+  const found = text.match(new RegExp(PROJECT_PATH_RE.source, 'g')) || [];
   for (const raw of found) {
     if (seen.has(raw)) continue;
     seen.add(raw);
     out.push({ text: raw, path: raw });
   }
+
   return out;
 }
 

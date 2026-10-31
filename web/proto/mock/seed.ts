@@ -378,7 +378,25 @@ function richConversation(now: number, threads: Map<string, MockSubThread>): Moc
           { text: 'web/src/data/store.test.ts', path: 'web/src/data/store.test.ts' },
         ],
       ),
-      assistant('rich-a3', '测试全绿。要不要我把这批改动整理成一条提交信息？'),
+      assistant(
+        'rich-a3',
+        [
+          '测试全绿。详细说明见 [内核入口](file:///Users/lawrence/Projects/weft/src/kernel/index.mjs#L1-L5)，样式定义参见 [app.css](web/src/styles/app.css)。',
+          '要不要我把这批改动整理成一条提交信息？',
+        ].join('\n'),
+        'deepseek-flash',
+        [
+          {
+            text: 'file:///Users/lawrence/Projects/weft/src/kernel/index.mjs#L1-L5',
+            path: 'src/kernel/index.mjs',
+            line: 1,
+          },
+          {
+            text: 'web/src/styles/app.css',
+            path: 'web/src/styles/app.css',
+          },
+        ],
+      ),
       ...(spawnIds.length ? [group(
         'rich-g-sa',
         spawnIds,
