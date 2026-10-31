@@ -1,0 +1,220 @@
+name: release
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+  # workflow_dispatch is only listed once this file is on the default branch.
+  # Pull requests that touch the packer still build the zip so the package can
+  # be proven before it reaches main. Unrelated PRs do not run this job.
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/release.yml"
+      - "scripts/pack-release.mjs"
+      - "tests/unit/pack-release.test.mjs"
+      - "package.json"
+      - "package-lock.json"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  win-x64:
+    name: win-x64
+    runs-on: windows-latest
+    timeout-minutes: 40
+    permissions:
+      actions: write
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build frontend
+        run: npm run build:web
+
+      - name: Pack portable zip
+        run: node scripts/pack-release.mjs --platform win-x64 --out dist
+
+      - name: Smoke test portable package
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $false
+
+          $zip = Get-ChildItem -Path dist -Filter 'weft-*-win-x64.zip' | Select-Object -First 1
+          if (-not $zip) { throw 'dist has no win-x64 zip' }
+          Write-Host ("zip=" + $zip.FullName)
+          Write-Host ("zip bytes=" + $zip.Length)
+          Write-Host ("zip sha256=" + (Get-FileHash -Algorithm SHA256 -LiteralPath $zip.FullName).Hash.ToLower())
+
+          $root = Join-Path $env:RUNNER_TEMP 'weft smoke 中文'
+          if (Test-Path -LiteralPath $root) { Remove-Item -LiteralPath $root -Recurse -Force }
+          # Windows tar.exe does not accept --force-local, and a drive-letter archive path is easy to misread.
+          # ZipFile takes a normal Windows path, including spaces and Chinese in the destination.
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          [System.IO.Compression.ZipFile]::ExtractToDirectory($zip.FullName, $root)
+
+          $node = Join-Path $root 'node\node.exe'
+          $cli = Join-Path $root 'app\bin\weft.mjs'
+          if (-not (Test-Path -LiteralPath $node)) { throw "missing $node" }
+          if (-not (Test-Path -LiteralPath $cli)) { throw "missing $cli" }
+          foreach ($launcher in @('Weft.cmd', 'Weft-stop.cmd', 'README.txt')) {
+            if (-not (Test-Path -LiteralPath (Join-Path $root $launcher))) { throw "missing $launcher" }
+          }
+
+          Write-Host '--- app/node_modules ---'
+          $nm = Join-Path $root 'app\node_modules'
+          $banned = @('vite', 'rolldown', 'lightningcss', 'esbuild', 'typescript', 'eslint', 'vitest', 'jsdom', 'playwright', '@playwright/test')
+          Get-ChildItem -LiteralPath $nm -Force | ForEach-Object {
+            if ($_.Name -eq '.bin' -or $_.Name.StartsWith('.')) { return }
+            $dirs = @()
+            if ($_.Name.StartsWith('@')) {
+              $dirs = @(Get-ChildItem -LiteralPath $_.FullName -Directory)
+            } else {
+              $dirs = @($_)
+            }
+            foreach ($dir in $dirs) {
+              $pkgJson = Join-Path $dir.FullName 'package.json'
+              if (-not (Test-Path -LiteralPath $pkgJson)) { continue }
+              $pkg = Get-Content -LiteralPath $pkgJson -Raw -Encoding UTF8 | ConvertFrom-Json
+              Write-Host ("pkg " + $pkg.name + "@" + $pkg.version)
+            }
+          }
+          $hits = @(Get-ChildItem -LiteralPath $nm -Recurse -Filter package.json -File | Where-Object {
+            try {
+              $name = (Get-Content -LiteralPath $_.FullName -Raw -Encoding UTF8 | ConvertFrom-Json).name
+              $banned -contains $name
+            } catch {
+              $false
+            }
+          })
+          if ($hits.Count -gt 0) {
+            $hits | ForEach-Object { Write-Host ("banned " + $_.FullName) }
+            throw 'zip contains devDependencies'
+          }
+
+          $version = (& $node -p 'process.version').Trim()
+          $execPath = (& $node -p 'process.execPath').Trim()
+          Write-Host "bundled version=$version"
+          Write-Host "bundled execPath=$execPath"
+          if ($version -ne 'v22.23.4') { throw "expected v22.23.4, got $version" }
+          $rootFull = (Resolve-Path -LiteralPath $root).Path
+          $execFull = (Resolve-Path -LiteralPath $execPath).Path
+          if (-not $execFull.StartsWith($rootFull, [System.StringComparison]::OrdinalIgnoreCase)) {
+            throw "execPath $execFull is outside $rootFull"
+          }
+
+          $env:Path = (($env:Path -split ';' | Where-Object { $_ -and ($_ -notmatch '(?i)node') }) -join ';')
+          $data = Join-Path (Get-Location) 'smoke-data'
+          if (Test-Path -LiteralPath $data) { Remove-Item -LiteralPath $data -Recurse -Force }
+          New-Item -ItemType Directory -Path $data | Out-Null
+          $env:WEFT_DATA_DIR = $data
+
+          function Show-ServiceLog {
+            $log = Join-Path $env:WEFT_DATA_DIR 'logs\service.log'
+            if (Test-Path -LiteralPath $log) {
+              Write-Host '--- service.log ---'
+              Get-Content -LiteralPath $log -Tail 120
+            }
+          }
+
+          $pushed = $false
+          try {
+            Push-Location -LiteralPath $root
+            $pushed = $true
+            $lines = @(& .\node\node.exe .\app\bin\weft.mjs open --print 2>&1 | ForEach-Object { "$_" })
+            $openCode = $LASTEXITCODE
+            $lines | ForEach-Object { Write-Host "open> $_" }
+            if ($openCode -ne 0) { throw "open --print exit $openCode" }
+            $url = @($lines | Where-Object { $_ -match '^http://127\.0\.0\.1:\d+/auth\?code=' } | Select-Object -Last 1)
+            if (-not $url) { throw 'open --print did not print a login url' }
+            $url = "$url".Trim()
+            Write-Host "login=$url"
+
+            $homeUrl = $url -replace '/auth\?code=.*$', '/'
+            $resp = Invoke-WebRequest -Uri $homeUrl -UseBasicParsing
+            if ([int]$resp.StatusCode -ne 200) { throw "home HTTP $($resp.StatusCode)" }
+            $html = [string]$resp.Content
+            if ($html -notmatch '<title>Weft</title>') { throw 'homepage is not the Weft frontend' }
+            if ($html -notmatch 'id="root"') { throw 'homepage missing #root' }
+            if ($html -match '/src/main\.tsx') { throw 'homepage is the dev index, not the build' }
+            if ($html -match '未构建') { throw 'frontend was not built' }
+            Write-Host "home HTTP $($resp.StatusCode) bytes=$($html.Length)"
+
+            $login = Invoke-WebRequest -Uri $url -UseBasicParsing -MaximumRedirection 5
+            if ([int]$login.StatusCode -ne 200) { throw "login HTTP $($login.StatusCode)" }
+            $loginHtml = [string]$login.Content
+            if ($loginHtml -notmatch '<title>Weft</title>' -or $loginHtml -notmatch 'id="root"') {
+              throw 'login link did not return the frontend'
+            }
+            Write-Host "login HTTP $($login.StatusCode) bytes=$($loginHtml.Length)"
+
+            $stopLines = @(& cmd.exe /d /c 'Weft-stop.cmd' 2>&1 | ForEach-Object { "$_" })
+            $stopCode = $LASTEXITCODE
+            $stopLines | ForEach-Object { Write-Host "stop> $_" }
+            if ($stopCode -ne 0) { throw "Weft-stop.cmd exit $stopCode" }
+
+            $statusLines = @(& .\node\node.exe .\app\bin\weft.mjs status 2>&1 | ForEach-Object { "$_" })
+            $statusCode = $LASTEXITCODE
+            $statusLines | ForEach-Object { Write-Host "status> $_" }
+            if ($statusCode -eq 0) { throw 'service still running after stop' }
+            Write-Host 'stopped'
+          } catch {
+            Show-ServiceLog
+            throw
+          } finally {
+            if ($pushed) { Pop-Location }
+            if (Test-Path -LiteralPath $node) {
+              & $node $cli stop 2>&1 | Out-Null
+            }
+          }
+
+      - name: Upload portable zip
+        uses: actions/upload-artifact@v7
+        with:
+          name: weft-win-x64
+          path: dist/weft-*-win-x64.zip
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload smoke log
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: portable-smoke-log
+          path: smoke-data/logs/
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Attach zip to GitHub Release
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          if ! gh release view "$tag" >/dev/null 2>&1; then
+            gh release create "$tag" --title "$tag" --generate-notes
+          fi
+          shopt -s nullglob
+          files=(dist/weft-*-win-x64.zip)
+          if [ "${#files[@]}" -ne 1 ]; then
+            echo "expected one zip, found ${#files[@]}" >&2
+            exit 1
+          fi
+          gh release upload "$tag" "${files[0]}" --clobber
