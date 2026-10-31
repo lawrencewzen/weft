@@ -118,7 +118,9 @@ export function AddProviderDialog({
   const [ddOpen, setDdOpen] = useState(false);
   const [acpFoldOpen, setAcpFoldOpen] = useState(false);
   const [oauthOpen, setOauthOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [testSuccess, setTestSuccess] = useState(false);
+  const [creating, setCreating] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [sessionIds, setSessionIds] = useState<string[]>([]);
   const leftoverRef = useRef<Set<string>>(new Set());
@@ -127,6 +129,7 @@ export function AddProviderDialog({
   const isOpenRef = useRef(isOpen);
   const ddRef = useRef<HTMLDivElement | null>(null);
   const closingRef = useRef(false);
+  const testTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const onConnectRef = useRef(onConnect);
   const onRollbackRef = useRef(onRollback);
   const onCloseRef = useRef(onClose);
@@ -186,8 +189,22 @@ export function AddProviderDialog({
   const isCustom = selected?.kind === 'custom';
   const isGrok = vendor?.id === 'xai';
 
+  function clearTestTimer() {
+    if (testTimerRef.current) {
+      clearTimeout(testTimerRef.current);
+      testTimerRef.current = null;
+    }
+  }
+
+  useEffect(() => {
+    return () => {
+      clearTestTimer();
+    };
+  }, []);
+
   useEffect(() => {
     if (!isOpen) return;
+    clearTestTimer();
     leftoverRef.current = new Set();
     autoKeyRef.current = '';
     closingRef.current = false;
@@ -204,7 +221,9 @@ export function AddProviderDialog({
     setDdOpen(false);
     setAcpFoldOpen(false);
     setOauthOpen(false);
-    setLoading(false);
+    setTesting(false);
+    setTestSuccess(false);
+    setCreating(false);
     setErrorMsg(null);
   }, [isOpen]);
 
@@ -230,7 +249,7 @@ export function AddProviderDialog({
     if (!key || autoKeyRef.current === key) return;
     const id = hit.id;
     const body: ConnectBody = hit.id === 'xai' ? { method: 'local_login' } : { method: 'env' };
-    setLoading(true);
+    setTesting(true);
     setErrorMsg(null);
     void Promise.resolve(onConnectRef.current(id, body)).then((provider) => {
       if (!provider) return;
@@ -252,7 +271,7 @@ export function AddProviderDialog({
       setConnectedId(null);
       setModels([]);
     }).finally(() => {
-      if (selectedIdRef.current === id) setLoading(false);
+      if (selectedIdRef.current === id) setTesting(false);
     });
   }, [isOpen, selectedId, available]);
 
@@ -289,6 +308,9 @@ export function AddProviderDialog({
         return;
       }
       if (closingRef.current) return;
+      clearTestTimer();
+      setTesting(false);
+      setTestSuccess(false);
       closingRef.current = true;
       const ids = [...leftoverRef.current];
       leftoverRef.current = new Set();
@@ -325,79 +347,150 @@ export function AddProviderDialog({
     setErrorMsg(null);
   }
 
-  async function runConnect(body: ConnectBody) {
+  async function runConnect(body: ConnectBody, isExplicit = false) {
     if (!vendor || alreadyConnected) return;
-    setLoading(true);
+    clearTestTimer();
+    setTesting(true);
+    setTestSuccess(false);
     setErrorMsg(null);
+    const currentId = vendor.id;
     try {
-      const provider = await onConnect(vendor.id, body);
-      remember(provider);
-    } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : String(err));
-      setConnectedId(null);
-      setModels([]);
-    } finally {
-      setLoading(false);
+      const connectPromise = onConnect(vendor.id, body);
+      const minDelayPromise = isExplicit
+        ? new Promise<void>((resolve) => {
+            testTimerRef.current = setTimeout(resolve, 500);
+          })
+        : Promise.resolve();
+
+      const [connectResult] = await Promise.allSettled([connectPromise, minDelayPromise]);
+
+      if (!isOpenRef.current || closingRef.current || selectedIdRef.current !== currentId) {
+        if (connectResult.status === 'fulfilled' && connectResult.value) {
+          void onRollbackRef.current([connectResult.value.id]);
+        }
+        return;
+      }
+
+      if (connectResult.status === 'fulfilled') {
+        const provider = connectResult.value;
+        remember(provider);
+        setTesting(false);
+        if (isExplicit) {
+          setTestSuccess(true);
+          testTimerRef.current = setTimeout(() => {
+            if (isOpenRef.current && !closingRef.current && selectedIdRef.current === currentId) {
+              setTestSuccess(false);
+            }
+          }, 1500);
+        }
+      } else {
+        const err = connectResult.reason;
+        setErrorMsg(err instanceof Error ? err.message : String(err));
+        setConnectedId(null);
+        setModels([]);
+        setTesting(false);
+        setTestSuccess(false);
+      }
+    } catch {
+      // In case of unexpected synchronous error
     }
   }
 
-  async function runCustomConnect() {
+  async function runCustomConnect(isExplicit = false) {
     const name = configName.trim() || t(lang, 'dlg_add_custom_title');
     if (!customUrl.trim()) {
       setErrorMsg(t(lang, 'form_fill_required'));
       return;
     }
-    setLoading(true);
+    clearTestTimer();
+    setTesting(true);
+    setTestSuccess(false);
     setErrorMsg(null);
     try {
-      const provider = await onConnectCustom({
+      const connectPromise = onConnectCustom({
         name,
         baseUrl: customUrl.trim(),
         api: 'openai-completions',
         ...(customKey.trim() ? { apiKey: customKey.trim() } : {}),
       });
-      remember(provider);
-    } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : String(err));
-      setConnectedId(null);
-      setModels([]);
-    } finally {
-      setLoading(false);
+      const minDelayPromise = isExplicit
+        ? new Promise<void>((resolve) => {
+            testTimerRef.current = setTimeout(resolve, 500);
+          })
+        : Promise.resolve();
+
+      const [connectResult] = await Promise.allSettled([connectPromise, minDelayPromise]);
+
+      if (!isOpenRef.current || closingRef.current || selectedIdRef.current !== 'custom') {
+        if (connectResult.status === 'fulfilled' && connectResult.value) {
+          void onRollbackRef.current([connectResult.value.id]);
+        }
+        return;
+      }
+
+      if (connectResult.status === 'fulfilled') {
+        const provider = connectResult.value;
+        remember(provider);
+        setTesting(false);
+        if (isExplicit) {
+          setTestSuccess(true);
+          testTimerRef.current = setTimeout(() => {
+            if (isOpenRef.current && !closingRef.current && selectedIdRef.current === 'custom') {
+              setTestSuccess(false);
+            }
+          }, 1500);
+        }
+      } else {
+        const err = connectResult.reason;
+        setErrorMsg(err instanceof Error ? err.message : String(err));
+        setConnectedId(null);
+        setModels([]);
+        setTesting(false);
+        setTestSuccess(false);
+      }
+    } catch {
+      // In case of unexpected synchronous error
     }
   }
 
   async function handleTest() {
-    if (isAcp || alreadyConnected) return;
+    if (isAcp || alreadyConnected || testing || testSuccess || creating) return;
     if (isCustom) {
-      await runCustomConnect();
+      await runCustomConnect(true);
       return;
     }
     if (!vendor) return;
     if (vendor.id === 'xai') {
-      if (vendor.localLogin?.detected) await runConnect({ method: 'local_login' });
+      if (vendor.localLogin?.detected) await runConnect({ method: 'local_login' }, true);
       else {
         setOauthOpen(true);
         await onStartOAuth(vendor);
       }
       return;
     }
-    if (apiKeyInput.trim()) await runConnect({ method: 'api_key', apiKey: apiKeyInput.trim() });
-    else if (vendor.envDetected) await runConnect({ method: 'env' });
+    if (apiKeyInput.trim()) await runConnect({ method: 'api_key', apiKey: apiKeyInput.trim() }, true);
+    else if (vendor.envDetected) await runConnect({ method: 'env' }, true);
     else setErrorMsg(t(lang, 'form_fill_required'));
   }
 
-  async function handleKeyBlur() {
-    if (alreadyConnected || loading || isAcp) return;
+  async function handleKeyBlur(e?: React.FocusEvent<HTMLInputElement>) {
+    if (alreadyConnected || testing || creating || isAcp) return;
+    if (e?.relatedTarget && (e.relatedTarget as HTMLElement).dataset?.testid === 'next-add-test') {
+      return;
+    }
     if (isCustom) {
-      if (customUrl.trim() && (customKey.trim() || configName.trim())) await runCustomConnect();
+      if (customUrl.trim() && (customKey.trim() || configName.trim())) await runCustomConnect(false);
       return;
     }
     if (vendor && apiKeyInput.trim()) {
-      await runConnect({ method: 'api_key', apiKey: apiKeyInput.trim() });
+      await runConnect({ method: 'api_key', apiKey: apiKeyInput.trim() }, false);
     }
   }
 
   async function handleCancel() {
+    clearTestTimer();
+    setTesting(false);
+    setTestSuccess(false);
     if (closingRef.current) return;
     closingRef.current = true;
     const ids = [...leftoverRef.current];
@@ -409,10 +502,10 @@ export function AddProviderDialog({
   }
 
   async function handleCreate() {
-    if (!isReady || !connectedId) return;
+    if (!isReady || !connectedId || creating) return;
     const defaultModel = chosenId || models[0]?.id;
     if (!defaultModel) return;
-    setLoading(true);
+    setCreating(true);
     setErrorMsg(null);
     try {
       leftoverRef.current.delete(connectedId);
@@ -429,12 +522,15 @@ export function AddProviderDialog({
       leftoverRef.current.add(connectedId);
       setErrorMsg(err instanceof Error ? err.message : String(err));
     } finally {
-      setLoading(false);
+      if (isOpenRef.current && !closingRef.current) {
+        setCreating(false);
+      }
     }
   }
 
   function handleSelect(item: LeftItem) {
     if (item.id === selectedId) return;
+    clearTestTimer();
     setSelectedId(item.id);
     setConfigName(item.kind === 'custom' ? '' : item.name);
     setApiKeyInput('');
@@ -444,7 +540,9 @@ export function AddProviderDialog({
     setDdOpen(false);
     setOauthOpen(false);
     setAcpFoldOpen(false);
-    setLoading(false);
+    setTesting(false);
+    setTestSuccess(false);
+    setCreating(false);
     setModels([]);
     setChosenId('');
     setConnectedId(null);
@@ -517,10 +615,14 @@ export function AddProviderDialog({
                 type="button"
                 className="mp-btn"
                 data-testid="next-add-test"
-                disabled={loading || isAcp || alreadyConnected}
+                disabled={testing || testSuccess || creating || isAcp || alreadyConnected}
                 onClick={() => void handleTest()}
               >
-                {loading ? t(lang, 'provider_status_run') : t(lang, 'provider_btn_test')}
+                {testing
+                  ? t(lang, 'provider_status_run')
+                  : testSuccess
+                    ? t(lang, 'provider_btn_connected')
+                    : t(lang, 'provider_btn_test')}
               </button>
               <button type="button" className="mp-x" data-testid="next-add-close" onClick={() => void handleCancel()}>×</button>
             </span>
@@ -595,8 +697,11 @@ export function AddProviderDialog({
                       data-testid="next-custom-url"
                       value={customUrl}
                       placeholder={t(lang, 'dlg_custom_url_placeholder')}
-                      onChange={(e) => setCustomUrl(e.target.value)}
-                      onBlur={() => void handleKeyBlur()}
+                      onChange={(e) => {
+                        setCustomUrl(e.target.value);
+                        setTestSuccess(false);
+                      }}
+                      onBlur={(e) => void handleKeyBlur(e)}
                     />
                   </div>
                 </div>
@@ -609,8 +714,11 @@ export function AddProviderDialog({
                       data-testid="next-custom-key"
                       value={customKey}
                       placeholder="sk-…"
-                      onChange={(e) => setCustomKey(e.target.value)}
-                      onBlur={() => void handleKeyBlur()}
+                      onChange={(e) => {
+                        setCustomKey(e.target.value);
+                        setTestSuccess(false);
+                      }}
+                      onBlur={(e) => void handleKeyBlur(e)}
                     />
                     <span className="mp-add-det">{DASH_SVG}</span>
                   </div>
@@ -630,8 +738,11 @@ export function AddProviderDialog({
                     placeholder={envDetected && vendor.envVar
                       ? t(lang, 'dlg_add_env_placeholder', { env: vendor.envVar })
                       : 'sk-…'}
-                    onChange={(e) => setApiKeyInput(e.target.value)}
-                    onBlur={() => void handleKeyBlur()}
+                    onChange={(e) => {
+                      setApiKeyInput(e.target.value);
+                      setTestSuccess(false);
+                    }}
+                    onBlur={(e) => void handleKeyBlur(e)}
                   />
                   <span className={`mp-add-det${envDetected ? ' ok' : ''}`} data-testid={envDetected ? 'next-detected-check' : undefined}>
                     {envDetected ? CHECK_SVG : DASH_SVG}
@@ -725,7 +836,7 @@ export function AddProviderDialog({
                 type="button"
                 className="mp-btn mp-pri"
                 data-testid="next-provider-finish"
-                disabled={loading || !isReady}
+                disabled={creating || !isReady}
                 onClick={() => void handleCreate()}
               >
                 {t(lang, 'dlg_add_create')}

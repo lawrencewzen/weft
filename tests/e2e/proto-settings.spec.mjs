@@ -118,10 +118,13 @@ test('providers: rows, groups, expand, Grok auto-detect, Anthropic key, custom, 
   await expect(page.getByTestId('next-add-dialog')).toHaveCount(0);
   await expect(rows).toHaveCount(3);
 
-  // Grok auto-detect → dropdown → create
+  // Grok auto-detect → test button feedback → dropdown → create
   await page.getByTestId('next-provider-add').click();
   await expect(page.getByTestId('next-add-model-dropdown')).toBeEnabled({ timeout: 10_000 });
   await expect(page.getByTestId('next-detected-check')).toBeVisible();
+  await page.getByTestId('next-add-test').click();
+  await expect(page.getByTestId('next-provider-finish')).toBeEnabled();
+  await expect(page.getByTestId('next-add-test')).toHaveText(/已连通|Connected/);
   await page.getByTestId('next-add-model-dropdown').click();
   await expect(page.getByTestId('next-add-model-option').first()).toBeVisible();
   await expect(page.getByTestId('next-add-model-option').first()).not.toHaveText(/grok-/i);

@@ -360,4 +360,155 @@ describe('AddProviderDialog', () => {
     expect(host!.querySelector('[data-vendor="anthropic"]')?.textContent).toContain('✓');
     expect(host!.querySelector('[data-vendor="xai"]')?.textContent).not.toContain('✓');
   });
+
+  it('shows "测试中…" for at least 500ms even if onConnect immediately resolves, turns to "✓ 已连通", and restores "测试" after 1500ms', async () => {
+    vi.useFakeTimers();
+    try {
+      const onConnect = vi.fn(async () => providerOf('xai', 'Grok'));
+      await render(<AddProviderDialog {...props({ onConnect })} />);
+      await act(async () => { await Promise.resolve(); });
+
+      const testBtn = host!.querySelector('[data-testid="next-add-test"]') as HTMLButtonElement;
+      expect(testBtn.textContent).toBe('测试');
+      expect(testBtn.disabled).toBe(false);
+
+      await act(async () => {
+        testBtn.click();
+      });
+
+      expect(testBtn.textContent).toBe('测试中…');
+      expect(testBtn.disabled).toBe(true);
+
+      await act(async () => {
+        vi.advanceTimersByTime(499);
+      });
+      expect(testBtn.textContent).toBe('测试中…');
+      expect(testBtn.disabled).toBe(true);
+
+      await act(async () => {
+        vi.advanceTimersByTime(1);
+      });
+      expect(testBtn.textContent).toBe('✓ 已连通');
+      expect(testBtn.disabled).toBe(true);
+
+      await act(async () => {
+        vi.advanceTimersByTime(1499);
+      });
+      expect(testBtn.textContent).toBe('✓ 已连通');
+      expect(testBtn.disabled).toBe(true);
+
+      await act(async () => {
+        vi.advanceTimersByTime(1);
+      });
+      expect(testBtn.textContent).toBe('测试');
+      expect(testBtn.disabled).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps create button enabled (disabled state unchanged) during testing when ready', async () => {
+    vi.useFakeTimers();
+    try {
+      const onConnect = vi.fn(async () => providerOf('xai', 'Grok'));
+      await render(<AddProviderDialog {...props({ onConnect })} />);
+      await act(async () => { await Promise.resolve(); });
+
+      const createBtn = host!.querySelector('[data-testid="next-provider-finish"]') as HTMLButtonElement;
+      const testBtn = host!.querySelector('[data-testid="next-add-test"]') as HTMLButtonElement;
+      expect(createBtn.disabled).toBe(false);
+
+      await act(async () => {
+        testBtn.click();
+      });
+
+      expect(createBtn.disabled).toBe(false);
+
+      await act(async () => {
+        vi.advanceTimersByTime(250);
+      });
+      expect(createBtn.disabled).toBe(false);
+
+      await act(async () => {
+        vi.advanceTimersByTime(250);
+      });
+      expect(createBtn.disabled).toBe(false);
+
+      await act(async () => {
+        vi.advanceTimersByTime(1500);
+      });
+      expect(createBtn.disabled).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('shows error, restores button to "测试", and does not show "✓ 已连通" on connect reject', async () => {
+    vi.useFakeTimers();
+    try {
+      let fail = false;
+      const onConnect = vi.fn(async () => {
+        if (fail) throw new Error('API Key invalid');
+        return providerOf('xai', 'Grok');
+      });
+      await render(<AddProviderDialog {...props({ onConnect })} />);
+      await act(async () => { await Promise.resolve(); });
+
+      const testBtn = host!.querySelector('[data-testid="next-add-test"]') as HTMLButtonElement;
+      const createBtn = host!.querySelector('[data-testid="next-provider-finish"]') as HTMLButtonElement;
+      expect(createBtn.disabled).toBe(false);
+
+      fail = true;
+      await act(async () => {
+        testBtn.click();
+      });
+
+      expect(testBtn.textContent).toBe('测试中…');
+      await act(async () => {
+        vi.advanceTimersByTime(499);
+      });
+      expect(testBtn.textContent).toBe('测试中…');
+
+      await act(async () => {
+        vi.advanceTimersByTime(1);
+      });
+      expect(host!.querySelector('[data-testid="next-test-result"]')?.textContent).toContain('API Key invalid');
+      expect(testBtn.textContent).toBe('测试');
+      expect(testBtn.disabled).toBe(false);
+      expect(testBtn.textContent).not.toContain('已连通');
+      expect(createBtn.disabled).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('clears timers and avoids state updates when switching selection during test', async () => {
+    vi.useFakeTimers();
+    try {
+      const onConnect = vi.fn(async () => providerOf('xai', 'Grok'));
+      const onRollback = vi.fn(async () => {});
+      const onClose = vi.fn();
+      await render(<AddProviderDialog {...props({ onConnect, onRollback, onClose })} />);
+      await act(async () => { await Promise.resolve(); });
+
+      const testBtn = host!.querySelector('[data-testid="next-add-test"]') as HTMLButtonElement;
+      await act(async () => {
+        testBtn.click();
+      });
+      expect(testBtn.textContent).toBe('测试中…');
+
+      await act(async () => {
+        (host!.querySelector('[data-vendor="anthropic"]') as HTMLElement).click();
+      });
+
+      await act(async () => {
+        vi.advanceTimersByTime(2500);
+      });
+
+      const anthropicTestBtn = host!.querySelector('[data-testid="next-add-test"]') as HTMLButtonElement;
+      expect(anthropicTestBtn.textContent).toBe('测试');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
