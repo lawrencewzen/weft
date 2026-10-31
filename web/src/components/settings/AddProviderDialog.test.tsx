@@ -321,4 +321,43 @@ describe('AddProviderDialog', () => {
     });
     expect(onConnect).toHaveBeenCalledWith('anthropic', { method: 'api_key', apiKey: 'sk-ant' });
   });
+
+  it('does not pull back selected provider when receiving polling updates for the same session', async () => {
+    const session1 = {
+      id: 'sess-1',
+      providerId: 'xai',
+      state: 'pending' as const,
+      events: [{ type: 'progress' as const, message: 'waiting...' }],
+    };
+    const initialProps = props({
+      available: [grokMissing, anthropic],
+      loginSession: session1,
+    });
+    await render(<AddProviderDialog {...initialProps} />);
+    await act(async () => { await Promise.resolve(); });
+
+    // Initial session sets selectedId to xai
+    expect(host!.querySelector('[data-vendor="xai"]')?.textContent).toContain('✓');
+
+    // User switches to Anthropic during OAuth
+    await act(async () => {
+      (host!.querySelector('[data-vendor="anthropic"]') as HTMLElement).click();
+    });
+    expect(host!.querySelector('[data-vendor="anthropic"]')?.textContent).toContain('✓');
+
+    // A polling update arrives with a new session object reference (same session id)
+    const session2 = {
+      id: 'sess-1',
+      providerId: 'xai',
+      state: 'pending' as const,
+      events: [{ type: 'progress' as const, message: 'still waiting...' }],
+    };
+    await act(async () => {
+      root!.render(<AddProviderDialog {...initialProps} loginSession={session2} />);
+    });
+
+    // The selection should NOT be pulled back to xai
+    expect(host!.querySelector('[data-vendor="anthropic"]')?.textContent).toContain('✓');
+    expect(host!.querySelector('[data-vendor="xai"]')?.textContent).not.toContain('✓');
+  });
 });

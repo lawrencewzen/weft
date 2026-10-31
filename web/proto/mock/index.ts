@@ -147,6 +147,28 @@ function installResetButton(): void {
     window.location.replace(url.toString());
   });
   document.body.appendChild(clear);
+
+  const toggleGrok = document.createElement('button');
+  toggleGrok.type = 'button';
+  toggleGrok.className = 'proto-toggle-grok';
+  toggleGrok.dataset.testid = 'proto-toggle-grok';
+  const currentUrl = typeof window !== 'undefined' ? new URL(window.location.href) : null;
+  const isGrokOAuth = currentUrl?.searchParams.get('grok') === 'oauth';
+  toggleGrok.textContent = isGrokOAuth ? 'Grok 本机模式' : 'Grok OAuth 模式';
+  toggleGrok.title = '切换 Grok 登录方式：本机登录 / OAuth 设备码';
+  Object.assign(toggleGrok.style, protoButtonStyle('206px'));
+  toggleGrok.addEventListener('mouseenter', () => { toggleGrok.style.opacity = '1'; });
+  toggleGrok.addEventListener('mouseleave', () => { toggleGrok.style.opacity = '0.7'; });
+  toggleGrok.addEventListener('click', () => {
+    const nextUrl = new URL(window.location.href);
+    if (nextUrl.searchParams.get('grok') === 'oauth') {
+      nextUrl.searchParams.delete('grok');
+    } else {
+      nextUrl.searchParams.set('grok', 'oauth');
+    }
+    window.location.replace(nextUrl.toString());
+  });
+  document.body.appendChild(toggleGrok);
 }
 
 function seedLastOpened(): void {
@@ -185,15 +207,8 @@ declare global {
   }
 }
 
-function blockExternalWindows(): void {
-  // The prototype must not leave the page. Grok's device-code screen opens the
-  // verification page automatically; in the prototype the URL is only displayed.
-  window.open = () => null;
-}
-
 export function installMockBackend(): void {
   window.__protoRequests = [];
-  blockExternalWindows();
   seedLastOpened();
   const db = createDb();
   const hub = createHub(readTopic(db));
