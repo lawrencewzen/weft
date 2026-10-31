@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   detectGlab,
   getGlabSettings,
@@ -39,6 +39,10 @@ const DEFAULT_SETTINGS: GlabSettings = {
 export function GlabPage({ lang, onToast, onNavigate }: Props) {
   const { gitConnections, ready } = useExtensions();
   const [settings, setSettings] = useState<GlabSettings>(DEFAULT_SETTINGS);
+  const settingsRef = useRef<GlabSettings>(DEFAULT_SETTINGS);
+  settingsRef.current = settings;
+  const patchSeqRef = useRef(0);
+
   const [customPath, setCustomPath] = useState('');
   const [showCustomPath, setShowCustomPath] = useState(false);
   const [detecting, setDetecting] = useState(false);
@@ -50,6 +54,7 @@ export function GlabPage({ lang, onToast, onNavigate }: Props) {
     void getGlabSettings(lang)
       .then((data) => {
         if (!alive) return;
+        settingsRef.current = data;
         setSettings(data);
         setCustomPath(data.customPath || '');
         if (data.customPath) setShowCustomPath(true);
@@ -69,10 +74,26 @@ export function GlabPage({ lang, onToast, onNavigate }: Props) {
   const checkedCount = settings.connectionIds.length;
 
   async function toggleEnabled() {
+    const prev = settingsRef.current;
+    const nextSettings: GlabSettings = {
+      ...prev,
+      enabled: !prev.enabled,
+    };
+    settingsRef.current = nextSettings;
+    setSettings(nextSettings);
+
+    const seq = ++patchSeqRef.current;
     try {
-      const updated = await patchGlabSettings({ enabled: !settings.enabled }, lang);
-      setSettings(updated);
+      const updated = await patchGlabSettings({ enabled: nextSettings.enabled }, lang);
+      if (seq === patchSeqRef.current) {
+        settingsRef.current = updated;
+        setSettings(updated);
+      }
     } catch (err) {
+      if (seq === patchSeqRef.current) {
+        settingsRef.current = prev;
+        setSettings(prev);
+      }
       onToast(failText(err));
     }
   }
@@ -80,10 +101,11 @@ export function GlabPage({ lang, onToast, onNavigate }: Props) {
   async function handleDetect() {
     setDetecting(true);
     try {
-      if (customPath !== settings.customPath) {
+      if (customPath !== settingsRef.current.customPath) {
         await patchGlabSettings({ customPath }, lang);
       }
       const updated = await detectGlab(lang);
+      settingsRef.current = updated;
       setSettings(updated);
       setCustomPath(updated.customPath || '');
     } catch (err) {
@@ -94,9 +116,10 @@ export function GlabPage({ lang, onToast, onNavigate }: Props) {
   }
 
   async function handlePathBlur() {
-    if (customPath === settings.customPath) return;
+    if (customPath === settingsRef.current.customPath) return;
     try {
       const updated = await patchGlabSettings({ customPath }, lang);
+      settingsRef.current = updated;
       setSettings(updated);
     } catch (err) {
       onToast(failText(err));
@@ -104,17 +127,27 @@ export function GlabPage({ lang, onToast, onNavigate }: Props) {
   }
 
   async function toggleConn(id: string) {
-    const current = new Set(settings.connectionIds);
+    const prev = settingsRef.current;
+    const current = new Set(prev.connectionIds);
     if (current.has(id)) {
       current.delete(id);
     } else {
       current.add(id);
     }
     const nextIds = Array.from(current);
-    let nextDefault = settings.defaultConnectionId;
+    let nextDefault = prev.defaultConnectionId;
     if (!nextIds.includes(nextDefault || '')) {
       nextDefault = nextIds[0] || null;
     }
+    const nextSettings: GlabSettings = {
+      ...prev,
+      connectionIds: nextIds,
+      defaultConnectionId: nextDefault,
+    };
+    settingsRef.current = nextSettings;
+    setSettings(nextSettings);
+
+    const seq = ++patchSeqRef.current;
     try {
       const updated = await patchGlabSettings(
         {
@@ -123,13 +156,29 @@ export function GlabPage({ lang, onToast, onNavigate }: Props) {
         },
         lang,
       );
-      setSettings(updated);
+      if (seq === patchSeqRef.current) {
+        settingsRef.current = updated;
+        setSettings(updated);
+      }
     } catch (err) {
+      if (seq === patchSeqRef.current) {
+        settingsRef.current = prev;
+        setSettings(prev);
+      }
       onToast(failText(err));
     }
   }
 
   async function selectDefault(id: string) {
+    const prev = settingsRef.current;
+    const nextSettings: GlabSettings = {
+      ...prev,
+      defaultConnectionId: id,
+    };
+    settingsRef.current = nextSettings;
+    setSettings(nextSettings);
+
+    const seq = ++patchSeqRef.current;
     try {
       const updated = await patchGlabSettings(
         {
@@ -137,8 +186,15 @@ export function GlabPage({ lang, onToast, onNavigate }: Props) {
         },
         lang,
       );
-      setSettings(updated);
+      if (seq === patchSeqRef.current) {
+        settingsRef.current = updated;
+        setSettings(updated);
+      }
     } catch (err) {
+      if (seq === patchSeqRef.current) {
+        settingsRef.current = prev;
+        setSettings(prev);
+      }
       onToast(failText(err));
     }
   }

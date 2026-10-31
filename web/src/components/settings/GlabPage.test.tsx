@@ -355,4 +355,50 @@ describe('GlabPage', () => {
 
     expect(mockDetectGlab).toHaveBeenCalled();
   });
+
+  it('PATCH 挂起时，点击 checkbox 后立即为 checked', async () => {
+    mockGetGlabSettings.mockResolvedValue({
+      enabled: true,
+      customPath: '',
+      binary: { source: 'bundled', version: '1.46.1', path: '/usr/local/bin/glab' },
+      connectionIds: [],
+      defaultConnectionId: null,
+    });
+    mockPatchGlabSettings.mockReturnValue(new Promise(() => {}));
+
+    await render(<GlabPage lang="zh" onToast={vi.fn()} />);
+
+    const checkboxes = host!.querySelectorAll<HTMLInputElement>('[data-testid="next-glab-conn"]');
+    expect(checkboxes[0].checked).toBe(false);
+
+    await act(async () => {
+      checkboxes[0].click();
+    });
+
+    expect(checkboxes[0].checked).toBe(true);
+  });
+
+  it('PATCH 失败时回滚为未勾选并调用 onToast', async () => {
+    mockGetGlabSettings.mockResolvedValue({
+      enabled: true,
+      customPath: '',
+      binary: { source: 'bundled', version: '1.46.1', path: '/usr/local/bin/glab' },
+      connectionIds: [],
+      defaultConnectionId: null,
+    });
+    mockPatchGlabSettings.mockRejectedValue(new Error('网络请求失败'));
+
+    const onToast = vi.fn();
+    await render(<GlabPage lang="zh" onToast={onToast} />);
+
+    const checkboxes = host!.querySelectorAll<HTMLInputElement>('[data-testid="next-glab-conn"]');
+    expect(checkboxes[0].checked).toBe(false);
+
+    await act(async () => {
+      checkboxes[0].click();
+    });
+
+    expect(checkboxes[0].checked).toBe(false);
+    expect(onToast).toHaveBeenCalledWith('网络请求失败');
+  });
 });
