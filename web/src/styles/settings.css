@@ -403,6 +403,7 @@ html[data-theme$="-dark"] .ns-ws-dialog {
   display: flex;
   align-items: flex-start;
   gap: 12px;
+  scroll-margin-bottom: 12px;
 }
 .ns-test-card.is-ok { background: var(--ns-ok-bg); border: 1px solid var(--ns-ok-line); color: var(--ns-ok-ink); }
 .ns-test-card.is-bad { background: var(--ns-bad-bg); border: 1px solid color-mix(in srgb, var(--ns-bad) 28%, var(--ns-bad-bg)); color: var(--ns-bad); }

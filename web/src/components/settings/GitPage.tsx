@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   createGitConnection,
   deleteGitConnection,
@@ -79,11 +79,40 @@ export function GitPage({ lang, onToast, onConfirm }: Props) {
   const [rowTesting, setRowTesting] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
+  const isMountedRef = useRef(true);
+  const drawerRef = useRef<Drawer | null>(null);
+  const testRunIdRef = useRef(0);
+  const testResultRef = useRef<HTMLDivElement | null>(null);
+
+  drawerRef.current = drawer;
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (test.phase !== 'idle') {
+      testResultRef.current?.scrollIntoView?.({ block: 'nearest' });
+    }
+  }, [test.phase]);
+
   const editing = drawer?.mode === 'edit' ? gitConnections.find((item) => item.id === drawer.id) : null;
   const displayUrl = form.kind === 'gitlab-com' ? gitlabComUrl() : form.baseUrl;
   const tokenLink = gitlabTokenPage(displayUrl);
 
+  function closeDrawer() {
+    drawerRef.current = null;
+    testRunIdRef.current += 1;
+    setDrawer(null);
+    setTest({ phase: 'idle' });
+  }
+
   function openAdd() {
+    drawerRef.current = { mode: 'add' };
+    testRunIdRef.current += 1;
     setForm(emptyGitForm());
     setAdvanced(false);
     setTest({ phase: 'idle' });
@@ -91,6 +120,8 @@ export function GitPage({ lang, onToast, onConfirm }: Props) {
   }
 
   function openEdit(conn: GitConnection) {
+    drawerRef.current = { mode: 'edit', id: conn.id };
+    testRunIdRef.current += 1;
     setForm(formFromConnection(conn));
     setAdvanced(Boolean(conn.caFile));
     setTest({ phase: 'idle' });
@@ -98,6 +129,7 @@ export function GitPage({ lang, onToast, onConfirm }: Props) {
   }
 
   function setKind(kind: GitKind) {
+    testRunIdRef.current += 1;
     setForm((prev) => ({
       ...prev,
       kind,
@@ -107,21 +139,44 @@ export function GitPage({ lang, onToast, onConfirm }: Props) {
     setTest({ phase: 'idle' });
   }
 
+  function updateForm(updater: (prev: GitForm) => GitForm) {
+    testRunIdRef.current += 1;
+    setForm(updater);
+    setTest({ phase: 'idle' });
+  }
+
   async function runFormTest() {
     setTest({ phase: 'testing' });
+    const currentRunId = ++testRunIdRef.current;
     try {
       const includeToken = Boolean(form.token.trim());
       const body = gitWriteBody(form, {
         includeToken,
         id: drawer?.mode === 'edit' ? drawer.id : undefined,
       });
-      const result = await testGitConnectionDraft(body, lang);
-      if (result.ok) {
-        setTest({ phase: 'ok', username: result.username || '', text: result.statusText || t(lang, 'git_test_ok') });
+      const [draftResult] = await Promise.allSettled([
+        testGitConnectionDraft(body, lang),
+        new Promise<void>((resolve) => {
+          setTimeout(resolve, 500);
+        }),
+      ]);
+      if (!isMountedRef.current || !drawerRef.current || currentRunId !== testRunIdRef.current) {
+        return;
+      }
+      if (draftResult.status === 'fulfilled') {
+        const result = draftResult.value;
+        if (result.ok) {
+          setTest({ phase: 'ok', username: result.username || '', text: result.statusText || t(lang, 'git_test_ok') });
+        } else {
+          setTest({ phase: 'fail', text: result.statusText || t(lang, 'git_test') });
+        }
       } else {
-        setTest({ phase: 'fail', text: result.statusText || t(lang, 'git_test') });
+        setTest({ phase: 'fail', text: failText(draftResult.reason) });
       }
     } catch (err) {
+      if (!isMountedRef.current || !drawerRef.current || currentRunId !== testRunIdRef.current) {
+        return;
+      }
       setTest({ phase: 'fail', text: failText(err) });
     }
   }
@@ -129,11 +184,23 @@ export function GitPage({ lang, onToast, onConfirm }: Props) {
   async function runRowTest(conn: GitConnection) {
     setRowTesting(conn.id);
     try {
-      await testGitConnection(conn.id, lang);
+      const [testResult] = await Promise.allSettled([
+        testGitConnection(conn.id, lang),
+        new Promise<void>((resolve) => {
+          setTimeout(resolve, 500);
+        }),
+      ]);
+      if (!isMountedRef.current) return;
+      if (testResult.status === 'rejected') {
+        onToast(failText(testResult.reason));
+      }
     } catch (err) {
+      if (!isMountedRef.current) return;
       onToast(failText(err));
     } finally {
-      setRowTesting(null);
+      if (isMountedRef.current) {
+        setRowTesting(null);
+      }
     }
   }
 
@@ -148,12 +215,15 @@ export function GitPage({ lang, onToast, onConfirm }: Props) {
       } else {
         await createGitConnection(body, lang);
       }
-      setDrawer(null);
-      setTest({ phase: 'idle' });
+      closeDrawer();
     } catch (err) {
-      setTest({ phase: 'fail', text: failText(err) });
+      if (isMountedRef.current && drawerRef.current) {
+        setTest({ phase: 'fail', text: failText(err) });
+      }
     } finally {
-      setSaving(false);
+      if (isMountedRef.current) {
+        setSaving(false);
+      }
     }
   }
 
@@ -167,9 +237,11 @@ export function GitPage({ lang, onToast, onConfirm }: Props) {
     if (!ok) return;
     try {
       await deleteGitConnection(conn.id);
-      setDrawer(null);
+      closeDrawer();
     } catch (err) {
-      onToast(failText(err));
+      if (isMountedRef.current) {
+        onToast(failText(err));
+      }
     }
   }
 
@@ -295,7 +367,7 @@ export function GitPage({ lang, onToast, onConfirm }: Props) {
 
       {drawer ? (
         <>
-          <div className="ns-drawer-scrim" onClick={() => setDrawer(null)} />
+          <div className="ns-drawer-scrim" onClick={closeDrawer} />
           <div className="ns-drawer" data-testid="next-git-drawer">
             <div className="ns-drawer-head">
               <b>
@@ -303,7 +375,7 @@ export function GitPage({ lang, onToast, onConfirm }: Props) {
                   ? t(lang, 'git_edit_title', { name: editing?.name || form.name })
                   : t(lang, 'git_add_title')}
               </b>
-              <button type="button" className="ns-btn ns-btn-ghost" onClick={() => setDrawer(null)}>✕</button>
+              <button type="button" className="ns-btn ns-btn-ghost" onClick={closeDrawer}>✕</button>
             </div>
             <div className="ns-drawer-body">
               <div className="ns-field">
@@ -331,7 +403,7 @@ export function GitPage({ lang, onToast, onConfirm }: Props) {
                   value={form.name}
                   placeholder={t(lang, 'git_name_ph')}
                   autoComplete="off"
-                  onChange={(ev) => setForm((prev) => ({ ...prev, name: ev.target.value }))}
+                  onChange={(ev) => updateForm((prev) => ({ ...prev, name: ev.target.value }))}
                 />
               </div>
               <div className="ns-field">
@@ -344,7 +416,7 @@ export function GitPage({ lang, onToast, onConfirm }: Props) {
                   spellCheck={false}
                   autoComplete="off"
                   readOnly={form.kind === 'gitlab-com'}
-                  onChange={(ev) => setForm((prev) => ({ ...prev, baseUrl: ev.target.value }))}
+                  onChange={(ev) => updateForm((prev) => ({ ...prev, baseUrl: ev.target.value }))}
                 />
                 <div className="ns-field-hint">
                   {t(lang, form.kind === 'gitlab-com' ? 'git_url_com_hint' : 'git_url_hint')}
@@ -360,7 +432,7 @@ export function GitPage({ lang, onToast, onConfirm }: Props) {
                   placeholder={drawer.mode === 'edit' ? t(lang, 'git_token_keep') : t(lang, 'git_token_ph')}
                   spellCheck={false}
                   autoComplete="off"
-                  onChange={(ev) => setForm((prev) => ({ ...prev, token: ev.target.value }))}
+                  onChange={(ev) => updateForm((prev) => ({ ...prev, token: ev.target.value }))}
                 />
                 <div className="ns-field-hint">
                   {t(lang, 'git_token_need')}
@@ -396,7 +468,7 @@ export function GitPage({ lang, onToast, onConfirm }: Props) {
                     type="checkbox"
                     data-testid="next-git-http"
                     checked={form.allowHttp}
-                    onChange={(ev) => setForm((prev) => ({ ...prev, allowHttp: ev.target.checked }))}
+                    onChange={(ev) => updateForm((prev) => ({ ...prev, allowHttp: ev.target.checked }))}
                   />
                   <span>
                     {t(lang, 'git_http')}
@@ -418,7 +490,7 @@ export function GitPage({ lang, onToast, onConfirm }: Props) {
                     placeholder={t(lang, 'git_ca_ph')}
                     spellCheck={false}
                     autoComplete="off"
-                    onChange={(ev) => setForm((prev) => ({ ...prev, caFile: ev.target.value }))}
+                    onChange={(ev) => updateForm((prev) => ({ ...prev, caFile: ev.target.value }))}
                   />
                   <div className="ns-field-hint">{t(lang, 'git_ca_hint')}</div>
                 </div>
@@ -431,11 +503,15 @@ export function GitPage({ lang, onToast, onConfirm }: Props) {
                   disabled={test.phase === 'testing'}
                   onClick={() => { void runFormTest(); }}
                 >
-                  {t(lang, 'git_test')}
+                  {test.phase === 'testing' ? t(lang, 'git_testing') : t(lang, 'git_test')}
                 </button>
               </div>
               {test.phase !== 'idle' ? (
-                <div className="ns-test-card is-git" data-testid="next-git-test-result">
+                <div
+                  ref={testResultRef}
+                  className="ns-test-card is-git"
+                  data-testid="next-git-test-result"
+                >
                   {test.phase === 'testing' ? (
                     <div className="ns-git-line">
                       <span className="ns-spin" />
@@ -465,7 +541,7 @@ export function GitPage({ lang, onToast, onConfirm }: Props) {
                   {t(lang, 'btn_delete')}
                 </button>
               ) : null}
-              <button type="button" className="ns-btn ns-btn-ghost" onClick={() => setDrawer(null)}>
+              <button type="button" className="ns-btn ns-btn-ghost" onClick={closeDrawer}>
                 {t(lang, 'btn_cancel')}
               </button>
               <button

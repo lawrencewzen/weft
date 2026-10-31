@@ -414,7 +414,7 @@ const zh = {
   git_row_test: '测试',
   git_row_edit: '编辑',
   git_row_delete: '删除',
-  git_testing: '正在测试…',
+  git_testing: '测试中…',
   git_connected: '已连接',
   git_untested: '未测试',
   git_add_title: '添加 Git 服务',
