@@ -36,6 +36,8 @@ describe('providerBrand', () => {
     expect(providerBrand('google')).toBe('google');
     expect(providerBrand('openrouter')).toBe('openrouter');
     expect(providerBrand('xai')).toBe('xai');
+    expect(providerBrand('antigravity-acp')).toBe('antigravity');
+    expect(providerBrand('antigravity')).toBe('antigravity');
   });
 
   it('handles empty or unrecognized provider ids gracefully', () => {
