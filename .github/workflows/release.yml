@@ -4,12 +4,13 @@ on:
   workflow_dispatch:
   push:
     tags:
-      - "v*"
+      # 解压即用的 Windows 包是内网版的发布物，从 intranet 分支打 tag。
+      - "intranet-v*"
   # workflow_dispatch is only listed once this file is on the default branch.
   # Pull requests that touch the packer still build the zip so the package can
   # be proven before it reaches main. Unrelated PRs do not run this job.
   pull_request:
-    branches: [main]
+    branches: [main, intranet]
     paths:
       - ".github/workflows/release.yml"
       - "scripts/pack-release.mjs"
