@@ -62,6 +62,7 @@ test('launchers quote paths, keep an existing data dir, and stay ASCII', () => {
     assert.equal([...text].some((ch) => ch.charCodeAt(0) > 127), false);
   }
   assert.equal(windowsCmd('open').includes('"%~dp0app\\bin\\weft.mjs" stop'), false);
+  assert.equal(windowsCmd('open').includes('WEFT_PORT'), false);
 });
 
 test('README covers start, data dir, upgrade, and stop', () => {
@@ -74,6 +75,9 @@ test('README covers start, data dir, upgrade, and stop', () => {
   assert.match(text, /停止/);
   assert.match(text, /版本 0\.1\.0/);
   assert.match(text, /WEFT_DATA_DIR/);
+  assert.match(text, /http:\/\/127\.0\.0\.1:3300/);
+  assert.match(text, /set WEFT_PORT=/);
+  assert.match(text, /只能这台电脑自己访问/);
 });
 
 test('runtime copy list includes the built app and the OpenAPI file the server loads', () => {

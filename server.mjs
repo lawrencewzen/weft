@@ -1322,6 +1322,15 @@ async function routeApi(req, res, url) {
   sendJson(res, 404, { error: 'not found' });
 }
 
+server.on('error', (err) => {
+  const code = err && typeof err === 'object' && 'code' in err ? err.code : '';
+  if (code === 'EADDRINUSE') {
+    console.error(`WEFT_ERROR EADDRINUSE 127.0.0.1:${PORT}`);
+  } else {
+    console.error(`WEFT_ERROR ${err instanceof Error ? err.message : err}`);
+  }
+  process.exit(1);
+});
 server.listen(PORT, '127.0.0.1', () => {
   const addr = server.address();
   const port = typeof addr === 'object' && addr ? addr.port : PORT;

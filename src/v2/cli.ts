@@ -5,6 +5,7 @@ import {
   mkdirSync,
   openSync,
   readFileSync,
+  statSync,
   unlinkSync,
 } from 'node:fs';
 import path from 'node:path';
@@ -17,6 +18,8 @@ import { PROTOCOL_VERSION } from './version.ts';
 export const PROBE_TIMEOUT_MS = 3_000;
 export const LAUNCH_TIMEOUT_MS = 30_000;
 export const EXIT_WAIT_MS = 15_000;
+/** Default listen port for `weft open` when neither WEFT_PORT nor PORT is set. */
+export const DEFAULT_OPEN_PORT = 3300;
 
 export function probeTimeoutMs(env: NodeJS.ProcessEnv = process.env): number {
   const raw = String(env.WEFT_PROBE_TIMEOUT_MS || '').trim();
@@ -24,6 +27,35 @@ export function probeTimeoutMs(env: NodeJS.ProcessEnv = process.env): number {
   const n = Number(raw);
   if (!Number.isFinite(n) || n <= 0) return PROBE_TIMEOUT_MS;
   return n;
+}
+
+function envPortRaw(env: NodeJS.ProcessEnv, key: string): string | undefined {
+  if (!Object.prototype.hasOwnProperty.call(env, key)) return undefined;
+  const value = env[key];
+  if (value == null) return undefined;
+  const trimmed = String(value).trim();
+  return trimmed === '' ? undefined : trimmed;
+}
+
+function parseListenPort(raw: string, source: string): number {
+  if (!/^\d+$/.test(raw)) {
+    throw new CliError(`${source} 端口无效：${raw}`, 1);
+  }
+  const n = Number(raw);
+  if (n === 0) return 0;
+  if (!Number.isInteger(n) || n < 1 || n > 65535) {
+    throw new CliError(`${source} 端口无效：${raw}`, 1);
+  }
+  return n;
+}
+
+/** WEFT_PORT, then PORT, then 3300. 0 means a random free port. */
+export function resolveListenPort(env: NodeJS.ProcessEnv = process.env): number {
+  const weft = envPortRaw(env, 'WEFT_PORT');
+  if (weft != null) return parseListenPort(weft, 'WEFT_PORT');
+  const port = envPortRaw(env, 'PORT');
+  if (port != null) return parseListenPort(port, 'PORT');
+  return DEFAULT_OPEN_PORT;
 }
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -325,18 +357,44 @@ function logPath(dataDir: string): string {
   return path.join(dataDir, LOG_REL);
 }
 
-function tailLog(dataDir: string, lines = 40): string {
+function logByteLength(dataDir: string): number {
   try {
-    const text = readFileSync(logPath(dataDir), 'utf8');
-    const parts = text.split(/\r?\n/);
-    while (parts.length && parts[parts.length - 1] === '') parts.pop();
-    return parts.slice(-lines).join('\n');
+    return statSync(logPath(dataDir)).size;
   } catch {
-    return '(没有日志)';
+    return 0;
   }
 }
 
-function launchService(dataDir: string): number {
+function readLogFrom(dataDir: string, start = 0): string {
+  try {
+    const buf = readFileSync(logPath(dataDir));
+    const slice = start > 0 ? buf.subarray(Math.min(start, buf.length)) : buf;
+    return slice.toString('utf8');
+  } catch {
+    return '';
+  }
+}
+
+function tailLog(dataDir: string, lines = 40): string {
+  const text = readLogFrom(dataDir);
+  if (!text) return '(没有日志)';
+  const parts = text.split(/\r?\n/);
+  while (parts.length && parts[parts.length - 1] === '') parts.pop();
+  return parts.slice(-lines).join('\n');
+}
+
+function logShowsAddrInUse(text: string): boolean {
+  return /EADDRINUSE/i.test(text) || /address already in use/i.test(text);
+}
+
+function portInUseError(port: number): CliError {
+  return new CliError(
+    `端口 ${port} 已被占用。请在 Weft.cmd 里调用前加一行 set WEFT_PORT=其它端口，或设置环境变量 WEFT_PORT。`,
+    1,
+  );
+}
+
+function launchService(dataDir: string, port: number): number {
   mkdirSync(path.join(dataDir, 'logs'), { recursive: true });
   const outFd = openSync(logPath(dataDir), 'a');
   const errFd = openSync(logPath(dataDir), 'a');
@@ -349,7 +407,7 @@ function launchService(dataDir: string): number {
       stdio: ['ignore', outFd, errFd],
       env: {
         ...process.env,
-        PORT: '0',
+        PORT: String(port),
         WEFT_DATA_DIR: dataDir,
         WEFT_LAUNCHED_BY: LAUNCHER_ID,
       },
@@ -376,11 +434,23 @@ async function waitPidExit(pid: number, timeoutMs: number): Promise<boolean> {
   return !pidIsLive(pid);
 }
 
-async function waitForLaunched(dataDir: string, pid: number): Promise<LiveService> {
+function launchedProcessDiedError(dataDir: string, port: number, logStart: number): CliError {
+  const fresh = readLogFrom(dataDir, logStart);
+  if (port !== 0 && logShowsAddrInUse(fresh)) return portInUseError(port);
+  const log = fresh.trim() ? fresh.trim() : tailLog(dataDir);
+  return new CliError(`服务进程已退出。最近日志：\n${log || '(没有日志)'}`, 1);
+}
+
+async function waitForLaunched(
+  dataDir: string,
+  pid: number,
+  port: number,
+  logStart: number,
+): Promise<LiveService> {
   const started = Date.now();
   while (Date.now() - started < LAUNCH_TIMEOUT_MS) {
     if (!pidIsLive(pid)) {
-      throw new CliError(`服务进程已退出。最近日志：\n${tailLog(dataDir)}`, 1);
+      throw launchedProcessDiedError(dataDir, port, logStart);
     }
     const loaded = loadDiscovery(dataDir);
     if (loaded.status === 'ok' && loaded.value.pid === pid) {
@@ -393,8 +463,10 @@ async function waitForLaunched(dataDir: string, pid: number): Promise<LiveServic
 }
 
 async function ensureLaunched(dataDir: string): Promise<LiveService> {
-  const pid = launchService(dataDir);
-  return waitForLaunched(dataDir, pid);
+  const port = resolveListenPort();
+  const logStart = logByteLength(dataDir);
+  const pid = launchService(dataDir, port);
+  return waitForLaunched(dataDir, pid, port, logStart);
 }
 
 type RestartResult = { status: 'exiting' } | { status: 'busy' } | { status: 'error'; message: string };
