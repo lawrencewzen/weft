@@ -10,6 +10,7 @@ import path from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { PROTOCOL_VERSION } from '../../src/v2/version.ts';
 import { discoveryPath, writeDiscoverySync } from '../../src/v2/daemon/discovery.ts';
+import { DEFAULT_OPEN_PORT, resolveListenPort } from '../../src/v2/cli.ts';
 import { ROOT } from './_root.mjs';
 
 const WEFT_BIN = path.join(ROOT, 'bin/weft.mjs');
@@ -22,6 +23,18 @@ function weftEnv(extra = {}) {
   }
   if (!Object.prototype.hasOwnProperty.call(extra, 'WEFT_LAUNCHED_BY')) {
     delete env.WEFT_LAUNCHED_BY;
+  }
+  // Parallel unit tests must not all grab 3300. Default to random unless the
+  // case under test sets WEFT_PORT / PORT itself.
+  if (!Object.prototype.hasOwnProperty.call(extra, 'WEFT_PORT')) {
+    env.WEFT_PORT = '0';
+  } else if (extra.WEFT_PORT == null || extra.WEFT_PORT === '') {
+    delete env.WEFT_PORT;
+  }
+  if (!Object.prototype.hasOwnProperty.call(extra, 'PORT')) {
+    delete env.PORT;
+  } else if (extra.PORT == null || extra.PORT === '') {
+    delete env.PORT;
   }
   return {
     ...env,
@@ -241,6 +254,19 @@ async function openConversation(port, title = 'cli') {
   assert.equal(conv.status, 201, conv.text);
   return conv.json;
 }
+
+test('resolveListenPort prefers WEFT_PORT over PORT then 3300; 0 stays random', () => {
+  assert.equal(DEFAULT_OPEN_PORT, 3300);
+  assert.equal(resolveListenPort({}), 3300);
+  assert.equal(resolveListenPort({ PORT: '4123' }), 4123);
+  assert.equal(resolveListenPort({ WEFT_PORT: '4500', PORT: '4123' }), 4500);
+  assert.equal(resolveListenPort({ WEFT_PORT: '0', PORT: '4123' }), 0);
+  assert.equal(resolveListenPort({ WEFT_PORT: '', PORT: '4123' }), 4123);
+  assert.equal(resolveListenPort({ WEFT_PORT: '  3301  ' }), 3301);
+  assert.equal(resolveListenPort({ PORT: '0' }), 0);
+  assert.throws(() => resolveListenPort({ WEFT_PORT: 'nope' }), /WEFT_PORT 端口无效/);
+  assert.throws(() => resolveListenPort({ PORT: '99999' }), /PORT 端口无效/);
+});
 
 test('open --print starts a service, login URL works, and a second open reuses the pid', { timeout: 60000 }, async () => {
   const dataDir = await mkdtemp(path.join(tmpdir(), 'weft-cli-open-'));
@@ -552,6 +578,101 @@ test('status reports running and stopped without leaking the token', { timeout: 
     assert.match(after.stdout, /服务没有运行/);
     assertNoSecrets(`${stopped.stdout}\n${after.stdout}\n${after.stderr}`, [discovery.token]);
   } finally {
+    await forceStop(dataDir);
+  }
+});
+
+test('open rejects an invalid WEFT_PORT without launching', async () => {
+  const dataDir = await mkdtemp(path.join(tmpdir(), 'weft-cli-bad-port-'));
+  const opened = await runWeft(['open', '--print', '--data-dir', dataDir], {
+    env: { WEFT_PORT: 'nope' },
+    timeoutMs: 10000,
+  });
+  assert.equal(opened.code, 1, opened.stderr);
+  assert.match(opened.stderr, /WEFT_PORT 端口无效/);
+  assert.equal(existsSync(discoveryPath(dataDir)), false);
+  assert.equal(existsSync(path.join(dataDir, 'logs', 'service.log')), false);
+});
+
+test('open --print listens on WEFT_PORT and ignores PORT', { timeout: 60000 }, async () => {
+  const dataDir = await mkdtemp(path.join(tmpdir(), 'weft-cli-port-'));
+  try {
+    const wanted = await unusedPort();
+    const ignored = wanted === 65535 ? wanted - 1 : wanted + 1;
+    const opened = await runWeft(['open', '--print', '--data-dir', dataDir], {
+      env: { WEFT_PORT: String(wanted), PORT: String(ignored) },
+    });
+    assert.equal(opened.code, 0, opened.stderr);
+    const printed = parseLoginUrl(opened.stdout);
+    const discovery = await readDiscoveryFile(dataDir);
+    assert.equal(printed.port, wanted);
+    assert.equal(discovery.port, wanted);
+    assert.notEqual(discovery.port, ignored);
+  } finally {
+    await forceStop(dataDir);
+  }
+});
+
+test('open --print falls back to PORT when WEFT_PORT is unset', { timeout: 60000 }, async () => {
+  const dataDir = await mkdtemp(path.join(tmpdir(), 'weft-cli-port-fallback-'));
+  try {
+    const wanted = await unusedPort();
+    const opened = await runWeft(['open', '--print', '--data-dir', dataDir], {
+      env: { WEFT_PORT: '', PORT: String(wanted) },
+    });
+    assert.equal(opened.code, 0, opened.stderr);
+    const printed = parseLoginUrl(opened.stdout);
+    const discovery = await readDiscoveryFile(dataDir);
+    assert.equal(printed.port, wanted);
+    assert.equal(discovery.port, wanted);
+  } finally {
+    await forceStop(dataDir);
+  }
+});
+
+test('second open reuses the running service even if WEFT_PORT differs', { timeout: 60000 }, async () => {
+  const dataDir = await mkdtemp(path.join(tmpdir(), 'weft-cli-reuse-port-'));
+  try {
+    const first = await runWeft(['open', '--print', '--data-dir', dataDir]);
+    assert.equal(first.code, 0, first.stderr);
+    const discovery = await readDiscoveryFile(dataDir);
+    const other = discovery.port === 65535 ? discovery.port - 1 : discovery.port + 1;
+    const second = await runWeft(['open', '--print', '--data-dir', dataDir], {
+      env: { WEFT_PORT: String(other) },
+    });
+    assert.equal(second.code, 0, second.stderr);
+    const again = parseLoginUrl(second.stdout);
+    const after = await readDiscoveryFile(dataDir);
+    assert.equal(after.pid, discovery.pid);
+    assert.equal(after.port, discovery.port);
+    assert.equal(again.port, discovery.port);
+    assert.notEqual(after.port, other);
+  } finally {
+    await forceStop(dataDir);
+  }
+});
+
+test('open fails with a Chinese port-in-use error and does not switch ports', { timeout: 60000 }, async () => {
+  const dataDir = await mkdtemp(path.join(tmpdir(), 'weft-cli-addrinuse-'));
+  const hung = await listenHangServer();
+  try {
+    const opened = await runWeft(['open', '--print', '--data-dir', dataDir], {
+      env: { WEFT_PORT: String(hung.port) },
+    });
+    assert.equal(opened.code, 1, `${opened.stdout}\n${opened.stderr}`);
+    assert.match(opened.stderr, new RegExp(`端口 ${hung.port} 已被占用`));
+    assert.match(opened.stderr, /Weft\.cmd/);
+    assert.match(opened.stderr, /set WEFT_PORT=/);
+    assert.match(opened.stderr, /环境变量 WEFT_PORT/);
+    assert.equal(opened.stderr.includes('启动服务超时'), false);
+    assert.equal(opened.stdout.includes('/auth?code='), false);
+    assert.equal(existsSync(discoveryPath(dataDir)), false);
+    let log = '';
+    try { log = readFileSync(path.join(dataDir, 'logs', 'service.log'), 'utf8'); } catch { log = ''; }
+    assert.match(log, /EADDRINUSE/);
+    assert.match(log, new RegExp(String(hung.port)));
+  } finally {
+    await hung.close();
     await forceStop(dataDir);
   }
 });
