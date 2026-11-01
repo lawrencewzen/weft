@@ -4,14 +4,50 @@
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 
-/** Lines run before each Agent PowerShell command. UTF-8, no BOM. */
+/**
+ * Must match `@earendil-works/pi-durable` `createPowerShellTool` (`UTF8_OUTPUT`
+ * in dist/tools/bash.js). That call SetConsoleOutputCP(65001), which makes
+ * cmd.exe misread GBK `.bat` files. We cannot change the library; the prefix
+ * below undoes the console CP without touching pwsh's output stream.
+ */
+export const PI_DURABLE_UTF8_OUTPUT = 'try { [Console]::OutputEncoding=[System.Text.Encoding]::UTF8 } catch {}';
+
+/**
+ * Restore the console code page to the system OEM CP for cmd.exe / `.bat`.
+ *
+ * Do not assign `[Console]::OutputEncoding`. pi-durable already set it to UTF-8
+ * so pwsh's own `Write-Output` stays UTF-8. Setting it to OEM (437 on English
+ * hosts, 936 on Chinese Win10) re-encodes that stream: 437 cannot write Chinese
+ * (`????`), and 936 cannot write characters outside GBK (emoji → `?`).
+ *
+ * `chcp.com` only changes the console CP (what cmd uses to read `.bat`). It
+ * does not rewrite pwsh's already-built UTF-8 output stream. `Encoding.Default`
+ * in pwsh 7 is UTF-8 (65001), not ACP/OEM — do not use it.
+ *
+ * Windows-only: `chcp.com` is missing on Linux pwsh; the try/catch skips it.
+ */
+export const powershellOemRestore = 'try { $oem = [Globalization.CultureInfo]::CurrentCulture.TextInfo.OEMCodePage; chcp.com $oem | Out-Null } catch {}';
+
+/**
+ * Lines run before each Agent PowerShell command (after pi-durable's UTF-8 line).
+ *
+ * Keep `$OutputEncoding` as UTF-8 (no BOM): it only encodes PowerShell pipeline
+ * stdin to native programs and does not call SetConsoleOutputCP.
+ *
+ * Do not set `[Console]::OutputEncoding` (leave pi-durable's UTF-8),
+ * `InputEncoding`, or `chcp 65001`. Console CP is restored with `chcp.com`
+ * to OEM so cmd.exe reads GBK batch files.
+ */
 export const powershellCommandPrefix = [
   '$enc = New-Object System.Text.UTF8Encoding $false',
   '$OutputEncoding = $enc',
-  '[Console]::InputEncoding = $enc',
-  '[Console]::OutputEncoding = $enc',
-  'try { chcp 65001 | Out-Null } catch {}',
+  powershellOemRestore,
 ].join('\n');
+
+/** Script body createPowerShellTool actually runs: library UTF-8 line, then our prefix, then the command. */
+export function agentPowerShellScript(command) {
+  return `${PI_DURABLE_UTF8_OUTPUT}\n${powershellCommandPrefix}\n${command}`;
+}
 
 /**
  * Which command tool the model gets. Windows defaults to powershell; Linux/macOS

@@ -1,13 +1,18 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
+import { fileURLToPath } from 'node:url';
 import { applyBashEnvAllowlist } from '../../src/kernel/bash-env.mjs';
 import {
+  PI_DURABLE_UTF8_OUTPUT,
+  agentPowerShellScript,
   agentShellKind,
   findWindowsExecutable,
   powershellCommandPrefix,
+  powershellOemRestore,
   windowsChildEnv,
   windowsPwshExecutable,
 } from '../../src/platform/win/shell.mjs';
@@ -23,12 +28,28 @@ test('agentShellKind defaults by platform and honors WEFT_AGENT_SHELL', () => {
   assert.equal(agentShellKind({ WEFT_AGENT_SHELL: '' }, 'linux'), 'bash');
 });
 
-test('powershellCommandPrefix sets UTF-8 without BOM for 5.1 and pwsh 7', () => {
+test('powershellCommandPrefix keeps $OutputEncoding UTF-8 and restores OEM code page', () => {
   assert.match(powershellCommandPrefix, /UTF8Encoding \$false/);
   assert.match(powershellCommandPrefix, /\$OutputEncoding/);
-  assert.match(powershellCommandPrefix, /\[Console\]::InputEncoding/);
-  assert.match(powershellCommandPrefix, /\[Console\]::OutputEncoding/);
+  assert.match(powershellCommandPrefix, /OEMCodePage/);
+  assert.match(powershellCommandPrefix, /CultureInfo\]::CurrentCulture\.TextInfo\.OEMCodePage/);
+  assert.match(powershellCommandPrefix, /chcp\.com \$oem/);
+  assert.equal(powershellCommandPrefix.includes(powershellOemRestore), true);
+  assert.equal(powershellCommandPrefix.includes('[Console]::OutputEncoding'), false);
+  assert.equal(powershellCommandPrefix.includes('[System.Text.Encoding]::Default'), false);
+  assert.equal(powershellCommandPrefix.includes('Encoding]::Default'), false);
   assert.equal(powershellCommandPrefix.includes('UTF8Encoding $true'), false);
+  assert.equal(powershellCommandPrefix.includes('chcp 65001'), false);
+  assert.equal(powershellCommandPrefix.includes('InputEncoding'), false);
+  const script = agentPowerShellScript('Write-Output x');
+  assert.equal(script.startsWith(`${PI_DURABLE_UTF8_OUTPUT}\n`), true);
+  assert.ok(script.indexOf('OEMCodePage') > script.indexOf('Encoding]::UTF8'));
+  assert.ok(script.includes('chcp.com'));
+  const bashJs = readFileSync(
+    fileURLToPath(new URL('../../node_modules/@earendil-works/pi-durable/dist/tools/bash.js', import.meta.url)),
+    'utf8',
+  );
+  assert.equal(bashJs.includes(JSON.stringify(PI_DURABLE_UTF8_OUTPUT)), true);
 });
 
 test('windowsChildEnv adds UTF-8 python/less vars and git config overlay', () => {

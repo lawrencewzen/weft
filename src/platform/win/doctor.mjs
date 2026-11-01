@@ -5,15 +5,19 @@
  * Does not print Token / Key / password / env values — only whether they are set.
  */
 import { spawn } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import iconv from 'iconv-lite';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { wrapPwshCommand } from './output-transcode.mjs';
+import { agentPowerShellScript } from './shell.mjs';
 
 export const NA = '不适用';
 export const ROUNDTRIP_TEXT = '中文自检';
-/** Same prefix WorkspaceExecutionEnv prepends when falling back to PowerShell. */
-export const PWSH_UTF8_PREFIX = 'try { [Console]::OutputEncoding=[System.Text.Encoding]::UTF8 } catch {}';
+export const ROUNDTRIP_PWSH_LABEL = 'pwsh（经 Weft wrapper）';
+export const ROUNDTRIP_GBK_BAT_LABEL = 'GBK 批处理 echo 中文';
+export const ROUNDTRIP_CMD_LABEL = 'cmd /c echo（不经 Weft 处理的原始输出）';
 export const CODE_PAGE_KEY = 'HKLM\\SYSTEM\\CurrentControlSet\\Control\\Nls\\CodePage';
 export const LOCALE_KEY = 'HKCU\\Control Panel\\International';
 export const WINNT_KEY = 'HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion';
@@ -99,8 +103,23 @@ export function quotePwshLiteral(value) {
 }
 
 export function buildPwshRoundtripArgs(text = ROUNDTRIP_TEXT) {
-  const script = `${PWSH_UTF8_PREFIX}\nWrite-Output ${quotePwshLiteral(text)}`;
-  return ['-NoProfile', '-NonInteractive', '-Command', script];
+  const script = agentPowerShellScript(`Write-Output ${quotePwshLiteral(text)}`);
+  return ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', script];
+}
+
+export function gbkBatEchoBytes(text = ROUNDTRIP_TEXT) {
+  const body = `@echo off\r\necho ${text}\r\n`;
+  return iconv.encode(body, 'gbk');
+}
+
+export function buildGbkBatRoundtripArgs(batPath) {
+  const script = agentPowerShellScript(`cmd /d /s /c ${quotePwshLiteral(batPath)}`);
+  return ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', script];
+}
+
+function wrapAgentPwsh(execPath, program, args, env, platform) {
+  const argv = wrapPwshCommand([program, ...args], { env, platform, execPath });
+  return { command: argv[0], args: argv.slice(1) };
 }
 
 export function normalizeRoundtripText(text) {
@@ -254,6 +273,9 @@ function makeDeps(opts) {
     readRegistry: opts.readRegistry ?? ((key) => defaultReadRegistry(key, exec)),
     existsSync: opts.existsSync ?? existsSync,
     readFileSync: opts.readFileSync ?? readFileSync,
+    writeFileSync: opts.writeFileSync ?? writeFileSync,
+    rmSync: opts.rmSync ?? rmSync,
+    tmpdir: opts.tmpdir ?? os.tmpdir,
     pidIsLive: opts.pidIsLive ?? pidIsLive,
   };
 }
@@ -407,25 +429,51 @@ function defaultInspectService(deps) {
   return { running: true, pid, port: Number.isInteger(port) && port > 0 ? port : undefined };
 }
 
+function roundtripFailSuffix(result) {
+  if (result?.error) return '（执行失败）';
+  if (result?.code && result.code !== 0) return `（退出码 ${result.code}）`;
+  return '';
+}
+
 async function collectRoundtrip(deps, ps) {
   const lines = [];
   if (ps.pwsh?.path) {
     const args = buildPwshRoundtripArgs(ROUNDTRIP_TEXT);
-    const result = await deps.exec(ps.pwsh.path, args);
+    const wrapped = wrapAgentPwsh(deps.execPath, ps.pwsh.path, args, deps.env, deps.platform);
+    const result = await deps.exec(wrapped.command, wrapped.args);
     const judged = judgeRoundtrip(result.stdout, ROUNDTRIP_TEXT, deps.Decoder);
-    const fail = result.error ? `（执行失败）` : result.code && result.code !== 0 ? `（退出码 ${result.code}）` : '';
-    lines.push(`pwsh（UTF-8 前缀）: ${judged.verdict}${fail}`);
+    lines.push(`${ROUNDTRIP_PWSH_LABEL}: ${judged.verdict}${roundtripFailSuffix(result)}`);
   } else {
-    lines.push(`pwsh（UTF-8 前缀）: 未安装 pwsh`);
+    lines.push(`${ROUNDTRIP_PWSH_LABEL}: 未安装 pwsh`);
+  }
+  if (deps.platform === 'win32' && ps.pwsh?.path) {
+    const batPath = path.join(deps.tmpdir(), `weft-doctor-${process.pid}-gbk.bat`);
+    try {
+      deps.writeFileSync(batPath, gbkBatEchoBytes(ROUNDTRIP_TEXT));
+      const args = buildGbkBatRoundtripArgs(batPath);
+      const wrapped = wrapAgentPwsh(deps.execPath, ps.pwsh.path, args, deps.env, deps.platform);
+      const result = await deps.exec(wrapped.command, wrapped.args);
+      const judged = judgeRoundtrip(result.stdout, ROUNDTRIP_TEXT, deps.Decoder);
+      lines.push(`${ROUNDTRIP_GBK_BAT_LABEL}: ${judged.verdict}${roundtripFailSuffix(result)}`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      lines.push(`${ROUNDTRIP_GBK_BAT_LABEL}: 乱码（${message}）`);
+    } finally {
+      try { deps.rmSync(batPath, { force: true }); } catch { /* ignore */ }
+    }
+  } else if (deps.platform === 'win32') {
+    lines.push(`${ROUNDTRIP_GBK_BAT_LABEL}: 未安装 pwsh`);
+  } else {
+    lines.push(`${ROUNDTRIP_GBK_BAT_LABEL}: ${NA}`);
   }
   if (deps.platform === 'win32') {
     const cmd = deps.env.ComSpec || deps.which('cmd') || deps.which('cmd.exe') || 'cmd.exe';
     const result = await deps.exec(cmd, ['/d', '/s', '/c', `echo ${ROUNDTRIP_TEXT}`]);
     const judged = judgeRoundtrip(result.stdout, ROUNDTRIP_TEXT, deps.Decoder);
-    const fail = result.error ? `（执行失败）` : '';
-    lines.push(`cmd /c echo: ${judged.verdict}${fail}`);
+    const fail = result.error ? '（执行失败）' : '';
+    lines.push(`${ROUNDTRIP_CMD_LABEL}: ${judged.verdict}${fail}`);
   } else {
-    lines.push(`cmd /c echo: ${NA}`);
+    lines.push(`${ROUNDTRIP_CMD_LABEL}: ${NA}`);
   }
   return lines;
 }

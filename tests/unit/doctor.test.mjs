@@ -6,8 +6,13 @@ import { test } from 'node:test';
 import {
   CODE_PAGE_KEY,
   NA,
+  ROUNDTRIP_CMD_LABEL,
+  ROUNDTRIP_GBK_BAT_LABEL,
+  ROUNDTRIP_PWSH_LABEL,
   ROUNDTRIP_TEXT,
+  buildGbkBatRoundtripArgs,
   buildPwshRoundtripArgs,
+  gbkBatEchoBytes,
   chooseShellPwshFirst,
   envPresenceLines,
   findOnPath,
@@ -80,13 +85,27 @@ test('judgeRoundtrip distinguishes UTF-8 正常 from constructed GBK 乱码', ()
   assert.equal(normalizeRoundtripText(`\r\n"${ROUNDTRIP_TEXT}"\r\n`), ROUNDTRIP_TEXT);
 });
 
-test('buildPwshRoundtripArgs uses Agent UTF-8 prefix and NoProfile', () => {
+test('buildPwshRoundtripArgs uses Agent prefix, Bypass, and NoProfile', () => {
   const args = buildPwshRoundtripArgs();
-  assert.deepEqual(args.slice(0, 3), ['-NoProfile', '-NonInteractive', '-Command']);
-  assert.match(args[3], /OutputEncoding/);
-  assert.match(args[3], /Write-Output/);
-  assert.match(args[3], /中文自检/);
+  assert.deepEqual(args.slice(0, 5), ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command']);
+  assert.match(args[5], /\$OutputEncoding/);
+  assert.match(args[5], /OutputEncoding=\[System\.Text\.Encoding\]::UTF8/);
+  assert.match(args[5], /OEMCodePage/);
+  assert.match(args[5], /chcp\.com \$oem/);
+  assert.equal(args[5].includes('Encoding]::Default'), false);
+  assert.equal(args[5].includes('chcp 65001'), false);
+  assert.match(args[5], /Write-Output/);
+  assert.match(args[5], /中文自检/);
+  assert.ok(args[5].indexOf('OEMCodePage') > args[5].indexOf('Encoding]::UTF8'));
   assert.equal(quotePwshLiteral("it's"), "'it''s'");
+  const batArgs = buildGbkBatRoundtripArgs('C:\\tmp\\zh.bat');
+  assert.deepEqual(batArgs.slice(0, 5), args.slice(0, 5));
+  assert.match(batArgs[5], /cmd \/d \/s \/c 'C:\\tmp\\zh\.bat'/);
+  assert.match(batArgs[5], /OutputEncoding=\[System\.Text\.Encoding\]::UTF8/);
+  assert.match(batArgs[5], /OEMCodePage/);
+  assert.match(batArgs[5], /chcp\.com \$oem/);
+  assert.ok(batArgs[5].indexOf('OEMCodePage') > batArgs[5].indexOf('Encoding]::UTF8'));
+  assert.equal(new TextDecoder('gbk').decode(gbkBatEchoBytes()).includes(ROUNDTRIP_TEXT), true);
 });
 
 test('envPresenceLines never includes values', () => {
@@ -187,8 +206,9 @@ test('runDoctor on non-Windows prints 不适用, roundtrip, and hides secrets', 
   assert.match(text, /数据目录: \/tmp\/weft-doctor-data/);
   assert.match(text, /服务: 未运行/);
   assert.match(text, /\[往返\]/);
-  assert.match(text, /pwsh（UTF-8 前缀）: 未安装 pwsh/);
-  assert.match(text, /cmd \/c echo: 不适用/);
+  assert.match(text, new RegExp(`${ROUNDTRIP_PWSH_LABEL}: 未安装 pwsh`));
+  assert.match(text, new RegExp(`${ROUNDTRIP_GBK_BAT_LABEL}: ${NA}`));
+  assert.match(text, new RegExp(`${ROUNDTRIP_CMD_LABEL}: ${NA}`));
   assert.match(text, /OPENAI_API_KEY: 已设置/);
   assert.equal(text.includes('sk-doctor-secret-aaaa'), false);
   assert.equal(text.includes('faux'), false);
@@ -234,9 +254,12 @@ test('runDoctor on Windows uses registry, shell.mjs, and roundtrip verdicts', as
       }
       return Buffer.alloc(0);
     },
+    writeFileSync() {},
+    rmSync() {},
+    tmpdir: () => 'C:\\tmp',
     exec: async (command, args) => {
       const joined = `${command} ${args.join(' ')}`;
-      if (joined.includes('Write-Output')) {
+      if (joined.includes('Write-Output') || joined.includes('gbk.bat')) {
         return { code: 0, stdout: Buffer.from(`${ROUNDTRIP_TEXT}\n`, 'utf8'), stderr: Buffer.alloc(0) };
       }
       if (args.includes('echo') || args.some((a) => String(a).startsWith('echo '))) {
@@ -261,8 +284,9 @@ test('runDoctor on Windows uses registry, shell.mjs, and roundtrip verdicts', as
   assert.match(text, /Agent 命令将使用: pwsh，C:\\Program Files\\PowerShell\\7\\pwsh.exe/);
   assert.match(text, /端口: 3456/);
   assert.match(text, /服务: 正在运行（pid 4242）/);
-  assert.match(text, /pwsh（UTF-8 前缀）: 正常/);
-  assert.match(text, /cmd \/c echo: 乱码/);
+  assert.match(text, new RegExp(`${ROUNDTRIP_PWSH_LABEL}: 正常`));
+  assert.match(text, new RegExp(`${ROUNDTRIP_GBK_BAT_LABEL}: 正常`));
+  assert.match(text, new RegExp(`${ROUNDTRIP_CMD_LABEL}: 乱码`));
   assert.equal(text.includes('sk-win-secret-bbbb'), false);
 });
 

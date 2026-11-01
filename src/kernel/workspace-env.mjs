@@ -6,6 +6,8 @@ import { realpath } from 'node:fs/promises';
 import { NodeExecutionEnv } from '@earendil-works/pi-durable/env/node';
 import { ExecutionError, FileError, err, ok } from '@earendil-works/pi-durable/env';
 import { resolveInWorkspace } from '../core/paths.mjs';
+import { wrapPwshCommand } from '../platform/win/output-transcode.mjs';
+import { agentPowerShellScript } from '../platform/win/shell.mjs';
 import {
   createStringTextLineReader,
   decode,
@@ -16,7 +18,6 @@ import {
 } from '../platform/win/text-encoding.mjs';
 import { bashChildEnv } from './bash-env.mjs';
 
-const UTF8_OUTPUT = 'try { [Console]::OutputEncoding=[System.Text.Encoding]::UTF8 } catch {}';
 const POWERSHELL_ARGS = ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command'];
 const POWERSHELL_PROGRAMS = ['pwsh', 'powershell'];
 
@@ -47,10 +48,14 @@ function sandboxError(filePath, error) {
  * Same flags as createPowerShellTool: no profile, Bypass execution policy.
  */
 async function execPowerShell(inner, command, options, context) {
-  const script = `${UTF8_OUTPUT}\n${command}`;
+  const script = agentPowerShellScript(command);
   let last = err(new ExecutionError('shell_unavailable', 'No bash shell found'));
   for (const program of POWERSHELL_PROGRAMS) {
-    last = await inner.exec([program, ...POWERSHELL_ARGS, script], options, context);
+    last = await inner.exec(
+      wrapPwshCommand([program, ...POWERSHELL_ARGS, script]),
+      options,
+      context,
+    );
     if (last.ok || last.error?.code !== 'spawn_error') return last;
   }
   return last;
@@ -271,7 +276,7 @@ export class WorkspaceExecutionEnv {
       env: bashChildEnv(process.env, options?.env),
     };
     if (typeof command !== 'string') {
-      return this.inner.exec(command, next, context);
+      return this.inner.exec(wrapPwshCommand(command), next, context);
     }
     const result = await this.inner.exec(command, next, context);
     if (result.ok || result.error?.code !== 'shell_unavailable') return result;
