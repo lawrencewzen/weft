@@ -191,12 +191,14 @@ test('without detection GBK is binary on non-Windows; Windows always detects', a
   const ok = await readWorkspaceFile(root, 'ok.txt', OFF);
   assert.equal(ok.binary, false);
   assert.equal(ok.text, 'hello\n');
-  assert.equal(ok.encoding, undefined);
   if (process.platform === 'win32') {
+    // win32 always enables detection, even with WEFT_TEXT_ENCODING_DETECT unset.
+    assert.equal(ok.encoding, 'utf8');
     assert.equal(gbk.binary, false);
     assert.equal(gbk.text, CHINESE);
     assert.equal(gbk.encoding, 'gbk');
   } else {
+    assert.equal(ok.encoding, undefined);
     assert.equal(gbk.binary, true);
     assert.equal(gbk.text, null);
     assert.equal(gbk.encoding, undefined);
