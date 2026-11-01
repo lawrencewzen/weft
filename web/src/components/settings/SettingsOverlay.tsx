@@ -8,6 +8,7 @@ import type { ConfirmOpts } from '../ConfirmDialog';
 import { AboutPage, type AboutService } from './AboutPage';
 import { GeneralPage } from './GeneralPage';
 import { GitPage } from './GitPage';
+import { GlabPage } from './GlabPage';
 import { PluginsPage } from './PluginsPage';
 import { ProviderPage } from './ProviderPage';
 import { SkillsPage } from './SkillsPage';
@@ -16,6 +17,7 @@ const NAV: { id: SettingsPage; key: I18nKey }[] = [
   { id: 'general', key: 'settings_nav_general' },
   { id: 'providers', key: 'settings_nav_providers' },
   { id: 'git', key: 'settings_nav_git' },
+  { id: 'glab', key: 'settings_nav_glab' },
   { id: 'plugins', key: 'settings_nav_plugins' },
   { id: 'skills', key: 'settings_nav_skills' },
   { id: 'about', key: 'settings_nav_about' },
@@ -92,6 +94,8 @@ export function SettingsOverlay({ page, lang, service, onToast, onConfirm }: Pro
             <AboutPage lang={lang} service={service} />
           ) : current === 'git' ? (
             <GitPage lang={lang} onToast={onToast} onConfirm={onConfirm} />
+          ) : current === 'glab' ? (
+            <GlabPage lang={lang} onToast={onToast} onNavigate={onNav} />
           ) : current === 'plugins' ? (
             <PluginsPage lang={lang} onToast={onToast} />
           ) : current === 'skills' ? (

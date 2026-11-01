@@ -497,6 +497,77 @@ html[data-theme$="-dark"] .ns-ws-dialog {
   transform: rotate(45deg) translateY(-2px); display: inline-block;
 }
 .ns-caret-tiny.is-open { transform: rotate(225deg) translate(-2px, -1px); }
+.ns-switch {
+  width: 34px;
+  height: 20px;
+  border-radius: 999px;
+  border: none;
+  background: var(--ns-line);
+  position: relative;
+  cursor: pointer;
+  flex-shrink: 0;
+  padding: 0;
+}
+.ns-switch.is-on {
+  background: var(--accent, var(--ns-ink));
+}
+.ns-switch::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--panel, #fff);
+  transition: left .15s;
+}
+.ns-switch.is-on::after {
+  left: 16px;
+}
+.ns-switch:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+}
+
+.ns-glab-status-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border: 1px solid var(--ns-line2);
+  border-radius: 8px;
+  background: var(--ns-bg);
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.ns-glab-status-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.ns-glab-connections.is-disabled {
+  opacity: .5;
+  pointer-events: none;
+}
+.ns-glab-default-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fs-sm);
+  color: var(--ns-mute2);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.ns-glab-default-label:hover {
+  color: var(--ns-ink);
+}
+.ns-glab-path-wrap {
+  margin: 8px 0 16px;
+}
+
 .ns-test-row { margin-top: 16px; }
 .ns-git-line { display: flex; align-items: center; gap: 8px; }
 .ns-git-line.is-ok { color: var(--ns-ok); }
