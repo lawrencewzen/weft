@@ -49,7 +49,6 @@ const PROVIDER_NAME_KEYS: Record<string, string> = {
   'minimax-cn': 'provider_name_minimax_cn',
   xiaomi: 'provider_name_xiaomi',
   xai: 'provider_name_xai',
-  'antigravity-acp': 'provider_name_antigravity_acp',
 };
 
 /** Localized display name for a built-in provider id. Falls back to `fallback`. */

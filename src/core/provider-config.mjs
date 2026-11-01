@@ -14,9 +14,6 @@ export const CUSTOM_PROVIDER_APIS = Object.freeze([
   'anthropic-messages',
 ]);
 
-/** Extra builtin ids that are not in pi-ai's catalog (ACP runtimes). */
-export const EXTRA_BUILTIN_PROVIDER_IDS = Object.freeze(['antigravity-acp']);
-
 const CUSTOM_API = new Set(CUSTOM_PROVIDER_APIS);
 const BLOCKED_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
 const DROPPED_VENDORS = new Set(['xai', 'grok']);
@@ -47,9 +44,7 @@ export function createCustomProviderId() {
 }
 
 function builtinIdSet() {
-  const ids = new Set(getBuiltinProviders());
-  for (const id of EXTRA_BUILTIN_PROVIDER_IDS) ids.add(id);
-  return ids;
+  return new Set(getBuiltinProviders());
 }
 
 function cleanName(value, fallback) {
