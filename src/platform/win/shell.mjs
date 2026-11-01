@@ -100,7 +100,9 @@ export function findWindowsExecutable(name, env = process.env, options = {}) {
       for (const variant of variants) {
         try {
           if (existsSync(path.join(dir, variant))) {
-            return variant.toLowerCase().endsWith('.exe') ? variant : `${name}.exe`;
+            // PATHEXT on Windows is `.EXE`; existsSync matches that casing.
+            // Spawn and tests want a stable `name.exe`.
+            return lower.endsWith('.exe') ? name : `${name}.exe`;
           }
         } catch {
           /* ignore unreadable PATH entries */
