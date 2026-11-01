@@ -20,6 +20,30 @@ function pwshAvailable() {
   return result.status === 0;
 }
 
+/** System OEM code page (what `chcp.com $oem` restores). Null off Windows. */
+function windowsOemCodePage() {
+  if (process.platform !== 'win32') return null;
+  for (const program of ['pwsh', 'powershell']) {
+    const result = spawnSync(
+      program,
+      ['-NoProfile', '-NonInteractive', '-Command', '[Globalization.CultureInfo]::CurrentCulture.TextInfo.OEMCodePage'],
+      { encoding: 'utf8', timeout: 15_000, windowsHide: true },
+    );
+    const n = Number.parseInt(String(result.stdout || '').trim(), 10);
+    if (result.status === 0 && Number.isInteger(n) && n > 0) return n;
+  }
+  return null;
+}
+
+/** OEM pages that can encode 中文 so `cmd /c echo 中文` is not `?`. */
+function oemCanRepresentChinese(oem) {
+  if (oem === 936 || oem === 54936 || oem === 65001) return true;
+  if (!Number.isInteger(oem) || oem <= 0) return false;
+  const name = `cp${oem}`;
+  if (!iconv.encodingExists(name)) return false;
+  return iconv.decode(iconv.encode('中文', name), name).includes('中文');
+}
+
 function resultText(chunks, ran) {
   return `${chunks.join('')}${ran?.structuredOutput?.output || ''}`;
 }
@@ -79,14 +103,28 @@ test('powershell tool prints Chinese from Write-Output, node, and cmd without U+
       { command: 'node zh.cjs', expect: '中文' },
     ];
     if (process.platform === 'win32') {
-      cases.push({ command: 'cmd /c echo 中文', expect: '中文' });
+      // cmd.exe encodes echo with the OEM console CP (`chcp.com $oem` in the prefix).
+      // 936 / 54936 (GBK / GB18030) can emit 中文; 437 on windows-latest cannot
+      // (WideCharToMultiByte replaces with 0x3F). That is the host, not a product
+      // bug. Commander measured OEM 936: `cmd /c echo 中文` is GBK, wrapper → 中文.
+      const oem = windowsOemCodePage();
+      cases.push({
+        command: 'cmd /c echo 中文',
+        expect: oemCanRepresentChinese(oem) ? '中文' : undefined,
+        oem,
+      });
     }
 
     for (const item of cases) {
       const { ran, text } = await runPowerShell(tool, env, item.command);
       assert.equal(Boolean(ran?.isError), false, `${item.command}: ${JSON.stringify({ text, ran })}`);
       assert.equal(text.includes('\uFFFD'), false, `${item.command} contained U+FFFD: ${JSON.stringify(text)}`);
-      assert.equal(text.includes(item.expect), true, `${item.command} missing ${item.expect}: ${JSON.stringify(text)}`);
+      if (item.expect !== undefined) {
+        assert.equal(text.includes(item.expect), true, `${item.command} missing ${item.expect}: ${JSON.stringify(text)}`);
+      }
+      if (item.command === 'cmd /c echo 中文') {
+        console.log(`cmd /c echo 中文 OEM=${item.oem} text=${JSON.stringify(text)}`);
+      }
     }
   } finally {
     await env.cleanup(BACKGROUND_CONTEXT).catch(() => {});
