@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
+import { applyBashEnvAllowlist } from '../../src/kernel/bash-env.mjs';
 import {
   agentShellKind,
   findWindowsExecutable,
@@ -60,6 +61,24 @@ test('windowsChildEnv appends git config after an existing GIT_CONFIG_COUNT', ()
   assert.equal(env.GIT_CONFIG_VALUE_2, 'false');
   assert.equal(env.GIT_CONFIG_KEY_3, 'i18n.logOutputEncoding');
   assert.equal(env.GIT_CONFIG_VALUE_3, 'utf-8');
+});
+
+test('host GIT_CONFIG extraHeader does not reach Agent env; UTF-8 overlay starts at 0', () => {
+  const execution = { command: 'git status', cwd: '/tmp', env: {}, inheritEnv: true };
+  applyBashEnvAllowlist(execution, {
+    PATH: '/usr/bin',
+    GIT_CONFIG_COUNT: '1',
+    GIT_CONFIG_KEY_0: 'http.extraHeader',
+    GIT_CONFIG_VALUE_0: 'Authorization: Bearer xxx',
+  }, { log() {}, warned: new Set() });
+  const env = windowsChildEnv(execution.env);
+  assert.equal(env.GIT_CONFIG_COUNT, '2');
+  assert.equal(env.GIT_CONFIG_KEY_0, 'core.quotepath');
+  assert.equal(env.GIT_CONFIG_VALUE_0, 'false');
+  assert.equal(env.GIT_CONFIG_KEY_1, 'i18n.logOutputEncoding');
+  assert.equal(env.GIT_CONFIG_VALUE_1, 'utf-8');
+  assert.equal(Object.values(env).includes('Authorization: Bearer xxx'), false);
+  assert.equal(Object.values(env).includes('http.extraHeader'), false);
 });
 
 test('windowsChildEnv keeps a mixed-case GIT_CONFIG_COUNT and does not leave a duplicate', () => {

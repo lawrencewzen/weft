@@ -51,7 +51,7 @@ test('sensitive names include prefixes, exact denials, and KEY/TOKEN/SECRET/PASS
   assert.equal(sensitiveEnvReason('HTTPS_PROXY'), null);
   assert.equal(sensitiveEnvReason('PATH'), null);
   assert.equal(sensitiveEnvReason('MY_BASH_CUSTOM'), null);
-  assert.equal(sensitiveEnvReason('GIT_CONFIG_KEY_0'), null);
+  assert.equal(sensitiveEnvReason('GIT_CONFIG_KEY_0') != null, true);
   assert.equal(sensitiveEnvReason('GIT_CONFIG_VALUE_0'), null);
   assert.equal(sensitiveEnvReason('PSModulePath'), null);
 });
@@ -133,21 +133,22 @@ test('proxy names keep both casings on Windows, including when the host only set
   assert.equal(one.env.https_proxy, 'http://weft-test-proxy.example:8080');
 });
 
-test('bashChildEnv copies PowerShell and GIT_CONFIG_* names', () => {
+test('bashChildEnv copies PowerShell names and drops host GIT_CONFIG_*', () => {
   const { env } = collect({
     PATH: '/usr/bin',
     PSModulePath: '/opt/microsoft/powershell/7/Modules',
     PSExecutionPolicyPreference: 'Bypass',
     GIT_CONFIG_COUNT: '1',
-    GIT_CONFIG_KEY_0: 'user.name',
-    GIT_CONFIG_VALUE_0: 'Weft',
+    GIT_CONFIG_KEY_0: 'http.extraHeader',
+    GIT_CONFIG_VALUE_0: 'Authorization: Bearer xxx',
     OPENAI_API_KEY: 'sk-weft-test-openai-key',
   });
   assert.equal(env.PSModulePath, '/opt/microsoft/powershell/7/Modules');
   assert.equal(env.PSExecutionPolicyPreference, 'Bypass');
-  assert.equal(env.GIT_CONFIG_COUNT, '1');
-  assert.equal(env.GIT_CONFIG_KEY_0, 'user.name');
-  assert.equal(env.GIT_CONFIG_VALUE_0, 'Weft');
+  assert.equal(env.GIT_CONFIG_COUNT, undefined);
+  assert.equal(env.GIT_CONFIG_KEY_0, undefined);
+  assert.equal(env.GIT_CONFIG_VALUE_0, undefined);
+  assert.equal(Object.values(env).includes('Authorization: Bearer xxx'), false);
   assert.equal(env.OPENAI_API_KEY, undefined);
 });
 

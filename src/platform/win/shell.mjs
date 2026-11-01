@@ -44,8 +44,8 @@ function setEnv(out, name, value) {
 
 /**
  * UTF-8 defaults for Agent commands (python, git, less) plus git config overlay.
- * Existing `GIT_CONFIG_COUNT` / `GIT_CONFIG_KEY_n` / `GIT_CONFIG_VALUE_n` stay;
- * our keys are appended after the user's count.
+ * Call after the env allow-list. Host `GIT_CONFIG_*` is already stripped; if the
+ * filtered env still has a count (tests, or a later overlay), append after it.
  *
  * @param {Record<string, string>} [env]
  * @returns {Record<string, string>}
