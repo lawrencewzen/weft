@@ -23,6 +23,11 @@ import {
   resolveKernelTarget,
 } from '../kernel/models.mjs';
 import { effectiveThinkingLevel, thinkingFieldsOf } from './thinking-level.mjs';
+import {
+  ANTIGRAVITY_ACP_ID,
+  antigravityAcpCredential,
+  antigravityAcpLocalLogin,
+} from './antigravity-acp.mjs';
 
 export const POPULAR_PROVIDER_IDS = Object.freeze([
   'deepseek',
@@ -757,7 +762,7 @@ export function createProviderService({
 
     function availableAuthMethods(provider) {
       const id = provider?.id;
-      if (id === 'xai') return ['oauth'];
+      if (id === 'xai' || id === ANTIGRAVITY_ACP_ID) return ['oauth'];
       // GitHub Copilot's env token is not a user-facing API key in this dialog.
       if (id === 'github-copilot') return [];
       const methods = [];
@@ -784,6 +789,7 @@ export function createProviderService({
       };
       if (envVar) item.envVar = envVar;
       if (id === 'xai') item.localLogin = grokLocalLoginPublic(env);
+      if (id === ANTIGRAVITY_ACP_ID) item.localLogin = antigravityAcpLocalLogin(env);
       out.push(item);
     }
 
@@ -859,6 +865,27 @@ export function createProviderService({
   }
 
   async function connectLocalLogin(id) {
+    if (id === ANTIGRAVITY_ACP_ID) {
+      requireBuiltin(id);
+      if (!antigravityAcpLocalLogin(env).detected) {
+        fail('E_BAD_REQUEST', 'local antigravity login not detected', { phrase: 'src_err_agy_login' });
+      }
+      const settings = await loadSettings();
+      const existing = providersOf(settings).find((item) => item.id === id);
+      const modelsList = await builtinModels(id);
+      const enabled = existing?.enabled || defaultEnabledIds(modelsList.map((item) => item.id));
+      const entry = {
+        id,
+        kind: 'builtin',
+        enabled,
+        overrides: existing?.overrides || {},
+      };
+      await credentials.modify(id, async () => antigravityAcpCredential());
+      const lastTest = { ok: true, at: now() };
+      if (existing) await writeLastTest(id, lastTest);
+      else await upsertEntry({ ...entry, lastTest });
+      return getProvider(id);
+    }
     if (id !== 'xai') {
       fail('E_BAD_REQUEST', 'local login not supported', { phrase: 'src_err_method' });
     }
@@ -959,6 +986,13 @@ export function createProviderService({
       };
     }
     if (event.type === 'info' || event.type === 'progress') {
+      const links = Array.isArray(event.links) ? event.links : [];
+      const linked = links.find((item) => item && typeof item.url === 'string' && item.url.trim());
+      if (linked) {
+        const item = { type: 'auth_url', url: String(linked.url).trim() };
+        if (typeof event.message === 'string' && event.message.trim()) item.instructions = event.message.trim();
+        return item;
+      }
       return { type: event.type, message: String(event.message || '') };
     }
     return null;

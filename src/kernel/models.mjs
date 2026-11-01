@@ -406,9 +406,14 @@ export function createKernelModels({
   getSettings,
   env = process.env,
   fetchImpl,
+  extraProviders = [],
 } = {}) {
   if (!models || typeof models.setProvider !== 'function') throw new Error('models is required');
   const fingerprints = new Map();
+  const extraById = new Map();
+  for (const provider of extraProviders) {
+    if (provider?.id) extraById.set(provider.id, provider);
+  }
 
   function drop(id) {
     models.deleteProvider(id);
@@ -421,7 +426,8 @@ export function createKernelModels({
     const fingerprint = fingerprintOf(entry, env);
     if (fingerprints.get(id) === fingerprint && models.getProvider(id)) return;
     let provider = null;
-    if (entry.kind === 'builtin') provider = buildBuiltinProvider(entry, { env });
+    if (extraById.has(id)) provider = overlayProvider(extraById.get(id), entry.overrides || {}, env);
+    else if (entry.kind === 'builtin') provider = buildBuiltinProvider(entry, { env });
     else if (entry.kind === 'custom') provider = buildCustomProvider(entry, { env, fetchImpl });
     if (!provider) {
       drop(id);

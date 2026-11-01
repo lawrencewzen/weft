@@ -134,11 +134,13 @@ function asStartedAt(value: unknown): number | null {
   return null;
 }
 
-function errorView(llmError: LlmErrorLike | null | undefined): RunState['error'] {
+function errorView(llmError: LlmErrorLike | null | undefined, lang: Lang = 'zh'): RunState['error'] {
   if (!llmError) return { code: 'E_LLM', message: '' };
+  let message = String(llmError.message || '');
+  if (message === 'agy_err_no_workspace') message = phrase(lang, message);
   const out: NonNullable<RunState['error']> = {
     code: String(llmError.code || 'E_LLM'),
-    message: String(llmError.message || ''),
+    message,
   };
   const attempt = Number(llmError.retry?.attempt);
   const delayMs = Number(llmError.retry?.delayMs);
@@ -188,7 +190,7 @@ export function runStateView({
     canSend: Boolean(hasWorkspace),
     canStop: running,
     lockedReason: hasWorkspace ? null : 'no_workspace',
-    error: runStatus === 'failed' ? errorView(llmError) : null,
+    error: runStatus === 'failed' ? errorView(llmError, lang) : null,
     lastActivityAt: last,
     stalledSince: stalledSinceOf(running, last, t, threshold),
     activeTool: running ? activeTool : null,

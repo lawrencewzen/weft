@@ -8,7 +8,7 @@
 - **多个客户端共用一个服务。** 规划中的客户端有 mac（SwiftUI）、Windows 原生、iOS、Web。目前只做 Web，其余都是规划。
 - **客户端只负责显示。** 界面要的数据由服务端算好（视图模型），各端不重复实现推导规则。
 - **内核继续用 Pi Durable。** 对话、任务、检查点、断点续跑、子 Agent、中止、压缩都走 Harness，模型调用走 pi-ai。AGENTS.md 里"禁止自写编排器、任务调度、检查点"的规定不变。
-- **以后的口子先留好，现在不实现：** 远程连接（手机）、通过 Provider 接外部 agent（ACP、Claude Code 等）、设备管理。
+- **以后的口子先留好，现在不实现：** 远程连接（手机）、通过 Provider 接外部 agent 运行时（Claude Code 等 `runtime: agent`）、设备管理。Antigravity ACP 已作为 **模型 Provider**（`runtime: model`，pi-ai + 官方 ACP 服务端）接入，不是外部 agent 运行时。
 
 ## 2. 总体结构
 
@@ -144,7 +144,7 @@ Provider {
 - 对话绑定 `{ providerId, modelId }`；子 Agent 默认沿用主对话的。
 - 品牌识别（模型 ID 和服务商对应到哪个品牌）在服务端做，数据来自 T34-1 的 `brand-data.json`。图标文件由各端自己打包。
 - **密钥**：Weft 自己管理的 API Key 和令牌存在系统钥匙串里（mac Keychain、Windows 凭据管理器），候选库是 `@napi-rs/keyring`（有预编译二进制），要先确认内网 npm 镜像能装。`weft.sqlite` 里只存引用。
-- **账号登录**：Claude Code、Codex、Antigravity、Gemini CLI、GitHub Copilot、Qwen Code、Kiro 等逐家核实技术可行性和服务条款后再加，界面暂不显示。
+- **账号登录**：Antigravity ACP（`antigravity-acp`）已接入：走官方 ACP 协议和本机/托管的 `agy_acp_server`，OAuth 令牌由 Antigravity 自己保管，Weft 只存非密钥标记。Claude Code、Codex、Gemini CLI、GitHub Copilot、Qwen Code、Kiro 等仍逐家核实后再加，界面暂不显示。
 - `runtime: agent` 只在契约里预留。以后实现时，外部 agent 作为 Pi Durable 的长任务运行（外部会话 id 存进检查点，abort 对应取消），不另写调度。
 
 ## 8. 数据和存储
