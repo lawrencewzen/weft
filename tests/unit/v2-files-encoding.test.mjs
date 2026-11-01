@@ -11,7 +11,8 @@ import {
   saveWorkspaceFile,
   writeFileAtomic,
 } from '../../src/v2/views/files.ts';
-import { detect } from '../../src/platform/win/text-encoding.mjs';
+import { detect, UTF8_BOM } from '../../src/platform/win/text-encoding.mjs';
+import { encodeWorkspaceSave } from '../../src/platform/win/workspace-files.mjs';
 import { readDiscovery, request, startServer, stopServer } from './_server.mjs';
 
 const DETECT = { WEFT_TEXT_ENCODING_DETECT: '1' };
@@ -318,4 +319,79 @@ test('GET/PUT files API: GBK Chinese, keep GBK on save, emoji 400', { timeout: 4
   } finally {
     await stopServer(srv);
   }
+});
+
+test('encodeWorkspaceSave and saveWorkspaceFile write new .ps1 with UTF-8 BOM', async () => {
+  const encoded = encodeWorkspaceSave("Write-Output '中文自检'\n", null, DETECT, 'linux', 'hi.ps1');
+  assert.equal(encoded.bytes.subarray(0, 3).equals(UTF8_BOM), true);
+  assert.equal(detect(encoded.bytes), 'utf8-bom');
+  assert.equal(encoded.bytes.toString('utf8').includes('中文自检'), true);
+
+  const existingUtf8 = Buffer.from("Write-Output '旧'\n", 'utf8');
+  const upgraded = encodeWorkspaceSave("Write-Output '中文自检'\n", existingUtf8, DETECT, 'linux', 'hi.ps1');
+  assert.equal(upgraded.bytes.subarray(0, 3).equals(UTF8_BOM), true);
+  assert.equal(upgraded.bytes.includes(Buffer.concat([UTF8_BOM, UTF8_BOM])), false);
+
+  const root = await tmpRoot();
+  const saved = await saveWorkspaceFile({
+    root,
+    path: 'nested/hi.ps1',
+    text: "Write-Output '中文自检'\n",
+    env: DETECT,
+  });
+  const disk = await readFile(path.join(root, 'nested', 'hi.ps1'));
+  assert.equal(detect(disk), 'utf8-bom');
+  assert.equal(disk.subarray(0, 3).equals(UTF8_BOM), true);
+  assert.equal(disk.toString('utf8').includes('中文自检'), true);
+  assert.equal(saved.version, contentVersion(disk));
+
+  const current = await readWorkspaceFile(root, 'nested/hi.ps1', DETECT);
+  const again = await saveWorkspaceFile({
+    root,
+    path: 'nested/hi.ps1',
+    text: "Write-Output '中文自检'\nflag = 1\n",
+    baseVersion: current.version,
+    env: DETECT,
+  });
+  const rewritten = await readFile(path.join(root, 'nested', 'hi.ps1'));
+  assert.equal(detect(rewritten), 'utf8-bom');
+  assert.equal(rewritten.subarray(0, 3).equals(UTF8_BOM), true);
+  assert.equal(rewritten.includes(Buffer.concat([UTF8_BOM, UTF8_BOM])), false);
+  assert.equal(again.version, contentVersion(rewritten));
+});
+
+test('saveWorkspaceFile keeps existing GBK .ps1 as GBK', async () => {
+  const root = await tmpRoot();
+  const abs = path.join(root, 'legacy.ps1');
+  const original = gbkBytes("Write-Output '你好世界'\n");
+  await writeFile(abs, original);
+  const first = await readWorkspaceFile(root, 'legacy.ps1', DETECT);
+  const saved = await saveWorkspaceFile({
+    root,
+    path: 'legacy.ps1',
+    text: first.text.replace('你好世界', '你好 Weft'),
+    baseVersion: first.version,
+    env: DETECT,
+  });
+  const disk = await readFile(abs);
+  assert.equal(detect(disk), 'gbk');
+  assert.equal(disk.subarray(0, 3).equals(UTF8_BOM), false);
+  assert.deepEqual(disk, gbkBytes("Write-Output '你好 Weft'\n"));
+  assert.equal(saved.version, contentVersion(disk));
+});
+
+test('saveWorkspaceFile new .ps1 has no BOM when detection is off', { skip: process.platform === 'win32' }, async () => {
+  const encoded = encodeWorkspaceSave("Write-Output '中文自检'\n", null, OFF, 'linux', 'hi.ps1');
+  assert.deepEqual(encoded.bytes, Buffer.from("Write-Output '中文自检'\n", 'utf8'));
+
+  const root = await tmpRoot();
+  await saveWorkspaceFile({
+    root,
+    path: 'hi.ps1',
+    text: "Write-Output '中文自检'\n",
+    env: OFF,
+  });
+  const disk = await readFile(path.join(root, 'hi.ps1'));
+  assert.deepEqual(disk, Buffer.from("Write-Output '中文自检'\n", 'utf8'));
+  assert.equal(detect(disk), 'utf8');
 });

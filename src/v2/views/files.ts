@@ -307,7 +307,7 @@ export async function saveWorkspaceFile({
   let payload: Buffer;
   let before = '';
   try {
-    const encoded = encodeWorkspaceSave(text, onDisk, env);
+    const encoded = encodeWorkspaceSave(text, onDisk, env, process.platform, rel);
     payload = encoded.bytes;
     before = encoded.before;
   } catch (err) {

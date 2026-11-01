@@ -13,6 +13,7 @@ import {
   decode,
   detect,
   encode,
+  encodingForWrite,
   isTextEncodingDetectEnabled,
   viewGbkReaderAsUtf8,
 } from '../platform/win/text-encoding.mjs';
@@ -21,12 +22,13 @@ import { bashChildEnv } from './bash-env.mjs';
 const POWERSHELL_ARGS = ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command'];
 const POWERSHELL_PROGRAMS = ['pwsh', 'powershell'];
 
-async function encodeExistingText(inner, resolvedPath, content, context) {
+async function encodeExistingText(inner, resolvedPath, content, context, mode) {
   if (!isTextEncodingDetectEnabled() || typeof content !== 'string') return ok(content);
   const existing = await inner.readBinaryFile(resolvedPath, context);
-  let enc = 'utf8';
-  if (existing.ok) enc = detect(existing.value);
+  let existingEnc;
+  if (existing.ok) existingEnc = detect(existing.value);
   else if (existing.error?.code !== 'not_found') return existing;
+  const enc = encodingForWrite(resolvedPath, existingEnc, mode);
   try {
     return ok(encode(content, enc));
   } catch (error) {
@@ -164,7 +166,7 @@ export class WorkspaceExecutionEnv {
   async writeFile(filePath, content, context) {
     const resolved = await this.checked(filePath, context);
     if (!resolved.ok) return resolved;
-    const encoded = await encodeExistingText(this.inner, resolved.value, content, context);
+    const encoded = await encodeExistingText(this.inner, resolved.value, content, context, 'write');
     if (!encoded.ok) return encoded;
     return this.inner.writeFile(resolved.value, encoded.value, context);
   }
@@ -172,7 +174,7 @@ export class WorkspaceExecutionEnv {
   async appendFile(filePath, content, context) {
     const resolved = await this.checked(filePath, context);
     if (!resolved.ok) return resolved;
-    const encoded = await encodeExistingText(this.inner, resolved.value, content, context);
+    const encoded = await encodeExistingText(this.inner, resolved.value, content, context, 'append');
     if (!encoded.ok) return encoded;
     return this.inner.appendFile(resolved.value, encoded.value, context);
   }
