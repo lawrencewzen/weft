@@ -7,7 +7,7 @@ import { NodeExecutionEnv } from '@earendil-works/pi-durable/env/node';
 import { ExecutionError, FileError, err, ok } from '@earendil-works/pi-durable/env';
 import { resolveInWorkspace } from '../core/paths.mjs';
 import { wrapPwshCommand } from '../platform/win/output-transcode.mjs';
-import { powershellCommandPrefix } from '../platform/win/shell.mjs';
+import { agentPowerShellScript } from '../platform/win/shell.mjs';
 import {
   createStringTextLineReader,
   decode,
@@ -48,7 +48,7 @@ function sandboxError(filePath, error) {
  * Same flags as createPowerShellTool: no profile, Bypass execution policy.
  */
 async function execPowerShell(inner, command, options, context) {
-  const script = `${powershellCommandPrefix}\n${command}`;
+  const script = agentPowerShellScript(command);
   let last = err(new ExecutionError('shell_unavailable', 'No bash shell found'));
   for (const program of POWERSHELL_PROGRAMS) {
     last = await inner.exec(

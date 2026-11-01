@@ -11,7 +11,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { wrapPwshCommand } from './output-transcode.mjs';
-import { powershellCommandPrefix } from './shell.mjs';
+import { agentPowerShellScript } from './shell.mjs';
 
 export const NA = '不适用';
 export const ROUNDTRIP_TEXT = '中文自检';
@@ -103,7 +103,7 @@ export function quotePwshLiteral(value) {
 }
 
 export function buildPwshRoundtripArgs(text = ROUNDTRIP_TEXT) {
-  const script = `${powershellCommandPrefix}\nWrite-Output ${quotePwshLiteral(text)}`;
+  const script = agentPowerShellScript(`Write-Output ${quotePwshLiteral(text)}`);
   return ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', script];
 }
 
@@ -113,10 +113,7 @@ export function gbkBatEchoBytes(text = ROUNDTRIP_TEXT) {
 }
 
 export function buildGbkBatRoundtripArgs(batPath) {
-  const script = [
-    powershellCommandPrefix,
-    `cmd /d /s /c ${quotePwshLiteral(batPath)}`,
-  ].join('\n');
+  const script = agentPowerShellScript(`cmd /d /s /c ${quotePwshLiteral(batPath)}`);
   return ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', script];
 }
 

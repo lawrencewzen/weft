@@ -89,14 +89,20 @@ test('buildPwshRoundtripArgs uses Agent prefix, Bypass, and NoProfile', () => {
   const args = buildPwshRoundtripArgs();
   assert.deepEqual(args.slice(0, 5), ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command']);
   assert.match(args[5], /\$OutputEncoding/);
-  assert.match(args[5], /Encoding\]::Default/);
+  assert.match(args[5], /OutputEncoding=\[System\.Text\.Encoding\]::UTF8/);
+  assert.match(args[5], /OEMCodePage/);
+  assert.equal(args[5].includes('Encoding]::Default'), false);
   assert.equal(args[5].includes('chcp 65001'), false);
   assert.match(args[5], /Write-Output/);
   assert.match(args[5], /中文自检/);
+  assert.ok(args[5].indexOf('OEMCodePage') > args[5].indexOf('Encoding]::UTF8'));
   assert.equal(quotePwshLiteral("it's"), "'it''s'");
   const batArgs = buildGbkBatRoundtripArgs('C:\\tmp\\zh.bat');
   assert.deepEqual(batArgs.slice(0, 5), args.slice(0, 5));
   assert.match(batArgs[5], /cmd \/d \/s \/c 'C:\\tmp\\zh\.bat'/);
+  assert.match(batArgs[5], /OutputEncoding=\[System\.Text\.Encoding\]::UTF8/);
+  assert.match(batArgs[5], /OEMCodePage/);
+  assert.ok(batArgs[5].indexOf('OEMCodePage') > batArgs[5].indexOf('Encoding]::UTF8'));
   assert.equal(new TextDecoder('gbk').decode(gbkBatEchoBytes()).includes(ROUNDTRIP_TEXT), true);
 });
 

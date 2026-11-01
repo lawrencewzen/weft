@@ -7,7 +7,7 @@ import { test } from 'node:test';
 import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
 import iconv from 'iconv-lite';
 import { PWSH_UTF8_WRAPPER } from '../../src/platform/win/output-transcode.mjs';
-import { agentShellKind } from '../../src/platform/win/shell.mjs';
+import { agentShellKind, powershellCommandPrefix } from '../../src/platform/win/shell.mjs';
 import { createAgentShellTool, workspaceTools } from '../../src/kernel/tools.mjs';
 import { createWorkspaceEnv } from '../../src/kernel/workspace-env.mjs';
 
@@ -140,6 +140,39 @@ test('GBK .bat echo and UTF-8 path through wrapper (936 vs windows-latest)', {
         assert.equal(batRun.text.includes('\uFFFD'), false, batRun.text);
       }
     }
+  } finally {
+    await env.cleanup(BACKGROUND_CONTEXT).catch(() => {});
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('powershell tool restores Console.OutputEncoding to the host OEMCodePage', {
+  timeout: 60_000,
+}, async () => {
+  assert.match(powershellCommandPrefix, /OEMCodePage/);
+  assert.equal(powershellCommandPrefix.includes('Encoding]::Default'), false);
+
+  if (process.platform !== 'win32') return;
+
+  const dir = await mkdtemp(path.join(tmpdir(), 'weft-pwsh-oemcp-'));
+  const env = await createWorkspaceEnv({ cwd: dir });
+  const tool = createAgentShellTool('powershell');
+  try {
+    const { ran, text } = await runPowerShell(
+      tool,
+      env,
+      [
+        'Write-Output ("CON=" + [Console]::OutputEncoding.CodePage)',
+        'Write-Output ("OEM=" + [System.Globalization.CultureInfo]::CurrentCulture.TextInfo.OEMCodePage)',
+      ].join('; '),
+    );
+    assert.equal(Boolean(ran?.isError), false, JSON.stringify({ text, ran }));
+    const con = Number((/CON=(\d+)/.exec(text) || [])[1]);
+    const oem = Number((/OEM=(\d+)/.exec(text) || [])[1]);
+    assert.equal(Number.isInteger(con) && con > 0, true, text);
+    assert.equal(Number.isInteger(oem) && oem > 0, true, text);
+    assert.equal(con, oem, text);
+    if (oem !== 65001) assert.equal(con === 65001, false, text);
   } finally {
     await env.cleanup(BACKGROUND_CONTEXT).catch(() => {});
     await rm(dir, { recursive: true, force: true });
