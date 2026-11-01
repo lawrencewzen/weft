@@ -146,7 +146,7 @@ export function ProviderPage({ lang, onConfirm }: Props) {
             div.style.height = '100vh';
             div.style.margin = '0';
             div.style.color = '#555';
-            div.style.fontFamily = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+            div.style.fontFamily = '"Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
             doc.body.appendChild(div);
           }
         } catch {

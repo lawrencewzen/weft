@@ -52,13 +52,26 @@
 --scrim:rgba(0,0,0,.5);--shadow-raise:0 8px 28px rgba(0,0,0,.45);--shadow-overlay:0 20px 60px rgba(0,0,0,.55);--shadow-panel:0 0 40px rgba(0,0,0,.45);--shadow-toast:0 4px 16px rgba(0,0,0,.4);
 }
 
+/* Intranet Windows: Segoe UI / Consolas 不含汉字，Chrome 会落到宋体，小字发糊。
+   界面整段用微软雅黑；代码拉丁走等宽，汉字用 unicode-range 切到雅黑。 */
+@font-face {
+  font-family: "Weft Mono";
+  src: local("Cascadia Mono"), local("Consolas"), local("SF Mono"), local("Menlo");
+  unicode-range: U+0000-024F, U+2000-206F, U+2070-218F, U+2190-21FF, U+2200-22FF, U+2300-23FF, U+2460-24FF, U+2500-259F, U+25A0-25FF, U+2600-26FF, U+2700-27BF, U+20A0-20CF;
+}
+@font-face {
+  font-family: "Weft Mono";
+  src: local("Microsoft YaHei UI"), local("Microsoft YaHei"), local("微软雅黑"), local("PingFang SC");
+  unicode-range: U+2E80-2FFF, U+3000-303F, U+3040-30FF, U+3100-312F, U+31A0-31BF, U+31C0-31EF, U+3400-4DBF, U+4E00-9FFF, U+F900-FAFF, U+FF00-FFEF;
+}
+
 /* Shared: status colours, fonts, and the legacy variable names older styles still use. */
 :root{
 --run:oklch(0.64 0.13 150);--run-ink:oklch(0.5 0.1 150);--wait:oklch(0.76 0.13 75);--wait-ink:oklch(0.55 0.12 70);--fail:oklch(0.55 0.15 25);
 --sa-check:#8fae9b;--sa-run:#2e8c5a;--sa-stuck:#c98a16;
 --add-ink:oklch(0.55 0.13 150);--del-ink:oklch(0.55 0.15 25);
---font:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
---mono:ui-monospace,"SF Mono","Cascadia Mono",Consolas,Menlo,"PingFang SC","Microsoft YaHei",monospace;
+--font:"Microsoft YaHei UI","Microsoft YaHei","微软雅黑","PingFang SC",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+--mono:"Weft Mono",ui-monospace,"Cascadia Mono",Consolas,Menlo,"Microsoft YaHei UI","Microsoft YaHei",monospace;
 
 --bg-app:var(--bg);--bg-sidebar:var(--side);--bg-surface:var(--panel);--bg-surface-subtle:var(--sub);--bg-hover:var(--hover);--bg-active:var(--sel);
 --border-subtle:var(--line);--border-strong:var(--bd2);--border-focus:var(--faint);
