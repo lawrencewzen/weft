@@ -43,6 +43,8 @@ import type {
   EntityValue,
   GitConnection,
   GitTestResult,
+  GlabBinaryInfo,
+  GlabSettings,
   Lang,
   LoginSession,
   MockConv,
@@ -883,6 +885,38 @@ function saveGitConnection(
   return existing ? ok(conn) : created(conn);
 }
 
+function evaluateGlabBinary(customPath: string): GlabBinaryInfo {
+  if (customPath) {
+    if (customPath.toLowerCase().includes('missing')) {
+      return {
+        source: 'missing',
+        version: '',
+        path: customPath,
+      };
+    }
+    return {
+      source: 'custom',
+      version: '1.46.1',
+      path: customPath,
+    };
+  }
+  return {
+    source: 'bundled',
+    version: '1.46.1',
+    path: '/usr/local/bin/glab',
+  };
+}
+
+function persistProtoGlab(glab: GlabSettings): void {
+  if (typeof sessionStorage !== 'undefined') {
+    try {
+      sessionStorage.setItem('weft_proto_glab', JSON.stringify(glab));
+    } catch {
+      // ignore
+    }
+  }
+}
+
 /* ---------- routing ---------- */
 
 /** Route one mock HTTP call. Unknown `/api` paths answer 404 so the UI can show a message. */
@@ -1333,6 +1367,72 @@ export function handleMockRequest(db: MockDb, hub: MockHub, rawUrl: string, init
       const conn = db.gitConnections.find((row) => row.id === id);
       return conn ? ok(conn) : fail(404, '连接不存在');
     }
+  }
+
+  /* ---- glab ---- */
+  if (path === '/api/v2/glab' && method === 'GET') {
+    return ok(db.glab);
+  }
+  if (path === '/api/v2/glab' && method === 'PATCH') {
+    if (typeof body.enabled === 'boolean') {
+      db.glab.enabled = body.enabled;
+    }
+    if (typeof body.customPath === 'string') {
+      db.glab.customPath = body.customPath.trim();
+      db.glab.binary = evaluateGlabBinary(db.glab.customPath);
+    }
+    if (Array.isArray(body.connectionIds)) {
+      db.glab.connectionIds = body.connectionIds.filter((id): id is string => typeof id === 'string');
+    }
+    if ('defaultConnectionId' in body) {
+      db.glab.defaultConnectionId = typeof body.defaultConnectionId === 'string' ? body.defaultConnectionId : null;
+    }
+    if (db.glab.connectionIds.length > 0) {
+      if (!db.glab.defaultConnectionId || !db.glab.connectionIds.includes(db.glab.defaultConnectionId)) {
+        db.glab.defaultConnectionId = db.glab.connectionIds[0];
+      }
+    } else {
+      db.glab.defaultConnectionId = null;
+    }
+    persistProtoGlab(db.glab);
+    return ok(db.glab);
+  }
+  if (path === '/api/v2/glab/detect' && method === 'POST') {
+    if (typeof body.customPath === 'string') {
+      db.glab.customPath = body.customPath.trim();
+    }
+    db.glab.binary = evaluateGlabBinary(db.glab.customPath);
+    persistProtoGlab(db.glab);
+    return ok(db.glab);
+  }
+  if (path === '/api/v2/glab/test' && method === 'POST') {
+    const connId = db.glab.defaultConnectionId || db.glab.connectionIds[0];
+    const conn = connId ? db.gitConnections.find((c) => c.id === connId) : null;
+    if (!conn) {
+      return ok({
+        ok: false,
+        host: '',
+        username: '',
+        output: lang === 'en' ? 'No connection selected' : '未选择连接',
+      });
+    }
+    if (conn.lastTest && conn.lastTest.ok === false) {
+      return ok({
+        ok: false,
+        host: conn.baseUrl,
+        username: conn.lastTest.username || '',
+        output: conn.lastTest.errorText || (lang === 'en' ? 'Authentication failed' : '认证失败'),
+      });
+    }
+    let host = conn.baseUrl.replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+    if (!host) host = 'gitlab.intra.local';
+    const username = conn.lastTest?.username || 'lawrence';
+    return ok({
+      ok: true,
+      host,
+      username,
+      output: `Logged in to ${host} as ${username} (/etc/glab-cli/config.yml)`,
+    });
   }
 
   /* ---- conversations ---- */

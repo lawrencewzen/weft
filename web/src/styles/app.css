@@ -748,14 +748,27 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.6; backgroun
   font-family: var(--mono); font-size: 0.86em; color: var(--ink2); background: var(--sub2);
   border: 0; padding: 1.5px 5px; border-radius: 5px; white-space: nowrap;
 }
-.msg-body code.md-path {
+.msg-body code.md-path,
+.msg-body a.md-path {
   display: inline-flex; align-items: center; gap: 4px; padding: 0 6px 0 5px;
   line-height: 22px; vertical-align: 1px; cursor: pointer; color: var(--ink); white-space: nowrap;
+  border-radius: 5px;
 }
-.msg-body code.md-path svg {
+.msg-body a.md-path {
+  background: var(--sub2);
+  text-decoration: none;
+}
+.msg-body a.md-path code {
+  background: none;
+  padding: 0;
+  border-radius: 0;
+  font-size: inherit;
+  color: inherit;
+}
+.msg-body .md-path svg {
   width: 12px; height: 12px; flex-shrink: 0; display: block; color: var(--faint);
 }
-.msg-body code.md-path:hover { background: var(--hover); }
+.msg-body .md-path:hover { background: var(--hover); text-decoration: none; }
 .msg-body .md-path-line { color: var(--faint); }
 .msg-body blockquote {
   border: none; border-left: 3px solid var(--bd2); padding: 2px 0 2px 16px;

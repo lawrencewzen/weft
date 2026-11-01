@@ -94,6 +94,36 @@ export type OkId = components['schemas']['OkId'];
 export type OpenTerminalRequest = components['schemas']['OpenTerminalRequest'];
 export type OpenTerminalResult = components['schemas']['OpenTerminalResult'];
 
+export type GlabBinarySource = 'bundled' | 'custom' | 'missing';
+
+export type GlabBinaryInfo = {
+  source: GlabBinarySource;
+  version: string;
+  path: string;
+};
+
+export type GlabSettings = {
+  enabled: boolean;
+  customPath: string;
+  binary: GlabBinaryInfo;
+  connectionIds: string[];
+  defaultConnectionId: string | null;
+};
+
+export type GlabSettingsPatch = {
+  enabled?: boolean;
+  customPath?: string;
+  connectionIds?: string[];
+  defaultConnectionId?: string | null;
+};
+
+export type GlabTestResult = {
+  ok: boolean;
+  host: string;
+  username: string;
+  output: string;
+};
+
 export class ApiError extends Error {
   readonly status: number;
   readonly code: string | undefined;
@@ -625,6 +655,31 @@ export function listGitBranches(connectionId: string, projectId: string | number
   return requestJson<GitBranchList>(
     withLang(`${gitPath(connectionId, `/projects/${encodeURIComponent(String(projectId))}/branches`)}`, lang),
   );
+}
+
+export function getGlabSettings(lang?: string): Promise<GlabSettings> {
+  return requestJson<GlabSettings>(withLang('/api/v2/glab', lang));
+}
+
+export function patchGlabSettings(patch: GlabSettingsPatch, lang?: string): Promise<GlabSettings> {
+  return requestJson<GlabSettings>(withLang('/api/v2/glab', lang), {
+    method: 'PATCH',
+    body: JSON.stringify(patch),
+  });
+}
+
+export function detectGlab(lang?: string): Promise<GlabSettings> {
+  return requestJson<GlabSettings>(withLang('/api/v2/glab/detect', lang), {
+    method: 'POST',
+    body: '{}',
+  });
+}
+
+export function testGlab(lang?: string): Promise<GlabTestResult> {
+  return requestJson<GlabTestResult>(withLang('/api/v2/glab/test', lang), {
+    method: 'POST',
+    body: '{}',
+  });
 }
 
 export function listPlugins(lang?: string): Promise<PluginList> {

@@ -2,6 +2,7 @@ import type {
   Bilingual,
   Change,
   ConversationView,
+  GlabSettings,
   MockConv,
   MockDb,
   MockGroup,
@@ -378,7 +379,25 @@ function richConversation(now: number, threads: Map<string, MockSubThread>): Moc
           { text: 'web/src/data/store.test.ts', path: 'web/src/data/store.test.ts' },
         ],
       ),
-      assistant('rich-a3', '测试全绿。要不要我把这批改动整理成一条提交信息？'),
+      assistant(
+        'rich-a3',
+        [
+          '测试全绿。详细说明见 [内核入口](file:///Users/lawrence/Projects/weft/src/kernel/index.mjs#L1-L5)，样式定义参见 [app.css](web/src/styles/app.css)。',
+          '要不要我把这批改动整理成一条提交信息？',
+        ].join('\n'),
+        'deepseek-flash',
+        [
+          {
+            text: 'file:///Users/lawrence/Projects/weft/src/kernel/index.mjs#L1-L5',
+            path: 'src/kernel/index.mjs',
+            line: 1,
+          },
+          {
+            text: 'web/src/styles/app.css',
+            path: 'web/src/styles/app.css',
+          },
+        ],
+      ),
       ...(spawnIds.length ? [group(
         'rich-g-sa',
         spawnIds,
@@ -961,6 +980,29 @@ function regexConversation(now: number): MockConv {
   });
 }
 
+function seedGlab(): GlabSettings {
+  const defaults: GlabSettings = {
+    enabled: false,
+    customPath: '',
+    binary: {
+      source: 'bundled',
+      version: '1.46.1',
+      path: '/usr/local/bin/glab',
+    },
+    connectionIds: [],
+    defaultConnectionId: null,
+  };
+  if (typeof sessionStorage !== 'undefined') {
+    try {
+      const saved = sessionStorage.getItem('weft_proto_glab');
+      if (saved) return { ...defaults, ...JSON.parse(saved) };
+    } catch {
+      // ignore
+    }
+  }
+  return defaults;
+}
+
 export function createSeed(now: number): MockDb {
   const subagents = seedSubThreads(now);
   const conversations = [
@@ -1052,5 +1094,6 @@ export function createSeed(now: number): MockDb {
     messageImages: new Map(),
     messagePastes: new Map(),
     workspaceUploads: new Map(),
+    glab: seedGlab(),
   };
 }

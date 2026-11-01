@@ -18,13 +18,24 @@ const FILE_ICON =
   '<path d="M14 3v5h5" stroke="currentColor" stroke-width="2"/>' +
   '</svg>';
 
-const LINE_HASH_RE = /#L(\d+)$/;
+const LINE_HASH_RE = /#L(\d+)(?:-L?\d+)?$/;
 const LINE_COLON_RE = /:(\d+)(?::(\d+))?$/;
 
 export type PathResolve = { path: string; line?: number };
 
 let currentResolvePath: ((raw: string) => PathResolve | null) | null = null;
 let currentCopyLabel = '';
+let inLink = false;
+
+function isLocalOrFilePath(href: string): boolean {
+  if (!href) return false;
+  if (/^file:\/\//i.test(href)) return true;
+  if (href.startsWith('/')) return true;
+  if (/^[a-zA-Z]:[/\\]/.test(href)) return true;
+  if (href.startsWith('#')) return false;
+  if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(href)) return false;
+  return true;
+}
 
 function parseLineSuffix(text: string): { path: string; line?: number; suffix: string } {
   const raw = String(text ?? '');
@@ -62,6 +73,21 @@ function pathChipHtml(rawText: string, resolved: PathResolve): string {
     FILE_ICON +
     `${main}${lineHtml}` +
     `</code>`
+  );
+}
+
+function filePathLinkHtml(resolved: PathResolve, contentHtml: string, title?: string | null): string {
+  const lineAttr = Number.isFinite(resolved.line) && (resolved.line ?? 0) >= 1
+    ? ` data-line="${resolved.line}"`
+    : '';
+  const titleAttr = title
+    ? ` title="${escapeHtml(title)}"`
+    : ` title="${escapeHtml(resolved.path)}"`;
+  return (
+    `<a class="md-path" data-path="${escapeHtml(resolved.path)}"${lineAttr}${titleAttr}>` +
+    FILE_ICON +
+    contentHtml +
+    `</a>`
   );
 }
 
@@ -140,11 +166,37 @@ const marked = new Marked({
     },
     codespan({ text }: Tokens.Codespan) {
       const raw = String(text ?? '');
-      if (typeof currentResolvePath === 'function') {
+      if (!inLink && typeof currentResolvePath === 'function') {
         const resolved = currentResolvePath(raw);
         if (resolved?.path) return pathChipHtml(raw, resolved);
       }
       return `<code>${escapeHtml(raw)}</code>`;
+    },
+    link(this: Renderer, token: Tokens.Link) {
+      const rawHref = String(token.href ?? '');
+      inLink = true;
+      let content = '';
+      try {
+        content = token.autolink
+          ? escapeHtml(token.text ?? '')
+          : (token.tokens && token.tokens.length > 0
+              ? this.parser.parseInline(token.tokens)
+              : escapeHtml(token.text ?? ''));
+      } finally {
+        inLink = false;
+      }
+      if (typeof currentResolvePath === 'function') {
+        const resolved = currentResolvePath(rawHref);
+        if (resolved?.path) {
+          return filePathLinkHtml(resolved, content || escapeHtml(resolved.path), token.title);
+        }
+      }
+      if (isLocalOrFilePath(rawHref)) {
+        const titleAttr = rawHref ? ` title="${escapeHtml(token.title || rawHref)}"` : '';
+        return `<span${titleAttr}>${content || escapeHtml(rawHref)}</span>`;
+      }
+      const titleAttr = token.title ? ` title="${escapeHtml(token.title)}"` : '';
+      return `<a href="${escapeHtml(rawHref)}"${titleAttr}>${content}</a>`;
     },
   },
 });
@@ -181,8 +233,13 @@ function getPurify() {
     const el = asElement(node);
     if (!el?.getAttribute) return;
     if (el.tagName === 'A') {
-      el.setAttribute('target', '_blank');
-      el.setAttribute('rel', 'noopener noreferrer');
+      if (el.hasAttribute('data-path') || el.classList.contains('md-path')) {
+        el.removeAttribute('target');
+        el.removeAttribute('rel');
+      } else {
+        el.setAttribute('target', '_blank');
+        el.setAttribute('rel', 'noopener noreferrer');
+      }
       const href = el.getAttribute('href') || '';
       if (/^\s*javascript:/i.test(href)) el.removeAttribute('href');
     }
@@ -232,5 +289,6 @@ export function renderMarkdown(
     return getPurify().sanitize(scrubInlineHandlers(String(html)), PURIFY_CONFIG);
   } finally {
     currentResolvePath = null;
+    inLink = false;
   }
 }
