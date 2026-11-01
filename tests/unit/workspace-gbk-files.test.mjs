@@ -8,11 +8,23 @@ import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
 import { createEditTool, createReadTool } from '@earendil-works/pi-durable/tools';
 import { createWorkspaceEnv } from '../../src/kernel/workspace-env.mjs';
 import {
+  GBK_BINARY_VIEW_MAX_BYTES,
   decode,
   detect,
   encode,
   isTextEncodingDetectEnabled,
 } from '../../src/platform/win/text-encoding.mjs';
+
+/** 1×1 PNG; IHDR is valid so createReadTool treats it as an image. */
+const PNG_1X1 = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+  'base64',
+);
+/** JPEG SOI + APP0 so the header matches the official sniffer. */
+const JPEG_HEADER = Buffer.from([
+  0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01,
+  0x01, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0xff, 0xd9,
+]);
 
 const context = BACKGROUND_CONTEXT;
 const CHINESE = '打印("你好世界")\r\n# 未改动：中文镕〇\n';
@@ -45,12 +57,37 @@ function toolText(result) {
     .join('');
 }
 
-test('detect: BOM, utf8, ascii, gbk, and invalid fallback', () => {
+function readToolApi(env) {
+  return {
+    env,
+    async agent() {
+      return { model: undefined };
+    },
+    models: { getModel() { return undefined; } },
+  };
+}
+
+async function readOpenBinaryAll(env, name) {
+  const opened = await env.openBinaryReader(name, undefined, context);
+  assert.equal(opened.ok, true, opened.ok ? '' : opened.error.message);
+  try {
+    const info = await opened.value.info(context);
+    assert.equal(info.ok, true, info.ok ? '' : info.error.message);
+    const bytes = await opened.value.read(0, info.value.size, context);
+    assert.equal(bytes.ok, true, bytes.ok ? '' : bytes.error.message);
+    return Buffer.from(bytes.value);
+  } finally {
+    await opened.value.close(context);
+  }
+}
+
+test('detect: BOM, utf8, ascii, gbk, NUL binary, and invalid fallback', () => {
   assert.equal(detect(Buffer.from([0xef, 0xbb, 0xbf, 0x61])), 'utf8-bom');
   assert.equal(detect(Buffer.from('hello 你好', 'utf8')), 'utf8');
   assert.equal(detect(Buffer.from('ascii only')), 'utf8');
   assert.equal(detect(gbkBytes()), 'gbk');
   assert.equal(detect(Buffer.from([0xff, 0xfe, 0x00, 0x81])), 'utf8');
+  assert.equal(detect(Buffer.concat([gbkBytes(), Buffer.from([0x00])])), 'utf8');
 });
 
 test('encode gbk rejects unencodable characters with a clear error', () => {
@@ -234,5 +271,40 @@ test('appendFile encodes the extra text with the existing file encoding', async 
     const appended = await env.appendFile(GBK_NAME, '世界\n', context);
     assert.equal(appended.ok, true, appended.ok ? '' : appended.error.message);
     assert.deepEqual(await readFile(path.join(dir, GBK_NAME)), gbkBytes('你好\n世界\n'));
+  });
+});
+
+test('openBinaryReader leaves PNG, JPEG, NUL binary, and oversized files as on-disk bytes', async () => {
+  await withDetectEnv(true, async ({ dir, env }) => {
+    const nulBinary = Buffer.from([0x81, 0x40, 0x00, 0xff, 0xc4, 0xe3, 0x80, 0x20]);
+    const oversized = Buffer.alloc(GBK_BINARY_VIEW_MAX_BYTES + 2);
+    for (let i = 0; i < oversized.length; i += 2) {
+      oversized[i] = 0xc4;
+      oversized[i + 1] = 0xe3;
+    }
+    await writeFile(path.join(dir, 'dot.png'), PNG_1X1);
+    await writeFile(path.join(dir, 'dot.jpg'), JPEG_HEADER);
+    await writeFile(path.join(dir, 'blob.bin'), nulBinary);
+    await writeFile(path.join(dir, 'huge.gbk'), oversized);
+
+    assert.deepEqual(await readOpenBinaryAll(env, 'dot.png'), PNG_1X1);
+    assert.deepEqual(await readOpenBinaryAll(env, 'dot.jpg'), JPEG_HEADER);
+    assert.deepEqual(await readOpenBinaryAll(env, 'blob.bin'), nulBinary);
+    assert.deepEqual(await readOpenBinaryAll(env, 'huge.gbk'), oversized);
+    assert.equal(detect(nulBinary), 'utf8');
+    assert.equal(detect(oversized), 'gbk');
+  });
+});
+
+test('official createReadTool reads a PNG as an image', async () => {
+  await withDetectEnv(true, async ({ dir, env }) => {
+    await writeFile(path.join(dir, 'dot.png'), PNG_1X1);
+    const tool = createReadTool();
+    const result = await tool.execute({ path: 'dot.png' }, readToolApi(env), context);
+    assert.equal(result?.isError, undefined, JSON.stringify(result));
+    const image = (result?.output ?? []).find((part) => part?.type === 'image');
+    assert.equal(image?.mimeType, 'image/png');
+    assert.equal(image?.type, 'image');
+    assert.deepEqual(Buffer.from(image.data, 'base64'), PNG_1X1);
   });
 });

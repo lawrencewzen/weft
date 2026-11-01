@@ -5,6 +5,9 @@ import iconv from 'iconv-lite';
 import { FileError, LineScanner, err, ok } from '@earendil-works/pi-durable/env';
 
 export const UTF8_BOM = Buffer.from([0xef, 0xbb, 0xbf]);
+/** Official read tool opens every file as binary; skip the GBK→UTF-8 view above this. */
+export const GBK_BINARY_VIEW_MAX_BYTES = 2 * 1024 * 1024;
+const IMAGE_HEADER_BYTES = 32;
 
 /** win32 always; elsewhere only when WEFT_TEXT_ENCODING_DETECT=1. */
 export function isTextEncodingDetectEnabled(platform = process.platform, env = process.env) {
@@ -22,12 +25,37 @@ function hasUtf8Bom(buf) {
   return buf.length >= 3 && buf[0] === 0xef && buf[1] === 0xbb && buf[2] === 0xbf;
 }
 
+function startsWithBytes(buf, offset, bytes) {
+  if (offset + bytes.length > buf.length) return false;
+  for (let i = 0; i < bytes.length; i++) {
+    if (buf[offset + i] !== bytes[i]) return false;
+  }
+  return true;
+}
+
+function startsWithAscii(buf, offset, text) {
+  return startsWithBytes(buf, offset, Buffer.from(text, 'ascii'));
+}
+
+/** PNG / JPEG / GIF / WebP / BMP magic. pi-durable does not export its image sniffer. */
+export function looksLikeSupportedImage(bytes) {
+  const buf = asBuffer(bytes);
+  if (startsWithBytes(buf, 0, [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])) return true;
+  if (buf.length >= 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return true;
+  if (startsWithAscii(buf, 0, 'GIF87a') || startsWithAscii(buf, 0, 'GIF89a')) return true;
+  if (startsWithAscii(buf, 0, 'RIFF') && startsWithAscii(buf, 8, 'WEBP')) return true;
+  if (startsWithAscii(buf, 0, 'BM')) return true;
+  return false;
+}
+
 /**
  * 'utf8-bom' | 'utf8' | 'gbk'. Pure ASCII is 'utf8'. Invalid UTF-8 that
  * decodes as GBK without U+FFFD is 'gbk'; otherwise keep utf8 (status quo).
+ * A NUL byte means binary: keep utf8 (no transcode).
  */
 export function detect(bytes) {
   const buf = asBuffer(bytes);
+  if (buf.includes(0)) return 'utf8';
   if (hasUtf8Bom(buf)) return 'utf8-bom';
   try {
     new TextDecoder('utf-8', { fatal: true }).decode(buf);
@@ -138,12 +166,17 @@ class Utf8ViewBinaryReader {
 
 /**
  * Official createReadTool decodes via BinaryReader + UTF-8 TextDecoder.
- * Serve a UTF-8 view of GBK files so the read tool sees real Chinese.
+ * Serve a UTF-8 view of small GBK text files so the read tool sees real Chinese.
+ * Images, NULs, and files over GBK_BINARY_VIEW_MAX_BYTES stay on-disk bytes.
  * readBinaryFile is unchanged and still returns on-disk bytes.
  */
 export async function viewGbkReaderAsUtf8(reader, context) {
   const info = await reader.info(context);
   if (!info.ok) return ok(reader);
+  if (info.value.size > GBK_BINARY_VIEW_MAX_BYTES) return ok(reader);
+  const head = await reader.read(0, Math.min(IMAGE_HEADER_BYTES, info.value.size), context);
+  if (!head.ok) return ok(reader);
+  if (looksLikeSupportedImage(head.value)) return ok(reader);
   const raw = await reader.read(0, info.value.size, context);
   if (!raw.ok) return ok(reader);
   if (detect(raw.value) !== 'gbk') return ok(reader);
