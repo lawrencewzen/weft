@@ -3,7 +3,7 @@ import { createReadStream, existsSync, statSync, readFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { TOOLS as BUILTIN_TOOLS } from './src/core/config.mjs';
+import { reservedBuiltinToolNames } from './src/core/config.mjs';
 import { resolveInWorkspace } from './src/core/paths.mjs';
 import { listWorkspaceTree } from './src/core/workspace-tree.mjs';
 import { diffStats } from './src/core/diff.mjs';
@@ -1199,7 +1199,7 @@ async function routeApi(req, res, url) {
     try {
       const s = await store.getSettings();
       const current = await describePlugins(PLUGIN_DIRS, s.plugins || {});
-      const existingToolNames = new Set(BUILTIN_TOOLS);
+      const existingToolNames = new Set(reservedBuiltinToolNames());
       for (const plugin of current) {
         if (plugin.enabled && plugin.loaded) {
           for (const tool of plugin.tools || []) existingToolNames.add(tool.name);

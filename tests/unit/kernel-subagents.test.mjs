@@ -8,6 +8,7 @@ import { parseSSE } from '../../src/core/sse.mjs';
 import { createExtensionHost } from '../../src/core/extensions.mjs';
 import { openConversationKernel } from '../../src/kernel/conversations.mjs';
 import { DELEGATE_DESCRIPTION, nameFromTask, SUBAGENT_DESCRIPTION, SUBAGENT_INSTRUCTIONS } from '../../src/kernel/subagents.mjs';
+import { agentShellKind } from '../../src/platform/win/shell.mjs';
 import { SKILL_TOOL_DESCRIPTION } from '../../src/kernel/skill-tool.mjs';
 import { createSqliteStore } from '../../src/store/sqlite.mjs';
 import { killChild, request as serverRequest, startServer, stopServer } from './_server.mjs';
@@ -832,7 +833,7 @@ test('background running agents[] uses tool:param currentAction; SSE carries the
   const script = await writeScript(dataDir, 'fields-bg.json', [
     { tool: 'subagent', args: { action: 'spawn', name: 'worker', message: task } },
     { text: 'spawned' },
-    { when: 'RUN_TESTS please', tool: 'bash', args: { command: 'npm test' } },
+    { when: 'RUN_TESTS please', tool: agentShellKind(), args: { command: 'npm test' } },
     { when: 'RUN_TESTS please', delayMs: 8000, text: 'tested' },
   ]);
   let proc = null;
@@ -853,7 +854,7 @@ test('background running agents[] uses tool:param currentAction; SSE carries the
     const pendingEvents = collectSse(srv.base, conv.body.id, {
       ready: (list) => {
         const agents = list.filter((ev) => ev.event === 'agent' && ev.data?.mode === 'background');
-        return agents.some((ev) => ev.data?.currentAction === 'bash: npm test' && ev.data?.brief === task)
+        return agents.some((ev) => ev.data?.currentAction === `${agentShellKind()}: npm test` && ev.data?.brief === task)
           && agents.some((ev) => ev.data?.status === 'done' && ev.data?.endedAt != null && ev.data?.currentAction == null);
       },
       timeout: 45000,
@@ -862,10 +863,10 @@ test('background running agents[] uses tool:param currentAction; SSE carries the
     await waitForFile(ready);
     const runningBody = await waitFor(srv.base, conv.body.id, (body) => {
       const worker = subagentsOf(body).find((agent) => agent.name === 'worker');
-      return worker?.status === 'running' && worker?.currentAction === 'bash: npm test';
+      return worker?.status === 'running' && worker?.currentAction === `${agentShellKind()}: npm test`;
     });
     const running = subagentsOf(runningBody).find((agent) => agent.name === 'worker');
-    assertRunningActivity(running, { brief: task, currentAction: 'bash: npm test', mode: 'background' });
+    assertRunningActivity(running, { brief: task, currentAction: `${agentShellKind()}: npm test`, mode: 'background' });
     await writeEvidence('background-running.json', running);
 
     const doneBody = await waitFor(srv.base, conv.body.id, (body) => {
@@ -878,7 +879,7 @@ test('background running agents[] uses tool:param currentAction; SSE carries the
 
     const events = await pendingEvents;
     const runningEvent = events.find((ev) => (
-      ev.event === 'agent' && ev.data?.currentAction === 'bash: npm test' && ev.data?.brief === task
+      ev.event === 'agent' && ev.data?.currentAction === `${agentShellKind()}: npm test` && ev.data?.brief === task
     ));
     assert.ok(runningEvent, JSON.stringify(events.filter((ev) => ev.event === 'agent')));
     assert.equal(runningEvent.data.mode, 'background');

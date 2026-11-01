@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import {
@@ -64,6 +64,7 @@ test('windows prefers wt.exe -d, then cmd /c start "" powershell with LiteralPat
     const launches = terminalLaunches(dir, { platform: 'win32', env: {} });
     assert.equal(launches[0].command, 'wt.exe');
     assert.deepEqual(launches[0].args, ['-d', dir]);
+    assert.equal(launches.length, 2);
     assert.equal(launches[1].command, 'cmd.exe');
     assert.deepEqual(launches[1].args, [
       '/c',
@@ -76,6 +77,39 @@ test('windows prefers wt.exe -d, then cmd /c start "" powershell with LiteralPat
     ]);
     assert.equal(typeof launches[1].args[launches[1].args.length - 1], 'string');
     assert.ok(Array.isArray(launches[1].args));
+  }
+});
+
+test('windows fallback prefers pwsh.exe when it exists on PATH', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'weft-term-pwsh-'));
+  try {
+    await writeFile(path.join(dir, 'pwsh.exe'), '');
+    const launches = terminalLaunches(SPACE_DIR, {
+      platform: 'win32',
+      env: { Path: dir, PATHEXT: '.EXE' },
+    });
+    assert.equal(launches[0].command, 'wt.exe');
+    assert.equal(launches.length, 3);
+    assert.deepEqual(launches[1].args, [
+      '/c',
+      'start',
+      '',
+      'pwsh.exe',
+      '-NoExit',
+      '-Command',
+      `Set-Location -LiteralPath ${quotePwshLiteral(SPACE_DIR)}`,
+    ]);
+    assert.deepEqual(launches[2].args, [
+      '/c',
+      'start',
+      '',
+      'powershell.exe',
+      '-NoExit',
+      '-Command',
+      `Set-Location -LiteralPath ${quotePwshLiteral(SPACE_DIR)}`,
+    ]);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
   }
 });
 
@@ -132,6 +166,25 @@ test('darwin spawn args keep spaces / chinese / quotes as one argv element', asy
     args: ['-a', 'iTerm', dir],
     opts: { detached: true, stdio: 'ignore' },
   });
+});
+
+test('windows falls back to pwsh.exe when wt.exe is missing and pwsh is on PATH', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'weft-term-pwsh-fb-'));
+  try {
+    await writeFile(path.join(dir, 'pwsh.exe'), '');
+    const spawn = fakeSpawn(({ command }) => (command === 'wt.exe' ? { code: 'ENOENT' } : 'ok'));
+    const result = await openInSystemTerminal(QUOTE_DIR, {
+      platform: 'win32',
+      env: { Path: dir, PATHEXT: '.EXE' },
+      spawn,
+    });
+    assert.equal(result.command, 'cmd.exe');
+    assert.equal(spawn.calls.length, 2);
+    assert.equal(spawn.calls[0].command, 'wt.exe');
+    assert.equal(spawn.calls[1].args[3], 'pwsh.exe');
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 });
 
 test('windows falls back to powershell when wt.exe is missing', async () => {

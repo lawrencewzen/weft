@@ -1,5 +1,6 @@
 /** Consecutive tool-call grouping, summary text, and ToolCall views. No DOM. */
 
+import { isCommandToolName } from '../../core/config.mjs';
 import { phrase, type Lang } from '../phrases/index.ts';
 import type { components } from '../contract.gen.ts';
 
@@ -51,6 +52,7 @@ function asRecord(value: unknown): JsonObject {
 
 export function toolKind(name: unknown): ToolKind {
   const key = String(name || '').toLowerCase();
+  if (isCommandToolName(key)) return 'bash';
   return KINDS.has(key) ? key as Exclude<ToolKind, 'other'> : 'other';
 }
 

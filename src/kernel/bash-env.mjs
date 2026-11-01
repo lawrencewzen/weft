@@ -39,6 +39,8 @@ const BUILTIN_EXACT = [
   'SSL_CERT_DIR',
   'REQUESTS_CA_BUNDLE',
   'SSH_AUTH_SOCK',
+  'PSModulePath',
+  'PSExecutionPolicyPreference',
 ];
 
 const PROXY_NAMES = ['HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'NO_PROXY'];

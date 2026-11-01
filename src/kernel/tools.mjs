@@ -1,6 +1,6 @@
 // Workspace tools for the Pi Durable kernel.
-// read/write/edit/bash are official Pi Durable tools. ls and grep use the
-// conversation ExecutionEnv. Path checks live only in workspace-env.mjs.
+// read/write/edit and bash or powershell are official Pi Durable tools. ls and
+// grep use the conversation ExecutionEnv. Path checks live only in workspace-env.mjs.
 import path from 'node:path';
 import { Type } from '@earendil-works/pi-ai';
 import { defineExtension, defineTool, hook, ToolTask } from '@earendil-works/pi-durable';
@@ -8,10 +8,16 @@ import { FileError, getOrThrow } from '@earendil-works/pi-durable/env';
 import {
   createBashTool,
   createEditTool,
+  createPowerShellTool,
   createReadTool,
   createWriteTool,
 } from '@earendil-works/pi-durable/tools';
 import { diffStats, splitLines } from '../core/diff.mjs';
+import {
+  agentShellKind,
+  powershellCommandPrefix,
+  windowsChildEnv,
+} from '../platform/win/shell.mjs';
 import { applyBashEnvAllowlist } from './bash-env.mjs';
 import { EXT_WORKSPACE } from './ids.mjs';
 
@@ -257,21 +263,43 @@ function createGrepTool() {
   });
 }
 
-const workspaceToolList = [
+const fileWorkspaceTools = [
   withIntent(withReplay(createReadTool(), 'safe')),
   withIntent(withReplay(withFileChangeDetails(createWriteTool()), 'unsafe')),
   withIntent(withReplay(withFileChangeDetails(withLegacyEditArgs(createEditTool())), 'unsafe')),
   withIntent(createLsTool()),
   withIntent(createGrepTool()),
-  withIntent(withReplay(withDefaultTimeout(createBashTool({
-    prepare(execution) {
-      applyBashEnvAllowlist(execution);
-    },
-  })), 'unsafe')),
 ];
 
+const commandTools = new Map();
+
+function wrapCommandTool(tool) {
+  return withIntent(withReplay(withDefaultTimeout(tool), 'unsafe'));
+}
+
+/** Official bash or powershell tool for this process (or an explicit kind). */
+export function createAgentShellTool(kind = agentShellKind()) {
+  const cached = commandTools.get(kind);
+  if (cached) return cached;
+  const tool = kind === 'powershell'
+    ? wrapCommandTool(createPowerShellTool({
+      commandPrefix: powershellCommandPrefix,
+      prepare(execution) {
+        applyBashEnvAllowlist(execution);
+        execution.env = windowsChildEnv(execution.env);
+      },
+    }))
+    : wrapCommandTool(createBashTool({
+      prepare(execution) {
+        applyBashEnvAllowlist(execution);
+      },
+    }));
+  commandTools.set(kind, tool);
+  return tool;
+}
+
 export function workspaceTools() {
-  return workspaceToolList;
+  return [...fileWorkspaceTools, createAgentShellTool()];
 }
 
 function byteLength(text) {
@@ -303,7 +331,7 @@ export function fileChangeDetails({ path: filePath, before, after }) {
 export function createWorkspaceExtension() {
   return defineExtension({
     name: EXT_WORKSPACE,
-    tools: workspaceToolList,
+    tools: workspaceTools(),
     hooks: [
       hook(ToolTask, {
         async afterTool(call, result) {
