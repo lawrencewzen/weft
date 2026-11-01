@@ -51,9 +51,6 @@ import { NOT_BUILT_HINT } from './src/v2/auth.ts';
 import { loadSubagentFromStore } from './src/v2/load-subagent.ts';
 import { phrase } from './src/v2/phrases/index.ts';
 import fs from 'node:fs/promises';
-import { installUtf8Stdio } from './src/platform/win/stdio-utf8.mjs';
-
-installUtf8Stdio();
 
 // 内置 fetch 默认不读 HTTP(S)_PROXY；配置了代理时让模型请求也走它（遵守 NO_PROXY）
 const PROXY_ENV = ['HTTPS_PROXY', 'https_proxy', 'HTTP_PROXY', 'http_proxy'].some((k) => String(process.env[k] || '').trim());
