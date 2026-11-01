@@ -9,6 +9,7 @@
  */
 import { spawn as defaultSpawn } from 'node:child_process';
 import { appendFile } from 'node:fs/promises';
+import { windowsPwshExecutable } from '../platform/win/shell.mjs';
 
 export function terminalError(message, { status = 500, code = 'E_TERMINAL' } = {}) {
   const err = new Error(message);
@@ -37,9 +38,22 @@ function darwinApp(env) {
   return raw || 'Terminal';
 }
 
+function windowsShellFallback(dir, env) {
+  const location = `Set-Location -LiteralPath ${quotePwshLiteral(dir)}`;
+  const launch = (exe) => ({
+    command: 'cmd.exe',
+    args: ['/c', 'start', '', exe, '-NoExit', '-Command', location],
+  });
+  const launches = [];
+  if (windowsPwshExecutable(env)) launches.push(launch('pwsh.exe'));
+  launches.push(launch('powershell.exe'));
+  return launches;
+}
+
 /**
  * Ordered spawn attempts for a platform. Linux tries two commands; Windows
- * tries Windows Terminal then PowerShell via `cmd /c start ""`.
+ * tries Windows Terminal then pwsh 7, then Windows PowerShell 5.1, via
+ * `cmd /c start ""`.
  */
 export function terminalLaunches(dir, {
   platform = process.platform,
@@ -51,18 +65,7 @@ export function terminalLaunches(dir, {
   if (platform === 'win32') {
     return [
       { command: 'wt.exe', args: ['-d', escapeWtArg(dir)] },
-      {
-        command: 'cmd.exe',
-        args: [
-          '/c',
-          'start',
-          '',
-          'powershell.exe',
-          '-NoExit',
-          '-Command',
-          `Set-Location -LiteralPath ${quotePwshLiteral(dir)}`,
-        ],
-      },
+      ...windowsShellFallback(dir, env),
     ];
   }
   return [

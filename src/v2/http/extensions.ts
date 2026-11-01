@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { mkdir } from 'node:fs/promises';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import path from 'node:path';
-import { TOOLS as BUILTIN_TOOLS } from '../../core/config.mjs';
+import { reservedBuiltinToolNames } from '../../core/config.mjs';
 import {
   createGitConnection,
   publicGitConnection,
@@ -507,7 +507,7 @@ async function handlePlugins(
     try {
       const settings = await host.getSettings();
       const current = await describePlugins(host.pluginDirs, settings.plugins || {});
-      const existingToolNames = new Set(BUILTIN_TOOLS);
+      const existingToolNames = new Set(reservedBuiltinToolNames());
       for (const plugin of current) {
         if (plugin.enabled && plugin.loaded) {
           for (const tool of plugin.tools || []) existingToolNames.add(tool.name);

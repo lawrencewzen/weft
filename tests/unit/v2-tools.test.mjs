@@ -26,6 +26,7 @@ import {
   toolGroupPreview,
   toolGroupSummaryView,
   toolResultHint,
+  toolKind,
   toolRowHeading,
   unwrapHarnessDiagnostics,
 } from '../../src/v2/views/tools.ts';
@@ -679,4 +680,45 @@ test('toolCallView success, failure, probe, running, bash exit, and diffs pass t
 
   const summary = toolGroupSummaryView([success, failed], 'zh');
   assert.equal(validateToolGroupSummary(summary), true, JSON.stringify(validateToolGroupSummary.errors));
+});
+
+test('powershell command views match bash kind, exitCode, and tail clipping', () => {
+  assert.equal(toolKind('powershell'), 'bash');
+  assert.equal(toolKind('PowerShell'), 'bash');
+  assert.equal(toolKind('bash'), 'bash');
+
+  const input = { command: 'npm test' };
+  const output = '{"stdout":"","stderr":"failed","code":1}';
+  const bash = tool('bash', { id: 'b1', input, output });
+  const powershell = tool('powershell', { id: 'p1', input, output });
+  const bashView = toolCallView(bash, [bash], { lang: 'zh' });
+  const pwshView = toolCallView(powershell, [powershell], { lang: 'zh' });
+  assert.equal(pwshView.kind, 'bash');
+  assert.equal(pwshView.kind, bashView.kind);
+  assert.equal(pwshView.failure, 'real');
+  assert.equal(pwshView.failure, bashView.failure);
+  assert.equal(pwshView.exitCode, 1);
+  assert.equal(pwshView.exitCode, bashView.exitCode);
+  assert.equal(pwshView.heading.title, bashView.heading.title);
+  assertValidToolCall(pwshView, 'powershell-nonzero');
+
+  assert.equal(isProbeFailure(powershell, [powershell, tool('read', { id: 'r1', path: 'a.ts' })]), false);
+  assert.equal(
+    summarizeToolGroup([powershell], 'zh').text,
+    summarizeToolGroup([bash], 'zh').text,
+  );
+
+  const lines = Array.from({ length: 30 }, (_, i) => `L${String(i + 1).padStart(2, '0')}`);
+  const raw = `${lines.join('\n')}\n`;
+  const tail = toolCallView(
+    tool('powershell', { id: 'pwsh-lines', input: { command: 'seq' }, output: raw }),
+    [],
+    { lang: 'zh' },
+  );
+  assert.equal(tail.kind, 'bash');
+  assert.equal(tail.output.truncated, true);
+  assert.equal(tail.output.preview, 'L26\nL27\nL28\nL29\nL30');
+  assert.equal(tail.output.totalLines, 30);
+  assert.equal(tail.output.text, raw);
+  assertValidToolCall(tail, 'powershell-tail');
 });

@@ -14,6 +14,7 @@ import {
   LiveDoc,
 } from '@earendil-works/pi-durable';
 import { agentEventData } from '../core/agents.mjs';
+import { isCommandToolName } from '../core/config.mjs';
 import { createMapContext, mapHarnessBatch, textOf } from './events.mjs';
 import {
   EXT_SUBAGENTS,
@@ -773,7 +774,7 @@ export function createSubagentHost({
     }
     if (ev.event !== 'tool.start' && ev.event !== 'tool.end') return;
     const name = ev.data?.tool?.name;
-    if (name !== 'bash') return;
+    if (!isCommandToolName(name)) return;
     void Promise.resolve(emit(parentCid, ev.event, ev.data)).catch((err) => {
       console.error(`WEFT_KERNEL_SUBAGENT ${err instanceof Error ? err.message : err}`);
     });

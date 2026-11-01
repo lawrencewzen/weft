@@ -6,7 +6,7 @@ import { randomUUID } from 'node:crypto';
 import { Type } from '@earendil-works/pi-ai';
 import { defineExtension, defineTool, section } from '@earendil-works/pi-durable';
 import { agentEventData, mapConvStatusToAgent } from '../core/agents.mjs';
-import { TOOLS } from '../core/config.mjs';
+import { workspaceToolNames } from '../core/config.mjs';
 import { unknownSkillError } from '../core/skills.mjs';
 import { parseThinkingLevelPatch } from '../core/thinking-level.mjs';
 import { createPluginHost } from './plugins.mjs';
@@ -64,7 +64,7 @@ export function installAgentExtensions(registry, bridge) {
     tools: [skillTool],
   }));
   const have = new Set(registry.snapshot().tools().map((item) => item.tool.name));
-  const missing = TOOLS.filter((name) => !have.has(name)).map(builtinTool);
+  const missing = workspaceToolNames().filter((name) => !have.has(name)).map(builtinTool);
   if (missing.length) {
     registry.install(defineExtension({ name: EXT_BUILTIN_TOOLS, tools: missing }));
   }

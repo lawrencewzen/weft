@@ -113,6 +113,7 @@ test('delegate and subagent tool schemas are self-contained', () => {
 test('currentActionText prefers description and otherwise uses name: primary arg', () => {
   assert.equal(currentActionText('bash', { command: 'npm test', description: '跑单元测试' }), '跑单元测试');
   assert.equal(currentActionText('bash', { command: 'npm test' }), 'bash: npm test');
+  assert.equal(currentActionText('powershell', { command: 'npm test' }), 'powershell: npm test');
   assert.equal(currentActionText('read', { path: 'src/auth.ts' }), 'read: src/auth.ts');
   assert.equal(currentActionText('read', { path: 'src/auth.ts', description: '   ' }), 'read: src/auth.ts');
   const long = currentActionText('read', { path: `src/${'a'.repeat(80)}.ts` });

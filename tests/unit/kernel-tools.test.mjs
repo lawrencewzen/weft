@@ -7,6 +7,7 @@ import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
 import { Type } from '@earendil-works/pi-ai';
 import { parseSSE } from '../../src/core/sse.mjs';
 import { fauxTurnFromScript, offeredToolNames } from '../../src/kernel/faux-script.mjs';
+import { agentShellKind } from '../../src/platform/win/shell.mjs';
 import {
   bashTimeoutSeconds,
   DEFAULT_BASH_TIMEOUT_SECONDS,
@@ -128,7 +129,26 @@ function changeView(body) {
   return (body || []).map((row) => ({ path: row.path, added: row.added, removed: row.removed }));
 }
 
-test('read, ls, and grep replay safely; write, edit, and bash do not', () => {
+function commandTool() {
+  const name = agentShellKind();
+  const tool = workspaceTools().find((item) => item.name === name);
+  assert.ok(tool, `expected ${name} tool`);
+  return tool;
+}
+
+function quoteShellArg(value) {
+  const text = String(value);
+  if (agentShellKind() === 'powershell') return `'${text.replaceAll("'", "''")}'`;
+  return `"${text.replaceAll('"', '\\"')}"`;
+}
+
+function nativeCommand(exe, ...args) {
+  const quoted = [exe, ...args].map(quoteShellArg);
+  if (agentShellKind() === 'powershell') return `& ${quoted.join(' ')}`;
+  return quoted.join(' ');
+}
+
+test('read, ls, and grep replay safely; write, edit, and the command tool do not', () => {
   const replay = Object.fromEntries(workspaceTools().map((tool) => [tool.name, tool.replay]));
   assert.deepEqual(replay, {
     read: 'safe',
@@ -136,12 +156,12 @@ test('read, ls, and grep replay safely; write, edit, and bash do not', () => {
     edit: 'unsafe',
     ls: 'safe',
     grep: 'safe',
-    bash: 'unsafe',
+    [agentShellKind()]: 'unsafe',
   });
 });
 
 test('workspaceTools lists every builtin tool in order', () => {
-  assert.deepEqual(workspaceTools().map((tool) => tool.name), ['read', 'write', 'edit', 'ls', 'grep', 'bash']);
+  assert.deepEqual(workspaceTools().map((tool) => tool.name), ['read', 'write', 'edit', 'ls', 'grep', agentShellKind()]);
   assert.deepEqual(
     offeredToolNames({
       messages: [
@@ -181,7 +201,7 @@ test('withIntent: bash with description runs; the original tool does not see it'
     assert.ok(tool.parameters?.properties?.description, tool.name);
     assert.equal((tool.parameters.required || []).includes('description'), false, tool.name);
   }
-  const bash = workspaceTools().find((tool) => tool.name === 'bash');
+  const bash = commandTool();
   const dir = await mkdtemp(path.join(tmpdir(), 'piw-intent-'));
   const env = await createWorkspaceEnv({ cwd: dir });
   const chunks = [];
@@ -241,7 +261,7 @@ test('a tools array is one assistant message with each call', () => {
 });
 
 test('bash keeps the model\'s timeout, else 600 s, else WEFT_BASH_TIMEOUT_SECONDS', () => {
-  const bash = workspaceTools().find((tool) => tool.name === 'bash');
+  const bash = commandTool();
   const previous = process.env.WEFT_BASH_TIMEOUT_SECONDS;
   const restore = () => {
     if (previous === undefined) delete process.env.WEFT_BASH_TIMEOUT_SECONDS;
@@ -281,11 +301,11 @@ function envValue(dumped, name) {
 }
 
 test('bash prepare sets inheritEnv false so NodeExecutionEnv does not copy process.env', async () => {
-  const bash = workspaceTools().find((tool) => tool.name === 'bash');
+  const bash = commandTool();
   let seen;
   const chunks = [];
   await bash.execute(
-    { command: 'true', timeout: 5 },
+    { command: agentShellKind() === 'powershell' ? 'Write-Output ok' : 'true', timeout: 5 },
     {
       env: {
         cwd: process.cwd(),
@@ -307,7 +327,7 @@ test('bash prepare sets inheritEnv false so NodeExecutionEnv does not copy proce
 });
 
 test('bash tool writes a filtered env dump and can run node -v', { timeout: 40_000 }, async () => {
-  const bash = workspaceTools().find((tool) => tool.name === 'bash');
+  const bash = commandTool();
   const dir = await mkdtemp(path.join(tmpdir(), 'piw-bash-env-'));
   const env = await createWorkspaceEnv({ cwd: dir });
   const previous = {
@@ -343,7 +363,7 @@ test('bash tool writes a filtered env dump and can run node -v', { timeout: 40_0
     return { ran, text: chunks.join('') };
   };
   try {
-    const dump = `"${process.execPath}" -e "require('fs').writeFileSync('env.json', JSON.stringify(process.env))"`;
+    const dump = nativeCommand(process.execPath, '-e', "require('fs').writeFileSync('env.json', JSON.stringify(process.env))");
     const dumpedRun = await run(dump);
     assert.equal(Boolean(dumpedRun.ran?.isError), false, JSON.stringify(dumpedRun));
     const dumped = JSON.parse(await readFile(path.join(dir, 'env.json'), 'utf8'));
@@ -366,13 +386,13 @@ test('kernel path: path escape is E_SANDBOX and bash stays in the workspace', { 
   const dataDir = await mkdtemp(path.join(tmpdir(), 'piw-ksand-'));
   // Sequential on Windows too: a backgrounded `& echo` let the shell exit before
   // `sand.txt` was written, so the read below could miss the file.
-  const command = process.platform === 'win32'
-    ? 'echo bash-ok> sand.txt; echo bash-ok'
+  const command = agentShellKind() === 'powershell'
+    ? 'Set-Content -Path sand.txt -Value bash-ok -NoNewline; Write-Output bash-ok'
     : 'printf bash-ok > sand.txt && printf bash-ok';
   const script = await writeScript(dataDir, 'sandbox.json', [
     { tool: 'read', args: { path: '../outside.txt' }, id: 'escape-read' },
     { tool: 'write', args: { path: '../outside.txt', content: 'pwned' }, id: 'escape-write' },
-    { tool: 'bash', args: { command }, id: 'bash-1' },
+    { tool: agentShellKind(), args: { command }, id: 'bash-1' },
     { text: 'sandbox-done' },
   ]);
   const srv = await startServer({ token: TOKEN, env: durableEnv(script), dataDir });
@@ -410,11 +430,11 @@ test('kernel path: path escape is E_SANDBOX and bash stays in the workspace', { 
 test('kernel path: bash runs a quoted node path and a script in a directory with spaces', { timeout: 40_000 }, async () => {
   const dataDir = await mkdtemp(path.join(tmpdir(), 'piw-kquote-'));
   const nodeBin = process.execPath;
-  const printOne = `"${nodeBin}" -e "console.log(1)"`;
-  const spaced = `"${nodeBin}" "dir with spaces/hi.cjs"`;
+  const printOne = nativeCommand(nodeBin, '-e', 'console.log(1)');
+  const spaced = nativeCommand(nodeBin, 'dir with spaces/hi.cjs');
   const script = await writeScript(dataDir, 'quoted.json', [
-    { tool: 'bash', args: { command: printOne }, id: 'quote-eval' },
-    { tool: 'bash', args: { command: spaced }, id: 'quote-space' },
+    { tool: agentShellKind(), args: { command: printOne }, id: 'quote-eval' },
+    { tool: agentShellKind(), args: { command: spaced }, id: 'quote-space' },
     { text: 'quoted-done' },
   ]);
   const srv = await startServer({ token: TOKEN, env: durableEnv(script), dataDir });
@@ -440,11 +460,11 @@ test('kernel path: bash runs a quoted node path and a script in a directory with
 
 test('kernel path: agent bash does not inherit secrets and honors WEFT_BASH_ENV_ALLOW', { timeout: 40_000 }, async () => {
   const dataDir = await mkdtemp(path.join(tmpdir(), 'piw-kenv-'));
-  const dump = `"${process.execPath}" -e "require('fs').writeFileSync('env.json', JSON.stringify(process.env))"`;
+  const dump = nativeCommand(process.execPath, '-e', "require('fs').writeFileSync('env.json', JSON.stringify(process.env))");
   const script = await writeScript(dataDir, 'bash-env.json', [
-    { tool: 'bash', args: { command: dump }, id: 'env-dump' },
-    { tool: 'bash', args: { command: 'node -v' }, id: 'node-ver' },
-    { tool: 'bash', args: { command: 'git --version' }, id: 'git-ver' },
+    { tool: agentShellKind(), args: { command: dump }, id: 'env-dump' },
+    { tool: agentShellKind(), args: { command: 'node -v' }, id: 'node-ver' },
+    { tool: agentShellKind(), args: { command: 'git --version' }, id: 'git-ver' },
     { text: 'env-done' },
   ]);
   const srv = await startServer({
@@ -571,9 +591,11 @@ test('kernel path: the main agent offers every workspace tool plus plugins and d
     const done = await waitFinished(srv.base, conv.id);
     assert.equal(done.status, 'done', JSON.stringify(done.messages));
     const offered = (await readFile(toolLog, 'utf8')).trim().split('\n').map((line) => JSON.parse(line));
-    for (const name of ['read', 'write', 'edit', 'ls', 'grep', 'bash', 'echo', 'skill', 'delegate', 'subagent']) {
+    for (const name of ['read', 'write', 'edit', 'ls', 'grep', agentShellKind(), 'echo', 'skill', 'delegate', 'subagent']) {
       assert.equal(offered[0].includes(name), true, name);
     }
+    const other = agentShellKind() === 'powershell' ? 'bash' : 'powershell';
+    assert.equal(offered[0].includes(other), false, other);
   } finally {
     await stopServer(srv);
     await rm(dataDir, { recursive: true, force: true });
@@ -593,9 +615,9 @@ test('kernel path: a timed-out bash ends the command and its child, and the run 
     'setInterval(() => {}, 1000);',
     '',
   ].join('\n'));
-  const command = `"${process.execPath}" "${hang}"`;
+  const command = nativeCommand(process.execPath, hang);
   const script = await writeScript(dataDir, 'timeout.json', [
-    { tool: 'bash', args: { command }, id: 'bash-timeout' },
+    { tool: agentShellKind(), args: { command }, id: 'bash-timeout' },
     { text: 'after-timeout' },
   ]);
   const srv = await startServer({
@@ -640,11 +662,11 @@ test('kernel path: a timed-out bash ends the command and its child, and the run 
 
 test('kernel path: killing the process does not rerun an unsafe tool, and the model receives interrupted', { timeout: 90_000 }, async () => {
   const dataDir = await mkdtemp(path.join(tmpdir(), 'piw-kkill-'));
-  const command = process.platform === 'win32'
-    ? 'echo x>>ran-count & ping -n 40 127.0.0.1 >nul'
+  const command = agentShellKind() === 'powershell'
+    ? 'cmd /c "echo x>>ran-count & ping -n 40 127.0.0.1 >nul"'
     : 'printf x >> ran-count && sleep 40';
   const script = await writeScript(dataDir, 'hang.json', [
-    { tool: 'bash', args: { command, timeout: 120000 }, id: 'bash-hold' },
+    { tool: agentShellKind(), args: { command, timeout: 120000 }, id: 'bash-hold' },
     { text: 'continued' },
   ]);
   const env = durableEnv(script);

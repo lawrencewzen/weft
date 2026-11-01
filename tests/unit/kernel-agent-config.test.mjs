@@ -6,6 +6,7 @@ import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
 import { killChild, request as serverRequest, startServer, stopServer } from './_server.mjs';
 import { autoTitleFromText } from '../../src/kernel/agent-config.mjs';
+import { agentShellKind } from '../../src/platform/win/shell.mjs';
 import { isAutoContinueText } from '../../src/kernel/continuation.mjs';
 import { createSkillTool, SKILL_TOOL_DESCRIPTION } from '../../src/kernel/skill-tool.mjs';
 import { SKILL_LIST_INTRO } from '../../src/core/skills.mjs';
@@ -82,9 +83,11 @@ test('new conversation: empty instructions, all tools, enabled skills, Agent nam
     assert.match(skills, /^- review-notes: /m);
     assert.equal(skills.includes('Subject line is imperative'), false);
     assert.equal(skills.includes('Lead with findings'), false);
-    for (const name of ['read', 'write', 'edit', 'ls', 'grep', 'bash', 'echo', 'skill', 'delegate', 'subagent']) {
+    const command = agentShellKind();
+    for (const name of ['read', 'write', 'edit', 'ls', 'grep', command, 'echo', 'skill', 'delegate', 'subagent']) {
       assert.equal(call.tools.includes(name), true, name);
     }
+    assert.equal(call.tools.includes(command === 'powershell' ? 'bash' : 'powershell'), false);
   } finally {
     await stopServer(srv);
     await rm(dataDir, { recursive: true, force: true });

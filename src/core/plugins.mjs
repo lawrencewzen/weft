@@ -3,7 +3,11 @@ import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { catalogError } from './catalog.mjs';
-import { TOOLS as BUILTIN_TOOLS } from './config.mjs';
+import { reservedBuiltinToolNames } from './config.mjs';
+
+function isReservedToolName(name) {
+  return reservedBuiltinToolNames().includes(name);
+}
 
 export const PLUGIN_ID = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const TOOL_NAME = /^[a-z][a-z0-9_]{0,31}$/;
@@ -89,7 +93,7 @@ function validateManifest(manifest, dir) {
     const toolName = String(spec.name || '').trim();
     if (!TOOL_NAME.test(toolName)) throw catalogError(400, 'err_plugin_invalid', `invalid tool name: ${toolName || '(empty)'}`);
     if (seen.has(toolName)) throw catalogError(400, 'err_plugin_invalid', `duplicate tool name: ${toolName}`);
-    if (BUILTIN_TOOLS.includes(toolName)) {
+    if (isReservedToolName(toolName)) {
       throw catalogError(400, 'err_plugin_invalid', `tool ${toolName} is already registered`);
     }
     seen.add(toolName);
@@ -215,7 +219,7 @@ export async function loadPlugins(dirs, enabledMap = {}) {
     }
   }
   const ordered = [...byId.values()];
-  const used = new Set(BUILTIN_TOOLS);
+  const used = new Set(reservedBuiltinToolNames());
   return ordered.map((plugin) => {
     const enabled = enabledMap[plugin.id] !== false;
     let error = plugin.error;
@@ -338,7 +342,7 @@ export async function installPlugin(sourcePath, destRoot, { existingIds = new Se
   const loaded = await readPlugin(src);
   if (existingIds.has(loaded.id)) throw catalogError(409, 'err_plugin_exists', 'plugin already exists');
   for (const tool of loaded.handlers) {
-    if (existingToolNames.has(tool.name) || BUILTIN_TOOLS.includes(tool.name)) {
+    if (existingToolNames.has(tool.name) || isReservedToolName(tool.name)) {
       throw catalogError(400, 'err_plugin_invalid', `tool ${tool.name} is already registered`);
     }
   }

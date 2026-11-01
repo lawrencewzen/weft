@@ -39,6 +39,8 @@ const BUILTIN_EXACT = [
   'SSL_CERT_DIR',
   'REQUESTS_CA_BUNDLE',
   'SSH_AUTH_SOCK',
+  'PSModulePath',
+  'PSExecutionPolicyPreference',
 ];
 
 const PROXY_NAMES = ['HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'NO_PROXY'];
@@ -91,9 +93,15 @@ function builtinExactSet(platform) {
   return set;
 }
 
+function isGitConfigEnv(name, platform) {
+  const folded = fold(name, namesAreCaseInsensitive(platform));
+  return folded.startsWith(namesAreCaseInsensitive(platform) ? 'git_config_' : 'GIT_CONFIG_');
+}
+
 function isBuiltinAllowed(name, platform) {
   const insensitive = namesAreCaseInsensitive(platform);
   if (builtinExactSet(platform).has(fold(name, insensitive))) return true;
+  if (isGitConfigEnv(name, platform)) return true;
   return fold(name, insensitive).startsWith(insensitive ? 'lc_' : 'LC_');
 }
 
@@ -171,6 +179,9 @@ function warnBlocked(log, warned, name, reason) {
  */
 export function sensitiveEnvReason(name) {
   const upper = String(name).toUpperCase();
+  // Git's GIT_CONFIG_KEY_n is an index name, not a secret. VALUE/COUNT do not
+  // match TOKEN/KEY/SECRET; KEY would, so it is exempted here.
+  if (/^GIT_CONFIG_KEY_\d+$/.test(upper)) return null;
   for (const prefix of DENIED_PREFIXES) {
     if (upper.startsWith(prefix)) return `prefix ${prefix}*`;
   }
