@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { readFileSync } from 'node:fs';
 import { compileSchema } from '../../src/v2/validate.ts';
 import { ROOT } from './_root.mjs';
@@ -179,4 +180,142 @@ test('extractPathRefs default exists treats sandbox escapes as missing', async (
   );
   for (const ref of refs) assertPathRef(ref);
   assert.deepEqual(refs, [{ text: 'secret.txt', path: 'secret.txt' }]);
+});
+
+function fileHref(abs, hash = '') {
+  return pathToFileURL(abs).href + hash;
+}
+
+test('extractPathRefs reads a file:// link with #L1-L3 as the start line', async () => {
+  const { workspacePath } = await makeWorkspace();
+  const abs = path.join(workspacePath, 'calc.py');
+  await fs.writeFile(abs, 'print(1)\n');
+  const href = fileHref(abs, '#L1-L3');
+  const refs = await extractPathRefs(
+    `在 [calc.py](${href}) 中发现了 Bug`,
+    { workspacePath },
+  );
+  for (const ref of refs) assertPathRef(ref);
+  assert.deepEqual(refs, [
+    { text: href, path: 'calc.py', line: 1 },
+  ]);
+});
+
+test('extractPathRefs decodes percent-encoded spaces and Chinese in file links', async () => {
+  const { workspacePath } = await makeWorkspace();
+  const name = '我的 笔记.py';
+  const abs = path.join(workspacePath, name);
+  await fs.writeFile(abs, 'x\n');
+  const href = fileHref(abs, '#L12-L20');
+  const refs = await extractPathRefs(`[note](${href})`, { workspacePath });
+  for (const ref of refs) assertPathRef(ref);
+  assert.equal(href.includes('%20'), true);
+  assert.match(href, /%[0-9A-Fa-f]{2}/);
+  assert.equal(href.includes(name), false);
+  assert.deepEqual(refs, [
+    { text: href, path: name, line: 12 },
+  ]);
+});
+
+test('extractPathRefs reads Windows file:///C:/ links inside the workspace', async () => {
+  const ranged = 'file:///C:/Users/me/proj/src/x.mjs#L12-20';
+  const lower = 'file:///c:/users/me/proj/public/app.css';
+  const colon = 'file:///C:/Users/me/proj/README.md:3';
+  const calls = [];
+  const refs = await extractPathRefs(
+    `[a](${ranged}) [b](file:///D:/other/secret.txt) [c](${lower}) [d](${colon}) [e](file:///C:/Users/me/proj/nope.missing)`,
+    {
+      workspacePath: 'C:\\Users\\me\\proj',
+      exists: async (rel) => {
+        calls.push(rel);
+        return rel === 'src/x.mjs' || rel === 'public/app.css' || rel === 'README.md';
+      },
+    },
+  );
+  for (const ref of refs) assertPathRef(ref);
+  assert.deepEqual(refs, [
+    { text: ranged, path: 'src/x.mjs', line: 12 },
+    { text: lower, path: 'public/app.css' },
+    { text: colon, path: 'README.md', line: 3 },
+  ]);
+  assert.deepEqual(calls, ['src/x.mjs', 'public/app.css', 'README.md', 'nope.missing']);
+});
+
+test('extractPathRefs reads relative and in-workspace absolute link hrefs', async () => {
+  const { workspacePath } = await makeWorkspace();
+  const root = workspacePath.replaceAll('\\', '/');
+  const abs = `${root}/src/x.mjs#L4`;
+  const markdown = [
+    '[css](public/app.css)',
+    '[rel](./src/x.mjs#L12-L20)',
+    '[short](src/x.mjs#L12-20)',
+    '[colon](README.md:3)',
+    '[colon2](public/app.css:12:3)',
+    '[colon3](src/x.mjs:12)',
+    `[abs](${abs})`,
+    '[dot](./package.json)',
+    String.raw`[slash](public\app.css)`,
+  ].join('\n');
+  const refs = await extractPathRefs(markdown, { workspacePath });
+  for (const ref of refs) assertPathRef(ref);
+  assert.deepEqual(refs, [
+    { text: 'public/app.css', path: 'public/app.css' },
+    { text: './src/x.mjs#L12-L20', path: 'src/x.mjs', line: 12 },
+    { text: 'src/x.mjs#L12-20', path: 'src/x.mjs', line: 12 },
+    { text: 'README.md:3', path: 'README.md', line: 3 },
+    { text: 'public/app.css:12:3', path: 'public/app.css', line: 12 },
+    { text: 'src/x.mjs:12', path: 'src/x.mjs', line: 12 },
+    { text: abs, path: 'src/x.mjs', line: 4 },
+    { text: './package.json', path: 'package.json' },
+    { text: String.raw`public\app.css`, path: 'public/app.css' },
+  ]);
+});
+
+test('extractPathRefs drops outside, missing, protocol, and directory links', async () => {
+  const { base, workspacePath } = await makeWorkspace();
+  await fs.mkdir(path.join(workspacePath, 'notfile.txt'));
+  const outside = fileHref(path.join(base, 'secret.txt'));
+  const missing = fileHref(path.join(workspacePath, 'nope.missing'), '#L1-L3');
+  const dirUrl = fileHref(path.join(workspacePath, 'public'));
+  const markdown = [
+    `[out](${outside})`,
+    `[miss](${missing})`,
+    '[relmiss](nope.missing)',
+    '[http](https://example.com/src/x.mjs)',
+    '[http2](http://host/app.css)',
+    '[mail](mailto:a@b.com)',
+    '[js](javascript:alert(1))',
+    '[dir](public)',
+    `[dirurl](${dirUrl})`,
+    '[fake](notfile.txt)',
+    '[dot](../secret.txt)',
+    '[dot2](public/../../secret.txt)',
+    '![img](package.json)',
+    '```',
+    '[x](package.json)',
+    '```',
+  ].join('\n');
+  const refs = await extractPathRefs(markdown, { workspacePath });
+  assert.deepEqual(refs, []);
+});
+
+test('extractPathRefs keeps inline-code results and emits one ref for a repeated text', async () => {
+  const { workspacePath } = await makeWorkspace();
+  const same = await extractPathRefs(
+    'see `package.json` and [pkg](package.json). range `src/x.mjs#L1-L3` stays plain. `src/x.mjs:12`.',
+    { workspacePath },
+  );
+  for (const ref of same) assertPathRef(ref);
+  assert.deepEqual(same, [
+    { text: 'package.json', path: 'package.json' },
+    { text: 'src/x.mjs:12', path: 'src/x.mjs', line: 12 },
+  ]);
+
+  const linkFirst = await extractPathRefs(
+    '[pkg](package.json) then `package.json`',
+    { workspacePath },
+  );
+  assert.deepEqual(linkFirst, [
+    { text: 'package.json', path: 'package.json' },
+  ]);
 });
