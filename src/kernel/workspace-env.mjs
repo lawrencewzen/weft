@@ -6,11 +6,33 @@ import { realpath } from 'node:fs/promises';
 import { NodeExecutionEnv } from '@earendil-works/pi-durable/env/node';
 import { ExecutionError, FileError, err, ok } from '@earendil-works/pi-durable/env';
 import { resolveInWorkspace } from '../core/paths.mjs';
+import {
+  createStringTextLineReader,
+  decode,
+  detect,
+  encode,
+  isTextEncodingDetectEnabled,
+  viewGbkReaderAsUtf8,
+} from '../platform/win/text-encoding.mjs';
 import { bashChildEnv } from './bash-env.mjs';
 
 const UTF8_OUTPUT = 'try { [Console]::OutputEncoding=[System.Text.Encoding]::UTF8 } catch {}';
 const POWERSHELL_ARGS = ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command'];
 const POWERSHELL_PROGRAMS = ['pwsh', 'powershell'];
+
+async function encodeExistingText(inner, resolvedPath, content, context) {
+  if (!isTextEncodingDetectEnabled() || typeof content !== 'string') return ok(content);
+  const existing = await inner.readBinaryFile(resolvedPath, context);
+  let enc = 'utf8';
+  if (existing.ok) enc = detect(existing.value);
+  else if (existing.error?.code !== 'not_found') return existing;
+  try {
+    return ok(encode(content, enc));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return err(new FileError('invalid', message, resolvedPath, error instanceof Error ? error : undefined));
+  }
+}
 
 function sandboxError(filePath, error) {
   const cause = error instanceof Error ? error : undefined;
@@ -80,19 +102,44 @@ export class WorkspaceExecutionEnv {
   async readTextFile(filePath, context) {
     const resolved = await this.checked(filePath, context);
     if (!resolved.ok) return resolved;
-    return this.inner.readTextFile(resolved.value, context);
+    if (!isTextEncodingDetectEnabled()) return this.inner.readTextFile(resolved.value, context);
+    const bytes = await this.inner.readBinaryFile(resolved.value, context);
+    if (!bytes.ok) return bytes;
+    return ok(decode(bytes.value, detect(bytes.value)));
   }
 
   async openTextLineReader(filePath, context) {
     const resolved = await this.checked(filePath, context);
     if (!resolved.ok) return resolved;
-    return this.inner.openTextLineReader(resolved.value, context);
+    if (!isTextEncodingDetectEnabled()) return this.inner.openTextLineReader(resolved.value, context);
+    const bytes = await this.inner.readBinaryFile(resolved.value, context);
+    if (!bytes.ok) return bytes;
+    const enc = detect(bytes.value);
+    if (enc === 'utf8' || enc === 'utf8-bom') {
+      return this.inner.openTextLineReader(resolved.value, context);
+    }
+    return ok(createStringTextLineReader(decode(bytes.value, enc)));
   }
 
   async readTextLines(filePath, options, context) {
     const resolved = await this.checked(filePath, context);
     if (!resolved.ok) return resolved;
-    return this.inner.readTextLines(resolved.value, options, context);
+    if (!isTextEncodingDetectEnabled()) return this.inner.readTextLines(resolved.value, options, context);
+    if (options?.maxLines !== undefined && options.maxLines <= 0) return ok([]);
+    const opened = await this.openTextLineReader(resolved.value, context);
+    if (!opened.ok) return opened;
+    const lines = [];
+    try {
+      while (options?.maxLines === undefined || lines.length < options.maxLines) {
+        const line = await opened.value.readLine(context);
+        if (!line.ok) return line;
+        if (line.value === undefined) break;
+        lines.push(line.value.text);
+      }
+      return ok(lines);
+    } finally {
+      await opened.value.close(context);
+    }
   }
 
   async readBinaryFile(filePath, context) {
@@ -104,19 +151,25 @@ export class WorkspaceExecutionEnv {
   async openBinaryReader(filePath, options, context) {
     const resolved = await this.checked(filePath, context);
     if (!resolved.ok) return resolved;
-    return this.inner.openBinaryReader(resolved.value, options, context);
+    const opened = await this.inner.openBinaryReader(resolved.value, options, context);
+    if (!opened.ok || !isTextEncodingDetectEnabled()) return opened;
+    return viewGbkReaderAsUtf8(opened.value, context);
   }
 
   async writeFile(filePath, content, context) {
     const resolved = await this.checked(filePath, context);
     if (!resolved.ok) return resolved;
-    return this.inner.writeFile(resolved.value, content, context);
+    const encoded = await encodeExistingText(this.inner, resolved.value, content, context);
+    if (!encoded.ok) return encoded;
+    return this.inner.writeFile(resolved.value, encoded.value, context);
   }
 
   async appendFile(filePath, content, context) {
     const resolved = await this.checked(filePath, context);
     if (!resolved.ok) return resolved;
-    return this.inner.appendFile(resolved.value, content, context);
+    const encoded = await encodeExistingText(this.inner, resolved.value, content, context);
+    if (!encoded.ok) return encoded;
+    return this.inner.appendFile(resolved.value, encoded.value, context);
   }
 
   async truncateFile(filePath, size, context) {
