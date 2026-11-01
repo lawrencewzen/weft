@@ -5,6 +5,8 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
+import iconv from 'iconv-lite';
+import { PWSH_UTF8_WRAPPER } from '../../src/platform/win/output-transcode.mjs';
 import { agentShellKind } from '../../src/platform/win/shell.mjs';
 import { createAgentShellTool, workspaceTools } from '../../src/kernel/tools.mjs';
 import { createWorkspaceEnv } from '../../src/kernel/workspace-env.mjs';
@@ -85,6 +87,58 @@ test('powershell tool prints Chinese from Write-Output, node, and cmd without U+
       assert.equal(Boolean(ran?.isError), false, `${item.command}: ${JSON.stringify({ text, ran })}`);
       assert.equal(text.includes('\uFFFD'), false, `${item.command} contained U+FFFD: ${JSON.stringify(text)}`);
       assert.equal(text.includes(item.expect), true, `${item.command} missing ${item.expect}: ${JSON.stringify(text)}`);
+    }
+  } finally {
+    await env.cleanup(BACKGROUND_CONTEXT).catch(() => {});
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('GBK .bat echo and UTF-8 path through wrapper (936 vs windows-latest)', {
+  timeout: 60_000,
+}, async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'weft-gbk-bat-'));
+  const env = await createWorkspaceEnv({ cwd: dir });
+  try {
+    const emit = path.join(dir, 'emit-mixed.mjs');
+    const gbkLine = [...iconv.encode('中文GBK\n', 'gbk')];
+    const utf8Line = [...Buffer.from('中文UTF8\n', 'utf8')];
+    await writeFile(emit, `
+      process.stdout.write(Buffer.from(${JSON.stringify(gbkLine)}));
+      process.stdout.write(Buffer.from(${JSON.stringify(utf8Line)}));
+    `);
+    const streamed = { stdout: '', stderr: '' };
+    const wrapped = await env.exec(
+      [process.execPath, PWSH_UTF8_WRAPPER, process.execPath, emit],
+      {
+        onOutput: (text, _ctx, info) => {
+          streamed[info.stream] += text;
+        },
+      },
+      BACKGROUND_CONTEXT,
+    );
+    assert.equal(wrapped.ok, true, wrapped.ok ? '' : wrapped.error.message);
+    assert.equal(wrapped.value.exitCode, 0);
+    assert.equal(streamed.stdout.includes('中文GBK'), true, streamed.stdout);
+    assert.equal(streamed.stdout.includes('中文UTF8'), true, streamed.stdout);
+    assert.equal(streamed.stdout.includes('\uFFFD'), false, streamed.stdout);
+
+    // windows-latest is CP 437/1252: cmd.exe will not parse a GBK .bat as Chinese.
+    // On ACP/OEMCP 936 the same command's echo is expected to contain 中文 and no U+FFFD.
+    if (process.platform === 'win32') {
+      const bat = path.join(dir, 'zh.bat');
+      await writeFile(bat, iconv.encode('@echo off\r\necho 中文输出测试\r\n', 'gbk'));
+      const tool = createAgentShellTool('powershell');
+      const utf8 = await runPowerShell(tool, env, "Write-Output '中文输出'");
+      assert.equal(Boolean(utf8.ran?.isError), false, JSON.stringify(utf8));
+      assert.equal(utf8.text.includes('中文'), true, utf8.text);
+      assert.equal(utf8.text.includes('\uFFFD'), false, utf8.text);
+
+      const batRun = await runPowerShell(tool, env, `.\\zh.bat`);
+      assert.equal(Boolean(batRun.ran?.isError), false, JSON.stringify(batRun));
+      if (batRun.text.includes('中文')) {
+        assert.equal(batRun.text.includes('\uFFFD'), false, batRun.text);
+      }
     }
   } finally {
     await env.cleanup(BACKGROUND_CONTEXT).catch(() => {});

@@ -23,12 +23,13 @@ test('agentShellKind defaults by platform and honors WEFT_AGENT_SHELL', () => {
   assert.equal(agentShellKind({ WEFT_AGENT_SHELL: '' }, 'linux'), 'bash');
 });
 
-test('powershellCommandPrefix sets UTF-8 without BOM for 5.1 and pwsh 7', () => {
+test('powershellCommandPrefix keeps $OutputEncoding UTF-8 and restores console CP', () => {
   assert.match(powershellCommandPrefix, /UTF8Encoding \$false/);
   assert.match(powershellCommandPrefix, /\$OutputEncoding/);
-  assert.match(powershellCommandPrefix, /\[Console\]::InputEncoding/);
-  assert.match(powershellCommandPrefix, /\[Console\]::OutputEncoding/);
+  assert.match(powershellCommandPrefix, /\[Console\]::OutputEncoding = \[System\.Text\.Encoding\]::Default/);
   assert.equal(powershellCommandPrefix.includes('UTF8Encoding $true'), false);
+  assert.equal(powershellCommandPrefix.includes('chcp 65001'), false);
+  assert.equal(powershellCommandPrefix.includes('InputEncoding'), false);
 });
 
 test('windowsChildEnv adds UTF-8 python/less vars and git config overlay', () => {

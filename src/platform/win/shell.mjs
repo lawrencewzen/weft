@@ -4,13 +4,24 @@
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 
-/** Lines run before each Agent PowerShell command. UTF-8, no BOM. */
+/**
+ * Lines run before each Agent PowerShell command.
+ *
+ * Keep `$OutputEncoding` as UTF-8 (no BOM): it only encodes PowerShell pipeline
+ * stdin to native programs and does not call SetConsoleOutputCP, so cmd.exe
+ * still reads GBK `.bat` files using the system ACP/OEM code page.
+ *
+ * Do not set `[Console]::OutputEncoding` / `InputEncoding` or `chcp 65001`.
+ * Those change the console output CP; cmd.exe then misreads GBK batch files.
+ *
+ * pi-durable's createPowerShellTool prepends `[Console]::OutputEncoding=UTF8`
+ * (cannot change that library). Restore Encoding.Default afterwards so the
+ * console CP returns to ACP.
+ */
 export const powershellCommandPrefix = [
   '$enc = New-Object System.Text.UTF8Encoding $false',
   '$OutputEncoding = $enc',
-  '[Console]::InputEncoding = $enc',
-  '[Console]::OutputEncoding = $enc',
-  'try { chcp 65001 | Out-Null } catch {}',
+  'try { [Console]::OutputEncoding = [System.Text.Encoding]::Default } catch {}',
 ].join('\n');
 
 /**
