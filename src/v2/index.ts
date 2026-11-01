@@ -477,6 +477,11 @@ function sendFileOpError(
     sendV2(res, pathname, method, 400, { error: 'is a directory', code: 'E_BAD_REQUEST' } satisfies V2Error);
     return true;
   }
+  if (code === 'E_BAD_REQUEST') {
+    const message = err instanceof Error ? err.message : 'bad request';
+    sendV2(res, pathname, method, 400, { error: message, code: 'E_BAD_REQUEST' } satisfies V2Error);
+    return true;
+  }
   if (code === 'E_CONFLICT') {
     const current = (err as FileOpError).current;
     if (!current) return false;

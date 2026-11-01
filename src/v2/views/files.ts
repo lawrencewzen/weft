@@ -10,6 +10,10 @@ import {
   listWorkspaceTree,
   WORKSPACE_TREE_MAX_ENTRIES,
 } from '../../core/workspace-tree.mjs';
+import {
+  encodeWorkspaceSave,
+  inspectWorkspaceText,
+} from '../../platform/win/workspace-files.mjs';
 import type { components } from '../contract.gen.ts';
 import { posixPath } from './changes.ts';
 
@@ -112,15 +116,21 @@ export async function readWorkspaceFile(
   const tooLarge = st.size > limit;
   if (!tooLarge) {
     const buf = await fs.readFile(abs);
-    const binary = looksBinary(buf);
-    return {
+    const inspected = inspectWorkspaceText(buf, env);
+    const binary = inspected ? inspected.binary : looksBinary(buf);
+    const content: FileContent = {
       path: pathPosix,
       size: st.size,
       binary,
       tooLarge: false,
-      text: binary ? null : buf.toString('utf8'),
+      text: inspected ? inspected.text : (binary ? null : buf.toString('utf8')),
       version: contentVersion(buf),
     };
+    const encoding = inspected?.encoding;
+    if (encoding === 'utf8' || encoding === 'utf8-bom' || encoding === 'gbk') {
+      content.encoding = encoding;
+    }
+    return content;
   }
 
   const sampleSize = Math.min(st.size, BINARY_SAMPLE_BYTES);
@@ -158,7 +168,7 @@ export const ATOMIC_RENAME_ATTEMPTS = 5;
 export const ATOMIC_RENAME_DELAYS_MS: readonly number[] = [25, 50, 100, 200];
 
 export type WriteFileAtomicIo = {
-  writeFile?: (file: string, data: string, encoding: BufferEncoding) => Promise<void>;
+  writeFile?: (file: string, data: string | Uint8Array, encoding?: BufferEncoding) => Promise<void>;
   rename?: (oldPath: string, newPath: string) => Promise<void>;
   sleep?: (ms: number) => Promise<void>;
 };
@@ -196,16 +206,20 @@ async function renameWithRetry(
 }
 
 /**
- * Write `text` by creating a sibling temp file, then renaming over `abs`.
+ * Write `data` by creating a sibling temp file, then renaming over `abs`.
+ * Strings are UTF-8; Buffers / Uint8Array are written as those bytes.
  * Callers must pass a path already resolved (and realpath'd) inside the workspace.
  * On Windows, a destination locked by another process falls back to in-place writeFile.
  */
 export async function writeFileAtomic(
   abs: string,
-  text: string,
+  data: string | Uint8Array,
   io: WriteFileAtomicIo = {},
 ): Promise<void> {
-  const writeFile = io.writeFile ?? ((file, data, encoding) => fs.writeFile(file, data, encoding));
+  const bytes = typeof data === 'string' ? Buffer.from(data, 'utf8') : Buffer.from(data);
+  const writeFile = io.writeFile ?? ((file, payload, encoding) => (
+    encoding == null ? fs.writeFile(file, payload) : fs.writeFile(file, payload, encoding)
+  ));
   const rename = io.rename ?? ((oldPath, newPath) => fs.rename(oldPath, newPath));
   const sleep = io.sleep ?? delay;
 
@@ -222,7 +236,7 @@ export async function writeFileAtomic(
     `.${path.basename(abs)}.${process.pid}.${randomUUID()}.tmp`,
   );
   try {
-    await writeFile(tmp, text, 'utf8');
+    await writeFile(tmp, bytes);
     if (mode != null) {
       try {
         await fs.chmod(tmp, mode);
@@ -234,7 +248,7 @@ export async function writeFileAtomic(
       await renameWithRetry(rename, tmp, abs, sleep);
     } catch (err) {
       if (!ATOMIC_RENAME_BUSY_CODES.has(ioErrorCode(err))) throw err;
-      await writeFile(abs, text, 'utf8');
+      await writeFile(abs, bytes);
     }
   } catch (err) {
     await unlinkQuiet(tmp);
@@ -281,20 +295,32 @@ export async function saveWorkspaceFile({
     }
   }
 
-  let before = '';
+  let onDisk: Buffer | null = null;
   if (existed) {
     try {
-      before = await fs.readFile(abs, 'utf8');
+      onDisk = await fs.readFile(abs);
     } catch {
-      before = '';
+      onDisk = null;
     }
   }
+
+  let payload: Buffer;
+  let before = '';
+  try {
+    const encoded = encodeWorkspaceSave(text, onDisk, env);
+    payload = encoded.bytes;
+    before = encoded.before;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    throw tagged(message, 'E_BAD_REQUEST');
+  }
+
   await fs.mkdir(path.dirname(abs), { recursive: true });
-  await writeFileAtomic(abs, text, atomic);
+  await writeFileAtomic(abs, payload, atomic);
   const stats = diffStats(before, text) as { added: number; removed: number };
   return {
     path: posixPath(rel),
-    version: contentVersion(text),
+    version: contentVersion(payload),
     added: Number(stats.added) || 0,
     removed: Number(stats.removed) || 0,
   };

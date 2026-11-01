@@ -557,8 +557,11 @@ export interface paths {
         /**
          * 读工作区文件
          * @description 返回 FileContent。超过 2 MB（环境变量 WEFT_V2_MAX_FILE_BYTES，仅测试用）时 tooLarge 为 true、text 为 null。
-         *     前 8 KB 里有 NUL 字节或不是合法 UTF-8 时 binary 为 true、text 为 null。
-         *     version 是内容 sha256 的十六进制前 16 位，保存时用来检测冲突。
+         *     未启用编码检测时：前 8 KB 里有 NUL 字节或不是合法 UTF-8 则 binary 为 true、text 为 null。
+         *     Windows 默认启用检测（其他系统需 WEFT_TEXT_ENCODING_DETECT=1）：对未超限文件用磁盘字节识别编码。
+         *     GBK 视为文本并解码；utf8-bom 仍按 UTF-8 解码并保留 U+FEFF；含 NUL 或无法识别为文本的仍按二进制。
+         *     识别成功时可选字段 encoding 为 utf8 / utf8-bom / gbk。
+         *     version 是磁盘字节 sha256 的十六进制前 16 位，保存时用来检测冲突。
          *     越界 403 E_SANDBOX；不存在 404；是目录 400。
          */
         get: operations["getWorkspaceFile"];
@@ -567,6 +570,9 @@ export interface paths {
          * @description 请求体 `{ path, text, baseVersion? }`。带了 baseVersion 且和磁盘当前内容的 version 不同时
          *     返回 409 `{ error, code: E_CONFLICT, current: FileContent }`，不写入。
          *     否则写入（需要时建目录），返回 200 `{ path, version, added, removed }`。
+         *     启用编码检测时，已存在的文件按磁盘原编码写回（GBK 仍是 GBK，utf8-bom 保留 BOM）；新文件写 UTF-8。
+         *     无法按原编码写入的字符（例如往 GBK 文件写 emoji）返回 400，文件不动。
+         *     返回的 version 是实际写入磁盘字节的哈希。
          *     越界 403 E_SANDBOX。写入后若该文件在某个对话的变更列表里，对应 conversation 主题会重算。
          */
         put: operations["saveWorkspaceFile"];
@@ -1967,6 +1973,11 @@ export interface components {
             text: null | string;
             /** @description 内容 sha256 十六进制前 16 位 */
             version: string;
+            /**
+             * @description 识别出的文本编码。未启用检测、binary 或 tooLarge 时省略
+             * @enum {string}
+             */
+            encoding?: "utf8" | "utf8-bom" | "gbk";
         };
         /** @description PUT /api/v2/workspaces/{id}/files 的请求体。 */
         SaveFileRequest: {
@@ -4268,7 +4279,7 @@ export interface operations {
                     "application/json": components["schemas"]["SaveResult"];
                 };
             };
-            /** @description 请求体无效或路径是目录 */
+            /** @description 请求体无效、路径是目录，或无法按文件原编码写入 */
             400: {
                 headers: {
                     [name: string]: unknown;
