@@ -58,6 +58,9 @@ jobs:
       - name: Unit tests
         shell: bash
         run: npm test
+      - name: weft doctor
+        shell: bash
+        run: node bin/weft.mjs doctor
 
   e2e:
     name: e2e

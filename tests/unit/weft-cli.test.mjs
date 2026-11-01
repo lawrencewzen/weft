@@ -481,6 +481,48 @@ test('stop returns 2 when busy and 0 when idle; open busy-incompatible returns 2
   }
 });
 
+test('service.log ready line is UTF-8 Chinese, not GBK', { timeout: 60000 }, async () => {
+  const dataDir = await mkdtemp(path.join(tmpdir(), 'weft-cli-utf8-log-'));
+  try {
+    const opened = await runWeft(['open', '--print', '--data-dir', dataDir]);
+    assert.equal(opened.code, 0, opened.stderr);
+    const log = readFileSync(path.join(dataDir, 'logs', 'service.log'));
+    const utf8 = Buffer.from('打开新版界面', 'utf8');
+    assert.equal(log.includes(utf8), true, log.toString('hex'));
+    assert.equal(log.toString('utf8').includes('打开新版界面'), true);
+    assert.equal(new TextDecoder('utf-8', { fatal: true }).decode(utf8).length, 6);
+  } finally {
+    await forceStop(dataDir);
+  }
+});
+
+test('doctor prints each section, roundtrip, and hides env values', { timeout: 30000 }, async () => {
+  const dataDir = await mkdtemp(path.join(tmpdir(), 'weft-cli-doctor-'));
+  const secret = 'sk-cli-doctor-secret-not-for-output';
+  try {
+    const result = await runWeft(['doctor', '--data-dir', dataDir], {
+      env: { OPENAI_API_KEY: secret, WEFT_LLM: 'faux' },
+      timeoutMs: 20000,
+    });
+    assert.equal(result.code, 0, result.stderr);
+    assert.match(result.stdout, /\[系统\]/);
+    assert.match(result.stdout, /\[Node\]/);
+    assert.match(result.stdout, /\[PowerShell\]/);
+    assert.match(result.stdout, /\[Git\]/);
+    assert.match(result.stdout, /\[Weft\]/);
+    assert.match(result.stdout, /\[往返\]/);
+    assert.equal(result.stdout.includes(`数据目录: ${dataDir}`), true);
+    assert.match(result.stdout, /服务: 未运行/);
+    assert.match(result.stdout, /OPENAI_API_KEY: 已设置/);
+    assert.match(result.stdout, /WEFT_LLM: 已设置/);
+    assert.equal(result.stdout.includes(secret), false);
+    assert.equal(result.stderr.includes(secret), false);
+    assert.equal(result.stdout.includes('faux'), false);
+  } finally {
+    await forceStop(dataDir);
+  }
+});
+
 test('status reports running and stopped without leaking the token', { timeout: 60000 }, async () => {
   const dataDir = await mkdtemp(path.join(tmpdir(), 'weft-cli-status-'));
   try {

@@ -30,11 +30,12 @@ const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..
 const SERVER_ENTRY = path.join(REPO_ROOT, 'server.mjs');
 const LOG_REL = path.join('logs', 'service.log');
 
-const USAGE = `用法: weft [--data-dir <路径>] <open|status|stop> [--print]
+const USAGE = `用法: weft [--data-dir <路径>] <open|status|stop|doctor> [--print]
 
   open    找到或拉起服务，打开浏览器登录新版界面
   status  显示服务是否在运行
-  stop    请求空闲的服务退出`;
+  stop    请求空闲的服务退出
+  doctor  检查本机环境（代码页、shell、编码往返）`;
 
 class CliError extends Error {
   readonly exitCode: number;
@@ -44,7 +45,7 @@ class CliError extends Error {
   }
 }
 
-export type CliCommand = 'open' | 'status' | 'stop';
+export type CliCommand = 'open' | 'status' | 'stop' | 'doctor';
 
 export type CliArgs = {
   command: CliCommand;
@@ -101,7 +102,7 @@ export function parseArgs(argv: string[]): CliArgs {
     if (arg.startsWith('-')) {
       throw new CliError(`未知参数 ${arg}\n${USAGE}`, 1);
     }
-    if (arg === 'open' || arg === 'status' || arg === 'stop') {
+    if (arg === 'open' || arg === 'status' || arg === 'stop' || arg === 'doctor') {
       if (command) throw new CliError(`多余的命令 ${arg}\n${USAGE}`, 1);
       command = arg;
       continue;
@@ -527,6 +528,36 @@ async function cmdStatus(dataDir: string, out: NodeJS.WritableStream): Promise<n
   return 0;
 }
 
+async function inspectServiceForDoctor(dataDir: string) {
+  try {
+    const service = await resolveService(dataDir);
+    if (!service) return { running: false as const };
+    return {
+      running: true as const,
+      port: service.discovery.port,
+      pid: service.discovery.pid,
+    };
+  } catch (errObj) {
+    const message = errObj instanceof Error ? errObj.message : String(errObj);
+    return { running: false as const, error: message };
+  }
+}
+
+async function cmdDoctor(dataDir: string, out: NodeJS.WritableStream): Promise<number> {
+  const { runDoctor } = await import('../platform/win/doctor.mjs') as {
+    runDoctor: (opts: {
+      dataDir: string;
+      inspectService: () => ReturnType<typeof inspectServiceForDoctor>;
+    }) => Promise<string>;
+  };
+  const text = await runDoctor({
+    dataDir,
+    inspectService: () => inspectServiceForDoctor(dataDir),
+  });
+  out.write(`${text}\n`);
+  return 0;
+}
+
 async function cmdStop(dataDir: string, out: NodeJS.WritableStream): Promise<number> {
   const service = await resolveService(dataDir);
   if (!service) return 0;
@@ -557,6 +588,7 @@ export async function main(
     const dataDir = resolveDataDir(args.dataDir);
     if (args.command === 'open') return await cmdOpen(dataDir, args.print, out, err);
     if (args.command === 'status') return await cmdStatus(dataDir, out);
+    if (args.command === 'doctor') return await cmdDoctor(dataDir, out);
     return await cmdStop(dataDir, out);
   } catch (errObj) {
     if (errObj instanceof CliError) {
