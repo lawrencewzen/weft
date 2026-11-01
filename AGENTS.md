@@ -15,6 +15,14 @@ Weft 是基于 Pi Durable（`@earendil-works/pi-durable`，作为库嵌入）的
 - 子 Agent 是主 Agent 用 `delegate` / `subagent` 在某个对话里生成的独立实例，只属于该对话。没有固定角色模板。
 - 需求支持断点续跑、自动继续、状态监控、多 Agent 并行。多 Agent 协作由主 Agent 用子 Agent 派活，宿主不轮换 Agent。
 
+## 产品线与分支
+- 两条产品线：对外版（完整生态，后续有 macOS / iOS 原生客户端）和内网 Windows 版（网页版，适配内网 Windows 10、GBK、pwsh 7）。
+- `main`：两条线都要的通用功能在这里开发，PR 合到 `main`。
+- `intranet`：内网 Windows 版。只为内网 Windows 机器做的优化（PowerShell 执行、GBK 编码、自检等）只进这里，PR 合到 `intranet`，不回到 `main`。
+- 同步方向只有一个：定期把 `main` merge 进 `intranet`，不反向合并，不挑单个提交。
+- Windows 专门的代码尽量放在独立文件（如 `src/platform/win/`），原有文件只留少量接入点，减少同步时的冲突。
+- 内网发布：在 `intranet` 上打 `intranet-v*` tag，`release.yml` 出 Windows 解压即用包。
+
 ## 文档
 - 计划与设计：`docs/PLAN.md`、`docs/ARCHITECTURE.md`、`design/`。接口契约以测试仓库的 `docs/API_CONTRACT.md` 为准。
 - Pi API 以 `node_modules/@earendil-works/*/dist/**/*.d.ts` 和 `node_modules/@earendil-works/pi-durable/README.md` 为准，不凭记忆编 API。
