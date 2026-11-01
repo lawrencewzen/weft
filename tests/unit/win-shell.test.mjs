@@ -33,7 +33,9 @@ test('powershellCommandPrefix keeps $OutputEncoding UTF-8 and restores OEM code 
   assert.match(powershellCommandPrefix, /\$OutputEncoding/);
   assert.match(powershellCommandPrefix, /OEMCodePage/);
   assert.match(powershellCommandPrefix, /CultureInfo\]::CurrentCulture\.TextInfo\.OEMCodePage/);
+  assert.match(powershellCommandPrefix, /chcp\.com \$oem/);
   assert.equal(powershellCommandPrefix.includes(powershellOemRestore), true);
+  assert.equal(powershellCommandPrefix.includes('[Console]::OutputEncoding'), false);
   assert.equal(powershellCommandPrefix.includes('[System.Text.Encoding]::Default'), false);
   assert.equal(powershellCommandPrefix.includes('Encoding]::Default'), false);
   assert.equal(powershellCommandPrefix.includes('UTF8Encoding $true'), false);
@@ -42,6 +44,7 @@ test('powershellCommandPrefix keeps $OutputEncoding UTF-8 and restores OEM code 
   const script = agentPowerShellScript('Write-Output x');
   assert.equal(script.startsWith(`${PI_DURABLE_UTF8_OUTPUT}\n`), true);
   assert.ok(script.indexOf('OEMCodePage') > script.indexOf('Encoding]::UTF8'));
+  assert.ok(script.includes('chcp.com'));
   const bashJs = readFileSync(
     fileURLToPath(new URL('../../node_modules/@earendil-works/pi-durable/dist/tools/bash.js', import.meta.url)),
     'utf8',

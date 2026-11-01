@@ -8,18 +8,25 @@ import path from 'node:path';
  * Must match `@earendil-works/pi-durable` `createPowerShellTool` (`UTF8_OUTPUT`
  * in dist/tools/bash.js). That call SetConsoleOutputCP(65001), which makes
  * cmd.exe misread GBK `.bat` files. We cannot change the library; the prefix
- * below undoes it.
+ * below undoes the console CP without touching pwsh's output stream.
  */
 export const PI_DURABLE_UTF8_OUTPUT = 'try { [Console]::OutputEncoding=[System.Text.Encoding]::UTF8 } catch {}';
 
 /**
- * Restore the console output CP to the system OEM code page.
+ * Restore the console code page to the system OEM CP for cmd.exe / `.bat`.
  *
- * pwsh 7 (.NET) has `Encoding.Default` = UTF-8 (65001), not ACP/OEM. Using
- * Default after pi-durable's UTF-8 line leaves CP 65001. OEMCodePage is 936
- * on Chinese Win10 and 437 on windows-latest.
+ * Do not assign `[Console]::OutputEncoding`. pi-durable already set it to UTF-8
+ * so pwsh's own `Write-Output` stays UTF-8. Setting it to OEM (437 on English
+ * hosts, 936 on Chinese Win10) re-encodes that stream: 437 cannot write Chinese
+ * (`????`), and 936 cannot write characters outside GBK (emoji → `?`).
+ *
+ * `chcp.com` only changes the console CP (what cmd uses to read `.bat`). It
+ * does not rewrite pwsh's already-built UTF-8 output stream. `Encoding.Default`
+ * in pwsh 7 is UTF-8 (65001), not ACP/OEM — do not use it.
+ *
+ * Windows-only: `chcp.com` is missing on Linux pwsh; the try/catch skips it.
  */
-export const powershellOemRestore = 'try { [Console]::OutputEncoding = [System.Text.Encoding]::GetEncoding([System.Globalization.CultureInfo]::CurrentCulture.TextInfo.OEMCodePage) } catch {}';
+export const powershellOemRestore = 'try { $oem = [Globalization.CultureInfo]::CurrentCulture.TextInfo.OEMCodePage; chcp.com $oem | Out-Null } catch {}';
 
 /**
  * Lines run before each Agent PowerShell command (after pi-durable's UTF-8 line).
@@ -27,9 +34,9 @@ export const powershellOemRestore = 'try { [Console]::OutputEncoding = [System.T
  * Keep `$OutputEncoding` as UTF-8 (no BOM): it only encodes PowerShell pipeline
  * stdin to native programs and does not call SetConsoleOutputCP.
  *
- * Do not set `[Console]::OutputEncoding` to UTF-8, `InputEncoding`, or
- * `chcp 65001`. Those change the console output CP; cmd.exe then misreads GBK
- * batch files.
+ * Do not set `[Console]::OutputEncoding` (leave pi-durable's UTF-8),
+ * `InputEncoding`, or `chcp 65001`. Console CP is restored with `chcp.com`
+ * to OEM so cmd.exe reads GBK batch files.
  */
 export const powershellCommandPrefix = [
   '$enc = New-Object System.Text.UTF8Encoding $false',

@@ -91,6 +91,7 @@ test('buildPwshRoundtripArgs uses Agent prefix, Bypass, and NoProfile', () => {
   assert.match(args[5], /\$OutputEncoding/);
   assert.match(args[5], /OutputEncoding=\[System\.Text\.Encoding\]::UTF8/);
   assert.match(args[5], /OEMCodePage/);
+  assert.match(args[5], /chcp\.com \$oem/);
   assert.equal(args[5].includes('Encoding]::Default'), false);
   assert.equal(args[5].includes('chcp 65001'), false);
   assert.match(args[5], /Write-Output/);
@@ -102,6 +103,7 @@ test('buildPwshRoundtripArgs uses Agent prefix, Bypass, and NoProfile', () => {
   assert.match(batArgs[5], /cmd \/d \/s \/c 'C:\\tmp\\zh\.bat'/);
   assert.match(batArgs[5], /OutputEncoding=\[System\.Text\.Encoding\]::UTF8/);
   assert.match(batArgs[5], /OEMCodePage/);
+  assert.match(batArgs[5], /chcp\.com \$oem/);
   assert.ok(batArgs[5].indexOf('OEMCodePage') > batArgs[5].indexOf('Encoding]::UTF8'));
   assert.equal(new TextDecoder('gbk').decode(gbkBatEchoBytes()).includes(ROUNDTRIP_TEXT), true);
 });

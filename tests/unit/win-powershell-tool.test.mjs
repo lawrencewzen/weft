@@ -146,33 +146,47 @@ test('GBK .bat echo and UTF-8 path through wrapper (936 vs windows-latest)', {
   }
 });
 
-test('powershell tool restores Console.OutputEncoding to the host OEMCodePage', {
+test('powershell tool restores console code page via chcp.com to OEMCodePage', {
   timeout: 60_000,
-}, async () => {
+}, async (t) => {
   assert.match(powershellCommandPrefix, /OEMCodePage/);
+  assert.match(powershellCommandPrefix, /chcp\.com \$oem/);
   assert.equal(powershellCommandPrefix.includes('Encoding]::Default'), false);
+  assert.equal(powershellCommandPrefix.includes('[Console]::OutputEncoding'), false);
 
-  if (process.platform !== 'win32') return;
+  if (process.platform !== 'win32' && !pwshAvailable()) {
+    t.skip('pwsh is not installed');
+    return;
+  }
 
   const dir = await mkdtemp(path.join(tmpdir(), 'weft-pwsh-oemcp-'));
   const env = await createWorkspaceEnv({ cwd: dir });
   const tool = createAgentShellTool('powershell');
   try {
-    const { ran, text } = await runPowerShell(
-      tool,
-      env,
-      [
-        'Write-Output ("CON=" + [Console]::OutputEncoding.CodePage)',
-        'Write-Output ("OEM=" + [System.Globalization.CultureInfo]::CurrentCulture.TextInfo.OEMCodePage)',
-      ].join('; '),
-    );
+    const { ran, text } = await runPowerShell(tool, env, "Write-Output 'pwsh中文😀表情'");
     assert.equal(Boolean(ran?.isError), false, JSON.stringify({ text, ran }));
-    const con = Number((/CON=(\d+)/.exec(text) || [])[1]);
-    const oem = Number((/OEM=(\d+)/.exec(text) || [])[1]);
-    assert.equal(Number.isInteger(con) && con > 0, true, text);
-    assert.equal(Number.isInteger(oem) && oem > 0, true, text);
-    assert.equal(con, oem, text);
-    if (oem !== 65001) assert.equal(con === 65001, false, text);
+    assert.equal(text.includes('\uFFFD'), false, text);
+    assert.equal(text.includes('中文'), true, text);
+    assert.equal(text.includes('😀'), true, text);
+
+    if (process.platform === 'win32') {
+      const chcpRun = await runPowerShell(
+        tool,
+        env,
+        [
+          '$chcp = (chcp.com | Out-String)',
+          'Write-Output ("CHCP=" + $chcp)',
+          'Write-Output ("OEM=" + [Globalization.CultureInfo]::CurrentCulture.TextInfo.OEMCodePage)',
+        ].join('; '),
+      );
+      assert.equal(Boolean(chcpRun.ran?.isError), false, JSON.stringify(chcpRun));
+      const oem = Number((/OEM=(\d+)/.exec(chcpRun.text) || [])[1]);
+      const chcpBlock = (/CHCP=([\s\S]*?)OEM=/.exec(chcpRun.text) || [])[1] || '';
+      const chcp = Number((/(\d+)/.exec(chcpBlock) || [])[1]);
+      assert.equal(Number.isInteger(oem) && oem > 0, true, chcpRun.text);
+      assert.equal(Number.isInteger(chcp) && chcp > 0, true, chcpRun.text);
+      assert.equal(chcp, oem, chcpRun.text);
+    }
   } finally {
     await env.cleanup(BACKGROUND_CONTEXT).catch(() => {});
     await rm(dir, { recursive: true, force: true });
