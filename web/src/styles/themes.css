@@ -52,11 +52,14 @@
 --scrim:rgba(0,0,0,.5);--shadow-raise:0 8px 28px rgba(0,0,0,.45);--shadow-overlay:0 20px 60px rgba(0,0,0,.55);--shadow-panel:0 0 40px rgba(0,0,0,.45);--shadow-toast:0 4px 16px rgba(0,0,0,.4);
 }
 
-/* Intranet Windows: Segoe UI / Consolas 不含汉字，Chrome 会落到宋体，小字发糊。
-   界面整段用微软雅黑；代码拉丁走等宽，汉字用 unicode-range 切到雅黑。 */
+/* Intranet: 代码拉丁用自带 Maple Mono（OFL，见 fonts/MapleMono-OFL.txt）；
+   汉字仍走微软雅黑。Maple Mono CN 全套约 140MB，不打进包。 */
 @font-face {
   font-family: "Weft Mono";
-  src: local("Cascadia Mono"), local("Consolas"), local("SF Mono"), local("Menlo");
+  src: url("./fonts/MapleMono-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
   unicode-range: U+0000-024F, U+2000-206F, U+2070-218F, U+2190-21FF, U+2200-22FF, U+2300-23FF, U+2460-24FF, U+2500-259F, U+25A0-25FF, U+2600-26FF, U+2700-27BF, U+20A0-20CF;
 }
 @font-face {
