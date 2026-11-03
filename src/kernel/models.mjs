@@ -218,7 +218,7 @@ function catalogMaxTokens(model) {
  * maxTokens: overrides.maxTokens > WEFT_MAX_OUTPUT_TOKENS > min(catalog, 32768),
  * then capMaxTokens against the effective context window.
  */
-function applyModelOverrides(model, overrides, env) {
+function applyModelOverrides(model, overrides, env, providerDefaults) {
   const over = overrides && typeof overrides === 'object' ? overrides[model.id] : null;
   const fallbackWindow = contextWindowFromEnv(env);
   let contextWindow = over?.contextWindow;
@@ -233,24 +233,52 @@ function applyModelOverrides(model, overrides, env) {
     maxTokens = explicitMax ?? Math.min(catalogMaxTokens(model), DEFAULT_MAX_OUTPUT_TOKENS);
   }
   maxTokens = capMaxTokens(maxTokens, contextWindow);
-  if (model.contextWindow === contextWindow && model.maxTokens === maxTokens) return model;
+
+  let input = Array.isArray(model.input) ? model.input.slice() : ['text'];
+  if (typeof over?.images === 'boolean') {
+    if (over.images && !input.includes('image')) input.push('image');
+    else if (!over.images) input = input.filter((t) => t !== 'image');
+  } else if (typeof providerDefaults?.images === 'boolean') {
+    if (providerDefaults.images && !input.includes('image')) input.push('image');
+    else if (!providerDefaults.images) input = input.filter((t) => t !== 'image');
+  }
+
+  let reasoning = model.reasoning === true;
+  let thinkingLevelMap = model.thinkingLevelMap;
+  let defaultThinkingLevel = model.defaultThinkingLevel;
+  const effectiveThinking = over?.thinkingLevel || providerDefaults?.defaultThinkingLevel;
+  if (effectiveThinking && effectiveThinking !== 'off') {
+    reasoning = true;
+    thinkingLevelMap = thinkingLevelMap || {
+      off: 'none',
+      low: 'low',
+      medium: 'medium',
+      high: 'high',
+    };
+    defaultThinkingLevel = effectiveThinking;
+  }
+
   const next = clonePlain(model);
   next.contextWindow = contextWindow;
   next.maxTokens = maxTokens;
+  next.input = input;
+  next.reasoning = reasoning;
+  if (thinkingLevelMap) next.thinkingLevelMap = thinkingLevelMap;
+  if (defaultThinkingLevel) next.defaultThinkingLevel = defaultThinkingLevel;
   return next;
 }
 
-function overlayProvider(provider, overrides, env) {
+function overlayProvider(provider, overrides, env, providerDefaults) {
   if (!provider) return provider;
   return new Proxy(provider, {
     get(target, prop, receiver) {
       if (prop === 'getModels') {
-        return () => target.getModels().map((model) => applyModelOverrides(model, overrides, env));
+        return () => target.getModels().map((model) => applyModelOverrides(model, overrides, env, providerDefaults));
       }
       if (prop === 'getAllModels') {
         return () => {
           const list = typeof target.getAllModels === 'function' ? target.getAllModels() : target.getModels();
-          return list.map((model) => applyModelOverrides(model, overrides, env));
+          return list.map((model) => applyModelOverrides(model, overrides, env, providerDefaults));
         };
       }
       const value = Reflect.get(target, prop, receiver);
@@ -305,6 +333,10 @@ export function buildCustomProvider(entry, { env, fetchImpl } = {}) {
     api,
     baseUrl,
   }));
+  const providerDefaults = {
+    images: entry.images,
+    defaultThinkingLevel: entry.defaultThinkingLevel,
+  };
   return overlayProvider(createProvider({
     id,
     name,
@@ -313,7 +345,7 @@ export function buildCustomProvider(entry, { env, fetchImpl } = {}) {
     models,
     fetchModels: (context) => fetchCustomProviderModels(context, { id, api, baseUrl, fetchImpl }),
     api: apiStreams(api),
-  }), entry.overrides || {}, env);
+  }), entry.overrides || {}, env, providerDefaults);
 }
 
 export function buildBuiltinProvider(entry, { env } = {}) {
@@ -391,6 +423,8 @@ function fingerprintOf(entry, env) {
     entry.api || '',
     entry.enabled || [],
     entry.overrides || {},
+    entry.images,
+    entry.defaultThinkingLevel || '',
     maxOutputTokensFromEnv(env),
     contextWindowFromEnv(env),
   ]);

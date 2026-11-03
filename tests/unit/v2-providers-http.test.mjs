@@ -465,13 +465,22 @@ test('POST /api/v2/providers/custom fetches /models; failure does not save', asy
       baseUrl: 'http://127.0.0.1:9/v1',
       api: 'openai-completions',
       apiKey: 'sk-custom-ok',
+      defaultModel: 'alpha',
+      images: true,
+      defaultThinkingLevel: 'high',
     });
     assert.equal(created.status, 200, created.text);
     assertChecked('/api/v2/providers/custom', 'POST', 200, created.body);
     assert.equal(created.body.provider.kind, 'custom');
     assert.equal(created.body.provider.brand, null);
+    assert.equal(created.body.provider.images, true);
+    assert.equal(created.body.provider.defaultThinkingLevel, 'high');
+    assert.equal(created.body.provider.defaultModel, 'alpha');
     assert.equal(created.body.provider.models.length, 2);
     assert.equal(created.body.provider.models.every((item) => item.enabled), true);
+    assert.equal(created.body.provider.models[0].images, true);
+    assert.equal(created.body.provider.models[0].reasoning, true);
+    assert.equal(created.body.provider.models[0].defaultThinkingLevel, 'high');
     assertNoSecret(created.body, 'sk-custom-ok');
   }, {
     fetchImpl: async () => ({

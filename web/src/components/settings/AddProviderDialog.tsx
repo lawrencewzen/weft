@@ -61,9 +61,22 @@ type Props = {
     baseUrl: string;
     api: CustomApiProtocol;
     apiKey?: string;
+    defaultModel?: string;
+    images?: boolean;
+    defaultThinkingLevel?: string | null;
   }) => Promise<Provider>;
-  onCreate: (id: string, patch: { name: string; enabled: string[]; defaultModel: string }) => Promise<void>;
+  onCreate: (id: string, patch: {
+    name: string;
+    enabled: string[];
+    defaultModel: string;
+    images?: boolean;
+    defaultThinkingLevel?: string | null;
+  }) => Promise<void>;
   onRollback: (ids: string[]) => Promise<void>;
+  editTarget?: Provider | null;
+  onSaveEdit?: (id: string, patch: PatchProviderRequest) => Promise<unknown>;
+  onTest?: (id: string) => Promise<unknown>;
+  customOnly?: boolean;
 };
 
 const CHECK_SVG = (
@@ -76,6 +89,20 @@ const CHECK_SVG = (
 const DASH_SVG = (
   <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
     <circle cx="10" cy="10" r="7.5" strokeDasharray="2.5 2.5" />
+  </svg>
+);
+
+const EYE_SVG = (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+    <circle cx="12" cy="12" r="3" />
+  </svg>
+);
+
+const EYE_OFF_SVG = (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+    <line x1="1" y1="1" x2="23" y2="23" />
   </svg>
 );
 
@@ -105,17 +132,33 @@ export function AddProviderDialog({
   onConnectCustom,
   onCreate,
   onRollback,
+  editTarget,
+  onSaveEdit,
+  onTest,
+  customOnly,
 }: Props) {
+  const isEdit = Boolean(editTarget);
   const [search, setSearch] = useState('');
-  const [selectedId, setSelectedId] = useState<string>('xai');
-  const [configName, setConfigName] = useState('');
+  const [selectedId, setSelectedId] = useState<string>(() => (
+    editTarget
+      ? (editTarget.kind === 'custom' ? 'custom' : editTarget.id)
+      : (customOnly ? 'custom' : 'xai')
+  ));
+  const [configName, setConfigName] = useState(() => (editTarget ? editTarget.name : ''));
   const [apiKeyInput, setApiKeyInput] = useState('');
-  const [customUrl, setCustomUrl] = useState('');
+  const [customUrl, setCustomUrl] = useState(() => (editTarget?.baseUrl || ''));
   const [customKey, setCustomKey] = useState('');
-  const [models, setModels] = useState<Model[]>([]);
-  const [chosenId, setChosenId] = useState('');
-  const [connectedId, setConnectedId] = useState<string | null>(null);
+  const [showKey, setShowKey] = useState(false);
+  const [models, setModels] = useState<Model[]>(() => (editTarget?.models || []));
+  const [chosenId, setChosenId] = useState(() => (editTarget?.defaultModel || editTarget?.models?.[0]?.id || ''));
+  const [imagesSupport, setImagesSupport] = useState<boolean>(() => (editTarget?.images === true));
+  const [thinkingDefault, setThinkingDefault] = useState<'off' | 'low' | 'medium' | 'high'>(() => (
+    (editTarget?.defaultThinkingLevel as 'off' | 'low' | 'medium' | 'high') || 'off'
+  ));
+  const [connectedId, setConnectedId] = useState<string | null>(() => (editTarget ? editTarget.id : null));
   const [ddOpen, setDdOpen] = useState(false);
+  const [imagesDdOpen, setImagesDdOpen] = useState(false);
+  const [thinkingDdOpen, setThinkingDdOpen] = useState(false);
   const [acpFoldOpen, setAcpFoldOpen] = useState(false);
   const [oauthOpen, setOauthOpen] = useState(false);
   const [testing, setTesting] = useState(false);
@@ -128,6 +171,8 @@ export function AddProviderDialog({
   const selectedIdRef = useRef(selectedId);
   const isOpenRef = useRef(isOpen);
   const ddRef = useRef<HTMLDivElement | null>(null);
+  const imagesDdRef = useRef<HTMLDivElement | null>(null);
+  const thinkingDdRef = useRef<HTMLDivElement | null>(null);
   const closingRef = useRef(false);
   const revertTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const testBtnRef = useRef<HTMLButtonElement | null>(null);
@@ -140,53 +185,102 @@ export function AddProviderDialog({
   selectedIdRef.current = selectedId;
   isOpenRef.current = isOpen;
 
+
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (ddRef.current && !ddRef.current.contains(target)) setDdOpen(false);
+      if (imagesDdRef.current && !imagesDdRef.current.contains(target)) setImagesDdOpen(false);
+      if (thinkingDdRef.current && !thinkingDdRef.current.contains(target)) setThinkingDdOpen(false);
+    };
+    window.addEventListener('mousedown', handleClick);
+    return () => window.removeEventListener('mousedown', handleClick);
+  }, []);
+
   const grokVendor = available.find((item) => item.id === 'xai') || null;
   const apiVendors = available.filter((item) => item.id !== 'xai');
 
-  const leftItems: LeftItem[] = [
-    ...(grokVendor
-      ? [{
-          kind: 'vendor' as const,
-          id: grokVendor.id,
-          name: grokVendor.name,
-          brand: grokVendor.brand || providerBrand(grokVendor.id),
-          connected: grokVendor.connected && !sessionIds.includes(grokVendor.id),
-          vendor: grokVendor,
-        }]
-      : []),
-    ...apiVendors.map((vendor) => ({
-      kind: 'vendor' as const,
-      id: vendor.id,
-      name: vendor.name,
-      brand: vendor.brand || providerBrand(vendor.id),
-      connected: vendor.connected && !sessionIds.includes(vendor.id),
-      vendor,
-    })),
-    {
-      kind: 'custom',
-      id: 'custom',
-      name: t(lang, 'dlg_add_custom_title'),
-      brand: null,
-      connected: false,
-    },
-    ...ACP_CATALOG.map((acp) => ({
-      kind: 'acp' as const,
-      id: acp.id,
-      name: acp.name,
-      brand: acp.brand,
-      connected: false,
-      acp,
-    })),
-  ];
+  const isCustomOnly = Boolean(customOnly || isEdit || (!grokVendor && apiVendors.length === 0));
+
+  const editItem: LeftItem | null = editTarget
+    ? {
+        kind: editTarget.kind === 'custom' ? ('custom' as const) : ('vendor' as const),
+        id: editTarget.kind === 'custom' ? 'custom' : editTarget.id,
+        name: editTarget.name,
+        brand: editTarget.brand || providerBrand(editTarget.id),
+        connected: false,
+        vendor: available.find((item) => item.id === editTarget.id) || {
+          id: editTarget.id,
+          name: editTarget.name,
+          brand: editTarget.brand || providerBrand(editTarget.id),
+          authMethods: [editTarget.auth?.type === 'oauth' ? 'oauth' : 'api_key'],
+          connected: true,
+        },
+      }
+    : null;
+
+  const leftItems: LeftItem[] = editItem
+    ? [editItem]
+    : isCustomOnly
+      ? [
+          {
+            kind: 'custom',
+            id: 'custom',
+            name: t(lang, 'dlg_add_custom_title'),
+            brand: null,
+            connected: false,
+          },
+        ]
+      : [
+          ...(grokVendor
+            ? [{
+                kind: 'vendor' as const,
+                id: grokVendor.id,
+                name: grokVendor.name,
+                brand: grokVendor.brand || providerBrand(grokVendor.id),
+                connected: grokVendor.connected && !sessionIds.includes(grokVendor.id),
+                vendor: grokVendor,
+              }]
+            : []),
+          ...apiVendors.map((vendor) => ({
+            kind: 'vendor' as const,
+            id: vendor.id,
+            name: vendor.name,
+            brand: vendor.brand || providerBrand(vendor.id),
+            connected: vendor.connected && !sessionIds.includes(vendor.id),
+            vendor,
+          })),
+          {
+            kind: 'custom',
+            id: 'custom',
+            name: t(lang, 'dlg_add_custom_title'),
+            brand: null,
+            connected: false,
+          },
+          ...ACP_CATALOG.map((acp) => ({
+            kind: 'acp' as const,
+            id: acp.id,
+            name: acp.name,
+            brand: acp.brand,
+            connected: false,
+            acp,
+          })),
+        ];
 
   const selected = leftItems.find((item) => item.id === selectedId) || leftItems[0] || null;
   const vendor = selected?.kind === 'vendor' ? selected.vendor : undefined;
   const isRelogin = Boolean(loginSession && vendor && loginSession.providerId === vendor.id);
-  const alreadyConnected = Boolean(vendor?.connected && !sessionIds.includes(vendor.id) && !isRelogin);
+  const alreadyConnected = Boolean(
+    !isEdit
+    && vendor?.connected
+    && !sessionIds.includes(vendor.id)
+    && !isRelogin,
+  );
   const grokDetected = Boolean(vendor?.id === 'xai' && vendor.localLogin?.detected);
   const envDetected = Boolean(vendor?.envDetected);
-  const isReady = Boolean(connectedId && models.length > 0 && !alreadyConnected);
+  const isReady = Boolean((connectedId || isEdit) && models.length > 0 && !alreadyConnected);
   const isAcp = selected?.kind === 'acp';
+  const isAcpComingSoon = isAcp;
   const isCustom = selected?.kind === 'custom';
   const isGrok = vendor?.id === 'xai';
 
@@ -211,25 +305,43 @@ export function AddProviderDialog({
     closingRef.current = false;
     setSessionIds([]);
     setSearch('');
-    setSelectedId('xai');
-    setConfigName('');
-    setApiKeyInput('');
-    setCustomUrl('');
-    setCustomKey('');
-    setModels([]);
-    setChosenId('');
-    setConnectedId(null);
+    if (editTarget) {
+      setSelectedId(editTarget.kind === 'custom' ? 'custom' : editTarget.id);
+      setConfigName(editTarget.name);
+      setCustomUrl(editTarget.baseUrl || '');
+      setCustomKey('');
+      setShowKey(false);
+      setModels(editTarget.models || []);
+      setChosenId(editTarget.defaultModel || editTarget.models?.[0]?.id || '');
+      setImagesSupport(editTarget.images === true);
+      setThinkingDefault((editTarget.defaultThinkingLevel as 'off' | 'low' | 'medium' | 'high') || 'off');
+      setConnectedId(editTarget.id);
+    } else {
+      setSelectedId(customOnly ? 'custom' : 'xai');
+      setConfigName('');
+      setApiKeyInput('');
+      setCustomUrl('');
+      setCustomKey('');
+      setShowKey(false);
+      setModels([]);
+      setChosenId('');
+      setConnectedId(null);
+      setImagesSupport(false);
+      setThinkingDefault('off');
+    }
     setDdOpen(false);
+    setImagesDdOpen(false);
+    setThinkingDdOpen(false);
     setAcpFoldOpen(false);
     setOauthOpen(false);
     setTesting(false);
     setTestSuccess(false);
     setCreating(false);
     setErrorMsg(null);
-  }, [isOpen]);
+  }, [isOpen, editTarget, customOnly]);
 
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen || editTarget) return;
     if (selectedId === 'custom') return;
     const acp = ACP_CATALOG.find((item) => item.id === selectedId);
     if (acp) {
@@ -238,7 +350,7 @@ export function AddProviderDialog({
     }
     const hit = available.find((item) => item.id === selectedId);
     if (hit) setConfigName(hit.name);
-  }, [isOpen, selectedId, available]);
+  }, [isOpen, selectedId, available, editTarget]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -434,6 +546,9 @@ export function AddProviderDialog({
         baseUrl: customUrl.trim(),
         api: 'openai-completions',
         ...(customKey.trim() ? { apiKey: customKey.trim() } : {}),
+        defaultModel: chosenId || undefined,
+        images: imagesSupport,
+        defaultThinkingLevel: thinkingDefault,
       }));
       await executeConnect(connectPromise, 'custom', isExplicit);
     } catch (err) {
@@ -448,10 +563,44 @@ export function AddProviderDialog({
     }
   }
 
+  async function executeTestExisting(id: string) {
+    if (!onTest) return;
+    clearRevertTimer();
+    setTesting(true);
+    setTestSuccess(false);
+    setErrorMsg(null);
+    try {
+      const minDelayPromise = new Promise<void>((resolve) => { setTimeout(resolve, 500); });
+      const [res] = await Promise.allSettled([onTest(id), minDelayPromise]);
+      if (!isOpenRef.current || closingRef.current) return;
+      if (res.status === 'fulfilled') {
+        setTesting(false);
+        setTestSuccess(true);
+        revertTimerRef.current = setTimeout(() => {
+          if (isOpenRef.current && !closingRef.current) setTestSuccess(false);
+        }, 1500);
+      } else {
+        const err = res.reason;
+        setErrorMsg(err instanceof Error ? err.message : String(err));
+        setTesting(false);
+        setTestSuccess(false);
+      }
+    } catch (err) {
+      if (!isOpenRef.current || closingRef.current) return;
+      setErrorMsg(err instanceof Error ? err.message : String(err));
+      setTesting(false);
+      setTestSuccess(false);
+    }
+  }
+
   async function handleTest() {
     if (isAcp || alreadyConnected || testing || testSuccess || creating) return;
     if (isCustom) {
-      await runCustomConnect(true);
+      if (customKey.trim() || !isEdit) {
+        await runCustomConnect(true);
+      } else if (isEdit && onTest && editTarget) {
+        await executeTestExisting(editTarget.id);
+      }
       return;
     }
     if (!vendor) return;
@@ -465,6 +614,7 @@ export function AddProviderDialog({
     }
     if (apiKeyInput.trim()) await runConnect({ method: 'api_key', apiKey: apiKeyInput.trim() }, true);
     else if (vendor.envDetected) await runConnect({ method: 'env' }, true);
+    else if (isEdit && onTest && editTarget) await executeTestExisting(editTarget.id);
     else setErrorMsg(t(lang, 'form_fill_required'));
   }
 
@@ -497,6 +647,34 @@ export function AddProviderDialog({
   }
 
   async function handleCreate() {
+    if (editTarget) {
+      setCreating(true);
+      setErrorMsg(null);
+      try {
+        const patch: PatchProviderRequest = {
+          name: (configName.trim() || editTarget.name).slice(0, 80),
+        };
+        if (isCustom) {
+          patch.images = imagesSupport;
+          patch.defaultThinkingLevel = thinkingDefault;
+          if (customUrl.trim()) patch.baseUrl = customUrl.trim();
+          if (customKey.trim()) patch.apiKey = customKey.trim();
+        } else {
+          if (apiKeyInput.trim()) patch.apiKey = apiKeyInput.trim();
+        }
+        if (chosenId) {
+          patch.defaultModel = chosenId;
+        }
+        await onSaveEdit?.(editTarget.id, patch);
+        onClose();
+      } catch (err) {
+        setErrorMsg(err instanceof Error ? err.message : String(err));
+      } finally {
+        setCreating(false);
+      }
+      return;
+    }
+
     if (!isReady || !connectedId || creating) return;
     const defaultModel = chosenId || models[0]?.id;
     if (!defaultModel) return;
@@ -510,6 +688,7 @@ export function AddProviderDialog({
         name: (configName.trim() || selected.name).slice(0, 80),
         enabled: models.map((item) => item.id),
         defaultModel,
+        ...(isCustom ? { images: imagesSupport, defaultThinkingLevel: thinkingDefault } : {}),
       });
       if (leftover.length) await onRollback(leftover);
       onClose();
@@ -591,9 +770,15 @@ export function AddProviderDialog({
             onChange={(e) => setSearch(e.target.value)}
           />
           <div className="mp-add-list">
-            {renderGroup(t(lang, 'dlg_add_grp_builtin'), builtinList)}
-            {renderGroup(t(lang, 'dlg_add_grp_apikey'), apiList)}
-            {renderGroup(t(lang, 'dlg_add_grp_acp'), acpList)}
+            {isCustomOnly ? (
+              renderGroup(t(lang, 'dlg_add_custom_title'), leftItems)
+            ) : (
+              <>
+                {renderGroup(t(lang, 'dlg_add_grp_builtin'), builtinList)}
+                {renderGroup(t(lang, 'dlg_add_grp_apikey'), apiList)}
+                {renderGroup(t(lang, 'dlg_add_grp_acp'), acpList)}
+              </>
+            )}
           </div>
         </div>
         <div className="mp-add-right">
@@ -602,7 +787,7 @@ export function AddProviderDialog({
               <BrandIcon brand={selected.brand} size={18} />
             </span>
             <div>
-              <b>{t(lang, 'dlg_add_provider_title')}</b>
+              <b>{isEdit ? t(lang, 'provider_act_edit') : t(lang, 'dlg_add_provider_title')}</b>
               <small>{subtitleOf(selected, lang)}</small>
             </div>
             <span className="mp-add-sp">
@@ -611,7 +796,7 @@ export function AddProviderDialog({
                 type="button"
                 className="mp-btn"
                 data-testid="next-add-test"
-                disabled={testing || testSuccess || creating || isAcp || alreadyConnected}
+                disabled={testing || testSuccess || creating}
                 onClick={() => void handleTest()}
               >
                 {testing
@@ -705,18 +890,26 @@ export function AddProviderDialog({
                   <label>{t(lang, 'dlg_key_label')}</label>
                   <div className="mp-add-in">
                     <input
-                      type="password"
+                      type={showKey ? 'text' : 'password'}
                       className="mono"
                       data-testid="next-custom-key"
                       value={customKey}
-                      placeholder="sk-…"
+                      placeholder={isEdit ? '••••••••••••••••' : 'sk-…'}
                       onChange={(e) => {
                         setCustomKey(e.target.value);
                         setTestSuccess(false);
                       }}
                       onBlur={(e) => void handleKeyBlur(e)}
                     />
-                    <span className="mp-add-det">{DASH_SVG}</span>
+                    <button
+                      type="button"
+                      className="mp-key-toggle"
+                      data-testid="next-key-toggle"
+                      title={showKey ? 'Hide key' : 'Show key'}
+                      onClick={() => setShowKey((s) => !s)}
+                    >
+                      {showKey ? EYE_OFF_SVG : EYE_SVG}
+                    </button>
                   </div>
                 </div>
               </>
@@ -727,22 +920,34 @@ export function AddProviderDialog({
                 <label>{t(lang, 'dlg_key_label')}</label>
                 <div className="mp-add-in">
                   <input
-                    type="password"
+                    type={showKey ? 'text' : 'password'}
                     className="mono"
                     data-testid="next-key-input"
                     value={apiKeyInput}
-                    placeholder={envDetected && vendor.envVar
+                    placeholder={isEdit ? '••••••••••••••••' : (envDetected && vendor.envVar
                       ? t(lang, 'dlg_add_env_placeholder', { env: vendor.envVar })
-                      : 'sk-…'}
+                      : 'sk-…')}
                     onChange={(e) => {
                       setApiKeyInput(e.target.value);
                       setTestSuccess(false);
                     }}
                     onBlur={(e) => void handleKeyBlur(e)}
                   />
-                  <span className={`mp-add-det${envDetected ? ' ok' : ''}`} data-testid={envDetected ? 'next-detected-check' : undefined}>
-                    {envDetected ? CHECK_SVG : DASH_SVG}
-                  </span>
+                  {envDetected && !isEdit ? (
+                    <span className="mp-add-det ok" data-testid="next-detected-check">
+                      {CHECK_SVG}
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      className="mp-key-toggle"
+                      data-testid="next-key-toggle"
+                      title={showKey ? 'Hide key' : 'Show key'}
+                      onClick={() => setShowKey((s) => !s)}
+                    >
+                      {showKey ? EYE_OFF_SVG : EYE_SVG}
+                    </button>
+                  )}
                 </div>
               </div>
             )}
@@ -816,6 +1021,101 @@ export function AddProviderDialog({
               </div>
             )}
 
+            {!isAcpComingSoon && !alreadyConnected && isCustom && (
+              <>
+                <div className="mp-add-f">
+                  <label>{t(lang, 'dlg_add_images_label')}</label>
+                  <div className="mp-add-in">
+                    <div className="mp-add-dd" ref={imagesDdRef}>
+                      <button
+                        type="button"
+                        className={`mp-add-dd-btn${imagesDdOpen ? ' open' : ''}`}
+                        data-testid="next-add-images-dropdown"
+                        onClick={() => setImagesDdOpen((o) => !o)}
+                      >
+                        <span>{imagesSupport ? t(lang, 'dlg_add_images_supported') : t(lang, 'dlg_add_images_unsupported')}</span>
+                        {CHEV_SVG}
+                      </button>
+                      {imagesDdOpen && (
+                        <div className="mp-add-dd-menu" data-testid="next-add-images-menu">
+                          <div
+                            className={`mp-add-dd-it${imagesSupport ? ' on' : ''}`}
+                            data-testid="next-add-images-option-supported"
+                            onClick={() => {
+                              setImagesSupport(true);
+                              setImagesDdOpen(false);
+                            }}
+                          >
+                            <span className="ck">{imagesSupport ? '✓' : ''}</span>
+                            <span>{t(lang, 'dlg_add_images_supported')}</span>
+                          </div>
+                          <div
+                            className={`mp-add-dd-it${!imagesSupport ? ' on' : ''}`}
+                            data-testid="next-add-images-option-unsupported"
+                            onClick={() => {
+                              setImagesSupport(false);
+                              setImagesDdOpen(false);
+                            }}
+                          >
+                            <span className="ck">{!imagesSupport ? '✓' : ''}</span>
+                            <span>{t(lang, 'dlg_add_images_unsupported')}</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mp-add-f">
+                  <label>{t(lang, 'dlg_add_thinking_label')}</label>
+                  <div className="mp-add-in">
+                    <div className="mp-add-dd" ref={thinkingDdRef}>
+                      <button
+                        type="button"
+                        className={`mp-add-dd-btn${thinkingDdOpen ? ' open' : ''}`}
+                        data-testid="next-add-thinking-dropdown"
+                        onClick={() => setThinkingDdOpen((o) => !o)}
+                      >
+                        <span>
+                          {thinkingDefault === 'off' ? t(lang, 'dlg_add_thinking_off')
+                            : thinkingDefault === 'low' ? t(lang, 'dlg_add_thinking_low')
+                            : thinkingDefault === 'medium' ? t(lang, 'dlg_add_thinking_medium')
+                            : t(lang, 'dlg_add_thinking_high')}
+                        </span>
+                        {CHEV_SVG}
+                      </button>
+                      {thinkingDdOpen && (
+                        <div className="mp-add-dd-menu" data-testid="next-add-thinking-menu">
+                          {[
+                            { id: 'off', label: t(lang, 'dlg_add_thinking_off') },
+                            { id: 'low', label: t(lang, 'dlg_add_thinking_low') },
+                            { id: 'medium', label: t(lang, 'dlg_add_thinking_medium') },
+                            { id: 'high', label: t(lang, 'dlg_add_thinking_high') },
+                          ].map((lvl) => {
+                            const on = thinkingDefault === lvl.id;
+                            return (
+                              <div
+                                key={lvl.id}
+                                className={`mp-add-dd-it${on ? ' on' : ''}`}
+                                data-testid={`next-add-thinking-option-${lvl.id}`}
+                                onClick={() => {
+                                  setThinkingDefault(lvl.id as 'off' | 'low' | 'medium' | 'high');
+                                  setThinkingDdOpen(false);
+                                }}
+                              >
+                                <span className="ck">{on ? '✓' : ''}</span>
+                                <span>{lvl.label}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
+
             {errorMsg && <div className="mp-add-err" data-testid="next-test-result">{errorMsg}</div>}
           </div>
 
@@ -832,10 +1132,10 @@ export function AddProviderDialog({
                 type="button"
                 className="mp-btn mp-pri"
                 data-testid="next-provider-finish"
-                disabled={creating || !isReady}
+                disabled={creating || (!isReady && !isEdit)}
                 onClick={() => void handleCreate()}
               >
-                {t(lang, 'dlg_add_create')}
+                {creating ? t(lang, 'provider_status_run') : isEdit ? t(lang, 'btn_save') : t(lang, 'dlg_add_create')}
               </button>
             )}
           </div>

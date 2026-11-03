@@ -87,7 +87,7 @@ export function SettingsOverlay({ page, lang, service, onToast, onConfirm }: Pro
             ×
           </button>
           {current === 'providers' ? (
-            <ProviderPage lang={lang} onToast={onToast} onConfirm={onConfirm} providersNavSeq={providersNavSeq} />
+            <ProviderPage lang={lang} onToast={onToast} onConfirm={onConfirm} providersNavSeq={providersNavSeq} customOnly />
           ) : current === 'general' ? (
             <GeneralPage lang={lang} />
           ) : current === 'about' ? (

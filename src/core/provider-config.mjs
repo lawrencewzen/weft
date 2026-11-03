@@ -5,6 +5,7 @@ import {
   normalizeHttpUrl,
   vendorPreset,
 } from './model-sources.mjs';
+import { isThinkingLevelName } from './thinking-level.mjs';
 
 export const SETTINGS_VERSION_V3 = 3;
 export const CUSTOM_PROVIDER_ID = /^custom-[0-9a-f]{8}$/;
@@ -98,6 +99,8 @@ function normalizeOverrides(value) {
     const entry = {};
     if (isValidContextWindow(raw.contextWindow)) entry.contextWindow = raw.contextWindow;
     if (isValidContextWindow(raw.maxTokens)) entry.maxTokens = raw.maxTokens;
+    if (typeof raw.images === 'boolean') entry.images = raw.images;
+    if (isThinkingLevelName(raw.thinkingLevel)) entry.thinkingLevel = raw.thinkingLevel;
     if (!Object.keys(entry).length) continue;
     out[modelId] = entry;
   }
@@ -172,6 +175,11 @@ export function normalizeProvidersV3(raw) {
       enabled,
       overrides,
     };
+    if (typeof item.images === 'boolean') provider.images = item.images;
+    if (isThinkingLevelName(item.defaultThinkingLevel)) provider.defaultThinkingLevel = item.defaultThinkingLevel;
+    if (typeof item.defaultModel === 'string' && item.defaultModel.trim()) {
+      provider.defaultModel = item.defaultModel.trim().slice(0, 200);
+    }
     if (lastTest) provider.lastTest = lastTest;
     out.push(provider);
   }

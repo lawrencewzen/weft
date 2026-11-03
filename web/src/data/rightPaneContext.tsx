@@ -37,7 +37,7 @@ import {
 } from './layout';
 import { useSession } from './session';
 import { conversationTopic, type Change, type ToolCall } from './store';
-import { cssViewportWidth, visualToCss } from './uiZoom';
+import { cssViewportWidth } from './uiZoom';
 import { useStoreTopics } from './useStoreTopic';
 import { t } from '../i18n';
 
@@ -188,7 +188,6 @@ export function RightPaneProvider({
   const [rightOpening, setRightOpening] = useState(false);
   const [rbDx, setRbDx] = useState(0);
   const [rbAnim, setRbAnim] = useState(false);
-  const rbDxRef = useRef(0);
   const rightTimer = useRef<number | null>(null);
 
   const setOpen = useCallback((next: boolean) => {
@@ -205,16 +204,7 @@ export function RightPaneProvider({
       return;
     }
     const closing = open;
-    if (closing) {
-      const rb = document.querySelector<HTMLElement>('[data-testid="next-right-collapse"]');
-      const hb = document.querySelector<HTMLElement>('[data-testid="next-right-toggle"]');
-      if (rb && hb) {
-        const rbLeft = visualToCss(rb.getBoundingClientRect().left);
-        const hbLeft = visualToCss(hb.getBoundingClientRect().left);
-        rbDxRef.current = Math.round(rbLeft - (hbLeft - (rbDxRef.current || 0)));
-      }
-    }
-    const dx = rbDxRef.current || 50;
+    const dx = 0;
     if (closing) {
       setOpenState(false);
       persistRightOpen(false, cssViewportWidth());
@@ -527,10 +517,9 @@ export function RightPaneProvider({
     }
   }, [wsId, lang, onToast]);
 
-  const isRightOverlay = isRightOverlayWidth(cssViewportWidth());
-  const rightBtnOp = !open || rightOpening || isRightOverlay ? 1 : 0;
-  const rightBtnPe: 'auto' | 'none' = (!open || isRightOverlay) ? 'auto' : 'none';
-  const rpBtnOp = open && (!rightOpening || isRightOverlay) ? 1 : 0;
+  const rightBtnOp = !open || rightOpening ? 1 : 0;
+  const rightBtnPe: 'auto' | 'none' = !open ? 'auto' : 'none';
+  const rpBtnOp = open && !rightOpening ? 1 : 0;
   const rbTr = rbAnim ? 'transform .22s cubic-bezier(.3,.8,.3,1)' : 'none';
 
   const layoutValue = useMemo<RightLayoutValue>(() => ({

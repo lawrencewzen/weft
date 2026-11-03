@@ -13,7 +13,7 @@ export function LeftOpenButton({ lang, onOpen }: { lang: Lang; onOpen?: () => vo
         marginRight: leftSlotM,
         flexShrink: 0,
         transition: leftSlotTr,
-        overflow: 'visible',
+        overflow: 'hidden',
       }}
     >
       <button
@@ -28,6 +28,7 @@ export function LeftOpenButton({ lang, onOpen }: { lang: Lang; onOpen?: () => vo
           transform: `translateX(${lbDx}px)`,
           transition: lbTr,
           visibility: leftBtnOp ? 'visible' : 'hidden',
+          display: leftBtnOp ? 'inline-flex' : 'none',
         }}
         onClick={() => {
           if (toggleLeft) toggleLeft();
@@ -57,6 +58,7 @@ export function RightToggle({ lang }: { lang: Lang }) {
         transform: `translateX(${rbDx}px)`,
         transition: rbTr,
         visibility: rightBtnOp ? 'visible' : 'hidden',
+        display: rightBtnOp ? 'inline-flex' : 'none',
       }}
       onClick={toggleRight}
     >

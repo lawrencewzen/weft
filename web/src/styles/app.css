@@ -255,7 +255,9 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.6; backgroun
 
 /* Sidebar Codex styles */
 .sb-hd, .hd {
-  display: flex; align-items: center; justify-content: space-between; padding: 2px 2px 6px 8px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: space-between;
+  height: 52px; box-sizing: border-box; padding: 0 12px; margin: -8px -8px 8px;
+  border-bottom: 1px solid var(--line3); flex-shrink: 0;
 }
 .sb-collapse, .collapse {
   width: 28px; height: 28px; border-radius: 7px; display: flex; align-items: center; justify-content: center;
@@ -632,6 +634,7 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.6; backgroun
 /* Thread */
 .center-thread {
   flex: 1; min-height: 0; overflow: auto; scrollbar-gutter: stable both-edges;
+  margin-top: -56px;
   --thread-sb: 0px;
   /* Two-layer mask: fade the last --thread-fade of the content; keep the
      classic scrollbar strip (right) fully opaque. --thread-sb is measured
@@ -649,11 +652,11 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.6; backgroun
   -webkit-mask-repeat: no-repeat;
   mask-repeat: no-repeat;
 }
-.thread-inner { padding: 20px 0 96px; display: flex; flex-direction: column; gap: 18px; }
+.thread-inner { padding: 76px 0 96px; display: flex; flex-direction: column; gap: 18px; }
 .thread-inner > * { flex-shrink: 0; }
 .thread-inner.is-empty {
   min-height: 100%; box-sizing: border-box;
-  justify-content: center; padding: 0 0 40px; gap: 0;
+  justify-content: center; padding: 56px 0 40px; gap: 0;
 }
 /* 发送后、Agent 还没出内容时的「思考中」，纯文字行，不是气泡 */
 .thread-pending { display: flex; align-items: center; gap: 8px; font-size: var(--fs-ui); color: var(--mute); }

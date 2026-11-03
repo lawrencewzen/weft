@@ -22,7 +22,7 @@ import {
   resolveEffectiveDefault,
   resolveKernelTarget,
 } from '../kernel/models.mjs';
-import { effectiveThinkingLevel, thinkingFieldsOf } from './thinking-level.mjs';
+import { effectiveThinkingLevel, isThinkingLevelName, thinkingFieldsOf } from './thinking-level.mjs';
 
 export const POPULAR_PROVIDER_IDS = Object.freeze([
   'deepseek',
@@ -222,6 +222,8 @@ function overrideView(overrides, modelId) {
   const out = {};
   if (isValidContextWindow(entry.contextWindow)) out.contextWindow = entry.contextWindow;
   if (isValidContextWindow(entry.maxTokens)) out.maxTokens = entry.maxTokens;
+  if (typeof entry.images === 'boolean') out.images = entry.images;
+  if (isThinkingLevelName(entry.thinkingLevel)) out.thinkingLevel = entry.thinkingLevel;
   return out;
 }
 
@@ -229,21 +231,46 @@ function displayWindow(value) {
   return Number.isInteger(value) && value > 0 ? value : null;
 }
 
-function modelRow(model, { enabled, overridden }) {
+function modelRow(model, { enabled, overridden, providerDefaults } = {}) {
   const input = Array.isArray(model?.input) ? model.input : [];
   const over = overridden && Object.keys(overridden).length ? overridden : {};
   const flags = {};
   if (over.contextWindow != null) flags.contextWindow = true;
   if (over.maxTokens != null) flags.maxTokens = true;
-  const thinking = thinkingFieldsOf(model);
+  if (over.images != null) flags.images = true;
+  if (over.thinkingLevel != null) flags.thinkingLevel = true;
+
+  let hasImage = input.includes('image');
+  if (typeof over.images === 'boolean') {
+    hasImage = over.images;
+  } else if (typeof providerDefaults?.images === 'boolean') {
+    hasImage = providerDefaults.images;
+  }
+
+  const effectiveThinking = over.thinkingLevel || providerDefaults?.defaultThinkingLevel;
+  let isReasoning = model.reasoning === true;
+  let thinking = thinkingFieldsOf(model);
+  if (effectiveThinking && effectiveThinking !== 'off') {
+    isReasoning = true;
+    thinking = {
+      thinkingLevels: ['off', 'low', 'medium', 'high'],
+      defaultThinkingLevel: effectiveThinking,
+    };
+  } else if (effectiveThinking === 'off') {
+    thinking = {
+      thinkingLevels: isReasoning ? (thinking.thinkingLevels.length ? thinking.thinkingLevels : ['off', 'low', 'medium', 'high']) : [],
+      defaultThinkingLevel: 'off',
+    };
+  }
+
   return {
     id: model.id,
     name: model.name || model.id,
     enabled: enabled === true,
     contextWindow: over.contextWindow ?? displayWindow(model.contextWindow),
     maxTokens: over.maxTokens ?? displayWindow(model.maxTokens),
-    images: input.includes('image'),
-    reasoning: model.reasoning === true,
+    images: hasImage,
+    reasoning: isReasoning,
     thinkingLevels: thinking.thinkingLevels,
     defaultThinkingLevel: thinking.defaultThinkingLevel,
     overridden: flags,
@@ -383,15 +410,21 @@ export function createProviderService({
     const catalog = entry.kind === 'builtin'
       ? await builtinModels(entry.id)
       : await customModels(entry.id);
+    const providerDefaults = {
+      images: entry.images,
+      defaultThinkingLevel: entry.defaultThinkingLevel,
+    };
     return catalog.map((model) => modelRow(model, {
       enabled: enabled.has(model.id),
       overridden: overrideView(overrides, model.id),
+      providerDefaults,
     }));
   }
 
   async function listProviders() {
     const settings = await loadSettings();
     const out = [];
+    const def = defaultModelOf(settings);
     for (const entry of providersOf(settings)) {
       const auth = await authView(entry);
       const builtin = entry.kind === 'builtin' ? builtinProviderById(entry.id) : null;
@@ -409,6 +442,9 @@ export function createProviderService({
         status: lastTestStatus(entry.lastTest),
         models: await modelsFor(entry),
       };
+      if (typeof entry.images === 'boolean') item.images = entry.images;
+      if (entry.defaultThinkingLevel) item.defaultThinkingLevel = entry.defaultThinkingLevel;
+      item.defaultModel = entry.defaultModel || (def?.providerId === entry.id ? def.modelId : null);
       if (entry.kind === 'custom') {
         if (entry.api) item.api = entry.api;
         if (entry.baseUrl) item.baseUrl = entry.baseUrl;
@@ -479,6 +515,22 @@ export function createProviderService({
           throw err;
         } else entry.maxTokens = raw.maxTokens;
       }
+      if (Object.prototype.hasOwnProperty.call(raw, 'images')) {
+        if (raw.images === null) delete entry.images;
+        else if (typeof raw.images !== 'boolean') {
+          const err = new Error('invalid images');
+          err.code = 'E_BAD_REQUEST';
+          throw err;
+        } else entry.images = raw.images;
+      }
+      if (Object.prototype.hasOwnProperty.call(raw, 'thinkingLevel')) {
+        if (raw.thinkingLevel === null) delete entry.thinkingLevel;
+        else if (!isThinkingLevelName(raw.thinkingLevel)) {
+          const err = new Error('invalid thinking level');
+          err.code = 'E_BAD_REQUEST';
+          throw err;
+        } else entry.thinkingLevel = raw.thinkingLevel;
+      }
       if (Object.keys(entry).length) next[modelId] = entry;
       else delete next[modelId];
     }
@@ -497,15 +549,26 @@ export function createProviderService({
     }
     if (Object.prototype.hasOwnProperty.call(patch, 'defaultModel')) {
       if (patch.defaultModel == null || patch.defaultModel === '') {
+        delete current.defaultModel;
         if (defaultModelOf(settings)?.providerId === id) {
           settings = { ...settings, defaultModel: null };
         }
       } else {
+        const modelId = String(patch.defaultModel).trim();
+        current.defaultModel = modelId;
         settings = {
           ...settings,
-          defaultModel: { providerId: id, modelId: String(patch.defaultModel).trim() },
+          defaultModel: { providerId: id, modelId },
         };
       }
+    }
+    if (Object.prototype.hasOwnProperty.call(patch, 'images')) {
+      if (typeof patch.images === 'boolean') current.images = patch.images;
+      else if (patch.images === null) delete current.images;
+    }
+    if (Object.prototype.hasOwnProperty.call(patch, 'defaultThinkingLevel')) {
+      if (isThinkingLevelName(patch.defaultThinkingLevel)) current.defaultThinkingLevel = patch.defaultThinkingLevel;
+      else if (patch.defaultThinkingLevel === null) delete current.defaultThinkingLevel;
     }
     if (typeof patch.name === 'string' && patch.name.trim()) {
       current.name = patch.name.trim().slice(0, 80);
@@ -1110,7 +1173,7 @@ export function createProviderService({
     return publicSession(session);
   }
 
-  async function addCustom({ name, baseUrl, api, apiKey } = {}) {
+  async function addCustom({ name, baseUrl, api, apiKey, defaultModel, images, defaultThinkingLevel } = {}) {
     const display = String(name || '').trim().slice(0, 80);
     if (!display) fail('E_BAD_REQUEST', 'name required', { phrase: 'src_err_name' });
     const url = normalizeHttpUrl(baseUrl);
@@ -1143,9 +1206,21 @@ export function createProviderService({
       overrides: {},
       lastTest: { ok: true, at: now() },
     };
+    if (typeof images === 'boolean') entry.images = images;
+    if (isThinkingLevelName(defaultThinkingLevel)) entry.defaultThinkingLevel = defaultThinkingLevel;
+    if (typeof defaultModel === 'string' && defaultModel.trim()) {
+      entry.defaultModel = defaultModel.trim().slice(0, 200);
+    }
     if (key) await credentials.modify(id, async () => ({ type: 'api_key', key }));
     await modelsStore.write(id, { models: fetched });
     await upsertEntry(entry);
+    if (entry.defaultModel) {
+      const currentSettings = await loadSettings();
+      await saveSettings({
+        ...currentSettings,
+        defaultModel: { providerId: id, modelId: entry.defaultModel },
+      });
+    }
     return getProvider(id);
   }
 

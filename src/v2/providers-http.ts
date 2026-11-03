@@ -57,6 +57,9 @@ export type ProviderServiceLike = {
     baseUrl?: unknown;
     api?: unknown;
     apiKey?: unknown;
+    defaultModel?: unknown;
+    images?: unknown;
+    defaultThinkingLevel?: unknown;
   }) => Promise<RawProvider | null>;
   testProvider: (id: string) => Promise<RawProvider | null>;
 };
@@ -160,7 +163,7 @@ export async function handleProvidersApi(ctx: ProvidersHttpCtx, opts: ProvidersH
       return true;
     }
 
-    if (method === 'POST' && pathname === '/api/v2/providers/custom') {
+    if (method === 'POST' && (pathname === '/api/v2/providers' || pathname === '/api/v2/providers/custom')) {
       const body = await ctx.readObjectBody(ctx.req, res, pathname, method);
       if (!body) return true;
       const created = await service.addCustom({
@@ -168,6 +171,9 @@ export async function handleProvidersApi(ctx: ProvidersHttpCtx, opts: ProvidersH
         baseUrl: body.baseUrl,
         api: body.api,
         apiKey: body.apiKey,
+        defaultModel: body.defaultModel,
+        images: body.images,
+        defaultThinkingLevel: body.defaultThinkingLevel,
       });
       opts.onProvidersChanged?.();
       await sendProvider(created);

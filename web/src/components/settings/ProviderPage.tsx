@@ -30,9 +30,10 @@ type Props = {
   onToast?: (message: string) => void;
   onConfirm?: (opts: ConfirmOpts) => Promise<boolean>;
   providersNavSeq?: number;
+  customOnly?: boolean;
 };
 
-export function ProviderPage({ lang, onConfirm }: Props) {
+export function ProviderPage({ lang, onConfirm, customOnly }: Props) {
   const { providers, defaultModel } = useProviders();
 
   const [openId, setOpenId] = useState<string | null>('deepseek');
@@ -42,6 +43,7 @@ export function ProviderPage({ lang, onConfirm }: Props) {
 
   // Add dialog state
   const [isAddOpen, setIsAddOpen] = useState(false);
+  const [editTarget, setEditTarget] = useState<Provider | null>(null);
   const [available, setAvailable] = useState<Available[]>([]);
   const [loginSession, setLoginSession] = useState<LoginSession | null>(null);
   const sessionPollRef = useRef<number | null>(null);
@@ -68,6 +70,7 @@ export function ProviderPage({ lang, onConfirm }: Props) {
   const handleOpenAdd = async () => {
     closeOAuthTab();
     setLoginSession(null);
+    setEditTarget(null);
     try {
       const res = await getAvailableProviders(lang);
       setAvailable(res.providers);
@@ -275,6 +278,7 @@ export function ProviderPage({ lang, onConfirm }: Props) {
   const handleCloseAdd = () => {
     closeOAuthTab();
     setIsAddOpen(false);
+    setEditTarget(null);
     setLoginSession(null);
     if (sessionPollRef.current) {
       window.clearTimeout(sessionPollRef.current);
@@ -390,6 +394,10 @@ export function ProviderPage({ lang, onConfirm }: Props) {
               onCustomEdit={async (id, data) => {
                 await patchProvider(id, data);
               }}
+              onEditProvider={(p) => {
+                setEditTarget(p);
+                setIsAddOpen(true);
+              }}
               onDelete={handleDelete}
               lang={lang}
               onToggleModel={handleToggleModel}
@@ -400,11 +408,12 @@ export function ProviderPage({ lang, onConfirm }: Props) {
         </div>
       </div>
 
-      {/* Add Provider Dialog */}
+      {/* Add / Edit Provider Dialog */}
       <AddProviderDialog
         lang={lang}
         isOpen={isAddOpen}
         onClose={handleCloseAdd}
+        editTarget={editTarget}
         available={available}
         loginSession={loginSession}
         onAnswerOAuth={handleAnswerOAuth}
@@ -424,11 +433,19 @@ export function ProviderPage({ lang, onConfirm }: Props) {
           await patchProvider(id, patch, lang);
           setOpenId(id);
         }}
+        onSaveEdit={async (id, patch) => {
+          await patchProvider(id, patch, lang);
+          setOpenId(id);
+        }}
+        onTest={async (id) => {
+          await testProvider(id, lang);
+        }}
         onRollback={async (ids) => {
           for (const id of ids) {
             try { await deleteProvider(id); } catch { /* already gone */ }
           }
         }}
+        customOnly={customOnly}
       />
     </div>
   );
