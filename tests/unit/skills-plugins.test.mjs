@@ -5,6 +5,8 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { load, ROOT } from './_root.mjs';
+import { readDiscovery, request as serverRequest, startServer, stopServer } from './_server.mjs';
+import { SAMPLE_COMMIT_SKILL, SAMPLE_REVIEW_SKILL, writeSampleEcho, writeSampleSkills } from './_sample-extensions.mjs';
 
 const {
   SKILL_LIST_INTRO,
@@ -19,9 +21,6 @@ const {
 } = await load('src/core/skills.mjs');
 const { clearPluginCache, describePlugins, installPlugin, pluginHandlers } = await load('src/core/plugins.mjs');
 const { mergeSettings, normalizeSettings } = await load('src/core/settings.mjs');
-
-const bundledSkills = [path.join(ROOT, 'skills')];
-const bundledPlugins = [path.join(ROOT, 'plugins')];
 
 async function tmp() {
   return fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), 'piw-ext-')));
@@ -52,22 +51,25 @@ async function writePlugin(dir, id, toolName, source) {
   return folder;
 }
 
-test('bundled skills render as a one-line catalog and can be disabled', async () => {
-  const enabled = await buildSkillPrompt(bundledSkills, {});
+test('skills render as a one-line catalog and can be disabled', async () => {
+  const skillsDir = await tmp();
+  await writeSampleSkills(skillsDir);
+  const dirs = [skillsDir];
+  const enabled = await buildSkillPrompt(dirs, {});
   assert.equal(
     enabled,
     [
       SKILL_LIST_INTRO,
-      '- commit-message: Write a commit subject and body that state the why, in the user\'s language.',
-      '- review-notes: Review code as a short list of findings ordered by severity.',
+      `- commit-message: ${SAMPLE_COMMIT_SKILL.description}`,
+      `- review-notes: ${SAMPLE_REVIEW_SKILL.description}`,
     ].join('\n'),
   );
   assert.equal(enabled.includes('Subject line is imperative'), false);
   assert.equal(enabled.includes('Lead with findings'), false);
   assert.equal(enabled.includes('# Skills'), false);
-  const disabled = await buildSkillPrompt(bundledSkills, { 'commit-message': false, 'review-notes': false });
+  const disabled = await buildSkillPrompt(dirs, { 'commit-message': false, 'review-notes': false });
   assert.equal(disabled, '');
-  const listed = await listSkills(bundledSkills, { 'review-notes': false });
+  const listed = await listSkills(dirs, { 'review-notes': false });
   assert.equal(listed.find((skill) => skill.id === 'commit-message').enabled, true);
   assert.equal(listed.find((skill) => skill.id === 'review-notes').enabled, false);
   assert.equal(listed.some((skill) => Object.hasOwn(skill, 'body')), false);
@@ -86,18 +88,23 @@ test('skill list flattens descriptions; loadSkillBody matches id then name', asy
   assert.equal(wide.length <= `- wide: `.length + 160, true);
   assert.match(list, /^- plain: one line$/m);
 
-  const byId = await loadSkillBody(bundledSkills, {}, 'commit-message');
+  const skillsDir = await tmp();
+  await writeSampleSkills(skillsDir);
+  const dirs = [skillsDir];
+  const byId = await loadSkillBody(dirs, {}, 'commit-message');
   assert.match(byId.body, /Subject line is imperative/);
-  const byName = await loadSkillBody(bundledSkills, {}, 'Commit messages');
+  const byName = await loadSkillBody(dirs, {}, 'Commit messages');
   assert.equal(byName.body, byId.body);
-  const unknown = await loadSkillBody(bundledSkills, { 'commit-message': false }, 'commit-message');
+  const unknown = await loadSkillBody(dirs, { 'commit-message': false }, 'commit-message');
   assert.equal(unknown.body, undefined);
   assert.match(unknown.error, /^unknown skill commit-message，可用：/);
   assert.match(unknown.error, /review-notes/);
   assert.equal(unknown.error.split('可用：')[1].includes('commit-message'), false);
 });
 
-test('user skills override bundled text and reject duplicates', async () => {
+test('user skills override earlier text and reject duplicates', async () => {
+  const earlier = await tmp();
+  await writeSampleSkills(earlier);
   const user = await tmp();
   await writeSkillFile(user, {
     id: 'commit-message',
@@ -106,11 +113,11 @@ test('user skills override bundled text and reject duplicates', async () => {
     body: 'USER_SKILL_MARK',
     source: 'local',
   });
-  const prompt = await buildSkillPrompt([bundledSkills[0], user], {});
+  const prompt = await buildSkillPrompt([earlier, user], {});
   assert.match(prompt, /- commit-message: local override/);
   assert.equal(prompt.includes('USER_SKILL_MARK'), false);
   assert.equal(prompt.includes('imperative'), false);
-  const loaded = await loadSkillBody([bundledSkills[0], user], {}, 'commit-message');
+  const loaded = await loadSkillBody([earlier, user], {}, 'commit-message');
   assert.equal(loaded.body, 'USER_SKILL_MARK');
   await assert.rejects(
     () => createSkill(user, { name: 'Commit messages', id: 'commit-message', body: 'again' }, new Set(['commit-message'])),
@@ -125,14 +132,14 @@ test('user skills override bundled text and reject duplicates', async () => {
   assert.equal(again.includes(created.id), false);
   const shutBody = await loadSkillBody([user], { [created.id]: false }, created.id);
   assert.match(shutBody.error, new RegExp(`unknown skill ${created.id}`));
-  const listed = await listSkills([bundledSkills[0], user], {}, user);
+  const listed = await listSkills([earlier, user], {}, user);
   assert.equal(listed.find((skill) => skill.id === 'review-notes').deletable, false);
   assert.equal(listed.find((skill) => skill.id === created.id).deletable, true);
   await assert.rejects(
-    () => deleteSkill([bundledSkills[0]], user, 'review-notes'),
+    () => deleteSkill([earlier], user, 'review-notes'),
     (err) => err.catalogCode === 'err_skill_builtin',
   );
-  assert.equal((await deleteSkill([bundledSkills[0], user], user, created.id)).id, created.id);
+  assert.equal((await deleteSkill([earlier, user], user, created.id)).id, created.id);
   assert.equal((await listSkills([user], {}, user)).some((skill) => skill.id === created.id), false);
 });
 
@@ -145,18 +152,21 @@ test('settings keep skill and plugin toggles', () => {
   assert.equal(normalized.plugins.echo, false);
 });
 
-test('bundled echo plugin loads and a disabled plugin contributes no tool', async () => {
+test('a sample echo plugin loads and a disabled plugin contributes no tool', async () => {
   clearPluginCache();
-  const listed = await describePlugins(bundledPlugins, {});
+  const pluginsDir = await tmp();
+  await writeSampleEcho(pluginsDir);
+  const dirs = [pluginsDir];
+  const listed = await describePlugins(dirs, {});
   const echo = listed.find((plugin) => plugin.id === 'echo');
   assert.equal(echo.loaded, true);
   assert.equal(echo.enabled, true);
   assert.equal(echo.tools[0].name, 'echo');
   assert.equal(Object.hasOwn(echo, 'handlers'), false);
-  const tools = await pluginHandlers(bundledPlugins, {});
+  const tools = await pluginHandlers(dirs, {});
   const result = await tools.find((tool) => tool.name === 'echo').handler({ text: 'ping' });
   assert.equal(result.output, 'ping');
-  const disabled = await pluginHandlers(bundledPlugins, { echo: false });
+  const disabled = await pluginHandlers(dirs, { echo: false });
   assert.equal(disabled.length, 0);
 });
 
@@ -217,8 +227,68 @@ test('plugin import loads a module and rejects metadata, symlinks, and path esca
   );
 });
 
+test('install directory ships no plugins or skills, and a fresh data dir lists neither', async () => {
+  const repoSkills = await listSkills([path.join(ROOT, 'skills')], {});
+  const repoPlugins = await describePlugins([path.join(ROOT, 'plugins')], {});
+  assert.deepEqual(repoSkills, []);
+  assert.deepEqual(repoPlugins, []);
+
+  const token = 'unit-test-token-empty-ext';
+  const srv = await startServer({ token, env: { WEFT_LLM: 'faux' } });
+  try {
+    const skills = await serverRequest(srv.base, 'GET', '/api/skills', undefined, token);
+    const plugins = await serverRequest(srv.base, 'GET', '/api/plugins', undefined, token);
+    assert.equal(skills.status, 200);
+    assert.deepEqual(skills.body, []);
+    assert.equal(plugins.status, 200);
+    assert.deepEqual(plugins.body, []);
+
+    const discovery = await readDiscovery(srv.dataDir);
+    const v2Skills = await fetch(`${srv.base}/api/v2/skills`, {
+      headers: { authorization: `Bearer ${discovery.token}` },
+    });
+    const v2Plugins = await fetch(`${srv.base}/api/v2/plugins`, {
+      headers: { authorization: `Bearer ${discovery.token}` },
+    });
+    assert.equal(v2Skills.status, 200);
+    assert.deepEqual((await v2Skills.json()).skills, []);
+    assert.equal(v2Plugins.status, 200);
+    assert.deepEqual((await v2Plugins.json()).plugins, []);
+
+    const log = srv.logs();
+    assert.match(log, /WEFT_READY /);
+    assert.equal(/WEFT_ERROR|WEFT_KERNEL_PLUGIN|WEFT_KERNEL_OPEN_FAILED|ENOENT/.test(log), false, log);
+  } finally {
+    await stopServer(srv);
+  }
+});
+
+test('examples/plugins/word-count still installs and counts words', async () => {
+  clearPluginCache();
+  const dest = await tmp();
+  const ws = await tmp();
+  await fs.writeFile(path.join(ws, 'wc-sample.txt'), 'one two three four\n');
+  const installed = await installPlugin(path.join(ROOT, 'examples/plugins/word-count'), dest, {
+    existingIds: new Set(),
+    existingToolNames: new Set(),
+  });
+  assert.equal(installed.id, 'word-count');
+  assert.equal(installed.loaded, true);
+  assert.equal(installed.source, 'imported');
+  assert.equal(installed.tools[0].name, 'word_count');
+  const tools = await pluginHandlers([dest], {});
+  const result = await tools.find((tool) => tool.name === 'word_count').handler(
+    { path: 'wc-sample.txt' },
+    { workspacePath: ws },
+  );
+  assert.equal(result.status, 'completed');
+  assert.equal(result.output, '4');
+});
+
 test('http api creates skills, rejects dead plugin metadata, and runs echo', async () => {
   const dataDir = await tmp();
+  await writeSampleSkills(path.join(dataDir, 'skills'));
+  await writeSampleEcho(path.join(dataDir, 'plugins'));
   const scriptPath = path.join(dataDir, 'faux.json');
   await fs.writeFile(scriptPath, JSON.stringify({
     turns: [

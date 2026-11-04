@@ -48,7 +48,7 @@
 - `tools`：至少一项。`name` 以小写字母开头，后面只能是小写字母、数字和下划线；另有 `description` 和 JSON Schema `parameters`。
 - 模块按工具名导出函数 `(args, ctx) => ({ output, status })`。`ctx.workspacePath` 是当前工作区根目录。`status` 为 `error` 表示失败，`output` 是给对话看的文本。
 
-`plugins/echo` 会预装。[`examples/plugins/word-count`](examples/plugins/word-count) 不会，导入路径填 `examples/plugins/word-count`。成功后复制到数据目录的 `plugins/<id>/`，开关写在设置里，重启后仍在。清单无效或模块加载失败时，对话框保持打开并说明原因，不新增卡片。插件在进程内执行，没有额外沙箱。
+内网包不预装插件，也不附带示例 Skill。需要示例插件时，导入 [`examples/plugins/word-count`](examples/plugins/word-count)，路径填 `examples/plugins/word-count`。成功后复制到数据目录的 `plugins/<id>/`，开关写在设置里，重启后仍在。清单无效或模块加载失败时，对话框保持打开并说明原因，不新增卡片。插件在进程内执行，没有额外沙箱。
 
 ## 从 pi-work 升级
 
