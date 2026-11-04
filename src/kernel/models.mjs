@@ -11,7 +11,7 @@ import { openAICompletionsApi } from '@earendil-works/pi-ai/api/openai-completio
 import { openAIResponsesApi } from '@earendil-works/pi-ai/api/openai-responses.lazy';
 import { createProvider } from '@earendil-works/pi-ai/models';
 import { builtinProviders } from '@earendil-works/pi-ai/providers/all';
-import { thinkingLevelMapFromSupportedLevels } from '../core/thinking-level.mjs';
+import { applyCapabilityOverrides, thinkingLevelMapFromSupportedLevels } from '../core/thinking-level.mjs';
 import { contextWindowFromEnv } from '../core/usage.mjs';
 import { normalizeProvidersV3 } from '../core/provider-config.mjs';
 import { normalizeHttpUrl } from '../core/model-sources.mjs';
@@ -217,6 +217,9 @@ function catalogMaxTokens(model) {
  * catalog (or user override) and is not capped here.
  * maxTokens: overrides.maxTokens > WEFT_MAX_OUTPUT_TOKENS > min(catalog, 32768),
  * then capMaxTokens against the effective context window.
+ * Image input and thinking fields come from `applyCapabilityOverrides`.
+ * When context, output cap, and those fields are all unchanged, the original
+ * model object is returned.
  */
 function applyModelOverrides(model, overrides, env, providerDefaults) {
   const over = overrides && typeof overrides === 'object' ? overrides[model.id] : null;
@@ -234,37 +237,24 @@ function applyModelOverrides(model, overrides, env, providerDefaults) {
   }
   maxTokens = capMaxTokens(maxTokens, contextWindow);
 
-  let input = Array.isArray(model.input) ? model.input.slice() : ['text'];
-  if (typeof over?.images === 'boolean') {
-    if (over.images && !input.includes('image')) input.push('image');
-    else if (!over.images) input = input.filter((t) => t !== 'image');
-  } else if (typeof providerDefaults?.images === 'boolean') {
-    if (providerDefaults.images && !input.includes('image')) input.push('image');
-    else if (!providerDefaults.images) input = input.filter((t) => t !== 'image');
-  }
-
-  let reasoning = model.reasoning === true;
-  let thinkingLevelMap = model.thinkingLevelMap;
-  let defaultThinkingLevel = model.defaultThinkingLevel;
-  const effectiveThinking = over?.thinkingLevel || providerDefaults?.defaultThinkingLevel;
-  if (effectiveThinking && effectiveThinking !== 'off') {
-    reasoning = true;
-    thinkingLevelMap = thinkingLevelMap || {
-      off: 'none',
-      low: 'low',
-      medium: 'medium',
-      high: 'high',
-    };
-    defaultThinkingLevel = effectiveThinking;
+  const caps = applyCapabilityOverrides(model, over, providerDefaults);
+  if (
+    model.contextWindow === contextWindow
+    && model.maxTokens === maxTokens
+    && caps.input === model.input
+    && caps.reasoning === model.reasoning
+    && caps.thinkingLevelMap === model.thinkingLevelMap
+    && caps.defaultThinkingLevel === model.defaultThinkingLevel
+  ) {
+    return model;
   }
 
   const next = clonePlain(model);
   next.contextWindow = contextWindow;
   next.maxTokens = maxTokens;
-  next.input = input;
-  next.reasoning = reasoning;
-  if (thinkingLevelMap) next.thinkingLevelMap = thinkingLevelMap;
-  if (defaultThinkingLevel) next.defaultThinkingLevel = defaultThinkingLevel;
+  next.input = Array.isArray(caps.input) ? caps.input.slice() : caps.input;
+  next.reasoning = caps.reasoning;
+  if (caps.defaultThinkingLevel != null) next.defaultThinkingLevel = caps.defaultThinkingLevel;
   return next;
 }
 

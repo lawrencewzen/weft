@@ -5,7 +5,10 @@ import { pathToFileURL } from 'node:url';
 import { createModels } from '@earendil-works/pi-ai/models';
 import { createSqliteStore } from '../../src/store/sqlite.mjs';
 import { createCredentialStore, createModelsStore } from '../../src/core/provider-stores.mjs';
+import { configureThinkingLevel } from '../../src/core/thinking-level.mjs';
 import {
+  buildBuiltinProvider,
+  builtinProviderById,
   createKernelModels,
   explicitDemo,
   fetchCustomProviderModels,
@@ -50,8 +53,15 @@ test('chat runtime uses a real model when one is connected, and faux only when a
   assert.equal(selectChatRuntime('', { llmApi: 'openai-completions' }), 'none');
 });
 
-function customProvider(id, { baseUrl, enabled, overrides = {}, name = id } = {}) {
-  return {
+function customProvider(id, {
+  baseUrl,
+  enabled,
+  overrides = {},
+  name = id,
+  images,
+  defaultThinkingLevel,
+} = {}) {
+  const entry = {
     id,
     kind: 'custom',
     name,
@@ -60,6 +70,48 @@ function customProvider(id, { baseUrl, enabled, overrides = {}, name = id } = {}
     enabled,
     overrides,
   };
+  if (typeof images === 'boolean') entry.images = images;
+  if (defaultThinkingLevel) entry.defaultThinkingLevel = defaultThinkingLevel;
+  return entry;
+}
+
+const CUSTOM_META = {
+  providerId: CUSTOM_DEFAULT,
+  api: 'openai-completions',
+  baseUrl: 'http://127.0.0.1:9/v1',
+};
+
+function fetchedCustom(item) {
+  return parseFetchedChatModels({ data: [item] }, CUSTOM_META)[0];
+}
+
+function containsNone(value) {
+  if (value === 'none') return true;
+  if (!value || typeof value !== 'object') return false;
+  return Object.values(value).some(containsNone);
+}
+
+async function withCustomModels(entry, models, fn) {
+  const dir = await makeTempDir('weft-kmodels-caps-');
+  const store = createSqliteStore(dir);
+  const modelsStore = createModelsStore(store);
+  try {
+    await modelsStore.write(entry.id, { models });
+    const registry = createModels({ modelsStore });
+    const routes = createKernelModels({
+      models: registry,
+      getSettings: async () => v3Settings([entry], {
+        providerId: entry.id,
+        modelId: entry.enabled[0],
+      }),
+      env: {},
+    });
+    await routes.modelFor({});
+    await fn(registry);
+  } finally {
+    store.close();
+    await removeTempDir(dir);
+  }
 }
 
 function v3Settings(providers, defaultModel) {
@@ -203,6 +255,158 @@ test('builtin catalog metadata is kept and user/env overrides apply', async () =
     },
   ], { providerId: 'deepseek', modelId: 'deepseek-flash' }))).model;
   assert.equal(userMax.maxTokens, 65536);
+});
+
+test('overlay getModels returns the original model when nothing is overridden', async () => {
+  const catalog = builtinProviderById('openai').getModels().find((item) => item.id === 'gpt-4');
+  assert.ok(catalog);
+  const wrapped = buildBuiltinProvider({
+    id: 'openai',
+    kind: 'builtin',
+    enabled: ['gpt-4'],
+    overrides: {},
+  }, { env: {} });
+  assert.equal(wrapped.getModels().find((item) => item.id === 'gpt-4'), catalog);
+  assert.equal(wrapped.getAllModels().find((item) => item.id === 'gpt-4'), catalog);
+
+  const loaded = await modelOf(v3Settings([
+    { id: 'openai', kind: 'builtin', enabled: ['gpt-4'], overrides: {} },
+  ], { providerId: 'openai', modelId: 'gpt-4' }), {}, {});
+  assert.equal(loaded.model, catalog);
+
+  const pictured = fetchedCustom({
+    id: 'pictured',
+    name: 'Pictured',
+    context_window: 16000,
+    max_output_tokens: 4000,
+    input_modalities: ['image'],
+  });
+  await withCustomModels(customProvider(CUSTOM_DEFAULT, {
+    baseUrl: CUSTOM_META.baseUrl,
+    enabled: ['pictured'],
+  }), [pictured], async (registry) => {
+    const first = registry.getModel(CUSTOM_DEFAULT, 'pictured');
+    const second = registry.getModel(CUSTOM_DEFAULT, 'pictured');
+    assert.equal(first, second);
+    assert.ok(first.input.includes('image'));
+  });
+});
+
+test('custom provider defaultThinkingLevel high is what configureThinkingLevel uses', async () => {
+  const rich = fetchedCustom({
+    id: 'rich',
+    name: 'Rich',
+    context_window: 16000,
+    max_output_tokens: 4000,
+    effort: { supported_levels: ['minimal', 'low', 'medium', 'high', 'max'] },
+  });
+  assert.equal(configureThinkingLevel(rich, null), 'medium');
+  await withCustomModels(customProvider(CUSTOM_DEFAULT, {
+    baseUrl: CUSTOM_META.baseUrl,
+    enabled: ['rich'],
+    defaultThinkingLevel: 'high',
+  }), [rich], async (registry) => {
+    const model = registry.getModel(CUSTOM_DEFAULT, 'rich');
+    assert.equal(configureThinkingLevel(model, null), 'high');
+    assert.equal(configureThinkingLevel(model, undefined), 'high');
+    assert.equal(model.defaultThinkingLevel, 'high');
+    assert.equal(model.thinkingLevelMap.high, 'high');
+    assert.equal(model.thinkingLevelMap.medium, 'medium');
+    assert.equal(containsNone(model), false);
+    assert.equal(configureThinkingLevel(model, 'low'), 'low');
+  });
+
+  const bare = fetchedCustom({
+    id: 'bare',
+    name: 'Bare',
+    context_window: 16000,
+    max_output_tokens: 4000,
+  });
+  assert.equal(bare.thinkingLevelMap, undefined);
+  assert.equal(configureThinkingLevel(bare, null), undefined);
+  await withCustomModels(customProvider(CUSTOM_DEFAULT, {
+    baseUrl: CUSTOM_META.baseUrl,
+    enabled: ['bare'],
+    defaultThinkingLevel: 'high',
+  }), [bare], async (registry) => {
+    const model = registry.getModel(CUSTOM_DEFAULT, 'bare');
+    assert.equal(model.reasoning, true);
+    assert.equal(model.thinkingLevelMap, undefined);
+    assert.equal(containsNone(model), false);
+    assert.equal(model.defaultThinkingLevel, 'high');
+    assert.equal(configureThinkingLevel(model, null), 'high');
+  });
+
+  await withCustomModels(customProvider(CUSTOM_DEFAULT, {
+    baseUrl: CUSTOM_META.baseUrl,
+    enabled: ['rich'],
+    defaultThinkingLevel: 'off',
+    overrides: { rich: { thinkingLevel: 'high' } },
+  }), [rich], async (registry) => {
+    const model = registry.getModel(CUSTOM_DEFAULT, 'rich');
+    assert.equal(configureThinkingLevel(model, null), 'high');
+  });
+});
+
+test('custom provider defaultThinkingLevel off configures off and leaves reasoning', async () => {
+  const rich = fetchedCustom({
+    id: 'rich',
+    name: 'Rich',
+    context_window: 16000,
+    max_output_tokens: 4000,
+    effort: { supported_levels: ['minimal', 'low', 'medium', 'high', 'max'] },
+  });
+  await withCustomModels(customProvider(CUSTOM_DEFAULT, {
+    baseUrl: CUSTOM_META.baseUrl,
+    enabled: ['rich'],
+    defaultThinkingLevel: 'off',
+  }), [rich], async (registry) => {
+    const model = registry.getModel(CUSTOM_DEFAULT, 'rich');
+    assert.equal(model.reasoning, true);
+    assert.equal(model.defaultThinkingLevel, 'off');
+    assert.equal(configureThinkingLevel(model, null), 'off');
+    assert.equal(model.thinkingLevelMap.medium, 'medium');
+    assert.equal(containsNone(model), false);
+  });
+});
+
+test('image overrides follow model, then provider, then the catalog', async () => {
+  const pictured = fetchedCustom({
+    id: 'pictured',
+    name: 'Pictured',
+    context_window: 16000,
+    max_output_tokens: 4000,
+    input_modalities: ['image'],
+  });
+  assert.ok(pictured.input.includes('image'));
+
+  await withCustomModels(customProvider(CUSTOM_DEFAULT, {
+    baseUrl: CUSTOM_META.baseUrl,
+    enabled: ['pictured'],
+    images: false,
+  }), [pictured], async (registry) => {
+    const model = registry.getModel(CUSTOM_DEFAULT, 'pictured');
+    assert.deepEqual(model.input, ['text']);
+  });
+
+  const plain = fetchedCustom({
+    id: 'plain',
+    name: 'Plain',
+    context_window: 16000,
+    max_output_tokens: 4000,
+  });
+  await withCustomModels(customProvider(CUSTOM_DEFAULT, {
+    baseUrl: CUSTOM_META.baseUrl,
+    enabled: ['pictured', 'plain'],
+    images: false,
+    overrides: {
+      pictured: { images: true },
+      plain: { images: true },
+    },
+  }), [pictured, plain], async (registry) => {
+    assert.ok(registry.getModel(CUSTOM_DEFAULT, 'pictured').input.includes('image'));
+    assert.ok(registry.getModel(CUSTOM_DEFAULT, 'plain').input.includes('image'));
+  });
 });
 
 async function captureDeepseekRequest({ overrides = {}, env = {} } = {}) {

@@ -177,6 +177,145 @@ test('custom models expose thinkingLevels from effort.supported_levels', async (
   });
 });
 
+const RICH_LEVELS = ['off', 'minimal', 'low', 'medium', 'high', 'max'];
+const BARE_LEVELS = ['off', 'minimal', 'low', 'medium', 'high'];
+
+function capabilityModels() {
+  return parseFetchedChatModels({
+    data: [
+      {
+        id: 'rich',
+        name: 'Rich',
+        context_window: 16000,
+        max_output_tokens: 4000,
+        input_modalities: ['image'],
+        effort: { supported_levels: ['minimal', 'low', 'medium', 'high', 'max'] },
+      },
+      {
+        id: 'bare',
+        name: 'Bare',
+        context_window: 16000,
+        max_output_tokens: 4000,
+      },
+      {
+        id: 'kept',
+        name: 'Kept',
+        context_window: 16000,
+        max_output_tokens: 4000,
+        input_modalities: ['image'],
+      },
+    ],
+  }, { providerId: CUSTOM_ID, api: 'openai-completions', baseUrl: 'http://127.0.0.1:9/v1' });
+}
+
+test('provider defaultThinkingLevel high is the row default, including models without a map', async () => {
+  await withService(async ({ service, modelsStore }) => {
+    await modelsStore.write(CUSTOM_ID, { models: capabilityModels() });
+    const listed = await service.listProviders();
+    const custom = listed.find((item) => item.id === CUSTOM_ID);
+    assert.equal(custom.defaultThinkingLevel, 'high');
+    const rich = custom.models.find((item) => item.id === 'rich');
+    const bare = custom.models.find((item) => item.id === 'bare');
+    assert.equal(rich.reasoning, true);
+    assert.deepEqual(rich.thinkingLevels, RICH_LEVELS);
+    assert.equal(rich.defaultThinkingLevel, 'high');
+    assert.equal(bare.reasoning, true);
+    assert.equal(bare.thinkingLevelMap, undefined);
+    assert.deepEqual(bare.thinkingLevels, BARE_LEVELS);
+    assert.equal(bare.defaultThinkingLevel, 'high');
+    assert.equal(JSON.stringify(bare).includes('none'), false);
+  }, {
+    settings: customSettings({
+      enabled: ['rich', 'bare'],
+      defaultThinkingLevel: 'high',
+    }),
+  });
+});
+
+test('provider defaultThinkingLevel off is the row default and keeps supported levels', async () => {
+  await withService(async ({ service, modelsStore }) => {
+    await modelsStore.write(CUSTOM_ID, { models: capabilityModels() });
+    const listed = await service.listProviders();
+    const rich = listed.find((item) => item.id === CUSTOM_ID).models.find((item) => item.id === 'rich');
+    assert.equal(rich.reasoning, true);
+    assert.deepEqual(rich.thinkingLevels, RICH_LEVELS);
+    assert.equal(rich.defaultThinkingLevel, 'off');
+  }, {
+    settings: customSettings({
+      enabled: ['rich', 'bare'],
+      defaultThinkingLevel: 'off',
+    }),
+  });
+});
+
+test('effectiveThinkingLevelFor uses the same capability overrides as the model row', async () => {
+  const conv = { modelSourceId: CUSTOM_ID, modelId: 'rich', thinkingLevel: null };
+
+  await withService(async ({ service, modelsStore }) => {
+    await modelsStore.write(CUSTOM_ID, { models: capabilityModels() });
+    const raw = await service.catalogModelFor(CUSTOM_ID, 'rich');
+    assert.equal(raw.defaultThinkingLevel, undefined);
+    assert.equal(await service.effectiveThinkingLevelFor(conv), 'high');
+    assert.equal(await service.effectiveThinkingLevelFor({ ...conv, thinkingLevel: 'low' }), 'low');
+  }, {
+    settings: customSettings({
+      enabled: ['rich'],
+      defaultThinkingLevel: 'high',
+    }),
+  });
+
+  await withService(async ({ service, modelsStore }) => {
+    await modelsStore.write(CUSTOM_ID, { models: capabilityModels() });
+    assert.equal(await service.effectiveThinkingLevelFor(conv), 'off');
+  }, {
+    settings: customSettings({
+      enabled: ['rich'],
+      defaultThinkingLevel: 'off',
+    }),
+  });
+
+  await withService(async ({ service, modelsStore }) => {
+    await modelsStore.write(CUSTOM_ID, { models: capabilityModels() });
+    assert.equal(await service.effectiveThinkingLevelFor(conv), 'low');
+  }, {
+    settings: customSettings({
+      enabled: ['rich'],
+      defaultThinkingLevel: 'high',
+      overrides: { rich: { thinkingLevel: 'low' } },
+    }),
+  });
+});
+
+test('image row follows model override, then provider default, then the catalog', async () => {
+  await withService(async ({ service, modelsStore }) => {
+    await modelsStore.write(CUSTOM_ID, { models: capabilityModels() });
+    const listed = await service.listProviders();
+    const models = listed.find((item) => item.id === CUSTOM_ID).models;
+    assert.equal(models.find((item) => item.id === 'rich').images, true);
+    assert.equal(models.find((item) => item.id === 'bare').images, false);
+  }, {
+    settings: customSettings({ enabled: ['rich', 'bare'] }),
+  });
+
+  await withService(async ({ service, modelsStore }) => {
+    await modelsStore.write(CUSTOM_ID, { models: capabilityModels() });
+    const listed = await service.listProviders();
+    const models = listed.find((item) => item.id === CUSTOM_ID).models;
+    const rich = models.find((item) => item.id === 'rich');
+    const kept = models.find((item) => item.id === 'kept');
+    assert.equal(rich.images, false);
+    assert.equal(rich.overridden.images, undefined);
+    assert.equal(kept.images, true);
+    assert.equal(kept.overridden.images, true);
+  }, {
+    settings: customSettings({
+      enabled: ['rich', 'kept'],
+      images: false,
+      overrides: { kept: { images: true } },
+    }),
+  });
+});
+
 test('listProviders uses env auth when no stored key', async () => {
   await withService(async ({ service }) => {
     const listed = await service.listProviders();
