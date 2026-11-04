@@ -13,6 +13,8 @@ export type KernelChange = {
   error?: unknown;
   toolCallId?: unknown;
   by?: unknown;
+  status?: unknown;
+  oldPath?: unknown;
 };
 
 function asBy(value: unknown): Change['by'] {
@@ -48,15 +50,26 @@ function asCount(value: unknown): number {
   return Number.isFinite(n) ? Math.trunc(n) : 0;
 }
 
+function asStatus(value: unknown): Change['status'] {
+  if (value === 'added' || value === 'modified' || value === 'deleted' || value === 'renamed') return value;
+  return undefined;
+}
+
 export function changeView(row: KernelChange): Change {
   const error = row.error == null || row.error === '' ? null : String(row.error);
-  return {
+  const view: Change = {
     path: posixPath(row.path),
     added: asCount(row.added),
     removed: asCount(row.removed),
     error,
     by: asBy(row.by),
   };
+  const status = asStatus(row.status);
+  if (status) {
+    view.status = status;
+    view.oldPath = status === 'renamed' && row.oldPath ? posixPath(row.oldPath) : null;
+  }
+  return view;
 }
 
 export function changeViews(rows: KernelChange[] | null | undefined): Change[] {

@@ -94,7 +94,7 @@ export interface paths {
          *     - `item`：id 为 ThreadItem.id，值为 ThreadItem
          *     - `tool`：id 为 ToolCall.id，值为 ToolCall
          *     - `subagent`：id 为子 Agent id，值为 Subagent。卡住由服务端判定：kernel 状态为 running 且超过 stuckAfterMs（默认 60000，环境变量 WEFT_SUBAGENT_STUCK_MS）没有活动时 status 为 stuck，到点推送 upsert。
-         *     - `change`：id 为相对工作区的路径（统一用 `/`），值为 Change。快照带上当前变更列表。工具结束（write / edit / bash 都可能改文件）或经保存接口写入后随重算更新：变了才 upsert，从列表消失则 remove。不做文件监听。
+         *     - `change`：id 为相对工作区的路径（统一用 `/`），值为 Change。git 工作区以会话第一次发消息前拍下的工作区树为基准，只列出之后的新增、修改、删除和重命名；不是 git 仓库时仍只统计 write/edit。工具结束（write / edit / bash 都可能改文件）或经保存接口写入后随重算更新：变了才 upsert，从列表消失则 remove。不做文件监听。
          *
          *     快照是 GET /api/v2/conversations/{id} 的 conversation / items / tools，再加上该对话的 subagent 和 change 实体。模型流式输出时先 upsert 一条 `item`，id 以 `live:` 开头、`streaming` 为 true、`text` 为空；随后用 `text.delta` 追加。正式助手消息到来后 remove 这条流式项，再 upsert 正式项和 conversation。bash 工具运行中用 `tool.delta` 追加保留窗口（不要复用 `text.delta`）；偏移对不上时客户端丢掉本地缓冲，等下一次 upsert。
          *
@@ -1977,7 +1977,7 @@ export interface components {
             /** @description 子 Agent 名。前端显示成「子 · <name>」 */
             name: string;
         };
-        /** @description 对话右栏变更列表的一项。SSE conversation 主题里 entity=change，id 为 path。 */
+        /** @description 对话右栏变更列表的一项。SSE conversation 主题里 entity=change，id 为 path。git 工作区对比会话起点快照与当前工作区；不是 git 仓库、git 不可用或快照失败时没有 status / oldPath，只含 write/edit 记录。 */
         Change: {
             /** @description 相对工作区的路径，统一用 `/` */
             path: string;
@@ -1987,6 +1987,13 @@ export interface components {
             error: null | string;
             /** @description 最后一次 write/edit 这个文件的是谁。主 Agent 和子 Agent 都改过时取最后一次。只被 bash 等非 write/edit 工具改、拿不到归属时为 null */
             by: null | components["schemas"]["ChangeByMain"] | components["schemas"]["ChangeBySubagent"];
+            /**
+             * @description 相对会话起点工作区快照。added 新建，modified 内容变化，deleted 删除，renamed 重命名。非 git 回退时没有此字段。
+             * @enum {string}
+             */
+            status?: "added" | "modified" | "deleted" | "renamed";
+            /** @description status 为 renamed 时的原相对路径（统一用 `/`）。其他情况为 null。非 git 回退时没有此字段。 */
+            oldPath?: null | string;
         };
         DiffLine: {
             /** @enum {string} */
