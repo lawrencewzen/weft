@@ -259,7 +259,31 @@ function displayWindow(value) {
   return Number.isInteger(value) && value > 0 ? value : null;
 }
 
-function modelRow(model, { enabled, overridden, providerDefaults } = {}) {
+/**
+ * Catalog model after the same capability rules as the kernel.
+ * Model-level overrides win. Provider images / defaultThinkingLevel apply
+ * only to custom providers. The input model is not mutated.
+ */
+function overriddenCatalogModel(model, entry) {
+  if (!model || typeof model !== 'object') return model;
+  const overrides = entry?.overrides && typeof entry.overrides === 'object' ? entry.overrides : {};
+  const defaults = entry?.kind === 'custom'
+    ? { images: entry.images, defaultThinkingLevel: entry.defaultThinkingLevel }
+    : undefined;
+  const caps = applyCapabilityOverrides(model, overrideView(overrides, model.id), defaults);
+  const adjusted = {
+    ...model,
+    input: caps.input,
+    reasoning: caps.reasoning,
+  };
+  if (caps.defaultThinkingLevel != null) adjusted.defaultThinkingLevel = caps.defaultThinkingLevel;
+  else delete adjusted.defaultThinkingLevel;
+  if (caps.thinkingLevelMap) adjusted.thinkingLevelMap = caps.thinkingLevelMap;
+  else delete adjusted.thinkingLevelMap;
+  return adjusted;
+}
+
+function modelRow(model, { enabled, overridden, entry } = {}) {
   const over = overridden && Object.keys(overridden).length ? overridden : {};
   const flags = {};
   if (over.contextWindow != null) flags.contextWindow = true;
@@ -267,14 +291,9 @@ function modelRow(model, { enabled, overridden, providerDefaults } = {}) {
   if (over.images != null) flags.images = true;
   if (over.thinkingLevel != null) flags.thinkingLevel = true;
 
-  const caps = applyCapabilityOverrides(model, over, providerDefaults);
-  const thinking = thinkingFieldsOf({
-    ...model,
-    input: caps.input,
-    reasoning: caps.reasoning,
-    defaultThinkingLevel: caps.defaultThinkingLevel,
-  });
-  const input = Array.isArray(caps.input) ? caps.input : [];
+  const adjusted = overriddenCatalogModel(model, entry);
+  const thinking = thinkingFieldsOf(adjusted);
+  const input = Array.isArray(adjusted?.input) ? adjusted.input : [];
 
   return {
     id: model.id,
@@ -283,7 +302,7 @@ function modelRow(model, { enabled, overridden, providerDefaults } = {}) {
     contextWindow: over.contextWindow ?? displayWindow(model.contextWindow),
     maxTokens: over.maxTokens ?? displayWindow(model.maxTokens),
     images: input.includes('image'),
-    reasoning: caps.reasoning === true,
+    reasoning: adjusted?.reasoning === true,
     thinkingLevels: thinking.thinkingLevels,
     defaultThinkingLevel: thinking.defaultThinkingLevel,
     overridden: flags,
@@ -423,14 +442,10 @@ export function createProviderService({
     const catalog = entry.kind === 'builtin'
       ? await builtinModels(entry.id)
       : await customModels(entry.id);
-    const providerDefaults = {
-      images: entry.images,
-      defaultThinkingLevel: entry.defaultThinkingLevel,
-    };
     return catalog.map((model) => modelRow(model, {
       enabled: enabled.has(model.id),
       overridden: overrideView(overrides, model.id),
-      providerDefaults,
+      entry,
     }));
   }
 
@@ -643,24 +658,31 @@ export function createProviderService({
     return { providerId: hit.provider, modelId: hit.modelId };
   }
 
-  async function catalogModelFor(providerId, modelId) {
+  async function catalogRecordFor(providerId, modelId) {
     const id = String(providerId || '').trim();
-    const model = String(modelId || '').trim();
-    if (!id || !model) return null;
+    const name = String(modelId || '').trim();
+    if (!id || !name) return null;
     const settings = await loadSettings();
     const entry = providersOf(settings).find((item) => item.id === id);
     if (!entry) return null;
     const catalog = entry.kind === 'builtin'
       ? await builtinModels(entry.id)
       : await customModels(entry.id);
-    return catalog.find((item) => item.id === model) || null;
+    const model = catalog.find((item) => item.id === name) || null;
+    return { entry, model };
+  }
+
+  async function catalogModelFor(providerId, modelId) {
+    const found = await catalogRecordFor(providerId, modelId);
+    return found?.model || null;
   }
 
   async function effectiveThinkingLevelFor(conv) {
     const target = await resolveTarget(conv);
     if (!target) return null;
-    const model = await catalogModelFor(target.providerId, target.modelId);
-    return effectiveThinkingLevel(model, conv?.thinkingLevel);
+    const found = await catalogRecordFor(target.providerId, target.modelId);
+    if (!found?.model) return null;
+    return effectiveThinkingLevel(overriddenCatalogModel(found.model, found.entry), conv?.thinkingLevel);
   }
 
   async function contextWindowFor(conv) {

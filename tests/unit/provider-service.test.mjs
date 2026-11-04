@@ -248,6 +248,44 @@ test('provider defaultThinkingLevel off is the row default and keeps supported l
   });
 });
 
+test('effectiveThinkingLevelFor uses the same capability overrides as the model row', async () => {
+  const conv = { modelSourceId: CUSTOM_ID, modelId: 'rich', thinkingLevel: null };
+
+  await withService(async ({ service, modelsStore }) => {
+    await modelsStore.write(CUSTOM_ID, { models: capabilityModels() });
+    const raw = await service.catalogModelFor(CUSTOM_ID, 'rich');
+    assert.equal(raw.defaultThinkingLevel, undefined);
+    assert.equal(await service.effectiveThinkingLevelFor(conv), 'high');
+    assert.equal(await service.effectiveThinkingLevelFor({ ...conv, thinkingLevel: 'low' }), 'low');
+  }, {
+    settings: customSettings({
+      enabled: ['rich'],
+      defaultThinkingLevel: 'high',
+    }),
+  });
+
+  await withService(async ({ service, modelsStore }) => {
+    await modelsStore.write(CUSTOM_ID, { models: capabilityModels() });
+    assert.equal(await service.effectiveThinkingLevelFor(conv), 'off');
+  }, {
+    settings: customSettings({
+      enabled: ['rich'],
+      defaultThinkingLevel: 'off',
+    }),
+  });
+
+  await withService(async ({ service, modelsStore }) => {
+    await modelsStore.write(CUSTOM_ID, { models: capabilityModels() });
+    assert.equal(await service.effectiveThinkingLevelFor(conv), 'low');
+  }, {
+    settings: customSettings({
+      enabled: ['rich'],
+      defaultThinkingLevel: 'high',
+      overrides: { rich: { thinkingLevel: 'low' } },
+    }),
+  });
+});
+
 test('image row follows model override, then provider default, then the catalog', async () => {
   await withService(async ({ service, modelsStore }) => {
     await modelsStore.write(CUSTOM_ID, { models: capabilityModels() });
