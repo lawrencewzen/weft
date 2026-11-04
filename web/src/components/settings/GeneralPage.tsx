@@ -2,19 +2,23 @@ import { useEffect, useState } from 'react';
 import { getPreferredLang, setPreferredLang, type Lang } from '../../data/lang';
 import {
   APPEARANCES,
+  CHAT_WIDTHS,
   FONT_SIZES,
   THEME_FAMILIES,
   THEME_SWATCHES,
   applyDocumentPrefs,
   notifyPrefs,
   readAppearance,
+  readChatWidth,
   readFontSize,
   readThemeFamily,
   subscribePrefs,
   writeAppearance,
+  writeChatWidth,
   writeFontSize,
   writeThemeFamily,
   type Appearance,
+  type ChatWidth,
   type FontSize,
   type ThemeFamily,
 } from '../../data/prefs';
@@ -37,6 +41,13 @@ const FONT_KEYS: Record<FontSize, I18nKey> = {
   lg: 'size_lg',
 };
 
+const CHAT_WIDTH_KEYS: Record<ChatWidth, I18nKey> = {
+  standard: 'width_standard',
+  wide: 'width_wide',
+  wider: 'width_wider',
+  full: 'width_full',
+};
+
 type Props = {
   lang: Lang;
 };
@@ -45,11 +56,13 @@ export function GeneralPage({ lang }: Props) {
   const [appearance, setAppearance] = useState(readAppearance);
   const [theme, setTheme] = useState(readThemeFamily);
   const [fontSize, setFontSize] = useState(readFontSize);
+  const [chatWidth, setChatWidth] = useState(readChatWidth);
 
   useEffect(() => subscribePrefs(() => {
     setAppearance(readAppearance());
     setTheme(readThemeFamily());
     setFontSize(readFontSize());
+    setChatWidth(readChatWidth());
   }), []);
 
   function persist(next: {
@@ -57,6 +70,7 @@ export function GeneralPage({ lang }: Props) {
     appearance?: Appearance;
     theme?: ThemeFamily;
     fontSize?: FontSize;
+    chatWidth?: ChatWidth;
   }): void {
     if (next.lang) setPreferredLang(next.lang);
     if (next.appearance) {
@@ -71,11 +85,16 @@ export function GeneralPage({ lang }: Props) {
       writeFontSize(next.fontSize);
       setFontSize(next.fontSize);
     }
+    if (next.chatWidth) {
+      writeChatWidth(next.chatWidth);
+      setChatWidth(next.chatWidth);
+    }
     applyDocumentPrefs({
       lang: next.lang ?? getPreferredLang(),
       appearance: next.appearance ?? readAppearance(),
       theme: next.theme ?? readThemeFamily(),
       fontSize: next.fontSize ?? readFontSize(),
+      chatWidth: next.chatWidth ?? readChatWidth(),
     });
     notifyPrefs();
   }
@@ -176,6 +195,26 @@ export function GeneralPage({ lang }: Props) {
               onClick={() => persist({ fontSize: size })}
             >
               {t(lang, FONT_KEYS[size])}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="ns-pref-row">
+        <div className="ns-pref-copy">
+          <b>{t(lang, 'chat_width_label')}</b>
+          <span>{t(lang, 'chat_width_desc')}</span>
+        </div>
+        <div className="ns-seg" data-testid="next-pref-chat-width">
+          {CHAT_WIDTHS.map((width) => (
+            <button
+              key={width}
+              type="button"
+              className={chatWidth === width ? 'is-on' : ''}
+              data-width={width}
+              onClick={() => persist({ chatWidth: width })}
+            >
+              {t(lang, CHAT_WIDTH_KEYS[width])}
             </button>
           ))}
         </div>

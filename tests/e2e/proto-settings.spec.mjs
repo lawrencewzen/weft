@@ -58,6 +58,65 @@ test('general: language, appearance, theme and font size apply immediately', asy
   expectClean(state);
 });
 
+test('general: chat width options standard, wide, wider, full strictly increase width and persist across reload', async ({ page }) => {
+  const state = await openProto(page);
+  expect(page.viewportSize()).toEqual({ width: 1440, height: 900 });
+  await expect(page.locator('.next-shell')).not.toHaveClass(/right-closed/);
+  await expect(page.getByTestId('next-right')).toBeVisible();
+
+  await page.getByTestId('next-open-settings').click();
+  await expect(page.getByTestId('next-settings-general')).toBeVisible();
+
+  const thread = page.locator('.thread-inner');
+  const composer = page.locator('.composer-stack');
+  await expect(thread).toBeVisible();
+  await expect(composer).toBeVisible();
+
+  /** @type {number[]} */
+  const recordedWidths = [];
+  const options = ['standard', 'wide', 'wider', 'full'];
+
+  for (const opt of options) {
+    await page.locator(`[data-testid=next-pref-chat-width] button[data-width="${opt}"]`).click();
+    await expect(page.locator('html')).toHaveAttribute('data-chat-width', opt);
+    await expect(page.locator(`[data-testid=next-pref-chat-width] button[data-width="${opt}"]`)).toHaveClass(/is-on/);
+
+    const threadBox = await thread.boundingBox();
+    const composerBox = await composer.boundingBox();
+    expect(threadBox).not.toBeNull();
+    expect(composerBox).not.toBeNull();
+    expect(Math.abs(threadBox.width - composerBox.width)).toBeLessThan(1);
+    recordedWidths.push(threadBox.width);
+  }
+
+  // Four widths must be strictly ascending
+  for (let i = 1; i < recordedWidths.length; i++) {
+    expect(recordedWidths[i]).toBeGreaterThan(recordedWidths[i - 1]);
+  }
+
+  // Close settings overlay before reloading
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('next-settings')).toHaveCount(0);
+
+  // Reload page and verify chosen width is preserved
+  await page.reload();
+  await expect(page.locator('html')).toHaveAttribute('data-chat-width', 'full');
+
+  const reloadedThreadBox = await page.locator('.thread-inner').boundingBox();
+  const reloadedComposerBox = await page.locator('.composer-stack').boundingBox();
+  expect(reloadedThreadBox).not.toBeNull();
+  expect(reloadedComposerBox).not.toBeNull();
+  expect(Math.abs(reloadedThreadBox.width - reloadedComposerBox.width)).toBeLessThan(1);
+  expect(Math.abs(reloadedThreadBox.width - recordedWidths[3])).toBeLessThan(1);
+
+  // Re-open settings and verify option remains selected
+  await page.getByTestId('next-open-settings').click();
+  await expect(page.getByTestId('next-settings-general')).toBeVisible();
+  await expect(page.locator('[data-testid=next-pref-chat-width] button[data-width="full"]')).toHaveClass(/is-on/);
+
+  expectClean(state);
+});
+
 test('providers: rows, groups, expand, Grok auto-detect, Anthropic key, custom, cancel rollback, no 服务商', async ({ page }) => {
   const state = await openProto(page);
   await page.getByTestId('next-open-settings').click();

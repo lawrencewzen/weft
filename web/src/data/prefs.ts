@@ -3,18 +3,22 @@ export const LS_LANG = 'weft_lang';
 export const LS_APPEARANCE = 'weft_appearance';
 export const LS_THEME = 'weft_theme';
 export const LS_FONT_SIZE = 'weft_font_size';
+export const LS_CHAT_WIDTH = 'weft_chat_width';
 
 export type Appearance = 'light' | 'dark' | 'system';
 export type ThemeFamily = 'white' | 'claude';
 export type FontSize = 'sm' | 'md' | 'lg';
+export type ChatWidth = 'standard' | 'wide' | 'wider' | 'full';
 
 export const THEME_FAMILIES: readonly ThemeFamily[] = ['white', 'claude'];
 export const APPEARANCES: readonly Appearance[] = ['light', 'dark', 'system'];
 export const FONT_SIZES: readonly FontSize[] = ['sm', 'md', 'lg'];
+export const CHAT_WIDTHS: readonly ChatWidth[] = ['standard', 'wide', 'wider', 'full'];
 
 export const DEFAULT_APPEARANCE: Appearance = 'light';
 export const DEFAULT_THEME: ThemeFamily = 'white';
 export const DEFAULT_FONT_SIZE: FontSize = 'md';
+export const DEFAULT_CHAT_WIDTH: ChatWidth = 'wider';
 
 const PREFS_EVENT = 'weft-prefs';
 
@@ -63,6 +67,11 @@ export function asFontSize(raw: string | null | undefined): FontSize {
   return DEFAULT_FONT_SIZE;
 }
 
+export function asChatWidth(raw: string | null | undefined): ChatWidth {
+  if (raw === 'standard' || raw === 'wide' || raw === 'wider' || raw === 'full') return raw;
+  return DEFAULT_CHAT_WIDTH;
+}
+
 export function readStoredLang(): 'zh' | 'en' | null {
   return asLang(readRaw(LS_LANG));
 }
@@ -98,6 +107,14 @@ export function writeFontSize(size: FontSize): void {
   writeRaw(LS_FONT_SIZE, size);
 }
 
+export function readChatWidth(): ChatWidth {
+  return asChatWidth(readRaw(LS_CHAT_WIDTH));
+}
+
+export function writeChatWidth(width: ChatWidth): void {
+  writeRaw(LS_CHAT_WIDTH, width);
+}
+
 export function prefersDark(): boolean {
   try {
     return typeof matchMedia === 'function'
@@ -124,6 +141,7 @@ export type DocumentPrefs = {
   appearance: Appearance;
   theme: ThemeFamily;
   fontSize: FontSize;
+  chatWidth: ChatWidth;
 };
 
 export function applyDocumentPrefs(prefs?: Partial<DocumentPrefs>): void {
@@ -131,10 +149,12 @@ export function applyDocumentPrefs(prefs?: Partial<DocumentPrefs>): void {
   const family = prefs?.theme ?? readThemeFamily();
   const appearance = prefs?.appearance ?? readAppearance();
   const fontSize = prefs?.fontSize ?? readFontSize();
+  const chatWidth = prefs?.chatWidth ?? readChatWidth();
   const lang = prefs?.lang;
   const root = document.documentElement;
   root.setAttribute('data-theme', themeAttr(family, appearance));
   root.setAttribute('data-font-size', fontSize);
+  root.setAttribute('data-chat-width', chatWidth);
   if (lang === 'zh' || lang === 'en') {
     root.lang = lang === 'zh' ? 'zh-CN' : 'en';
   }
