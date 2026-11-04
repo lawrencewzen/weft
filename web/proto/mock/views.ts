@@ -56,6 +56,7 @@ export function providersEntities(db: MockDb): TopicEntities {
       name: provider.kind === 'custom'
         ? provider.name
         : mockProviderName(provider.id, provider.name, lang),
+      defaultModel: db.defaultModel?.providerId === provider.id ? db.defaultModel.modelId : null,
     }),
   }));
   out.push({ entity: 'defaults', id: 'self', value: { model: db.defaultModel } });

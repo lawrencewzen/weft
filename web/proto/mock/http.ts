@@ -151,13 +151,14 @@ function subagentSnapshot(thread: MockSubThread, lang: Lang): unknown {
   };
 }
 
-function providerView(provider: Provider, lang: Lang): Provider {
+function providerView(db: MockDb, provider: Provider, lang: Lang): Provider {
   return {
     ...provider,
     name: provider.kind === 'custom'
       ? provider.name
       : mockProviderName(provider.id, provider.name, lang),
     models: provider.models.map((model) => ({ ...model })),
+    defaultModel: db.defaultModel?.providerId === provider.id ? db.defaultModel.modelId : null,
   };
 }
 
@@ -351,7 +352,7 @@ function handleConnect(
       if (first) db.defaultModel = { providerId: id, modelId: first.id };
     }
     publishProviders(db, hub);
-    return ok({ provider: providerView(provider, lang) });
+    return ok({ provider: providerView(db, provider, lang) });
   }
 
   if (method === 'env') {
@@ -374,7 +375,7 @@ function handleConnect(
       if (first) db.defaultModel = { providerId: id, modelId: first.id };
     }
     publishProviders(db, hub);
-    return ok({ provider: providerView(provider, lang) });
+    return ok({ provider: providerView(db, provider, lang) });
   }
 
   if (method === 'local_login') {
@@ -398,7 +399,7 @@ function handleConnect(
       if (first) db.defaultModel = { providerId: id, modelId: first.id };
     }
     publishProviders(db, hub);
-    return ok({ provider: providerView(provider, lang) });
+    return ok({ provider: providerView(db, provider, lang) });
   }
 
   if (method === 'oauth') {
@@ -500,13 +501,21 @@ function handleCustomProvider(
     status: { state: 'ok', testedAt: Date.now() },
     models: customModels,
   };
+  if (typeof body.images === 'boolean') {
+    provider.images = body.images;
+  }
+  if (body.defaultThinkingLevel !== undefined) {
+    provider.defaultThinkingLevel = body.defaultThinkingLevel as ThinkingLevel | null;
+  }
   db.providers.push(provider);
-  if (!db.defaultModel && provider.models.some((m) => m.enabled)) {
+  if (typeof body.defaultModel === 'string' && body.defaultModel) {
+    db.defaultModel = { providerId: id, modelId: body.defaultModel };
+  } else if (!db.defaultModel && provider.models.some((m) => m.enabled)) {
     const first = provider.models.find((m) => m.enabled);
     if (first) db.defaultModel = { providerId: id, modelId: first.id };
   }
   publishProviders(db, hub);
-  return ok({ provider: providerView(provider, lang) });
+  return ok({ provider: providerView(db, provider, lang) });
 }
 
 function handlePatchProvider(
@@ -557,6 +566,20 @@ function handlePatchProvider(
       db.defaultModel = { providerId: provider.id, modelId: body.defaultModel };
     }
   }
+  if (body.images !== undefined) {
+    if (body.images === null) {
+      delete provider.images;
+    } else if (typeof body.images === 'boolean') {
+      provider.images = body.images;
+    }
+  }
+  if (body.defaultThinkingLevel !== undefined) {
+    if (body.defaultThinkingLevel === null) {
+      provider.defaultThinkingLevel = null;
+    } else if (typeof body.defaultThinkingLevel === 'string') {
+      provider.defaultThinkingLevel = body.defaultThinkingLevel as ThinkingLevel;
+    }
+  }
   if (typeof body.name === 'string' && body.name.trim()) provider.name = body.name.trim();
   if (typeof body.baseUrl === 'string' && body.baseUrl.trim()) provider.baseUrl = body.baseUrl.trim();
   if (typeof body.api === 'string') provider.api = body.api as CustomApiProtocol;
@@ -576,7 +599,7 @@ function handlePatchProvider(
       }
     }
   }
-  return ok({ provider: providerView(provider, lang) });
+  return ok({ provider: providerView(db, provider, lang) });
 }
 
 /* ---------- workspace directory browser ---------- */
@@ -950,7 +973,7 @@ export function handleMockRequest(db: MockDb, hub: MockHub, rawUrl: string, init
   /* ---- providers ---- */
   if (path === '/api/v2/providers' && method === 'GET') {
     return ok({
-      providers: db.providers.map((provider) => providerView(provider, lang)),
+      providers: db.providers.map((provider) => providerView(db, provider, lang)),
       defaultModel: db.defaultModel,
     });
   }
@@ -1082,7 +1105,7 @@ export function handleMockRequest(db: MockDb, hub: MockHub, rawUrl: string, init
     const provider = db.providers.find((row) => row.id === id);
     if (!provider) return fail(404, 'Provider 不存在');
     if (method === 'PATCH') return handlePatchProvider(db, hub, provider, body, lang);
-    if (method === 'GET') return ok({ provider: providerView(provider, lang) });
+    if (method === 'GET') return ok({ provider: providerView(db, provider, lang) });
     if (method === 'DELETE') {
       db.providers = db.providers.filter((row) => row.id !== id);
       publishProviderGone(hub, id);
