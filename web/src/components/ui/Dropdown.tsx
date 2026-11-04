@@ -7,6 +7,12 @@ import React, {
   useState,
 } from 'react';
 import { createPortal } from 'react-dom';
+import {
+  cssViewportHeight,
+  cssViewportWidth,
+  readUiZoom,
+  visualToCss,
+} from '../../data/uiZoom';
 
 export interface DropdownOption<T = string> {
   value: T;
@@ -99,19 +105,29 @@ export function Dropdown<T = string>({
 
   const defaultMaxHeight = preferredMaxHeight ?? (variant === 'picker' ? 340 : 260);
 
-  const calculatePosition = useCallback((menuEl?: HTMLElement | null) => {
+  const calculatePosition = useCallback(() => {
     if (!triggerRef.current) return;
+    const zoom = readUiZoom();
     const rect = triggerRef.current.getBoundingClientRect();
-    const vh = window.innerHeight || 800;
-    const vw = window.innerWidth || 1200;
+
+    // Convert getBoundingClientRect visual coordinates to CSS pixels
+    const topCss = visualToCss(rect.top, zoom);
+    const bottomCss = visualToCss(rect.bottom, zoom);
+    const leftCss = visualToCss(rect.left, zoom);
+    const rightCss = visualToCss(rect.right, zoom);
+    const widthCss = visualToCss(rect.width, zoom);
+
+    // Viewport dimensions in CSS pixels
+    const vhCss = cssViewportHeight();
+    const vwCss = cssViewportWidth();
+
     const GAP = 4;
     const EDGE_MARGIN = 8;
 
-    const spaceBelow = Math.max(0, vh - rect.bottom - GAP - EDGE_MARGIN);
-    const spaceAbove = Math.max(0, rect.top - GAP - EDGE_MARGIN);
+    const spaceBelow = Math.max(0, vhCss - bottomCss - GAP - EDGE_MARGIN);
+    const spaceAbove = Math.max(0, topCss - GAP - EDGE_MARGIN);
 
-    const measuredHeight = menuEl ? menuEl.scrollHeight : 0;
-    const desiredHeight = measuredHeight > 0 ? measuredHeight : defaultMaxHeight;
+    const desiredHeight = defaultMaxHeight;
 
     // Requirement: 下方放不下且上方更宽就向上展开
     const shouldFlipUp = spaceBelow < desiredHeight && spaceAbove > spaceBelow;
@@ -121,14 +137,14 @@ export function Dropdown<T = string>({
     const maxHeight = Math.max(60, Math.min(defaultMaxHeight, availableSpace));
 
     const effectiveMinWidth = minWidth ?? (variant === 'picker' ? 300 : 0);
-    const calculatedWidth = Math.max(effectiveMinWidth, rect.width);
+    const calculatedWidth = Math.max(effectiveMinWidth, widthCss);
 
-    let left = rect.left;
+    let left = leftCss;
     if (align === 'right') {
-      left = rect.right - calculatedWidth;
+      left = rightCss - calculatedWidth;
     }
-    if (left + calculatedWidth > vw - EDGE_MARGIN) {
-      left = Math.max(EDGE_MARGIN, vw - EDGE_MARGIN - calculatedWidth);
+    if (left + calculatedWidth > vwCss - EDGE_MARGIN) {
+      left = Math.max(EDGE_MARGIN, vwCss - EDGE_MARGIN - calculatedWidth);
     }
     if (left < EDGE_MARGIN) {
       left = EDGE_MARGIN;
@@ -137,7 +153,7 @@ export function Dropdown<T = string>({
     setPlacement(nextPlacement);
     if (nextPlacement === 'top') {
       setCoords({
-        bottom: vh - rect.top + GAP,
+        bottom: vhCss - topCss + GAP,
         top: undefined,
         left,
         width: calculatedWidth,
@@ -145,7 +161,7 @@ export function Dropdown<T = string>({
       });
     } else {
       setCoords({
-        top: rect.bottom + GAP,
+        top: bottomCss + GAP,
         bottom: undefined,
         left,
         width: calculatedWidth,
@@ -156,7 +172,7 @@ export function Dropdown<T = string>({
 
   const openMenu = () => {
     if (disabled) return;
-    calculatePosition(menuRef.current);
+    calculatePosition();
     setIsOpen(true);
   };
 
@@ -176,7 +192,7 @@ export function Dropdown<T = string>({
   // Re-check position and measure menu once open
   useLayoutEffect(() => {
     if (!isOpen) return;
-    calculatePosition(menuRef.current);
+    calculatePosition();
   }, [isOpen, calculatePosition]);
 
   // When opened, find and scroll selected option into view, and initialize highlightedIndex

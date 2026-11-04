@@ -292,11 +292,33 @@ test('git connections, plugins, skills and about', async ({ page }) => {
   expectClean(state);
 });
 
-test('edit provider dialog: default thinking dropdown menu stays completely within viewport', async ({ page }) => {
+test('dropdown alignment under default zoom: default picker (downward & right-aligned) and edit dialog thinking (upward & left-aligned)', async ({ page }) => {
   const state = await openProto(page);
   await page.getByTestId('next-open-settings').click();
   await page.getByTestId('next-settings-nav-providers').click();
 
+  // ① 默认模型选择器（向下展开，右对齐）
+  const picker = page.getByTestId('next-provider-default-picker');
+  await expect(picker).toBeVisible();
+  const pickerBox = await picker.boundingBox();
+  expect(pickerBox).not.toBeNull();
+
+  await picker.click();
+  const pickerMenu = page.locator('.mp-menu');
+  await expect(pickerMenu).toBeVisible();
+  const pickerMenuBox = await pickerMenu.boundingBox();
+  expect(pickerMenuBox).not.toBeNull();
+
+  // 向下展开时 |menu.y - (trigger.y+trigger.height)| ≤ 6
+  expect(Math.abs(pickerMenuBox.y - (pickerBox.y + pickerBox.height))).toBeLessThanOrEqual(6);
+  // 右对齐时 |(menu.x+menu.width) - (trigger.x+trigger.width)| ≤ 2
+  expect(Math.abs((pickerMenuBox.x + pickerMenuBox.width) - (pickerBox.x + pickerBox.width))).toBeLessThanOrEqual(2);
+
+  // 关闭默认模型选择器
+  await page.keyboard.press('Escape');
+  await expect(pickerMenu).toHaveCount(0);
+
+  // ② 编辑对话框「默认思考」下拉（向上展开，左对齐）
   const customRow = page.getByTestId('next-provider-row').filter({ hasText: '内网网关' });
   await customRow.getByTestId('next-provider-more').click();
   await page.getByTestId('next-provider-edit').click();
@@ -305,16 +327,23 @@ test('edit provider dialog: default thinking dropdown menu stays completely with
   // 打开「默认思考」下拉
   const thinkingBtn = page.getByTestId('next-add-thinking-dropdown');
   await expect(thinkingBtn).toBeVisible();
-  await thinkingBtn.click();
+  const thinkingBox = await thinkingBtn.boundingBox();
+  expect(thinkingBox).not.toBeNull();
 
-  const menu = page.getByTestId('next-add-thinking-menu');
-  await expect(menu).toBeVisible();
+  await thinkingBtn.click();
+  const thinkingMenu = page.getByTestId('next-add-thinking-menu');
+  await expect(thinkingMenu).toBeVisible();
+  const thinkingMenuBox = await thinkingMenu.boundingBox();
+  expect(thinkingMenuBox).not.toBeNull();
 
   const viewport = page.viewportSize();
-  const box = await menu.boundingBox();
-  expect(box).not.toBeNull();
-  expect(box.y).toBeGreaterThanOrEqual(0);
-  expect(box.y + box.height).toBeLessThanOrEqual(viewport.height);
+  expect(thinkingMenuBox.y).toBeGreaterThanOrEqual(0);
+  expect(thinkingMenuBox.y + thinkingMenuBox.height).toBeLessThanOrEqual(viewport.height);
+
+  // 向上展开时 |(menu.y+menu.height) - trigger.y| ≤ 6
+  expect(Math.abs((thinkingMenuBox.y + thinkingMenuBox.height) - thinkingBox.y)).toBeLessThanOrEqual(6);
+  // 左对齐时 |menu.x - trigger.x| ≤ 2
+  expect(Math.abs(thinkingMenuBox.x - thinkingBox.x)).toBeLessThanOrEqual(2);
 
   expectClean(state);
 });
