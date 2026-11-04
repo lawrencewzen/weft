@@ -152,10 +152,12 @@ export function AddProviderDialog({
   const [customKey, setCustomKey] = useState('');
   const [showKey, setShowKey] = useState(false);
   const [models, setModels] = useState<Model[]>(() => (editTarget?.models || []));
-  const [chosenId, setChosenId] = useState(() => (editTarget?.defaultModel || editTarget?.models?.[0]?.id || ''));
-  const [imagesSupport, setImagesSupport] = useState<boolean>(() => (editTarget?.images === true));
-  const [thinkingDefault, setThinkingDefault] = useState<'off' | 'low' | 'medium' | 'high'>(() => (
-    (editTarget?.defaultThinkingLevel as 'off' | 'low' | 'medium' | 'high') || 'off'
+  const [chosenId, setChosenId] = useState(() => (editTarget ? (editTarget.defaultModel || '') : ''));
+  const [imagesSupport, setImagesSupport] = useState<boolean | null>(() => (
+    typeof editTarget?.images === 'boolean' ? editTarget.images : null
+  ));
+  const [thinkingDefault, setThinkingDefault] = useState<ThinkingLevel | null>(() => (
+    editTarget?.defaultThinkingLevel || null
   ));
   const [connectedId, setConnectedId] = useState<string | null>(() => (editTarget ? editTarget.id : null));
   const [ddOpen, setDdOpen] = useState(false);
@@ -317,9 +319,9 @@ export function AddProviderDialog({
       setCustomKey('');
       setShowKey(false);
       setModels(editTarget.models || []);
-      setChosenId(editTarget.defaultModel || editTarget.models?.[0]?.id || '');
-      setImagesSupport(editTarget.images === true);
-      setThinkingDefault((editTarget.defaultThinkingLevel as 'off' | 'low' | 'medium' | 'high') || 'off');
+      setChosenId(editTarget.defaultModel || '');
+      setImagesSupport(typeof editTarget.images === 'boolean' ? editTarget.images : null);
+      setThinkingDefault(editTarget.defaultThinkingLevel || null);
       setConnectedId(editTarget.id);
     } else {
       setSelectedId(customOnly ? 'custom' : 'xai');
@@ -331,8 +333,8 @@ export function AddProviderDialog({
       setModels([]);
       setChosenId('');
       setConnectedId(null);
-      setImagesSupport(false);
-      setThinkingDefault('off');
+      setImagesSupport(null);
+      setThinkingDefault(null);
     }
     setDdOpen(false);
     setImagesDdOpen(false);
@@ -552,8 +554,8 @@ export function AddProviderDialog({
         api: 'openai-completions',
         ...(customKey.trim() ? { apiKey: customKey.trim() } : {}),
         defaultModel: chosenId || undefined,
-        images: imagesSupport,
-        defaultThinkingLevel: thinkingDefault,
+        ...(imagesSupport !== null ? { images: imagesSupport } : {}),
+        ...(thinkingDefault !== null ? { defaultThinkingLevel: thinkingDefault } : {}),
       }));
       await executeConnect(connectPromise, 'custom', isExplicit);
     } catch (err) {
@@ -660,14 +662,20 @@ export function AddProviderDialog({
           name: (configName.trim() || editTarget.name).slice(0, 80),
         };
         if (isCustom) {
-          patch.images = imagesSupport;
-          patch.defaultThinkingLevel = thinkingDefault;
+          const initialImages = typeof editTarget.images === 'boolean' ? editTarget.images : null;
+          if (imagesSupport !== initialImages) {
+            patch.images = imagesSupport;
+          }
+          const initialThinking = editTarget.defaultThinkingLevel || null;
+          if (thinkingDefault !== initialThinking) {
+            patch.defaultThinkingLevel = thinkingDefault;
+          }
           if (customUrl.trim()) patch.baseUrl = customUrl.trim();
           if (customKey.trim()) patch.apiKey = customKey.trim();
         } else {
           if (apiKeyInput.trim()) patch.apiKey = apiKeyInput.trim();
         }
-        if (chosenId) {
+        if (chosenId && chosenId !== (editTarget.defaultModel || '')) {
           patch.defaultModel = chosenId;
         }
         await onSaveEdit?.(editTarget.id, patch);
@@ -693,7 +701,10 @@ export function AddProviderDialog({
         name: (configName.trim() || selected.name).slice(0, 80),
         enabled: models.map((item) => item.id),
         defaultModel,
-        ...(isCustom ? { images: imagesSupport, defaultThinkingLevel: thinkingDefault } : {}),
+        ...(isCustom ? {
+          ...(imagesSupport !== null ? { images: imagesSupport } : {}),
+          ...(thinkingDefault !== null ? { defaultThinkingLevel: thinkingDefault } : {}),
+        } : {}),
       });
       if (leftover.length) await onRollback(leftover);
       onClose();
@@ -726,6 +737,8 @@ export function AddProviderDialog({
     setChosenId('');
     setConnectedId(null);
     autoKeyRef.current = '';
+    setImagesSupport(null);
+    setThinkingDefault(null);
   }
 
   const q = search.trim().toLowerCase();
@@ -734,7 +747,9 @@ export function AddProviderDialog({
   const apiList = leftItems.filter((item) => (item.kind === 'vendor' && item.id !== 'xai') || item.kind === 'custom').filter(match);
   const acpList = leftItems.filter((item) => item.kind === 'acp').filter(match);
 
-  const chosen = models.find((item) => item.id === chosenId) || models[0];
+  const chosen = (chosenId ? models.find((item) => item.id === chosenId) : null)
+    || (!editTarget ? models[0] : null)
+    || null;
   const grokAccount = vendor?.localLogin?.account || '';
 
   function renderGroup(label: string, items: LeftItem[]) {
@@ -910,7 +925,7 @@ export function AddProviderDialog({
                       type="button"
                       className="mp-key-toggle"
                       data-testid="next-key-toggle"
-                      title={showKey ? 'Hide key' : 'Show key'}
+                      title={showKey ? t(lang, 'dlg_key_hide') : t(lang, 'dlg_key_show')}
                       onClick={() => setShowKey((s) => !s)}
                     >
                       {showKey ? EYE_OFF_SVG : EYE_SVG}
@@ -947,7 +962,7 @@ export function AddProviderDialog({
                       type="button"
                       className="mp-key-toggle"
                       data-testid="next-key-toggle"
-                      title={showKey ? 'Hide key' : 'Show key'}
+                      title={showKey ? t(lang, 'dlg_key_hide') : t(lang, 'dlg_key_show')}
                       onClick={() => setShowKey((s) => !s)}
                     >
                       {showKey ? EYE_OFF_SVG : EYE_SVG}
@@ -993,13 +1008,13 @@ export function AddProviderDialog({
                       disabled={!isReady}
                       onClick={() => isReady && setDdOpen((open) => !open)}
                     >
-                      {isReady && chosen ? chosen.name : t(lang, 'dlg_add_models_pending')}
+                      {isReady ? (chosen ? chosen.name : t(lang, 'provider_default_unselected')) : t(lang, 'dlg_add_models_pending')}
                       {CHEV_SVG}
                     </button>
                     {ddOpen && isReady && (
                       <div className="mp-add-dd-menu">
                         {models.map((model) => {
-                          const on = model.id === (chosen?.id || '');
+                          const on = Boolean(chosen && model.id === chosen.id);
                           return (
                             <div
                               key={model.id}
@@ -1038,31 +1053,48 @@ export function AddProviderDialog({
                         data-testid="next-add-images-dropdown"
                         onClick={() => setImagesDdOpen((o) => !o)}
                       >
-                        <span>{imagesSupport ? t(lang, 'dlg_add_images_supported') : t(lang, 'dlg_add_images_unsupported')}</span>
+                        <span>
+                          {imagesSupport === null
+                            ? t(lang, 'dlg_add_follow_model')
+                            : imagesSupport
+                              ? t(lang, 'dlg_add_images_supported')
+                              : t(lang, 'dlg_add_images_unsupported')}
+                        </span>
                         {CHEV_SVG}
                       </button>
                       {imagesDdOpen && (
                         <div className="mp-add-dd-menu" data-testid="next-add-images-menu">
                           <div
-                            className={`mp-add-dd-it${imagesSupport ? ' on' : ''}`}
+                            className={`mp-add-dd-it${imagesSupport === null ? ' on' : ''}`}
+                            data-testid="next-add-images-option-follow"
+                            onClick={() => {
+                              setImagesSupport(null);
+                              setImagesDdOpen(false);
+                            }}
+                          >
+                            <span className="ck">{imagesSupport === null ? '✓' : ''}</span>
+                            <span>{t(lang, 'dlg_add_follow_model')}</span>
+                          </div>
+                          <div
+                            className={`mp-add-dd-it${imagesSupport === true ? ' on' : ''}`}
                             data-testid="next-add-images-option-supported"
                             onClick={() => {
                               setImagesSupport(true);
                               setImagesDdOpen(false);
                             }}
                           >
-                            <span className="ck">{imagesSupport ? '✓' : ''}</span>
+                            <span className="ck">{imagesSupport === true ? '✓' : ''}</span>
                             <span>{t(lang, 'dlg_add_images_supported')}</span>
                           </div>
                           <div
-                            className={`mp-add-dd-it${!imagesSupport ? ' on' : ''}`}
+                            className={`mp-add-dd-it${imagesSupport === false ? ' on' : ''}`}
                             data-testid="next-add-images-option-unsupported"
                             onClick={() => {
                               setImagesSupport(false);
                               setImagesDdOpen(false);
                             }}
                           >
-                            <span className="ck">{!imagesSupport ? '✓' : ''}</span>
+                            <span className="ck">{imagesSupport === false ? '✓' : ''}</span>
                             <span>{t(lang, 'dlg_add_images_unsupported')}</span>
                           </div>
                         </div>
@@ -1082,29 +1114,37 @@ export function AddProviderDialog({
                         onClick={() => setThinkingDdOpen((o) => !o)}
                       >
                         <span>
-                          {thinkingDefault === 'off' ? t(lang, 'dlg_add_thinking_off')
-                            : thinkingDefault === 'low' ? t(lang, 'dlg_add_thinking_low')
-                            : thinkingDefault === 'medium' ? t(lang, 'dlg_add_thinking_medium')
-                            : t(lang, 'dlg_add_thinking_high')}
+                          {thinkingDefault === null
+                            ? t(lang, 'dlg_add_follow_model')
+                            : thinkingDefault === 'off'
+                              ? t(lang, 'dlg_add_thinking_off')
+                              : thinkingDefault === 'low'
+                                ? t(lang, 'dlg_add_thinking_low')
+                                : thinkingDefault === 'medium'
+                                  ? t(lang, 'dlg_add_thinking_medium')
+                                  : thinkingDefault === 'high'
+                                    ? t(lang, 'dlg_add_thinking_high')
+                                    : thinkingDefault}
                         </span>
                         {CHEV_SVG}
                       </button>
                       {thinkingDdOpen && (
                         <div className="mp-add-dd-menu" data-testid="next-add-thinking-menu">
                           {[
-                            { id: 'off', label: t(lang, 'dlg_add_thinking_off') },
-                            { id: 'low', label: t(lang, 'dlg_add_thinking_low') },
-                            { id: 'medium', label: t(lang, 'dlg_add_thinking_medium') },
-                            { id: 'high', label: t(lang, 'dlg_add_thinking_high') },
+                            { id: null, testId: 'follow', label: t(lang, 'dlg_add_follow_model') },
+                            { id: 'off' as const, testId: 'off', label: t(lang, 'dlg_add_thinking_off') },
+                            { id: 'low' as const, testId: 'low', label: t(lang, 'dlg_add_thinking_low') },
+                            { id: 'medium' as const, testId: 'medium', label: t(lang, 'dlg_add_thinking_medium') },
+                            { id: 'high' as const, testId: 'high', label: t(lang, 'dlg_add_thinking_high') },
                           ].map((lvl) => {
                             const on = thinkingDefault === lvl.id;
                             return (
                               <div
-                                key={lvl.id}
+                                key={lvl.testId}
                                 className={`mp-add-dd-it${on ? ' on' : ''}`}
-                                data-testid={`next-add-thinking-option-${lvl.id}`}
+                                data-testid={`next-add-thinking-option-${lvl.testId}`}
                                 onClick={() => {
-                                  setThinkingDefault(lvl.id as 'off' | 'low' | 'medium' | 'high');
+                                  setThinkingDefault(lvl.id);
                                   setThinkingDdOpen(false);
                                 }}
                               >

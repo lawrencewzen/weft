@@ -7337,7 +7337,15 @@
             "type": "string"
           },
           "images": {
-            "type": "boolean"
+            "description": "null 清除，回到跟随模型",
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "boolean"
+              }
+            ]
           },
           "defaultThinkingLevel": {
             "oneOf": [

@@ -1700,7 +1700,8 @@ export interface components {
             baseUrl?: string;
             api?: components["schemas"]["CustomApi"];
             apiKey?: string;
-            images?: boolean;
+            /** @description null 清除，回到跟随模型 */
+            images?: null | boolean;
             defaultThinkingLevel?: null | components["schemas"]["ThinkingLevel"];
         };
         /** @description 回答登录会话当前 prompt。 */
