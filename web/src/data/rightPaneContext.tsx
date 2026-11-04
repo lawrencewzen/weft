@@ -58,7 +58,6 @@ export type RightLayoutValue = {
   width: number;
   setWidth: (width: number) => void;
   persistWidth: (width: number) => void;
-  selectedCommandId: string | null;
 };
 
 export type RightChangesValue = {
@@ -92,7 +91,6 @@ export type RightFilesValue = {
 export type RightActionsValue = {
   openFile: (path: string, line?: number) => void;
   openChangeDiff: (path: string) => void;
-  openTerminal: (toolId?: string) => void;
   showFiles: () => void;
   copyPath: (path: string) => void;
   openInTerminal: (relPath?: string, targetWorkspaceId?: string) => Promise<void>;
@@ -149,7 +147,6 @@ export function RightPaneProvider({
   const [editorMode, setEditorMode] = useState<'preview' | 'edit'>('preview');
   const [draftText, setDraftText] = useState('');
   const [saveState, setSaveState] = useState<SaveState>(IDLE_SAVE);
-  const [selectedCommandId, setSelectedCommandId] = useState<string | null>(null);
 
   const wsId = workspaceId || '';
   const changes = useMemo(
@@ -326,7 +323,6 @@ export function RightPaneProvider({
     setDiffs({});
     sigRef.current = {};
     seenDone.current = '';
-    setSelectedCommandId(null);
   }, [cid]);
 
   useEffect(() => {
@@ -461,11 +457,6 @@ export function RightPaneProvider({
     });
   }, [setTab]);
 
-  const openTerminal = useCallback((toolId?: string) => {
-    if (toolId) setSelectedCommandId(toolId);
-    setTab('term');
-  }, [setTab]);
-
   const showFiles = useCallback(() => {
     setTab('files');
     if (wsId) void loadTree(wsId);
@@ -547,10 +538,9 @@ export function RightPaneProvider({
     width,
     setWidth,
     persistWidth,
-    selectedCommandId,
   }), [
     open, setOpen, toggleRight, rbDx, rbTr, rightBtnOp, rightBtnPe, rpBtnOp,
-    tab, setTab, width, setWidth, persistWidth, selectedCommandId,
+    tab, setTab, width, setWidth, persistWidth,
   ]);
 
   const changesValue = useMemo<RightChangesValue>(() => ({
@@ -588,12 +578,11 @@ export function RightPaneProvider({
   const actionsValue = useMemo<RightActionsValue>(() => ({
     openFile,
     openChangeDiff,
-    openTerminal,
     showFiles,
     copyPath,
     openInTerminal,
     onToast,
-  }), [openFile, openChangeDiff, openTerminal, showFiles, copyPath, openInTerminal, onToast]);
+  }), [openFile, openChangeDiff, showFiles, copyPath, openInTerminal, onToast]);
 
   return (
     <RightLayoutContext.Provider value={layoutValue}>

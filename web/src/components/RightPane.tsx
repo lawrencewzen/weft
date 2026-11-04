@@ -1,15 +1,9 @@
-import { useEffect, useMemo } from 'react';
-import { agentCommands, commandTopics } from '../data/agentCommands';
 import type { Lang } from '../data/lang';
 import type { RightTab } from '../data/layout';
 import { useRightChanges, useRightLayout } from '../data/rightPaneContext';
-import { useSession } from '../data/session';
-import { subagentTopic } from '../data/store';
-import { useStoreTopics } from '../data/useStoreTopic';
 import { t } from '../i18n';
 import { ChangesPane } from './ChangesPane';
 import { FileBrowser } from './FileBrowser';
-import { TerminalPane } from './TerminalPane';
 
 type Props = {
   lang: Lang;
@@ -25,38 +19,7 @@ export function RightPane({ lang, workspaceLabel }: Props) {
     rpBtnOp,
   } = useRightLayout();
   const { totals, hasChanges } = useRightChanges();
-  const { store, conversationId, retainTopic, releaseTopic } = useSession();
-  const agents = conversationId ? store.subagents(conversationId) : [];
-  const agentIdsKey = agents.map((agent) => agent.id).join(';');
-  const agentsKey = agents.map((agent) => `${agent.id}:${agent.status}`).join(';');
-  const paneTopics = useMemo(
-    () => (conversationId ? commandTopics(conversationId, agents) : []),
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- agentIdsKey captures list of subagents
-    [conversationId, agentIdsKey],
-  );
-  const storeVersion = useStoreTopics(store, paneTopics);
-  const commands = useMemo(
-    () => (conversationId ? agentCommands(store, conversationId, agents) : []),
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- store is stable; storeVersion tracks writes
-    [store, conversationId, agentsKey, storeVersion],
-  );
-  const runningCount = commands.filter((row) => row.running).length;
-  const effectiveTab: RightTab = tab === 'term'
-    ? 'term'
-    : tab === 'files'
-      ? 'files'
-      : 'changes';
-
-  const agentKey = agents.map((agent) => agent.id).join('\n');
-  useEffect(() => {
-    if (!conversationId) return;
-    const list = store.subagents(conversationId);
-    const topics = list.map((agent) => subagentTopic(conversationId, agent.id));
-    for (const topic of topics) retainTopic(topic);
-    return () => {
-      for (const topic of topics) releaseTopic(topic);
-    };
-  }, [conversationId, agentKey, retainTopic, releaseTopic, store]);
+  const effectiveTab: RightTab = tab === 'files' ? 'files' : 'changes';
 
   return (
     <aside
@@ -109,22 +72,10 @@ export function RightPane({ lang, workspaceLabel }: Props) {
           >
             <span>{t(lang, 'tab_file')}</span>
           </button>
-          <button
-            type="button"
-            className={`tab-btn${effectiveTab === 'term' ? ' active' : ''}`}
-            data-testid="next-right-tab-term"
-            title={t(lang, 'tab_term_title')}
-            onClick={() => setTab('term')}
-          >
-            <span>{t(lang, 'tab_term')}</span>
-            {runningCount > 0 ? <span className="tab-count">{runningCount}</span> : null}
-          </button>
         </nav>
       </header>
       <div className="right-viewport">
-        {effectiveTab === 'term' ? (
-          <TerminalPane lang={lang} />
-        ) : effectiveTab === 'files' ? (
+        {effectiveTab === 'files' ? (
           <FileBrowser lang={lang} workspaceLabel={workspaceLabel} />
         ) : (
           <ChangesPane lang={lang} />

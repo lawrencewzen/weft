@@ -20,7 +20,7 @@ import { isMac, type SearchItem } from '../data/sidebarSearchModel';
 import { readLastOpenedMap, writeLastOpened } from '../data/sidebarUnread';
 import type { ConversationSummary, Workspace } from '../data/store';
 import { useLeftPanel } from '../data/leftPanelContext';
-import { useRightActions, useRightLayout } from '../data/rightPaneContext';
+import { useRightActions } from '../data/rightPaneContext';
 import { useWorkspaces } from '../data/useWorkspaces';
 import { t } from '../i18n';
 import { CtxMenu, type CtxMenuItem } from './CtxMenu';
@@ -72,7 +72,6 @@ export function Sidebar({
 }: Props) {
   const { workspaces, groups, chats, archived } = useWorkspaces();
   const { status } = useSession();
-  const { tab, setTab } = useRightLayout();
   const { showFiles, openInTerminal } = useRightActions();
   const { toggleLeft, sbBtnOp } = useLeftPanel();
   const [openMap, setOpenMap] = useState<OpenRecord>(() => readWorkspaceOpen());
@@ -144,9 +143,8 @@ export function Sidebar({
     writeActiveWorkspace(storedActiveWorkspaceId(ws));
     writeLastOpened(cid);
     setLastOpenedMap((prev) => ({ ...prev, [cid]: Date.now() }));
-    if (tab === 'subagents') setTab('changes');
     navigate(conversationPath(cid));
-  }, [setTab, tab, workspaces]);
+  }, [workspaces]);
 
   const copy = useCallback(async (text: string) => {
     const ok = await copyText(text);

@@ -1,6 +1,7 @@
-import { useState, type MouseEvent } from 'react';
+import { useContext, useState, type MouseEvent } from 'react';
 import type { Lang } from '../data/lang';
 import { useRightActions } from '../data/rightPaneContext';
+import { SessionContext } from '../data/session';
 import type { ToolCall } from '../data/store';
 import { t, toolActionLabel } from '../i18n';
 
@@ -68,7 +69,8 @@ function KindIcon({ kind }: { kind: ToolCall['kind'] }) {
 }
 
 export function ToolRow({ tool, lang, onLoadOutput }: Props) {
-  const { openChangeDiff, openTerminal } = useRightActions();
+  const { openChangeDiff } = useRightActions();
+  const session = useContext(SessionContext);
   const realFail = tool.failure === 'real';
   const changeKind = tool.kind === 'write' || tool.kind === 'edit';
   const [toggled, setToggled] = useState<boolean | null>(null);
@@ -85,6 +87,11 @@ export function ToolRow({ tool, lang, onLoadOutput }: Props) {
     tool.status === 'interrupted' ? 'tool-interrupted' : '',
     realFail ? 'is-failed' : '',
   ].filter(Boolean).join(' ');
+
+  const isRunningBash = tool.kind === 'bash' && tool.status === 'running';
+  const live = isRunningBash && session ? session.store.toolLiveText(tool.id) : undefined;
+  const body = fullText ?? (live && live !== '' ? live : tool.output.preview);
+  const truncated = fullText == null && tool.output.truncated;
 
   async function toggle() {
     if (changeKind) {
@@ -105,9 +112,6 @@ export function ToolRow({ tool, lang, onLoadOutput }: Props) {
       setLoading(false);
     }
   }
-
-  const body = fullText ?? tool.output.preview;
-  const truncated = fullText == null && tool.output.truncated;
 
   return (
     <div className="tool-row-wrapper">
@@ -140,19 +144,6 @@ export function ToolRow({ tool, lang, onLoadOutput }: Props) {
           </span>
         </div>
         <div className="tool-meta">
-          {tool.kind === 'bash' ? (
-            <button
-              type="button"
-              className="tool-open-term"
-              data-testid="next-tool-open-term"
-              onClick={(event) => {
-                event.stopPropagation();
-                openTerminal(tool.id);
-              }}
-            >
-              {t(lang, 'term_view_in')}
-            </button>
-          ) : null}
           {realFail ? (
             <span className="tool-row-status is-failed" data-testid="next-tool-row-status">{t(lang, 'tool_status_failed')}</span>
           ) : tool.status === 'interrupted' ? (
