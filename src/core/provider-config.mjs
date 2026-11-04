@@ -177,9 +177,7 @@ export function normalizeProvidersV3(raw) {
     };
     if (typeof item.images === 'boolean') provider.images = item.images;
     if (isThinkingLevelName(item.defaultThinkingLevel)) provider.defaultThinkingLevel = item.defaultThinkingLevel;
-    if (typeof item.defaultModel === 'string' && item.defaultModel.trim()) {
-      provider.defaultModel = item.defaultModel.trim().slice(0, 200);
-    }
+    // Legacy per-provider defaultModel is discarded. settings.defaultModel is the only source.
     if (lastTest) provider.lastTest = lastTest;
     out.push(provider);
   }

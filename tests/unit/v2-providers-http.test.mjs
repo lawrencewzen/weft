@@ -459,7 +459,7 @@ test('POST /api/v2/providers/custom fetches /models; failure does not save', asy
     }),
   });
 
-  await withHttp(async ({ base }) => {
+  await withHttp(async ({ base, store }) => {
     const created = await send(base, 'POST', '/api/v2/providers/custom?lang=zh', {
       name: 'Local',
       baseUrl: 'http://127.0.0.1:9/v1',
@@ -476,6 +476,12 @@ test('POST /api/v2/providers/custom fetches /models; failure does not save', asy
     assert.equal(created.body.provider.images, true);
     assert.equal(created.body.provider.defaultThinkingLevel, 'high');
     assert.equal(created.body.provider.defaultModel, 'alpha');
+    const settings = await store.getSettings();
+    assert.deepEqual(settings.defaultModel, {
+      providerId: created.body.provider.id,
+      modelId: 'alpha',
+    });
+    assert.equal(settings.providers.every((item) => !Object.prototype.hasOwnProperty.call(item, 'defaultModel')), true);
     assert.equal(created.body.provider.models.length, 2);
     assert.equal(created.body.provider.models.every((item) => item.enabled), true);
     assert.equal(created.body.provider.models[0].images, true);
@@ -605,5 +611,167 @@ test('POST connect local_login imports Grok login and does not leak tokens', asy
   } finally {
     await removeTempDir(home);
   }
+});
+
+test('GET /api/v2/providers defaultModel follows only the global default', async () => {
+  const customId = 'custom-bbbbbbbb';
+  await withHttp(async ({ base, store }) => {
+    const first = await send(base, 'GET', '/api/v2/providers');
+    assert.equal(first.status, 200, first.text);
+    assertChecked('/api/v2/providers', 'GET', 200, first.body);
+    assert.equal(first.body.providers.find((item) => item.id === 'deepseek').defaultModel, 'deepseek-chat');
+    assert.equal(first.body.providers.find((item) => item.id === customId).defaultModel, null);
+
+    const renamed = await send(base, 'PATCH', '/api/v2/providers/deepseek', { name: 'Still DeepSeek' });
+    assert.equal(renamed.status, 200, renamed.text);
+    assert.equal(renamed.body.provider.defaultModel, 'deepseek-chat');
+    assert.deepEqual((await store.getSettings()).defaultModel, {
+      providerId: 'deepseek',
+      modelId: 'deepseek-chat',
+    });
+
+    const switched = await send(base, 'PATCH', `/api/v2/providers/${customId}`, { defaultModel: 'beta' });
+    assert.equal(switched.status, 200, switched.text);
+    assertChecked(`/api/v2/providers/${customId}`, 'PATCH', 200, switched.body);
+    assert.equal(switched.body.provider.defaultModel, 'beta');
+
+    const listed = await send(base, 'GET', '/api/v2/providers');
+    assert.equal(listed.status, 200, listed.text);
+    assertChecked('/api/v2/providers', 'GET', 200, listed.body);
+    assert.equal(listed.body.providers.find((item) => item.id === 'deepseek').defaultModel, null);
+    assert.equal(listed.body.providers.find((item) => item.id === customId).defaultModel, 'beta');
+    const settings = await store.getSettings();
+    assert.deepEqual(settings.defaultModel, { providerId: customId, modelId: 'beta' });
+    assert.equal(settings.providers.every((item) => !Object.prototype.hasOwnProperty.call(item, 'defaultModel')), true);
+  }, {
+    settings: {
+      version: 3,
+      providers: [
+        { id: 'deepseek', kind: 'builtin', enabled: ['deepseek-chat'], overrides: {} },
+        {
+          id: customId,
+          kind: 'custom',
+          name: 'Local',
+          baseUrl: 'http://127.0.0.1:9/v1',
+          api: 'openai-completions',
+          enabled: ['beta'],
+          overrides: {},
+        },
+      ],
+      defaultModel: { providerId: 'deepseek', modelId: 'deepseek-chat' },
+    },
+  });
+});
+
+test('POST /api/v2/providers/custom rejects an unknown defaultModel and saves nothing', async () => {
+  await withHttp(async ({ base, store, credentials }) => {
+    const failed = await send(base, 'POST', '/api/v2/providers/custom?lang=zh', {
+      name: 'Local',
+      baseUrl: 'http://127.0.0.1:9/v1',
+      api: 'openai-completions',
+      apiKey: 'sk-should-not-save',
+      defaultModel: 'missing',
+    });
+    assert.equal(failed.status, 400, failed.text);
+    assert.equal(failed.body.code, 'E_BAD_REQUEST');
+    assertChecked('/api/v2/providers/custom', 'POST', 400, failed.body);
+    assert.deepEqual((await store.getSettings()).providers, []);
+    assert.equal((await credentials.list()).length, 0);
+    const listed = await send(base, 'GET', '/api/v2/providers');
+    assert.equal(listed.body.providers.length, 0);
+  }, {
+    fetchImpl: async () => ({
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify({ data: [{ id: 'alpha', name: 'Alpha' }] }),
+    }),
+  });
+});
+
+test('PATCH rejects illegal images and thinking level, and null images deletes the field', async () => {
+  const customId = 'custom-aaaaaaaa';
+  await withHttp(async ({ base, store }) => {
+    const badImages = await send(base, 'PATCH', `/api/v2/providers/${customId}`, { images: 'yes' });
+    assert.equal(badImages.status, 400, badImages.text);
+    assert.equal(badImages.body.code, 'E_BAD_REQUEST');
+    assertChecked(`/api/v2/providers/${customId}`, 'PATCH', 400, badImages.body);
+
+    const badThinking = await send(base, 'PATCH', `/api/v2/providers/${customId}`, {
+      defaultThinkingLevel: 'ultra',
+    });
+    assert.equal(badThinking.status, 400, badThinking.text);
+    assert.equal(badThinking.body.code, 'E_BAD_REQUEST');
+    assertChecked(`/api/v2/providers/${customId}`, 'PATCH', 400, badThinking.body);
+
+    const builtin = await send(base, 'PATCH', '/api/v2/providers/deepseek', { images: true });
+    assert.equal(builtin.status, 400, builtin.text);
+    assert.equal(builtin.body.code, 'E_BAD_REQUEST');
+    assertChecked('/api/v2/providers/deepseek', 'PATCH', 400, builtin.body);
+
+    const kept = await store.getSettings();
+    const custom = kept.providers.find((item) => item.id === customId);
+    assert.equal(custom.images, true);
+    assert.equal(custom.defaultThinkingLevel, 'high');
+    assert.equal(Object.prototype.hasOwnProperty.call(
+      kept.providers.find((item) => item.id === 'deepseek'),
+      'images',
+    ), false);
+    assert.deepEqual(kept.defaultModel, { providerId: 'deepseek', modelId: 'deepseek-chat' });
+
+    const cleared = await send(base, 'PATCH', `/api/v2/providers/${customId}`, { images: null });
+    assert.equal(cleared.status, 200, cleared.text);
+    assertChecked(`/api/v2/providers/${customId}`, 'PATCH', 200, cleared.body);
+    assert.equal(cleared.body.provider.images, undefined);
+    assert.equal(cleared.body.provider.defaultThinkingLevel, 'high');
+    const saved = (await store.getSettings()).providers.find((item) => item.id === customId);
+    assert.equal(Object.prototype.hasOwnProperty.call(saved, 'images'), false);
+    assert.equal(saved.defaultThinkingLevel, 'high');
+  }, {
+    settings: {
+      version: 3,
+      providers: [
+        { id: 'deepseek', kind: 'builtin', enabled: ['deepseek-chat'], overrides: {} },
+        {
+          id: customId,
+          kind: 'custom',
+          name: 'Local',
+          baseUrl: 'http://127.0.0.1:9/v1',
+          api: 'openai-completions',
+          enabled: ['alpha'],
+          overrides: {},
+          images: true,
+          defaultThinkingLevel: 'high',
+        },
+      ],
+      defaultModel: { providerId: 'deepseek', modelId: 'deepseek-chat' },
+    },
+  });
+});
+
+test('POST /api/v2/providers is not a custom-provider alias', async () => {
+  let fetches = 0;
+  await withHttp(async ({ base, store, credentials }) => {
+    const got = await send(base, 'POST', '/api/v2/providers', {
+      name: 'Local',
+      baseUrl: 'http://127.0.0.1:9/v1',
+      api: 'openai-completions',
+      apiKey: 'sk-should-not-save',
+    });
+    assert.equal(got.status, 404, got.text);
+    assert.equal(got.body.code, 'E_NOT_FOUND');
+    assertChecked('/api/v2/providers', 'POST', 404, got.body);
+    assert.equal(fetches, 0);
+    assert.deepEqual((await store.getSettings()).providers, []);
+    assert.equal((await credentials.list()).length, 0);
+  }, {
+    fetchImpl: async () => {
+      fetches += 1;
+      return {
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify({ data: [{ id: 'alpha' }] }),
+      };
+    },
+  });
 });
 

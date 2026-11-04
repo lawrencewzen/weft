@@ -163,7 +163,7 @@ export async function handleProvidersApi(ctx: ProvidersHttpCtx, opts: ProvidersH
       return true;
     }
 
-    if (method === 'POST' && (pathname === '/api/v2/providers' || pathname === '/api/v2/providers/custom')) {
+    if (method === 'POST' && pathname === '/api/v2/providers/custom') {
       const body = await ctx.readObjectBody(ctx.req, res, pathname, method);
       if (!body) return true;
       const created = await service.addCustom({

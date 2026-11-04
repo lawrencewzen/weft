@@ -59,6 +59,35 @@ test('entitiesFromSnapshot emits provider rows and defaults/self', () => {
   });
 });
 
+test('provider topic rows take defaultModel only from the global default', () => {
+  const snap = providersSnapshotFrom({
+    providers: [
+      {
+        id: 'custom-aaaaaaaa',
+        kind: 'custom',
+        name: 'A',
+        auth: { type: 'none' },
+        models: [],
+        defaultModel: null,
+      },
+      {
+        id: 'custom-bbbbbbbb',
+        kind: 'custom',
+        name: 'B',
+        auth: { type: 'none' },
+        models: [],
+        defaultModel: 'beta',
+      },
+    ],
+    defaultModel: { providerId: 'custom-bbbbbbbb', modelId: 'beta' },
+  }, 'zh');
+  const entities = entitiesFromSnapshot(snap);
+  const a = entities.find((item) => item.entity === 'provider' && item.id === 'custom-aaaaaaaa');
+  const b = entities.find((item) => item.entity === 'provider' && item.id === 'custom-bbbbbbbb');
+  assert.equal(a.value.defaultModel, null);
+  assert.equal(b.value.defaultModel, 'beta');
+});
+
 test('providers topic upserts after connect and removes after delete', async () => {
   const dir = await makeTempDir('weft-providers-topic-');
   const store = createSqliteStore(dir);

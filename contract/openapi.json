@@ -6767,7 +6767,7 @@
             }
           },
           "defaultModel": {
-            "description": "该 Provider 的默认模型 id（若未设置则为 null）",
+            "description": "全局默认模型属于该 Provider 时为其 modelId，否则 null",
             "oneOf": [
               {
                 "type": "null"

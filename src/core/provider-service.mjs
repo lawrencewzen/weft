@@ -178,6 +178,34 @@ function fail(code, message, extra = {}) {
   throw err;
 }
 
+function rejectIllegalCustomCapability(patch) {
+  if (patch?.images !== undefined && typeof patch.images !== 'boolean' && patch.images !== null) {
+    fail('E_BAD_REQUEST', 'invalid images');
+  }
+  if (
+    patch?.defaultThinkingLevel !== undefined
+    && patch.defaultThinkingLevel !== null
+    && !isThinkingLevelName(patch.defaultThinkingLevel)
+  ) {
+    fail('E_BAD_REQUEST', 'invalid thinking level');
+  }
+}
+
+function applyCustomCapability(entry, patch) {
+  rejectIllegalCustomCapability(patch);
+  if (typeof patch?.images === 'boolean') entry.images = patch.images;
+  else if (patch?.images === null) delete entry.images;
+  if (isThinkingLevelName(patch?.defaultThinkingLevel)) entry.defaultThinkingLevel = patch.defaultThinkingLevel;
+  else if (patch?.defaultThinkingLevel === null) delete entry.defaultThinkingLevel;
+}
+
+function requestedDefaultModelId(value) {
+  if (value == null) return null;
+  if (typeof value !== 'string') fail('E_BAD_REQUEST', 'invalid default model');
+  const modelId = value.trim().slice(0, 200);
+  return modelId || null;
+}
+
 function defaultEnabledIds(ids) {
   return ids.length <= ENABLE_ALL_MAX ? ids.slice() : [];
 }
@@ -444,7 +472,7 @@ export function createProviderService({
       };
       if (typeof entry.images === 'boolean') item.images = entry.images;
       if (entry.defaultThinkingLevel) item.defaultThinkingLevel = entry.defaultThinkingLevel;
-      item.defaultModel = entry.defaultModel || (def?.providerId === entry.id ? def.modelId : null);
+      item.defaultModel = def?.providerId === entry.id ? def.modelId : null;
       if (entry.kind === 'custom') {
         if (entry.api) item.api = entry.api;
         if (entry.baseUrl) item.baseUrl = entry.baseUrl;
@@ -543,32 +571,29 @@ export function createProviderService({
     const index = providers.findIndex((item) => item.id === id);
     if (index < 0) fail('E_NOT_FOUND', 'not found', { phrase: 'src_err_missing' });
     const current = { ...providers[index] };
+    if (current.kind !== 'custom') {
+      if (patch.images !== undefined || patch.defaultThinkingLevel !== undefined) {
+        fail('E_BAD_REQUEST', 'images and defaultThinkingLevel apply only to custom providers');
+      }
+    } else {
+      applyCustomCapability(current, patch);
+    }
     if (Array.isArray(patch.enabled)) current.enabled = patch.enabled;
     if (Object.prototype.hasOwnProperty.call(patch, 'overrides')) {
       current.overrides = mergeOverrides(current.overrides, patch.overrides);
     }
     if (Object.prototype.hasOwnProperty.call(patch, 'defaultModel')) {
       if (patch.defaultModel == null || patch.defaultModel === '') {
-        delete current.defaultModel;
         if (defaultModelOf(settings)?.providerId === id) {
           settings = { ...settings, defaultModel: null };
         }
       } else {
         const modelId = String(patch.defaultModel).trim();
-        current.defaultModel = modelId;
         settings = {
           ...settings,
           defaultModel: { providerId: id, modelId },
         };
       }
-    }
-    if (Object.prototype.hasOwnProperty.call(patch, 'images')) {
-      if (typeof patch.images === 'boolean') current.images = patch.images;
-      else if (patch.images === null) delete current.images;
-    }
-    if (Object.prototype.hasOwnProperty.call(patch, 'defaultThinkingLevel')) {
-      if (isThinkingLevelName(patch.defaultThinkingLevel)) current.defaultThinkingLevel = patch.defaultThinkingLevel;
-      else if (patch.defaultThinkingLevel === null) delete current.defaultThinkingLevel;
     }
     if (typeof patch.name === 'string' && patch.name.trim()) {
       current.name = patch.name.trim().slice(0, 80);
@@ -593,6 +618,7 @@ export function createProviderService({
         current.api = api;
       }
     }
+    delete current.defaultModel;
     const nextProviders = providers.slice();
     nextProviders[index] = current;
     const saved = await saveSettings({ ...settings, providers: nextProviders });
@@ -1181,6 +1207,8 @@ export function createProviderService({
     const apiId = String(api || '').trim();
     if (!CUSTOM_API.has(apiId)) fail('E_BAD_REQUEST', 'invalid api', { phrase: 'src_err_api' });
     const key = isMaskedOrEmptyApiKey(apiKey) ? '' : String(apiKey || '').trim();
+    rejectIllegalCustomCapability({ images, defaultThinkingLevel });
+    const requestedModel = requestedDefaultModelId(defaultModel);
     const id = createCustomProviderId();
     let fetched;
     try {
@@ -1195,6 +1223,9 @@ export function createProviderService({
     if (!Array.isArray(fetched) || !fetched.length) {
       fail('E_HTTP', 'no models', { phrase: 'src_err_models' });
     }
+    if (requestedModel && !fetched.some((item) => item?.id === requestedModel)) {
+      fail('E_BAD_REQUEST', 'unknown default model', { phrase: 'src_err_model' });
+    }
     const enabled = defaultEnabledIds(fetched.map((item) => item.id));
     const entry = {
       id,
@@ -1206,19 +1237,15 @@ export function createProviderService({
       overrides: {},
       lastTest: { ok: true, at: now() },
     };
-    if (typeof images === 'boolean') entry.images = images;
-    if (isThinkingLevelName(defaultThinkingLevel)) entry.defaultThinkingLevel = defaultThinkingLevel;
-    if (typeof defaultModel === 'string' && defaultModel.trim()) {
-      entry.defaultModel = defaultModel.trim().slice(0, 200);
-    }
+    applyCustomCapability(entry, { images, defaultThinkingLevel });
     if (key) await credentials.modify(id, async () => ({ type: 'api_key', key }));
     await modelsStore.write(id, { models: fetched });
     await upsertEntry(entry);
-    if (entry.defaultModel) {
+    if (requestedModel) {
       const currentSettings = await loadSettings();
       await saveSettings({
         ...currentSettings,
-        defaultModel: { providerId: id, modelId: entry.defaultModel },
+        defaultModel: { providerId: id, modelId: requestedModel },
       });
     }
     return getProvider(id);

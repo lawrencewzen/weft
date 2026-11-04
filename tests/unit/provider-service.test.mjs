@@ -1,9 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createSqliteStore } from '../../src/store/sqlite.mjs';
+import { APP_DB_FILE, createSqliteStore } from '../../src/store/sqlite.mjs';
 import { createCredentialStore, createModelsStore } from '../../src/core/provider-stores.mjs';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 import {
   createProviderService,
   EXCLUDED_PROVIDER_IDS,
@@ -50,6 +51,15 @@ async function withService(fn, {
   } finally {
     store.close();
     await removeTempDir(dir);
+  }
+}
+
+function tableCount(dir, table) {
+  const db = new DatabaseSync(path.join(dir, APP_DB_FILE), { readOnly: true });
+  try {
+    return db.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get().n;
+  } finally {
+    db.close();
   }
 }
 
@@ -789,6 +799,227 @@ test('connectLocalLogin rejects non-xai and missing local login', async () => {
     });
   }, {
     extraProviders: [fakeOAuthProvider({ id: 'xai', name: 'Grok', models: ['grok-3'] })],
+  });
+});
+
+test('listed defaultModel follows the global default and drops a legacy provider field', async () => {
+  await withService(async ({ service, store }) => {
+    await store.putSettingsRaw('app', {
+      version: 3,
+      language: 'zh',
+      theme: 'white',
+      appearance: 'light',
+      providers: [
+        {
+          id: 'deepseek',
+          kind: 'builtin',
+          enabled: ['deepseek-chat'],
+          overrides: {},
+          defaultModel: 'deepseek-chat',
+        },
+        {
+          id: CUSTOM_ID,
+          kind: 'custom',
+          name: 'Local',
+          baseUrl: 'http://127.0.0.1:9/v1',
+          api: 'openai-completions',
+          enabled: ['alpha', 'beta'],
+          overrides: {},
+          defaultModel: 'alpha',
+        },
+      ],
+      defaultModel: { providerId: 'deepseek', modelId: 'deepseek-chat' },
+    });
+
+    const listed = await service.listProviders();
+    assert.equal(listed.find((item) => item.id === 'deepseek').defaultModel, 'deepseek-chat');
+    assert.equal(listed.find((item) => item.id === CUSTOM_ID).defaultModel, null);
+    assert.equal((await service.getProvider(CUSTOM_ID)).defaultModel, null);
+    const loaded = await store.getSettings();
+    assert.equal(loaded.providers.every((item) => !Object.prototype.hasOwnProperty.call(item, 'defaultModel')), true);
+    assert.deepEqual(loaded.defaultModel, { providerId: 'deepseek', modelId: 'deepseek-chat' });
+
+    await service.patchProvider(CUSTOM_ID, { defaultModel: 'beta' });
+    const switched = await service.listProviders();
+    assert.equal(switched.find((item) => item.id === 'deepseek').defaultModel, null);
+    assert.equal(switched.find((item) => item.id === CUSTOM_ID).defaultModel, 'beta');
+    const saved = await store.getSettings();
+    assert.deepEqual(saved.defaultModel, { providerId: CUSTOM_ID, modelId: 'beta' });
+    assert.equal(saved.providers.every((item) => !Object.prototype.hasOwnProperty.call(item, 'defaultModel')), true);
+    const raw = await store.getSettingsRaw('app');
+    assert.equal(raw.providers.every((item) => !Object.prototype.hasOwnProperty.call(item, 'defaultModel')), true);
+
+    await service.patchProvider('deepseek', { defaultModel: null });
+    assert.deepEqual((await store.getSettings()).defaultModel, { providerId: CUSTOM_ID, modelId: 'beta' });
+    await service.patchProvider(CUSTOM_ID, { defaultModel: '' });
+    assert.equal((await store.getSettings()).defaultModel, null);
+    assert.equal((await service.getProvider(CUSTOM_ID)).defaultModel, null);
+  });
+});
+
+test('patching a provider name does not change the global default model', async () => {
+  await withService(async ({ service, store }) => {
+    await service.patchProvider(CUSTOM_ID, { name: 'Renamed' });
+    const settings = await store.getSettings();
+    assert.equal(settings.providers[0].name, 'Renamed');
+    assert.equal(Object.prototype.hasOwnProperty.call(settings.providers[0], 'defaultModel'), false);
+    assert.deepEqual(settings.defaultModel, { providerId: CUSTOM_ID, modelId: 'alpha' });
+    const listed = await service.getProvider(CUSTOM_ID);
+    assert.equal(listed.name, 'Renamed');
+    assert.equal(listed.defaultModel, 'alpha');
+  }, { settings: customSettings() });
+});
+
+test('addCustom rejects an unknown defaultModel and writes nothing', async () => {
+  let fetches = 0;
+  await withService(async ({ service, store, credentials, dir }) => {
+    await assert.rejects(() => service.addCustom({
+      name: 'Local',
+      baseUrl: 'http://127.0.0.1:9/v1',
+      api: 'openai-completions',
+      apiKey: 'sk-should-not-save',
+      images: 'yes',
+    }), (err) => {
+      assert.equal(err.code, 'E_BAD_REQUEST');
+      return true;
+    });
+    await assert.rejects(() => service.addCustom({
+      name: 'Local',
+      baseUrl: 'http://127.0.0.1:9/v1',
+      api: 'openai-completions',
+      defaultThinkingLevel: 'ultra',
+    }), (err) => {
+      assert.equal(err.code, 'E_BAD_REQUEST');
+      return true;
+    });
+    assert.equal(fetches, 0);
+
+    await assert.rejects(() => service.addCustom({
+      name: 'Local',
+      baseUrl: 'http://127.0.0.1:9/v1',
+      api: 'openai-completions',
+      apiKey: 'sk-should-not-save',
+      defaultModel: 'missing',
+    }), (err) => {
+      assert.equal(err.code, 'E_BAD_REQUEST');
+      assert.equal(err.phrase, 'src_err_model');
+      return true;
+    });
+    assert.equal(fetches, 1);
+    assert.deepEqual((await store.getSettings()).providers, []);
+    assert.deepEqual(await credentials.list(), []);
+    assert.equal(tableCount(dir, 'provider_credentials'), 0);
+    assert.equal(tableCount(dir, 'provider_models'), 0);
+  }, {
+    fetchImpl: async () => {
+      fetches += 1;
+      return {
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify({ data: [{ id: 'alpha', name: 'Alpha' }] }),
+      };
+    },
+  });
+
+  await withService(async ({ service, store, credentials }) => {
+    const created = await service.addCustom({
+      name: 'Local',
+      baseUrl: 'http://127.0.0.1:9/v1',
+      api: 'openai-completions',
+      apiKey: 'sk-custom-ok',
+      defaultModel: 'alpha',
+      images: null,
+      defaultThinkingLevel: null,
+    });
+    assert.equal(created.defaultModel, 'alpha');
+    assert.equal(created.images, undefined);
+    assert.equal(created.defaultThinkingLevel, undefined);
+    const settings = await store.getSettings();
+    assert.deepEqual(settings.defaultModel, { providerId: created.id, modelId: 'alpha' });
+    assert.equal(Object.prototype.hasOwnProperty.call(settings.providers[0], 'defaultModel'), false);
+    assert.equal(Object.prototype.hasOwnProperty.call(settings.providers[0], 'images'), false);
+    assert.equal((await credentials.read(created.id)).key, 'sk-custom-ok');
+  }, {
+    fetchImpl: async () => ({
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify({ data: [{ id: 'alpha', name: 'Alpha' }] }),
+    }),
+  });
+});
+
+test('patchProvider rejects illegal images and thinking level, and null deletes them', async () => {
+  await withService(async ({ service, store }) => {
+    await assert.rejects(
+      () => service.patchProvider(CUSTOM_ID, { images: 'yes' }),
+      (err) => {
+        assert.equal(err.code, 'E_BAD_REQUEST');
+        return true;
+      },
+    );
+    await assert.rejects(
+      () => service.patchProvider(CUSTOM_ID, { defaultThinkingLevel: 'ultra' }),
+      (err) => {
+        assert.equal(err.code, 'E_BAD_REQUEST');
+        return true;
+      },
+    );
+    await assert.rejects(
+      () => service.patchProvider('deepseek', { images: true }),
+      (err) => {
+        assert.equal(err.code, 'E_BAD_REQUEST');
+        return true;
+      },
+    );
+    await assert.rejects(
+      () => service.patchProvider('deepseek', { images: null, defaultThinkingLevel: 'low' }),
+      (err) => {
+        assert.equal(err.code, 'E_BAD_REQUEST');
+        return true;
+      },
+    );
+    const kept = await store.getSettings();
+    const custom = kept.providers.find((item) => item.id === CUSTOM_ID);
+    const builtin = kept.providers.find((item) => item.id === 'deepseek');
+    assert.equal(custom.images, true);
+    assert.equal(custom.defaultThinkingLevel, 'high');
+    assert.equal(Object.prototype.hasOwnProperty.call(builtin, 'images'), false);
+    assert.deepEqual(kept.defaultModel, { providerId: CUSTOM_ID, modelId: 'alpha' });
+
+    await service.patchProvider(CUSTOM_ID, { images: false, defaultThinkingLevel: 'low' });
+    const written = (await store.getSettings()).providers.find((item) => item.id === CUSTOM_ID);
+    assert.equal(written.images, false);
+    assert.equal(written.defaultThinkingLevel, 'low');
+
+    await service.patchProvider(CUSTOM_ID, { images: null });
+    const cleared = (await store.getSettings()).providers.find((item) => item.id === CUSTOM_ID);
+    assert.equal(Object.prototype.hasOwnProperty.call(cleared, 'images'), false);
+    assert.equal(cleared.defaultThinkingLevel, 'low');
+    assert.equal((await service.getProvider(CUSTOM_ID)).images, undefined);
+
+    await service.patchProvider(CUSTOM_ID, { defaultThinkingLevel: null });
+    const noThinking = (await store.getSettings()).providers.find((item) => item.id === CUSTOM_ID);
+    assert.equal(Object.prototype.hasOwnProperty.call(noThinking, 'defaultThinkingLevel'), false);
+    assert.equal((await service.getProvider(CUSTOM_ID)).defaultThinkingLevel, undefined);
+  }, {
+    settings: {
+      version: 3,
+      providers: [
+        { id: 'deepseek', kind: 'builtin', enabled: ['deepseek-chat'], overrides: {} },
+        {
+          id: CUSTOM_ID,
+          kind: 'custom',
+          name: 'Local',
+          baseUrl: 'http://127.0.0.1:9/v1',
+          api: 'openai-completions',
+          enabled: ['alpha'],
+          overrides: {},
+          images: true,
+          defaultThinkingLevel: 'high',
+        },
+      ],
+      defaultModel: { providerId: CUSTOM_ID, modelId: 'alpha' },
+    },
   });
 });
 
