@@ -22,7 +22,7 @@ import {
   resolveEffectiveDefault,
   resolveKernelTarget,
 } from '../kernel/models.mjs';
-import { effectiveThinkingLevel, isThinkingLevelName, thinkingFieldsOf } from './thinking-level.mjs';
+import { applyCapabilityOverrides, effectiveThinkingLevel, isThinkingLevelName, thinkingFieldsOf } from './thinking-level.mjs';
 
 export const POPULAR_PROVIDER_IDS = Object.freeze([
   'deepseek',
@@ -260,7 +260,6 @@ function displayWindow(value) {
 }
 
 function modelRow(model, { enabled, overridden, providerDefaults } = {}) {
-  const input = Array.isArray(model?.input) ? model.input : [];
   const over = overridden && Object.keys(overridden).length ? overridden : {};
   const flags = {};
   if (over.contextWindow != null) flags.contextWindow = true;
@@ -268,28 +267,14 @@ function modelRow(model, { enabled, overridden, providerDefaults } = {}) {
   if (over.images != null) flags.images = true;
   if (over.thinkingLevel != null) flags.thinkingLevel = true;
 
-  let hasImage = input.includes('image');
-  if (typeof over.images === 'boolean') {
-    hasImage = over.images;
-  } else if (typeof providerDefaults?.images === 'boolean') {
-    hasImage = providerDefaults.images;
-  }
-
-  const effectiveThinking = over.thinkingLevel || providerDefaults?.defaultThinkingLevel;
-  let isReasoning = model.reasoning === true;
-  let thinking = thinkingFieldsOf(model);
-  if (effectiveThinking && effectiveThinking !== 'off') {
-    isReasoning = true;
-    thinking = {
-      thinkingLevels: ['off', 'low', 'medium', 'high'],
-      defaultThinkingLevel: effectiveThinking,
-    };
-  } else if (effectiveThinking === 'off') {
-    thinking = {
-      thinkingLevels: isReasoning ? (thinking.thinkingLevels.length ? thinking.thinkingLevels : ['off', 'low', 'medium', 'high']) : [],
-      defaultThinkingLevel: 'off',
-    };
-  }
+  const caps = applyCapabilityOverrides(model, over, providerDefaults);
+  const thinking = thinkingFieldsOf({
+    ...model,
+    input: caps.input,
+    reasoning: caps.reasoning,
+    defaultThinkingLevel: caps.defaultThinkingLevel,
+  });
+  const input = Array.isArray(caps.input) ? caps.input : [];
 
   return {
     id: model.id,
@@ -297,8 +282,8 @@ function modelRow(model, { enabled, overridden, providerDefaults } = {}) {
     enabled: enabled === true,
     contextWindow: over.contextWindow ?? displayWindow(model.contextWindow),
     maxTokens: over.maxTokens ?? displayWindow(model.maxTokens),
-    images: hasImage,
-    reasoning: isReasoning,
+    images: input.includes('image'),
+    reasoning: caps.reasoning === true,
     thinkingLevels: thinking.thinkingLevels,
     defaultThinkingLevel: thinking.defaultThinkingLevel,
     overridden: flags,

@@ -25,12 +25,68 @@ export function thinkingLevelsOf(model) {
 }
 
 /**
- * Every reasoning model defaults to `medium`, then `clampThinkingLevel`.
- * No thinking → null.
+ * `model.defaultThinkingLevel` when it is a canonical name, then
+ * `clampThinkingLevel`. Otherwise `medium`, then `clampThinkingLevel`.
+ * No thinking → null. pi-ai itself ignores this field; callers that configure
+ * a turn use this so a weft override actually takes effect.
  */
 export function defaultThinkingLevelOf(model) {
   if (!thinkingLevelsOf(model).length) return null;
-  return clampThinkingLevel(model, 'medium');
+  const preferred = isThinkingLevelName(model?.defaultThinkingLevel)
+    ? model.defaultThinkingLevel
+    : 'medium';
+  return clampThinkingLevel(model, preferred);
+}
+
+/**
+ * One calculation for the settings row and the model that is actually called.
+ * Model-level override beats custom-provider defaults, which beat the catalog.
+ * Does not invent a `thinkingLevelMap`: missing standard levels stay on the
+ * provider default (pi-ai sends map strings as-is, so a fallback `'none'`
+ * would go out as `reasoning_effort`).
+ *
+ * `override` is one model's entry (`images`, `thinkingLevel`).
+ * `providerDefaults` is the custom provider (`images`, `defaultThinkingLevel`).
+ */
+export function applyCapabilityOverrides(model, override, providerDefaults) {
+  const base = model && typeof model === 'object' ? model : {};
+  const images = chosenImages(override, providerDefaults);
+  const input = adjustInput(base.input, images);
+  const level = chosenThinkingLevel(override, providerDefaults);
+  let reasoning = base.reasoning;
+  let defaultThinkingLevel = base.defaultThinkingLevel;
+  if (level === 'off') {
+    defaultThinkingLevel = 'off';
+  } else if (level) {
+    reasoning = true;
+    defaultThinkingLevel = clampThinkingLevel({ ...base, reasoning: true }, level);
+  }
+  return {
+    input,
+    reasoning,
+    thinkingLevelMap: base.thinkingLevelMap,
+    defaultThinkingLevel,
+  };
+}
+
+function chosenImages(override, providerDefaults) {
+  if (typeof override?.images === 'boolean') return override.images;
+  if (typeof providerDefaults?.images === 'boolean') return providerDefaults.images;
+  return undefined;
+}
+
+function chosenThinkingLevel(override, providerDefaults) {
+  if (isThinkingLevelName(override?.thinkingLevel)) return override.thinkingLevel;
+  if (isThinkingLevelName(providerDefaults?.defaultThinkingLevel)) return providerDefaults.defaultThinkingLevel;
+  return undefined;
+}
+
+function adjustInput(input, images) {
+  if (typeof images !== 'boolean') return input;
+  if (!Array.isArray(input)) return images ? ['text', 'image'] : ['text'];
+  const hasImage = input.includes('image');
+  if (images) return hasImage ? input : [...input, 'image'];
+  return hasImage ? input.filter((item) => item !== 'image') : input;
 }
 
 /**
