@@ -422,13 +422,13 @@ async function pathExists(target) {
   }
 }
 
-async function fetchBuffer(url) {
+async function fetchBuffer(url, timeoutMs = 60_000) {
   let lastErr;
-  for (let attempt = 1; attempt <= 3; attempt += 1) {
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
     try {
       const res = await fetch(url, {
         redirect: 'follow',
-        signal: AbortSignal.timeout(180_000),
+        signal: AbortSignal.timeout(timeoutMs),
         headers: { 'user-agent': 'weft-pack-release' },
       });
       if (!res.ok) throw new Error(`${url} 返回 HTTP ${res.status}`);
@@ -436,18 +436,18 @@ async function fetchBuffer(url) {
     } catch (err) {
       lastErr = err;
       console.error(`下载失败（第 ${attempt} 次）：${err instanceof Error ? err.message : err}`);
-      if (attempt < 3) await new Promise((resolve) => setTimeout(resolve, 1000 * attempt));
+      if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, 1000 * attempt));
     }
   }
   throw lastErr;
 }
 
-async function downloadVerified(url, sumsText, fileName) {
+export async function downloadVerified(url, sumsText, fileName, timeoutMs = 60_000) {
   const expected = expectedSha256(sumsText, fileName);
   if (!expected) throw new Error(`SHASUMS256.txt 没有 ${fileName}`);
   let last = '';
-  for (let attempt = 1; attempt <= 3; attempt += 1) {
-    const buf = await fetchBuffer(url);
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    const buf = await fetchBuffer(url, timeoutMs);
     const actual = sha256Hex(buf);
     if (actual === expected) {
       console.log(`${fileName} sha256 已对照官方 SHASUMS256.txt：${actual}`);
@@ -590,22 +590,82 @@ export async function packRelease({
     await stripPostinstall(appDir);
     const packages = await listTopPackages(path.join(appDir, 'node_modules'));
 
-    const base = `https://nodejs.org/dist/v${nodeVersion}`;
+    const candidateBases = [
+      process.env.WEFT_NODE_MIRROR || process.env.NODE_DIST_URL,
+      `https://nodejs.org/dist/v${nodeVersion}`,
+      `https://npmmirror.com/mirrors/node/v${nodeVersion}`,
+    ].filter(Boolean);
+
     const archiveName = `node-v${nodeVersion}-win-x64.zip`;
     const exeName = `node-v${nodeVersion}-win-x64/node.exe`;
-    console.log(`下载 ${base}/SHASUMS256.txt`);
-    const sums = (await fetchBuffer(`${base}/SHASUMS256.txt`)).toString('utf8');
-    console.log(`下载 ${archiveName}`);
-    let archive = await downloadVerified(`${base}/${archiveName}`, sums, archiveName);
-    const exe = extractZipEntry(archive, exeName);
-    archive = null;
-    const standalone = expectedSha256(sums, 'win-x64/node.exe');
-    const exeHash = sha256Hex(exe);
-    if (!standalone) throw new Error('SHASUMS256.txt 没有 win-x64/node.exe');
-    if (standalone !== exeHash) {
-      throw new Error(`解出的 node.exe sha256 ${exeHash} 与官方 win-x64/node.exe ${standalone} 不一致`);
+
+    let sums = null;
+    let baseUsed = null;
+    for (const b of candidateBases) {
+      try {
+        console.log(`尝试获取 ${b}/SHASUMS256.txt`);
+        sums = (await fetchBuffer(`${b}/SHASUMS256.txt`, 15_000)).toString('utf8');
+        baseUsed = b;
+        break;
+      } catch (err) {
+        console.warn(`${b}/SHASUMS256.txt 获取失败，尝试备选源：${err instanceof Error ? err.message : err}`);
+      }
     }
-    console.log(`node.exe sha256 已对照官方 SHASUMS256.txt：${exeHash}`);
+    if (!sums || !baseUsed) throw new Error('无法从任何源获取 SHASUMS256.txt');
+
+    const standalone = expectedSha256(sums, 'win-x64/node.exe');
+    if (!standalone) throw new Error('SHASUMS256.txt 没有 win-x64/node.exe');
+
+    const cacheLocations = [
+      process.env.WEFT_NODE_EXE,
+      path.join(outDir, '.cache', `node-${nodeVersion}-win-x64.exe`),
+      path.join(root, 'dist', '.cache', `node-${nodeVersion}-win-x64.exe`),
+    ].filter(Boolean);
+
+    let exe = null;
+    let exeHash = null;
+    for (const loc of cacheLocations) {
+      if (await pathExists(loc)) {
+        try {
+          const buf = await readFile(loc);
+          const hash = sha256Hex(buf);
+          if (hash === standalone) {
+            console.log(`使用本地 node.exe 缓存 (${loc})，sha256 已对照官方 SHASUMS256.txt：${hash}`);
+            exe = buf;
+            exeHash = hash;
+            break;
+          }
+        } catch { /* ignore read error, try next */ }
+      }
+    }
+
+    if (!exe) {
+      let archive = null;
+      const downloadBases = [baseUsed, ...candidateBases.filter((b) => b !== baseUsed)];
+      for (const b of downloadBases) {
+        try {
+          console.log(`尝试从 ${b} 下载 ${archiveName}`);
+          archive = await downloadVerified(`${b}/${archiveName}`, sums, archiveName, 180_000);
+          break;
+        } catch (err) {
+          console.warn(`从 ${b} 下载 ${archiveName} 失败，尝试备选源：${err instanceof Error ? err.message : err}`);
+        }
+      }
+      if (!archive) throw new Error(`无法从任何源下载并校验 ${archiveName}`);
+
+      exe = extractZipEntry(archive, exeName);
+      archive = null;
+      exeHash = sha256Hex(exe);
+      if (standalone !== exeHash) {
+        throw new Error(`解出的 node.exe sha256 ${exeHash} 与官方 win-x64/node.exe ${standalone} 不一致`);
+      }
+      console.log(`node.exe sha256 已对照官方 SHASUMS256.txt：${exeHash}`);
+      try {
+        const defaultCache = path.join(outDir, '.cache', `node-${nodeVersion}-win-x64.exe`);
+        await mkdir(path.dirname(defaultCache), { recursive: true });
+        await writeFile(defaultCache, exe);
+      } catch { /* ignore cache write failure */ }
+    }
     await mkdir(path.join(stage, 'node'), { recursive: true });
     await writeFile(path.join(stage, 'node', 'node.exe'), exe);
 
