@@ -193,8 +193,13 @@ export type SendMode = 'steer' | 'queue';
 export type PostMessage = (
   conv: ConversationRow,
   text: string,
-  opts?: { requestId?: string; content?: unknown; mode?: SendMode },
-) => Promise<{ status: number; body?: { runId?: unknown } }>;
+  opts?: {
+    requestId?: string;
+    content?: unknown;
+    mode?: SendMode;
+    answer?: Record<string, unknown>;
+  },
+) => Promise<{ status: number; body?: { runId?: unknown; error?: unknown; code?: unknown } }>;
 export type WithdrawMessageFn = (
   cid: string,
   requestId: string,
@@ -1217,6 +1222,7 @@ export function createV2Handler(opts: {
       }
       let text: string;
       let content: unknown = '';
+      let answer: Record<string, unknown> | undefined;
       let sendImages: MessageImage[] = [];
       let sendPastes: string[] = [];
       let sendFiles: Array<{ path: string; name?: string; bytes?: number }> = [];
@@ -1253,8 +1259,27 @@ export function createV2Handler(opts: {
           } satisfies V2Error);
           return true;
         }
+        if (body.answer != null) {
+          if (typeof body.answer !== 'object' || Array.isArray(body.answer)) {
+            sendV2(res, pathname, method, 400, { error: 'invalid answer', code: 'E_BAD_REQUEST' } satisfies V2Error);
+            return true;
+          }
+          answer = body.answer as Record<string, unknown>;
+          if (
+            parsedImages.images.length > 0
+            || parsedPastes.pastes.length > 0
+            || parsedFiles.files.length > 0
+          ) {
+            sendV2(res, pathname, method, 400, {
+              error: 'answer cannot include attachments',
+              code: 'E_BAD_REQUEST',
+            } satisfies V2Error);
+            return true;
+          }
+        }
         if (
-          !text
+          !answer
+          && !text
           && parsedImages.images.length === 0
           && parsedPastes.pastes.length === 0
           && parsedFiles.files.length === 0
@@ -1343,9 +1368,19 @@ export function createV2Handler(opts: {
         mode = parsedMode.value;
       }
       try {
-        const posted = await opts.postMessage(conv, text, { requestId, content, mode });
+        const posted = await opts.postMessage(conv, text, { requestId, content, mode, answer });
         if (posted.status === 404) {
           sendV2(res, pathname, method, 404, { error: 'not found' } satisfies V2Error);
+          return true;
+        }
+        if (posted.status === 400 || posted.status === 409) {
+          const code = typeof posted.body?.code === 'string' && posted.body.code
+            ? posted.body.code
+            : (posted.status === 409 ? 'E_ASK_ANSWERED' : 'E_BAD_REQUEST');
+          const error = typeof posted.body?.error === 'string' && posted.body.error
+            ? posted.body.error
+            : (posted.status === 409 ? 'already answered' : 'bad request');
+          sendV2(res, pathname, method, posted.status, { error, code } satisfies V2Error);
           return true;
         }
         const runId = posted.body?.runId;

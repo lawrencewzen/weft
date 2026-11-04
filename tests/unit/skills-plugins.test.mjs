@@ -153,11 +153,16 @@ test('bundled echo plugin loads and a disabled plugin contributes no tool', asyn
   assert.equal(echo.enabled, true);
   assert.equal(echo.tools[0].name, 'echo');
   assert.equal(Object.hasOwn(echo, 'handlers'), false);
+  const ask = listed.find((plugin) => plugin.id === 'ask');
+  assert.equal(ask.loaded, true);
+  assert.equal(ask.enabled, true);
+  assert.equal(ask.tools[0].name, 'ask_user_question');
   const tools = await pluginHandlers(bundledPlugins, {});
   const result = await tools.find((tool) => tool.name === 'echo').handler({ text: 'ping' });
   assert.equal(result.output, 'ping');
   const disabled = await pluginHandlers(bundledPlugins, { echo: false });
-  assert.equal(disabled.length, 0);
+  assert.equal(disabled.some((tool) => tool.name === 'echo'), false);
+  assert.equal(disabled.some((tool) => tool.name === 'ask_user_question'), true);
 });
 
 test('plugin import loads a module and rejects metadata, symlinks, and path escapes', async () => {

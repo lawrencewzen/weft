@@ -6,6 +6,7 @@ import { DEFAULT_RETRY_POLICY } from '@earendil-works/pi-durable';
 import { redactAuthText } from '../core/redact.mjs';
 import { extractPasteTexts, parseUserMessageParts } from '../core/user-message-parts.mjs';
 import { overlayContextWindow, presentContext } from '../core/usage.mjs';
+import { askByToolCall } from './ask.mjs';
 import { isAutoContinueText } from './continuation.mjs';
 import { parentNoteText, USER_TO_SUBAGENT_KIND } from './subagent-control.mjs';
 import { isSubagentReportText } from './subagent-report.mjs';
@@ -126,6 +127,13 @@ function toolBody({ id, name, status, input, output, path, added, removed }) {
   if (path) tool.path = path;
   if (added != null) tool.added = added;
   if (removed != null) tool.removed = removed;
+  return tool;
+}
+
+function withAsk(tool, askMap) {
+  if (!tool?.id || !askMap) return tool;
+  const ask = askMap.get(String(tool.id));
+  if (ask) tool.ask = ask;
   return tool;
 }
 
@@ -362,6 +370,7 @@ export function mapHarnessBatch(batch, ctx) {
 /** Transcript entries to the REST message list, plus the latest reported call usage. */
 export function messagesFromEntries(entries) {
   const calls = new Map();
+  const askMap = askByToolCall(entries);
   const usage = latestCallUsage(entries);
   for (const entry of entries || []) {
     if (entry?.kind !== 'pi.assistant') continue;
@@ -430,7 +439,7 @@ export function messagesFromEntries(entries) {
       added: diff.added,
       removed: diff.removed,
     });
-    messages.push({ id: String(entry.id), role: 'tool', text: tool.output || '', tool });
+    messages.push({ id: String(entry.id), role: 'tool', text: tool.output || '', tool: withAsk(tool, askMap) });
   }
   // A tool call with no result yet is still running. The refresh must keep it,
   // or a GET during the call erases the live tool.start row.
@@ -444,7 +453,7 @@ export function messagesFromEntries(entries) {
       input,
       path: typeof input.path === 'string' ? input.path : undefined,
     });
-    messages.push({ id: `tool-${id}`, role: 'tool', tool });
+    messages.push({ id: `tool-${id}`, role: 'tool', tool: withAsk(tool, askMap) });
   }
   return { messages, usage };
 }

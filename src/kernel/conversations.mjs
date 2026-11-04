@@ -16,6 +16,7 @@ import { presentContext } from '../core/usage.mjs';
 import { createCredentialStore, createModelsStore } from '../core/provider-stores.mjs';
 import { createProviderService } from '../core/provider-service.mjs';
 import { configureThinkingLevel } from '../core/thinking-level.mjs';
+import { buildAskSubmission } from './ask.mjs';
 import {
   createMapContext,
   mapHarnessBatch,
@@ -729,13 +730,24 @@ export async function openConversationKernel({
       }
       const given = typeof options.requestId === 'string' ? options.requestId.trim() : '';
       const requestId = given || prepared?.requestId || randomUUID();
-      const content = options.content !== undefined ? options.content : text;
+      let content = options.content !== undefined ? options.content : text;
+      let entry;
       const mode = sendModeOf(options.mode);
+      if (options.answer) {
+        const prior = recentSendsFor(sends, current.id).find((row) => row.requestId === requestId && !row.dropped);
+        if (prior) return { status: 202, body: { runId: String(prior.submissionId), status: 'running' } };
+        const transcript = current.harnessId ? await readTranscript(current.harnessId) : { entries: [] };
+        const decided = buildAskSubmission(transcript.entries, options.answer);
+        if (!decided.ok) return { status: decided.status, body: { error: decided.error, code: decided.code } };
+        content = decided.content;
+        entry = decided.entry;
+      }
       const submission = await conversation.submit({
         type: 'input',
         content,
         requestId,
         whenBusy: whenBusyForMode(mode),
+        ...(entry ? { entry } : {}),
       }, context);
       let entryId = null;
       try {
@@ -746,7 +758,9 @@ export async function openConversationKernel({
       }
       rememberSend(sends, current.id, requestId, submission.id, {
         mode,
-        text: typeof text === 'string' ? text : '',
+        text: options.answer && typeof content === 'string'
+          ? content
+          : (typeof text === 'string' ? text : ''),
         entryId,
       });
       await store.updateConversation(current.id, { lastSubmissionId: submission.id });

@@ -917,6 +917,58 @@ function workspace(
   };
 }
 
+const ASK_DEMO: MockTool = tool({
+  id: 'ask-demo-1',
+  kind: 'ask',
+  title: hint('包管理器', 'Package'),
+  detail: hint('用哪种包管理器？', 'Which package manager?'),
+  fromIntent: false,
+  hint: hint('等待回答', 'Waiting'),
+  preview: '已向用户提问，等待回答，不要继续。',
+  totalLines: 1,
+  output: '已向用户提问，等待回答，不要继续。',
+  ask: {
+    questions: [
+      {
+        question: hint('用哪种包管理器？', 'Which package manager?'),
+        header: hint('包管理器', 'Package'),
+        multiSelect: false,
+        options: [
+          { label: hint('npm', 'npm'), description: hint('Node 自带', 'Bundled with Node') },
+          { label: hint('pnpm', 'pnpm'), description: hint('节省磁盘', 'Saves disk') },
+        ],
+      },
+      {
+        question: hint('要跑哪些检查？', 'Which checks should run?'),
+        header: hint('检查', 'Checks'),
+        multiSelect: true,
+        options: [
+          { label: hint('lint', 'lint'), description: hint('只看风格', 'Style only') },
+          { label: hint('test', 'test'), description: hint('跑单元测试', 'Run unit tests') },
+          { label: hint('typecheck', 'typecheck'), description: hint('查类型', 'Check types') },
+        ],
+      },
+    ],
+    answer: null,
+  },
+});
+
+function askConversation(now: number): MockConv {
+  return conversation({
+    id: 'c-ask',
+    workspaceId: 'ws-weft',
+    title: '选择包管理器',
+    updatedAt: now - 5 * HOUR,
+    used: 1_800,
+    tools: { [ASK_DEMO.id]: ASK_DEMO },
+    items: [
+      user('ask-u1', '帮我定一下这个仓库用什么装依赖、跑哪些检查。'),
+      assistant('ask-a1', '先确认两件事后再改配置。'),
+      group('ask-g1', [ASK_DEMO.id], { zh: '调用了 ask_user_question', en: 'called ask_user_question once' }, 0),
+    ],
+  });
+}
+
 function consultConversation(now: number): MockConv {
   return conversation({
     id: 'c-consult',
@@ -1007,6 +1059,7 @@ export function createSeed(now: number): MockDb {
   const subagents = seedSubThreads(now);
   const conversations = [
     richConversation(now, subagents),
+    askConversation(now),
     testsConversation(now),
     docsConversation(now, subagents),
     scriptsConversation(now),
