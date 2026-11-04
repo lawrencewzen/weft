@@ -197,6 +197,7 @@ test('deleting all providers shows the no-model state', async ({ page }) => {
     await page.getByTestId('next-confirm-ok').click();
   }
   await expect(page.getByTestId('next-provider-row')).toHaveCount(0);
+  await expect(page.getByTestId('next-provider-default-picker')).toBeDisabled();
 
   await page.locator('.next-settings-close').click();
   await expect(page.getByTestId('next-no-model')).toBeVisible();
@@ -287,6 +288,33 @@ test('git connections, plugins, skills and about', async ({ page }) => {
   await page.getByTestId('next-settings-nav-about').click();
   await expect(page.getByTestId('next-about-version')).toHaveText('0.1.0-prototype');
   await expect(page.getByTestId('next-about-protocol')).toHaveText('2.0.0');
+
+  expectClean(state);
+});
+
+test('edit provider dialog: default thinking dropdown menu stays completely within viewport', async ({ page }) => {
+  const state = await openProto(page);
+  await page.getByTestId('next-open-settings').click();
+  await page.getByTestId('next-settings-nav-providers').click();
+
+  const customRow = page.getByTestId('next-provider-row').filter({ hasText: '内网网关' });
+  await customRow.getByTestId('next-provider-more').click();
+  await page.getByTestId('next-provider-edit').click();
+  await expect(page.getByTestId('next-add-dialog')).toBeVisible();
+
+  // 打开「默认思考」下拉
+  const thinkingBtn = page.getByTestId('next-add-thinking-dropdown');
+  await expect(thinkingBtn).toBeVisible();
+  await thinkingBtn.click();
+
+  const menu = page.getByTestId('next-add-thinking-menu');
+  await expect(menu).toBeVisible();
+
+  const viewport = page.viewportSize();
+  const box = await menu.boundingBox();
+  expect(box).not.toBeNull();
+  expect(box.y).toBeGreaterThanOrEqual(0);
+  expect(box.y + box.height).toBeLessThanOrEqual(viewport.height);
 
   expectClean(state);
 });
