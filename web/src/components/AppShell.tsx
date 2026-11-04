@@ -39,6 +39,7 @@ import { RightPane } from './RightPane';
 import { SettingsOverlay } from './settings/SettingsOverlay';
 import type { AboutService } from './settings/AboutPage';
 import { Sidebar } from './Sidebar';
+import { SideToggles } from './RightToggle';
 import { WorkspaceDialog } from './WorkspaceDialog';
 
 type Props = {
@@ -51,7 +52,7 @@ type Props = {
 
 function overlayKeepOpen(target: HTMLElement): boolean {
   return Boolean(
-    target.closest?.('.md-path, [data-testid=next-right-toggle], [data-testid=next-right], [data-testid=next-tool-row][data-tool=edit], [data-testid=next-tool-row][data-tool=write]'),
+    target.closest?.('.side-toggle, .md-path, [data-testid=next-right-toggle], [data-testid=next-right-collapse], [data-testid=next-right], [data-testid=next-tool-row][data-tool=edit], [data-testid=next-tool-row][data-tool=write]'),
   );
 }
 
@@ -322,6 +323,7 @@ function AppShellLayout({
       }}
       onPointerDown={onShellPointerDown}
     >
+      <SideToggles lang={lang} />
       <Sidebar
         lang={lang}
         collapsed={!leftOpen}

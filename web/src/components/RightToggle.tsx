@@ -3,70 +3,53 @@ import { useLeftPanel } from '../data/leftPanelContext';
 import { useRightChanges, useRightLayout } from '../data/rightPaneContext';
 import type { Lang } from '../data/lang';
 
-export function LeftOpenButton({ lang, onOpen }: { lang: Lang; onOpen?: () => void }) {
-  const { toggleLeft, leftSlotW, leftSlotM, leftSlotTr, leftBtnOp, leftBtnPe, lbDx, lbTr } = useLeftPanel();
+export function PanelToggleIcon({ side }: { side: 'left' | 'right' }) {
+  return <span className={`ico-panel ico-panel-${side}`} aria-hidden="true" />;
+}
+
+export function SideToggles({ lang }: { lang: Lang }) {
+  const { leftOpen, toggleLeft } = useLeftPanel();
+  const { open, toggleRight } = useRightLayout();
+  const { hasChanges } = useRightChanges();
+
   return (
-    <div
-      className="top-left-slot"
-      style={{
-        width: leftSlotW,
-        marginRight: leftSlotM,
-        flexShrink: 0,
-        transition: leftSlotTr,
-        overflow: 'hidden',
-      }}
-    >
+    <>
       <button
         type="button"
-        className="icon-btn top-left-open"
-        data-testid="next-left-open"
-        title={t(lang, 'expand_sidebar')}
-        aria-label={t(lang, 'expand_sidebar')}
-        style={{
-          opacity: leftBtnOp,
-          pointerEvents: leftBtnPe,
-          transform: `translateX(${lbDx}px)`,
-          transition: lbTr,
-          visibility: leftBtnOp ? 'visible' : 'hidden',
-          display: leftBtnOp ? 'inline-flex' : 'none',
-        }}
-        onClick={() => {
-          if (toggleLeft) toggleLeft();
-          else onOpen?.();
-        }}
+        className="icon-btn side-toggle side-toggle-left"
+        data-testid={leftOpen ? 'next-left-collapse' : 'next-left-open'}
+        title={leftOpen ? t(lang, 'collapse_sidebar') : t(lang, 'expand_sidebar')}
+        aria-label={leftOpen ? t(lang, 'collapse_sidebar') : t(lang, 'expand_sidebar')}
+        aria-expanded={leftOpen}
+        onClick={toggleLeft}
       >
-        <span className="ico-panel ico-panel-left" aria-hidden="true" />
+        <PanelToggleIcon side="left" />
       </button>
-    </div>
+      <button
+        type="button"
+        className="icon-btn side-toggle side-toggle-right"
+        data-testid={open ? 'next-right-collapse' : 'next-right-toggle'}
+        title={open ? t(lang, 'collapse_panel') : t(lang, 'expand_panel')}
+        aria-label={open ? t(lang, 'collapse_panel') : t(lang, 'expand_panel')}
+        aria-expanded={open}
+        onClick={toggleRight}
+      >
+        <PanelToggleIcon side="right" />
+        <span
+          className={`top-right-dot${hasChanges ? ' is-on' : ''}`}
+          data-testid="next-right-dot"
+        />
+      </button>
+    </>
   );
 }
 
-export function RightToggle({ lang }: { lang: Lang }) {
-  const { open, toggleRight, rbDx, rbTr, rightBtnOp, rightBtnPe } = useRightLayout();
-  const { hasChanges } = useRightChanges();
-  return (
-    <button
-      type="button"
-      className="icon-btn top-right-open"
-      data-testid="next-right-toggle"
-      title={t(lang, 'expand_panel')}
-      aria-label={t(lang, 'expand_panel')}
-      aria-pressed={open}
-      style={{
-        opacity: rightBtnOp,
-        pointerEvents: rightBtnPe,
-        transform: `translateX(${rbDx}px)`,
-        transition: rbTr,
-        visibility: rightBtnOp ? 'visible' : 'hidden',
-        display: rightBtnOp ? 'inline-flex' : 'none',
-      }}
-      onClick={toggleRight}
-    >
-      <span className="ico-panel ico-panel-right" aria-hidden="true" />
-      <span
-        className={`top-right-dot${hasChanges ? ' is-on' : ''}`}
-        data-testid="next-right-dot"
-      />
-    </button>
-  );
+/** @deprecated Replaced by shell-level SideToggles. Renders spacer slot in header. */
+export function LeftOpenButton() {
+  return <div className="top-left-slot" aria-hidden="true" />;
+}
+
+/** @deprecated Replaced by shell-level SideToggles. Renders spacer slot in header. */
+export function RightToggle() {
+  return <div className="top-right" aria-hidden="true" />;
 }

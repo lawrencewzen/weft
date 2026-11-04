@@ -13,7 +13,6 @@ import { usePendingSend, waitingForAgent } from '../data/usePendingSend';
 import { t } from '../i18n';
 import type { components } from '../../../src/v2/contract.gen';
 import { Composer } from './Composer';
-import { LeftOpenButton, RightToggle } from './RightToggle';
 import { StatusBar } from './StatusBar';
 import { Thread } from './Thread';
 
@@ -178,9 +177,9 @@ export function CenterPane({
         <header className="next-status">
           <div className="next-status-inner">
             <div className="top-heading">
-              <LeftOpenButton lang={lang} onOpen={onOpenLeft} />
+              <div className="top-left-slot" aria-hidden="true" />
             </div>
-            <div className="top-right"><RightToggle lang={lang} /></div>
+            <div className="top-right" aria-hidden="true" />
           </div>
         </header>
         <div className="thread-empty">
@@ -196,12 +195,12 @@ export function CenterPane({
         <header className="next-status" data-testid="next-status">
           <div className="next-status-inner">
             <div className="top-heading">
-              <LeftOpenButton lang={lang} onOpen={onOpenLeft} />
+              <div className="top-left-slot" aria-hidden="true" />
               {cid ? (
                 <span className="top-title">{knownTitle}</span>
               ) : null}
             </div>
-            <div className="top-right"><RightToggle lang={lang} /></div>
+            <div className="top-right" aria-hidden="true" />
           </div>
         </header>
         {cid && showDelayedLoading ? (

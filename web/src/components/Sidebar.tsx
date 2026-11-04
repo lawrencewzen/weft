@@ -19,7 +19,6 @@ import {
 import { isMac, type SearchItem } from '../data/sidebarSearchModel';
 import { readLastOpenedMap, writeLastOpened } from '../data/sidebarUnread';
 import type { ConversationSummary, Workspace } from '../data/store';
-import { useLeftPanel } from '../data/leftPanelContext';
 import { useRightActions, useRightLayout } from '../data/rightPaneContext';
 import { useWorkspaces } from '../data/useWorkspaces';
 import { t } from '../i18n';
@@ -33,7 +32,6 @@ import {
   MOON_ICON,
   PLUS_ICON,
   SEARCH_ICON,
-  SIDE_ICON,
   SUN_ICON,
 } from './SidebarIcons';
 import { buildConversationItems, buildProjectItems } from './SidebarMenus';
@@ -64,7 +62,7 @@ export function Sidebar({
   collapsed = false,
   activeConversationId,
   draftWorkspaceId,
-  onCollapse,
+  onCollapse: _onCollapse,
   onToast,
   onConfirm,
   onRemoveWorkspace,
@@ -74,7 +72,6 @@ export function Sidebar({
   const { status } = useSession();
   const { tab, setTab } = useRightLayout();
   const { showFiles, openInTerminal } = useRightActions();
-  const { toggleLeft, sbBtnOp } = useLeftPanel();
   const [openMap, setOpenMap] = useState<OpenRecord>(() => readWorkspaceOpen());
   const [archivedOpen, setArchivedOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -253,24 +250,6 @@ export function Sidebar({
       <div className="col-panel-inner">
         <div className="sb-hd hd">
           <span className="sb-brand brand">Weft</span>
-          <button
-            type="button"
-            className="sb-collapse collapse icon-btn"
-            data-testid="next-left-collapse"
-            title={t(lang, 'collapse_sidebar')}
-            aria-label={t(lang, 'collapse_sidebar')}
-            style={{
-              opacity: sbBtnOp,
-              pointerEvents: sbBtnOp ? 'auto' : 'none',
-              visibility: sbBtnOp ? 'visible' : 'hidden',
-            }}
-            onClick={() => {
-              if (toggleLeft) toggleLeft();
-              else onCollapse();
-            }}
-          >
-            {SIDE_ICON}
-          </button>
         </div>
 
         <button

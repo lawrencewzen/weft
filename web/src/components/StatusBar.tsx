@@ -1,7 +1,6 @@
 import type { Lang } from '../data/lang';
 import type { components } from '../../../src/v2/contract.gen';
 import { t } from '../i18n';
-import { LeftOpenButton, RightToggle } from './RightToggle';
 
 type ConversationView = components['schemas']['ConversationView'];
 type Workspace = components['schemas']['Workspace'];
@@ -18,7 +17,7 @@ type Props = {
 export function StatusBar({
   conversation,
   lang,
-  onOpenLeft,
+  onOpenLeft: _onOpenLeft,
 }: Props) {
   const run = conversation.run;
   const failed = run.status === 'failed';
@@ -28,7 +27,7 @@ export function StatusBar({
     <header className="next-status" data-testid="next-status">
       <div className="next-status-inner">
         <div className="top-heading">
-          <LeftOpenButton lang={lang} onOpen={onOpenLeft} />
+          <div className="top-left-slot" aria-hidden="true" />
           <span
             className="top-title"
             style={isNew ? { color: 'var(--faint)' } : undefined}
@@ -36,9 +35,7 @@ export function StatusBar({
             {isNew ? t(lang, 'new_conversation') : conversation.title}
           </span>
         </div>
-        <div className="top-right">
-          <RightToggle lang={lang} />
-        </div>
+        <div className="top-right" aria-hidden="true" />
       </div>
       {failed && run.error?.message ? (
         <div className="next-status-inner">
