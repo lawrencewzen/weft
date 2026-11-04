@@ -1560,7 +1560,7 @@ export interface components {
             auth: components["schemas"]["ProviderAuth"];
             status: components["schemas"]["ProviderStatus"];
             models: components["schemas"]["ProviderModel"][];
-            /** @description 该 Provider 的默认模型 id（若未设置则为 null） */
+            /** @description 全局默认模型属于该 Provider 时为其 modelId，否则 null */
             defaultModel?: null | string;
             /** @description 该 Provider 默认图片输入能力；自定义端点可在创建/编辑时指定 */
             images?: boolean;

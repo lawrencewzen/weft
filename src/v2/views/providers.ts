@@ -221,8 +221,8 @@ export function providerView(raw: RawProvider, lang: Lang): Provider {
       ? { state: 'testing', ...(typeof raw.status.testedAt === 'number' ? { testedAt: raw.status.testedAt } : {}) }
       : statusView(raw.lastTest, lang),
     models: raw.models.map(modelView),
+    defaultModel: raw.defaultModel || null,
   };
-  if (raw.defaultModel) item.defaultModel = raw.defaultModel;
   if (typeof raw.images === 'boolean') item.images = raw.images;
   if (raw.defaultThinkingLevel) {
     item.defaultThinkingLevel = raw.defaultThinkingLevel as NonNullable<Provider['defaultThinkingLevel']>;

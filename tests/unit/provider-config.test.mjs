@@ -382,3 +382,40 @@ test('normalizeProvidersV3 drops illegal items and duplicate ids', () => {
     overrides: {},
   });
 });
+
+test('normalizeProvidersV3 drops legacy provider defaultModel', () => {
+  const custom = 'custom-deadbeef';
+  const out = normalizeProvidersV3([
+    {
+      id: 'openai',
+      kind: 'builtin',
+      enabled: ['gpt-4o'],
+      overrides: {},
+      defaultModel: 'gpt-4o',
+    },
+    {
+      id: custom,
+      kind: 'custom',
+      name: 'Proxy',
+      baseUrl: 'https://proxy.example/v1',
+      api: 'openai-completions',
+      enabled: ['local'],
+      defaultModel: 'local',
+      images: true,
+      defaultThinkingLevel: 'low',
+    },
+    {
+      id: 'custom-abcdef01',
+      kind: 'custom',
+      name: 'Weird',
+      baseUrl: 'https://proxy.example/v1',
+      api: 'openai-completions',
+      enabled: [],
+      defaultModel: { modelId: 'nope' },
+    },
+  ]);
+  assert.equal(out.length, 3);
+  assert.equal(out.every((item) => !Object.prototype.hasOwnProperty.call(item, 'defaultModel')), true);
+  assert.equal(out[1].images, true);
+  assert.equal(out[1].defaultThinkingLevel, 'low');
+});
