@@ -7,7 +7,9 @@ import type {
   CustomApiProtocol,
   LoginSession,
   Model,
+  PatchProviderRequest,
   Provider,
+  ThinkingLevel,
 } from '../../data/providerTypes';
 import { t, type Lang } from '../../i18n';
 import { LoginSessionView } from './LoginSessionView';
@@ -63,14 +65,14 @@ type Props = {
     apiKey?: string;
     defaultModel?: string;
     images?: boolean;
-    defaultThinkingLevel?: string | null;
+    defaultThinkingLevel?: ThinkingLevel | null;
   }) => Promise<Provider>;
   onCreate: (id: string, patch: {
     name: string;
     enabled: string[];
     defaultModel: string;
     images?: boolean;
-    defaultThinkingLevel?: string | null;
+    defaultThinkingLevel?: ThinkingLevel | null;
   }) => Promise<void>;
   onRollback: (ids: string[]) => Promise<void>;
   editTarget?: Provider | null;
@@ -214,6 +216,9 @@ export function AddProviderDialog({
           name: editTarget.name,
           brand: editTarget.brand || providerBrand(editTarget.id),
           authMethods: [editTarget.auth?.type === 'oauth' ? 'oauth' : 'api_key'],
+          modelCount: editTarget.models?.length || 0,
+          popular: false,
+          envDetected: false,
           connected: true,
         },
       }

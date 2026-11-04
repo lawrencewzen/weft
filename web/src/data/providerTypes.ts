@@ -10,6 +10,7 @@ export type ProviderStatus = components['schemas']['ProviderStatus'];
 export type ProviderStatusState = components['schemas']['ProviderStatusState'];
 export type CustomApi = components['schemas']['CustomApi'];
 export type CustomApiProtocol = CustomApi;
+export type ThinkingLevel = components['schemas']['ThinkingLevel'];
 export type ModelOverridden = components['schemas']['ModelOverridden'];
 export type AvailableProvider = components['schemas']['AvailableProvider'];
 export type Available = AvailableProvider;
