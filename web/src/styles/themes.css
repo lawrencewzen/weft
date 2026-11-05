@@ -11,6 +11,7 @@
 --shadow-composer:0 1px 2px rgba(0,0,0,.04), 0 6px 24px rgba(0,0,0,.06);
 --shadow-composer-focus:0 1px 2px rgba(0,0,0,.05), 0 10px 34px rgba(0,0,0,.10);
 --drop:#6B7FD7;--drop-ring:rgba(52,70,184,.08);--drop-bg:rgba(238,242,255,.92);--drop-ink:#3446B8;--drop-mute:#4A5AA8;
+--syn-kw:#7434db;--syn-str:#2e7d32;--syn-fn:#1967d2;--syn-type:#0d7477;--syn-num:#a04800;--syn-com:#767676;--syn-comment:var(--syn-com);
 --scrim:rgba(0,0,0,.28);--shadow-raise:0 8px 28px rgba(0,0,0,.12);--shadow-overlay:0 20px 60px rgba(0,0,0,.16);--shadow-panel:0 0 40px rgba(0,0,0,.15);--shadow-toast:0 4px 16px rgba(0,0,0,.14);
 }
 [data-theme="white-dark"]{color-scheme:dark;
@@ -24,6 +25,7 @@
 --shadow-composer:0 1px 2px rgba(0,0,0,.3), 0 6px 24px rgba(0,0,0,.35);
 --shadow-composer-focus:0 1px 2px rgba(0,0,0,.35), 0 10px 34px rgba(0,0,0,.5);
 --drop:#8b9ae8;--drop-ring:rgba(107,127,215,.22);--drop-bg:rgba(36,42,72,.92);--drop-ink:#c5cef5;--drop-mute:#9aa6d8;
+--syn-kw:#b392f0;--syn-str:#86d993;--syn-fn:#79b8ff;--syn-type:#56d4dd;--syn-num:#ffab70;--syn-com:#8c8c8c;--syn-comment:var(--syn-com);
 --scrim:rgba(0,0,0,.5);--shadow-raise:0 8px 28px rgba(0,0,0,.45);--shadow-overlay:0 20px 60px rgba(0,0,0,.55);--shadow-panel:0 0 40px rgba(0,0,0,.45);--shadow-toast:0 4px 16px rgba(0,0,0,.4);
 }
 [data-theme="claude-light"]{color-scheme:light;
@@ -36,6 +38,7 @@
 --shadow-composer:0 1px 2px rgba(60,45,20,.04), 0 6px 24px rgba(60,45,20,.06);
 --shadow-composer-focus:0 1px 2px rgba(60,45,20,.05), 0 10px 34px rgba(60,45,20,.10);
 --drop:#6B7FD7;--drop-ring:rgba(52,70,184,.08);--drop-bg:rgba(238,242,255,.92);--drop-ink:#3446B8;--drop-mute:#4A5AA8;
+--syn-kw:#8636ba;--syn-str:#297a48;--syn-fn:#1f64bc;--syn-type:#0a737e;--syn-num:#a14c0e;--syn-com:#787368;--syn-comment:var(--syn-com);
 --scrim:rgba(60,45,20,.28);--shadow-raise:0 8px 28px rgba(60,45,20,.12);--shadow-overlay:0 20px 60px rgba(60,45,20,.16);--shadow-panel:0 0 40px rgba(60,45,20,.15);--shadow-toast:0 4px 16px rgba(60,45,20,.14);
 }
 [data-theme="claude-dark"]{color-scheme:dark;
@@ -49,6 +52,7 @@
 --shadow-composer:0 1px 2px rgba(0,0,0,.3), 0 6px 24px rgba(0,0,0,.35);
 --shadow-composer-focus:0 1px 2px rgba(0,0,0,.35), 0 10px 34px rgba(0,0,0,.5);
 --drop:#8b9ae8;--drop-ring:rgba(107,127,215,.22);--drop-bg:rgba(48,44,38,.92);--drop-ink:#c5cef5;--drop-mute:#9aa6d8;
+--syn-kw:#bd93f9;--syn-str:#8be9a5;--syn-fn:#82b1ff;--syn-type:#6ee2ea;--syn-num:#ffb37a;--syn-com:#948f85;--syn-comment:var(--syn-com);
 --scrim:rgba(0,0,0,.5);--shadow-raise:0 8px 28px rgba(0,0,0,.45);--shadow-overlay:0 20px 60px rgba(0,0,0,.55);--shadow-panel:0 0 40px rgba(0,0,0,.45);--shadow-toast:0 4px 16px rgba(0,0,0,.4);
 }
 
@@ -68,7 +72,7 @@
 --tool-bg:var(--sub);--tool-border:var(--line);--tool-hover:var(--hover);--warn-border:var(--warn-line);--warn-text:var(--warn-ink);
 --diff-del-bg:var(--err-bg);--diff-del-text:var(--err-ink);--diff-del-num:var(--del-ink);--diff-add-bg:var(--ok-bg);--diff-add-text:var(--ok-ink);--diff-add-num:var(--add-ink);
 --diff-num-col:var(--dis);--diff-hunk-bg:var(--sub);--diff-hunk-text:var(--faint);
---syn-kw:var(--ink);--syn-fn:var(--ink3);--syn-str:var(--mute);--syn-type:var(--ink3);--syn-comment:var(--faint);--syn-num:var(--ink3);
+--syn-kw:#7434db;--syn-str:#2e7d32;--syn-fn:#1967d2;--syn-type:#0d7477;--syn-num:#a04800;--syn-com:#767676;--syn-comment:var(--syn-com);
 --code-block-bg:var(--sub2);--code-block-border:var(--line);
 }
 [data-theme="white-dark"], [data-theme="claude-dark"] {
@@ -77,4 +81,29 @@
   --sa-stuck: var(--wait);
   --run-ink: var(--ok-ink);
   --wait-ink: var(--warn-ink);
+  --syn-kw: #b392f0;
+  --syn-str: #86d993;
+  --syn-fn: #79b8ff;
+  --syn-type: #56d4dd;
+  --syn-num: #ffab70;
+  --syn-com: #8c8c8c;
+  --syn-comment: var(--syn-com);
+}
+[data-theme="claude-dark"] {
+  --syn-kw: #bd93f9;
+  --syn-str: #8be9a5;
+  --syn-fn: #82b1ff;
+  --syn-type: #6ee2ea;
+  --syn-num: #ffb37a;
+  --syn-com: #948f85;
+  --syn-comment: var(--syn-com);
+}
+[data-theme="claude-light"] {
+  --syn-kw: #8636ba;
+  --syn-str: #297a48;
+  --syn-fn: #1f64bc;
+  --syn-type: #0a737e;
+  --syn-num: #a14c0e;
+  --syn-com: #787368;
+  --syn-comment: var(--syn-com);
 }

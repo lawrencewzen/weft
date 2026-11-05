@@ -70,6 +70,7 @@ function singleFile(): Plugin {
 }
 
 export default defineConfig({
+  define: { __VITE_PRELOAD__: "[]" },
   root: protoRoot,
   base: './',
   publicDir: false,
@@ -82,8 +83,13 @@ export default defineConfig({
   build: {
     outDir: path.resolve(repoRoot, 'design/prototype'),
     emptyOutDir: false,
-    modulePreload: { polyfill: false },
+    modulePreload: false,
     cssCodeSplit: false,
     assetsInlineLimit: Number.MAX_SAFE_INTEGER,
+    rollupOptions: {
+      output: {
+        codeSplitting: false,
+      },
+    },
   },
 });

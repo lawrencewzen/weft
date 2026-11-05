@@ -653,11 +653,8 @@ test('rapid double-clicking toggle button reverses smoothly without residual sty
 test('sidebar collapse and expand without projects does not throw error', async ({ page }) => {
   const state = await openProto(page);
 
-  // Clear workspace list to simulate 0 projects
-  await page.evaluate(() => {
-    const tree = document.querySelector('.sb-tree-root');
-    if (tree) tree.innerHTML = '';
-  });
+  await page.getByTestId('proto-clear-projects').click();
+  await expect(page.getByTestId('next-ws-empty-add')).toBeVisible();
 
   const leftBtn = page.locator('.side-toggle-left');
   await leftBtn.click();

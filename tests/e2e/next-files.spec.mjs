@@ -110,13 +110,13 @@ test('FL-3 markdown edit save survives reload and updates the diff', async ({ pa
     await (await revealFile(page, 'notes/today.md')).click();
     await expect(page.getByTestId('next-file-view')).toContainText('QA-FILE-1');
     await page.getByTestId('next-file-open-editor').click();
-    const editor = page.getByTestId('next-file-editor').locator('textarea');
+    const editor = page.getByTestId('next-file-editor').locator('.cm-content');
     await expect(editor).toBeVisible();
-    const current = await editor.inputValue();
+    const current = (await editor.textContent()) || '';
     await editor.fill(`${current.replace(/\n$/, '')}\nQA-EDIT-2\n`);
     await page.getByTestId('next-file-save').click();
     await expect(page.getByTestId('next-toast')).toContainText(/已保存|Saved/);
-    await expect(editor).toHaveValue(/QA-EDIT-2/);
+    await expect(editor).toContainText('QA-EDIT-2');
     await expect(await fs.readFile(path.join(wsDir, 'notes/today.md'), 'utf8')).toContain('QA-EDIT-2');
 
     await page.reload();
@@ -191,7 +191,7 @@ test('FL-5 reverting a new file to the empty baseline drops it from the changes 
     await page.getByTestId('next-right-tab-files').click();
     await (await revealFile(page, 'notes/today.md')).click();
     await page.getByTestId('next-file-open-editor').click();
-    const editor = page.getByTestId('next-file-editor').locator('textarea');
+    const editor = page.getByTestId('next-file-editor').locator('.cm-content');
     await expect(editor).toBeVisible();
     await editor.fill('');
     await page.getByTestId('next-file-save').click();
@@ -244,6 +244,10 @@ test('FL-6 long filenames truncate with a full-path title in changes and the fil
     expect(changeBox.scrollWidth).toBeGreaterThan(changeBox.clientWidth);
 
     await page.getByTestId('next-right-tab-files').click();
+    // 240px cannot hold the tree and the editor side by side, so the tree is in the drawer.
+    const treeToggle = page.getByTestId('next-file-tree-toggle');
+    await expect(treeToggle).toBeVisible({ timeout: 15000 });
+    await treeToggle.click();
     const fileNode = await revealFile(page, longName);
     await expect(fileNode).toHaveAttribute('title', longName);
     const treeName = fileNode.locator('.file-tree-name');
@@ -310,8 +314,8 @@ test('clicking a path chip opens the file at that line', async ({ page }) => {
     await expect(preview).toContainText('line-3');
     const target = preview.locator('.file-line.is-target');
     await expect(target).toHaveCount(1);
-    await expect(target.locator('.n')).toHaveText('3');
-    await expect(target.locator('.code')).toHaveText('line-3');
+    await expect(target).toHaveAttribute('data-line', '3');
+    await expect(target).toContainText('line-3');
   } finally {
     await srv.kill();
   }
@@ -363,8 +367,8 @@ test('saving an edited file updates the changes tab counts', async ({ page }) =>
     await page.getByTestId('next-right-tab-files').click();
     await (await revealFile(page, 'notes/today.md')).click();
     await page.getByTestId('next-file-open-editor').click();
-    const editor = page.getByTestId('next-file-editor').locator('textarea');
-    const current = await editor.inputValue();
+    const editor = page.getByTestId('next-file-editor').locator('.cm-content');
+    const current = (await editor.textContent()) || '';
     await editor.fill(`${current}extra-line\n`);
     await page.getByTestId('next-file-save').click();
     await expect(page.getByTestId('next-toast')).toContainText(/已保存|Saved/);
@@ -387,7 +391,7 @@ test('a 409 conflict offers overwrite and reload', async ({ page }) => {
     await page.getByTestId('next-right-tab-files').click();
     await (await revealFile(page, 'notes/today.md')).click();
     await page.getByTestId('next-file-open-editor').click();
-    const editor = page.getByTestId('next-file-editor').locator('textarea');
+    const editor = page.getByTestId('next-file-editor').locator('.cm-content');
     await editor.fill('mine-overwrite\n');
     await fs.writeFile(path.join(wsDir, 'notes/today.md'), 'disk-changed\n');
     await page.getByTestId('next-file-save').click();
@@ -406,7 +410,44 @@ test('a 409 conflict offers overwrite and reload', async ({ page }) => {
     await expect(page.getByTestId('next-file-conflict')).toBeVisible();
     await page.getByTestId('next-file-reload').click();
     await expect(page.getByTestId('next-file-conflict')).toHaveCount(0, { timeout: 10000 });
-    await expect(editor).toHaveValue('disk-again\n');
+    await expect(editor).toContainText('disk-again');
+  } finally {
+    await srv.kill();
+  }
+});
+
+test('focus inside editor and press Cmd/Ctrl+S saves once via route interception with no conflict', async ({ page }) => {
+  const { srv } = await boot(page, {}, [
+    { tool: 'write', args: { path: 'notes/cmd-save.txt', content: 'hello world\n' } },
+    { text: 'done' },
+  ]);
+  try {
+    await sendNext(page, 'write cmd-save');
+    await waitRunDone(page);
+    await page.getByTestId('next-right-tab-files').click();
+    await (await revealFile(page, 'notes/cmd-save.txt')).click();
+    const editor = page.getByTestId('next-file-editor').locator('.cm-content');
+    await expect(editor).toBeVisible();
+
+    let putCount = 0;
+    page.on('request', (req) => {
+      if (req.method() === 'PUT' && req.url().includes('/files')) {
+        putCount += 1;
+      }
+    });
+
+    await editor.click();
+    await editor.pressSequentially('extra line\n');
+    await expect(page.getByTestId('next-file-unsaved')).toBeVisible();
+
+    await editor.focus();
+    const modKey = process.platform === 'darwin' ? 'Meta' : 'Control';
+    await page.keyboard.press(`${modKey}+s`);
+
+    await expect(page.getByTestId('next-toast')).toContainText(/已保存|Saved/);
+    await expect(page.getByTestId('next-file-unsaved')).toHaveCount(0);
+    expect(putCount, 'save request should fire exactly once').toBe(1);
+    await expect(page.getByTestId('next-file-conflict')).toHaveCount(0);
   } finally {
     await srv.kill();
   }

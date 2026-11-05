@@ -1,8 +1,18 @@
 import { useEffect, useRef, useState, type MouseEvent } from 'react';
 import type { Lang } from '../data/lang';
+import {
+  FILE_LAYOUT_MIN_TOTAL,
+  FILE_PREVIEW_W_MIN,
+  FILE_TREE_W_DEFAULT,
+  FILE_TREE_W_MIN,
+  readFileTreeWidth,
+  writeFileTreeWidth,
+} from '../data/layout';
 import { isMarkdownFile, useRightActions, useRightChanges, useRightFiles } from '../data/rightPaneContext';
 import { visibleTreeRows } from '../data/fileTree';
+import { readUiZoom } from '../data/uiZoom';
 import { t } from '../i18n';
+import { CodeEditor } from './CodeEditor';
 import { CtxMenu, type CtxMenuItem } from './CtxMenu';
 import { Markdown } from './Markdown';
 
@@ -12,61 +22,21 @@ const DIR_CHEV = (
   </svg>
 );
 
-function FileLines({
-  text,
-  targetLine,
-}: {
-  text: string;
-  targetLine: number | null;
-}) {
-  const root = useRef<HTMLDivElement>(null);
-  const lines = text.split('\n');
-  useEffect(() => {
-    if (targetLine == null) return;
-    root.current?.querySelector('.file-line.is-target')?.scrollIntoView({ block: 'center', inline: 'nearest' });
-  }, [targetLine, text]);
-  return (
-    <div className="file-lines file-view-content" ref={root}>
-      {lines.map((line, i) => (
-        <div
-          key={i}
-          className={`file-line${targetLine === i + 1 ? ' is-target' : ''}`}
-          data-line={i + 1}
-        >
-          <span className="n">{i + 1}</span>
-          <span className="code">{line}</span>
-        </div>
-      ))}
-    </div>
-  );
-}
+const FILE_TREE_ICON = (
+  <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <rect x="2" y="2.5" width="12" height="11" rx="2" />
+    <path d="M6 2.5v11" />
+  </svg>
+);
 
-function FilePreview({ lang }: { lang: Lang }) {
-  const { file, activeFilePath, fileTargetLine } = useRightFiles();
-  const { visibleChanges } = useRightChanges();
-  if (!activeFilePath || !file) {
-    return <div className="file-preview-empty">{t(lang, 'select_file_to_preview')}</div>;
-  }
-  if (file.tooLarge) {
-    return <div className="file-preview-empty">{activeFilePath} — {t(lang, 'file_too_large')}</div>;
-  }
-  if (file.binary || file.text == null) {
-    return <div className="file-preview-empty">{activeFilePath} — {t(lang, 'file_binary')}</div>;
-  }
-  const lines = file.text.split('\n');
-  const changed = visibleChanges.some((item) => item.path === activeFilePath);
-  return (
-    <>
-      <div className="file-preview-head">
-        <span>{activeFilePath}</span>
-        <span>{changed ? t(lang, 'file_modified_note') : t(lang, 'file_lines', { n: lines.length })}</span>
-      </div>
-      <FileLines text={file.text} targetLine={fileTargetLine} />
-    </>
-  );
-}
+type EditorPaneProps = {
+  lang: Lang;
+  isNarrow?: boolean;
+  showDrawer?: boolean;
+  onToggleDrawer?: () => void;
+};
 
-function FileEditor({ lang }: { lang: Lang }) {
+function FileEditorPane({ lang, isNarrow = false, showDrawer = false, onToggleDrawer }: EditorPaneProps) {
   const {
     file,
     activeFilePath,
@@ -77,49 +47,105 @@ function FileEditor({ lang }: { lang: Lang }) {
     saveFile,
     saveState,
     reloadFile,
+    fileTargetLine,
   } = useRightFiles();
-  const area = useRef<HTMLTextAreaElement>(null);
 
-  useEffect(() => {
-    function onKey(ev: KeyboardEvent) {
-      if ((ev.metaKey || ev.ctrlKey) && ev.key.toLowerCase() === 's') {
-        ev.preventDefault();
-        void saveFile();
-      }
-    }
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [saveFile]);
+  const toggleBtn = isNarrow ? (
+    <button
+      type="button"
+      className="icon-btn is-sm file-tree-toggle-btn"
+      data-testid="next-file-tree-toggle"
+      title={showDrawer ? t(lang, 'hide_file_tree') : t(lang, 'show_file_tree')}
+      aria-label={showDrawer ? t(lang, 'hide_file_tree') : t(lang, 'show_file_tree')}
+      aria-expanded={showDrawer}
+      onClick={onToggleDrawer}
+    >
+      {FILE_TREE_ICON}
+    </button>
+  ) : null;
 
   if (!activeFilePath || !file) {
-    return <div className="file-preview-empty">{t(lang, 'select_file_to_preview')}</div>;
+    return (
+      <div className="md-editor-container file-editor-empty-container">
+        {isNarrow ? (
+          <div className="md-editor-toolbar file-preview-head">
+            <div className="file-toolbar-left">
+              {toggleBtn}
+              <span className="path">{t(lang, 'select_file_to_preview')}</span>
+            </div>
+          </div>
+        ) : null}
+        <div className="file-preview-empty">{t(lang, 'select_file_to_preview')}</div>
+      </div>
+    );
   }
   if (file.tooLarge) {
-    return <div className="file-preview-empty">{activeFilePath} — {t(lang, 'file_too_large')}</div>;
+    return (
+      <div className="md-editor-container file-editor-empty-container">
+        {isNarrow ? (
+          <div className="md-editor-toolbar file-preview-head">
+            <div className="file-toolbar-left">
+              {toggleBtn}
+              <span className="path" title={activeFilePath}>{activeFilePath}</span>
+            </div>
+          </div>
+        ) : null}
+        <div className="file-preview-empty">{activeFilePath} — {t(lang, 'file_too_large')}</div>
+      </div>
+    );
   }
   if (file.binary || file.text == null) {
-    return <div className="file-preview-empty">{activeFilePath} — {t(lang, 'file_binary')}</div>;
+    return (
+      <div className="md-editor-container file-editor-empty-container">
+        {isNarrow ? (
+          <div className="md-editor-toolbar file-preview-head">
+            <div className="file-toolbar-left">
+              {toggleBtn}
+              <span className="path" title={activeFilePath}>{activeFilePath}</span>
+            </div>
+          </div>
+        ) : null}
+        <div className="file-preview-empty">{activeFilePath} — {t(lang, 'file_binary')}</div>
+      </div>
+    );
   }
 
+  const isMd = isMarkdownFile(activeFilePath);
+  const isDirty = draftText !== (file.text ?? '');
+  const lineCount = draftText.length === 0 ? 1 : draftText.split('\n').length;
+
   return (
-    <div className="md-editor-container" data-testid="next-file-editor">
-      <div className="md-editor-toolbar">
-        <span className="path">{activeFilePath}</span>
+    <div className="md-editor-container code-editor-wrapper" data-testid="next-file-editor">
+      <div className="md-editor-toolbar file-preview-head">
+        <div className="file-toolbar-left">
+          {toggleBtn}
+          <span className="path" title={activeFilePath}>{activeFilePath}</span>
+          {!isMd ? (
+            <span className="file-lines-count">{t(lang, 'file_lines', { n: lineCount })}</span>
+          ) : null}
+          {isDirty ? (
+            <span className="file-unsaved" data-testid="next-file-unsaved" title={t(lang, 'file_unsaved')}>
+              ● {t(lang, 'file_unsaved')}
+            </span>
+          ) : null}
+        </div>
         <div className="md-editor-actions">
-          {editorMode === 'edit' ? (
-            <button type="button" className="btn btn-sm" onClick={() => setEditorMode('preview')}>
-              {t(lang, 'btn_preview')}
-            </button>
-          ) : (
-            <button
-              type="button"
-              className="btn btn-sm"
-              data-testid="next-file-open-editor"
-              onClick={() => setEditorMode('edit')}
-            >
-              {t(lang, 'btn_edit')}
-            </button>
-          )}
+          {isMd ? (
+            editorMode === 'edit' ? (
+              <button type="button" className="btn btn-sm" onClick={() => setEditorMode('preview')}>
+                {t(lang, 'btn_preview')}
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="btn btn-sm"
+                data-testid="next-file-open-editor"
+                onClick={() => setEditorMode('edit')}
+              >
+                {t(lang, 'btn_edit')}
+              </button>
+            )
+          ) : null}
           <button
             type="button"
             className="btn btn-sm p"
@@ -152,24 +178,103 @@ function FileEditor({ lang }: { lang: Lang }) {
           </button>
         </div>
       ) : null}
-      {editorMode === 'edit' ? (
-        <textarea
-          ref={area}
-          className="md-editor-content"
-          spellCheck={false}
-          value={draftText}
-          onChange={(ev) => setDraftText(ev.target.value)}
-        />
-      ) : (
+      {isMd && editorMode === 'preview' ? (
         <div className="md-editor-preview">
           <Markdown text={draftText} copyLabel={t(lang, 'copy_code')} copiedLabel={t(lang, 'copied')} />
         </div>
+      ) : (
+        <CodeEditor
+          key={activeFilePath}
+          filePath={activeFilePath}
+          value={draftText}
+          onChange={setDraftText}
+          targetLine={fileTargetLine}
+          onSave={saveFile}
+        />
       )}
     </div>
   );
 }
 
 type DirMenu = { x: number; y: number; path: string };
+
+type TreeContentProps = {
+  lang: Lang;
+  workspaceLabel: string;
+  treeReady: boolean;
+  rows: ReturnType<typeof visibleTreeRows>;
+  activeFilePath: string | null;
+  changed: Set<string>;
+  treeTruncated: boolean;
+  onDirMenu: (ev: MouseEvent, dirPath: string) => void;
+  onSelectDir: (path: string) => void;
+  onSelectFile: (path: string) => void;
+};
+
+function FileTreeRows({
+  lang,
+  workspaceLabel,
+  treeReady,
+  rows,
+  activeFilePath,
+  changed,
+  treeTruncated,
+  onDirMenu,
+  onSelectDir,
+  onSelectFile,
+}: TreeContentProps) {
+  return (
+    <>
+      {workspaceLabel ? <div className="file-tree-root" title={workspaceLabel}>{workspaceLabel}</div> : null}
+      {!treeReady ? (
+        <div className="file-tree-empty">{t(lang, 'file_tree_loading')}</div>
+      ) : rows.length === 0 ? (
+        <div className="file-tree-empty">{t(lang, 'file_tree_empty')}</div>
+      ) : (
+        rows.map((row) => (
+          row.type === 'dir' ? (
+            <button
+              key={row.path}
+              type="button"
+              className={`file-tree-row is-dir${row.expanded ? ' is-open' : ''}`}
+              style={{ paddingLeft: 8 + row.depth * 14 }}
+              title={row.path}
+              data-testid="next-file-node"
+              data-path={row.path}
+              data-type="dir"
+              onClick={() => onSelectDir(row.path)}
+              onContextMenu={(ev) => onDirMenu(ev, row.path)}
+            >
+              <span className="file-tree-icon">{DIR_CHEV}</span>
+              <span className="file-tree-name">{row.name}</span>
+            </button>
+          ) : (
+            <button
+              key={row.path}
+              type="button"
+              className={`file-tree-row${row.path === activeFilePath ? ' active' : ''}`}
+              style={{ paddingLeft: 8 + row.depth * 14 }}
+              title={row.path}
+              data-testid="next-file-node"
+              data-path={row.path}
+              data-type="file"
+              onClick={() => onSelectFile(row.path)}
+            >
+              <span className="file-tree-icon" />
+              <span className="file-tree-name">{row.name}</span>
+              {changed.has(row.path) ? <span className="file-tree-mod">M</span> : null}
+            </button>
+          )
+        ))
+      )}
+      {treeTruncated ? (
+        <div className="file-tree-empty" data-testid="next-file-tree-truncated">
+          {t(lang, 'file_tree_truncated')}
+        </div>
+      ) : null}
+    </>
+  );
+}
 
 export function FileBrowser({ lang, workspaceLabel }: { lang: Lang; workspaceLabel: string }) {
   const {
@@ -182,10 +287,67 @@ export function FileBrowser({ lang, workspaceLabel }: { lang: Lang; workspaceLab
   } = useRightFiles();
   const { visibleChanges } = useRightChanges();
   const { openFile, copyPath, openInTerminal } = useRightActions();
+
+  const [treeWidth, setTreeWidth] = useState(() => readFileTreeWidth());
+  const treeWidthRef = useRef(treeWidth);
+  treeWidthRef.current = treeWidth;
+
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [containerWidth, setContainerWidth] = useState<number | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [showDrawer, setShowDrawer] = useState(false);
+  const drawerRef = useRef<HTMLDivElement>(null);
+
   const [dirMenu, setDirMenu] = useState<DirMenu | null>(null);
   const rows = treeReady ? visibleTreeRows(tree, expandedDirs) : [];
   const changed = new Set(visibleChanges.map((item) => item.path));
-  const md = isMarkdownFile(activeFilePath);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (!entry) return;
+      setContainerWidth(entry.contentRect.width);
+    });
+    ro.observe(el);
+    setContainerWidth(el.clientWidth);
+    return () => ro.disconnect();
+  }, []);
+
+  const isNarrow = containerWidth != null && containerWidth < FILE_LAYOUT_MIN_TOTAL;
+
+  useEffect(() => {
+    if (!isNarrow && showDrawer) {
+      setShowDrawer(false);
+    }
+  }, [isNarrow, showDrawer]);
+
+  useEffect(() => {
+    if (!showDrawer) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        setShowDrawer(false);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown, true);
+    return () => window.removeEventListener('keydown', onKeyDown, true);
+  }, [showDrawer]);
+
+  useEffect(() => {
+    if (!showDrawer) return;
+    const onPointerDown = (e: globalThis.PointerEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (!target) return;
+      if (target.closest('.file-tree-drawer') || target.closest('[data-testid=next-file-tree-toggle]')) {
+        return;
+      }
+      setShowDrawer(false);
+    };
+    window.addEventListener('pointerdown', onPointerDown);
+    return () => window.removeEventListener('pointerdown', onPointerDown);
+  }, [showDrawer]);
 
   function onDirMenu(ev: MouseEvent, dirPath: string) {
     ev.preventDefault();
@@ -202,60 +364,113 @@ export function FileBrowser({ lang, workspaceLabel }: { lang: Lang; workspaceLab
     },
   ];
 
+  function onDividerMouseDown(ev: MouseEvent<HTMLDivElement>) {
+    if (ev.button !== 0) return;
+    ev.preventDefault();
+    const container = containerRef.current;
+    if (!container) return;
+    const zoom = readUiZoom();
+    setIsDragging(true);
+
+    const onMouseMove = (e: globalThis.MouseEvent) => {
+      const currentRect = container.getBoundingClientRect();
+      const cssTargetW = (e.clientX - currentRect.left) / zoom;
+      const contWidth = currentRect.width / zoom;
+      const maxW = Math.max(FILE_TREE_W_MIN, contWidth - FILE_PREVIEW_W_MIN);
+      const nextW = Math.round(Math.max(FILE_TREE_W_MIN, Math.min(maxW, cssTargetW)));
+      setTreeWidth(nextW);
+    };
+
+    const onMouseUp = () => {
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+      setIsDragging(false);
+      writeFileTreeWidth(treeWidthRef.current);
+    };
+
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+  }
+
+  const maxAllowedTreeW = containerWidth != null
+    ? Math.max(FILE_TREE_W_MIN, containerWidth - FILE_PREVIEW_W_MIN)
+    : treeWidth;
+  const effectiveTreeW = Math.max(FILE_TREE_W_MIN, Math.min(maxAllowedTreeW, treeWidth));
+
   return (
-    <div className="file-browser">
-      <div className="file-tree" data-testid="next-file-tree">
-        {workspaceLabel ? <div className="file-tree-root" title={workspaceLabel}>{workspaceLabel}</div> : null}
-        {!treeReady ? (
-          <div className="file-tree-empty">{t(lang, 'file_tree_loading')}</div>
-        ) : rows.length === 0 ? (
-          <div className="file-tree-empty">{t(lang, 'file_tree_empty')}</div>
-        ) : (
-          rows.map((row) => (
-            row.type === 'dir' ? (
-              <button
-                key={row.path}
-                type="button"
-                className={`file-tree-row is-dir${row.expanded ? ' is-open' : ''}`}
-                style={{ paddingLeft: 8 + row.depth * 14 }}
-                title={row.path}
-                data-testid="next-file-node"
-                data-path={row.path}
-                data-type="dir"
-                onClick={() => toggleDirectory(row.path)}
-                onContextMenu={(ev) => onDirMenu(ev, row.path)}
-              >
-                <span className="file-tree-icon">{DIR_CHEV}</span>
-                <span className="file-tree-name">{row.name}</span>
-              </button>
-            ) : (
-              <button
-                key={row.path}
-                type="button"
-                className={`file-tree-row${row.path === activeFilePath ? ' active' : ''}`}
-                style={{ paddingLeft: 8 + row.depth * 14 }}
-                title={row.path}
-                data-testid="next-file-node"
-                data-path={row.path}
-                data-type="file"
-                onClick={() => openFile(row.path)}
-              >
-                <span className="file-tree-icon" />
-                <span className="file-tree-name">{row.name}</span>
-                {changed.has(row.path) ? <span className="file-tree-mod">M</span> : null}
-              </button>
-            )
-          ))
-        )}
-        {treeTruncated ? (
-          <div className="file-tree-empty" data-testid="next-file-tree-truncated">
-            {t(lang, 'file_tree_truncated')}
+    <div
+      ref={containerRef}
+      className={`file-browser${isNarrow ? ' is-narrow' : ''}${isDragging ? ' is-dragging' : ''}`}
+    >
+      {!isNarrow ? (
+        <>
+          <div
+            className="file-tree"
+            data-testid="next-file-tree"
+            style={{ width: `${effectiveTreeW}px` }}
+          >
+            <FileTreeRows
+              lang={lang}
+              workspaceLabel={workspaceLabel}
+              treeReady={treeReady}
+              rows={rows}
+              activeFilePath={activeFilePath}
+              changed={changed}
+              treeTruncated={treeTruncated}
+              onDirMenu={onDirMenu}
+              onSelectDir={(path) => toggleDirectory(path)}
+              onSelectFile={(path) => openFile(path)}
+            />
           </div>
-        ) : null}
-      </div>
+          <div
+            className="file-tree-divider"
+            data-testid="next-file-tree-divider"
+            title={t(lang, 'drag_resize')}
+            onMouseDown={onDividerMouseDown}
+            onDoubleClick={() => {
+              setTreeWidth(FILE_TREE_W_DEFAULT);
+              writeFileTreeWidth(FILE_TREE_W_DEFAULT);
+            }}
+          />
+        </>
+      ) : null}
       <div className="file-preview" data-testid="next-file-view">
-        {md ? <FileEditor lang={lang} /> : <FilePreview lang={lang} />}
+        <FileEditorPane
+          lang={lang}
+          isNarrow={isNarrow}
+          showDrawer={showDrawer}
+          onToggleDrawer={() => setShowDrawer((v) => !v)}
+        />
       </div>
+      {isNarrow && showDrawer ? (
+        <>
+          <div
+            className="file-tree-drawer-backdrop"
+            onClick={() => setShowDrawer(false)}
+          />
+          <div
+            ref={drawerRef}
+            className="file-tree file-tree-drawer"
+            data-testid="next-file-tree"
+          >
+            <FileTreeRows
+              lang={lang}
+              workspaceLabel={workspaceLabel}
+              treeReady={treeReady}
+              rows={rows}
+              activeFilePath={activeFilePath}
+              changed={changed}
+              treeTruncated={treeTruncated}
+              onDirMenu={onDirMenu}
+              onSelectDir={(path) => toggleDirectory(path)}
+              onSelectFile={(path) => {
+                openFile(path);
+                setShowDrawer(false);
+              }}
+            />
+          </div>
+        </>
+      ) : null}
       {dirMenu ? (
         <CtxMenu
           x={dirMenu.x}
