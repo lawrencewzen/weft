@@ -52,4 +52,11 @@ describe('i18n empty home and branding', () => {
     expect(t('en', 'unauthenticated')).not.toMatch(/[\u4e00-\u9fff]/);
     expect(t('zh', 'unauthenticated')).toBe('请用 weft open 打开新版网页端');
   });
+
+  it('formats send_title with mod param for Mac and non-Mac in zh and en', () => {
+    expect(t('zh', 'send_title', { mod: 'Cmd' })).toBe('发送指令 (Cmd+Enter)');
+    expect(t('zh', 'send_title', { mod: 'Ctrl' })).toBe('发送指令 (Ctrl+Enter)');
+    expect(t('en', 'send_title', { mod: 'Cmd' })).toBe('Send (Cmd+Enter)');
+    expect(t('en', 'send_title', { mod: 'Ctrl' })).toBe('Send (Ctrl+Enter)');
+  });
 });
