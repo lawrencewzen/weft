@@ -558,6 +558,7 @@ export interface paths {
          * 读工作区文件
          * @description 返回 FileContent。超过 2 MB（环境变量 WEFT_V2_MAX_FILE_BYTES，仅测试用）时 tooLarge 为 true、text 为 null。
          *     前 8 KB 里有 NUL 字节或不是合法 UTF-8 时 binary 为 true、text 为 null。
+         *     扩展名在图片白名单（png、jpg、jpeg、gif、webp、bmp、svg、ico）内时 image 为 true，字节走 GET /files/raw。
          *     version 是内容 sha256 的十六进制前 16 位，保存时用来检测冲突。
          *     越界 403 E_SANDBOX；不存在 404；是目录 400。
          */
@@ -570,6 +571,34 @@ export interface paths {
          *     越界 403 E_SANDBOX。写入后若该文件在某个对话的变更列表里，对应 conversation 主题会重算。
          */
         put: operations["saveWorkspaceFile"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/workspaces/{id}/files/raw": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 读取工作区里的图片字节
+         * @description 供文件面板用 img 预览。只允许扩展名白名单：png、jpg、jpeg、gif、webp、bmp、svg、ico（大小写不敏感）。
+         *     Content-Type 按扩展名给出，不根据文件内容猜测。其他扩展名 415 E_MEDIA。
+         *     鉴权和路径校验与 GET /files 相同，并且接受 session cookie（weft_session）：浏览器图片请求带不上 Authorization。
+         *     越界 403 E_SANDBOX；不存在 404；是目录 400；缺少 path 也是 400。
+         *     超过 20 MB 返回 413 E_TOO_LARGE，不把文件读进内存。成功响应是流。
+         *     ETag 是内容 sha256 十六进制前 16 位，带引号，与 FileContent.version 同一算法。
+         *     If-None-Match 命中返回 304。Cache-Control 为 private, no-cache。
+         *     一律带 X-Content-Type-Options: nosniff 和 Content-Disposition: inline。
+         *     svg 额外带 Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; sandbox。
+         */
+        get: operations["getWorkspaceFileRaw"];
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -2047,6 +2076,8 @@ export interface components {
             text: null | string;
             /** @description 内容 sha256 十六进制前 16 位 */
             version: string;
+            /** @description 扩展名在图片白名单（png、jpg、jpeg、gif、webp、bmp、svg、ico）内时为 true。缺省表示不是图片。 */
+            image?: boolean;
         };
         /** @description PUT /api/v2/workspaces/{id}/files 的请求体。 */
         SaveFileRequest: {
@@ -4391,6 +4422,129 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FileConflict"];
+                };
+            };
+            /** @description 客户端错误 */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 服务端错误 */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+        };
+    };
+    getWorkspaceFileRaw: {
+        parameters: {
+            query: {
+                /** @description 相对工作区的文件路径 */
+                path: string;
+            };
+            header?: never;
+            path: {
+                /** @description 工作区 id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 图片字节 */
+            200: {
+                headers: {
+                    /** @description private, no-cache */
+                    "Cache-Control"?: string;
+                    /** @description 带引号的内容哈希 */
+                    ETag?: string;
+                    /** @description nosniff */
+                    "X-Content-Type-Options"?: string;
+                    /** @description inline */
+                    "Content-Disposition"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/png": string;
+                    "image/jpeg": string;
+                    "image/gif": string;
+                    "image/webp": string;
+                    "image/bmp": string;
+                    "image/svg+xml": string;
+                    "image/x-icon": string;
+                };
+            };
+            /** @description If-None-Match 与当前 ETag 一致，无响应体 */
+            304: {
+                headers: {
+                    ETag?: string;
+                    "Cache-Control"?: string;
+                    "X-Content-Type-Options"?: string;
+                    "Content-Disposition"?: string;
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 路径是目录或缺少 path */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 未授权 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 路径越界 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 工作区或文件不存在 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 图片超过 20 MB */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 扩展名不在图片白名单内 */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
                 };
             };
             /** @description 客户端错误 */

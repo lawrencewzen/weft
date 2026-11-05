@@ -1,7 +1,40 @@
 import type { Diff, FileContent, FileNode, FileTree, SaveResult } from './types';
 
-/** A file in the in-memory mock repository. Only text files exist here. */
-export type MockFile = { path: string; text: string };
+/** A file in the in-memory mock repository. Images carry `imageBase64` instead of text. */
+export type MockFile = { path: string; text: string; imageBase64?: string };
+
+/** 1×1 PNG so the prototype can preview GET .../files/raw without a real disk. */
+export const SEED_PREVIEW_PNG_BASE64 =
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+
+export const MOCK_IMAGE_MAX_BYTES = 20 * 1024 * 1024;
+
+/** Keep in step with WORKSPACE_IMAGE_MEDIA_TYPES in src/v2/views/files.ts. */
+const IMAGE_MEDIA_BY_EXT: Record<string, string> = {
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  gif: 'image/gif',
+  webp: 'image/webp',
+  bmp: 'image/bmp',
+  svg: 'image/svg+xml',
+  ico: 'image/x-icon',
+};
+
+export function imageMediaType(filePath: string): string | null {
+  const base = posixPath(filePath).split('/').pop() || '';
+  const dot = base.lastIndexOf('.');
+  if (dot <= 0 || dot === base.length - 1) return null;
+  const ext = base.slice(dot + 1).toLowerCase();
+  return IMAGE_MEDIA_BY_EXT[ext] ?? null;
+}
+
+export function decodeBase64(data: string): Uint8Array {
+  const bin = atob(data);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i += 1) out[i] = bin.charCodeAt(i);
+  return out;
+}
 
 export type MockRepo = {
   files: Map<string, MockFile>;
@@ -46,6 +79,18 @@ function byteLength(text: string): number {
 }
 
 export function fileContent(file: MockFile): FileContent {
+  const image = imageMediaType(file.path) != null;
+  if (file.imageBase64) {
+    return {
+      path: file.path,
+      size: decodeBase64(file.imageBase64).length,
+      binary: true,
+      tooLarge: false,
+      text: null,
+      version: versionOf(file.imageBase64),
+      ...(image ? { image: true } : {}),
+    };
+  }
   return {
     path: file.path,
     size: byteLength(file.text),
@@ -53,6 +98,7 @@ export function fileContent(file: MockFile): FileContent {
     tooLarge: false,
     text: file.text,
     version: versionOf(file.text),
+    ...(image ? { image: true } : {}),
   };
 }
 
@@ -79,6 +125,68 @@ export function readRepoFile(repo: MockRepo, rawPath: string): FileContent | nul
   const file = repo.files.get(posixPath(rawPath));
   return file ? fileContent(file) : null;
 }
+
+function repoHasDir(repo: MockRepo, rel: string): boolean {
+  const prefix = `${rel}/`;
+  for (const filePath of repo.files.keys()) {
+    if (filePath.startsWith(prefix)) return true;
+  }
+  return false;
+}
+
+function rawPathEscapes(raw: string): boolean {
+  if (raw.includes('\0')) return true;
+  const trimmed = raw.trim();
+  if (trimmed.startsWith('/') || trimmed.startsWith('\\') || /^[a-zA-Z]:/.test(trimmed)) return true;
+  return posixPath(raw).split('/').includes('..');
+}
+
+export type RawFileHit = {
+  bytes: Uint8Array;
+  mediaType: string;
+  etag: string;
+};
+
+export type RawFileMiss = { status: number; error: string; code: string };
+
+/** Image bytes for GET /files/raw. Same status codes as the real route. */
+export function readRepoFileRaw(repo: MockRepo, rawPath: string): RawFileHit | RawFileMiss {
+  if (rawPath == null || rawPath === '') {
+    return { status: 400, error: 'path required', code: 'E_BAD_REQUEST' };
+  }
+  if (rawPathEscapes(rawPath)) {
+    return { status: 403, error: 'path outside workspace', code: 'E_SANDBOX' };
+  }
+  const rel = posixPath(rawPath);
+  if (!rel) return { status: 400, error: 'path required', code: 'E_BAD_REQUEST' };
+  const file = repo.files.get(rel);
+  if (!file) {
+    if (repoHasDir(repo, rel)) {
+      return { status: 400, error: 'is a directory', code: 'E_BAD_REQUEST' };
+    }
+    return { status: 404, error: 'not found', code: 'ENOENT' };
+  }
+  const mediaType = imageMediaType(rel);
+  if (!mediaType) {
+    return { status: 415, error: 'unsupported media type', code: 'E_MEDIA' };
+  }
+  const bytes = file.imageBase64 ? decodeBase64(file.imageBase64) : new TextEncoder().encode(file.text);
+  if (bytes.byteLength > MOCK_IMAGE_MAX_BYTES) {
+    return {
+      status: 413,
+      error: `image exceeds ${MOCK_IMAGE_MAX_BYTES} bytes`,
+      code: 'E_TOO_LARGE',
+    };
+  }
+  const etag = `"${versionOf(file.imageBase64 || file.text)}"`;
+  return { bytes, mediaType, etag };
+}
+
+function isRawFileHit(value: RawFileHit | RawFileMiss): value is RawFileHit {
+  return 'bytes' in value;
+}
+
+export { isRawFileHit };
 
 /** Longest common subsequence length; enough for the mock's line counters. */
 function lcsLength(a: string[], b: string[]): number {
@@ -456,6 +564,11 @@ function storeTestSource(): string {
 
 export function seedWeftRepo(): MockRepo {
   return createRepo([
+    {
+      path: 'design/preview.png',
+      text: '',
+      imageBase64: SEED_PREVIEW_PNG_BASE64,
+    },
     {
       path: 'README.md',
       text: [

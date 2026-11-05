@@ -2648,7 +2648,7 @@
       "get": {
         "operationId": "getWorkspaceFile",
         "summary": "读工作区文件",
-        "description": "返回 FileContent。超过 2 MB（环境变量 WEFT_V2_MAX_FILE_BYTES，仅测试用）时 tooLarge 为 true、text 为 null。\n前 8 KB 里有 NUL 字节或不是合法 UTF-8 时 binary 为 true、text 为 null。\nversion 是内容 sha256 的十六进制前 16 位，保存时用来检测冲突。\n越界 403 E_SANDBOX；不存在 404；是目录 400。\n",
+        "description": "返回 FileContent。超过 2 MB（环境变量 WEFT_V2_MAX_FILE_BYTES，仅测试用）时 tooLarge 为 true、text 为 null。\n前 8 KB 里有 NUL 字节或不是合法 UTF-8 时 binary 为 true、text 为 null。\n扩展名在图片白名单（png、jpg、jpeg、gif、webp、bmp、svg、ico）内时 image 为 true，字节走 GET /files/raw。\nversion 是内容 sha256 的十六进制前 16 位，保存时用来检测冲突。\n越界 403 E_SANDBOX；不存在 404；是目录 400。\n",
         "security": [
           {
             "bearerAuth": []
@@ -2840,6 +2840,221 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/FileConflict"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "客户端错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "服务端错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/workspaces/{id}/files/raw": {
+      "get": {
+        "operationId": "getWorkspaceFileRaw",
+        "summary": "读取工作区里的图片字节",
+        "description": "供文件面板用 img 预览。只允许扩展名白名单：png、jpg、jpeg、gif、webp、bmp、svg、ico（大小写不敏感）。\nContent-Type 按扩展名给出，不根据文件内容猜测。其他扩展名 415 E_MEDIA。\n鉴权和路径校验与 GET /files 相同，并且接受 session cookie（weft_session）：浏览器图片请求带不上 Authorization。\n越界 403 E_SANDBOX；不存在 404；是目录 400；缺少 path 也是 400。\n超过 20 MB 返回 413 E_TOO_LARGE，不把文件读进内存。成功响应是流。\nETag 是内容 sha256 十六进制前 16 位，带引号，与 FileContent.version 同一算法。\nIf-None-Match 命中返回 304。Cache-Control 为 private, no-cache。\n一律带 X-Content-Type-Options: nosniff 和 Content-Disposition: inline。\nsvg 额外带 Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; sandbox。\n",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "工作区 id"
+          },
+          {
+            "name": "path",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "相对工作区的文件路径"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "图片字节",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "private, no-cache"
+              },
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "带引号的内容哈希"
+              },
+              "X-Content-Type-Options": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "nosniff"
+              },
+              "Content-Disposition": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "inline"
+              }
+            },
+            "content": {
+              "image/png": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "image/jpeg": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "image/gif": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "image/webp": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "image/bmp": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "image/svg+xml": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "image/x-icon": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "If-None-Match 与当前 ETag 一致，无响应体",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Content-Type-Options": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Content-Disposition": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "路径是目录或缺少 path",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "未授权",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "路径越界",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "工作区或文件不存在",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "图片超过 20 MB",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "扩展名不在图片白名单内",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
                 }
               }
             }
@@ -8422,6 +8637,10 @@
           "version": {
             "type": "string",
             "description": "内容 sha256 十六进制前 16 位"
+          },
+          "image": {
+            "type": "boolean",
+            "description": "扩展名在图片白名单（png、jpg、jpeg、gif、webp、bmp、svg、ico）内时为 true。缺省表示不是图片。"
           }
         },
         "description": "GET /api/v2/workspaces/{id}/files 的响应。"

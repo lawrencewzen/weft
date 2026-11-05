@@ -22,6 +22,36 @@ export type SaveResult = components['schemas']['SaveResult'];
 
 export const DEFAULT_MAX_FILE_BYTES = 2 * 1024 * 1024;
 export const BINARY_SAMPLE_BYTES = 8 * 1024;
+/** Preview images larger than this are rejected with 413. */
+export const WORKSPACE_IMAGE_MAX_BYTES = 20 * 1024 * 1024;
+
+/** Extension (lowercase, no dot) → Content-Type. Not sniffed from bytes. */
+export const WORKSPACE_IMAGE_MEDIA_TYPES: Readonly<Record<string, string>> = {
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  gif: 'image/gif',
+  webp: 'image/webp',
+  bmp: 'image/bmp',
+  svg: 'image/svg+xml',
+  ico: 'image/x-icon',
+};
+
+/** SVG is served inline; this CSP keeps scripts and external loads off. */
+export const SVG_IMAGE_CSP = "default-src 'none'; style-src 'unsafe-inline'; sandbox";
+
+export function workspaceImageMediaType(rel: string): string | null {
+  const normalized = posixPath(rel);
+  const base = normalized.slice(normalized.lastIndexOf('/') + 1);
+  const dot = base.lastIndexOf('.');
+  if (dot <= 0 || dot === base.length - 1) return null;
+  const ext = base.slice(dot + 1).toLowerCase();
+  return WORKSPACE_IMAGE_MEDIA_TYPES[ext] ?? null;
+}
+
+function imageField(rel: string): { image: true } | undefined {
+  return workspaceImageMediaType(rel) ? { image: true } : undefined;
+}
 
 export type FileOpError = Error & { code?: string; current?: FileContent };
 
@@ -120,6 +150,7 @@ export async function readWorkspaceFile(
       tooLarge: false,
       text: binary ? null : buf.toString('utf8'),
       version: contentVersion(buf),
+      ...imageField(rel),
     };
   }
 
@@ -132,6 +163,38 @@ export async function readWorkspaceFile(
     tooLarge: true,
     text: null,
     version: await hashFile(abs),
+    ...imageField(rel),
+  };
+}
+
+export type WorkspaceImageFile = {
+  abs: string;
+  size: number;
+  mediaType: string;
+  etag: string;
+};
+
+/** Resolve an image inside the workspace. Does not read the body into memory. */
+export async function openWorkspaceImage(root: string, rel: string): Promise<WorkspaceImageFile> {
+  const abs = await resolveInWorkspace(root, rel);
+  let st: Awaited<ReturnType<typeof fs.stat>>;
+  try {
+    st = await fs.stat(abs);
+  } catch (err) {
+    if (ioErrorCode(err) === 'ENOENT') throw tagged('not found', 'ENOENT');
+    throw err;
+  }
+  if (st.isDirectory()) throw tagged('is a directory', 'EISDIR');
+  const mediaType = workspaceImageMediaType(rel);
+  if (!mediaType) throw tagged('unsupported media type', 'E_MEDIA');
+  if (st.size > WORKSPACE_IMAGE_MAX_BYTES) {
+    throw tagged(`image exceeds ${WORKSPACE_IMAGE_MAX_BYTES} bytes`, 'E_TOO_LARGE');
+  }
+  return {
+    abs,
+    size: st.size,
+    mediaType,
+    etag: `"${await hashFile(abs)}"`,
   };
 }
 

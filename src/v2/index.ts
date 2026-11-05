@@ -1,5 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
+import { createReadStream } from 'node:fs';
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import { pipeline } from 'node:stream/promises';
 import { SECURITY_HEADERS } from '../core/auth.mjs';
 import { formatSSE } from '../core/sse.mjs';
 import {
@@ -63,10 +65,14 @@ import {
   UPLOAD_BODY_MAX_BYTES,
 } from './views/uploads.ts';
 import {
+  openWorkspaceImage,
   readWorkspaceFile,
   saveWorkspaceFile,
+  SVG_IMAGE_CSP,
+  WORKSPACE_IMAGE_MAX_BYTES,
   workspaceTreeView,
   type FileOpError,
+  type WorkspaceImageFile,
 } from './views/files.ts';
 import {
   buildWorkspacesSnapshot,
@@ -345,6 +351,45 @@ function sendCachedBytes(
 
 function sendImageBytes(req: IncomingMessage, res: ServerResponse, mediaType: string, buf: Buffer): void {
   sendCachedBytes(req, res, mediaType, buf);
+}
+
+const WORKSPACE_IMAGE_CACHE_CONTROL = 'private, no-cache';
+
+function ifNoneMatchHits(header: string | string[] | undefined, etag: string): boolean {
+  const raw = Array.isArray(header) ? header.join(',') : String(header || '');
+  if (!raw) return false;
+  return raw.split(',').map((part) => part.trim()).includes(etag);
+}
+
+/** Stream a workspace image. The body is not buffered. */
+async function sendWorkspaceImage(
+  req: IncomingMessage,
+  res: ServerResponse,
+  image: WorkspaceImageFile,
+): Promise<void> {
+  const headers: Record<string, string> = {
+    ...SECURITY_HEADERS,
+    'content-type': image.mediaType,
+    'content-disposition': 'inline',
+    'cache-control': WORKSPACE_IMAGE_CACHE_CONTROL,
+    etag: image.etag,
+    'Weft-Protocol': PROTOCOL_VERSION,
+  };
+  if (image.mediaType === 'image/svg+xml') {
+    headers['Content-Security-Policy'] = SVG_IMAGE_CSP;
+  }
+  if (ifNoneMatchHits(req.headers['if-none-match'], image.etag)) {
+    res.writeHead(304, headers);
+    res.end();
+    return;
+  }
+  headers['content-length'] = String(image.size);
+  res.writeHead(200, headers);
+  try {
+    await pipeline(createReadStream(image.abs), res);
+  } catch (err) {
+    if (!res.writableEnded) res.destroy(err instanceof Error ? err : undefined);
+  }
 }
 
 async function readObjectBody(
@@ -912,6 +957,50 @@ export function createV2Handler(opts: {
       } catch (err) {
         if (sendFileOpError(res, pathname, method, err)) return true;
         const message = err instanceof Error ? err.message : 'tree failed';
+        sendV2(res, pathname, method, 500, { error: message, code: 'E_INTERNAL' } satisfies V2Error);
+      }
+      return true;
+    }
+
+    const rawMatch = /^\/api\/v2\/workspaces\/([^/]+)\/files\/raw$/.exec(pathname);
+    if (method === 'GET' && rawMatch) {
+      const workspaceId = decodeURIComponent(rawMatch[1]);
+      const rel = url.searchParams.get('path');
+      if (rel == null || rel === '') {
+        sendV2(res, pathname, method, 400, { error: 'path required', code: 'E_BAD_REQUEST' } satisfies V2Error);
+        return true;
+      }
+      let ws: WorkspaceRow | null | undefined = null;
+      try {
+        ws = opts.getWorkspace ? await opts.getWorkspace(workspaceId) : null;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'workspace check failed';
+        sendV2(res, pathname, method, 500, { error: message, code: 'E_INTERNAL' } satisfies V2Error);
+        return true;
+      }
+      const root = workspacePathOf(ws);
+      if (!root) {
+        sendV2(res, pathname, method, 404, { error: 'not found' } satisfies V2Error);
+        return true;
+      }
+      try {
+        const image = await openWorkspaceImage(root, rel);
+        await sendWorkspaceImage(req, res, image);
+      } catch (err) {
+        const code = errCode(err);
+        if (code === 'E_MEDIA') {
+          sendV2(res, pathname, method, 415, { error: 'unsupported media type', code: 'E_MEDIA' } satisfies V2Error);
+          return true;
+        }
+        if (code === 'E_TOO_LARGE') {
+          sendV2(res, pathname, method, 413, {
+            error: `image exceeds ${WORKSPACE_IMAGE_MAX_BYTES} bytes`,
+            code: 'E_TOO_LARGE',
+          } satisfies V2Error);
+          return true;
+        }
+        if (sendFileOpError(res, pathname, method, err)) return true;
+        const message = err instanceof Error ? err.message : 'read failed';
         sendV2(res, pathname, method, 500, { error: message, code: 'E_INTERNAL' } satisfies V2Error);
       }
       return true;
