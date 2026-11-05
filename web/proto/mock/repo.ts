@@ -265,7 +265,8 @@ export function queryRepoTree(repo: MockRepo, dirRaw: string): RepoTreeResult {
         : underIgnored || rules.some((rule) => !rule.dirOnly && rule.test(child));
       return withIgnored({ path: child, type }, ignored);
     });
-  return { ok: true, tree: { entries, truncated: false } };
+  const truncated = entries.length > 2000;
+  return { ok: true, tree: { entries: truncated ? entries.slice(0, 2000) : entries, truncated } };
 }
 
 export function readRepoFile(repo: MockRepo, rawPath: string): FileContent | null {

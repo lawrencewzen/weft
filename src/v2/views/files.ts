@@ -114,15 +114,22 @@ export function emptyFileContent(rel: string): FileContent {
 
 type TreeEntry = { path?: unknown; type?: unknown; ignored?: unknown };
 
+export type WorkspaceTreeGit = (
+  args: readonly string[],
+  opts: { cwd: string; env?: NodeJS.ProcessEnv },
+) => Promise<{ ok: boolean; stdout?: Buffer | Uint8Array | string }>;
+
 export type WorkspaceTreeOptions = {
   dir?: string | null;
   env?: NodeJS.ProcessEnv;
+  runGit?: WorkspaceTreeGit;
 };
 
 export async function workspaceTreeView(root: string, opts: WorkspaceTreeOptions = {}): Promise<FileTree> {
   const raw = await listWorkspaceTree(root, {
     dir: opts.dir,
     env: opts.env,
+    runGit: opts.runGit,
   }) as TreeEntry[] & { truncated?: boolean };
   return {
     entries: raw.map(fileNodeView),

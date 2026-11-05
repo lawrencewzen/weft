@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { PROTOCOL_VERSION } from '../../src/v2/version.ts';
 import { validateResponse } from '../../src/v2/validate.ts';
+import { runWorkspaceTreeGit } from '../../src/core/workspace-tree.mjs';
 import { fileNodeView, workspaceTreeView } from '../../src/v2/views/files.ts';
 import { readDiscovery, request, startServer, stopServer } from './_server.mjs';
 
@@ -93,7 +94,7 @@ test('missing git does not throw and leaves ignored unset', async () => {
   assertNoIgnored(tree.entries);
 });
 
-test('git check-ignore marks ignored files and does not walk ignored directories', async () => {
+test('ls-files marks ignored files and does not walk ignored directories', async () => {
   const root = await mkdtemp(path.join(tmpdir(), 'piw-tree-ignore-'));
   await git(root, ['init']);
   await mkdir(path.join(root, 'dist', 'nested'), { recursive: true });
@@ -193,6 +194,58 @@ test('ignored directories do not consume the 500 entry budget', { timeout: 60_00
   assert.equal(inside.truncated, false);
   assert.equal(inside.entries.length, 600);
   assert.equal(inside.entries.every((entry) => entry.ignored === true && entry.type === 'file'), true);
+});
+
+test('one tree request runs git once', async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'piw-tree-once-'));
+  await git(root, ['init']);
+  await mkdir(path.join(root, 'src', 'sub'), { recursive: true });
+  await mkdir(path.join(root, 'dist'), { recursive: true });
+  await writeFile(path.join(root, '.gitignore'), 'dist/\n*.log\n');
+  await writeFile(path.join(root, 'src', 'keep.ts'), 'x');
+  await writeFile(path.join(root, 'src', 'sub', 'c.ts'), 'x');
+  await writeFile(path.join(root, 'src', 'debug.log'), 'x');
+  await writeFile(path.join(root, 'dist', 'a.js'), 'x');
+  await writeFile(path.join(root, 'notes.log'), 'x');
+  const env = await isolatedEnv();
+  const calls = [];
+  const runGit = async (args, opts) => {
+    calls.push(args);
+    return runWorkspaceTreeGit(args, opts);
+  };
+
+  const tree = await workspaceTreeView(root, { env, runGit });
+  assert.equal(calls.length, 1);
+  assert.deepEqual(calls[0], ['ls-files', '-z', '--others', '--ignored', '--exclude-standard', '--directory']);
+  assert.equal(tree.entries.find((entry) => entry.path === 'dist')?.ignored, true);
+  assert.equal(tree.entries.find((entry) => entry.path === 'notes.log')?.ignored, true);
+  assert.equal(tree.entries.some((entry) => entry.path === 'src/sub/c.ts'), true);
+  assert.equal(tree.entries.some((entry) => entry.path.startsWith('dist/')), false);
+
+  const again = await workspaceTreeView(root, { env, dir: 'src', runGit });
+  assert.equal(calls.length, 2);
+  assert.deepEqual(calls[1], calls[0]);
+  assert.equal(again.entries.find((entry) => entry.path === 'src/debug.log')?.ignored, true);
+  assert.equal(again.truncated, false);
+});
+
+test('dir listing stops at 2000 entries', { timeout: 60_000 }, async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'piw-tree-dirmax-'));
+  const many = path.join(root, 'many');
+  await writeMany(many, 2000, 'f');
+  const env = await isolatedEnv();
+  const full = await workspaceTreeView(root, { env, dir: 'many' });
+  assert.equal(full.truncated, false);
+  assert.equal(full.entries.length, 2000);
+  assert.equal(full.entries.some((entry) => entry.path === 'many/f0000.txt'), true);
+  assert.equal(full.entries.some((entry) => entry.path === 'many/f1999.txt'), true);
+
+  await writeFile(path.join(many, 'f2000.txt'), 'x');
+  const over = await workspaceTreeView(root, { env, dir: 'many' });
+  assert.equal(over.truncated, true);
+  assert.equal(over.entries.length, 2000);
+  assert.equal(over.entries.some((entry) => entry.path === 'many/f2000.txt'), false);
+  assert.equal(over.entries.some((entry) => entry.path === 'many/f1999.txt'), true);
 });
 
 test('GET /api/v2/workspaces/{id}/tree dir parameter', { timeout: 40_000 }, async () => {
