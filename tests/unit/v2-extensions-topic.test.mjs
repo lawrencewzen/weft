@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import http from 'node:http';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -17,6 +17,7 @@ import {
 import { phrase } from '../../src/v2/phrases/index.ts';
 import { ROOT } from './_root.mjs';
 import { readDiscovery, request, startServer, stopServer } from './_server.mjs';
+import { writeSampleEcho, writeSampleSkills } from './_sample-extensions.mjs';
 
 const spec = JSON.parse(readFileSync(path.join(ROOT, 'contract/openapi.json'), 'utf8'));
 const TOKEN = 'v2-ext-topic-token';
@@ -268,7 +269,10 @@ test('in-process extensions topic snapshots, upserts, and removes with zh/en plu
 test('subscribe extensions: v2 and legacy mutations upsert and remove', { timeout: 60_000 }, async () => {
   const src = await mkdtemp(path.join(tmpdir(), 'weft-v2-ext-topic-'));
   const folder = await writePlugin(src, 'word-count', 'word_count');
-  const srv = await startServer({ token: TOKEN, env: { WEFT_LLM: 'faux' } });
+  const dataDir = await mkdtemp(path.join(tmpdir(), 'weft-v2-ext-topic-data-'));
+  await writeSampleEcho(path.join(dataDir, 'plugins'));
+  await writeSampleSkills(path.join(dataDir, 'skills'));
+  const srv = await startServer({ token: TOKEN, dataDir, env: { WEFT_LLM: 'faux' } });
   try {
     const discovery = await readDiscovery(srv.dataDir);
     const session = await openEvents({
@@ -353,5 +357,6 @@ test('subscribe extensions: v2 and legacy mutations upsert and remove', { timeou
     session.close();
   } finally {
     await stopServer(srv);
+    await rm(dataDir, { recursive: true, force: true });
   }
 });

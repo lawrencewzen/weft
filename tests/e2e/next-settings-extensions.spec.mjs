@@ -207,15 +207,8 @@ test('plugins import, fail with server copy, and toggle', async ({ page }) => {
   await boot(page);
   await openSettingsNav(page, 'plugins');
   await expect(page.getByTestId('next-settings-plugins')).toBeVisible();
-  const echo = pluginRow(page, 'Echo');
-  await expect(echo).toBeVisible();
-  await expect(echo).toContainText('返回传入的文本');
-  await expect(echo).toContainText('echo');
-  await expect(echo).toContainText('内置');
-  await expect(echo).toContainText('0.1.0');
-  await expect(echo.getByTestId('next-plugin-toggle')).toHaveAttribute('aria-pressed', 'true');
-  await expect(pluginRow(page, 'Word Count')).toHaveCount(0);
-  await expect(pluginRow(page, 'Broken')).toHaveCount(0);
+  await expect(page.getByTestId('next-settings-plugins')).toContainText('还没有插件');
+  await expect(page.getByTestId('next-plugin-row')).toHaveCount(0);
 
   await page.getByTestId('next-plugin-import').click();
   await expect(page.getByTestId('next-plugin-error')).toHaveText('请填写本机插件目录');
@@ -228,7 +221,7 @@ test('plugins import, fail with server copy, and toggle', async ({ page }) => {
   await expect(word).toContainText('word_count');
   await expect(word).toContainText('本地导入');
   await expect(word).toContainText('0.1.0');
-  await expect(echo).toBeVisible();
+  await expect(page.getByTestId('next-plugin-row')).toHaveCount(1);
   await expect(page.getByTestId('next-toast')).toContainText('Word Count');
 
   await page.getByTestId('next-plugin-path').fill('examples/plugins/broken');
@@ -237,10 +230,10 @@ test('plugins import, fail with server copy, and toggle', async ({ page }) => {
   await expect(pluginRow(page, 'Broken')).toHaveCount(0);
   await expect(word).toBeVisible();
 
-  await echo.getByTestId('next-plugin-toggle').click();
-  await expect(echo.getByTestId('next-plugin-toggle')).toHaveAttribute('aria-pressed', 'false');
-  await echo.getByTestId('next-plugin-toggle').click();
-  await expect(echo.getByTestId('next-plugin-toggle')).toHaveAttribute('aria-pressed', 'true');
+  await word.getByTestId('next-plugin-toggle').click();
+  await expect(word.getByTestId('next-plugin-toggle')).toHaveAttribute('aria-pressed', 'false');
+  await word.getByTestId('next-plugin-toggle').click();
+  await expect(word.getByTestId('next-plugin-toggle')).toHaveAttribute('aria-pressed', 'true');
 });
 
 test('skills can be created, edited, toggled, and only user skills deleted', async ({ page }) => {
@@ -248,13 +241,8 @@ test('skills can be created, edited, toggled, and only user skills deleted', asy
   await boot(page);
   await openSettingsNav(page, 'skills');
   await expect(page.getByTestId('next-settings-skills')).toBeVisible();
-  const commit = skillRow(page, 'Commit messages');
-  const review = skillRow(page, 'Review notes');
-  await expect(commit).toBeVisible();
-  await expect(review).toBeVisible();
-  await expect(commit.getByTestId('next-skill-delete')).toHaveCount(0);
-  await expect(review.getByTestId('next-skill-delete')).toHaveCount(0);
-  await expect(commit).toContainText('内置');
+  await expect(page.getByTestId('next-settings-skills')).toContainText('还没有 Skill');
+  await expect(page.getByTestId('next-skill-row')).toHaveCount(0);
 
   await page.getByTestId('next-skill-add').click();
   await expect(page.getByTestId('next-skill-drawer')).toBeVisible();
@@ -291,6 +279,6 @@ test('skills can be created, edited, toggled, and only user skills deleted', asy
   await passphrase.getByTestId('next-skill-delete').click();
   await page.getByTestId('next-confirm-ok').click();
   await expect(skillRow(page, '口令')).toHaveCount(0);
-  await expect(commit).toBeVisible();
-  await expect(review).toBeVisible();
+  await expect(page.getByTestId('next-skill-row')).toHaveCount(0);
+  await expect(page.getByTestId('next-settings-skills')).toContainText('还没有 Skill');
 });
