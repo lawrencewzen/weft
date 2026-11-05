@@ -10,28 +10,17 @@ import {
 } from 'react';
 import {
   defaultLeftOpen,
-  isOverlayWidth,
   LEFT_OVERLAY_MAX,
   LS_LEFT_OPEN,
   persistLeftOpen,
   readPref,
 } from './layout';
-import { cssViewportWidth, visualToCss } from './uiZoom';
+import { cssViewportWidth } from './uiZoom';
 
 export type LeftPanelValue = {
   leftOpen: boolean;
   setLeftOpen: (open: boolean) => void;
   toggleLeft: () => void;
-  leftOpening: boolean;
-  lbDx: number;
-  lbAnim: boolean;
-  leftSlotW: string;
-  leftSlotM: string;
-  leftSlotTr: string;
-  leftBtnOp: number;
-  leftBtnPe: 'auto' | 'none';
-  sbBtnOp: number;
-  lbTr: string;
   dragging: boolean;
   setDragging: (dragging: boolean) => void;
 };
@@ -40,63 +29,16 @@ const LeftPanelContext = createContext<LeftPanelValue | null>(null);
 
 export function LeftPanelProvider({ children }: { children: ReactNode }) {
   const [leftOpen, setLeftOpenState] = useState(() => defaultLeftOpen(cssViewportWidth()));
-  const [leftOpening, setLeftOpening] = useState(false);
-  const [lbDx, setLbDx] = useState(0);
-  const [lbAnim, setLbAnim] = useState(false);
   const [dragging, setDragging] = useState(false);
-  const lbOffRef = useRef<number | null>(null);
-  const leftTimer = useRef<number | null>(null);
   const lastWidth = useRef(cssViewportWidth());
 
   const setLeftOpen = useCallback((open: boolean) => {
     setLeftOpenState(open);
-    setLeftOpening(false);
-    setLbAnim(false);
-    setLbDx(0);
     persistLeftOpen(open, cssViewportWidth());
   }, []);
 
   const toggleLeft = useCallback(() => {
-    if (isOverlayWidth(cssViewportWidth())) {
-      setLeftOpen(!leftOpen);
-      return;
-    }
-    const closing = leftOpen;
-    if (closing) {
-      const sb = document.querySelector<HTMLElement>('[data-testid="next-left-collapse"]');
-      const as = sb?.closest('aside');
-      if (sb && as) {
-        lbOffRef.current = visualToCss(as.getBoundingClientRect().right - sb.getBoundingClientRect().left);
-      }
-    }
-    const dx = -Math.round((lbOffRef.current || 46) + 13);
-    if (closing) {
-      setLeftOpenState(false);
-      persistLeftOpen(false, cssViewportWidth());
-      setLeftOpening(false);
-      setLbAnim(false);
-      setLbDx(dx);
-      if (typeof window !== 'undefined') {
-        window.requestAnimationFrame(() => {
-          window.requestAnimationFrame(() => {
-            setLbAnim(true);
-            setLbDx(0);
-          });
-        });
-      }
-    } else {
-      setLeftOpenState(true);
-      persistLeftOpen(true, cssViewportWidth());
-      setLeftOpening(true);
-      setLbAnim(true);
-      setLbDx(dx);
-    }
-    if (leftTimer.current) window.clearTimeout(leftTimer.current);
-    leftTimer.current = window.setTimeout(() => {
-      if (!closing) {
-        setLeftOpening(false);
-      }
-    }, 230);
+    setLeftOpen(!leftOpen);
   }, [leftOpen, setLeftOpen]);
 
   useEffect(() => {
@@ -115,48 +57,13 @@ export function LeftPanelProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener('resize', onResize);
   }, [setLeftOpen]);
 
-  const leftSlotW = leftOpen ? '0px' : '30px';
-  const leftSlotM = leftOpen ? '-8px' : '0px';
-  const leftSlotTr = dragging
-    ? 'none'
-    : 'width .22s cubic-bezier(.3,.8,.3,1), margin-right .22s cubic-bezier(.3,.8,.3,1)';
-  const leftBtnOp = !leftOpen || leftOpening ? 1 : 0;
-  const leftBtnPe: 'auto' | 'none' = !leftOpen ? 'auto' : 'none';
-  const sbBtnOp = leftOpen && !leftOpening ? 1 : 0;
-  const lbTr = lbAnim && !dragging ? 'transform .22s cubic-bezier(.3,.8,.3,1)' : 'none';
-
   const value = useMemo<LeftPanelValue>(() => ({
     leftOpen,
     setLeftOpen,
     toggleLeft,
-    leftOpening,
-    lbDx,
-    lbAnim,
-    leftSlotW,
-    leftSlotM,
-    leftSlotTr,
-    leftBtnOp,
-    leftBtnPe,
-    sbBtnOp,
-    lbTr,
     dragging,
     setDragging,
-  }), [
-    leftOpen,
-    setLeftOpen,
-    toggleLeft,
-    leftOpening,
-    lbDx,
-    lbAnim,
-    leftSlotW,
-    leftSlotM,
-    leftSlotTr,
-    leftBtnOp,
-    leftBtnPe,
-    sbBtnOp,
-    lbTr,
-    dragging,
-  ]);
+  }), [leftOpen, setLeftOpen, toggleLeft, dragging, setDragging]);
 
   return <LeftPanelContext.Provider value={value}>{children}</LeftPanelContext.Provider>;
 }

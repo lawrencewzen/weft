@@ -21,8 +21,6 @@ export function RightPane({ lang, workspaceLabel }: Props) {
     tab,
     setTab,
     open,
-    toggleRight,
-    rpBtnOp,
   } = useRightLayout();
   const { totals, hasChanges } = useRightChanges();
   const { store, conversationId, retainTopic, releaseTopic } = useSession();
@@ -103,23 +101,6 @@ export function RightPane({ lang, workspaceLabel }: Props) {
             {runningCount > 0 ? <span className="tab-count">{runningCount}</span> : null}
           </button>
         </nav>
-        <button
-          type="button"
-          className="icon-btn next-right-collapse-btn"
-          data-testid="next-right-collapse"
-          title={t(lang, 'collapse_panel')}
-          aria-label={t(lang, 'collapse_panel')}
-          style={{
-            opacity: rpBtnOp,
-            pointerEvents: rpBtnOp ? 'auto' : 'none',
-            visibility: rpBtnOp ? 'visible' : 'hidden',
-            marginLeft: 'auto',
-            flexShrink: 0,
-          }}
-          onClick={toggleRight}
-        >
-          <span className="ico-panel ico-panel-right" aria-hidden="true" />
-        </button>
       </header>
       <div className="right-viewport">
         {effectiveTab === 'term' ? (

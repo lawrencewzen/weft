@@ -39,6 +39,7 @@ import { RightPane } from './RightPane';
 import { SettingsOverlay } from './settings/SettingsOverlay';
 import type { AboutService } from './settings/AboutPage';
 import { Sidebar } from './Sidebar';
+import { SideToggles } from './RightToggle';
 import { WorkspaceDialog } from './WorkspaceDialog';
 
 type Props = {
@@ -51,7 +52,7 @@ type Props = {
 
 function overlayKeepOpen(target: HTMLElement): boolean {
   return Boolean(
-    target.closest?.('.md-path, [data-testid=next-right-toggle], [data-testid=next-right], [data-testid=next-tool-row][data-tool=edit], [data-testid=next-tool-row][data-tool=write]'),
+    target.closest?.('.side-toggle, .md-path, [data-testid=next-right-toggle], [data-testid=next-right-collapse], [data-testid=next-right], [data-testid=next-tool-row][data-tool=edit], [data-testid=next-tool-row][data-tool=write]'),
   );
 }
 
@@ -265,7 +266,7 @@ function AppShellLayout({
   }, [activeConversationId, conversations, draftWorkspaceId, workspaces]);
 
   function onDividerDown(ev: MouseEvent<HTMLDivElement>, side: 'left' | 'right') {
-    if (ev.button !== 0) return;
+    if (ev.button !== 0 || (side === 'left' && !leftOpen)) return;
     ev.preventDefault();
     const startX = ev.clientX;
     const startLeft = leftWRef.current;
@@ -322,13 +323,12 @@ function AppShellLayout({
       }}
       onPointerDown={onShellPointerDown}
     >
+      <SideToggles lang={lang} />
       <Sidebar
         lang={lang}
-        collapsed={!leftOpen}
         activeConversationId={activeConversationId}
         activeAgentId={activeAgentId}
         draftWorkspaceId={draftWorkspaceId}
-        onCollapse={() => setLeftOpen(false)}
         onToast={onToast}
         onConfirm={askConfirm}
         onRemoveWorkspace={onRemoveWorkspace}
@@ -355,7 +355,6 @@ function AppShellLayout({
         isDraft={isDraftRoute}
         lang={lang}
         demo={demo}
-        onOpenLeft={() => setLeftOpen(true)}
         onNewWorkspace={() => setWsDialog(true)}
       />
       <div
