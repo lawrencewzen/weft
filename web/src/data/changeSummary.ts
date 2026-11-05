@@ -35,6 +35,21 @@ export function splitChangePath(filePath: string): SplitChangePath {
 }
 
 /**
+ * Filter out changes whose path matches the oldPath of a renamed change,
+ * preventing renamed files from being double-counted.
+ */
+export function dedupeRenamedChanges(changes: readonly Change[]): Change[] {
+  const oldPaths = new Set<string>();
+  for (const c of changes) {
+    if (c.status === 'renamed' && c.oldPath) {
+      oldPaths.add(c.oldPath);
+    }
+  }
+  if (oldPaths.size === 0) return [...changes];
+  return changes.filter((c) => !oldPaths.has(c.path));
+}
+
+/**
  * Sort changes descending by total changes (added + removed),
  * breaking ties alphabetically by path.
  */

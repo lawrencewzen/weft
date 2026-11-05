@@ -20,6 +20,7 @@ import {
   type FileContent,
   type FileNode,
 } from './api';
+import { dedupeRenamedChanges } from './changeSummary';
 import { copyText } from './copyText';
 import { changeHasDiff, changeSignature, diffTotals } from './diffView';
 import { IDLE_SAVE, saveReducer, type SaveState } from './fileConflict';
@@ -153,7 +154,10 @@ export function RightPaneProvider({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- store is stable; storeVersion tracks writes
     [store, cid, storeVersion],
   );
-  const visibleChanges = useMemo(() => changes.filter(changeHasDiff), [changes]);
+  const visibleChanges = useMemo(
+    () => dedupeRenamedChanges(changes).filter(changeHasDiff),
+    [changes],
+  );
   const totals = useMemo(() => diffTotals(visibleChanges), [visibleChanges]);
   const hasChanges = visibleChanges.length > 0;
 

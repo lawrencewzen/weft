@@ -2431,7 +2431,42 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.6; backgroun
 .changed-file-pill:hover { background: var(--sub); }
 .changed-file-pill .ws-chev { width: 12px; height: 12px; flex-shrink: 0; transition: transform .15s; }
 .change-file.is-open .changed-file-pill .ws-chev { transform: rotate(90deg); }
+.changed-file-status {
+  font-family: var(--mono);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  line-height: 1;
+  flex-shrink: 0;
+  width: 11px;
+  text-align: center;
+}
+.changed-file-status.is-added { color: var(--add-ink); }
+.changed-file-status.is-modified { color: var(--wait-ink); }
+.changed-file-status.is-deleted { color: var(--del-ink); }
+.changed-file-status.is-renamed { color: var(--drop-ink); }
 .changed-file-path { flex: 1; min-width: 0; font-family: var(--mono); font-size: var(--fs-sm); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.changed-file-path.is-deleted,
+.change-summary-row-name.is-deleted {
+  text-decoration: line-through;
+  color: var(--mute);
+}
+.changed-file-path.is-renamed {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.changed-file-path.is-renamed .rename-old,
+.changed-file-path.is-renamed .rename-new {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  flex: 0 1 auto;
+}
+.changed-file-path.is-renamed .rename-arrow {
+  flex-shrink: 0;
+  color: var(--faint);
+}
 .changed-file-by {
   font-size: var(--fs-xs);
   color: var(--faint);

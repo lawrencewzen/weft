@@ -32,6 +32,21 @@ describe('i18n empty home and branding', () => {
     expect(LANGUAGE_NAMES.en).toBe('English');
   });
 
+  it('provides change status copy in zh and en', () => {
+    expect(t('zh', 'change_status_added')).toBe('新增');
+    expect(t('zh', 'change_status_modified')).toBe('修改');
+    expect(t('zh', 'change_status_deleted')).toBe('删除');
+    expect(t('zh', 'change_status_renamed')).toBe('重命名');
+    expect(t('zh', 'diff_renamed_only')).toBe('仅重命名');
+
+    expect(t('en', 'change_status_added')).toBe('Added');
+    expect(t('en', 'change_status_modified')).toBe('Modified');
+    expect(t('en', 'change_status_deleted')).toBe('Deleted');
+    expect(t('en', 'change_status_renamed')).toBe('Renamed');
+    expect(t('en', 'diff_renamed_only')).toBe('Renamed only');
+    expect(t('en', 'diff_renamed_only')).not.toMatch(/[\u4e00-\u9fff]/);
+  });
+
   it('english unauthenticated copy is English', () => {
     expect(t('en', 'unauthenticated')).toBe('Open the new web UI with weft open');
     expect(t('en', 'unauthenticated')).not.toMatch(/[\u4e00-\u9fff]/);
