@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { BrandIcon } from '../BrandIcon';
+import { Dropdown } from '../ui/Dropdown';
 import { providerBrand } from '../../data/providerBrand';
 import { formatNumber } from '../../data/providerFormat';
 import type {
@@ -160,9 +161,6 @@ export function AddProviderDialog({
     editTarget?.defaultThinkingLevel || null
   ));
   const [connectedId, setConnectedId] = useState<string | null>(() => (editTarget ? editTarget.id : null));
-  const [ddOpen, setDdOpen] = useState(false);
-  const [imagesDdOpen, setImagesDdOpen] = useState(false);
-  const [thinkingDdOpen, setThinkingDdOpen] = useState(false);
   const [acpFoldOpen, setAcpFoldOpen] = useState(false);
   const [oauthOpen, setOauthOpen] = useState(false);
   const [testing, setTesting] = useState(false);
@@ -174,9 +172,6 @@ export function AddProviderDialog({
   const autoKeyRef = useRef<string>('');
   const selectedIdRef = useRef(selectedId);
   const isOpenRef = useRef(isOpen);
-  const ddRef = useRef<HTMLDivElement | null>(null);
-  const imagesDdRef = useRef<HTMLDivElement | null>(null);
-  const thinkingDdRef = useRef<HTMLDivElement | null>(null);
   const closingRef = useRef(false);
   const revertTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const testBtnRef = useRef<HTMLButtonElement | null>(null);
@@ -188,18 +183,6 @@ export function AddProviderDialog({
   onCloseRef.current = onClose;
   selectedIdRef.current = selectedId;
   isOpenRef.current = isOpen;
-
-
-  useEffect(() => {
-    const handleClick = (e: MouseEvent) => {
-      const target = e.target as Node;
-      if (ddRef.current && !ddRef.current.contains(target)) setDdOpen(false);
-      if (imagesDdRef.current && !imagesDdRef.current.contains(target)) setImagesDdOpen(false);
-      if (thinkingDdRef.current && !thinkingDdRef.current.contains(target)) setThinkingDdOpen(false);
-    };
-    window.addEventListener('mousedown', handleClick);
-    return () => window.removeEventListener('mousedown', handleClick);
-  }, []);
 
   const grokVendor = available.find((item) => item.id === 'xai') || null;
   const apiVendors = available.filter((item) => item.id !== 'xai');
@@ -336,9 +319,6 @@ export function AddProviderDialog({
       setImagesSupport(null);
       setThinkingDefault(null);
     }
-    setDdOpen(false);
-    setImagesDdOpen(false);
-    setThinkingDdOpen(false);
     setAcpFoldOpen(false);
     setOauthOpen(false);
     setTesting(false);
@@ -420,13 +400,12 @@ export function AddProviderDialog({
     if (!isOpen) return;
     function onKey(e: KeyboardEvent) {
       if (e.key !== 'Escape') return;
+      if (document.querySelector('.mp-add-dd-menu, .mp-menu')) {
+        return;
+      }
       e.preventDefault();
       e.stopPropagation();
       e.stopImmediatePropagation();
-      if (ddOpen) {
-        setDdOpen(false);
-        return;
-      }
       if (closingRef.current) return;
       clearRevertTimer();
       setTesting(false);
@@ -441,16 +420,7 @@ export function AddProviderDialog({
     }
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
-  }, [isOpen, ddOpen]);
-
-  useEffect(() => {
-    if (!ddOpen) return;
-    function onDown(e: MouseEvent) {
-      if (ddRef.current && !ddRef.current.contains(e.target as Node)) setDdOpen(false);
-    }
-    window.addEventListener('mousedown', onDown);
-    return () => window.removeEventListener('mousedown', onDown);
-  }, [ddOpen]);
+  }, [isOpen]);
 
   if (!isOpen || !selected) return null;
 
@@ -727,7 +697,6 @@ export function AddProviderDialog({
     setCustomUrl('');
     setCustomKey('');
     setErrorMsg(null);
-    setDdOpen(false);
     setOauthOpen(false);
     setAcpFoldOpen(false);
     setTesting(false);
@@ -1000,42 +969,31 @@ export function AddProviderDialog({
               <div className="mp-add-f">
                 <label>{t(lang, 'dlg_add_default_model')}</label>
                 <div className="mp-add-in">
-                  <div className="mp-add-dd" ref={ddRef}>
-                    <button
-                      type="button"
-                      className={`mp-add-dd-btn${ddOpen ? ' open' : ''}`}
-                      data-testid="next-add-model-dropdown"
+                  <div className="mp-add-dd">
+                    <Dropdown
+                      triggerTestId="next-add-model-dropdown"
+                      triggerClassName="mp-add-dd-btn"
                       disabled={!isReady}
-                      onClick={() => isReady && setDdOpen((open) => !open)}
-                    >
-                      {isReady ? (chosen ? chosen.name : t(lang, 'provider_default_unselected')) : t(lang, 'dlg_add_models_pending')}
-                      {CHEV_SVG}
-                    </button>
-                    {ddOpen && isReady && (
-                      <div className="mp-add-dd-menu">
-                        {models.map((model) => {
-                          const on = Boolean(chosen && model.id === chosen.id);
-                          return (
-                            <div
-                              key={model.id}
-                              className={`mp-add-dd-it${on ? ' on' : ''}`}
-                              data-testid="next-add-model-option"
-                              data-model={model.id}
-                              onClick={() => {
-                                setChosenId(model.id);
-                                setDdOpen(false);
-                              }}
-                            >
-                              <span className="ck">{on ? '✓' : ''}</span>
-                              <span>{model.name}</span>
-                              {model.contextWindow != null ? (
-                                <span className="cx">{formatNumber(model.contextWindow)}</span>
-                              ) : null}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
+                      value={chosen?.id}
+                      onSelect={(id) => setChosenId(id)}
+                      triggerContent={
+                        <>
+                          <span>
+                            {isReady
+                              ? (chosen ? chosen.name : t(lang, 'provider_default_unselected'))
+                              : t(lang, 'dlg_add_models_pending')}
+                          </span>
+                          {CHEV_SVG}
+                        </>
+                      }
+                      items={models.map((model) => ({
+                        value: model.id,
+                        label: model.name,
+                        testId: 'next-add-model-option',
+                        dataModel: model.id,
+                        extra: model.contextWindow != null ? formatNumber(model.contextWindow) : null,
+                      }))}
+                    />
                   </div>
                 </div>
               </div>
@@ -1046,59 +1004,31 @@ export function AddProviderDialog({
                 <div className="mp-add-f">
                   <label>{t(lang, 'dlg_add_images_label')}</label>
                   <div className="mp-add-in">
-                    <div className="mp-add-dd" ref={imagesDdRef}>
-                      <button
-                        type="button"
-                        className={`mp-add-dd-btn${imagesDdOpen ? ' open' : ''}`}
-                        data-testid="next-add-images-dropdown"
-                        onClick={() => setImagesDdOpen((o) => !o)}
-                      >
-                        <span>
-                          {imagesSupport === null
-                            ? t(lang, 'dlg_add_follow_model')
-                            : imagesSupport
-                              ? t(lang, 'dlg_add_images_supported')
-                              : t(lang, 'dlg_add_images_unsupported')}
-                        </span>
-                        {CHEV_SVG}
-                      </button>
-                      {imagesDdOpen && (
-                        <div className="mp-add-dd-menu" data-testid="next-add-images-menu">
-                          <div
-                            className={`mp-add-dd-it${imagesSupport === null ? ' on' : ''}`}
-                            data-testid="next-add-images-option-follow"
-                            onClick={() => {
-                              setImagesSupport(null);
-                              setImagesDdOpen(false);
-                            }}
-                          >
-                            <span className="ck">{imagesSupport === null ? '✓' : ''}</span>
-                            <span>{t(lang, 'dlg_add_follow_model')}</span>
-                          </div>
-                          <div
-                            className={`mp-add-dd-it${imagesSupport === true ? ' on' : ''}`}
-                            data-testid="next-add-images-option-supported"
-                            onClick={() => {
-                              setImagesSupport(true);
-                              setImagesDdOpen(false);
-                            }}
-                          >
-                            <span className="ck">{imagesSupport === true ? '✓' : ''}</span>
-                            <span>{t(lang, 'dlg_add_images_supported')}</span>
-                          </div>
-                          <div
-                            className={`mp-add-dd-it${imagesSupport === false ? ' on' : ''}`}
-                            data-testid="next-add-images-option-unsupported"
-                            onClick={() => {
-                              setImagesSupport(false);
-                              setImagesDdOpen(false);
-                            }}
-                          >
-                            <span className="ck">{imagesSupport === false ? '✓' : ''}</span>
-                            <span>{t(lang, 'dlg_add_images_unsupported')}</span>
-                          </div>
-                        </div>
-                      )}
+                    <div className="mp-add-dd">
+                      <Dropdown<boolean | null>
+                        triggerTestId="next-add-images-dropdown"
+                        triggerClassName="mp-add-dd-btn"
+                        menuTestId="next-add-images-menu"
+                        value={imagesSupport}
+                        onSelect={(val) => setImagesSupport(val)}
+                        triggerContent={
+                          <>
+                            <span>
+                              {imagesSupport === null
+                                ? t(lang, 'dlg_add_follow_model')
+                                : imagesSupport
+                                  ? t(lang, 'dlg_add_images_supported')
+                                  : t(lang, 'dlg_add_images_unsupported')}
+                            </span>
+                            {CHEV_SVG}
+                          </>
+                        }
+                        items={[
+                          { value: null, label: t(lang, 'dlg_add_follow_model'), testId: 'next-add-images-option-follow' },
+                          { value: true, label: t(lang, 'dlg_add_images_supported'), testId: 'next-add-images-option-supported' },
+                          { value: false, label: t(lang, 'dlg_add_images_unsupported'), testId: 'next-add-images-option-unsupported' },
+                        ]}
+                      />
                     </div>
                   </div>
                 </div>
@@ -1106,55 +1036,39 @@ export function AddProviderDialog({
                 <div className="mp-add-f">
                   <label>{t(lang, 'dlg_add_thinking_label')}</label>
                   <div className="mp-add-in">
-                    <div className="mp-add-dd" ref={thinkingDdRef}>
-                      <button
-                        type="button"
-                        className={`mp-add-dd-btn${thinkingDdOpen ? ' open' : ''}`}
-                        data-testid="next-add-thinking-dropdown"
-                        onClick={() => setThinkingDdOpen((o) => !o)}
-                      >
-                        <span>
-                          {thinkingDefault === null
-                            ? t(lang, 'dlg_add_follow_model')
-                            : thinkingDefault === 'off'
-                              ? t(lang, 'dlg_add_thinking_off')
-                              : thinkingDefault === 'low'
-                                ? t(lang, 'dlg_add_thinking_low')
-                                : thinkingDefault === 'medium'
-                                  ? t(lang, 'dlg_add_thinking_medium')
-                                  : thinkingDefault === 'high'
-                                    ? t(lang, 'dlg_add_thinking_high')
-                                    : thinkingDefault}
-                        </span>
-                        {CHEV_SVG}
-                      </button>
-                      {thinkingDdOpen && (
-                        <div className="mp-add-dd-menu" data-testid="next-add-thinking-menu">
-                          {[
-                            { id: null, testId: 'follow', label: t(lang, 'dlg_add_follow_model') },
-                            { id: 'off' as const, testId: 'off', label: t(lang, 'dlg_add_thinking_off') },
-                            { id: 'low' as const, testId: 'low', label: t(lang, 'dlg_add_thinking_low') },
-                            { id: 'medium' as const, testId: 'medium', label: t(lang, 'dlg_add_thinking_medium') },
-                            { id: 'high' as const, testId: 'high', label: t(lang, 'dlg_add_thinking_high') },
-                          ].map((lvl) => {
-                            const on = thinkingDefault === lvl.id;
-                            return (
-                              <div
-                                key={lvl.testId}
-                                className={`mp-add-dd-it${on ? ' on' : ''}`}
-                                data-testid={`next-add-thinking-option-${lvl.testId}`}
-                                onClick={() => {
-                                  setThinkingDefault(lvl.id);
-                                  setThinkingDdOpen(false);
-                                }}
-                              >
-                                <span className="ck">{on ? '✓' : ''}</span>
-                                <span>{lvl.label}</span>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
+                    <div className="mp-add-dd">
+                      <Dropdown<ThinkingLevel | null>
+                        triggerTestId="next-add-thinking-dropdown"
+                        triggerClassName="mp-add-dd-btn"
+                        menuTestId="next-add-thinking-menu"
+                        value={thinkingDefault}
+                        onSelect={(val) => setThinkingDefault(val)}
+                        triggerContent={
+                          <>
+                            <span>
+                              {thinkingDefault === null
+                                ? t(lang, 'dlg_add_follow_model')
+                                : thinkingDefault === 'off'
+                                  ? t(lang, 'dlg_add_thinking_off')
+                                  : thinkingDefault === 'low'
+                                    ? t(lang, 'dlg_add_thinking_low')
+                                    : thinkingDefault === 'medium'
+                                      ? t(lang, 'dlg_add_thinking_medium')
+                                      : thinkingDefault === 'high'
+                                        ? t(lang, 'dlg_add_thinking_high')
+                                        : thinkingDefault}
+                            </span>
+                            {CHEV_SVG}
+                          </>
+                        }
+                        items={[
+                          { value: null, label: t(lang, 'dlg_add_follow_model'), testId: 'next-add-thinking-option-follow' },
+                          { value: 'off', label: t(lang, 'dlg_add_thinking_off'), testId: 'next-add-thinking-option-off' },
+                          { value: 'low', label: t(lang, 'dlg_add_thinking_low'), testId: 'next-add-thinking-option-low' },
+                          { value: 'medium', label: t(lang, 'dlg_add_thinking_medium'), testId: 'next-add-thinking-option-medium' },
+                          { value: 'high', label: t(lang, 'dlg_add_thinking_high'), testId: 'next-add-thinking-option-high' },
+                        ]}
+                      />
                     </div>
                   </div>
                 </div>

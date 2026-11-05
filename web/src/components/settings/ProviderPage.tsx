@@ -22,6 +22,7 @@ import type {
 import { useProviders } from '../../data/useProviders';
 import { t } from '../../i18n';
 import type { ConfirmOpts } from '../ConfirmDialog';
+import { Dropdown } from '../ui/Dropdown';
 import { AddProviderDialog } from './AddProviderDialog';
 import { ProviderList } from './ProviderList';
 
@@ -38,8 +39,6 @@ export function ProviderPage({ lang, onConfirm, customOnly }: Props) {
 
   const [openId, setOpenId] = useState<string | null>('deepseek');
   const [testing, setTesting] = useState<Record<string, boolean>>({});
-  const [defMenuOpen, setDefMenuOpen] = useState(false);
-  const defMenuRef = useRef<HTMLDivElement | null>(null);
 
   // Add dialog state
   const [isAddOpen, setIsAddOpen] = useState(false);
@@ -48,17 +47,6 @@ export function ProviderPage({ lang, onConfirm, customOnly }: Props) {
   const [loginSession, setLoginSession] = useState<LoginSession | null>(null);
   const sessionPollRef = useRef<number | null>(null);
   const oauthTabRef = useRef<Window | null>(null);
-
-  useEffect(() => {
-    if (!defMenuOpen) return;
-    const handleClick = (e: MouseEvent) => {
-      if (defMenuRef.current && !defMenuRef.current.contains(e.target as Node)) {
-        setDefMenuOpen(false);
-      }
-    };
-    window.addEventListener('mousedown', handleClick);
-    return () => window.removeEventListener('mousedown', handleClick);
-  }, [defMenuOpen]);
 
   useEffect(() => {
     return () => {
@@ -124,7 +112,6 @@ export function ProviderPage({ lang, onConfirm, customOnly }: Props) {
   };
 
   const handleSelectDefault = async (providerId: string, modelId: string) => {
-    setDefMenuOpen(false);
     await patchProvider(providerId, { defaultModel: modelId });
   };
 
@@ -299,6 +286,12 @@ export function ProviderPage({ lang, onConfirm, customOnly }: Props) {
     await deleteProvider(p.id);
   };
 
+  const totalEnabledModels = providers.reduce(
+    (acc, p) => acc + p.models.filter((m) => m.enabled).length,
+    0,
+  );
+  const noEnabledModels = totalEnabledModels === 0;
+
   // Find default model display name
   let currentDefaultName = t(lang, 'provider_default_unselected');
   let currentDefaultProviderName = '';
@@ -325,38 +318,40 @@ export function ProviderPage({ lang, onConfirm, customOnly }: Props) {
       <div className="mp-sec">
         <div className="mp-card mp-def">
           <span className="mp-def-l">{t(lang, 'provider_default_title')}</span>
-          <span
-            className="mp-pick"
-            data-testid="next-provider-default-picker"
-            onClick={() => setDefMenuOpen(!defMenuOpen)}
-          >
-            <span>{currentDefaultName}</span>
-            {currentDefaultProviderName && <span className="mp-from">{currentDefaultProviderName}</span>}
-            {defMenuOpen && (
-              <div className="mp-menu" ref={defMenuRef} onClick={(e) => e.stopPropagation()}>
-                {providers.map((p) => {
-                  const enabledModels = p.models.filter((m) => m.enabled);
-                  if (enabledModels.length === 0) return null;
-                  return (
-                    <div key={p.id}>
-                      <div className="mp-menu-g">{p.name}</div>
-                      {enabledModels.map((m) => (
-                        <div
-                          key={m.id}
-                          className="mp-menu-i"
-                          data-testid="next-provider-default-item"
-                          onClick={() => void handleSelectDefault(p.id, m.id)}
-                        >
-                          <span>{m.name}</span>
-                          <span className="mp-menu-x">{m.contextWindow ? formatNumber(m.contextWindow) : ''}</span>
-                        </div>
-                      ))}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </span>
+          <Dropdown
+            variant="picker"
+            align="right"
+            minWidth={300}
+            triggerTestId="next-provider-default-picker"
+            triggerClassName="mp-pick"
+            disabled={noEnabledModels}
+            value={defaultModel ? `${defaultModel.providerId}:${defaultModel.modelId}` : undefined}
+            onSelect={(val) => {
+              const colonIdx = val.indexOf(':');
+              const pId = val.slice(0, colonIdx);
+              const mId = val.slice(colonIdx + 1);
+              void handleSelectDefault(pId, mId);
+            }}
+            triggerContent={
+              <>
+                <span>{currentDefaultName}</span>
+                {currentDefaultProviderName ? <span className="mp-from">{currentDefaultProviderName}</span> : null}
+              </>
+            }
+            items={providers
+              .filter((p) => p.models.some((m) => m.enabled))
+              .map((p) => ({
+                groupLabel: p.name,
+                options: p.models
+                  .filter((m) => m.enabled)
+                  .map((m) => ({
+                    value: `${p.id}:${m.id}`,
+                    label: m.name,
+                    extra: m.contextWindow ? formatNumber(m.contextWindow) : '',
+                    testId: 'next-provider-default-item',
+                  })),
+              }))}
+          />
         </div>
       </div>
 

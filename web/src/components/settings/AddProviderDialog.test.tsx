@@ -194,7 +194,7 @@ describe('AddProviderDialog', () => {
     await act(async () => { await Promise.resolve(); });
     const dd = host!.querySelector('[data-testid="next-add-model-dropdown"]') as HTMLButtonElement;
     await act(async () => { dd.click(); });
-    const options = [...host!.querySelectorAll('[data-testid="next-add-model-option"]')];
+    const options = [...document.querySelectorAll('[data-testid="next-add-model-option"]')];
     expect(options).toHaveLength(2);
     expect(options[0].textContent).toContain('Grok 4.7');
     expect(options[0].textContent).toContain('256K');
@@ -654,7 +654,7 @@ describe('AddProviderDialog', () => {
       await act(async () => {
         imagesBtn.click();
       });
-      const optSupported = host!.querySelector('[data-testid="next-add-images-option-supported"]') as HTMLElement;
+      const optSupported = document.querySelector('[data-testid="next-add-images-option-supported"]') as HTMLElement;
       await act(async () => {
         optSupported.click();
       });
@@ -668,7 +668,7 @@ describe('AddProviderDialog', () => {
       await act(async () => {
         thinkingBtn.click();
       });
-      const optHigh = host!.querySelector('[data-testid="next-add-thinking-option-high"]') as HTMLElement;
+      const optHigh = document.querySelector('[data-testid="next-add-thinking-option-high"]') as HTMLElement;
       await act(async () => {
         optHigh.click();
       });
@@ -850,7 +850,7 @@ describe('AddProviderDialog', () => {
       ddBtn.click();
     });
 
-    const options = host!.querySelectorAll('[data-testid="next-add-model-option"]');
+    const options = document.querySelectorAll('[data-testid="next-add-model-option"]');
     expect(options.length).toBe(2);
     expect(options[0]!.classList.contains('on')).toBe(true);
     expect(options[0]!.textContent).toContain('✓');
@@ -882,7 +882,7 @@ describe('AddProviderDialog', () => {
     await act(async () => {
       modelBtn.click();
     });
-    const opt = host!.querySelector('[data-testid="next-add-model-option"][data-model="grok-4-7"]') as HTMLElement;
+    const opt = document.querySelector('[data-testid="next-add-model-option"][data-model="grok-4-7"]') as HTMLElement;
     await act(async () => {
       opt.click();
     });
@@ -924,7 +924,7 @@ describe('AddProviderDialog', () => {
     await act(async () => {
       imagesBtn.click();
     });
-    const optFollow = host!.querySelector('[data-testid="next-add-images-option-follow"]') as HTMLElement;
+    const optFollow = document.querySelector('[data-testid="next-add-images-option-follow"]') as HTMLElement;
     await act(async () => {
       optFollow.click();
     });
