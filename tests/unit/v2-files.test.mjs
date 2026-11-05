@@ -124,7 +124,9 @@ test('readWorkspaceFile flags binary, tooLarge, directory, missing', async () =>
   await writeFile(path.join(root, 'nul.bin'), Buffer.from([0x00, 0x01, 0x02]));
   await writeFile(path.join(root, 'bad.bin'), Buffer.from([0xff, 0xfe, 0xfd]));
   await writeFile(path.join(root, 'big.txt'), 'abcdefghij');
-  await writeFile(path.join(root, 'pic.PNG'), Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+  // A NUL keeps the stub binary on Windows, where encoding detection is always
+  // on and the four PNG magic bytes alone decode as GBK.
+  await writeFile(path.join(root, 'pic.PNG'), Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x00]));
   await writeFile(path.join(root, 'icon.svg'), '<svg></svg>');
   const env = { WEFT_V2_MAX_FILE_BYTES: '4' };
 
