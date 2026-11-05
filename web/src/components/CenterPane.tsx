@@ -28,6 +28,7 @@ type Props = {
   workspaceId?: string | null;
   workspace?: Workspace | null;
   isDraft?: boolean;
+  maximized?: boolean;
   lang: Lang;
   demo?: boolean;
   onNewWorkspace?: () => void;
@@ -65,6 +66,7 @@ export function CenterPane({
   workspaceId,
   workspace = null,
   isDraft: isDraftProp = false,
+  maximized = false,
   lang,
   demo = false,
   onNewWorkspace,
@@ -131,7 +133,12 @@ export function CenterPane({
     const draft = draftView(workspaceId || '', lang);
     const projectName = workspace && !isChatWorkspace(workspace) ? workspace.name : null;
     return (
-      <main className="col-center" data-testid="next-center">
+      <main
+        className="col-center"
+        data-testid="next-center"
+        inert={maximized || undefined}
+        aria-hidden={maximized || undefined}
+      >
         <StatusBar
           conversation={draft}
           lang={lang}
@@ -175,7 +182,12 @@ export function CenterPane({
 
   if (missing) {
     return (
-      <main className="col-center" data-testid="next-center">
+      <main
+        className="col-center"
+        data-testid="next-center"
+        inert={maximized || undefined}
+        aria-hidden={maximized || undefined}
+      >
         <header className="next-status">
           <div className="next-status-inner">
             <div className="top-heading" />
@@ -191,7 +203,12 @@ export function CenterPane({
 
   if (!conversation) {
     return (
-      <main className="col-center" data-testid="next-center">
+      <main
+        className="col-center"
+        data-testid="next-center"
+        inert={maximized || undefined}
+        aria-hidden={maximized || undefined}
+      >
         <header className="next-status" data-testid="next-status">
           <div className="next-status-inner">
             <div className="top-heading">
@@ -219,7 +236,12 @@ export function CenterPane({
   const activePendingAsk = rawPendingAsk && rawPendingAsk.id !== dismissedAskId ? rawPendingAsk : null;
 
   return (
-    <main className="col-center" data-testid="next-center">
+    <main
+      className="col-center"
+      data-testid="next-center"
+      inert={maximized || undefined}
+      aria-hidden={maximized || undefined}
+    >
       <StatusBar
         conversation={conversation}
         lang={lang}

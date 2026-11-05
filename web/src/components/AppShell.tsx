@@ -175,7 +175,7 @@ function AppShellLayout({
   workspaces,
   conversations,
 }: LayoutProps) {
-  const { open, setOpen, width, setWidth, persistWidth } = useRightLayout();
+  const { open, setOpen, width, setWidth, persistWidth, maximized } = useRightLayout();
   const { leftOpen, setLeftOpen, dragging, setDragging } = useLeftPanel();
   const [leftW, setLeftW] = useState(() => readLeftWidth());
   const motionReady = usePanelMotionReady();
@@ -309,6 +309,7 @@ function AppShellLayout({
     motionReady ? 'is-ready' : '',
     !leftOpen ? 'left-closed' : '',
     !open ? 'right-closed' : '',
+    maximized ? 'is-maximized' : '',
     dragging ? 'is-dragging' : '',
   ].filter(Boolean).join(' ');
 
@@ -353,6 +354,7 @@ function AppShellLayout({
         workspaceId={draftWorkspaceId}
         workspace={workspace || null}
         isDraft={isDraftRoute}
+        maximized={maximized}
         lang={lang}
         demo={demo}
         onNewWorkspace={() => setWsDialog(true)}
