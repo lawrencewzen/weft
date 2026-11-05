@@ -27,7 +27,6 @@ export function StatusBar({
     <header className="next-status" data-testid="next-status">
       <div className="next-status-inner">
         <div className="top-heading">
-          <div className="top-left-slot" aria-hidden="true" />
           <span
             className="top-title"
             style={isNew ? { color: 'var(--faint)' } : undefined}

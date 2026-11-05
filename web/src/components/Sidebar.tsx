@@ -19,6 +19,7 @@ import {
 import { isMac, type SearchItem } from '../data/sidebarSearchModel';
 import { readLastOpenedMap, writeLastOpened } from '../data/sidebarUnread';
 import type { ConversationSummary, Workspace } from '../data/store';
+import { useLeftPanel } from '../data/leftPanelContext';
 import { useRightActions, useRightLayout } from '../data/rightPaneContext';
 import { useWorkspaces } from '../data/useWorkspaces';
 import { t } from '../i18n';
@@ -28,6 +29,7 @@ import { SidebarArchived } from './SidebarArchived';
 import { SidebarConvRow, SidebarGroup } from './SidebarGroup';
 import {
   EDIT_ICON,
+  FOLDER_ICON,
   GEAR_ICON,
   MOON_ICON,
   PLUS_ICON,
@@ -51,6 +53,7 @@ type Props = {
   activeAgentId: string | null;
   draftWorkspaceId: string | null;
   onCollapse: () => void;
+  onExpand?: () => void;
   onToast: (message: string) => void;
   onConfirm: (opts: ConfirmOpts) => Promise<boolean>;
   onRemoveWorkspace: (workspaceId: string) => Promise<void>;
@@ -63,6 +66,7 @@ export function Sidebar({
   activeConversationId,
   draftWorkspaceId,
   onCollapse: _onCollapse,
+  onExpand: _onExpand,
   onToast,
   onConfirm,
   onRemoveWorkspace,
@@ -72,6 +76,7 @@ export function Sidebar({
   const { status } = useSession();
   const { tab, setTab } = useRightLayout();
   const { showFiles, openInTerminal } = useRightActions();
+  const { setLeftOpen } = useLeftPanel();
   const [openMap, setOpenMap] = useState<OpenRecord>(() => readWorkspaceOpen());
   const [archivedOpen, setArchivedOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -244,8 +249,6 @@ export function Sidebar({
     <aside
       className="col-left sb"
       data-testid="next-sidebar"
-      inert={collapsed || undefined}
-      aria-hidden={collapsed || undefined}
     >
       <div className="col-panel-inner">
         <div className="sb-hd hd">
@@ -256,6 +259,8 @@ export function Sidebar({
           type="button"
           className="sb-row row sb-top-row"
           data-testid="next-new-chat"
+          title={t(lang, 'new_conversation')}
+          aria-label={t(lang, 'new_conversation')}
           onClick={() => startNewChat()}
         >
           <span className="sb-ic ic" aria-hidden="true">{EDIT_ICON}</span>
@@ -267,14 +272,35 @@ export function Sidebar({
           type="button"
           className="sb-row row sb-top-row"
           data-testid="next-search"
-          onClick={() => setSearchOpen(true)}
+          title={t(lang, 'search')}
+          aria-label={t(lang, 'search')}
+          onClick={() => {
+            if (collapsed) setLeftOpen(true);
+            setSearchOpen(true);
+          }}
         >
           <span className="sb-ic ic" aria-hidden="true">{SEARCH_ICON}</span>
           <span className="sb-row-text">{t(lang, 'search')}</span>
           <span className="sb-kbd kbd" aria-hidden="true">{modKey}K</span>
         </button>
 
-        <div className="sb-scroll scroll left-body">
+        <button
+          type="button"
+          className="sb-row row sb-top-row sb-strip-projects"
+          data-testid="next-strip-projects"
+          title={t(lang, 'projects_label')}
+          aria-label={t(lang, 'projects_label')}
+          onClick={() => setLeftOpen(true)}
+        >
+          <span className="sb-ic ic" aria-hidden="true">{FOLDER_ICON}</span>
+          <span className="sb-row-text">{t(lang, 'projects_label')}</span>
+        </button>
+
+        <div
+          className="sb-scroll scroll left-body"
+          inert={collapsed || undefined}
+          aria-hidden={collapsed || undefined}
+        >
           <div className="sb-sec sec">
             <span>{t(lang, 'projects_label')}</span>
             <button
@@ -363,6 +389,7 @@ export function Sidebar({
               className="sb-foot-link foot-link"
               data-testid="next-open-settings"
               title={t(lang, 'settings_title')}
+              aria-label={t(lang, 'settings_title')}
               onClick={() => openSettings('general')}
             >
               <span className="sb-ic ic" aria-hidden="true">{GEAR_ICON}</span>

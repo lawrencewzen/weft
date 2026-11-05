@@ -176,9 +176,7 @@ export function CenterPane({
       <main className="col-center" data-testid="next-center">
         <header className="next-status">
           <div className="next-status-inner">
-            <div className="top-heading">
-              <div className="top-left-slot" aria-hidden="true" />
-            </div>
+            <div className="top-heading" />
             <div className="top-right" aria-hidden="true" />
           </div>
         </header>
@@ -195,7 +193,6 @@ export function CenterPane({
         <header className="next-status" data-testid="next-status">
           <div className="next-status-inner">
             <div className="top-heading">
-              <div className="top-left-slot" aria-hidden="true" />
               {cid ? (
                 <span className="top-title">{knownTitle}</span>
               ) : null}

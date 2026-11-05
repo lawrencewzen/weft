@@ -44,9 +44,9 @@ export function SideToggles({ lang }: { lang: Lang }) {
   );
 }
 
-/** @deprecated Replaced by shell-level SideToggles. Renders spacer slot in header. */
+/** @deprecated Replaced by shell-level SideToggles. */
 export function LeftOpenButton() {
-  return <div className="top-left-slot" aria-hidden="true" />;
+  return null;
 }
 
 /** @deprecated Replaced by shell-level SideToggles. Renders spacer slot in header. */

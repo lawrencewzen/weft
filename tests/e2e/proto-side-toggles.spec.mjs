@@ -93,21 +93,45 @@ test('side toggle buttons have identical dimensions, mirror-symmetric insets, eq
   expectClean(state);
 });
 
-test('left button remains stationary and same DOM element in every frame during collapse and expand without intersecting title', async ({ page }) => {
+test('collapsed sidebar becomes 54px narrow strip, buttons and icons remain stationary across every frame', async ({ page }) => {
   const state = await openProto(page);
 
+  const sidebar = page.getByTestId('next-sidebar');
   const leftBtn = page.locator('.side-toggle-left');
+  await expect(sidebar).toBeVisible();
   await expect(leftBtn).toBeVisible();
 
-  // Attach unique marker property to confirm same DOM element
+  // Attach unique marker properties to confirm exact same DOM elements are reused
   await page.evaluate(() => {
-    const el = document.querySelector('.side-toggle-left');
-    if (el) el.__marker = 'left-toggle-singleton';
+    const lb = document.querySelector('.side-toggle-left');
+    const nc = document.querySelector('[data-testid="next-new-chat"]');
+    const sc = document.querySelector('[data-testid="next-search"]');
+    const st = document.querySelector('[data-testid="next-open-settings"]');
+    if (lb) lb.__marker = 'left-toggle-singleton';
+    if (nc) nc.__marker = 'new-chat-singleton';
+    if (sc) sc.__marker = 'search-singleton';
+    if (st) st.__marker = 'settings-singleton';
   });
 
-  const initialBox = await leftBtn.boundingBox();
-  expect(initialBox).not.toBeNull();
-  expect(Math.abs(initialBox.x - 12 * 0.9)).toBeLessThanOrEqual(1);
+  const initialLeftBox = await leftBtn.boundingBox();
+  expect(initialLeftBox).not.toBeNull();
+
+  // Record initial icon positions
+  const initialIconPositions = await page.evaluate(() => {
+    const getIconLeft = (sel) => {
+      const el = document.querySelector(sel);
+      const ico = el ? el.querySelector('.sb-ic') : null;
+      return ico ? ico.getBoundingClientRect().left : null;
+    };
+    return {
+      newChat: getIconLeft('[data-testid="next-new-chat"]'),
+      search: getIconLeft('[data-testid="next-search"]'),
+      settings: getIconLeft('[data-testid="next-open-settings"]'),
+    };
+  });
+  expect(initialIconPositions.newChat).not.toBeNull();
+  expect(initialIconPositions.search).not.toBeNull();
+  expect(initialIconPositions.settings).not.toBeNull();
 
   // --- Left toggle: Collapse ---
   const collapseSamples = [];
@@ -116,17 +140,29 @@ test('left button remains stationary and same DOM element in every frame during 
 
   while (Date.now() - startCollapse < 280) {
     const sample = await page.evaluate(() => {
-      const el = document.querySelector('.side-toggle-left');
+      const lb = document.querySelector('.side-toggle-left');
+      const nc = document.querySelector('[data-testid="next-new-chat"]');
+      const sc = document.querySelector('[data-testid="next-search"]');
+      const st = document.querySelector('[data-testid="next-open-settings"]');
       const titleEl = document.querySelector('.top-title');
-      if (!el) return null;
-      const r = el.getBoundingClientRect();
+      const sb = document.querySelector('[data-testid="next-sidebar"]');
+      if (!lb || !nc || !sc || !st || !sb) return null;
+
+      const getIconLeft = (el) => el.querySelector('.sb-ic')?.getBoundingClientRect().left;
+      const r = lb.getBoundingClientRect();
       const tr = titleEl ? titleEl.getBoundingClientRect() : null;
       return {
-        isSameEl: el.__marker === 'left-toggle-singleton',
-        x: r.left,
-        y: r.top,
-        width: r.width,
-        height: r.height,
+        isLbSame: lb.__marker === 'left-toggle-singleton',
+        isNcSame: nc.__marker === 'new-chat-singleton',
+        isScSame: sc.__marker === 'search-singleton',
+        isStSame: st.__marker === 'settings-singleton',
+        lbX: r.left,
+        lbY: r.top,
+        lbW: r.width,
+        lbH: r.height,
+        ncX: getIconLeft(nc),
+        scX: getIconLeft(sc),
+        stX: getIconLeft(st),
         title: tr ? { x: tr.left, y: tr.top, width: tr.width, height: tr.height } : null,
       };
     });
@@ -137,32 +173,41 @@ test('left button remains stationary and same DOM element in every frame during 
 
   expect(collapseSamples.length).toBeGreaterThanOrEqual(3);
   for (const s of collapseSamples) {
-    expect(s.isSameEl).toBe(true);
-    expect(Math.abs(s.x - initialBox.x)).toBeLessThanOrEqual(1);
-    expect(Math.abs(s.y - initialBox.y)).toBeLessThanOrEqual(1);
-    expect(Math.abs(s.width - initialBox.width)).toBeLessThanOrEqual(1);
-    expect(Math.abs(s.height - initialBox.height)).toBeLessThanOrEqual(1);
+    expect(s.isLbSame).toBe(true);
+    expect(s.isNcSame).toBe(true);
+    expect(s.isScSame).toBe(true);
+    expect(s.isStSame).toBe(true);
+    // Left button stationary
+    expect(Math.abs(s.lbX - initialLeftBox.x)).toBeLessThanOrEqual(1);
+    expect(Math.abs(s.lbY - initialLeftBox.y)).toBeLessThanOrEqual(1);
+    // Icons x position constant in every frame
+    expect(Math.abs(s.ncX - initialIconPositions.newChat)).toBeLessThanOrEqual(1);
+    expect(Math.abs(s.scX - initialIconPositions.search)).toBeLessThanOrEqual(1);
+    expect(Math.abs(s.stX - initialIconPositions.settings)).toBeLessThanOrEqual(1);
+    // Title never enters left button area
     if (s.title && s.title.width > 0) {
-      expect(rectsIntersect(s.title, s)).toBe(false);
-      expect(s.title.x).toBeGreaterThanOrEqual(s.x + s.width - 1);
+      expect(rectsIntersect(s.title, { x: s.lbX, y: s.lbY, width: s.lbW, height: s.lbH })).toBe(false);
     }
   }
 
   // Settle in collapsed state
   await page.waitForTimeout(100);
-  const collapsedBox = await leftBtn.boundingBox();
-  expect(collapsedBox).not.toBeNull();
-  expect(Math.abs(collapsedBox.x - initialBox.x)).toBeLessThanOrEqual(1);
-  expect(Math.abs(collapsedBox.y - initialBox.y)).toBeLessThanOrEqual(1);
 
-  // In collapsed state, title must not intersect the left button
-  const titleAfterCollapse = page.locator('.top-title');
-  if (await titleAfterCollapse.isVisible()) {
-    const tBox = await titleAfterCollapse.boundingBox();
-    expect(tBox).not.toBeNull();
-    expect(rectsIntersect(tBox, collapsedBox)).toBe(false);
-    expect(tBox.x).toBeGreaterThanOrEqual(collapsedBox.x + collapsedBox.width);
-  }
+  // 1. Sidebar is visible as a 54px narrow strip (visual width ~48.6px)
+  await expect(sidebar).toBeVisible();
+  const collapsedSbBox = await sidebar.boundingBox();
+  expect(collapsedSbBox).not.toBeNull();
+  expect(Math.abs(collapsedSbBox.width - 54 * 0.9)).toBeLessThanOrEqual(1.5);
+  const cssWidth = await sidebar.evaluate((el) => getComputedStyle(el).width);
+  expect(Math.round(Number.parseFloat(cssWidth))).toBe(54);
+
+  // 2. Buttons and icons remain stationary and centered
+  const collapsedLeftBox = await leftBtn.boundingBox();
+  expect(Math.abs(collapsedLeftBox.x - initialLeftBox.x)).toBeLessThanOrEqual(1);
+
+  // 3. Projects toggle button is visible in collapsed strip
+  const stripProjects = page.getByTestId('next-strip-projects');
+  await expect(stripProjects).toBeVisible();
 
   // --- Left toggle: Expand ---
   const expandSamples = [];
@@ -171,15 +216,21 @@ test('left button remains stationary and same DOM element in every frame during 
 
   while (Date.now() - startExpand < 280) {
     const sample = await page.evaluate(() => {
-      const el = document.querySelector('.side-toggle-left');
-      if (!el) return null;
-      const r = el.getBoundingClientRect();
+      const lb = document.querySelector('.side-toggle-left');
+      const nc = document.querySelector('[data-testid="next-new-chat"]');
+      const sc = document.querySelector('[data-testid="next-search"]');
+      const st = document.querySelector('[data-testid="next-open-settings"]');
+      if (!lb || !nc || !sc || !st) return null;
+      const getIconLeft = (el) => el.querySelector('.sb-ic')?.getBoundingClientRect().left;
       return {
-        isSameEl: el.__marker === 'left-toggle-singleton',
-        x: r.left,
-        y: r.top,
-        width: r.width,
-        height: r.height,
+        isLbSame: lb.__marker === 'left-toggle-singleton',
+        isNcSame: nc.__marker === 'new-chat-singleton',
+        isScSame: sc.__marker === 'search-singleton',
+        isStSame: st.__marker === 'settings-singleton',
+        lbX: lb.getBoundingClientRect().left,
+        ncX: getIconLeft(nc),
+        scX: getIconLeft(sc),
+        stX: getIconLeft(st),
       };
     });
     if (sample) expandSamples.push(sample);
@@ -189,26 +240,20 @@ test('left button remains stationary and same DOM element in every frame during 
 
   expect(expandSamples.length).toBeGreaterThanOrEqual(3);
   for (const s of expandSamples) {
-    expect(s.isSameEl).toBe(true);
-    expect(Math.abs(s.x - initialBox.x)).toBeLessThanOrEqual(1);
-    expect(Math.abs(s.y - initialBox.y)).toBeLessThanOrEqual(1);
-    expect(Math.abs(s.width - initialBox.width)).toBeLessThanOrEqual(1);
-    expect(Math.abs(s.height - initialBox.height)).toBeLessThanOrEqual(1);
+    expect(s.isLbSame).toBe(true);
+    expect(s.isNcSame).toBe(true);
+    expect(s.isScSame).toBe(true);
+    expect(s.isStSame).toBe(true);
+    expect(Math.abs(s.lbX - initialLeftBox.x)).toBeLessThanOrEqual(1);
+    expect(Math.abs(s.ncX - initialIconPositions.newChat)).toBeLessThanOrEqual(1);
+    expect(Math.abs(s.scX - initialIconPositions.search)).toBeLessThanOrEqual(1);
+    expect(Math.abs(s.stX - initialIconPositions.settings)).toBeLessThanOrEqual(1);
   }
 
   // Settle in expanded state
   await page.waitForTimeout(100);
-  const expandedBox = await leftBtn.boundingBox();
-  expect(expandedBox).not.toBeNull();
-  expect(Math.abs(expandedBox.x - initialBox.x)).toBeLessThanOrEqual(1);
-
-  // Weft brand must not intersect left button
-  const brandAfterExpand = page.locator('.sb-brand');
-  await expect(brandAfterExpand).toBeVisible();
-  const bBox = await brandAfterExpand.boundingBox();
-  expect(bBox).not.toBeNull();
-  expect(rectsIntersect(bBox, expandedBox)).toBe(false);
-  expect(bBox.x).toBeGreaterThanOrEqual(expandedBox.x + expandedBox.width);
+  const expandedSbBox = await sidebar.boundingBox();
+  expect(expandedSbBox.width).toBeGreaterThan(150);
 
   expectClean(state);
 });
@@ -219,7 +264,6 @@ test('right button remains stationary and same DOM element in every frame during
   const rightBtn = page.locator('.side-toggle-right');
   await expect(rightBtn).toBeVisible();
 
-  // Attach unique marker property to confirm same DOM element
   await page.evaluate(() => {
     const el = document.querySelector('.side-toggle-right');
     if (el) el.__marker = 'right-toggle-singleton';
@@ -298,6 +342,53 @@ test('right button remains stationary and same DOM element in every frame during
   expectClean(state);
 });
 
+test('narrow strip icon actions: search expands and focuses input, new chat creates, project icon expands', async ({ page }) => {
+  const state = await openProto(page);
+
+  const leftBtn = page.locator('.side-toggle-left');
+  const sidebar = page.getByTestId('next-sidebar');
+
+  // Collapse sidebar to narrow strip
+  await leftBtn.click();
+  await page.waitForTimeout(300);
+  const sbBox = await sidebar.boundingBox();
+  expect(Math.abs(sbBox.width - 54 * 0.9)).toBeLessThanOrEqual(1.5);
+
+  // 1. Clicking search in narrow strip expands left bar and focuses search input
+  await page.getByTestId('next-search').click();
+  const searchModal = page.getByTestId('next-search-modal');
+  await expect(searchModal).toBeVisible();
+  const searchInput = page.getByTestId('next-search-input');
+  await expect(searchInput).toBeFocused();
+
+  // Close search modal
+  await page.keyboard.press('Escape');
+  await expect(searchModal).toBeHidden();
+
+  // Sidebar expanded after clicking search
+  await expect(page.locator('.next-shell')).not.toHaveClass(/left-closed/);
+  await expect.poll(async () => (await sidebar.boundingBox())?.width).toBeGreaterThan(150);
+
+  // 2. Collapse again and click new chat
+  await page.getByTestId('next-left-collapse').click();
+  await page.waitForTimeout(300);
+  await page.getByTestId('next-new-chat').click();
+  // Navigates to draft/new chat
+  await expect(page).toHaveURL(/(\/w\/[^/]+\/new|\/new)$/);
+
+  // 3. While still collapsed in narrow strip, click projects toggle
+  const stripProjects = page.getByTestId('next-strip-projects');
+  await expect(stripProjects).toBeVisible();
+  await stripProjects.click();
+  await page.waitForTimeout(300);
+
+  // Sidebar expanded after clicking project icon
+  await expect(page.locator('.next-shell')).not.toHaveClass(/left-closed/);
+  await expect.poll(async () => (await sidebar.boundingBox())?.width).toBeGreaterThan(150);
+
+  expectClean(state);
+});
+
 test('dragging left sidebar width does not move left or right buttons', async ({ page }) => {
   const state = await openProto(page);
 
@@ -329,7 +420,7 @@ test('dragging left sidebar width does not move left or right buttons', async ({
   expectClean(state);
 });
 
-test('774px viewport collapses overlay sidebar without horizontal scroll or button overlap', async ({ page }) => {
+test('774px viewport collapses to 54px narrow strip without horizontal scroll', async ({ page }) => {
   const state = await openProto(page);
 
   await page.setViewportSize({ width: 774, height: 800 });
@@ -337,10 +428,16 @@ test('774px viewport collapses overlay sidebar without horizontal scroll or butt
 
   const leftBtn = page.locator('.side-toggle-left');
   const rightBtn = page.locator('.side-toggle-right');
+  const sidebar = page.getByTestId('next-sidebar');
   await expect(leftBtn).toBeVisible();
   await expect(rightBtn).toBeVisible();
+  await expect(sidebar).toBeVisible();
 
-  // 1. No horizontal scroll
+  // 1. Auto-collapsed to 54px strip (~48.6 visual px)
+  const sbBox = await sidebar.boundingBox();
+  expect(Math.abs(sbBox.width - 54 * 0.9)).toBeLessThanOrEqual(1.5);
+
+  // 2. No horizontal scroll
   const scrollInfo = await page.evaluate(() => ({
     scrollWidth: document.body.scrollWidth,
     clientWidth: document.body.clientWidth,
@@ -350,40 +447,27 @@ test('774px viewport collapses overlay sidebar without horizontal scroll or butt
   expect(scrollInfo.scrollWidth).toBeLessThanOrEqual(scrollInfo.clientWidth + 1);
   expect(scrollInfo.htmlScroll).toBeLessThanOrEqual(scrollInfo.htmlClient + 1);
 
-  // 2. Buttons z-index >= 40
+  // 3. Buttons z-index >= 40
   const leftZ = await leftBtn.evaluate((el) => Number.parseInt(getComputedStyle(el).zIndex, 10));
   const rightZ = await rightBtn.evaluate((el) => Number.parseInt(getComputedStyle(el).zIndex, 10));
   expect(leftZ).toBeGreaterThanOrEqual(40);
   expect(rightZ).toBeGreaterThanOrEqual(40);
 
-  // 3. Left button does not overlap top-title in collapsed state
-  const leftBox = await leftBtn.boundingBox();
-  const title = page.locator('.top-title');
-  if (await title.isVisible()) {
-    const titleBox = await title.boundingBox();
-    expect(rectsIntersect(titleBox, leftBox)).toBe(false);
-    expect(titleBox.x).toBeGreaterThanOrEqual(leftBox.x + leftBox.width);
-  }
-
-  // 4. Open overlay sidebar: "Weft" does not overlap left button
+  // 4. Open overlay sidebar: expands over CenterPane
   await leftBtn.click();
   await page.waitForTimeout(300);
-  await expect(page.getByTestId('next-sidebar')).toBeVisible();
-
-  const brand = page.locator('.sb-brand');
-  await expect(brand).toBeVisible();
-  const brandBox = await brand.boundingBox();
-  expect(rectsIntersect(brandBox, leftBox)).toBe(false);
-  expect(brandBox.x).toBeGreaterThanOrEqual(leftBox.x + leftBox.width);
+  const openBox = await sidebar.boundingBox();
+  expect(openBox.width).toBeGreaterThan(150);
 
   // Still no horizontal scroll with overlay open
   const openScroll = await page.evaluate(() => document.body.scrollWidth <= document.body.clientWidth + 1);
   expect(openScroll).toBe(true);
 
-  // Close overlay sidebar
+  // Close back to narrow strip
   await leftBtn.click();
   await page.waitForTimeout(300);
-  await expect(page.getByTestId('next-sidebar')).toBeHidden();
+  const closedBox = await sidebar.boundingBox();
+  expect(Math.abs(closedBox.width - 54 * 0.9)).toBeLessThanOrEqual(1.5);
 
   // Open and close right overlay
   await rightBtn.click();
@@ -409,6 +493,10 @@ test('respects prefers-reduced-motion: reduce without animation lag', async ({ p
 
   const boxAfter = await leftBtn.boundingBox();
   expect(Math.abs(boxAfter.x - boxBefore.x)).toBeLessThanOrEqual(1);
+
+  const sidebar = page.getByTestId('next-sidebar');
+  const sbBox = await sidebar.boundingBox();
+  expect(Math.abs(sbBox.width - 54 * 0.9)).toBeLessThanOrEqual(1.5);
 
   expectClean(state);
 });

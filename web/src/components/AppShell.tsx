@@ -266,7 +266,7 @@ function AppShellLayout({
   }, [activeConversationId, conversations, draftWorkspaceId, workspaces]);
 
   function onDividerDown(ev: MouseEvent<HTMLDivElement>, side: 'left' | 'right') {
-    if (ev.button !== 0) return;
+    if (ev.button !== 0 || (side === 'left' && !leftOpen)) return;
     ev.preventDefault();
     const startX = ev.clientX;
     const startLeft = leftWRef.current;
@@ -331,6 +331,7 @@ function AppShellLayout({
         activeAgentId={activeAgentId}
         draftWorkspaceId={draftWorkspaceId}
         onCollapse={() => setLeftOpen(false)}
+        onExpand={() => setLeftOpen(true)}
         onToast={onToast}
         onConfirm={askConfirm}
         onRemoveWorkspace={onRemoveWorkspace}
