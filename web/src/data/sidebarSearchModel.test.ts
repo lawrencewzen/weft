@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { filterSearchConversations } from './sidebarSearchModel';
+import { afterEach, describe, expect, it } from 'vitest';
+import { filterSearchConversations, isMac } from './sidebarSearchModel';
 import type { WorkspaceGroup } from './sidebarModel';
 import type { ConversationSummary, Workspace } from './store';
 
@@ -85,5 +85,44 @@ describe('filterSearchConversations', () => {
     const results = filterSearchConversations(mockGroups, '咨询', extra);
     expect(results.map((r) => r.conv.id)).toEqual(['c-consult']);
     expect(results[0].workspace.kind).toBe('chat');
+  });
+});
+
+describe('isMac', () => {
+  const originalUserAgent = navigator.userAgent;
+
+  afterEach(() => {
+    Object.defineProperty(navigator, 'userAgent', {
+      value: originalUserAgent,
+      configurable: true,
+    });
+  });
+
+  it('returns true on macOS and iOS user agents', () => {
+    Object.defineProperty(navigator, 'userAgent', {
+      value: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)',
+      configurable: true,
+    });
+    expect(isMac()).toBe(true);
+
+    Object.defineProperty(navigator, 'userAgent', {
+      value: 'Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X)',
+      configurable: true,
+    });
+    expect(isMac()).toBe(true);
+  });
+
+  it('returns false on Windows and Linux user agents', () => {
+    Object.defineProperty(navigator, 'userAgent', {
+      value: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+      configurable: true,
+    });
+    expect(isMac()).toBe(false);
+
+    Object.defineProperty(navigator, 'userAgent', {
+      value: 'Mozilla/5.0 (X11; Linux x86_64)',
+      configurable: true,
+    });
+    expect(isMac()).toBe(false);
   });
 });
