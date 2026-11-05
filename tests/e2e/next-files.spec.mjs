@@ -244,6 +244,10 @@ test('FL-6 long filenames truncate with a full-path title in changes and the fil
     expect(changeBox.scrollWidth).toBeGreaterThan(changeBox.clientWidth);
 
     await page.getByTestId('next-right-tab-files').click();
+    // 240px cannot hold the tree and the editor side by side, so the tree is in the drawer.
+    const treeToggle = page.getByTestId('next-file-tree-toggle');
+    await expect(treeToggle).toBeVisible({ timeout: 15000 });
+    await treeToggle.click();
     const fileNode = await revealFile(page, longName);
     await expect(fileNode).toHaveAttribute('title', longName);
     const treeName = fileNode.locator('.file-tree-name');
