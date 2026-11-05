@@ -52,6 +52,9 @@ export type RightLayoutValue = {
   width: number;
   setWidth: (width: number) => void;
   persistWidth: (width: number) => void;
+  maximized: boolean;
+  setMaximized: (maximized: boolean) => void;
+  toggleMaximized: () => void;
 };
 
 export type RightChangesValue = {
@@ -129,6 +132,7 @@ export function RightPaneProvider({
   const [open, setOpenState] = useState(() => defaultRightOpen(cssViewportWidth()));
   const [tab, setTabState] = useState<RightTab>(() => readRightTab());
   const [width, setWidth] = useState(() => readRightWidth());
+  const [maximized, setMaximizedState] = useState(false);
   const [openPaths, setOpenPaths] = useState<Set<string>>(() => new Set());
   const [diffs, setDiffs] = useState<Record<string, Diff | 'loading' | 'error'>>({});
   const [tree, setTree] = useState<FileNode[]>([]);
@@ -178,6 +182,7 @@ export function RightPaneProvider({
 
   const setOpen = useCallback((next: boolean) => {
     setOpenState(next);
+    if (!next) setMaximizedState(false);
     persistRightOpen(next, cssViewportWidth());
   }, []);
 
@@ -188,8 +193,22 @@ export function RightPaneProvider({
   const setTab = useCallback((next: RightTab) => {
     setTabState(next);
     writeRightTab(next);
+    if (next !== 'files') setMaximizedState(false);
     setOpen(true);
   }, [setOpen]);
+
+  const setMaximized = useCallback((next: boolean) => {
+    setMaximizedState(next);
+    if (next) {
+      setOpen(true);
+      setTabState('files');
+      writeRightTab('files');
+    }
+  }, [setOpen]);
+
+  const toggleMaximized = useCallback(() => {
+    setMaximized(!maximized);
+  }, [maximized, setMaximized]);
 
   const persistWidth = useCallback((next: number) => {
     writeRightWidth(next);
@@ -267,7 +286,27 @@ export function RightPaneProvider({
     setDiffs({});
     sigRef.current = {};
     seenDone.current = '';
+    setMaximizedState(false);
   }, [cid]);
+
+  useEffect(() => {
+    if (tab !== 'files') {
+      setMaximizedState(false);
+    }
+  }, [tab]);
+
+  useEffect(() => {
+    if (!maximized) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      if (document.querySelector('.cm-search, .cm-panel.cm-search')) return;
+      if (document.querySelector('.file-tree-drawer')) return;
+      if (document.querySelector('.ctx-menu, [role=dialog]')) return;
+      setMaximizedState(false);
+    };
+    window.addEventListener('keydown', onKeyDown, true);
+    return () => window.removeEventListener('keydown', onKeyDown, true);
+  }, [maximized]);
 
   useEffect(() => {
     if (!cid || visibleChanges.length === 0) return;
@@ -471,6 +510,9 @@ export function RightPaneProvider({
     width,
     setWidth,
     persistWidth,
+    maximized,
+    setMaximized,
+    toggleMaximized,
   }), [
     open,
     setOpen,
@@ -480,6 +522,9 @@ export function RightPaneProvider({
     width,
     setWidth,
     persistWidth,
+    maximized,
+    setMaximized,
+    toggleMaximized,
   ]);
 
   const changesValue = useMemo<RightChangesValue>(() => ({
