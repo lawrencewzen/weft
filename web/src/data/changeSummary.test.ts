@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Change } from './store';
 import {
+  dedupeRenamedChanges,
   getShownChanges,
   isChangeSummaryCollapsible,
   remainingHiddenCount,
@@ -134,5 +135,25 @@ describe('collapsing threshold (6 all shown, 7 collapsed into 5 + 2)', () => {
     expect(getShownChanges(eight, false)).toHaveLength(5);
     expect(remainingHiddenCount(eight.length)).toBe(3);
     expect(getShownChanges(eight, true)).toHaveLength(8);
+  });
+});
+
+describe('dedupeRenamedChanges', () => {
+  it('filters out oldPath of renamed changes to prevent double-counting', () => {
+    const changes: Change[] = [
+      { path: 'old.txt', added: 0, removed: 5, error: null, by: null, status: 'deleted' },
+      { path: 'new.txt', added: 0, removed: 0, error: null, by: null, status: 'renamed', oldPath: 'old.txt' },
+      { path: 'other.txt', added: 2, removed: 1, error: null, by: null, status: 'modified' },
+    ];
+    const deduped = dedupeRenamedChanges(changes);
+    expect(deduped.map((c) => c.path)).toEqual(['new.txt', 'other.txt']);
+  });
+
+  it('preserves list when no renamed changes exist', () => {
+    const changes: Change[] = [
+      makeChange('a.txt', 1, 0),
+      makeChange('b.txt', 2, 1),
+    ];
+    expect(dedupeRenamedChanges(changes)).toEqual(changes);
   });
 });

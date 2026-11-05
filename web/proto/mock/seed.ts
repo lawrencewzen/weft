@@ -406,14 +406,14 @@ function richConversation(now: number, threads: Map<string, MockSubThread>): Moc
       ...seedSubagentReports(),
     ],
     changes: [
-      { path: 'web/src/data/store.ts', added: 8, removed: 3, error: null, by: { kind: 'main' } },
-      { path: 'web/src/data/store.test.ts', added: 12, removed: 0, error: null, by: { kind: 'subagent', agentId: 'c-rich:sub:sa-2', name: 'sub-delta-test' } },
+      { path: 'web/src/data/store.ts', added: 8, removed: 3, error: null, by: { kind: 'main' }, status: 'modified' },
+      { path: 'web/src/data/store.test.ts', added: 12, removed: 0, error: null, by: { kind: 'subagent', agentId: 'c-rich:sub:sa-2', name: 'sub-delta-test' }, status: 'added' },
       { path: 'web/src/data/diffView.ts', added: 16, removed: 4, error: null, by: { kind: 'main' } },
       { path: 'web/src/components/ChangesPane.tsx', added: 24, removed: 6, error: null, by: { kind: 'subagent', agentId: 'c-rich:sub:sa-1', name: 'sub-load-order' } },
       { path: 'web/src/components/Thread.tsx', added: 6, removed: 2, error: null, by: { kind: 'main' } },
-      { path: 'web/src/styles/app.css', added: 4, removed: 1, error: null, by: { kind: 'main' } },
-      { path: 'web/src/data/pendingSend.ts', added: 2, removed: 1, error: null, by: { kind: 'main' } },
-      { path: '/Users/lawrence/.config/weft/notes.md', added: 1, removed: 1, error: null, by: { kind: 'main' } },
+      { path: 'web/src/styles/app.css', added: 0, removed: 0, error: null, by: { kind: 'main' }, status: 'renamed', oldPath: 'web/src/styles/base.css' },
+      { path: 'web/src/data/pendingSend.ts', added: 0, removed: 3, error: null, by: null, status: 'deleted' },
+      { path: '/Users/lawrence/.config/weft/notes.md', added: 7, removed: 0, error: null, by: { kind: 'main' } },
     ],
     diffs: {
       'web/src/data/store.ts': mockDiff('web/src/data/store.ts', [
@@ -521,27 +521,15 @@ function richConversation(now: number, threads: Map<string, MockSubThread>): Moc
           ],
         },
       ]),
-      'web/src/styles/app.css': mockDiff('web/src/styles/app.css', [
-        {
-          oldStart: 840,
-          newStart: 840,
-          lines: [
-            { op: 'del', text: '.change-summary { padding: 10px; }' },
-            { op: 'add', text: '.change-summary { border-radius: 12px; }' },
-            { op: 'add', text: '.change-summary-head { height: 40px; }' },
-            { op: 'add', text: '.change-summary-row { height: 30px; }' },
-            { op: 'add', text: '.change-summary-more { height: 32px; }' },
-          ],
-        },
-      ]),
+      'web/src/styles/app.css': mockDiff('web/src/styles/app.css', []),
       'web/src/data/pendingSend.ts': mockDiff('web/src/data/pendingSend.ts', [
         {
           oldStart: 1,
-          newStart: 1,
+          newStart: 0,
           lines: [
             { op: 'del', text: 'export const PENDING_TIMEOUT = 1000;' },
-            { op: 'add', text: 'export const PENDING_TIMEOUT = 2000;' },
-            { op: 'add', text: '// updated timeout' },
+            { op: 'del', text: 'export const PENDING_MAX = 5000;' },
+            { op: 'del', text: '// updated timeout' },
           ],
         },
       ]),
@@ -550,8 +538,13 @@ function richConversation(now: number, threads: Map<string, MockSubThread>): Moc
           oldStart: 1,
           newStart: 1,
           lines: [
-            { op: 'del', text: '# old user notes' },
             { op: 'add', text: '# updated user notes' },
+            { op: 'add', text: '- note 1' },
+            { op: 'add', text: '- note 2' },
+            { op: 'add', text: '- note 3' },
+            { op: 'add', text: '- note 4' },
+            { op: 'add', text: '- note 5' },
+            { op: 'add', text: '- note 6' },
           ],
         },
       ]),

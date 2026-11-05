@@ -1,6 +1,12 @@
 import { useMemo, useState, type KeyboardEvent, type MouseEvent } from 'react';
 import type { Lang } from '../data/lang';
-import { changeByTitle, flattenDiff, formatChangeBy } from '../data/diffView';
+import {
+  changeByTitle,
+  changeStatusLetter,
+  changeStatusTitle,
+  flattenDiff,
+  formatChangeBy,
+} from '../data/diffView';
 import { focusSubagent } from '../data/focusSubagent';
 import { useRightActions, useRightChanges } from '../data/rightPaneContext';
 import { useSession } from '../data/session';
@@ -45,10 +51,15 @@ export function ChangesPane({ lang }: { lang: Lang }) {
     setMenu({ x: ev.clientX, y: ev.clientY, path });
   }
 
-  const items = (path: string): CtxMenuItem[] => [
-    { label: t(lang, 'show_in_files'), action: 'show-in-files', run: () => openFile(path) },
-    { label: t(lang, 'copy_path'), action: 'copy-path', run: () => copyPath(path) },
-  ];
+  const items = (path: string): CtxMenuItem[] => {
+    const target = visibleChanges.find((c) => c.path === path);
+    const list: CtxMenuItem[] = [];
+    if (target?.status !== 'deleted') {
+      list.push({ label: t(lang, 'show_in_files'), action: 'show-in-files', run: () => openFile(path) });
+    }
+    list.push({ label: t(lang, 'copy_path'), action: 'copy-path', run: () => copyPath(path) });
+    return list;
+  };
 
   if (!visibleChanges.length) {
     return <div className="pane-empty">{t(lang, 'no_changes_yet')}</div>;
@@ -72,6 +83,12 @@ export function ChangesPane({ lang }: { lang: Lang }) {
         const byTitle = changeByTitle(by, store, conversationId);
         const isSubagent = by?.kind === 'subagent';
         const subagentId = by?.kind === 'subagent' ? by.agentId : null;
+
+        const isRenamed = change.status === 'renamed' && !!change.oldPath;
+        const renameDisplay = isRenamed ? `${change.oldPath} → ${change.path}` : null;
+        const pillTitle = renameDisplay || change.path;
+        const statusLetter = changeStatusLetter(change.status);
+        const statusTitle = changeStatusTitle(change.status, lang);
 
         function onSubagentClick(ev: MouseEvent | KeyboardEvent) {
           ev.stopPropagation();
@@ -97,12 +114,38 @@ export function ChangesPane({ lang }: { lang: Lang }) {
           >
             <div
               className="changed-file-pill"
-              title={change.path}
+              title={pillTitle}
               onClick={() => toggleChange(change.path)}
               onContextMenu={(ev) => onCtx(ev, change.path)}
             >
               {CHEV}
-              <span className="changed-file-path">{change.path}</span>
+              {statusLetter ? (
+                <span
+                  className={`changed-file-status is-${change.status}`}
+                  data-testid="next-change-status"
+                  data-status={change.status}
+                  title={statusTitle || undefined}
+                >
+                  {statusLetter}
+                </span>
+              ) : null}
+              {isRenamed ? (
+                <span
+                  className="changed-file-path is-renamed"
+                  title={pillTitle}
+                >
+                  <span className="rename-old">{change.oldPath}</span>
+                  <span className="rename-arrow"> → </span>
+                  <span className="rename-new">{change.path}</span>
+                </span>
+              ) : (
+                <span
+                  className={`changed-file-path${change.status === 'deleted' ? ' is-deleted' : ''}`}
+                  title={pillTitle}
+                >
+                  {change.path}
+                </span>
+              )}
               {byLabel ? (
                 <span
                   className={`changed-file-by${isSubagent ? ' is-subagent' : ''}`}
@@ -131,7 +174,11 @@ export function ChangesPane({ lang }: { lang: Lang }) {
                 ) : diff.tooLarge ? (
                   <div className="diff-note">{t(lang, 'file_too_large')}</div>
                 ) : flattenDiff(diff).length === 0 ? (
-                  <div className="diff-note">{t(lang, 'diff_no_change')}</div>
+                  <div className="diff-note">
+                    {change.status === 'renamed'
+                      ? t(lang, 'diff_renamed_only')
+                      : t(lang, 'diff_no_change')}
+                  </div>
                 ) : (
                   <div className="diff-lines">
                     {flattenDiff(diff).map((row, i) => (
