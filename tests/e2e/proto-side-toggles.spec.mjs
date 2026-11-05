@@ -498,5 +498,180 @@ test('respects prefers-reduced-motion: reduce without animation lag', async ({ p
   const sbBox = await sidebar.boundingBox();
   expect(Math.abs(sbBox.width - 54 * 0.9)).toBeLessThanOrEqual(1.5);
 
+  // In reduced-motion, project strip button is immediately visible without sliding animation
+  const stripProjects = page.getByTestId('next-strip-projects');
+  await expect(stripProjects).toBeVisible();
+  const noSlide = await stripProjects.evaluate((el) => ({
+    hasIsSliding: el.classList.contains('is-sliding'),
+    transform: el.style.transform,
+  }));
+  expect(noSlide.hasIsSliding).toBe(false);
+  expect(noSlide.transform).toBe('');
+
+  expectClean(state);
+});
+
+test('project icon slides from first folder to narrow strip during collapse, and reverses smoothly on expand', async ({ page }) => {
+  const state = await openProto(page);
+
+  // 1. Initial positions
+  const wsToggle = page.locator('[data-testid="next-ws-toggle"]').first();
+  await expect(wsToggle).toBeVisible();
+  const firstWsIcon = wsToggle.locator('.sb-ic');
+  const initialFirstBox = await firstWsIcon.boundingBox();
+  expect(initialFirstBox).not.toBeNull();
+
+  const stripProjects = page.getByTestId('next-strip-projects');
+  const stripIcon = stripProjects.locator('.sb-ic');
+
+  // Collapse
+  const collapseSamples = [];
+  const startCollapse = Date.now();
+  const clickCollapsePromise = page.click('.side-toggle-left');
+
+  while (Date.now() - startCollapse < 280) {
+    const s = await page.evaluate(() => {
+      const sp = document.querySelector('[data-testid="next-strip-projects"]');
+      const spI = sp ? sp.querySelector('.sb-ic') : null;
+      const wsI = document.querySelector('[data-testid="next-ws-toggle"] .sb-ic');
+      if (!sp || !spI || getComputedStyle(sp).display === 'none') return null;
+      const r = spI.getBoundingClientRect();
+      const wsVis = wsI ? getComputedStyle(wsI).visibility : null;
+      return { x: r.left, y: r.top, wsVis };
+    });
+    if (s) collapseSamples.push(s);
+    await page.waitForTimeout(15);
+  }
+  await clickCollapsePromise;
+  await page.waitForTimeout(100);
+
+  expect(collapseSamples.length).toBeGreaterThanOrEqual(3);
+
+  // First sample starts near the first folder position
+  expect(Math.abs(collapseSamples[0].y - initialFirstBox.y)).toBeLessThanOrEqual(2);
+  expect(collapseSamples[0].wsVis).toBe('hidden');
+
+  // y is monotonically decreasing towards narrow strip position
+  for (let i = 1; i < collapseSamples.length; i++) {
+    expect(collapseSamples[i].y).toBeLessThanOrEqual(collapseSamples[i - 1].y + 0.5);
+    expect(collapseSamples[i].wsVis).toBe('hidden');
+  }
+
+  // Final settled position in narrow strip
+  const settledStripBox = await stripIcon.boundingBox();
+  expect(settledStripBox).not.toBeNull();
+  expect(settledStripBox.y).toBeLessThan(initialFirstBox.y - 30);
+  // x converged to narrow strip center (center ~ 24.3 visual px)
+  const stripCenterX = settledStripBox.x + settledStripBox.width / 2;
+  expect(Math.abs(stripCenterX - 27 * 0.9)).toBeLessThanOrEqual(1.5);
+
+  // --- Expand ---
+  const expandSamples = [];
+  const startExpand = Date.now();
+  const clickExpandPromise = page.click('.side-toggle-left');
+
+  while (Date.now() - startExpand < 280) {
+    const s = await page.evaluate(() => {
+      const sp = document.querySelector('[data-testid="next-strip-projects"]');
+      const spI = sp ? sp.querySelector('.sb-ic') : null;
+      const wsI = document.querySelector('[data-testid="next-ws-toggle"] .sb-ic');
+      if (!sp || !spI || getComputedStyle(sp).display === 'none') return null;
+      const r = spI.getBoundingClientRect();
+      const wsVis = wsI ? getComputedStyle(wsI).visibility : null;
+      return { x: r.left, y: r.top, wsVis };
+    });
+    if (s) expandSamples.push(s);
+    await page.waitForTimeout(15);
+  }
+  await clickExpandPromise;
+  await page.waitForTimeout(100);
+
+  expect(expandSamples.length).toBeGreaterThanOrEqual(3);
+  // y is monotonically increasing towards first folder position
+  for (let i = 1; i < expandSamples.length; i++) {
+    expect(expandSamples[i].y).toBeGreaterThanOrEqual(expandSamples[i - 1].y - 0.5);
+    expect(expandSamples[i].wsVis).toBe('hidden');
+  }
+
+  // After expand settled:
+  // 1. strip-projects is hidden
+  await expect(stripProjects).toBeHidden();
+  // 2. Real first folder icon is visible at original location
+  await expect(firstWsIcon).toBeVisible();
+  const finalWsBox = await firstWsIcon.boundingBox();
+  expect(Math.abs(finalWsBox.x - initialFirstBox.x)).toBeLessThanOrEqual(1);
+  expect(Math.abs(finalWsBox.y - initialFirstBox.y)).toBeLessThanOrEqual(1);
+  // Only one folder icon at that position (no ghosting)
+  const folderIconsCount = await page.evaluate(() => {
+    const wsI = document.querySelector('[data-testid="next-ws-toggle"] .sb-ic');
+    const spI = document.querySelector('[data-testid="next-strip-projects"] .sb-ic');
+    return {
+      wsVis: wsI ? getComputedStyle(wsI).visibility : null,
+      spDisplay: spI ? getComputedStyle(spI.parentElement).display : null,
+    };
+  });
+  expect(folderIconsCount.wsVis).toBe('visible');
+  expect(folderIconsCount.spDisplay).toBe('none');
+
+  expectClean(state);
+});
+
+test('rapid double-clicking toggle button reverses smoothly without residual styles', async ({ page }) => {
+  const state = await openProto(page);
+
+  const leftBtn = page.locator('.side-toggle-left');
+  await expect(leftBtn).toBeVisible();
+
+  // Rapid double click: collapse then expand within 50ms
+  await leftBtn.click();
+  await page.waitForTimeout(50);
+  await leftBtn.click();
+  await page.waitForTimeout(350);
+
+  // Assert no residual style on strip-projects and clean DOM state
+  const cleanState = await page.evaluate(() => {
+    const sp = document.querySelector('[data-testid="next-strip-projects"]');
+    const wsI = document.querySelector('[data-testid="next-ws-toggle"] .sb-ic');
+    const hasHideClass = !!document.querySelector('.sb-hide-first-folder');
+    return {
+      spTransform: sp ? sp.style.transform : null,
+      spDisplay: sp ? getComputedStyle(sp).display : null,
+      wsVis: wsI ? getComputedStyle(wsI).visibility : null,
+      hasHideClass,
+      hasIsSliding: sp ? sp.classList.contains('is-sliding') : false,
+    };
+  });
+  expect(cleanState.spTransform).toBe('');
+  expect(cleanState.spDisplay).toBe('none');
+  expect(cleanState.wsVis).toBe('visible');
+  expect(cleanState.hasHideClass).toBe(false);
+  expect(cleanState.hasIsSliding).toBe(false);
+
+  expectClean(state);
+});
+
+test('sidebar collapse and expand without projects does not throw error', async ({ page }) => {
+  const state = await openProto(page);
+
+  // Clear workspace list to simulate 0 projects
+  await page.evaluate(() => {
+    const tree = document.querySelector('.sb-tree-root');
+    if (tree) tree.innerHTML = '';
+  });
+
+  const leftBtn = page.locator('.side-toggle-left');
+  await leftBtn.click();
+  await page.waitForTimeout(300);
+
+  const sidebar = page.getByTestId('next-sidebar');
+  const sbBox = await sidebar.boundingBox();
+  expect(Math.abs(sbBox.width - 54 * 0.9)).toBeLessThanOrEqual(1.5);
+
+  // Expand back
+  await leftBtn.click();
+  await page.waitForTimeout(300);
+  const openBox = await sidebar.boundingBox();
+  expect(openBox.width).toBeGreaterThan(150);
+
   expectClean(state);
 });

@@ -190,6 +190,7 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.6; backgroun
   min-width: var(--panel-w);
   flex: 0 0 auto;
   background: inherit;
+  position: relative;
 }
 .next-shell.right-closed .col-right > .col-panel-inner { transform: translateX(100%); }
 
@@ -310,9 +311,23 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.6; backgroun
 }
 .sb-strip-projects {
   display: none;
+  position: absolute;
+  top: 124px;
+  left: 8px;
+  right: 8px;
+  height: 32px;
+  z-index: 10;
+  box-sizing: border-box;
 }
-.next-shell.left-closed .sb-strip-projects {
+.next-shell.left-closed .sb-strip-projects,
+.sb-strip-projects.is-sliding {
   display: flex;
+}
+.sb-strip-projects .sb-row-text {
+  display: none !important;
+}
+.sb-hide-first-folder .sb-tree-root > .sb-group:first-child [data-testid="next-ws-toggle"] .sb-ic {
+  visibility: hidden !important;
 }
 .sb-ic, .ic { width: 16px; height: 16px; flex-shrink: 0; color: var(--mute); display: flex; align-items: center; justify-content: center; }
 .sb-ic svg, .ic svg { width: 16px; height: 16px; display: block; }

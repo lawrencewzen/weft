@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type MouseEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
 import { ApiError } from '../data/api';
 import { copyText } from '../data/copyText';
 import type { Lang } from '../data/lang';
@@ -20,6 +20,7 @@ import { isMac, type SearchItem } from '../data/sidebarSearchModel';
 import { readLastOpenedMap, writeLastOpened } from '../data/sidebarUnread';
 import type { ConversationSummary, Workspace } from '../data/store';
 import { useLeftPanel } from '../data/leftPanelContext';
+import { useStripProjectsFlip } from '../data/stripProjectsMotion';
 import { useRightActions, useRightLayout } from '../data/rightPaneContext';
 import { useWorkspaces } from '../data/useWorkspaces';
 import { t } from '../i18n';
@@ -76,7 +77,9 @@ export function Sidebar({
   const { status } = useSession();
   const { tab, setTab } = useRightLayout();
   const { showFiles, openInTerminal } = useRightActions();
-  const { setLeftOpen } = useLeftPanel();
+  const { leftOpen, setLeftOpen } = useLeftPanel();
+  const sidebarRef = useRef<HTMLElement | null>(null);
+  const stripBtnRef = useRef<HTMLButtonElement | null>(null);
   const [openMap, setOpenMap] = useState<OpenRecord>(() => readWorkspaceOpen());
   const [archivedOpen, setArchivedOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -84,6 +87,13 @@ export function Sidebar({
   const [dark, setDark] = useState(() => effectiveAppearance() === 'dark');
   const [lastOpenedMap, setLastOpenedMap] = useState<Record<string, number>>(() => readLastOpenedMap());
   const serviceOk = status === 'connected';
+
+  useStripProjectsFlip({
+    leftOpen,
+    stripBtnRef,
+    sidebarRef,
+    hasProjects: groups.length > 0,
+  });
 
   useEffect(() => subscribePrefs(() => setDark(effectiveAppearance() === 'dark')), []);
 
@@ -247,6 +257,7 @@ export function Sidebar({
 
   return (
     <aside
+      ref={sidebarRef}
       className="col-left sb"
       data-testid="next-sidebar"
     >
@@ -285,6 +296,7 @@ export function Sidebar({
         </button>
 
         <button
+          ref={stripBtnRef}
           type="button"
           className="sb-row row sb-top-row sb-strip-projects"
           data-testid="next-strip-projects"
