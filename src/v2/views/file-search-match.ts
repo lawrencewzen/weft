@@ -157,10 +157,9 @@ export function scorePath(filePath: string, query: string): number | null {
   return alignScore(foldedPath, foldedQuery, 'path', fileStart);
 }
 
-export function rankFileMatches(paths: readonly string[], query: string, limit?: unknown): FileMatch[] {
+export function rankAllFileMatches(paths: readonly string[], query: string): FileMatch[] {
   const q = typeof query === 'string' ? query : '';
   if (q === '') return [];
-  const cap = parseFileSearchLimit(limit);
   const hits: FileMatch[] = [];
   for (const filePath of paths) {
     if (typeof filePath !== 'string' || filePath === '') continue;
@@ -175,5 +174,11 @@ export function rankFileMatches(paths: readonly string[], query: string, limit?:
     if (a.path > b.path) return 1;
     return 0;
   });
+  return hits;
+}
+
+export function rankFileMatches(paths: readonly string[], query: string, limit?: unknown): FileMatch[] {
+  const hits = rankAllFileMatches(paths, query);
+  const cap = parseFileSearchLimit(limit);
   return hits.length <= cap ? hits : hits.slice(0, cap);
 }

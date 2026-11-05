@@ -1,9 +1,9 @@
-/** Workspace file search view. Listing is cached in the core module; ranking is pure. */
+/** Workspace file search view. The file list is cached; only ranked hits are stat'ed, until `limit`. */
 
-import { listWorkspaceFiles } from '../../core/workspace-file-search.mjs';
+import { isListedWorkspaceFile, listWorkspaceFiles } from '../../core/workspace-file-search.mjs';
 import type { components } from '../contract.gen.ts';
 import { posixPath } from './changes.ts';
-import { rankFileMatches } from './file-search-match.ts';
+import { parseFileSearchLimit, rankAllFileMatches } from './file-search-match.ts';
 
 export type FileSearchResult = components['schemas']['FileSearchResult'];
 
@@ -31,11 +31,13 @@ export async function searchWorkspaceFiles(
   const q = typeof query === 'string' ? query : '';
   if (q === '') return { entries: [], truncated: false };
   const listed = await listWorkspaceFiles(root, opts) as FileList;
-  return {
-    entries: rankFileMatches(listed.files, q, opts.limit).map((entry) => ({
-      path: posixPath(entry.path),
-      score: entry.score,
-    })),
-    truncated: Boolean(listed.truncated),
-  };
+  const cap = parseFileSearchLimit(opts.limit);
+  const ranked = rankAllFileMatches(listed.files, q);
+  const entries: FileSearchResult['entries'] = [];
+  for (const hit of ranked) {
+    if (entries.length >= cap) break;
+    if (!(await isListedWorkspaceFile(root, hit.path))) continue;
+    entries.push({ path: posixPath(hit.path), score: hit.score });
+  }
+  return { entries, truncated: Boolean(listed.truncated) };
 }

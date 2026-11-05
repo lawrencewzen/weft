@@ -289,26 +289,32 @@ test('git list drops paths outside the workspace and honors the file cap', async
   assert.deepEqual(found.entries.map((entry) => entry.path), ['ok.txt']);
   await assertInside(root, found.entries);
 
-  for (const name of ['a.txt', 'b.txt', 'c.txt', 'd.txt', 'e.txt']) {
-    await writeFile(path.join(root, name), 'x');
-  }
   await writeFile(path.join(root, 'z-only-walk.txt'), 'z');
-  const bin = path.join(root, '0-git.mjs');
-  await writeFile(bin, [
-    '#!/usr/bin/env node',
-    "import { writeSync } from 'node:fs';",
-    "const names = ['a.txt', 'b.txt', 'c.txt', 'd.txt', 'e.txt'];",
-    'writeSync(1, names.join(String.fromCharCode(0)) + String.fromCharCode(0));',
-    '',
-  ].join('\n'));
-  await chmod(bin, 0o755);
   const capped = await listWorkspaceFiles(root, {
     state: state(),
     maxFiles: 2,
-    env: { ...process.env, WEFT_GIT_BIN: bin },
+    runGit: async () => ({
+      ok: true,
+      files: ['e.txt', 'd.txt', 'c.txt', 'b.txt', 'a.txt', 'z-only-walk.txt'],
+      truncated: false,
+    }),
   });
   assert.equal(capped.truncated, true);
-  assert.deepEqual(capped.files, ['a.txt', 'b.txt']);
+  assert.deepEqual(capped.files, ['e.txt', 'd.txt']);
+
+  await symlink(path.join(parent, 'secret.txt'), path.join(root, 'escape.txt'));
+  await writeFile(path.join(root, 'keep-me.txt'), 'k');
+  const skipped = await searchWorkspaceFiles(root, 'txt', {
+    state: state(),
+    limit: 1,
+    runGit: async () => ({
+      ok: true,
+      files: ['escape.txt', 'keep-me.txt', 'ghost.txt'],
+      truncated: false,
+    }),
+  });
+  assert.deepEqual(skipped.entries.map((entry) => entry.path), ['keep-me.txt']);
+  await assertInside(root, skipped.entries);
 });
 
 test('git repo hides gitignored files, shows untracked files, and stays inside a subdirectory', async () => {

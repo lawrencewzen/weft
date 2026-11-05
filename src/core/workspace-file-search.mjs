@@ -4,7 +4,10 @@
  * set to the workspace, so a subdirectory workspace stays relative to itself.
  * Otherwise (not a repo, git missing, timeout, or any failure) walk the
  * directory, skipping `.git` and `node_modules`. Symlinks are not followed.
- * Every returned path has passed resolveInWorkspace and is a file.
+ * The cached list only normalizes and dedupes paths. Search checks
+ * resolveInWorkspace and lstat on ranked hits until it fills `limit`, so a
+ * cache refresh does not stat every file. Paths outside the workspace and
+ * symlinks that point outside are dropped at that check.
  * The list is cached per workspace root for about two seconds. Expiry is a
  * timestamp check; nothing is scheduled.
  */
@@ -20,7 +23,6 @@ export const FILE_SEARCH_MAX_FILES = 200_000;
 export const FILE_SEARCH_GIT_TIMEOUT_MS = 5_000;
 
 const SKIP_DIRS = new Set(['.git', 'node_modules']);
-const FILTER_CONCURRENCY = 32;
 
 const DROP_GIT_VARS = [
   'GIT_DIR',
@@ -152,9 +154,12 @@ function gitLsFiles(root, opts) {
   });
 }
 
-async function isWorkspaceFile(root, rel) {
+/** True when `rel` is a real file inside `root`. Symlinks are followed by resolveInWorkspace. */
+export async function isListedWorkspaceFile(root, rel) {
+  const normalized = normalizeWorkspaceRel(rel);
+  if (!normalized) return false;
   try {
-    const abs = await resolveInWorkspace(root, rel);
+    const abs = await resolveInWorkspace(root, normalized);
     const st = await fs.lstat(abs);
     return st.isFile();
   } catch {
@@ -162,33 +167,12 @@ async function isWorkspaceFile(root, rel) {
   }
 }
 
-async function mapPool(items, fn) {
-  const out = new Array(items.length);
-  let cursor = 0;
-  const workers = Math.min(FILTER_CONCURRENCY, items.length);
-  async function worker() {
-    for (;;) {
-      const i = cursor;
-      cursor += 1;
-      if (i >= items.length) return;
-      out[i] = await fn(items[i]);
-    }
-  }
-  if (workers > 0) await Promise.all(Array.from({ length: workers }, () => worker()));
-  return out;
-}
-
-async function filterListed(root, raws, maxFiles) {
-  const checked = await mapPool(raws, async (raw) => {
-    const rel = normalizeWorkspaceRel(raw);
-    if (!rel) return null;
-    if (!(await isWorkspaceFile(root, rel))) return null;
-    return rel;
-  });
+function normalizeListed(raws, maxFiles) {
   const files = [];
   const seen = new Set();
   let truncated = false;
-  for (const rel of checked) {
+  for (const raw of raws) {
+    const rel = normalizeWorkspaceRel(raw);
     if (!rel || seen.has(rel)) continue;
     if (files.length >= maxFiles) {
       truncated = true;
@@ -205,6 +189,16 @@ async function walkFiles(rootReal, maxFiles) {
   let truncated = false;
   const seenDirs = new Set([rootReal]);
 
+  function pushFile(childRel) {
+    const relPath = normalizeWorkspaceRel(childRel);
+    if (!relPath) return;
+    if (files.length >= maxFiles) {
+      truncated = true;
+      return;
+    }
+    files.push(relPath);
+  }
+
   async function walk(dirReal, rel) {
     if (truncated) return;
     let dirents;
@@ -218,30 +212,24 @@ async function walkFiles(rootReal, maxFiles) {
       if (truncated) return;
       if (SKIP_DIRS.has(ent.name)) continue;
       const childRel = rel ? `${rel}/${ent.name}` : ent.name;
-      let resolved;
-      try {
-        resolved = await resolveInWorkspace(rootReal, childRel);
-      } catch {
+      if (ent.isSymbolicLink()) {
+        pushFile(childRel);
         continue;
       }
-      let st;
-      try {
-        st = await fs.lstat(resolved);
-      } catch {
-        continue;
-      }
-      if (st.isDirectory()) {
-        if (ent.isSymbolicLink() || seenDirs.has(resolved)) continue;
+      if (ent.isDirectory()) {
+        let resolved;
+        try {
+          resolved = await resolveInWorkspace(rootReal, childRel);
+        } catch {
+          continue;
+        }
+        if (seenDirs.has(resolved)) continue;
         seenDirs.add(resolved);
         await walk(resolved, childRel);
         continue;
       }
-      if (!st.isFile()) continue;
-      if (files.length >= maxFiles) {
-        truncated = true;
-        return;
-      }
-      files.push(childRel);
+      if (!ent.isFile()) continue;
+      pushFile(childRel);
     }
   }
 
@@ -261,7 +249,7 @@ async function loadFileList(rootReal, opts) {
     git = { ok: false };
   }
   if (git && git.ok) {
-    const filtered = await filterListed(rootReal, git.files || [], maxFiles);
+    const filtered = normalizeListed(git.files || [], maxFiles);
     return {
       files: filtered.files,
       truncated: Boolean(git.truncated) || filtered.truncated,
