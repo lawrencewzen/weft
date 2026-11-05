@@ -36,6 +36,15 @@ export type Skill = components['schemas']['Skill'];
 export type SkillList = components['schemas']['SkillList'];
 export type ResolvedModel = components['schemas']['ResolvedModel'];
 
+export type AskOption = components['schemas']['AskOption'];
+export type AskQuestion = components['schemas']['AskQuestion'];
+export type AskSelection = components['schemas']['AskSelection'];
+export type AskAnswerState = components['schemas']['AskAnswerState'];
+export type AskCall = components['schemas']['AskCall'];
+export type AskAnswerRequest = components['schemas']['AskAnswerRequest'];
+export type ThreadItem = components['schemas']['ThreadItem'];
+export type ToolCall = components['schemas']['ToolCall'];
+
 import type {
   Available,
   ConnectApiKeyRequest,
@@ -262,19 +271,22 @@ export function sendMessage(
   mode?: SendMode,
   files?: components['schemas']['SendMessageFile'][],
   pastes?: string[],
+  answer?: components['schemas']['AskAnswerRequest'],
 ): Promise<RunAccepted> {
   const id = requestId ?? randomId();
   const body: {
-    text: string;
+    text?: string;
     requestId: string;
     images?: components['schemas']['MessageImage'][];
     mode?: SendMode;
     files?: components['schemas']['SendMessageFile'][];
     pastes?: string[];
+    answer?: components['schemas']['AskAnswerRequest'];
   } = {
-    text,
+    ...(text || !answer ? { text } : {}),
     requestId: id,
   };
+  if (answer) body.answer = answer;
   if (images?.length) body.images = images;
   if (mode === 'steer' || mode === 'queue') body.mode = mode;
   if (files?.length) body.files = files;
@@ -283,6 +295,14 @@ export function sendMessage(
     method: 'POST',
     body: JSON.stringify(body),
   });
+}
+
+export function sendAnswer(
+  cid: string,
+  answer: components['schemas']['AskAnswerRequest'],
+  requestId?: string,
+): Promise<RunAccepted> {
+  return sendMessage(cid, '', requestId, undefined, undefined, undefined, undefined, answer);
 }
 
 export function uploadWorkspaceFile(

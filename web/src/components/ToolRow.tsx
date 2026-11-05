@@ -61,6 +61,15 @@ function KindIcon({ kind }: { kind: ToolCall['kind'] }) {
       </svg>
     );
   }
+  if (kind === 'ask') {
+    return (
+      <svg className="tool-kind-icon icon" viewBox="0 0 24 24" aria-hidden="true">
+        <circle cx="12" cy="12" r="10" />
+        <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+        <line x1="12" y1="17" x2="12.01" y2="17" />
+      </svg>
+    );
+  }
   return (
     <svg className="tool-kind-icon icon" viewBox="0 0 24 24" aria-hidden="true">
       <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
@@ -76,6 +85,104 @@ export function ToolRow({ tool, lang, onLoadOutput }: Props) {
   const [toggled, setToggled] = useState<boolean | null>(null);
   const [fullText, setFullText] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  if (tool.kind === 'ask' && tool.ask) {
+    const ask = tool.ask;
+    const isWaiting = ask.answer === null;
+    const isSkipped = Boolean(ask.answer?.skipped);
+    const isAnswered = !isWaiting && !isSkipped;
+
+    const statusClass = isWaiting ? 'is-waiting' : isSkipped ? 'is-skipped' : 'is-answered';
+    const statusText = isWaiting
+      ? t(lang, 'ask_status_waiting')
+      : isSkipped
+        ? t(lang, 'ask_status_skipped')
+        : t(lang, 'ask_status_answered');
+
+    const delimiter = lang === 'zh' ? '、' : ', ';
+
+    return (
+      <div className="tool-row-wrapper tool-row-ask-wrapper">
+        <div
+          className={`ask-card ${statusClass}`}
+          data-testid="next-tool-row"
+          data-tool="ask"
+          data-tool-id={tool.id}
+        >
+          <div className="ask-card-header">
+            {isAnswered ? (
+              <svg className="ask-card-status-icon icon is-answered" viewBox="0 0 24 24" aria-hidden="true">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+            ) : isWaiting ? (
+              <svg className="ask-card-status-icon icon is-waiting" viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="12" cy="12" r="10" />
+                <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+                <line x1="12" y1="17" x2="12.01" y2="17" />
+              </svg>
+            ) : (
+              <svg className="ask-card-status-icon icon is-skipped" viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="12" cy="12" r="10" />
+                <line x1="4.93" y1="4.93" x2="19.07" y2="19.07" />
+              </svg>
+            )}
+            <span className="ask-card-status-text" data-testid="next-tool-row-status">
+              {statusText}
+            </span>
+          </div>
+
+          <div className="ask-card-body">
+            {ask.questions.map((q, idx) => {
+              if (isSkipped || isWaiting) {
+                return (
+                  <div key={idx} className="ask-card-item" data-testid="next-tool-row-ask-item">
+                    <div className="ask-card-question" data-testid="next-tool-row-question">{q.question}</div>
+                  </div>
+                );
+              }
+
+              // Answered state
+              const ans = ask.answer?.answers.find((a) => a.questionIndex === idx);
+              const hasSelected = Boolean(ans && ans.selected && ans.selected.length > 0);
+              const hasOther = Boolean(ans && ans.other && ans.other.trim().length > 0);
+              const isItemAnswered = hasSelected || hasOther;
+
+              let answerDisplay = '';
+              if (isItemAnswered && ans) {
+                const parts: string[] = [...(ans.selected || [])];
+                if (hasOther) {
+                  parts.push(ans.other!.trim());
+                }
+                answerDisplay = parts.join(delimiter);
+              }
+
+              return (
+                <div key={idx} className="ask-card-item" data-testid="next-tool-row-ask-item">
+                  <div className="ask-card-question" data-testid="next-tool-row-question">{q.question}</div>
+                  {isItemAnswered ? (
+                    <div
+                      className="ask-card-answer"
+                      data-testid="next-tool-row-hint"
+                    >
+                      {answerDisplay}
+                    </div>
+                  ) : (
+                    <div
+                      className="ask-card-answer is-skipped"
+                      data-testid="next-tool-row-hint"
+                    >
+                      {t(lang, 'ask_status_skipped')}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const open = toggled ?? (realFail && !changeKind);
 
   const showDiff = Boolean(tool.diff && (tool.diff.added != null || tool.diff.removed != null));
