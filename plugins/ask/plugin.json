@@ -8,7 +8,7 @@
   "tools": [
     {
       "name": "ask_user_question",
-      "description": "向用户提 1 到 4 道选择题并结束本轮。Ask 1-4 multiple-choice questions, then end this turn. Pass { questions: [{ question, header (≤12 characters), multiSelect, options: [{ label, description }] }] }. Each question needs 2-4 options. The UI adds an Other free-text choice; do not add an Other option yourself. Returns immediately and ends the turn. Do not continue or poll.",
+      "description": "向用户提 1 到 4 道选择题并结束本轮。Ask 1-4 multiple-choice questions, then end this turn. Pass { questions: [{ question, header (≤12 characters), multiSelect, options: [{ label, description }] }] }. Each question needs 2-4 options. The UI adds an Other free-text choice; do not add an Other option yourself. Returns immediately and ends the turn. Do not continue or poll. 单独调用这个工具，不要在同一批里调用其他工具（同批有其他工具时本轮不会结束）。 Call this tool alone; do not call other tools in the same batch, or this turn will not end.",
       "parameters": {
         "type": "object",
         "properties": {

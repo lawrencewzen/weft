@@ -2,6 +2,9 @@
 // The answer is the next user input, placed as a weft.ask-answer entry.
 // Nothing here waits, polls, or schedules.
 
+import { isAutoContinueText } from './continuation.mjs';
+import { isSubagentReportText } from './subagent-report.mjs';
+
 export const ASK_TOOL_NAME = 'ask_user_question';
 /** Custom input entry. Must not start with `pi.`. */
 export const ASK_ANSWER_KIND = 'weft.ask-answer';
@@ -228,18 +231,38 @@ function answerData(entry) {
   };
 }
 
+function messageText(content) {
+  if (typeof content === 'string') return content;
+  if (!Array.isArray(content)) return '';
+  return content.map((block) => {
+    if (typeof block === 'string') return block;
+    if (block && typeof block.text === 'string' && block.type !== 'toolCall') return block.text;
+    return '';
+  }).join('');
+}
+
+/** A pi.user the person actually sent. Subagent reports and auto-continue do not count. */
+function isOrdinaryUserEntry(entry) {
+  if (entry?.kind !== 'pi.user') return false;
+  const text = messageText(entry.model?.[0]?.content);
+  if (isAutoContinueText(text)) return false;
+  if (isSubagentReportText(text)) return false;
+  return true;
+}
+
 /**
  * Structured ask state for each ask_user_question call in a transcript.
  * `answer` is null while the user has not sent anything after the question.
- * A later ordinary user message (pi.user), with no weft.ask-answer for this
- * call, is `{ answers: [], skipped: true }`.
+ * A later ordinary user message, with no weft.ask-answer for this call, is
+ * `{ answers: [], skipped: true }`. Subagent reports and auto-continue are
+ * pi.user too, and do not skip the question.
  */
 export function askByToolCall(entries) {
   const rows = new Map();
   const answers = new Map();
   const userAt = [];
   (Array.isArray(entries) ? entries : []).forEach((entry, index) => {
-    if (entry?.kind === 'pi.user') userAt.push(index);
+    if (isOrdinaryUserEntry(entry)) userAt.push(index);
     const stored = answerData(entry);
     if (stored) answers.set(stored.toolCallId, stored.answer);
     if (entry?.kind === 'pi.assistant') {
@@ -285,7 +308,8 @@ export function askByToolCall(entries) {
 
 /**
  * Resolve one answer submission against the transcript.
- * A second answer for the same toolCallId is 409. An unknown call is 400.
+ * A second answer, or an answer after an ordinary user message already skipped
+ * the question, is 409. The skip rule matches askByToolCall. An unknown call is 400.
  */
 export function buildAskSubmission(entries, body) {
   const raw = asObject(body);
@@ -319,7 +343,8 @@ export function buildAskSubmission(entries, body) {
   }
   if (!found) return httpFail(400, 'toolCallId is not a question in this conversation', 'E_BAD_REQUEST');
   if (failed || !questions) return httpFail(400, 'question is not ready', 'E_BAD_REQUEST');
-  if (answered) return httpFail(409, 'already answered', 'E_ASK_ANSWERED');
+  const settled = askByToolCall(entries).get(toolCallId);
+  if (answered || settled?.answer) return httpFail(409, 'already answered', 'E_ASK_ANSWERED');
   const checked = validateAskAnswer(questions, body);
   if (!checked.ok) return checked;
   const answer = { answers: checked.answers, skipped: checked.skipped };

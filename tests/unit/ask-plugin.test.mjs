@@ -1,10 +1,12 @@
 import { readFileSync } from 'node:fs';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import http from 'node:http';
 import { DatabaseSync } from 'node:sqlite';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { parseSSE } from '../../src/core/sse.mjs';
 import { createRegistry } from '@earendil-works/pi-durable';
 import {
   ASK_ANSWER_KIND,
@@ -17,6 +19,8 @@ import {
 import { messagesFromEntries } from '../../src/kernel/events.mjs';
 import { harnessSqlitePath } from '../../src/kernel/migrate-weft-ids.mjs';
 import { createPluginHost, mapPluginResult } from '../../src/kernel/plugins.mjs';
+import { CONTINUE_TEXT } from '../../src/kernel/continuation-text.mjs';
+import { formatSubagentReport } from '../../src/kernel/subagent-report.mjs';
 import { CHILD_HIDDEN_TOOLS } from '../../src/kernel/subagents.mjs';
 import { ask_user_question } from '../../plugins/ask/index.mjs';
 import { compileSchema, validateResponse } from '../../src/v2/validate.ts';
@@ -200,9 +204,11 @@ test('ask_user_question checks question count, option count, and header length',
 
   const manifest = JSON.parse(readFileSync(path.join(ROOT, 'plugins/ask/plugin.json'), 'utf8'));
   const description = manifest.tools[0].description;
-  assert.ok(description.length <= 500);
+  assert.ok(description.length <= 500, String(description.length));
   assert.match(description, /do not add an Other/i);
   assert.match(description, /end this turn/i);
+  assert.match(description, /不要在同一批里调用其他工具/);
+  assert.match(description, /same batch/);
 });
 
 test('child agents do not keep ask_user_question', () => {
@@ -249,6 +255,13 @@ test('answer text names each question, and the view backfills or skips', () => {
 
   const ignored = viewOf(askEntries([userEntry(4, '先别问了，直接用 npm')]));
   assert.deepEqual(ignored.ask.answer, { answers: [], skipped: true });
+
+  const reported = viewOf(askEntries([
+    userEntry(4, formatSubagentReport({ name: 'scout', kind: 'answered', body: 'done the scan' })),
+  ]));
+  assert.equal(reported.ask.answer, null);
+  const continued = viewOf(askEntries([userEntry(4, CONTINUE_TEXT)]));
+  assert.equal(continued.ask.answer, null);
 
   const spec = JSON.parse(readFileSync(path.join(ROOT, 'contract/openapi.json'), 'utf8'));
   const validateToolCall = compileSchema(structuredClone(spec.components.schemas.ToolCall));
@@ -364,6 +377,113 @@ test('submitting an answer records weft.ask-answer, fills the view, and rejects 
   }
 });
 
+test('a subscribed conversation topic receives ask questions without a page refresh', { timeout: 40_000 }, async () => {
+  const dataDir = await mkdtemp(path.join(tmpdir(), 'piw-ask-live-'));
+  const scriptPath = path.join(dataDir, 'ask.json');
+  await writeFile(scriptPath, JSON.stringify({
+    turns: [
+      {
+        text: '先问一下。',
+        tool: 'ask_user_question',
+        id: 'ask-1',
+        args: { questions: [ONE] },
+      },
+      { text: 'ASK_CONTINUE_OK' },
+    ],
+  }));
+  const srv = await startServer({
+    token: TOKEN,
+    dataDir,
+    env: { WEFT_LLM: 'faux', WEFT_FAUX_SCRIPT: scriptPath, WEFT_RETRY_MAX: '2' },
+  });
+  let session = null;
+  try {
+    const discovery = await readDiscovery(dataDir);
+    const ws = await request(srv.base, 'POST', '/api/workspaces', { name: 'ask-live' }, TOKEN);
+    assert.equal(ws.status, 201, JSON.stringify(ws.body));
+    const conv = await request(srv.base, 'POST', `/api/workspaces/${ws.body.id}/conversations`, { title: 'ask-live' }, TOKEN);
+    assert.equal(conv.status, 201, JSON.stringify(conv.body));
+    session = await openTopic(srv.port, discovery.token, `conversation:${conv.body.id}`);
+    await waitTopic(session, (list) => list.some((ev) => ev.event === 'snapshot'));
+    const sent = await request(srv.base, 'POST', `/api/conversations/${conv.body.id}/messages`, { text: '请提问' }, TOKEN);
+    assert.equal(sent.status, 202, JSON.stringify(sent.body));
+    const events = await waitTopic(session, (list) => list.some((ev) => askQuestionsOf(ev)), 20000);
+    const hit = [...events].reverse().find((ev) => askQuestionsOf(ev));
+    assert.ok(hit, 'topic never upserted the question');
+    assert.equal(hit.event, 'upsert');
+    assert.equal(hit.data.entity, 'tool');
+    assert.equal(hit.data.value.kind, 'ask');
+    assert.equal(hit.data.value.ask.questions[0].question, ONE.question);
+    assert.equal(hit.data.value.ask.answer, null);
+  } finally {
+    session?.close();
+    await stopServer(srv);
+    await rm(dataDir, { recursive: true, force: true });
+  }
+});
+
+function askQuestionsOf(ev) {
+  return ev?.event === 'upsert'
+    && ev.data?.entity === 'tool'
+    && ev.data?.value?.ask?.questions?.[0]?.question === ONE.question;
+}
+
+function parseCompleteSse(buf) {
+  const parts = String(buf).split('\n\n');
+  const rest = parts.pop() || '';
+  const events = [];
+  for (const part of parts) {
+    if (!part.trim() || part.trim() === ':') continue;
+    events.push(...parseSSE(`${part}\n\n`));
+  }
+  return { events, rest };
+}
+
+function openTopic(port, token, topics) {
+  const query = new URLSearchParams({ topics });
+  return new Promise((resolve, reject) => {
+    let buf = '';
+    const events = [];
+    const req = http.request({
+      host: '127.0.0.1',
+      port,
+      method: 'GET',
+      path: `/api/v2/events?${query.toString()}`,
+      headers: {
+        authorization: `Bearer ${token}`,
+        accept: 'text/event-stream',
+      },
+    }, (res) => {
+      if (res.statusCode !== 200) {
+        reject(new Error(`events ${res.statusCode}`));
+        res.resume();
+        return;
+      }
+      res.on('data', (chunk) => {
+        buf += chunk.toString('utf8');
+        const parsed = parseCompleteSse(buf);
+        buf = parsed.rest;
+        events.push(...parsed.events);
+      });
+      resolve({
+        events,
+        close() { req.destroy(); },
+      });
+    });
+    req.on('error', reject);
+    req.end();
+  });
+}
+
+async function waitTopic(session, ready, timeoutMs = 10000) {
+  const started = Date.now();
+  while (Date.now() - started < timeoutMs) {
+    if (ready(session.events)) return session.events;
+    await new Promise((resolve) => setTimeout(resolve, 40));
+  }
+  throw new Error(`topic did not match: ${JSON.stringify(session.events.map((ev) => ev.event))}`);
+}
+
 function entryKinds(dataDir) {
   const db = new DatabaseSync(harnessSqlitePath(dataDir), { readOnly: true, timeout: 5000 });
   try {
@@ -415,4 +535,18 @@ test('buildAskSubmission rejects a second answer for the same tool call', () => 
   assert.equal(again.code, 'E_ASK_ANSWERED');
   const unknown = buildAskSubmission(askEntries(), { toolCallId: 'nope', answers: [] });
   assert.equal(unknown.status, 400);
+  const skipped = buildAskSubmission(askEntries([userEntry(4, '先用 npm')]), {
+    toolCallId: 'ask-1',
+    answers: [{ questionIndex: 0, selected: ['pnpm'] }],
+  });
+  assert.equal(skipped.ok, false);
+  assert.equal(skipped.status, 409);
+  assert.equal(skipped.code, 'E_ASK_ANSWERED');
+  const afterReport = buildAskSubmission(askEntries([
+    userEntry(4, formatSubagentReport({ name: 'scout', kind: 'answered', body: 'done the scan' })),
+  ]), {
+    toolCallId: 'ask-1',
+    answers: [{ questionIndex: 0, selected: ['pnpm'] }],
+  });
+  assert.equal(afterReport.ok, true);
 });

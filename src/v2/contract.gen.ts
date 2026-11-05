@@ -865,10 +865,11 @@ export interface paths {
          *     只有图片、文件或粘贴没有文字也可以发送。`files` 的 path 必须是该工作区 `.weft/uploads/` 下已存在的文件。
          *     `answer` 是对一次 `ask_user_question` 的回答。有 `answer` 时 `text` 可省略或为空，且不能同时带
          *     `images` / `files` / `pastes`。服务端校验 `toolCallId` 属于本对话、对应一次已完成且未失败的提问、
-         *     且还没有 `weft.ask-answer` 条目；通过后生成给模型看的 content（每题的问题，以及所选 label、
+         *     且还没有 `weft.ask-answer` 条目、也还没被普通用户消息跳过；通过后生成给模型看的 content（每题的问题，以及所选 label、
          *     「其他：…」或「用户跳过」），并以
          *     `submit({ type: 'input', content, entry: { kind: 'weft.ask-answer', data } })` 提交
-         *     （kind 不以 `pi.` 开头）。同一 `toolCallId` 再次回答返回 409 `E_ASK_ANSWERED`。
+         *     （kind 不以 `pi.` 开头）。同一 `toolCallId` 再次回答，或提问已因普通用户消息记为 skipped，返回 409 `E_ASK_ANSWERED`。
+         *     子 Agent 汇报和自动续写虽是 pi.user，不算跳过。
          *     `requestId` 缺省时服务端生成；同一个 requestId 重复请求返回同一个 runId。
          */
         post: operations["postConversationMessage"];
@@ -1330,13 +1331,15 @@ export interface components {
             questions: components["schemas"]["AskQuestion"][];
             /**
              * @description null 表示还在等用户。有 weft.ask-answer 时按其 data 回填。
-             *     用户没答就发了普通消息时为 { answers: [], skipped: true }。
+             *     用户没答就发了普通消息时为 { answers: [], skipped: true }，此后再提交 answer 为 409。
+             *     子 Agent 汇报和自动续写不算这种普通消息。
              */
             answer: null | components["schemas"]["AskAnswerState"];
         };
         /**
          * @description 提交对一次提问的回答。服务端校验 toolCallId 属于本对话且尚未回答。
-         *     重复回答同一 toolCallId 返回 409 E_ASK_ANSWERED。
+         *     重复回答同一 toolCallId，或该提问已因普通用户消息记为 skipped，返回 409 E_ASK_ANSWERED。
+         *     子 Agent 汇报和自动续写不算跳过，仍可回答。
          */
         AskAnswerRequest: {
             /** @description 本对话里一次 ask_user_question 的工具调用 id */
@@ -1386,10 +1389,11 @@ export interface components {
             /**
              * @description 仅 ask_user_question，且参数通过插件校验时出现。kind 为 ask。
              *     questions 来自工具结果 details（插件校验后的题目）。
-             *     answer 为 null：这条提问之后还没有任何用户消息，界面继续等回答。
+             *     answer 为 null：这条提问之后还没有真正的用户消息，界面继续等回答。
+             *     子 Agent 汇报（`[subagent …]`）和自动续写（`[auto-continue]`）虽是 pi.user，不算用户作答，answer 保持 null。
              *     之后若有 kind 为 weft.ask-answer 的条目（不以 pi. 开头），按其 data 回填 answer。
-             *     用户没答就发了普通消息（之后出现 pi.user，且没有这条 toolCallId 的 weft.ask-answer）时，
-             *     answer 为 { answers: [], skipped: true }。
+             *     用户没答就发了普通消息（之后出现普通 pi.user，且没有这条 toolCallId 的 weft.ask-answer）时，
+             *     answer 为 { answers: [], skipped: true }。这时再提交 answer 返回 409 E_ASK_ANSWERED。
              */
             ask?: components["schemas"]["AskCall"];
         };
@@ -5367,7 +5371,7 @@ export interface operations {
                     "application/json": components["schemas"]["V2Error"];
                 };
             };
-            /** @description 对话没有工作区（E_NO_WORKSPACE），或这条提问已经回答过（E_ASK_ANSWERED）。 */
+            /** @description 对话没有工作区（E_NO_WORKSPACE），或这条提问已经回答过、或已因普通用户消息记为跳过（E_ASK_ANSWERED）。 */
             409: {
                 headers: {
                     [name: string]: unknown;

@@ -4159,7 +4159,7 @@
       "post": {
         "operationId": "postConversationMessage",
         "summary": "向对话发消息",
-        "description": "空闲时发出去就是新一轮。运行中再发：默认 `mode: steer` 插话（Pi Durable `whenBusy: steer`，\n当前工具批次结束后写入对话）；`mode: queue` 排队（`whenBusy: followUp`，本轮结束后才作为新消息执行）。\n`text` 去掉首尾空白后，若没有 `images`、`files`、`pastes`、`answer` 则不能为空。\n只有图片、文件或粘贴没有文字也可以发送。`files` 的 path 必须是该工作区 `.weft/uploads/` 下已存在的文件。\n`answer` 是对一次 `ask_user_question` 的回答。有 `answer` 时 `text` 可省略或为空，且不能同时带\n`images` / `files` / `pastes`。服务端校验 `toolCallId` 属于本对话、对应一次已完成且未失败的提问、\n且还没有 `weft.ask-answer` 条目；通过后生成给模型看的 content（每题的问题，以及所选 label、\n「其他：…」或「用户跳过」），并以\n`submit({ type: 'input', content, entry: { kind: 'weft.ask-answer', data } })` 提交\n（kind 不以 `pi.` 开头）。同一 `toolCallId` 再次回答返回 409 `E_ASK_ANSWERED`。\n`requestId` 缺省时服务端生成；同一个 requestId 重复请求返回同一个 runId。\n",
+        "description": "空闲时发出去就是新一轮。运行中再发：默认 `mode: steer` 插话（Pi Durable `whenBusy: steer`，\n当前工具批次结束后写入对话）；`mode: queue` 排队（`whenBusy: followUp`，本轮结束后才作为新消息执行）。\n`text` 去掉首尾空白后，若没有 `images`、`files`、`pastes`、`answer` 则不能为空。\n只有图片、文件或粘贴没有文字也可以发送。`files` 的 path 必须是该工作区 `.weft/uploads/` 下已存在的文件。\n`answer` 是对一次 `ask_user_question` 的回答。有 `answer` 时 `text` 可省略或为空，且不能同时带\n`images` / `files` / `pastes`。服务端校验 `toolCallId` 属于本对话、对应一次已完成且未失败的提问、\n且还没有 `weft.ask-answer` 条目、也还没被普通用户消息跳过；通过后生成给模型看的 content（每题的问题，以及所选 label、\n「其他：…」或「用户跳过」），并以\n`submit({ type: 'input', content, entry: { kind: 'weft.ask-answer', data } })` 提交\n（kind 不以 `pi.` 开头）。同一 `toolCallId` 再次回答，或提问已因普通用户消息记为 skipped，返回 409 `E_ASK_ANSWERED`。\n子 Agent 汇报和自动续写虽是 pi.user，不算跳过。\n`requestId` 缺省时服务端生成；同一个 requestId 重复请求返回同一个 runId。\n",
         "security": [
           {
             "bearerAuth": []
@@ -4231,7 +4231,7 @@
             }
           },
           "409": {
-            "description": "对话没有工作区（E_NO_WORKSPACE），或这条提问已经回答过（E_ASK_ANSWERED）。\n",
+            "description": "对话没有工作区（E_NO_WORKSPACE），或这条提问已经回答过、或已因普通用户消息记为跳过（E_ASK_ANSWERED）。\n",
             "content": {
               "application/json": {
                 "schema": {
@@ -5971,7 +5971,7 @@
             }
           },
           "answer": {
-            "description": "null 表示还在等用户。有 weft.ask-answer 时按其 data 回填。\n用户没答就发了普通消息时为 { answers: [], skipped: true }。\n",
+            "description": "null 表示还在等用户。有 weft.ask-answer 时按其 data 回填。\n用户没答就发了普通消息时为 { answers: [], skipped: true }，此后再提交 answer 为 409。\n子 Agent 汇报和自动续写不算这种普通消息。\n",
             "oneOf": [
               {
                 "type": "null"
@@ -6007,7 +6007,7 @@
             "description": "为 true 且 answers 为空时，每一题都记为用户跳过"
           }
         },
-        "description": "提交对一次提问的回答。服务端校验 toolCallId 属于本对话且尚未回答。\n重复回答同一 toolCallId 返回 409 E_ASK_ANSWERED。\n"
+        "description": "提交对一次提问的回答。服务端校验 toolCallId 属于本对话且尚未回答。\n重复回答同一 toolCallId，或该提问已因普通用户消息记为 skipped，返回 409 E_ASK_ANSWERED。\n子 Agent 汇报和自动续写不算跳过，仍可回答。\n"
       },
       "ToolCall": {
         "type": "object",
@@ -6163,7 +6163,7 @@
           },
           "ask": {
             "$ref": "#/components/schemas/AskCall",
-            "description": "仅 ask_user_question，且参数通过插件校验时出现。kind 为 ask。\nquestions 来自工具结果 details（插件校验后的题目）。\nanswer 为 null：这条提问之后还没有任何用户消息，界面继续等回答。\n之后若有 kind 为 weft.ask-answer 的条目（不以 pi. 开头），按其 data 回填 answer。\n用户没答就发了普通消息（之后出现 pi.user，且没有这条 toolCallId 的 weft.ask-answer）时，\nanswer 为 { answers: [], skipped: true }。\n"
+            "description": "仅 ask_user_question，且参数通过插件校验时出现。kind 为 ask。\nquestions 来自工具结果 details（插件校验后的题目）。\nanswer 为 null：这条提问之后还没有真正的用户消息，界面继续等回答。\n子 Agent 汇报（`[subagent …]`）和自动续写（`[auto-continue]`）虽是 pi.user，不算用户作答，answer 保持 null。\n之后若有 kind 为 weft.ask-answer 的条目（不以 pi. 开头），按其 data 回填 answer。\n用户没答就发了普通消息（之后出现普通 pi.user，且没有这条 toolCallId 的 weft.ask-answer）时，\nanswer 为 { answers: [], skipped: true }。这时再提交 answer 返回 409 E_ASK_ANSWERED。\n"
           }
         },
         "description": "单条工具调用的视图模型。全文按需拉 GET /api/v2/conversations/{id}/tools/{toolId}/output。ask_user_question 的 kind 为 ask。"
