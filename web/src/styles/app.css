@@ -552,7 +552,6 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.6; backgroun
 .col-divider.is-active { background: var(--ink); }
 
 .top-right { display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: var(--fs-sm); width: 30px; height: 30px; }
-.top-right-open { display: inline-flex; }
 .top-right-dot { position: absolute; top: 5px; right: 4px; width: 6px; height: 6px; border-radius: 50%; background: var(--run); border: 1.5px solid var(--bg); box-sizing: content-box; }
 .top-right-dot:not(.is-on) { display: none; }
 
@@ -578,7 +577,6 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.6; backgroun
   .next-shell > .col-divider[data-side="right"] { display: none; }
   .next-shell.right-closed .col-right { transform: translateX(100%); }
   .next-shell.right-closed .col-right > .col-panel-inner { transform: none; }
-  .top-right-open { display: inline-flex; }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -49,12 +49,9 @@ type MenuState = {
 
 type Props = {
   lang: Lang;
-  collapsed?: boolean;
   activeConversationId: string | null;
   activeAgentId: string | null;
   draftWorkspaceId: string | null;
-  onCollapse: () => void;
-  onExpand?: () => void;
   onToast: (message: string) => void;
   onConfirm: (opts: ConfirmOpts) => Promise<boolean>;
   onRemoveWorkspace: (workspaceId: string) => Promise<void>;
@@ -63,11 +60,8 @@ type Props = {
 
 export function Sidebar({
   lang,
-  collapsed = false,
   activeConversationId,
   draftWorkspaceId,
-  onCollapse: _onCollapse,
-  onExpand: _onExpand,
   onToast,
   onConfirm,
   onRemoveWorkspace,
@@ -78,6 +72,7 @@ export function Sidebar({
   const { tab, setTab } = useRightLayout();
   const { showFiles, openInTerminal } = useRightActions();
   const { leftOpen, setLeftOpen } = useLeftPanel();
+  const collapsed = !leftOpen;
   const sidebarRef = useRef<HTMLElement | null>(null);
   const stripBtnRef = useRef<HTMLButtonElement | null>(null);
   const [openMap, setOpenMap] = useState<OpenRecord>(() => readWorkspaceOpen());

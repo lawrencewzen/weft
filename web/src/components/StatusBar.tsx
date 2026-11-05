@@ -10,14 +10,12 @@ type Props = {
   lang: Lang;
   demo?: boolean;
   hidePending?: boolean;
-  onOpenLeft?: () => void;
   workspace?: Workspace | null;
 };
 
 export function StatusBar({
   conversation,
   lang,
-  onOpenLeft: _onOpenLeft,
 }: Props) {
   const run = conversation.run;
   const failed = run.status === 'failed';

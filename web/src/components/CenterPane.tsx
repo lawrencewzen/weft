@@ -26,7 +26,6 @@ type Props = {
   isDraft?: boolean;
   lang: Lang;
   demo?: boolean;
-  onOpenLeft?: () => void;
   onNewWorkspace?: () => void;
 };
 
@@ -64,7 +63,6 @@ export function CenterPane({
   isDraft: isDraftProp = false,
   lang,
   demo = false,
-  onOpenLeft,
   onNewWorkspace,
 }: Props) {
   const isDraft = isDraftProp || (!cid && Boolean(workspaceId));
@@ -133,7 +131,6 @@ export function CenterPane({
           conversation={draft}
           lang={lang}
           demo={demo}
-          onOpenLeft={onOpenLeft}
           workspace={workspace}
         />
         <Thread
@@ -220,7 +217,6 @@ export function CenterPane({
         lang={lang}
         demo={demo}
         hidePending={liveTools}
-        onOpenLeft={onOpenLeft}
         workspace={workspace}
       />
         <Thread

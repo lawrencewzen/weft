@@ -675,3 +675,41 @@ test('sidebar collapse and expand without projects does not throw error', async 
 
   expectClean(state);
 });
+
+test('rapid double-click maintains is-sliding and sb-hide-first-folder throughout reverse animation without early cleanup', async ({ page }) => {
+  const state = await openProto(page);
+
+  const leftBtn = page.locator('.side-toggle-left');
+  await expect(leftBtn).toBeVisible();
+
+  // First click: starts collapse
+  await leftBtn.click();
+  await page.waitForTimeout(40);
+
+  // Second click: triggers reversal (expand)
+  await leftBtn.click();
+
+  // Sample during the reverse animation
+  const samples = [];
+  const start = Date.now();
+  while (Date.now() - start < 160) {
+    const status = await page.evaluate(() => {
+      const sp = document.querySelector('[data-testid="next-strip-projects"]');
+      const sb = document.querySelector('[data-testid="next-sidebar"]');
+      return {
+        hasIsSliding: sp ? sp.classList.contains('is-sliding') : false,
+        hasHideClass: sb ? sb.classList.contains('sb-hide-first-folder') : false,
+      };
+    });
+    samples.push(status);
+    await page.waitForTimeout(20);
+  }
+
+  expect(samples.length).toBeGreaterThanOrEqual(3);
+  for (const s of samples) {
+    expect(s.hasIsSliding).toBe(true);
+    expect(s.hasHideClass).toBe(true);
+  }
+
+  expectClean(state);
+});

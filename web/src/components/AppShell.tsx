@@ -326,12 +326,9 @@ function AppShellLayout({
       <SideToggles lang={lang} />
       <Sidebar
         lang={lang}
-        collapsed={!leftOpen}
         activeConversationId={activeConversationId}
         activeAgentId={activeAgentId}
         draftWorkspaceId={draftWorkspaceId}
-        onCollapse={() => setLeftOpen(false)}
-        onExpand={() => setLeftOpen(true)}
         onToast={onToast}
         onConfirm={askConfirm}
         onRemoveWorkspace={onRemoveWorkspace}
@@ -358,7 +355,6 @@ function AppShellLayout({
         isDraft={isDraftRoute}
         lang={lang}
         demo={demo}
-        onOpenLeft={() => setLeftOpen(true)}
         onNewWorkspace={() => setWsDialog(true)}
       />
       <div

@@ -43,13 +43,3 @@ export function SideToggles({ lang }: { lang: Lang }) {
     </>
   );
 }
-
-/** @deprecated Replaced by shell-level SideToggles. */
-export function LeftOpenButton() {
-  return null;
-}
-
-/** @deprecated Replaced by shell-level SideToggles. Renders spacer slot in header. */
-export function RightToggle() {
-  return <div className="top-right" aria-hidden="true" />;
-}
