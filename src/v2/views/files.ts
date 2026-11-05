@@ -85,11 +85,13 @@ export function looksBinary(buf: Buffer): boolean {
   }
 }
 
-export function fileNodeView(entry: { path?: unknown; type?: unknown }): FileNode {
-  return {
+export function fileNodeView(entry: { path?: unknown; type?: unknown; ignored?: unknown }): FileNode {
+  const node: FileNode = {
     path: posixPath(entry.path),
     type: entry.type === 'dir' ? 'dir' : 'file',
   };
+  if (entry.ignored === true) node.ignored = true;
+  return node;
 }
 
 export async function hashFile(abs: string): Promise<string> {
@@ -110,14 +112,21 @@ export function emptyFileContent(rel: string): FileContent {
   };
 }
 
-type TreeEntry = { path?: unknown; type?: unknown };
+type TreeEntry = { path?: unknown; type?: unknown; ignored?: unknown };
 
-export async function workspaceTreeView(root: string): Promise<FileTree> {
-  const raw = await listWorkspaceTree(root) as TreeEntry[];
-  const entries = raw.map(fileNodeView);
+export type WorkspaceTreeOptions = {
+  dir?: string | null;
+  env?: NodeJS.ProcessEnv;
+};
+
+export async function workspaceTreeView(root: string, opts: WorkspaceTreeOptions = {}): Promise<FileTree> {
+  const raw = await listWorkspaceTree(root, {
+    dir: opts.dir,
+    env: opts.env,
+  }) as TreeEntry[] & { truncated?: boolean };
   return {
-    entries,
-    truncated: entries.length >= WORKSPACE_TREE_MAX_ENTRIES,
+    entries: raw.map(fileNodeView),
+    truncated: raw.truncated === true,
   };
 }
 

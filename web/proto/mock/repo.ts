@@ -106,19 +106,166 @@ export function emptyRepo(): MockRepo {
   return createRepo([]);
 }
 
+type IgnoreRule = { dirOnly: boolean; test: (path: string) => boolean };
+
+export type RepoTreeFailure = { ok: false; status: number; error: string; code: string };
+export type RepoTreeResult = { ok: true; tree: FileTree } | RepoTreeFailure;
+
+function compileIgnore(text: string): IgnoreRule[] {
+  const rules: IgnoreRule[] = [];
+  for (const rawLine of text.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith('#')) continue;
+    let body = line;
+    let dirOnly = false;
+    if (body.endsWith('/')) {
+      dirOnly = true;
+      body = body.slice(0, -1);
+    }
+    if (!body) continue;
+    const rooted = body.includes('/');
+    rules.push({ dirOnly, test: (p) => globToRegExp(body, rooted).test(p) });
+  }
+  return rules;
+}
+
+function globToRegExp(pattern: string, rooted: boolean): RegExp {
+  let src = '';
+  for (const ch of pattern) {
+    if (ch === '*') src += '[^/]*';
+    else if (ch === '?') src += '[^/]';
+    else src += ch.replace(/[\\^$+?.()|[\]{}]/g, '\\$&');
+  }
+  return new RegExp(rooted ? `^${src}$` : `(^|/)${src}$`);
+}
+
+function ignoreRules(repo: MockRepo): IgnoreRule[] {
+  const text = repo.files.get('.gitignore')?.text ?? '';
+  return compileIgnore(text);
+}
+
+function hiddenInFullTree(filePath: string): boolean {
+  const parts = filePath.split('/');
+  return parts.includes('.git') || parts.includes('node_modules');
+}
+
+function ancestorIgnored(filePath: string, ignoredDirs: Set<string>): boolean {
+  const parts = filePath.split('/');
+  for (let i = 1; i < parts.length; i += 1) {
+    if (ignoredDirs.has(parts.slice(0, i).join('/'))) return true;
+  }
+  return false;
+}
+
+function ignoredDirSet(dirs: Iterable<string>, rules: IgnoreRule[]): Set<string> {
+  const ignored = new Set<string>();
+  const sorted = [...dirs].sort((a, b) => a.length - b.length);
+  for (const dir of sorted) {
+    if (ancestorIgnored(dir, ignored) || rules.some((rule) => rule.test(dir))) ignored.add(dir);
+  }
+  return ignored;
+}
+
+function withIgnored(node: FileNode, ignored: boolean): FileNode {
+  if (!ignored) return node;
+  return { ...node, ignored: true };
+}
+
 /** Flattened tree: every ancestor directory comes before its children. */
 export function repoTree(repo: MockRepo): FileTree {
-  const entries = new Map<string, FileNode>();
+  const rules = ignoreRules(repo);
+  const dirs = new Set<string>();
+  const files: string[] = [];
   for (const file of repo.files.values()) {
+    files.push(file.path);
     const parts = file.path.split('/');
-    for (let i = 1; i < parts.length; i += 1) {
-      const dir = parts.slice(0, i).join('/');
-      if (!entries.has(dir)) entries.set(dir, { path: dir, type: 'dir' });
-    }
-    entries.set(file.path, { path: file.path, type: 'file' });
+    for (let i = 1; i < parts.length; i += 1) dirs.add(parts.slice(0, i).join('/'));
   }
-  const list = [...entries.values()].sort((a, b) => a.path.localeCompare(b.path));
-  return { entries: list, truncated: false };
+  const ignoredDirs = ignoredDirSet(dirs, rules);
+  const nodes: FileNode[] = [];
+  for (const dir of dirs) {
+    nodes.push({ path: dir, type: 'dir' });
+  }
+  for (const file of files) nodes.push({ path: file, type: 'file' });
+  nodes.sort((a, b) => a.path.localeCompare(b.path));
+  const entries: FileNode[] = [];
+  for (const node of nodes) {
+    if (hiddenInFullTree(node.path) || ancestorIgnored(node.path, ignoredDirs)) continue;
+    const ignored = node.type === 'dir'
+      ? ignoredDirs.has(node.path)
+      : rules.some((rule) => !rule.dirOnly && rule.test(node.path));
+    entries.push(withIgnored(node, ignored));
+  }
+  return { entries, truncated: false };
+}
+
+function resolveMockDir(raw: string): { ok: true; dir: string } | RepoTreeFailure {
+  const trimmed = raw.trim();
+  if (/^[a-zA-Z]:/.test(trimmed) || trimmed.startsWith('/') || trimmed.startsWith('\\')) {
+    return { ok: false, status: 403, error: '路径超出工作区', code: 'E_SANDBOX' };
+  }
+  const stack: string[] = [];
+  for (const part of trimmed.replaceAll('\\', '/').split('/')) {
+    if (part === '' || part === '.') continue;
+    if (part === '..') {
+      if (stack.length === 0) {
+        return { ok: false, status: 403, error: '路径超出工作区', code: 'E_SANDBOX' };
+      }
+      stack.pop();
+      continue;
+    }
+    stack.push(part);
+  }
+  if (stack.includes('.git')) {
+    return { ok: false, status: 403, error: '.git 不可读', code: 'E_NOT_READABLE' };
+  }
+  return { ok: true, dir: stack.join('/') };
+}
+
+/**
+ * One directory level, including ignored marks. `dir` is a raw relative path;
+ * `.` lists the workspace root's direct children.
+ */
+export function queryRepoTree(repo: MockRepo, dirRaw: string): RepoTreeResult {
+  const resolved = resolveMockDir(dirRaw);
+  if (!resolved.ok) return resolved;
+  const dir = resolved.dir;
+  const files = [...repo.files.keys()];
+  if (dir && files.includes(dir)) {
+    return { ok: false, status: 400, error: '不是目录', code: 'E_BAD_REQUEST' };
+  }
+  const prefix = dir ? `${dir}/` : '';
+  const known = !dir || files.some((file) => file.startsWith(prefix));
+  if (!known) return { ok: false, status: 404, error: '目录不存在', code: 'ENOENT' };
+
+  const rules = ignoreRules(repo);
+  const dirs = new Set<string>();
+  for (const file of files) {
+    const parts = file.split('/');
+    for (let i = 1; i < parts.length; i += 1) dirs.add(parts.slice(0, i).join('/'));
+  }
+  const ignoredDirs = ignoredDirSet(dirs, rules);
+  const children = new Map<string, FileNode['type']>();
+  for (const file of files) {
+    if (prefix && !file.startsWith(prefix)) continue;
+    const rest = prefix ? file.slice(prefix.length) : file;
+    if (!rest) continue;
+    const slash = rest.indexOf('/');
+    const name = slash === -1 ? rest : rest.slice(0, slash);
+    if (name === '.git') continue;
+    const child = prefix + name;
+    children.set(child, slash === -1 ? 'file' : 'dir');
+  }
+  const entries = [...children.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([child, type]) => {
+      const underIgnored = ancestorIgnored(child, ignoredDirs);
+      const ignored = type === 'dir'
+        ? ignoredDirs.has(child) || underIgnored
+        : underIgnored || rules.some((rule) => !rule.dirOnly && rule.test(child));
+      return withIgnored({ path: child, type }, ignored);
+    });
+  return { ok: true, tree: { entries, truncated: false } };
 }
 
 export function readRepoFile(repo: MockRepo, rawPath: string): FileContent | null {
@@ -606,7 +753,15 @@ export function seedWeftRepo(): MockRepo {
     },
     {
       path: '.gitignore',
-      text: ['node_modules/', 'public-next/', 'design/prototype/index.html', '.env', ''].join('\n'),
+      text: ['node_modules/', 'public-next/', 'design/prototype/index.html', '.env', 'dist/', 'secret.log', ''].join('\n'),
+    },
+    {
+      path: 'dist/bundle.js',
+      text: '/* generated */\n',
+    },
+    {
+      path: 'secret.log',
+      text: 'local debug log\n',
     },
     {
       path: 'docs/ARCHITECTURE.md',

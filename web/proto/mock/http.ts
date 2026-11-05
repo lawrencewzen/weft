@@ -24,6 +24,7 @@ import {
   createRepo,
   isRawFileHit,
   posixPath,
+  queryRepoTree,
   readRepoFile,
   readRepoFileRaw,
   repoTree,
@@ -1180,7 +1181,11 @@ export function handleMockRequest(db: MockDb, hub: MockHub, rawUrl: string, init
     const workspaceId = decodeURIComponent(wsTreeMatch[1]);
     const repo = db.repos.get(workspaceId);
     if (!repo) return fail(404, '工作区不存在');
-    return ok(repoTree(repo));
+    const dir = url.searchParams.get('dir');
+    if (dir == null || dir.trim() === '') return ok(repoTree(repo));
+    const listed = queryRepoTree(repo, dir);
+    if (!listed.ok) return fail(listed.status, listed.error, listed.code);
+    return ok(listed.tree);
   }
   const wsSearchMatch = /^\/api\/v2\/workspaces\/([^/]+)\/file-search$/.exec(path);
   if (wsSearchMatch && method === 'GET') {
