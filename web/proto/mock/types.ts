@@ -29,6 +29,7 @@ export type ToolOutput = components['schemas']['ToolOutput'];
 export type FileContent = components['schemas']['FileContent'];
 export type FileNode = components['schemas']['FileNode'];
 export type FileTree = components['schemas']['FileTree'];
+export type FileSearchResult = components['schemas']['FileSearchResult'];
 export type SaveResult = components['schemas']['SaveResult'];
 export type WorkspaceDirEntry = components['schemas']['WorkspaceDirEntry'];
 export type WorkspaceDirs = components['schemas']['WorkspaceDirs'];

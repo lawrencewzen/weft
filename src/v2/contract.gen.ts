@@ -547,6 +547,36 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/workspaces/{id}/file-search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 搜索工作区文件
+         * @description 大小写不敏感的子序列匹配，给 Cmd+P 和文件树搜索用。
+         *     查询字符按顺序出现在路径里即可，不必连续。文件名命中优于目录命中，
+         *     连续命中和前缀命中更靠前，分数相同则路径更短的靠前。只返回文件。
+         *     q 为空时返回空列表，不扫描磁盘。
+         *     limit 默认 50，大于 200 时按 200，缺省或非法时按 50。
+         *     工作区是 git 仓库时用 `git ls-files -z --cached --others --exclude-standard`
+         *     （cwd 为工作区，子目录工作区的路径相对该目录）。遵守 .gitignore；
+         *     未被忽略的未跟踪文件会返回。git 超时 5 秒。
+         *     不是 git 仓库、git 不可用或命令失败时改为遍历目录，跳过 `.git` 和 `node_modules`，
+         *     不跟随符号链接。路径经 resolveInWorkspace 校验，工作区外的路径不返回。
+         *     文件列表按工作区缓存约 2 秒。文件数超过 200000 时 truncated 为 true。
+         */
+        get: operations["searchWorkspaceFiles"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/workspaces/{id}/files": {
         parameters: {
             query?: never;
@@ -2062,6 +2092,19 @@ export interface components {
         FileTree: {
             entries: components["schemas"]["FileNode"][];
             /** @description 达到 500 条上限时为 true */
+            truncated: boolean;
+        };
+        /** @description 文件搜索的一条命中。 */
+        FileSearchHit: {
+            /** @description 相对工作区的路径，统一用 `/`，只含文件 */
+            path: string;
+            /** @description 匹配分，越高越靠前 */
+            score?: number;
+        };
+        /** @description GET /api/v2/workspaces/{id}/file-search 的响应。 */
+        FileSearchResult: {
+            entries: components["schemas"]["FileSearchHit"][];
+            /** @description 工作区文件数超过 200000，列表被截断，结果可能不完整 */
             truncated: boolean;
         };
         /** @description GET /api/v2/workspaces/{id}/files 的响应。 */
@@ -4238,6 +4281,70 @@ export interface operations {
             };
             /** @description 路径越界 */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 工作区不存在 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 客户端错误 */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 服务端错误 */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+        };
+    };
+    searchWorkspaceFiles: {
+        parameters: {
+            query?: {
+                /** @description 搜索文本。空字符串返回空列表。 */
+                q?: string;
+                /** @description 最多返回多少条。缺省或非法为 50，大于 200 时按 200。 */
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                /** @description 工作区 id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 命中的文件，按分数从高到低 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FileSearchResult"];
+                };
+            };
+            /** @description 未授权 */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };
