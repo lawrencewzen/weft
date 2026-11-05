@@ -13,7 +13,6 @@ import { usePendingSend, waitingForAgent } from '../data/usePendingSend';
 import { t } from '../i18n';
 import type { components } from '../../../src/v2/contract.gen';
 import { Composer } from './Composer';
-import { LeftOpenButton, RightToggle } from './RightToggle';
 import { StatusBar } from './StatusBar';
 import { Thread } from './Thread';
 
@@ -27,7 +26,6 @@ type Props = {
   isDraft?: boolean;
   lang: Lang;
   demo?: boolean;
-  onOpenLeft?: () => void;
   onNewWorkspace?: () => void;
 };
 
@@ -65,7 +63,6 @@ export function CenterPane({
   isDraft: isDraftProp = false,
   lang,
   demo = false,
-  onOpenLeft,
   onNewWorkspace,
 }: Props) {
   const isDraft = isDraftProp || (!cid && Boolean(workspaceId));
@@ -134,7 +131,6 @@ export function CenterPane({
           conversation={draft}
           lang={lang}
           demo={demo}
-          onOpenLeft={onOpenLeft}
           workspace={workspace}
         />
         <Thread
@@ -177,10 +173,8 @@ export function CenterPane({
       <main className="col-center" data-testid="next-center">
         <header className="next-status">
           <div className="next-status-inner">
-            <div className="top-heading">
-              <LeftOpenButton lang={lang} onOpen={onOpenLeft} />
-            </div>
-            <div className="top-right"><RightToggle lang={lang} /></div>
+            <div className="top-heading" />
+            <div className="top-right" aria-hidden="true" />
           </div>
         </header>
         <div className="thread-empty">
@@ -196,12 +190,11 @@ export function CenterPane({
         <header className="next-status" data-testid="next-status">
           <div className="next-status-inner">
             <div className="top-heading">
-              <LeftOpenButton lang={lang} onOpen={onOpenLeft} />
               {cid ? (
                 <span className="top-title">{knownTitle}</span>
               ) : null}
             </div>
-            <div className="top-right"><RightToggle lang={lang} /></div>
+            <div className="top-right" aria-hidden="true" />
           </div>
         </header>
         {cid && showDelayedLoading ? (
@@ -224,7 +217,6 @@ export function CenterPane({
         lang={lang}
         demo={demo}
         hidePending={liveTools}
-        onOpenLeft={onOpenLeft}
         workspace={workspace}
       />
         <Thread

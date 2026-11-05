@@ -15,8 +15,6 @@ export function RightPane({ lang, workspaceLabel }: Props) {
     tab,
     setTab,
     open,
-    toggleRight,
-    rpBtnOp,
   } = useRightLayout();
   const { totals, hasChanges } = useRightChanges();
   const effectiveTab: RightTab = tab === 'files' ? 'files' : 'changes';
@@ -30,23 +28,6 @@ export function RightPane({ lang, workspaceLabel }: Props) {
     >
       <div className="col-panel-inner">
       <header className="right-tabs-bar">
-        <button
-          type="button"
-          className="icon-btn next-right-collapse-btn"
-          data-testid="next-right-collapse"
-          title={t(lang, 'collapse_panel')}
-          aria-label={t(lang, 'collapse_panel')}
-          style={{
-            opacity: rpBtnOp,
-            pointerEvents: rpBtnOp ? 'auto' : 'none',
-            visibility: rpBtnOp ? 'visible' : 'hidden',
-            marginRight: 4,
-            flexShrink: 0,
-          }}
-          onClick={toggleRight}
-        >
-          <span className="ico-panel ico-panel-right" aria-hidden="true" />
-        </button>
         <nav className="tabs-nav">
           <button
             type="button"
