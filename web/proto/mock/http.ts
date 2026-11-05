@@ -22,8 +22,10 @@ import { branchesOf, pluginForLang, tokenFails } from './extensions';
 import {
   EXTERNAL_TOUCH_MS,
   createRepo,
+  isRawFileHit,
   posixPath,
   readRepoFile,
+  readRepoFileRaw,
   repoTree,
   saveRepoFile,
   textDiff,
@@ -117,6 +119,21 @@ function readBody(init?: RequestInit): Record<string, unknown> {
 
 function str(value: unknown): string {
   return typeof value === 'string' ? value : '';
+}
+
+function requestHeader(init: RequestInit | undefined, name: string): string {
+  const headers = init?.headers;
+  if (!headers) return '';
+  if (typeof Headers !== 'undefined' && headers instanceof Headers) return headers.get(name) || '';
+  if (Array.isArray(headers)) {
+    const hit = headers.find(([key]) => key.toLowerCase() === name.toLowerCase());
+    return hit ? String(hit[1]) : '';
+  }
+  const rec = headers as Record<string, string>;
+  for (const key of Object.keys(rec)) {
+    if (key.toLowerCase() === name.toLowerCase()) return String(rec[key] ?? '');
+  }
+  return '';
 }
 
 function modelLabel(db: MockDb, model: ResolvedModel | null): string {
@@ -1164,6 +1181,31 @@ export function handleMockRequest(db: MockDb, hub: MockHub, rawUrl: string, init
     if (!repo) return fail(404, '工作区不存在');
     return ok(repoTree(repo));
   }
+  const wsRawMatch = /^\/api\/v2\/workspaces\/([^/]+)\/files\/raw$/.exec(path);
+  if (wsRawMatch && method === 'GET') {
+    const workspaceId = decodeURIComponent(wsRawMatch[1]);
+    const repo = db.repos.get(workspaceId);
+    if (!repo) return fail(404, lang === 'en' ? 'Workspace not found' : '工作区不存在');
+    const raw = url.searchParams.get('path');
+    if (raw == null || raw === '') return fail(400, 'path required', 'E_BAD_REQUEST');
+    const result = readRepoFileRaw(repo, raw);
+    if (!isRawFileHit(result)) return fail(result.status, result.error, result.code);
+    const headers: Record<string, string> = {
+      'content-type': result.mediaType,
+      'content-disposition': 'inline',
+      'cache-control': 'private, no-cache',
+      etag: result.etag,
+      'x-content-type-options': 'nosniff',
+    };
+    if (result.mediaType === 'image/svg+xml') {
+      headers['content-security-policy'] = "default-src 'none'; style-src 'unsafe-inline'; sandbox";
+    }
+    const inm = requestHeader(init, 'if-none-match');
+    if (inm && inm.split(',').map((part) => part.trim()).includes(result.etag)) {
+      return { status: 304, headers };
+    }
+    return { status: 200, bytes: result.bytes, headers };
+  }
   const wsFilesMatch = /^\/api\/v2\/workspaces\/([^/]+)\/files$/.exec(path);
   if (wsFilesMatch) {
     const workspaceId = decodeURIComponent(wsFilesMatch[1]);
@@ -1648,9 +1690,9 @@ export function handleMockRequest(db: MockDb, hub: MockHub, rawUrl: string, init
 /** Everything the prototype serves, wrapped in a real `Response`. */
 export function mockResponse(db: MockDb, hub: MockHub, rawUrl: string, init?: RequestInit): Response {
   const reply = handleMockRequest(db, hub, rawUrl, init);
-  if (reply.status === 204) {
+  if (reply.status === 204 || reply.status === 304) {
     return new Response(null, {
-      status: 204,
+      status: reply.status,
       headers: reply.headers,
     });
   }
