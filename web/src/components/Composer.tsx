@@ -27,6 +27,7 @@ import {
 import type { Lang } from '../data/lang';
 import { draftPath, navigate, newChatPath, openSettings } from '../data/nav';
 import { NO_PROJECT_ID } from '../data/sidebarModel';
+import { isMac } from '../data/sidebarSearchModel';
 import type { QueueChip, SendMode } from '../data/pendingSend';
 import { useProviders } from '../data/useProviders';
 import type { components } from '../../../src/v2/contract.gen';
@@ -580,7 +581,7 @@ export function Composer({
                     type="button"
                     className={`btn-send${canSend ? ' is-ready' : ''}`}
                     data-testid="next-send"
-                    title={t(lang, 'send_title')}
+                    title={t(lang, 'send_title', { mod: isMac() ? 'Cmd' : 'Ctrl' })}
                     aria-label={t(lang, 'btn_send')}
                     disabled={locked || busy || !canSend}
                     onClick={() => { void submit(draft.trim(), running ? 'steer' : undefined); }}
