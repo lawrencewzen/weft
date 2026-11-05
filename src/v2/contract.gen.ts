@@ -534,9 +534,18 @@ export interface paths {
         };
         /**
          * 工作区文件树
-         * @description 复用 listWorkspaceTree：最多 500 条、深度 8，跳过 .git 和 node_modules。
+         * @description 复用 listWorkspaceTree：最多 500 条、深度 8。不带 dir 时跳过 .git 和 node_modules。
+         *     工作区是 git 仓库时，一次请求只跑一次
+         *     `git ls-files -z --others --ignored --exclude-standard --directory`。
+         *     命中的条目带 `ignored: true`（只有 true 才返回该字段）。
+         *     被忽略的目录只列出自身，不递归，且不计入 500 条。
+         *     非 git 仓库、git 不可用或检查失败时不带 ignored，树照常返回。
          *     达到条数上限时 truncated 为 true。path 相对工作区，统一用 `/`。
          *     越界的符号链接跳过。工作区不存在或已移除 404。
+         *     可选查询参数 dir 为相对目录时，只返回该目录的直接子项（含 ignored），供展开被忽略目录。
+         *     这一层不套用 500 条和深度 8，但最多 2000 条，超过时 truncated 为 true。
+         *     不存在 404；不是目录 400；越界 403 E_SANDBOX。
+         *     .git 永远不可读（403 E_NOT_READABLE）。dir 指向 node_modules 或其子目录时允许按需列出。
          */
         get: operations["getWorkspaceTree"];
         put?: never;
@@ -2087,11 +2096,13 @@ export interface components {
             path: string;
             /** @enum {string} */
             type: "file" | "dir";
+            /** @description 命中 gitignore 时为 true。未忽略、非 git 仓库或 git 不可用时不返回该字段。 */
+            ignored?: boolean;
         };
         /** @description GET /api/v2/workspaces/{id}/tree 的响应。 */
         FileTree: {
             entries: components["schemas"]["FileNode"][];
-            /** @description 达到 500 条上限时为 true */
+            /** @description 不带 dir 时，计入上限的条目达到 500 为 true，标为 ignored 的目录不计入。带 dir 时，直接子项超过 2000 为 true。 */
             truncated: boolean;
         };
         /** @description 文件搜索的一条命中。 */
@@ -4251,7 +4262,14 @@ export interface operations {
     };
     getWorkspaceTree: {
         parameters: {
-            query?: never;
+            query?: {
+                /**
+                 * @description 相对工作区的目录。给出时只返回该目录的直接子项，最多 2000 条，超过时 truncated 为 true。
+                 *     不存在 404；不是目录 400；越界 403 E_SANDBOX。.git 不可读（403 E_NOT_READABLE）。
+                 *     不带此参数时仍跳过 .git 和 node_modules；指向 node_modules 时允许列出。
+                 */
+                dir?: string;
+            };
             header?: never;
             path: {
                 /** @description 工作区 id */
@@ -4270,6 +4288,15 @@ export interface operations {
                     "application/json": components["schemas"]["FileTree"];
                 };
             };
+            /** @description dir 不是目录 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
             /** @description 未授权 */
             401: {
                 headers: {
@@ -4279,7 +4306,7 @@ export interface operations {
                     "application/json": components["schemas"]["V2Error"];
                 };
             };
-            /** @description 路径越界 */
+            /** @description 路径越界（E_SANDBOX），或 .git 不可读（E_NOT_READABLE） */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -4288,7 +4315,7 @@ export interface operations {
                     "application/json": components["schemas"]["V2Error"];
                 };
             };
-            /** @description 工作区不存在 */
+            /** @description 工作区或目录不存在 */
             404: {
                 headers: {
                     [name: string]: unknown;

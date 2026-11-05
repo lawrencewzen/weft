@@ -530,6 +530,14 @@ function sendFileOpError(
     sendV2(res, pathname, method, 400, { error: 'is a directory', code: 'E_BAD_REQUEST' } satisfies V2Error);
     return true;
   }
+  if (code === 'ENOTDIR') {
+    sendV2(res, pathname, method, 400, { error: 'not a directory', code: 'E_BAD_REQUEST' } satisfies V2Error);
+    return true;
+  }
+  if (code === 'E_NOT_READABLE') {
+    sendV2(res, pathname, method, 403, { error: '.git is not readable', code: 'E_NOT_READABLE' } satisfies V2Error);
+    return true;
+  }
   if (code === 'E_CONFLICT') {
     const current = (err as FileOpError).current;
     if (!current) return false;
@@ -955,7 +963,8 @@ export function createV2Handler(opts: {
         return true;
       }
       try {
-        const tree = await workspaceTreeView(root);
+        const dir = url.searchParams.get('dir');
+        const tree = await workspaceTreeView(root, dir == null ? {} : { dir });
         sendV2(res, pathname, method, 200, tree);
       } catch (err) {
         if (sendFileOpError(res, pathname, method, err)) return true;

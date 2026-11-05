@@ -95,10 +95,17 @@ test('changes pane: file status letters, deleted strikethrough, rename display, 
   await expect(sumRenRow.getByTestId('next-change-summary-status')).toHaveText('R');
   await expect(sumRenRow).toHaveAttribute('title', 'web/src/styles/base.css → web/src/styles/app.css');
 
-  // 7. Narrow right pane does not overflow horizontally
+  // 7. Narrow right pane does not overflow horizontally.
+  // Width is driven by --right-w (the inner panel's min-width follows it).
+  // Setting only the used width starts a CSS transition; measuring mid-way
+  // sees a shell narrower than the still-440px inner panel.
   const rightPane = page.getByTestId('next-right');
-  await rightPane.evaluate((el) => {
-    el.style.width = '240px';
+  await page.getByTestId('next-app').evaluate((shell) => {
+    const pane = shell.querySelector('[data-testid=next-right]');
+    pane.style.transition = 'none';
+    const inner = pane.querySelector('.col-panel-inner');
+    if (inner) inner.style.transition = 'none';
+    shell.style.setProperty('--right-w', '240px');
   });
   const scrollInfo = await rightPane.evaluate((el) => ({
     scrollWidth: el.scrollWidth,
@@ -107,8 +114,12 @@ test('changes pane: file status letters, deleted strikethrough, rename display, 
   expect(scrollInfo.scrollWidth).toBeLessThanOrEqual(scrollInfo.clientWidth + 1);
 
   // Restore right pane width
-  await rightPane.evaluate((el) => {
-    el.style.width = '';
+  await page.getByTestId('next-app').evaluate((shell) => {
+    const pane = shell.querySelector('[data-testid=next-right]');
+    pane.style.transition = '';
+    const inner = pane.querySelector('.col-panel-inner');
+    if (inner) inner.style.transition = '';
+    shell.style.removeProperty('--right-w');
   });
 
   // 8. English locale verification
