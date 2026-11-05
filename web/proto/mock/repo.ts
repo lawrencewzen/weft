@@ -1,7 +1,40 @@
 import type { Diff, FileContent, FileNode, FileTree, SaveResult } from './types';
 
-/** A file in the in-memory mock repository. Only text files exist here. */
-export type MockFile = { path: string; text: string };
+/** A file in the in-memory mock repository. Images carry `imageBase64` instead of text. */
+export type MockFile = { path: string; text: string; imageBase64?: string };
+
+/** 1×1 PNG so the prototype can preview GET .../files/raw without a real disk. */
+export const SEED_PREVIEW_PNG_BASE64 =
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+
+export const MOCK_IMAGE_MAX_BYTES = 20 * 1024 * 1024;
+
+/** Keep in step with WORKSPACE_IMAGE_MEDIA_TYPES in src/v2/views/files.ts. */
+const IMAGE_MEDIA_BY_EXT: Record<string, string> = {
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  gif: 'image/gif',
+  webp: 'image/webp',
+  bmp: 'image/bmp',
+  svg: 'image/svg+xml',
+  ico: 'image/x-icon',
+};
+
+export function imageMediaType(filePath: string): string | null {
+  const base = posixPath(filePath).split('/').pop() || '';
+  const dot = base.lastIndexOf('.');
+  if (dot <= 0 || dot === base.length - 1) return null;
+  const ext = base.slice(dot + 1).toLowerCase();
+  return IMAGE_MEDIA_BY_EXT[ext] ?? null;
+}
+
+export function decodeBase64(data: string): Uint8Array {
+  const bin = atob(data);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i += 1) out[i] = bin.charCodeAt(i);
+  return out;
+}
 
 export type MockRepo = {
   files: Map<string, MockFile>;
@@ -46,6 +79,18 @@ function byteLength(text: string): number {
 }
 
 export function fileContent(file: MockFile): FileContent {
+  const image = imageMediaType(file.path) != null;
+  if (file.imageBase64) {
+    return {
+      path: file.path,
+      size: decodeBase64(file.imageBase64).length,
+      binary: true,
+      tooLarge: false,
+      text: null,
+      version: versionOf(file.imageBase64),
+      ...(image ? { image: true } : {}),
+    };
+  }
   return {
     path: file.path,
     size: byteLength(file.text),
@@ -53,6 +98,7 @@ export function fileContent(file: MockFile): FileContent {
     tooLarge: false,
     text: file.text,
     version: versionOf(file.text),
+    ...(image ? { image: true } : {}),
   };
 }
 
@@ -60,25 +106,235 @@ export function emptyRepo(): MockRepo {
   return createRepo([]);
 }
 
+type IgnoreRule = { dirOnly: boolean; test: (path: string) => boolean };
+
+export type RepoTreeFailure = { ok: false; status: number; error: string; code: string };
+export type RepoTreeResult = { ok: true; tree: FileTree } | RepoTreeFailure;
+
+function compileIgnore(text: string): IgnoreRule[] {
+  const rules: IgnoreRule[] = [];
+  for (const rawLine of text.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith('#')) continue;
+    let body = line;
+    let dirOnly = false;
+    if (body.endsWith('/')) {
+      dirOnly = true;
+      body = body.slice(0, -1);
+    }
+    if (!body) continue;
+    const rooted = body.includes('/');
+    rules.push({ dirOnly, test: (p) => globToRegExp(body, rooted).test(p) });
+  }
+  return rules;
+}
+
+function globToRegExp(pattern: string, rooted: boolean): RegExp {
+  let src = '';
+  for (const ch of pattern) {
+    if (ch === '*') src += '[^/]*';
+    else if (ch === '?') src += '[^/]';
+    else src += ch.replace(/[\\^$+?.()|[\]{}]/g, '\\$&');
+  }
+  return new RegExp(rooted ? `^${src}$` : `(^|/)${src}$`);
+}
+
+function ignoreRules(repo: MockRepo): IgnoreRule[] {
+  const text = repo.files.get('.gitignore')?.text ?? '';
+  return compileIgnore(text);
+}
+
+function hiddenInFullTree(filePath: string): boolean {
+  const parts = filePath.split('/');
+  return parts.includes('.git') || parts.includes('node_modules');
+}
+
+function ancestorIgnored(filePath: string, ignoredDirs: Set<string>): boolean {
+  const parts = filePath.split('/');
+  for (let i = 1; i < parts.length; i += 1) {
+    if (ignoredDirs.has(parts.slice(0, i).join('/'))) return true;
+  }
+  return false;
+}
+
+function ignoredDirSet(dirs: Iterable<string>, rules: IgnoreRule[]): Set<string> {
+  const ignored = new Set<string>();
+  const sorted = [...dirs].sort((a, b) => a.length - b.length);
+  for (const dir of sorted) {
+    if (ancestorIgnored(dir, ignored) || rules.some((rule) => rule.test(dir))) ignored.add(dir);
+  }
+  return ignored;
+}
+
+function withIgnored(node: FileNode, ignored: boolean): FileNode {
+  if (!ignored) return node;
+  return { ...node, ignored: true };
+}
+
 /** Flattened tree: every ancestor directory comes before its children. */
 export function repoTree(repo: MockRepo): FileTree {
-  const entries = new Map<string, FileNode>();
+  const rules = ignoreRules(repo);
+  const dirs = new Set<string>();
+  const files: string[] = [];
   for (const file of repo.files.values()) {
+    files.push(file.path);
     const parts = file.path.split('/');
-    for (let i = 1; i < parts.length; i += 1) {
-      const dir = parts.slice(0, i).join('/');
-      if (!entries.has(dir)) entries.set(dir, { path: dir, type: 'dir' });
-    }
-    entries.set(file.path, { path: file.path, type: 'file' });
+    for (let i = 1; i < parts.length; i += 1) dirs.add(parts.slice(0, i).join('/'));
   }
-  const list = [...entries.values()].sort((a, b) => a.path.localeCompare(b.path));
-  return { entries: list, truncated: false };
+  const ignoredDirs = ignoredDirSet(dirs, rules);
+  const nodes: FileNode[] = [];
+  for (const dir of dirs) {
+    nodes.push({ path: dir, type: 'dir' });
+  }
+  for (const file of files) nodes.push({ path: file, type: 'file' });
+  nodes.sort((a, b) => a.path.localeCompare(b.path));
+  const entries: FileNode[] = [];
+  for (const node of nodes) {
+    if (hiddenInFullTree(node.path) || ancestorIgnored(node.path, ignoredDirs)) continue;
+    const ignored = node.type === 'dir'
+      ? ignoredDirs.has(node.path)
+      : rules.some((rule) => !rule.dirOnly && rule.test(node.path));
+    entries.push(withIgnored(node, ignored));
+  }
+  return { entries, truncated: false };
+}
+
+function resolveMockDir(raw: string): { ok: true; dir: string } | RepoTreeFailure {
+  const trimmed = raw.trim();
+  if (/^[a-zA-Z]:/.test(trimmed) || trimmed.startsWith('/') || trimmed.startsWith('\\')) {
+    return { ok: false, status: 403, error: '路径超出工作区', code: 'E_SANDBOX' };
+  }
+  const stack: string[] = [];
+  for (const part of trimmed.replaceAll('\\', '/').split('/')) {
+    if (part === '' || part === '.') continue;
+    if (part === '..') {
+      if (stack.length === 0) {
+        return { ok: false, status: 403, error: '路径超出工作区', code: 'E_SANDBOX' };
+      }
+      stack.pop();
+      continue;
+    }
+    stack.push(part);
+  }
+  if (stack.includes('.git')) {
+    return { ok: false, status: 403, error: '.git 不可读', code: 'E_NOT_READABLE' };
+  }
+  return { ok: true, dir: stack.join('/') };
+}
+
+/**
+ * One directory level, including ignored marks. `dir` is a raw relative path;
+ * `.` lists the workspace root's direct children.
+ */
+export function queryRepoTree(repo: MockRepo, dirRaw: string): RepoTreeResult {
+  const resolved = resolveMockDir(dirRaw);
+  if (!resolved.ok) return resolved;
+  const dir = resolved.dir;
+  const files = [...repo.files.keys()];
+  if (dir && files.includes(dir)) {
+    return { ok: false, status: 400, error: '不是目录', code: 'E_BAD_REQUEST' };
+  }
+  const prefix = dir ? `${dir}/` : '';
+  const known = !dir || files.some((file) => file.startsWith(prefix));
+  if (!known) return { ok: false, status: 404, error: '目录不存在', code: 'ENOENT' };
+
+  const rules = ignoreRules(repo);
+  const dirs = new Set<string>();
+  for (const file of files) {
+    const parts = file.split('/');
+    for (let i = 1; i < parts.length; i += 1) dirs.add(parts.slice(0, i).join('/'));
+  }
+  const ignoredDirs = ignoredDirSet(dirs, rules);
+  const children = new Map<string, FileNode['type']>();
+  for (const file of files) {
+    if (prefix && !file.startsWith(prefix)) continue;
+    const rest = prefix ? file.slice(prefix.length) : file;
+    if (!rest) continue;
+    const slash = rest.indexOf('/');
+    const name = slash === -1 ? rest : rest.slice(0, slash);
+    if (name === '.git') continue;
+    const child = prefix + name;
+    children.set(child, slash === -1 ? 'file' : 'dir');
+  }
+  const entries = [...children.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([child, type]) => {
+      const underIgnored = ancestorIgnored(child, ignoredDirs);
+      const ignored = type === 'dir'
+        ? ignoredDirs.has(child) || underIgnored
+        : underIgnored || rules.some((rule) => !rule.dirOnly && rule.test(child));
+      return withIgnored({ path: child, type }, ignored);
+    });
+  const truncated = entries.length > 2000;
+  return { ok: true, tree: { entries: truncated ? entries.slice(0, 2000) : entries, truncated } };
 }
 
 export function readRepoFile(repo: MockRepo, rawPath: string): FileContent | null {
   const file = repo.files.get(posixPath(rawPath));
   return file ? fileContent(file) : null;
 }
+
+function repoHasDir(repo: MockRepo, rel: string): boolean {
+  const prefix = `${rel}/`;
+  for (const filePath of repo.files.keys()) {
+    if (filePath.startsWith(prefix)) return true;
+  }
+  return false;
+}
+
+function rawPathEscapes(raw: string): boolean {
+  if (raw.includes('\0')) return true;
+  const trimmed = raw.trim();
+  if (trimmed.startsWith('/') || trimmed.startsWith('\\') || /^[a-zA-Z]:/.test(trimmed)) return true;
+  return posixPath(raw).split('/').includes('..');
+}
+
+export type RawFileHit = {
+  bytes: Uint8Array;
+  mediaType: string;
+  etag: string;
+};
+
+export type RawFileMiss = { status: number; error: string; code: string };
+
+/** Image bytes for GET /files/raw. Same status codes as the real route. */
+export function readRepoFileRaw(repo: MockRepo, rawPath: string): RawFileHit | RawFileMiss {
+  if (rawPath == null || rawPath === '') {
+    return { status: 400, error: 'path required', code: 'E_BAD_REQUEST' };
+  }
+  if (rawPathEscapes(rawPath)) {
+    return { status: 403, error: 'path outside workspace', code: 'E_SANDBOX' };
+  }
+  const rel = posixPath(rawPath);
+  if (!rel) return { status: 400, error: 'path required', code: 'E_BAD_REQUEST' };
+  const file = repo.files.get(rel);
+  if (!file) {
+    if (repoHasDir(repo, rel)) {
+      return { status: 400, error: 'is a directory', code: 'E_BAD_REQUEST' };
+    }
+    return { status: 404, error: 'not found', code: 'ENOENT' };
+  }
+  const mediaType = imageMediaType(rel);
+  if (!mediaType) {
+    return { status: 415, error: 'unsupported media type', code: 'E_MEDIA' };
+  }
+  const bytes = file.imageBase64 ? decodeBase64(file.imageBase64) : new TextEncoder().encode(file.text);
+  if (bytes.byteLength > MOCK_IMAGE_MAX_BYTES) {
+    return {
+      status: 413,
+      error: `image exceeds ${MOCK_IMAGE_MAX_BYTES} bytes`,
+      code: 'E_TOO_LARGE',
+    };
+  }
+  const etag = `"${versionOf(file.imageBase64 || file.text)}"`;
+  return { bytes, mediaType, etag };
+}
+
+function isRawFileHit(value: RawFileHit | RawFileMiss): value is RawFileHit {
+  return 'bytes' in value;
+}
+
+export { isRawFileHit };
 
 /** Longest common subsequence length; enough for the mock's line counters. */
 function lcsLength(a: string[], b: string[]): number {
@@ -457,6 +713,11 @@ function storeTestSource(): string {
 export function seedWeftRepo(): MockRepo {
   return createRepo([
     {
+      path: 'design/preview.png',
+      text: '',
+      imageBase64: SEED_PREVIEW_PNG_BASE64,
+    },
+    {
       path: 'README.md',
       text: [
         '# weft',
@@ -493,7 +754,15 @@ export function seedWeftRepo(): MockRepo {
     },
     {
       path: '.gitignore',
-      text: ['node_modules/', 'public-next/', 'design/prototype/index.html', '.env', ''].join('\n'),
+      text: ['node_modules/', 'public-next/', 'design/prototype/index.html', '.env', 'dist/', 'secret.log', ''].join('\n'),
+    },
+    {
+      path: 'dist/bundle.js',
+      text: '/* generated */\n',
+    },
+    {
+      path: 'secret.log',
+      text: 'local debug log\n',
     },
     {
       path: 'docs/ARCHITECTURE.md',

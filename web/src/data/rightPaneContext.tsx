@@ -20,6 +20,7 @@ import {
   type FileContent,
   type FileNode,
 } from './api';
+import { dedupeRenamedChanges } from './changeSummary';
 import { copyText } from './copyText';
 import { changeHasDiff, changeSignature, diffTotals } from './diffView';
 import { IDLE_SAVE, saveReducer, type SaveState } from './fileConflict';
@@ -36,6 +37,7 @@ import {
 } from './layout';
 import { useSession } from './session';
 import { conversationTopic, type Change, type ToolCall } from './store';
+import { recordRecentFile } from './recentFiles';
 import { cssViewportWidth } from './uiZoom';
 import { useStoreTopics } from './useStoreTopic';
 import { t } from '../i18n';
@@ -52,7 +54,9 @@ export type RightLayoutValue = {
   width: number;
   setWidth: (width: number) => void;
   persistWidth: (width: number) => void;
-  selectedCommandId: string | null;
+  maximized: boolean;
+  setMaximized: (maximized: boolean) => void;
+  toggleMaximized: () => void;
 };
 
 export type RightChangesValue = {
@@ -66,6 +70,7 @@ export type RightChangesValue = {
 };
 
 export type RightFilesValue = {
+  workspaceId: string | null;
   tree: FileNode[];
   treeTruncated: boolean;
   treeReady: boolean;
@@ -86,7 +91,6 @@ export type RightFilesValue = {
 export type RightActionsValue = {
   openFile: (path: string, line?: number) => void;
   openChangeDiff: (path: string) => void;
-  openTerminal: (toolId?: string) => void;
   showFiles: () => void;
   copyPath: (path: string) => void;
   openInTerminal: (relPath?: string, targetWorkspaceId?: string) => Promise<void>;
@@ -131,6 +135,7 @@ export function RightPaneProvider({
   const [open, setOpenState] = useState(() => defaultRightOpen(cssViewportWidth()));
   const [tab, setTabState] = useState<RightTab>(() => readRightTab());
   const [width, setWidth] = useState(() => readRightWidth());
+  const [maximized, setMaximizedState] = useState(false);
   const [openPaths, setOpenPaths] = useState<Set<string>>(() => new Set());
   const [diffs, setDiffs] = useState<Record<string, Diff | 'loading' | 'error'>>({});
   const [tree, setTree] = useState<FileNode[]>([]);
@@ -143,7 +148,6 @@ export function RightPaneProvider({
   const [editorMode, setEditorMode] = useState<'preview' | 'edit'>('preview');
   const [draftText, setDraftText] = useState('');
   const [saveState, setSaveState] = useState<SaveState>(IDLE_SAVE);
-  const [selectedCommandId, setSelectedCommandId] = useState<string | null>(null);
 
   const wsId = workspaceId || '';
   const changes = useMemo(
@@ -156,7 +160,10 @@ export function RightPaneProvider({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- store is stable; storeVersion tracks writes
     [store, cid, storeVersion],
   );
-  const visibleChanges = useMemo(() => changes.filter(changeHasDiff), [changes]);
+  const visibleChanges = useMemo(
+    () => dedupeRenamedChanges(changes).filter(changeHasDiff),
+    [changes],
+  );
   const totals = useMemo(() => diffTotals(visibleChanges), [visibleChanges]);
   const hasChanges = visibleChanges.length > 0;
 
@@ -181,6 +188,7 @@ export function RightPaneProvider({
 
   const setOpen = useCallback((next: boolean) => {
     setOpenState(next);
+    if (!next) setMaximizedState(false);
     persistRightOpen(next, cssViewportWidth());
   }, []);
 
@@ -191,8 +199,22 @@ export function RightPaneProvider({
   const setTab = useCallback((next: RightTab) => {
     setTabState(next);
     writeRightTab(next);
+    if (next !== 'files') setMaximizedState(false);
     setOpen(true);
   }, [setOpen]);
+
+  const setMaximized = useCallback((next: boolean) => {
+    setMaximizedState(next);
+    if (next) {
+      setOpen(true);
+      setTabState('files');
+      writeRightTab('files');
+    }
+  }, [setOpen]);
+
+  const toggleMaximized = useCallback(() => {
+    setMaximized(!maximized);
+  }, [maximized, setMaximized]);
 
   const persistWidth = useCallback((next: number) => {
     writeRightWidth(next);
@@ -270,8 +292,27 @@ export function RightPaneProvider({
     setDiffs({});
     sigRef.current = {};
     seenDone.current = '';
-    setSelectedCommandId(null);
+    setMaximizedState(false);
   }, [cid]);
+
+  useEffect(() => {
+    if (tab !== 'files') {
+      setMaximizedState(false);
+    }
+  }, [tab]);
+
+  useEffect(() => {
+    if (!maximized) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      if (document.querySelector('.cm-search, .cm-panel.cm-search')) return;
+      if (document.querySelector('.file-tree-drawer')) return;
+      if (document.querySelector('.ctx-menu, [role=dialog]')) return;
+      setMaximizedState(false);
+    };
+    window.addEventListener('keydown', onKeyDown, true);
+    return () => window.removeEventListener('keydown', onKeyDown, true);
+  }, [maximized]);
 
   useEffect(() => {
     if (!cid || visibleChanges.length === 0) return;
@@ -374,6 +415,7 @@ export function RightPaneProvider({
       if (gen !== fileGen.current) return;
       setActiveFilePath(path);
       setFile(content);
+      recordRecentFile(wsId, path);
       setDraftText(content.text ?? '');
       versionRef.current = content.version;
       if (!opts?.preserveEditor) setEditorMode('preview');
@@ -403,11 +445,6 @@ export function RightPaneProvider({
       next.add(path);
       return next;
     });
-  }, [setTab]);
-
-  const openTerminal = useCallback((toolId?: string) => {
-    if (toolId) setSelectedCommandId(toolId);
-    setTab('term');
   }, [setTab]);
 
   const showFiles = useCallback(() => {
@@ -480,7 +517,9 @@ export function RightPaneProvider({
     width,
     setWidth,
     persistWidth,
-    selectedCommandId,
+    maximized,
+    setMaximized,
+    toggleMaximized,
   }), [
     open,
     setOpen,
@@ -490,7 +529,9 @@ export function RightPaneProvider({
     width,
     setWidth,
     persistWidth,
-    selectedCommandId,
+    maximized,
+    setMaximized,
+    toggleMaximized,
   ]);
 
   const changesValue = useMemo<RightChangesValue>(() => ({
@@ -504,6 +545,7 @@ export function RightPaneProvider({
   }), [cid, hasChanges, totals, visibleChanges, openPaths, toggleChange, diffs]);
 
   const filesValue = useMemo<RightFilesValue>(() => ({
+    workspaceId,
     tree,
     treeTruncated,
     treeReady,
@@ -520,7 +562,7 @@ export function RightPaneProvider({
     saveFile,
     reloadFile,
   }), [
-    tree, treeTruncated, treeReady, expandedDirs, toggleDirectory,
+    workspaceId, tree, treeTruncated, treeReady, expandedDirs, toggleDirectory,
     activeFilePath, fileTargetLine, file, editorMode, setEditorMode, draftText,
     setDraftText, saveState, saveFile, reloadFile,
   ]);
@@ -528,12 +570,11 @@ export function RightPaneProvider({
   const actionsValue = useMemo<RightActionsValue>(() => ({
     openFile,
     openChangeDiff,
-    openTerminal,
     showFiles,
     copyPath,
     openInTerminal,
     onToast,
-  }), [openFile, openChangeDiff, openTerminal, showFiles, copyPath, openInTerminal, onToast]);
+  }), [openFile, openChangeDiff, showFiles, copyPath, openInTerminal, onToast]);
 
   return (
     <RightLayoutContext.Provider value={layoutValue}>

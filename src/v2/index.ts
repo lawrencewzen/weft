@@ -1,5 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
+import { createReadStream } from 'node:fs';
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import { pipeline } from 'node:stream/promises';
 import { SECURITY_HEADERS } from '../core/auth.mjs';
 import { formatSSE } from '../core/sse.mjs';
 import {
@@ -63,11 +65,16 @@ import {
   UPLOAD_BODY_MAX_BYTES,
 } from './views/uploads.ts';
 import {
+  openWorkspaceImage,
   readWorkspaceFile,
   saveWorkspaceFile,
+  SVG_IMAGE_CSP,
+  WORKSPACE_IMAGE_MAX_BYTES,
   workspaceTreeView,
   type FileOpError,
+  type WorkspaceImageFile,
 } from './views/files.ts';
+import { searchWorkspaceFiles } from './views/file-search.ts';
 import {
   buildWorkspacesSnapshot,
   conversationSummaryView,
@@ -93,6 +100,7 @@ type SubagentSnapshot = components['schemas']['SubagentSnapshot'];
 type SubagentMessageAccepted = components['schemas']['SubagentMessageAccepted'];
 type Diff = components['schemas']['Diff'];
 type FileTree = components['schemas']['FileTree'];
+type FileSearchResult = components['schemas']['FileSearchResult'];
 type FileContent = components['schemas']['FileContent'];
 type SaveResult = components['schemas']['SaveResult'];
 type FileConflict = components['schemas']['FileConflict'];
@@ -135,6 +143,7 @@ type V2JsonBody =
   | SubagentMessageAccepted
   | Diff
   | FileTree
+  | FileSearchResult
   | FileContent
   | SaveResult
   | FileConflict
@@ -193,8 +202,13 @@ export type SendMode = 'steer' | 'queue';
 export type PostMessage = (
   conv: ConversationRow,
   text: string,
-  opts?: { requestId?: string; content?: unknown; mode?: SendMode },
-) => Promise<{ status: number; body?: { runId?: unknown } }>;
+  opts?: {
+    requestId?: string;
+    content?: unknown;
+    mode?: SendMode;
+    answer?: Record<string, unknown>;
+  },
+) => Promise<{ status: number; body?: { runId?: unknown; error?: unknown; code?: unknown } }>;
 export type WithdrawMessageFn = (
   cid: string,
   requestId: string,
@@ -342,6 +356,45 @@ function sendImageBytes(req: IncomingMessage, res: ServerResponse, mediaType: st
   sendCachedBytes(req, res, mediaType, buf);
 }
 
+const WORKSPACE_IMAGE_CACHE_CONTROL = 'private, no-cache';
+
+function ifNoneMatchHits(header: string | string[] | undefined, etag: string): boolean {
+  const raw = Array.isArray(header) ? header.join(',') : String(header || '');
+  if (!raw) return false;
+  return raw.split(',').map((part) => part.trim()).includes(etag);
+}
+
+/** Stream a workspace image. The body is not buffered. */
+async function sendWorkspaceImage(
+  req: IncomingMessage,
+  res: ServerResponse,
+  image: WorkspaceImageFile,
+): Promise<void> {
+  const headers: Record<string, string> = {
+    ...SECURITY_HEADERS,
+    'content-type': image.mediaType,
+    'content-disposition': 'inline',
+    'cache-control': WORKSPACE_IMAGE_CACHE_CONTROL,
+    etag: image.etag,
+    'Weft-Protocol': PROTOCOL_VERSION,
+  };
+  if (image.mediaType === 'image/svg+xml') {
+    headers['Content-Security-Policy'] = SVG_IMAGE_CSP;
+  }
+  if (ifNoneMatchHits(req.headers['if-none-match'], image.etag)) {
+    res.writeHead(304, headers);
+    res.end();
+    return;
+  }
+  headers['content-length'] = String(image.size);
+  res.writeHead(200, headers);
+  try {
+    await pipeline(createReadStream(image.abs), res);
+  } catch (err) {
+    if (!res.writableEnded) res.destroy(err instanceof Error ? err : undefined);
+  }
+}
+
 async function readObjectBody(
   req: IncomingMessage,
   res: ServerResponse,
@@ -480,6 +533,14 @@ function sendFileOpError(
   if (code === 'E_BAD_REQUEST') {
     const message = err instanceof Error ? err.message : 'bad request';
     sendV2(res, pathname, method, 400, { error: message, code: 'E_BAD_REQUEST' } satisfies V2Error);
+    return true;
+  }
+  if (code === 'ENOTDIR') {
+    sendV2(res, pathname, method, 400, { error: 'not a directory', code: 'E_BAD_REQUEST' } satisfies V2Error);
+    return true;
+  }
+  if (code === 'E_NOT_READABLE') {
+    sendV2(res, pathname, method, 403, { error: '.git is not readable', code: 'E_NOT_READABLE' } satisfies V2Error);
     return true;
   }
   if (code === 'E_CONFLICT') {
@@ -907,11 +968,85 @@ export function createV2Handler(opts: {
         return true;
       }
       try {
-        const tree = await workspaceTreeView(root);
+        const dir = url.searchParams.get('dir');
+        const tree = await workspaceTreeView(root, dir == null ? {} : { dir });
         sendV2(res, pathname, method, 200, tree);
       } catch (err) {
         if (sendFileOpError(res, pathname, method, err)) return true;
         const message = err instanceof Error ? err.message : 'tree failed';
+        sendV2(res, pathname, method, 500, { error: message, code: 'E_INTERNAL' } satisfies V2Error);
+      }
+      return true;
+    }
+
+    const searchMatch = /^\/api\/v2\/workspaces\/([^/]+)\/file-search$/.exec(pathname);
+    if (method === 'GET' && searchMatch) {
+      const workspaceId = decodeURIComponent(searchMatch[1]);
+      let ws: WorkspaceRow | null | undefined = null;
+      try {
+        ws = opts.getWorkspace ? await opts.getWorkspace(workspaceId) : null;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'workspace check failed';
+        sendV2(res, pathname, method, 500, { error: message, code: 'E_INTERNAL' } satisfies V2Error);
+        return true;
+      }
+      const root = workspacePathOf(ws);
+      if (!root) {
+        sendV2(res, pathname, method, 404, { error: 'not found' } satisfies V2Error);
+        return true;
+      }
+      try {
+        const found = await searchWorkspaceFiles(root, url.searchParams.get('q'), {
+          limit: url.searchParams.get('limit'),
+        });
+        sendV2(res, pathname, method, 200, found satisfies FileSearchResult);
+      } catch (err) {
+        if (sendFileOpError(res, pathname, method, err)) return true;
+        const message = err instanceof Error ? err.message : 'file search failed';
+        sendV2(res, pathname, method, 500, { error: message, code: 'E_INTERNAL' } satisfies V2Error);
+      }
+      return true;
+    }
+
+    const rawMatch = /^\/api\/v2\/workspaces\/([^/]+)\/files\/raw$/.exec(pathname);
+    if (method === 'GET' && rawMatch) {
+      const workspaceId = decodeURIComponent(rawMatch[1]);
+      const rel = url.searchParams.get('path');
+      if (rel == null || rel === '') {
+        sendV2(res, pathname, method, 400, { error: 'path required', code: 'E_BAD_REQUEST' } satisfies V2Error);
+        return true;
+      }
+      let ws: WorkspaceRow | null | undefined = null;
+      try {
+        ws = opts.getWorkspace ? await opts.getWorkspace(workspaceId) : null;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'workspace check failed';
+        sendV2(res, pathname, method, 500, { error: message, code: 'E_INTERNAL' } satisfies V2Error);
+        return true;
+      }
+      const root = workspacePathOf(ws);
+      if (!root) {
+        sendV2(res, pathname, method, 404, { error: 'not found' } satisfies V2Error);
+        return true;
+      }
+      try {
+        const image = await openWorkspaceImage(root, rel);
+        await sendWorkspaceImage(req, res, image);
+      } catch (err) {
+        const code = errCode(err);
+        if (code === 'E_MEDIA') {
+          sendV2(res, pathname, method, 415, { error: 'unsupported media type', code: 'E_MEDIA' } satisfies V2Error);
+          return true;
+        }
+        if (code === 'E_TOO_LARGE') {
+          sendV2(res, pathname, method, 413, {
+            error: `image exceeds ${WORKSPACE_IMAGE_MAX_BYTES} bytes`,
+            code: 'E_TOO_LARGE',
+          } satisfies V2Error);
+          return true;
+        }
+        if (sendFileOpError(res, pathname, method, err)) return true;
+        const message = err instanceof Error ? err.message : 'read failed';
         sendV2(res, pathname, method, 500, { error: message, code: 'E_INTERNAL' } satisfies V2Error);
       }
       return true;
@@ -1222,6 +1357,7 @@ export function createV2Handler(opts: {
       }
       let text: string;
       let content: unknown = '';
+      let answer: Record<string, unknown> | undefined;
       let sendImages: MessageImage[] = [];
       let sendPastes: string[] = [];
       let sendFiles: Array<{ path: string; name?: string; bytes?: number }> = [];
@@ -1258,8 +1394,27 @@ export function createV2Handler(opts: {
           } satisfies V2Error);
           return true;
         }
+        if (body.answer != null) {
+          if (typeof body.answer !== 'object' || Array.isArray(body.answer)) {
+            sendV2(res, pathname, method, 400, { error: 'invalid answer', code: 'E_BAD_REQUEST' } satisfies V2Error);
+            return true;
+          }
+          answer = body.answer as Record<string, unknown>;
+          if (
+            parsedImages.images.length > 0
+            || parsedPastes.pastes.length > 0
+            || parsedFiles.files.length > 0
+          ) {
+            sendV2(res, pathname, method, 400, {
+              error: 'answer cannot include attachments',
+              code: 'E_BAD_REQUEST',
+            } satisfies V2Error);
+            return true;
+          }
+        }
         if (
-          !text
+          !answer
+          && !text
           && parsedImages.images.length === 0
           && parsedPastes.pastes.length === 0
           && parsedFiles.files.length === 0
@@ -1348,9 +1503,19 @@ export function createV2Handler(opts: {
         mode = parsedMode.value;
       }
       try {
-        const posted = await opts.postMessage(conv, text, { requestId, content, mode });
+        const posted = await opts.postMessage(conv, text, { requestId, content, mode, answer });
         if (posted.status === 404) {
           sendV2(res, pathname, method, 404, { error: 'not found' } satisfies V2Error);
+          return true;
+        }
+        if (posted.status === 400 || posted.status === 409) {
+          const code = typeof posted.body?.code === 'string' && posted.body.code
+            ? posted.body.code
+            : (posted.status === 409 ? 'E_ASK_ANSWERED' : 'E_BAD_REQUEST');
+          const error = typeof posted.body?.error === 'string' && posted.body.error
+            ? posted.body.error
+            : (posted.status === 409 ? 'already answered' : 'bad request');
+          sendV2(res, pathname, method, posted.status, { error, code } satisfies V2Error);
           return true;
         }
         const runId = posted.body?.runId;

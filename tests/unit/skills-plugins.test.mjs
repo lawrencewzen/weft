@@ -227,11 +227,16 @@ test('plugin import loads a module and rejects metadata, symlinks, and path esca
   );
 });
 
-test('install directory ships no plugins or skills, and a fresh data dir lists neither', async () => {
+test('install directory ships only the ask plugin and no skills', async () => {
   const repoSkills = await listSkills([path.join(ROOT, 'skills')], {});
   const repoPlugins = await describePlugins([path.join(ROOT, 'plugins')], {});
   assert.deepEqual(repoSkills, []);
-  assert.deepEqual(repoPlugins, []);
+  assert.equal(repoPlugins.length, 1);
+  assert.equal(repoPlugins[0].id, 'ask');
+  assert.equal(repoPlugins[0].loaded, true);
+  assert.equal(repoPlugins[0].enabled, true);
+  assert.equal(repoPlugins[0].tools[0].name, 'ask_user_question');
+  assert.equal(Object.hasOwn(repoPlugins[0], 'handlers'), false);
 
   const token = 'unit-test-token-empty-ext';
   const srv = await startServer({ token, env: { WEFT_LLM: 'faux' } });
@@ -241,7 +246,9 @@ test('install directory ships no plugins or skills, and a fresh data dir lists n
     assert.equal(skills.status, 200);
     assert.deepEqual(skills.body, []);
     assert.equal(plugins.status, 200);
-    assert.deepEqual(plugins.body, []);
+    assert.deepEqual(plugins.body.map((plugin) => plugin.id), ['ask']);
+    assert.equal(plugins.body[0].loaded, true);
+    assert.equal(plugins.body[0].tools[0].name, 'ask_user_question');
 
     const discovery = await readDiscovery(srv.dataDir);
     const v2Skills = await fetch(`${srv.base}/api/v2/skills`, {
@@ -253,7 +260,10 @@ test('install directory ships no plugins or skills, and a fresh data dir lists n
     assert.equal(v2Skills.status, 200);
     assert.deepEqual((await v2Skills.json()).skills, []);
     assert.equal(v2Plugins.status, 200);
-    assert.deepEqual((await v2Plugins.json()).plugins, []);
+    const v2PluginBody = await v2Plugins.json();
+    assert.deepEqual(v2PluginBody.plugins.map((plugin) => plugin.id), ['ask']);
+    assert.equal(v2PluginBody.plugins[0].loaded, true);
+    assert.equal(v2PluginBody.plugins[0].tools[0].name, 'ask_user_question');
 
     const log = srv.logs();
     assert.match(log, /WEFT_READY /);

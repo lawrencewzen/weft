@@ -18,6 +18,7 @@ export type ToolLike = {
   added?: unknown;
   removed?: unknown;
   code?: unknown;
+  ask?: unknown;
 };
 
 export type ToolFocus = { mode: 'path' | 'text'; text: string };
@@ -25,6 +26,8 @@ export type ToolRowHeading = { title: string; detail: string; intent: boolean };
 export type ToolHint = { text: string; failed: boolean };
 
 type ToolCall = components['schemas']['ToolCall'];
+type AskCall = components['schemas']['AskCall'];
+const ASK_TOOL_NAME = 'ask_user_question';
 type ToolGroupSummary = components['schemas']['ToolGroupSummary'];
 type Translate = (key: string, params?: Record<string, unknown>) => string;
 type JsonObject = Record<string, unknown>;
@@ -784,6 +787,56 @@ function toolFailure(tool: ToolLike, group: ToolLike[]): ToolFailureKind {
   return 'none';
 }
 
+function askCallOf(tool: ToolLike | null | undefined): AskCall | undefined {
+  const raw = tool?.ask;
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+  const body = raw as { questions?: unknown; answer?: unknown };
+  if (!Array.isArray(body.questions) || body.questions.length < 1 || body.questions.length > 4) return undefined;
+  const questions: AskCall['questions'] = [];
+  for (const item of body.questions) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) return undefined;
+    const q = item as Record<string, unknown>;
+    if (typeof q.question !== 'string' || typeof q.header !== 'string' || typeof q.multiSelect !== 'boolean') {
+      return undefined;
+    }
+    if (!Array.isArray(q.options) || q.options.length < 2 || q.options.length > 4) return undefined;
+    const options: AskCall['questions'][number]['options'] = [];
+    for (const opt of q.options) {
+      if (!opt || typeof opt !== 'object' || Array.isArray(opt)) return undefined;
+      const row = opt as Record<string, unknown>;
+      if (typeof row.label !== 'string' || typeof row.description !== 'string') return undefined;
+      options.push({ label: row.label, description: row.description });
+    }
+    questions.push({
+      question: q.question,
+      header: q.header,
+      multiSelect: q.multiSelect,
+      options,
+    });
+  }
+  let answer: AskCall['answer'] = null;
+  if (body.answer != null) {
+    if (typeof body.answer !== 'object' || Array.isArray(body.answer)) return undefined;
+    const state = body.answer as { answers?: unknown; skipped?: unknown };
+    if (!Array.isArray(state.answers) || typeof state.skipped !== 'boolean') return undefined;
+    const answers: NonNullable<AskCall['answer']>['answers'] = [];
+    for (const item of state.answers) {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) return undefined;
+      const row = item as Record<string, unknown>;
+      if (!Number.isInteger(row.questionIndex) || !Array.isArray(row.selected)) return undefined;
+      if (row.selected.some((label) => typeof label !== 'string')) return undefined;
+      const next: (typeof answers)[number] = {
+        questionIndex: row.questionIndex as number,
+        selected: row.selected as string[],
+      };
+      if (typeof row.other === 'string' && row.other) next.other = row.other;
+      answers.push(next);
+    }
+    answer = { answers, skipped: state.skipped };
+  }
+  return { questions, answer };
+}
+
 function diffView(tool: ToolLike): ToolCall['diff'] {
   const counts = toolDiffCounts(tool);
   if (counts.added == null && counts.removed == null) return null;
@@ -798,7 +851,9 @@ export function toolCallView(
   const lang = opts.lang;
   const workspacePath = opts.workspacePath || '';
   const group = (Array.isArray(groupTools) && groupTools.length ? groupTools : [tool]).filter(Boolean) as ToolLike[];
-  const kind = toolKind(tool?.name);
+  const namedAsk = String(tool?.name || '') === ASK_TOOL_NAME;
+  const ask = namedAsk ? askCallOf(tool) : undefined;
+  const kind: ToolCall['kind'] = namedAsk ? 'ask' : toolKind(tool?.name);
   const status = toolStatusBucket(tool?.status);
   const path = displayPath(tool, workspacePath);
   const outputText = toolOutputText(tool, workspacePath);
@@ -827,6 +882,17 @@ export function toolCallView(
   if (path) view.path = path;
   const exitCode = bashExitCode(tool);
   if (kind === 'bash' && exitCode != null) view.exitCode = exitCode;
+  if (ask) {
+    view.ask = ask;
+    const first = ask.questions[0];
+    if (first && !view.heading.title) {
+      view.heading = {
+        title: first.header || first.question,
+        detail: first.header ? first.question : '',
+        fromIntent: false,
+      };
+    }
+  }
   return view;
 }
 

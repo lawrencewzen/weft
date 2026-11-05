@@ -72,8 +72,7 @@ test('seeded no-project conversation hides git chip and still has a right pane',
   await expect(page.getByTestId('next-tool-group')).toHaveCount(1);
   await page.getByTestId('next-right-tab-files').click();
   await expect(page.locator('[data-testid=next-file-node][data-path="README.md"]')).toBeVisible();
-  await page.getByTestId('next-right-tab-term').click();
-  await expect(page.getByTestId('next-term-pane')).toBeVisible();
+  await expect(page.getByTestId('next-right-tab-term')).toHaveCount(0);
 
   expectClean(state);
 });

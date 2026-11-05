@@ -193,6 +193,24 @@ test('changeView normalizes win32 separators and maps error', () => {
   assert.equal(changeView({ path: 'a.txt', error: '文件过大' }).error, '文件过大');
 });
 
+test('changeView keeps snapshot status and oldPath', () => {
+  const renamed = changeView({
+    path: 'F.txt',
+    added: 0,
+    removed: 0,
+    status: 'renamed',
+    oldPath: path.win32.join('dir', 'E.txt'),
+  });
+  assert.equal(renamed.status, 'renamed');
+  assert.equal(renamed.oldPath, 'dir/E.txt');
+  assert.equal(renamed.error, null);
+  assertSchema('Change', renamed);
+  const plain = changeView({ path: 'a.txt', added: 1, removed: 0 });
+  assert.equal(plain.status, undefined);
+  assert.equal(Object.hasOwn(plain, 'oldPath'), false);
+  assertSchema('Change', plain);
+});
+
 test('changeView maps main and sub-agent by', () => {
   assert.deepEqual(changeView({ path: 'a.txt', added: 1, by: { kind: 'main' } }).by, { kind: 'main' });
   assert.deepEqual(

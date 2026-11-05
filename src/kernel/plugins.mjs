@@ -9,6 +9,59 @@ import { EXT_PLUGIN_RELOAD, EXT_PLUGIN_TOOLS } from './ids.mjs';
 
 const LOOSE_PARAMS = Type.Object({}, { additionalProperties: true });
 const EXTENSION = EXT_PLUGIN_TOOLS;
+const DETAILS_MAX_BYTES = 64 * 1024;
+
+function plainDetails(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return { ok: false, error: 'plugin details must be a JSON object' };
+  }
+  let text;
+  try {
+    text = JSON.stringify(value);
+  } catch {
+    return { ok: false, error: 'plugin details must be JSON-serializable' };
+  }
+  if (Buffer.byteLength(text, 'utf8') > DETAILS_MAX_BYTES) {
+    return { ok: false, error: 'plugin details exceed 64KB' };
+  }
+  return { ok: true, value: JSON.parse(text) };
+}
+
+/**
+ * Plugin handler result → Pi Durable tool result.
+ * `{ output, status }` stays `{ output, isError }`. `details` is passed through
+ * when it is a JSON object of at most 64KB. `terminate: true` becomes
+ * `control: { terminate: true }` so the round can end without another model request.
+ */
+export function mapPluginResult(result) {
+  const payload = typeof result === 'string' ? result : result?.output ?? '';
+  const text = typeof payload === 'string' ? payload : JSON.stringify(payload ?? '');
+  const isError = typeof result === 'object' && result != null && result.status === 'error';
+  if (typeof result === 'object' && result != null && Object.prototype.hasOwnProperty.call(result, 'details') && result.details != null) {
+    const details = plainDetails(result.details);
+    if (!details.ok) {
+      return {
+        output: [{ type: 'text', text: details.error }],
+        isError: true,
+      };
+    }
+    const out = {
+      output: [{ type: 'text', text: text.slice(0, 32_000) }],
+      isError,
+      details: details.value,
+    };
+    if (result.terminate === true && !isError) out.control = { terminate: true };
+    return out;
+  }
+  const out = {
+    output: [{ type: 'text', text: text.slice(0, 32_000) }],
+    isError,
+  };
+  if (typeof result === 'object' && result != null && result.terminate === true && !isError) {
+    out.control = { terminate: true };
+  }
+  return out;
+}
 
 function pluginTool(spec, store, byHarness) {
   const handler = spec.handler;
@@ -33,12 +86,7 @@ function pluginTool(spec, store, byHarness) {
           isError: true,
         };
       }
-      const payload = typeof result === 'string' ? result : result?.output ?? '';
-      const text = typeof payload === 'string' ? payload : JSON.stringify(payload ?? '');
-      return {
-        output: [{ type: 'text', text: text.slice(0, 32_000) }],
-        isError: result?.status === 'error',
-      };
+      return mapPluginResult(result);
     },
   });
 }

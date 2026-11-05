@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, writeFile, mkdir } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile, mkdir, access, readdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import assert from 'node:assert/strict';
@@ -142,6 +142,17 @@ test('runtime copy list includes the built app and the OpenAPI file the server l
     assert.equal(OPTIONAL_APP_PATHS.includes(rel), false, rel);
   }
   assert.deepEqual(OPTIONAL_APP_PATHS, ['plugins', 'skills']);
+});
+
+test('pack copy includes the preinstalled ask plugin', async () => {
+  assert.equal(OPTIONAL_APP_PATHS.includes('plugins'), true);
+  const root = path.join(import.meta.dirname, '../..');
+  const manifest = JSON.parse(await readFile(path.join(root, 'plugins/ask/plugin.json'), 'utf8'));
+  assert.equal(manifest.id, 'ask');
+  assert.equal(manifest.main, 'index.mjs');
+  await access(path.join(root, 'plugins/ask/index.mjs'));
+  const skillNames = (await readdir(path.join(root, 'skills'))).filter((name) => name !== '.gitkeep');
+  assert.deepEqual(skillNames, []);
 });
 
 test('zip roundtrip keeps unicode names and bytes', async () => {

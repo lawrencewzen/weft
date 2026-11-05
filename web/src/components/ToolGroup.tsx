@@ -17,11 +17,17 @@ type Props = {
 };
 
 export function ToolGroup({ item, toolsById, lang, onLoadOutput }: Props) {
-  const [open, setOpen] = useState(false);
+  const tools = item.toolIds.map((id) => toolsById[id]).filter((tool): tool is ToolCall => Boolean(tool));
+  const hasAsk = tools.some((tool) => tool.kind === 'ask' && Boolean(tool.ask));
+  const isOnlyAsk = tools.length > 0 && tools.every((tool) => tool.kind === 'ask' && Boolean(tool.ask));
+  const [open, setOpen] = useState(hasAsk);
   const [showOlder, setShowOlder] = useState(false);
   const [seenAt, setSeenAt] = useState<number | null>(null);
   const [now, setNow] = useState(() => Date.now());
-  const tools = item.toolIds.map((id) => toolsById[id]).filter((tool): tool is ToolCall => Boolean(tool));
+
+  useEffect(() => {
+    if (hasAsk) setOpen(true);
+  }, [hasAsk]);
   const hidden = !showOlder && tools.length > TOOL_GROUP_PREVIEW ? tools.length - TOOL_GROUP_PREVIEW : 0;
   const visible = hidden ? tools.slice(-TOOL_GROUP_PREVIEW) : tools;
   const spinning = item.summary.running || item.live;
@@ -51,6 +57,21 @@ export function ToolGroup({ item, toolsById, lang, onLoadOutput }: Props) {
 
   const elapsed = item.live && seenAt != null ? formatElapsed(now - seenAt) : null;
   const groupStatus: StatusIconType = spinning ? 'running' : realFailed ? 'failed' : 'done';
+
+  if (isOnlyAsk) {
+    return (
+      <div className="tool-group-ask-direct" data-testid="next-tool-group-ask-direct">
+        {tools.map((tool) => (
+          <ToolRow
+            key={tool.id}
+            tool={tool}
+            lang={lang}
+            onLoadOutput={onLoadOutput}
+          />
+        ))}
+      </div>
+    );
+  }
 
   return (
     <div className={groupClass} data-testid="next-tool-group" data-id={item.id} data-live={item.live ? 'true' : 'false'}>

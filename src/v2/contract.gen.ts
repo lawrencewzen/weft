@@ -94,7 +94,7 @@ export interface paths {
          *     - `item`：id 为 ThreadItem.id，值为 ThreadItem
          *     - `tool`：id 为 ToolCall.id，值为 ToolCall
          *     - `subagent`：id 为子 Agent id，值为 Subagent。卡住由服务端判定：kernel 状态为 running 且超过 stuckAfterMs（默认 60000，环境变量 WEFT_SUBAGENT_STUCK_MS）没有活动时 status 为 stuck，到点推送 upsert。
-         *     - `change`：id 为相对工作区的路径（统一用 `/`），值为 Change。快照带上当前变更列表。工具结束（write / edit / bash 都可能改文件）或经保存接口写入后随重算更新：变了才 upsert，从列表消失则 remove。不做文件监听。
+         *     - `change`：id 为相对工作区的路径（统一用 `/`），值为 Change。git 工作区以会话第一次发消息前拍下的工作区树为基准，只列出之后的新增、修改、删除和重命名；不是 git 仓库时仍只统计 write/edit。工具结束（write / edit / bash 都可能改文件）或经保存接口写入后随重算更新：变了才 upsert，从列表消失则 remove。不做文件监听。
          *
          *     快照是 GET /api/v2/conversations/{id} 的 conversation / items / tools，再加上该对话的 subagent 和 change 实体。模型流式输出时先 upsert 一条 `item`，id 以 `live:` 开头、`streaming` 为 true、`text` 为空；随后用 `text.delta` 追加。正式助手消息到来后 remove 这条流式项，再 upsert 正式项和 conversation。bash 工具运行中用 `tool.delta` 追加保留窗口（不要复用 `text.delta`）；偏移对不上时客户端丢掉本地缓冲，等下一次 upsert。
          *
@@ -534,11 +534,50 @@ export interface paths {
         };
         /**
          * 工作区文件树
-         * @description 复用 listWorkspaceTree：最多 500 条、深度 8，跳过 .git 和 node_modules。
+         * @description 复用 listWorkspaceTree：最多 500 条、深度 8。不带 dir 时跳过 .git 和 node_modules。
+         *     工作区是 git 仓库时，一次请求只跑一次
+         *     `git ls-files -z --others --ignored --exclude-standard --directory`。
+         *     命中的条目带 `ignored: true`（只有 true 才返回该字段）。
+         *     被忽略的目录只列出自身，不递归，且不计入 500 条。
+         *     非 git 仓库、git 不可用或检查失败时不带 ignored，树照常返回。
          *     达到条数上限时 truncated 为 true。path 相对工作区，统一用 `/`。
          *     越界的符号链接跳过。工作区不存在或已移除 404。
+         *     可选查询参数 dir 为相对目录时，只返回该目录的直接子项（含 ignored），供展开被忽略目录。
+         *     这一层不套用 500 条和深度 8，但最多 2000 条，超过时 truncated 为 true。
+         *     不存在 404；不是目录 400；越界 403 E_SANDBOX。
+         *     .git 永远不可读（403 E_NOT_READABLE）。dir 指向 node_modules 或其子目录时允许按需列出。
          */
         get: operations["getWorkspaceTree"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/workspaces/{id}/file-search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 搜索工作区文件
+         * @description 大小写不敏感的子序列匹配，给 Cmd+P 和文件树搜索用。
+         *     查询字符按顺序出现在路径里即可，不必连续。文件名命中优于目录命中，
+         *     连续命中和前缀命中更靠前，分数相同则路径更短的靠前。只返回文件。
+         *     q 为空时返回空列表，不扫描磁盘。
+         *     limit 默认 50，大于 200 时按 200，缺省或非法时按 50。
+         *     工作区是 git 仓库时用 `git ls-files -z --cached --others --exclude-standard`
+         *     （cwd 为工作区，子目录工作区的路径相对该目录）。遵守 .gitignore；
+         *     未被忽略的未跟踪文件会返回。git 超时 5 秒。
+         *     不是 git 仓库、git 不可用或命令失败时改为遍历目录，跳过 `.git` 和 `node_modules`，
+         *     不跟随符号链接。路径经 resolveInWorkspace 校验，工作区外的路径不返回。
+         *     文件列表按工作区缓存约 2 秒。文件数超过 200000 时 truncated 为 true。
+         */
+        get: operations["searchWorkspaceFiles"];
         put?: never;
         post?: never;
         delete?: never;
@@ -561,6 +600,7 @@ export interface paths {
          *     Windows 默认启用检测（其他系统需 WEFT_TEXT_ENCODING_DETECT=1）：对未超限文件用磁盘字节识别编码。
          *     GBK 视为文本并解码；utf8-bom 仍按 UTF-8 解码并保留 U+FEFF；含 NUL 或无法识别为文本的仍按二进制。
          *     识别成功时可选字段 encoding 为 utf8 / utf8-bom / gbk。
+         *     扩展名在图片白名单（png、jpg、jpeg、gif、webp、bmp、svg、ico）内时 image 为 true，字节走 GET /files/raw。
          *     version 是磁盘字节 sha256 的十六进制前 16 位，保存时用来检测冲突。
          *     越界 403 E_SANDBOX；不存在 404；是目录 400。
          */
@@ -576,6 +616,34 @@ export interface paths {
          *     越界 403 E_SANDBOX。写入后若该文件在某个对话的变更列表里，对应 conversation 主题会重算。
          */
         put: operations["saveWorkspaceFile"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/workspaces/{id}/files/raw": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 读取工作区里的图片字节
+         * @description 供文件面板用 img 预览。只允许扩展名白名单：png、jpg、jpeg、gif、webp、bmp、svg、ico（大小写不敏感）。
+         *     Content-Type 按扩展名给出，不根据文件内容猜测。其他扩展名 415 E_MEDIA。
+         *     鉴权和路径校验与 GET /files 相同，并且接受 session cookie（weft_session）：浏览器图片请求带不上 Authorization。
+         *     越界 403 E_SANDBOX；不存在 404；是目录 400；缺少 path 也是 400。
+         *     超过 20 MB 返回 413 E_TOO_LARGE，不把文件读进内存。成功响应是流。
+         *     ETag 是内容 sha256 十六进制前 16 位，带引号，与 FileContent.version 同一算法。
+         *     If-None-Match 命中返回 304。Cache-Control 为 private, no-cache。
+         *     一律带 X-Content-Type-Options: nosniff 和 Content-Disposition: inline。
+         *     svg 额外带 Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; sandbox。
+         */
+        get: operations["getWorkspaceFileRaw"];
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -866,8 +934,15 @@ export interface paths {
          * 向对话发消息
          * @description 空闲时发出去就是新一轮。运行中再发：默认 `mode: steer` 插话（Pi Durable `whenBusy: steer`，
          *     当前工具批次结束后写入对话）；`mode: queue` 排队（`whenBusy: followUp`，本轮结束后才作为新消息执行）。
-         *     `text` 去掉首尾空白后，若没有 `images`、`files`、`pastes` 则不能为空。
+         *     `text` 去掉首尾空白后，若没有 `images`、`files`、`pastes`、`answer` 则不能为空。
          *     只有图片、文件或粘贴没有文字也可以发送。`files` 的 path 必须是该工作区 `.weft/uploads/` 下已存在的文件。
+         *     `answer` 是对一次 `ask_user_question` 的回答。有 `answer` 时 `text` 可省略或为空，且不能同时带
+         *     `images` / `files` / `pastes`。服务端校验 `toolCallId` 属于本对话、对应一次已完成且未失败的提问、
+         *     且还没有 `weft.ask-answer` 条目、也还没被普通用户消息跳过；通过后生成给模型看的 content（每题的问题，以及所选 label、
+         *     「其他：…」或「用户跳过」），并以
+         *     `submit({ type: 'input', content, entry: { kind: 'weft.ask-answer', data } })` 提交
+         *     （kind 不以 `pi.` 开头）。同一 `toolCallId` 再次回答，或提问已因普通用户消息记为 skipped，返回 409 `E_ASK_ANSWERED`。
+         *     子 Agent 汇报和自动续写虽是 pi.user，不算跳过。
          *     `requestId` 缺省时服务端生成；同一个 requestId 重复请求返回同一个 runId。
          */
         post: operations["postConversationMessage"];
@@ -1102,8 +1177,13 @@ export interface components {
             mediaType: string;
         };
         SendMessageRequest: {
-            /** @description 用户输入。去掉首尾空白后，若没有 images / files / pastes 则不能为空。 */
+            /**
+             * @description 用户输入。去掉首尾空白后，若没有 images / files / pastes / answer 则不能为空。
+             *     有 answer 时 text 可省略或为空；服务端另写给模型看的回答文本，不使用 text。
+             */
             text?: string;
+            /** @description 回答一次 ask_user_question。有 answer 时 text 可为空，且不能同时带 images / files / pastes。 */
+            answer?: components["schemas"]["AskAnswerRequest"];
             /** @description 内联图片。data 是不带 data URL 前缀的标准 base64，mediaType 为 png / jpeg / gif / webp。 单张解码后不超过 5MB，一条最多 6 张。选内联而不是先上传再拿 id，是因为 Pi Durable 的 UserInput 原生就是 TextContent | ImageContent，图片进对话记录后刷新才能再显示。 */
             images?: components["schemas"]["MessageImage"][];
             /** @description 已上传到该工作区 `.weft/uploads/` 的文件。path 相对工作区、正斜杠，必须真实存在， 否则 400 E_BAD_REQUEST。一条最多 20 个。服务端拼进一条 TextContent，模型用读文件工具去读。 */
@@ -1291,13 +1371,63 @@ export interface components {
         };
         /** @description SSE event=heartbeat 的 data。不带 id，不进环形缓冲。 */
         HeartbeatEvent: Record<string, never>;
-        /** @description 单条工具调用的视图模型。全文按需拉 GET /api/v2/conversations/{id}/tools/{toolId}/output。 */
+        /** @description 一个选项。界面会另加「其他」自由输入，这里不要包含它。 */
+        AskOption: {
+            label: string;
+            description: string;
+        };
+        /** @description 一道选择题。options 为 2 到 4 个。 */
+        AskQuestion: {
+            question: string;
+            /** @description 短标题，最多 12 个字符 */
+            header: string;
+            multiSelect: boolean;
+            options: components["schemas"]["AskOption"][];
+        };
+        /** @description 一道题的回答。 */
+        AskSelection: {
+            /** @description 题目下标，从 0 起 */
+            questionIndex: number;
+            /** @description 选中的 option.label。单选最多 1 个。 */
+            selected: string[];
+            /** @description 「其他」自由输入。单选时与 selected 互斥。 */
+            other?: string;
+        };
+        /** @description 已回填的回答。skipped 为 true 且 answers 为空表示整段未答。 */
+        AskAnswerState: {
+            answers: components["schemas"]["AskSelection"][];
+            /** @description 用户整段跳过，或这道题没有选项也没有「其他」时为 true */
+            skipped: boolean;
+        };
+        /** @description ask_user_question 的题目和回答状态。 */
+        AskCall: {
+            questions: components["schemas"]["AskQuestion"][];
+            /**
+             * @description null 表示还在等用户。有 weft.ask-answer 时按其 data 回填。
+             *     用户没答就发了普通消息时为 { answers: [], skipped: true }，此后再提交 answer 为 409。
+             *     子 Agent 汇报和自动续写不算这种普通消息。
+             */
+            answer: null | components["schemas"]["AskAnswerState"];
+        };
+        /**
+         * @description 提交对一次提问的回答。服务端校验 toolCallId 属于本对话且尚未回答。
+         *     重复回答同一 toolCallId，或该提问已因普通用户消息记为 skipped，返回 409 E_ASK_ANSWERED。
+         *     子 Agent 汇报和自动续写不算跳过，仍可回答。
+         */
+        AskAnswerRequest: {
+            /** @description 本对话里一次 ask_user_question 的工具调用 id */
+            toolCallId: string;
+            answers: components["schemas"]["AskSelection"][];
+            /** @description 为 true 且 answers 为空时，每一题都记为用户跳过 */
+            skipped?: boolean;
+        };
+        /** @description 单条工具调用的视图模型。全文按需拉 GET /api/v2/conversations/{id}/tools/{toolId}/output。ask_user_question 的 kind 为 ask。 */
         ToolCall: {
             id: string;
             /** @description 所属工具组 id，由组内第一条调用算出 */
             groupId: string;
             /** @enum {string} */
-            kind: "read" | "write" | "edit" | "ls" | "grep" | "bash" | "other";
+            kind: "read" | "write" | "edit" | "ls" | "grep" | "bash" | "ask" | "other";
             /** @enum {string} */
             status: "running" | "failed" | "interrupted" | "done";
             heading: {
@@ -1329,6 +1459,16 @@ export interface components {
                 /** @description Harness 保留的输出窗口（尾部）。运行中的 bash 或预览被截断时带上；省略则预览即全文 */
                 text?: string;
             };
+            /**
+             * @description 仅 ask_user_question，且参数通过插件校验时出现。kind 为 ask。
+             *     questions 来自工具结果 details（插件校验后的题目）。
+             *     answer 为 null：这条提问之后还没有真正的用户消息，界面继续等回答。
+             *     子 Agent 汇报（`[subagent …]`）和自动续写（`[auto-continue]`）虽是 pi.user，不算用户作答，answer 保持 null。
+             *     之后若有 kind 为 weft.ask-answer 的条目（不以 pi. 开头），按其 data 回填 answer。
+             *     用户没答就发了普通消息（之后出现普通 pi.user，且没有这条 toolCallId 的 weft.ask-answer）时，
+             *     answer 为 { answers: [], skipped: true }。这时再提交 answer 返回 409 E_ASK_ANSWERED。
+             */
+            ask?: components["schemas"]["AskCall"];
         };
         /** @description 工具组摘要。对应 ThreadItem.tool_group.summary。 */
         ToolGroupSummary: {
@@ -1928,7 +2068,7 @@ export interface components {
             /** @description 子 Agent 名。前端显示成「子 · <name>」 */
             name: string;
         };
-        /** @description 对话右栏变更列表的一项。SSE conversation 主题里 entity=change，id 为 path。 */
+        /** @description 对话右栏变更列表的一项。SSE conversation 主题里 entity=change，id 为 path。git 工作区对比会话起点快照与当前工作区；不是 git 仓库、git 不可用或快照失败时没有 status / oldPath，只含 write/edit 记录。 */
         Change: {
             /** @description 相对工作区的路径，统一用 `/` */
             path: string;
@@ -1938,6 +2078,13 @@ export interface components {
             error: null | string;
             /** @description 最后一次 write/edit 这个文件的是谁。主 Agent 和子 Agent 都改过时取最后一次。只被 bash 等非 write/edit 工具改、拿不到归属时为 null */
             by: null | components["schemas"]["ChangeByMain"] | components["schemas"]["ChangeBySubagent"];
+            /**
+             * @description 相对会话起点工作区快照。added 新建，modified 内容变化，deleted 删除，renamed 重命名。非 git 回退时没有此字段。
+             * @enum {string}
+             */
+            status?: "added" | "modified" | "deleted" | "renamed";
+            /** @description status 为 renamed 时的原相对路径（统一用 `/`）。其他情况为 null。非 git 回退时没有此字段。 */
+            oldPath?: null | string;
         };
         DiffLine: {
             /** @enum {string} */
@@ -1972,11 +2119,26 @@ export interface components {
             path: string;
             /** @enum {string} */
             type: "file" | "dir";
+            /** @description 命中 gitignore 时为 true。未忽略、非 git 仓库或 git 不可用时不返回该字段。 */
+            ignored?: boolean;
         };
         /** @description GET /api/v2/workspaces/{id}/tree 的响应。 */
         FileTree: {
             entries: components["schemas"]["FileNode"][];
-            /** @description 达到 500 条上限时为 true */
+            /** @description 不带 dir 时，计入上限的条目达到 500 为 true，标为 ignored 的目录不计入。带 dir 时，直接子项超过 2000 为 true。 */
+            truncated: boolean;
+        };
+        /** @description 文件搜索的一条命中。 */
+        FileSearchHit: {
+            /** @description 相对工作区的路径，统一用 `/`，只含文件 */
+            path: string;
+            /** @description 匹配分，越高越靠前 */
+            score?: number;
+        };
+        /** @description GET /api/v2/workspaces/{id}/file-search 的响应。 */
+        FileSearchResult: {
+            entries: components["schemas"]["FileSearchHit"][];
+            /** @description 工作区文件数超过 200000，列表被截断，结果可能不完整 */
             truncated: boolean;
         };
         /** @description GET /api/v2/workspaces/{id}/files 的响应。 */
@@ -1996,6 +2158,8 @@ export interface components {
              * @enum {string}
              */
             encoding?: "utf8" | "utf8-bom" | "gbk";
+            /** @description 扩展名在图片白名单（png、jpg、jpeg、gif、webp、bmp、svg、ico）内时为 true。缺省表示不是图片。 */
+            image?: boolean;
         };
         /** @description PUT /api/v2/workspaces/{id}/files 的请求体。 */
         SaveFileRequest: {
@@ -4126,7 +4290,14 @@ export interface operations {
     };
     getWorkspaceTree: {
         parameters: {
-            query?: never;
+            query?: {
+                /**
+                 * @description 相对工作区的目录。给出时只返回该目录的直接子项，最多 2000 条，超过时 truncated 为 true。
+                 *     不存在 404；不是目录 400；越界 403 E_SANDBOX。.git 不可读（403 E_NOT_READABLE）。
+                 *     不带此参数时仍跳过 .git 和 node_modules；指向 node_modules 时允许列出。
+                 */
+                dir?: string;
+            };
             header?: never;
             path: {
                 /** @description 工作区 id */
@@ -4145,6 +4316,15 @@ export interface operations {
                     "application/json": components["schemas"]["FileTree"];
                 };
             };
+            /** @description dir 不是目录 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
             /** @description 未授权 */
             401: {
                 headers: {
@@ -4154,8 +4334,72 @@ export interface operations {
                     "application/json": components["schemas"]["V2Error"];
                 };
             };
-            /** @description 路径越界 */
+            /** @description 路径越界（E_SANDBOX），或 .git 不可读（E_NOT_READABLE） */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 工作区或目录不存在 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 客户端错误 */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 服务端错误 */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+        };
+    };
+    searchWorkspaceFiles: {
+        parameters: {
+            query?: {
+                /** @description 搜索文本。空字符串返回空列表。 */
+                q?: string;
+                /** @description 最多返回多少条。缺省或非法为 50，大于 200 时按 200。 */
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                /** @description 工作区 id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 命中的文件，按分数从高到低 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FileSearchResult"];
+                };
+            };
+            /** @description 未授权 */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -4340,6 +4584,129 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FileConflict"];
+                };
+            };
+            /** @description 客户端错误 */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 服务端错误 */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+        };
+    };
+    getWorkspaceFileRaw: {
+        parameters: {
+            query: {
+                /** @description 相对工作区的文件路径 */
+                path: string;
+            };
+            header?: never;
+            path: {
+                /** @description 工作区 id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 图片字节 */
+            200: {
+                headers: {
+                    /** @description private, no-cache */
+                    "Cache-Control"?: string;
+                    /** @description 带引号的内容哈希 */
+                    ETag?: string;
+                    /** @description nosniff */
+                    "X-Content-Type-Options"?: string;
+                    /** @description inline */
+                    "Content-Disposition"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/png": string;
+                    "image/jpeg": string;
+                    "image/gif": string;
+                    "image/webp": string;
+                    "image/bmp": string;
+                    "image/svg+xml": string;
+                    "image/x-icon": string;
+                };
+            };
+            /** @description If-None-Match 与当前 ETag 一致，无响应体 */
+            304: {
+                headers: {
+                    ETag?: string;
+                    "Cache-Control"?: string;
+                    "X-Content-Type-Options"?: string;
+                    "Content-Disposition"?: string;
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 路径是目录或缺少 path */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 未授权 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 路径越界 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 工作区或文件不存在 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 图片超过 20 MB */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 扩展名不在图片白名单内 */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
                 };
             };
             /** @description 客户端错误 */
@@ -5297,7 +5664,10 @@ export interface operations {
                     "application/json": components["schemas"]["RunAccepted"];
                 };
             };
-            /** @description 空文字且没有图片 / 文件 / 粘贴，或字段超限 / 格式不对 / 文件不在 uploads 下 */
+            /**
+             * @description 空文字且没有图片 / 文件 / 粘贴 / answer，或字段超限 / 格式不对 / 文件不在 uploads 下。
+             *     answer 的 toolCallId 不属于本对话、提问尚未完成或已失败、选项对不上时也是 400（E_BAD_REQUEST）。
+             */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -5324,7 +5694,7 @@ export interface operations {
                     "application/json": components["schemas"]["V2Error"];
                 };
             };
-            /** @description 对话没有工作区 */
+            /** @description 对话没有工作区（E_NO_WORKSPACE），或这条提问已经回答过、或已因普通用户消息记为跳过（E_ASK_ANSWERED）。 */
             409: {
                 headers: {
                     [name: string]: unknown;
