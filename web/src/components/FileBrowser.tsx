@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState, type MouseEvent } from 'react';
+import { useState, type MouseEvent } from 'react';
 import type { Lang } from '../data/lang';
 import { isMarkdownFile, useRightActions, useRightChanges, useRightFiles } from '../data/rightPaneContext';
 import { visibleTreeRows } from '../data/fileTree';
 import { t } from '../i18n';
+import { CodeEditor } from './CodeEditor';
 import { CtxMenu, type CtxMenuItem } from './CtxMenu';
 import { Markdown } from './Markdown';
 
@@ -12,61 +13,7 @@ const DIR_CHEV = (
   </svg>
 );
 
-function FileLines({
-  text,
-  targetLine,
-}: {
-  text: string;
-  targetLine: number | null;
-}) {
-  const root = useRef<HTMLDivElement>(null);
-  const lines = text.split('\n');
-  useEffect(() => {
-    if (targetLine == null) return;
-    root.current?.querySelector('.file-line.is-target')?.scrollIntoView({ block: 'center', inline: 'nearest' });
-  }, [targetLine, text]);
-  return (
-    <div className="file-lines file-view-content" ref={root}>
-      {lines.map((line, i) => (
-        <div
-          key={i}
-          className={`file-line${targetLine === i + 1 ? ' is-target' : ''}`}
-          data-line={i + 1}
-        >
-          <span className="n">{i + 1}</span>
-          <span className="code">{line}</span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function FilePreview({ lang }: { lang: Lang }) {
-  const { file, activeFilePath, fileTargetLine } = useRightFiles();
-  const { visibleChanges } = useRightChanges();
-  if (!activeFilePath || !file) {
-    return <div className="file-preview-empty">{t(lang, 'select_file_to_preview')}</div>;
-  }
-  if (file.tooLarge) {
-    return <div className="file-preview-empty">{activeFilePath} — {t(lang, 'file_too_large')}</div>;
-  }
-  if (file.binary || file.text == null) {
-    return <div className="file-preview-empty">{activeFilePath} — {t(lang, 'file_binary')}</div>;
-  }
-  const lines = file.text.split('\n');
-  const changed = visibleChanges.some((item) => item.path === activeFilePath);
-  return (
-    <>
-      <div className="file-preview-head">
-        <span>{activeFilePath}</span>
-        <span>{changed ? t(lang, 'file_modified_note') : t(lang, 'file_lines', { n: lines.length })}</span>
-      </div>
-      <FileLines text={file.text} targetLine={fileTargetLine} />
-    </>
-  );
-}
-
-function FileEditor({ lang }: { lang: Lang }) {
+function FileEditorPane({ lang }: { lang: Lang }) {
   const {
     file,
     activeFilePath,
@@ -77,19 +24,8 @@ function FileEditor({ lang }: { lang: Lang }) {
     saveFile,
     saveState,
     reloadFile,
+    fileTargetLine,
   } = useRightFiles();
-  const area = useRef<HTMLTextAreaElement>(null);
-
-  useEffect(() => {
-    function onKey(ev: KeyboardEvent) {
-      if ((ev.metaKey || ev.ctrlKey) && ev.key.toLowerCase() === 's') {
-        ev.preventDefault();
-        void saveFile();
-      }
-    }
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [saveFile]);
 
   if (!activeFilePath || !file) {
     return <div className="file-preview-empty">{t(lang, 'select_file_to_preview')}</div>;
@@ -101,25 +37,41 @@ function FileEditor({ lang }: { lang: Lang }) {
     return <div className="file-preview-empty">{activeFilePath} — {t(lang, 'file_binary')}</div>;
   }
 
+  const isMd = isMarkdownFile(activeFilePath);
+  const isDirty = draftText !== (file.text ?? '');
+  const lineCount = draftText.length === 0 ? 1 : draftText.split('\n').length;
+
   return (
-    <div className="md-editor-container" data-testid="next-file-editor">
-      <div className="md-editor-toolbar">
-        <span className="path">{activeFilePath}</span>
+    <div className="md-editor-container code-editor-wrapper" data-testid="next-file-editor">
+      <div className="md-editor-toolbar file-preview-head">
+        <div className="file-toolbar-left">
+          <span className="path" title={activeFilePath}>{activeFilePath}</span>
+          {!isMd ? (
+            <span className="file-lines-count">{t(lang, 'file_lines', { n: lineCount })}</span>
+          ) : null}
+          {isDirty ? (
+            <span className="file-unsaved" data-testid="next-file-unsaved" title={t(lang, 'file_unsaved')}>
+              ● {t(lang, 'file_unsaved')}
+            </span>
+          ) : null}
+        </div>
         <div className="md-editor-actions">
-          {editorMode === 'edit' ? (
-            <button type="button" className="btn btn-sm" onClick={() => setEditorMode('preview')}>
-              {t(lang, 'btn_preview')}
-            </button>
-          ) : (
-            <button
-              type="button"
-              className="btn btn-sm"
-              data-testid="next-file-open-editor"
-              onClick={() => setEditorMode('edit')}
-            >
-              {t(lang, 'btn_edit')}
-            </button>
-          )}
+          {isMd ? (
+            editorMode === 'edit' ? (
+              <button type="button" className="btn btn-sm" onClick={() => setEditorMode('preview')}>
+                {t(lang, 'btn_preview')}
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="btn btn-sm"
+                data-testid="next-file-open-editor"
+                onClick={() => setEditorMode('edit')}
+              >
+                {t(lang, 'btn_edit')}
+              </button>
+            )
+          ) : null}
           <button
             type="button"
             className="btn btn-sm p"
@@ -152,18 +104,19 @@ function FileEditor({ lang }: { lang: Lang }) {
           </button>
         </div>
       ) : null}
-      {editorMode === 'edit' ? (
-        <textarea
-          ref={area}
-          className="md-editor-content"
-          spellCheck={false}
-          value={draftText}
-          onChange={(ev) => setDraftText(ev.target.value)}
-        />
-      ) : (
+      {isMd && editorMode === 'preview' ? (
         <div className="md-editor-preview">
           <Markdown text={draftText} copyLabel={t(lang, 'copy_code')} copiedLabel={t(lang, 'copied')} />
         </div>
+      ) : (
+        <CodeEditor
+          key={activeFilePath}
+          filePath={activeFilePath}
+          value={draftText}
+          onChange={setDraftText}
+          targetLine={fileTargetLine}
+          onSave={saveFile}
+        />
       )}
     </div>
   );
@@ -185,7 +138,6 @@ export function FileBrowser({ lang, workspaceLabel }: { lang: Lang; workspaceLab
   const [dirMenu, setDirMenu] = useState<DirMenu | null>(null);
   const rows = treeReady ? visibleTreeRows(tree, expandedDirs) : [];
   const changed = new Set(visibleChanges.map((item) => item.path));
-  const md = isMarkdownFile(activeFilePath);
 
   function onDirMenu(ev: MouseEvent, dirPath: string) {
     ev.preventDefault();
@@ -254,7 +206,7 @@ export function FileBrowser({ lang, workspaceLabel }: { lang: Lang; workspaceLab
         ) : null}
       </div>
       <div className="file-preview" data-testid="next-file-view">
-        {md ? <FileEditor lang={lang} /> : <FilePreview lang={lang} />}
+        <FileEditorPane lang={lang} />
       </div>
       {dirMenu ? (
         <CtxMenu

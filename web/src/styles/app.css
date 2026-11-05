@@ -2030,18 +2030,19 @@ button.file-tree-row:hover { background: var(--side); }
 .file-tree-empty, .file-preview-empty { padding: 16px 12px; color: var(--faint); font-size: var(--fs-sm); }
 .file-preview { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; }
 .file-preview-head { padding: 8px 16px; font-family: var(--mono); font-size: var(--fs-xs); color: var(--mute); display: flex; justify-content: space-between; gap: 8px; }
-.file-lines { font-family: var(--mono); font-size: var(--fs-xs); line-height: 1.75; color: var(--ink2); padding-bottom: 12px; display: grid; grid-template-columns: minmax(100%, max-content); align-content: start; }
-.file-line { display: flex; padding-right: 16px; }
-.file-line.is-target { background: var(--sel); }
-.file-line .n { width: 40px; flex-shrink: 0; text-align: right; padding-right: 12px; color: var(--dis); user-select: none; }
-.file-line .code { white-space: pre; }
+.file-line.is-target, .cm-target-line { background: var(--sel) !important; }
 .file-tree-icon { width: 12px; height: 12px; flex-shrink: 0; display: flex; }
 
 .md-editor-container { flex: 1; display: flex; flex-direction: column; overflow: hidden; background: var(--panel); min-height: 0; }
 .md-editor-toolbar { padding: 8px 16px; border-bottom: 1px solid var(--line3); display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-shrink: 0; }
 .md-editor-toolbar .path { font-family: var(--mono); font-size: var(--fs-sm); color: var(--mute); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-toolbar-left { display: flex; align-items: center; gap: 10px; min-width: 0; overflow: hidden; }
+.file-lines-count { font-family: var(--mono); font-size: var(--fs-xs); color: var(--faint); flex-shrink: 0; }
+.file-unsaved { font-size: var(--fs-xs); color: var(--wait-ink); display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0; user-select: none; }
 .md-editor-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
-.md-editor-content { flex: 1; overflow: auto; padding: 14px 16px; font-family: var(--mono); font-size: var(--fs-sm); line-height: 1.7; outline: none; white-space: pre-wrap; word-break: break-all; color: var(--ink); border: none; background: transparent; resize: none; width: 100%; }
+.code-editor-container { flex: 1; min-height: 0; overflow: hidden; }
+.code-editor-container .cm-editor { height: 100%; }
+.code-editor-container .cm-scroller { overflow: auto; }
 .md-editor-preview { flex: 1; overflow: auto; padding: 14px 16px; min-height: 0; }
 .md-editor-preview .msg-body { font-size: var(--fs-ui); }
 .file-conflict {

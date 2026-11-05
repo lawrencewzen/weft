@@ -95,7 +95,7 @@ test('diff, file tree, preview, save and the 409 conflict demo', async ({ page }
   await page.locator('[data-testid=next-file-node][data-path="README.md"]').click();
   await expect(page.getByTestId('next-file-editor')).toContainText('常用命令');
   await page.getByTestId('next-file-open-editor').click();
-  await page.locator('.md-editor-content').fill('# weft\n\n原型里改过的一行\n');
+  await page.locator('.cm-content').fill('# weft\n\n原型里改过的一行\n');
   await page.getByTestId('next-file-save').click();
   await expect(page.getByTestId('next-toast')).toContainText('已保存');
   const savedVersion = await page.evaluate(() => (window.__protoRequests || [])
@@ -119,7 +119,7 @@ test('diff, file tree, preview, save and the 409 conflict demo', async ({ page }
   await expect(page.getByTestId('next-file-editor')).toContainText('保存冲突演示');
   await page.waitForTimeout(1_600);
   await page.getByTestId('next-file-open-editor').click();
-  await page.locator('.md-editor-content').fill('# 冲突演示\n\n我加了一行\n');
+  await page.locator('.cm-content').fill('# 冲突演示\n\n我加了一行\n');
   await page.getByTestId('next-file-save').click();
   await expect(page.getByTestId('next-file-conflict')).toBeVisible();
   const conflict = await page.evaluate(() => (window.__protoRequests || [])
@@ -127,7 +127,7 @@ test('diff, file tree, preview, save and the 409 conflict demo', async ({ page }
   expect(conflict).toBe(true);
   await page.getByTestId('next-file-reload').click();
   await expect(page.getByTestId('next-file-conflict')).toHaveCount(0);
-  await expect(page.locator('.md-editor-content')).toContainText('外部修改');
+  await expect(page.locator('.cm-content')).toContainText('外部修改');
 
   // Clicking an edit tool row jumps to that file's diff in the changes tab.
   await page.getByTestId('next-tool-group-summary').nth(1).click();
