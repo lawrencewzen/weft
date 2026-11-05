@@ -1644,6 +1644,78 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/V2Error"
+  /api/v2/workspaces/{id}/file-search:
+    get:
+      operationId: searchWorkspaceFiles
+      summary: 搜索工作区文件
+      description: |
+        大小写不敏感的子序列匹配，给 Cmd+P 和文件树搜索用。
+        查询字符按顺序出现在路径里即可，不必连续。文件名命中优于目录命中，
+        连续命中和前缀命中更靠前，分数相同则路径更短的靠前。只返回文件。
+        q 为空时返回空列表，不扫描磁盘。
+        limit 默认 50，大于 200 时按 200，缺省或非法时按 50。
+        工作区是 git 仓库时用 `git ls-files -z --cached --others --exclude-standard`
+        （cwd 为工作区，子目录工作区的路径相对该目录）。遵守 .gitignore；
+        未被忽略的未跟踪文件会返回。git 超时 5 秒。
+        不是 git 仓库、git 不可用或命令失败时改为遍历目录，跳过 `.git` 和 `node_modules`，
+        不跟随符号链接。路径经 resolveInWorkspace 校验，工作区外的路径不返回。
+        文件列表按工作区缓存约 2 秒。文件数超过 200000 时 truncated 为 true。
+      security:
+        - bearerAuth: []
+        - sessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: 工作区 id
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: string
+          description: 搜索文本。空字符串返回空列表。
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+          description: 最多返回多少条。缺省或非法为 50，大于 200 时按 200。
+      responses:
+        "200":
+          description: 命中的文件，按分数从高到低
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FileSearchResult"
+        "401":
+          description: 未授权
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        "404":
+          description: 工作区不存在
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        4XX:
+          description: 客户端错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        5XX:
+          description: 服务端错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
   /api/v2/workspaces/{id}/files:
     get:
       operationId: getWorkspaceFile
@@ -5616,6 +5688,34 @@ components:
           type: boolean
           description: 达到 500 条上限时为 true
       description: GET /api/v2/workspaces/{id}/tree 的响应。
+    FileSearchHit:
+      type: object
+      additionalProperties: false
+      required:
+        - path
+      properties:
+        path:
+          type: string
+          description: 相对工作区的路径，统一用 `/`，只含文件
+        score:
+          type: integer
+          description: 匹配分，越高越靠前
+      description: 文件搜索的一条命中。
+    FileSearchResult:
+      type: object
+      additionalProperties: false
+      required:
+        - entries
+        - truncated
+      properties:
+        entries:
+          type: array
+          items:
+            $ref: "#/components/schemas/FileSearchHit"
+        truncated:
+          type: boolean
+          description: 工作区文件数超过 200000，列表被截断，结果可能不完整
+      description: GET /api/v2/workspaces/{id}/file-search 的响应。
     FileContent:
       type: object
       additionalProperties: false

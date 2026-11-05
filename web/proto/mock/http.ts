@@ -31,6 +31,7 @@ import {
   textDiff,
   touchRepoFile,
 } from './repo';
+import { searchRepoFiles } from './file-search';
 import {
   conversationValue,
   itemValue,
@@ -1180,6 +1181,13 @@ export function handleMockRequest(db: MockDb, hub: MockHub, rawUrl: string, init
     const repo = db.repos.get(workspaceId);
     if (!repo) return fail(404, '工作区不存在');
     return ok(repoTree(repo));
+  }
+  const wsSearchMatch = /^\/api\/v2\/workspaces\/([^/]+)\/file-search$/.exec(path);
+  if (wsSearchMatch && method === 'GET') {
+    const workspaceId = decodeURIComponent(wsSearchMatch[1]);
+    const repo = db.repos.get(workspaceId);
+    if (!repo) return fail(404, '工作区不存在');
+    return ok(searchRepoFiles(repo, url.searchParams.get('q') ?? '', url.searchParams.get('limit')));
   }
   const wsRawMatch = /^\/api\/v2\/workspaces\/([^/]+)\/files\/raw$/.exec(path);
   if (wsRawMatch && method === 'GET') {

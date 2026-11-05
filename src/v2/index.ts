@@ -74,6 +74,7 @@ import {
   type FileOpError,
   type WorkspaceImageFile,
 } from './views/files.ts';
+import { searchWorkspaceFiles } from './views/file-search.ts';
 import {
   buildWorkspacesSnapshot,
   conversationSummaryView,
@@ -99,6 +100,7 @@ type SubagentSnapshot = components['schemas']['SubagentSnapshot'];
 type SubagentMessageAccepted = components['schemas']['SubagentMessageAccepted'];
 type Diff = components['schemas']['Diff'];
 type FileTree = components['schemas']['FileTree'];
+type FileSearchResult = components['schemas']['FileSearchResult'];
 type FileContent = components['schemas']['FileContent'];
 type SaveResult = components['schemas']['SaveResult'];
 type FileConflict = components['schemas']['FileConflict'];
@@ -141,6 +143,7 @@ type V2JsonBody =
   | SubagentMessageAccepted
   | Diff
   | FileTree
+  | FileSearchResult
   | FileContent
   | SaveResult
   | FileConflict
@@ -957,6 +960,35 @@ export function createV2Handler(opts: {
       } catch (err) {
         if (sendFileOpError(res, pathname, method, err)) return true;
         const message = err instanceof Error ? err.message : 'tree failed';
+        sendV2(res, pathname, method, 500, { error: message, code: 'E_INTERNAL' } satisfies V2Error);
+      }
+      return true;
+    }
+
+    const searchMatch = /^\/api\/v2\/workspaces\/([^/]+)\/file-search$/.exec(pathname);
+    if (method === 'GET' && searchMatch) {
+      const workspaceId = decodeURIComponent(searchMatch[1]);
+      let ws: WorkspaceRow | null | undefined = null;
+      try {
+        ws = opts.getWorkspace ? await opts.getWorkspace(workspaceId) : null;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'workspace check failed';
+        sendV2(res, pathname, method, 500, { error: message, code: 'E_INTERNAL' } satisfies V2Error);
+        return true;
+      }
+      const root = workspacePathOf(ws);
+      if (!root) {
+        sendV2(res, pathname, method, 404, { error: 'not found' } satisfies V2Error);
+        return true;
+      }
+      try {
+        const found = await searchWorkspaceFiles(root, url.searchParams.get('q'), {
+          limit: url.searchParams.get('limit'),
+        });
+        sendV2(res, pathname, method, 200, found satisfies FileSearchResult);
+      } catch (err) {
+        if (sendFileOpError(res, pathname, method, err)) return true;
+        const message = err instanceof Error ? err.message : 'file search failed';
         sendV2(res, pathname, method, 500, { error: message, code: 'E_INTERNAL' } satisfies V2Error);
       }
       return true;
