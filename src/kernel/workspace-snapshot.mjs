@@ -4,12 +4,13 @@
 // user's index, the worktree, or the stash list. The tree id lives in the
 // Pi Durable conversation document WorkspaceSnapshot.
 import { execFile } from 'node:child_process';
-import { mkdir, readFile, rm, stat } from 'node:fs/promises';
+import { mkdir, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { defineDoc } from '@earendil-works/pi-durable';
 import { buildGitChildEnv, resolveGitBin } from '../core/git-import.mjs';
 import { WORKSPACE_SNAPSHOT_DOC_KIND } from './ids.mjs';
+import { decodeWorkspaceBytes } from './workspace-text.mjs';
 
 /** Same cap as write/edit details and the legacy changes list. */
 export const FILE_CAP = 1024 * 1024;
@@ -18,7 +19,6 @@ export const CHANGE_CACHE_MS = 500;
 const ADD_TIMEOUT_MS = 30_000;
 const GIT_TIMEOUT_MS = 10_000;
 const MAX_BUFFER = 8_000_000;
-const BINARY_SAMPLE_BYTES = 8 * 1024;
 
 const DROP_GIT_VARS = [
   'GIT_DIR',
@@ -75,6 +75,7 @@ function runGit(args, { cwd, env, indexFile, timeoutMs, encoding = 'buffer' } = 
       const code = err ? (typeof err.code === 'number' ? err.code : 1) : 0;
       resolve({
         code,
+        killed: err?.killed === true,
         stdout: stdout == null ? emptyOut(encoding) : stdout,
         stderr: stderr == null ? emptyOut(encoding) : stderr,
         missing: false,
@@ -114,15 +115,10 @@ export function isOutsideWorkspacePath(filePath) {
   return /^[A-Za-z]:[\\/]/.test(raw);
 }
 
-export function bufferLooksBinary(buf) {
-  const sample = buf.subarray(0, Math.min(buf.length, BINARY_SAMPLE_BYTES));
-  if (sample.includes(0)) return true;
-  try {
-    new TextDecoder('utf-8', { fatal: true }).decode(sample);
-    return false;
-  } catch {
-    return true;
-  }
+/** A timed-out `git add` must not run again. Any other failure may try once. */
+export function shouldRetryGitAdd(result) {
+  if (!result || result.killed === true) return false;
+  return result.code !== 0;
 }
 
 function stripPrefix(filePath, prefix) {
@@ -221,9 +217,15 @@ async function addAndWriteTree(cwd, indexFile, env) {
     await mkdir(path.dirname(indexFile), { recursive: true });
     const args = ['-c', 'core.autocrlf=false', '-c', 'core.safecrlf=false', '-c', 'core.fsmonitor=', 'add', '-A', '--', '.'];
     let added = await runGit(args, { cwd, env, indexFile, timeoutMs: ADD_TIMEOUT_MS });
-    if (added.code !== 0) {
+    if (shouldRetryGitAdd(added)) {
       await rm(indexFile, { force: true });
       added = await runGit(args, { cwd, env, indexFile, timeoutMs: ADD_TIMEOUT_MS });
+    }
+    if (added.killed) {
+      console.error('WEFT_CHANGE_SNAPSHOT git add timed out');
+      const error = new Error('git add timed out');
+      error.code = 'E_GIT_TIMEOUT';
+      throw error;
     }
     if (added.code !== 0 || added.missing) {
       const error = new Error('git add failed');
@@ -387,27 +389,17 @@ export async function readTreeBlob({ cwd, tree, prefix = '', rel, env, maxBytes 
   }
   const blob = await runGit(['cat-file', '-p', spec], { cwd, env });
   if (blob.code !== 0) return { missing: true, text: '', tooLarge: false, binary: false };
-  const buf = asBuffer(blob.stdout);
-  if (bufferLooksBinary(buf)) return { missing: false, text: '', tooLarge: true, binary: true, size };
-  return { missing: false, text: buf.toString('utf8'), tooLarge: false, binary: false, size };
+  return {
+    missing: false,
+    text: decodeWorkspaceBytes(asBuffer(blob.stdout)),
+    tooLarge: false,
+    binary: false,
+    size,
+  };
 }
 
 export async function gitPrefix(cwd, env) {
   return showPrefix(cwd, env);
-}
-
-export async function readDiskText(abs, maxBytes = FILE_CAP) {
-  let info;
-  try {
-    info = await stat(abs);
-  } catch (err) {
-    if (err?.code === 'ENOENT') return { missing: true, text: '', tooLarge: false, binary: false };
-    throw err;
-  }
-  if (info.size > maxBytes) return { missing: false, text: '', tooLarge: true, binary: false, size: info.size };
-  const buf = await readFile(abs);
-  if (bufferLooksBinary(buf)) return { missing: false, text: '', tooLarge: true, binary: true, size: info.size };
-  return { missing: false, text: buf.toString('utf8'), tooLarge: false, binary: false, size: info.size };
 }
 
 /**

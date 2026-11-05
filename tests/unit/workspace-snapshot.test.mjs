@@ -18,7 +18,9 @@ import {
   parseNameStatusZ,
   parseNumstatZ,
   readTreeBlob,
+  shouldRetryGitAdd,
 } from '../../src/kernel/workspace-snapshot.mjs';
+import { decodeWorkspaceBytes } from '../../src/kernel/workspace-text.mjs';
 import { withHarnessLock } from './_harness-lock.mjs';
 
 const execFileP = promisify(execFile);
@@ -70,6 +72,22 @@ async function initRepo(root) {
 function byPath(rows) {
   return new Map(rows.map((row) => [row.path, row]));
 }
+
+test('a timed-out git add is not retried', () => {
+  assert.equal(shouldRetryGitAdd({ code: 1, killed: true }), false);
+  assert.equal(shouldRetryGitAdd({ code: 124, killed: true, missing: false }), false);
+  assert.equal(shouldRetryGitAdd({ code: 1, killed: false }), true);
+  assert.equal(shouldRetryGitAdd({ code: 128 }), true);
+  assert.equal(shouldRetryGitAdd({ code: 0, killed: false }), false);
+  assert.equal(shouldRetryGitAdd(null), false);
+});
+
+test('decodeWorkspaceBytes keeps a UTF-8 BOM', () => {
+  const buf = Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from('alpha\n', 'utf8')]);
+  const text = decodeWorkspaceBytes(buf);
+  assert.equal(text.charCodeAt(0), 0xfeff);
+  assert.equal(text.slice(1), 'alpha\n');
+});
 
 test('name-status and numstat -z parsers keep rename paths', () => {
   const names = parseNameStatusZ(Buffer.from('M\0B.txt\0A\0C.txt\0D\0D.txt\0R100\0E.txt\0F.txt\0', 'utf8'));
@@ -341,6 +359,143 @@ test('a non-git workspace keeps the write/edit changes list', { timeout: 60_000 
       assert.equal(diff.body.after, 'from-write\n');
       const shell = await kernel.diff(conv.id, 'B.txt');
       assert.equal(shell.status, 404);
+    } finally {
+      await kernel.close();
+      store.close();
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+});
+
+async function initGitRepo(root) {
+  const repo = path.join(root, 'repo');
+  await mkdir(repo);
+  await git(repo, ['init']);
+  await git(repo, ['config', 'user.email', 't96@example.com']);
+  await git(repo, ['config', 'user.name', 't96']);
+  return repo;
+}
+
+test('an existing transcript stays on the write/edit list instead of snapshotting', { timeout: 60_000 }, async () => {
+  await withHarnessLock(async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'weft-snap-legacy-'));
+    const dataDir = path.join(root, 'data');
+    await mkdir(dataDir);
+    const repo = await initGitRepo(root);
+    await writeFile(path.join(repo, 'note.txt'), 'base\n');
+    await git(repo, ['add', '-A']);
+    await git(repo, ['commit', '-m', 'init']);
+    const script = path.join(dataDir, 'script.json');
+    await writeFile(script, JSON.stringify({
+      turns: [
+        { tool: 'write', args: { path: 'note.txt', content: 'from-write\n' } },
+        { text: 'later' },
+      ],
+    }));
+    const store = createSqliteStore(dataDir);
+    const kernel = await openConversationKernel({
+      dataDir,
+      store,
+      demo: true,
+      env: { ...process.env, WEFT_LLM: 'faux', WEFT_FAUX_SCRIPT: script },
+    });
+    try {
+      const ws = await store.createWorkspace({
+        name: 'legacy',
+        path: repo,
+        source: 'local',
+        rootPath: repo,
+      });
+      const conv = await kernel.createConversation({
+        workspaceId: ws.id,
+        workspacePath: repo,
+        title: 'legacy',
+      });
+      const conversation = await kernel.harness.conversation(conv.harnessId, kernel.context);
+      const submission = await conversation.submit({
+        type: 'input',
+        content: 'go',
+        requestId: 'legacy-turn',
+      }, kernel.context);
+      const started = Date.now();
+      let record;
+      while (Date.now() - started < 20_000) {
+        record = await submission.status(kernel.context);
+        if (record?.status === 'done' || record?.status === 'unanswered') break;
+        await sleep(40);
+      }
+      assert.equal(record?.status, 'done', JSON.stringify(record));
+      await writeFile(path.join(repo, 'shell.txt'), 'from-shell\n');
+      const posted = await kernel.postMessage(conv, 'next');
+      assert.equal(posted.status, 202, JSON.stringify(posted.body));
+      const rows = byPath(await kernel.changes(conv.id));
+      assert.equal(rows.has('note.txt'), true, JSON.stringify([...rows.keys()]));
+      assert.equal(rows.has('shell.txt'), false, JSON.stringify([...rows.keys()]));
+      assert.equal(Object.hasOwn(rows.get('note.txt'), 'status'), false);
+      assert.deepEqual(rows.get('note.txt').by, { kind: 'main' });
+      const diff = await kernel.diff(conv.id, 'note.txt');
+      assert.equal(diff.status, 200, JSON.stringify(diff.body));
+      assert.equal(diff.body.before, 'base\n');
+      assert.equal(diff.body.after, 'from-write\n');
+    } finally {
+      await kernel.close();
+      store.close();
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+});
+
+test('UTF-8 BOM and CRLF diffs match the change counts', { timeout: 60_000 }, async () => {
+  await withHarnessLock(async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'weft-snap-text-'));
+    const dataDir = path.join(root, 'data');
+    await mkdir(dataDir);
+    const repo = await initGitRepo(root);
+    await writeFile(path.join(repo, '.gitattributes'), '* text=auto\n');
+    const bom = Buffer.from([0xef, 0xbb, 0xbf]);
+    await writeFile(path.join(repo, 'bom.txt'), Buffer.concat([bom, Buffer.from('alpha\nbeta\n', 'utf8')]));
+    await writeFile(path.join(repo, 'crlf.txt'), 'line one\r\nline two\r\nline three\r\n');
+    await git(repo, ['add', '-A']);
+    await git(repo, ['commit', '-m', 'init']);
+    const env = { ...process.env, WEFT_LLM: 'faux', WEFT_FAUX_TEXT: 'ok' };
+    delete env.WEFT_FAUX_SCRIPT;
+    const store = createSqliteStore(dataDir);
+    const kernel = await openConversationKernel({ dataDir, store, demo: true, env });
+    try {
+      const ws = await store.createWorkspace({
+        name: 'text',
+        path: repo,
+        source: 'local',
+        rootPath: repo,
+      });
+      const conv = await kernel.createConversation({
+        workspaceId: ws.id,
+        workspacePath: repo,
+        title: 'text',
+      });
+      const posted = await kernel.postMessage(conv, 'go');
+      assert.equal(posted.status, 202, JSON.stringify(posted.body));
+      const done = await waitDone(kernel, store, conv);
+      assert.equal(done.status, 'done', JSON.stringify(done));
+      await writeFile(path.join(repo, 'bom.txt'), Buffer.concat([bom, Buffer.from('alpha\nBETA\n', 'utf8')]));
+      await writeFile(path.join(repo, 'crlf.txt'), 'line one\r\nline TWO\r\nline three\r\n');
+      const rows = byPath(await kernel.changes(conv.id));
+      for (const name of ['bom.txt', 'crlf.txt']) {
+        const row = rows.get(name);
+        assert.ok(row, JSON.stringify([...rows.keys()]));
+        assert.equal(row.status, 'modified', name);
+        assert.equal(row.added, 1, `${name} changes added ${row.added}`);
+        assert.equal(row.removed, 1, `${name} changes removed ${row.removed}`);
+        const diff = await kernel.diff(conv.id, name);
+        assert.equal(diff.status, 200, JSON.stringify(diff.body));
+        assert.equal(diff.body.error, undefined, JSON.stringify(diff.body));
+        assert.equal(diff.body.added, row.added, name);
+        assert.equal(diff.body.removed, row.removed, name);
+      }
+      const bomDiff = await kernel.diff(conv.id, 'bom.txt');
+      assert.equal(bomDiff.body.before.charCodeAt(0), 0xfeff);
+      assert.equal(bomDiff.body.after.charCodeAt(0), 0xfeff);
+      assert.equal(bomDiff.body.after.includes('BETA'), true);
     } finally {
       await kernel.close();
       store.close();

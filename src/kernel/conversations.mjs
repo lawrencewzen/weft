@@ -47,9 +47,9 @@ import {
   indexFileFor,
   isOutsideWorkspacePath,
   listWorktreeChanges,
-  readDiskText,
   readTreeBlob,
 } from './workspace-snapshot.mjs';
+import { decodeWorkspaceBytes } from './workspace-text.mjs';
 import { installUsageExtension } from './usage.mjs';
 import { installContinuationExtension } from './continuation.mjs';
 import { createAntigravityCwdExtension } from './antigravity-cwd.mjs';
@@ -485,7 +485,7 @@ export async function openConversationKernel({
         err.code = 'E_TOO_LARGE';
         throw err;
       }
-      return { missing: false, text: await readFile(abs, 'utf8') };
+      return { missing: false, text: decodeWorkspaceBytes(await readFile(abs)) };
     } catch (err) {
       if (err.code === 'ENOENT') return { missing: true, text: '' };
       if (abs === filePath) {
@@ -599,17 +599,22 @@ export async function openConversationKernel({
     return withSnapshotLock(conv.id, async () => {
       const existing = await readSnapshot(conv.harnessId);
       if (existing) return existing;
-      const workspacePath = conv.workspacePath || '';
-      const captured = workspacePath
-        ? await captureWorktree({
-          cwd: workspacePath,
-          indexFile: indexFileFor(dataDir, conv.id, workspacePath),
-          env,
-        })
-        : { mode: 'fallback', tree: '' };
-      const stored = captured.mode === 'git' && captured.tree
-        ? { mode: 'git', tree: captured.tree }
-        : { mode: 'fallback', tree: '' };
+      // A conversation that already has transcript entries was started before
+      // snapshots existed. Photographing it now would hide those edits.
+      const transcript = await readTranscript(conv.harnessId);
+      const started = (transcript.entries || []).length > 0;
+      let stored = { mode: 'fallback', tree: '' };
+      if (!started) {
+        const workspacePath = conv.workspacePath || '';
+        const captured = workspacePath
+          ? await captureWorktree({
+            cwd: workspacePath,
+            indexFile: indexFileFor(dataDir, conv.id, workspacePath),
+            env,
+          })
+          : { mode: 'fallback', tree: '' };
+        if (captured.mode === 'git' && captured.tree) stored = { mode: 'git', tree: captured.tree };
+      }
       try {
         await harness.commit(async (tx) => {
           const state = await tx.doc(WorkspaceSnapshot, conv.harnessId);
@@ -783,21 +788,19 @@ export async function openConversationKernel({
     }
     let disk = '';
     if (row.status !== 'deleted') {
-      let abs;
+      let read;
       try {
-        abs = await resolveInWorkspace(workspacePath, row.path);
+        read = await readWorkspaceText(workspacePath, row.path);
       } catch (err) {
-        if (err?.code === 'E_SANDBOX') throw err;
-        return { status: 200, body: { path: row.path, error: '文件过大' } };
+        if (err?.code === 'E_TOO_LARGE') {
+          return {
+            status: 200,
+            body: { path: row.path, added: row.added ?? 0, removed: row.removed ?? 0, error: '文件过大' },
+          };
+        }
+        throw err;
       }
-      const file = await readDiskText(abs);
-      if (file.tooLarge || file.binary) {
-        return {
-          status: 200,
-          body: { path: row.path, added: row.added ?? 0, removed: row.removed ?? 0, error: '文件过大' },
-        };
-      }
-      disk = file.missing ? '' : (file.text ?? '');
+      disk = read.missing || read.text == null ? '' : read.text;
     }
     return {
       status: 200,
