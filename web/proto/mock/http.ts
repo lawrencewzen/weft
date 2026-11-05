@@ -9,6 +9,7 @@ import {
   publishProviders,
   publishRemove,
   publishSummary,
+  publishTool,
   publishWorkspaces,
   recomputeContext,
   touch,
@@ -1533,9 +1534,61 @@ export function handleMockRequest(db: MockDb, hub: MockHub, rawUrl: string, init
     if (!parsedImages.ok) return fail(400, parsedImages.error, parsedImages.code);
     const files = Array.isArray(body.files) ? (body.files as components['schemas']['SendMessageFile'][]) : undefined;
     const pastes = Array.isArray(body.pastes) ? (body.pastes as string[]) : undefined;
+
+    const answer = body.answer as components['schemas']['AskAnswerRequest'] | undefined;
+    if (answer != null) {
+      if (typeof answer !== 'object' || Array.isArray(answer)) {
+        return fail(400, 'invalid answer', 'E_BAD_REQUEST');
+      }
+      if (parsedImages.images.length || (files && files.length > 0) || (pastes && pastes.length > 0)) {
+        return fail(400, 'answer cannot include attachments', 'E_BAD_REQUEST');
+      }
+      const tool = conv.tools[answer.toolCallId];
+      if (!tool || !tool.ask) {
+        return fail(400, '提问不存在', 'E_BAD_REQUEST');
+      }
+      if (tool.ask.answer != null) {
+        return fail(409, 'already answered', 'E_ASK_ANSWERED');
+      }
+      const skipped = Boolean(answer.skipped);
+      tool.ask.answer = {
+        answers: skipped ? [] : (answer.answers || []),
+        skipped,
+      };
+      if (skipped) {
+        tool.hint = { zh: '已跳过', en: 'Skipped' };
+      } else {
+        const parts: string[] = [];
+        for (const ans of tool.ask.answer.answers) {
+          const items = [...ans.selected, ...(ans.other ? [ans.other] : [])];
+          if (items.length) parts.push(items.join(', '));
+        }
+        const summary = parts.join('；') || '已回答';
+        tool.hint = { zh: summary, en: summary };
+      }
+      const group = conv.items.find((item) => item.kind === 'tool_group' && item.toolIds.includes(tool.id));
+      const groupId = group && group.kind === 'tool_group' ? group.id : `group:${tool.id}`;
+      publishTool(conv, hub, tool, groupId);
+      touch(conv);
+      publishConversationView(conv, hub);
+      publishSummary(db, hub, conv.view.id);
+      return accepted({ runId: nextId(db, 'run') });
+    }
+
     if (!text && parsedImages.images.length === 0 && (!files || files.length === 0) && (!pastes || pastes.length === 0)) {
       return fail(400, '消息不能为空', 'E_BAD_REQUEST');
     }
+
+    for (const t of Object.values(conv.tools)) {
+      if (t.ask && t.ask.answer === null) {
+        t.ask.answer = { answers: [], skipped: true };
+        t.hint = { zh: '已跳过', en: 'Skipped' };
+        const g = conv.items.find((item) => item.kind === 'tool_group' && item.toolIds.includes(t.id));
+        const gid = g && g.kind === 'tool_group' ? g.id : `group:${t.id}`;
+        publishTool(conv, hub, t, gid);
+      }
+    }
+
     const requestId = typeof body.requestId === 'string' && body.requestId
       ? body.requestId
       : nextId(db, 'req');
