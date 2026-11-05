@@ -1,25 +1,32 @@
+/** @vitest-environment jsdom */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { getPreferredLang, resolveLang, setPreferredLang } from './lang';
 import {
+  applyDocumentPrefs,
   asAppearance,
+  asChatWidth,
   asFontSize,
   asLang,
   asThemeFamily,
   DEFAULT_APPEARANCE,
+  DEFAULT_CHAT_WIDTH,
   DEFAULT_FONT_SIZE,
   DEFAULT_THEME,
   effectiveAppearance,
   LS_APPEARANCE,
+  LS_CHAT_WIDTH,
   LS_FONT_SIZE,
   LS_LANG,
   LS_THEME,
   readAppearance,
+  readChatWidth,
   readFontSize,
   readStoredLang,
   readThemeFamily,
   themeAttr,
   toggleAppearance,
   writeAppearance,
+  writeChatWidth,
   writeFontSize,
   writeStoredLang,
   writeThemeFamily,
@@ -59,20 +66,23 @@ describe('prefs keys and values match the old UI', () => {
     expect(LS_APPEARANCE).toBe('weft_appearance');
     expect(LS_THEME).toBe('weft_theme');
     expect(LS_FONT_SIZE).toBe('weft_font_size');
+    expect(LS_CHAT_WIDTH).toBe('weft_chat_width');
   });
 
-  it('defaults appearance to light, theme to white, font to md', () => {
+  it('defaults appearance to light, theme to white, font to md, chat width to wider', () => {
     installStorage(new MemoryStorage());
     expect(DEFAULT_APPEARANCE).toBe('light');
     expect(DEFAULT_THEME).toBe('white');
     expect(DEFAULT_FONT_SIZE).toBe('md');
+    expect(DEFAULT_CHAT_WIDTH).toBe('wider');
     expect(readAppearance()).toBe('light');
     expect(readThemeFamily()).toBe('white');
     expect(readFontSize()).toBe('md');
+    expect(readChatWidth()).toBe('wider');
     expect(readStoredLang()).toBeNull();
   });
 
-  it('round-trips zh/en, light/dark/system, white/claude, sm/md/lg', () => {
+  it('round-trips zh/en, light/dark/system, white/claude, sm/md/lg, standard/wide/wider/full', () => {
     const mem = new MemoryStorage();
     installStorage(mem);
     writeStoredLang('en');
@@ -102,6 +112,19 @@ describe('prefs keys and values match the old UI', () => {
     expect(readFontSize()).toBe('lg');
     writeFontSize('md');
     expect(readFontSize()).toBe('md');
+
+    writeChatWidth('standard');
+    expect(mem.getItem(LS_CHAT_WIDTH)).toBe('standard');
+    expect(readChatWidth()).toBe('standard');
+    writeChatWidth('wide');
+    expect(mem.getItem(LS_CHAT_WIDTH)).toBe('wide');
+    expect(readChatWidth()).toBe('wide');
+    writeChatWidth('wider');
+    expect(mem.getItem(LS_CHAT_WIDTH)).toBe('wider');
+    expect(readChatWidth()).toBe('wider');
+    writeChatWidth('full');
+    expect(mem.getItem(LS_CHAT_WIDTH)).toBe('full');
+    expect(readChatWidth()).toBe('full');
   });
 
   it('falls unknown theme families back to white like the old UI', () => {
@@ -116,6 +139,11 @@ describe('prefs keys and values match the old UI', () => {
     expect(asThemeFamily('nope')).toBe('white');
     expect(asAppearance('dim')).toBe('light');
     expect(asFontSize('xl')).toBe('md');
+    expect(asChatWidth('gigantic')).toBe('wider');
+    expect(asChatWidth(null)).toBe('wider');
+    expect(asChatWidth(undefined)).toBe('wider');
+    mem.setItem(LS_CHAT_WIDTH, 'huge');
+    expect(readChatWidth()).toBe('wider');
     expect(asLang('fr')).toBeNull();
     expect(asLang('zh')).toBe('zh');
   });
@@ -141,6 +169,25 @@ describe('prefs keys and values match the old UI', () => {
     expect(effectiveAppearance()).toBe('light');
     expect(toggleAppearance()).toBe('dark');
     expect(readAppearance()).toBe('dark');
+  });
+
+  it('applies document preferences to document.documentElement attributes', () => {
+    installStorage(new MemoryStorage());
+    applyDocumentPrefs();
+    expect(document.documentElement.getAttribute('data-chat-width')).toBe('wider');
+    expect(document.documentElement.getAttribute('data-font-size')).toBe('md');
+    expect(document.documentElement.getAttribute('data-theme')).toBe('white-light');
+
+    writeChatWidth('standard');
+    applyDocumentPrefs();
+    expect(document.documentElement.getAttribute('data-chat-width')).toBe('standard');
+
+    writeChatWidth('wide');
+    applyDocumentPrefs();
+    expect(document.documentElement.getAttribute('data-chat-width')).toBe('wide');
+
+    applyDocumentPrefs({ chatWidth: 'full' });
+    expect(document.documentElement.getAttribute('data-chat-width')).toBe('full');
   });
 });
 
