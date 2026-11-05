@@ -11,9 +11,11 @@ import {
 import { isMarkdownFile, useRightActions, useRightChanges, useRightFiles } from '../data/rightPaneContext';
 import { visibleTreeRows } from '../data/fileTree';
 import { readUiZoom } from '../data/uiZoom';
+import { useFileSearch, type UseFileSearchResult } from '../data/useFileSearch';
 import { t } from '../i18n';
 import { CodeEditor } from './CodeEditor';
 import { CtxMenu, type CtxMenuItem } from './CtxMenu';
+import { FileSearchResultRow } from './FileSearchResultRow';
 import { Markdown } from './Markdown';
 
 const DIR_CHEV = (
@@ -26,6 +28,13 @@ const FILE_TREE_ICON = (
   <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <rect x="2" y="2.5" width="12" height="11" rx="2" />
     <path d="M6 2.5v11" />
+  </svg>
+);
+
+const SEARCH_ICON = (
+  <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" aria-hidden="true">
+    <circle cx="7" cy="7" r="4.5" />
+    <path d="M10.5 10.5l3 3" />
   </svg>
 );
 
@@ -276,8 +285,119 @@ function FileTreeRows({
   );
 }
 
+type TreePanelProps = {
+  lang: Lang;
+  workspaceLabel: string;
+  treeReady: boolean;
+  rows: ReturnType<typeof visibleTreeRows>;
+  activeFilePath: string | null;
+  changed: Set<string>;
+  treeTruncated: boolean;
+  onDirMenu: (ev: MouseEvent, dirPath: string) => void;
+  onSelectDir: (path: string) => void;
+  onSelectFile: (path: string) => void;
+  searchQuery: string;
+  setSearchQuery: (query: string) => void;
+  searchResult: UseFileSearchResult;
+};
+
+function FileTreePanel({
+  lang,
+  workspaceLabel,
+  treeReady,
+  rows,
+  activeFilePath,
+  changed,
+  treeTruncated,
+  onDirMenu,
+  onSelectDir,
+  onSelectFile,
+  searchQuery,
+  setSearchQuery,
+  searchResult,
+}: TreePanelProps) {
+  const isSearching = searchQuery.trim().length > 0;
+  const { entries, truncated, loading, error } = searchResult;
+
+  return (
+    <>
+      {workspaceLabel ? <div className="file-tree-root" title={workspaceLabel}>{workspaceLabel}</div> : null}
+      <div className="file-tree-search-bar">
+        <span className="file-tree-search-ic">{SEARCH_ICON}</span>
+        <input
+          type="text"
+          className="file-tree-search-input"
+          data-testid="next-file-tree-search-input"
+          placeholder={t(lang, 'file_search_placeholder')}
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') {
+              e.stopPropagation();
+              setSearchQuery('');
+            }
+          }}
+        />
+        {searchQuery ? (
+          <button
+            type="button"
+            className="file-tree-search-clear"
+            data-testid="next-file-tree-search-clear"
+            onClick={() => setSearchQuery('')}
+            aria-label={t(lang, 'btn_cancel')}
+          >
+            ✕
+          </button>
+        ) : null}
+      </div>
+      {isSearching ? (
+        error ? (
+          <div className="file-tree-empty file-search-error" data-testid="next-file-search-error">
+            {t(lang, 'file_search_error')}
+          </div>
+        ) : !loading && entries.length === 0 ? (
+          <div className="file-tree-empty file-search-empty" data-testid="next-file-search-empty">
+            {t(lang, 'file_search_no_results')}
+          </div>
+        ) : (
+          <>
+            {entries.map((entry) => (
+              <FileSearchResultRow
+                key={entry.path}
+                path={entry.path}
+                query={searchQuery}
+                active={entry.path === activeFilePath}
+                onClick={() => onSelectFile(entry.path)}
+              />
+            ))}
+            {truncated ? (
+              <div className="file-tree-empty file-search-truncated" data-testid="next-file-search-truncated">
+                {t(lang, 'file_search_truncated')}
+              </div>
+            ) : null}
+          </>
+        )
+      ) : (
+        <FileTreeRows
+          lang={lang}
+          workspaceLabel=""
+          treeReady={treeReady}
+          rows={rows}
+          activeFilePath={activeFilePath}
+          changed={changed}
+          treeTruncated={treeTruncated}
+          onDirMenu={onDirMenu}
+          onSelectDir={onSelectDir}
+          onSelectFile={onSelectFile}
+        />
+      )}
+    </>
+  );
+}
+
 export function FileBrowser({ lang, workspaceLabel }: { lang: Lang; workspaceLabel: string }) {
   const {
+    workspaceId,
     tree,
     treeTruncated,
     treeReady,
@@ -287,6 +407,9 @@ export function FileBrowser({ lang, workspaceLabel }: { lang: Lang; workspaceLab
   } = useRightFiles();
   const { visibleChanges } = useRightChanges();
   const { openFile, copyPath, openInTerminal } = useRightActions();
+
+  const [treeQuery, setTreeQuery] = useState('');
+  const searchResult = useFileSearch(workspaceId, treeQuery, { limit: 50 });
 
   const [treeWidth, setTreeWidth] = useState(() => readFileTreeWidth());
   const treeWidthRef = useRef(treeWidth);
@@ -327,13 +450,18 @@ export function FileBrowser({ lang, workspaceLabel }: { lang: Lang; workspaceLab
     if (!showDrawer) return;
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
+        if (treeQuery) {
+          e.stopPropagation();
+          setTreeQuery('');
+          return;
+        }
         e.stopPropagation();
         setShowDrawer(false);
       }
     };
     window.addEventListener('keydown', onKeyDown, true);
     return () => window.removeEventListener('keydown', onKeyDown, true);
-  }, [showDrawer]);
+  }, [showDrawer, treeQuery]);
 
   useEffect(() => {
     if (!showDrawer) return;
@@ -409,7 +537,7 @@ export function FileBrowser({ lang, workspaceLabel }: { lang: Lang; workspaceLab
             data-testid="next-file-tree"
             style={{ width: `${effectiveTreeW}px` }}
           >
-            <FileTreeRows
+            <FileTreePanel
               lang={lang}
               workspaceLabel={workspaceLabel}
               treeReady={treeReady}
@@ -420,6 +548,9 @@ export function FileBrowser({ lang, workspaceLabel }: { lang: Lang; workspaceLab
               onDirMenu={onDirMenu}
               onSelectDir={(path) => toggleDirectory(path)}
               onSelectFile={(path) => openFile(path)}
+              searchQuery={treeQuery}
+              setSearchQuery={setTreeQuery}
+              searchResult={searchResult}
             />
           </div>
           <div
@@ -453,7 +584,7 @@ export function FileBrowser({ lang, workspaceLabel }: { lang: Lang; workspaceLab
             className="file-tree file-tree-drawer"
             data-testid="next-file-tree"
           >
-            <FileTreeRows
+            <FileTreePanel
               lang={lang}
               workspaceLabel={workspaceLabel}
               treeReady={treeReady}
@@ -467,6 +598,9 @@ export function FileBrowser({ lang, workspaceLabel }: { lang: Lang; workspaceLab
                 openFile(path);
                 setShowDrawer(false);
               }}
+              searchQuery={treeQuery}
+              setSearchQuery={setTreeQuery}
+              searchResult={searchResult}
             />
           </div>
         </>

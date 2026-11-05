@@ -2623,6 +2623,136 @@ button.file-tree-row:hover { background: var(--side); }
 .file-tree-row.is-dir .file-tree-name { font-family: var(--font); font-size: var(--fs-sm); }
 .file-tree-mod { font-family: var(--mono); font-size: var(--fs-xs); color: var(--wait-ink); }
 .file-tree-empty, .file-preview-empty { padding: 16px 12px; color: var(--faint); font-size: var(--fs-sm); }
+.file-tree-search-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  margin: 2px 0 6px;
+  border: 1px solid var(--line2);
+  border-radius: var(--radius-md);
+  background: var(--bg);
+  position: sticky;
+  top: -8px;
+  z-index: 5;
+}
+.file-tree-search-bar:focus-within {
+  border-color: var(--line);
+}
+.file-tree-search-ic {
+  display: flex;
+  color: var(--faint);
+  flex-shrink: 0;
+}
+.file-tree-search-ic svg {
+  width: 13px;
+  height: 13px;
+}
+.file-tree-search-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  outline: none;
+  font: inherit;
+  font-size: var(--fs-sm);
+  color: var(--ink);
+  padding: 0;
+}
+.file-tree-search-input::placeholder {
+  color: var(--faint);
+}
+.file-tree-search-clear {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--faint);
+  font-size: 11px;
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+}
+.file-tree-search-clear:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+.file-search-result-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  width: 100%;
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: var(--fs-sm);
+  text-align: left;
+  color: var(--ink);
+  min-width: 0;
+  box-sizing: border-box;
+}
+button.file-search-result-row:hover {
+  background: var(--side);
+}
+.file-search-result-row.active {
+  background: var(--line2);
+}
+.file-search-result-row.is-selected {
+  background: var(--sel);
+  color: var(--ink);
+}
+.file-search-result-name {
+  font-family: var(--mono);
+  font-size: var(--fs-sm);
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 0;
+  max-width: 100%;
+}
+.file-search-result-dir {
+  font-family: var(--mono);
+  font-size: var(--fs-xs);
+  color: var(--mute);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
+}
+.file-search-match {
+  color: var(--accent-text, var(--ink));
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.file-search-result-dir .file-search-match {
+  color: var(--ink);
+  font-weight: 700;
+}
+.file-search-truncated {
+  padding: 8px 8px;
+  color: var(--faint);
+  font-size: var(--fs-xs);
+}
+.search-palette .file-search-result-row {
+  height: 36px;
+  padding: 0 10px;
+  align-items: center;
+  flex-shrink: 0;
+}
+.search-palette .file-search-result-row:hover,
+.search-palette .file-search-result-row.is-selected {
+  background: var(--sel);
+  color: var(--ink);
+}
 .file-preview {
   flex: 1;
   min-width: 0;

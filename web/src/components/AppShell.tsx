@@ -21,7 +21,7 @@ import {
 import { usePanelMotionReady } from '../data/panelMotion';
 import { cssViewportWidth, readUiZoom } from '../data/uiZoom';
 import { LeftPanelProvider, useLeftPanel } from '../data/leftPanelContext';
-import { RightPaneProvider, useRightLayout } from '../data/rightPaneContext';
+import { RightPaneProvider, useRightActions, useRightLayout } from '../data/rightPaneContext';
 import { conversationPath, draftPath, navigate, newChatPath, rememberSettingsBehind } from '../data/nav';
 import {
   latestConversation,
@@ -29,6 +29,7 @@ import {
   pickDraftWorkspace,
   storedActiveWorkspaceId,
 } from '../data/sidebarModel';
+import { isChatWorkspace } from '../data/store';
 import { useWorkspaces } from '../data/useWorkspaces';
 import { t } from '../i18n';
 import type { SettingsPage } from '../data/settingsPages';
@@ -41,6 +42,7 @@ import type { AboutService } from './settings/AboutPage';
 import { Sidebar } from './Sidebar';
 import { SideToggles } from './RightToggle';
 import { WorkspaceDialog } from './WorkspaceDialog';
+import { QuickOpenModal } from './QuickOpenModal';
 
 type Props = {
   route: AppRoute;
@@ -176,6 +178,7 @@ function AppShellLayout({
   conversations,
 }: LayoutProps) {
   const { open, setOpen, width, setWidth, persistWidth, maximized } = useRightLayout();
+  const { openFile } = useRightActions();
   const { leftOpen, setLeftOpen, dragging, setDragging } = useLeftPanel();
   const [leftW, setLeftW] = useState(() => readLeftWidth());
   const motionReady = usePanelMotionReady();
@@ -184,6 +187,7 @@ function AppShellLayout({
     resolve: (ok: boolean) => void;
   } | null>(null);
   const [wsDialog, setWsDialog] = useState(false);
+  const [quickOpen, setQuickOpen] = useState(false);
   const leftWRef = useRef(leftW);
   leftWRef.current = leftW;
   const rightWRef = useRef(width);
@@ -208,10 +212,25 @@ function AppShellLayout({
   const conversationWorkspaceId = activeConversationId
     ? conversations.find((conv) => conv.id === activeConversationId)?.workspaceId
     : null;
-  const workspace = (draftWorkspaceId || conversationWorkspaceId)
-    ? workspaces.find((item) => item.id === (draftWorkspaceId || conversationWorkspaceId))
+  const currentWorkspaceId = draftWorkspaceId || conversationWorkspaceId || null;
+  const workspace = currentWorkspaceId
+    ? workspaces.find((item) => item.id === currentWorkspaceId)
     : undefined;
+  const hasWorkspace = Boolean(workspace && !isChatWorkspace(workspace));
   const workspaceLabel = workspace?.path || workspace?.name || t(lang, 'chats_label');
+
+  useEffect(() => {
+    const onKeyDown = (ev: KeyboardEvent) => {
+      const isMod = ev.metaKey || ev.ctrlKey;
+      if (isMod && ev.key.toLowerCase() === 'p' && !ev.shiftKey && !ev.altKey) {
+        ev.preventDefault();
+        if (!hasWorkspace) return;
+        setQuickOpen(true);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [hasWorkspace]);
 
   useEffect(() => {
     const onResize = () => {
@@ -394,6 +413,17 @@ function AppShellLayout({
           lang={lang}
           onClose={() => setWsDialog(false)}
           onToast={onToast}
+        />
+      ) : null}
+      {quickOpen ? (
+        <QuickOpenModal
+          lang={lang}
+          open={quickOpen}
+          workspaceId={hasWorkspace ? currentWorkspaceId : null}
+          onClose={() => setQuickOpen(false)}
+          onSelectFile={(path) => {
+            openFile(path);
+          }}
         />
       ) : null}
     </div>
