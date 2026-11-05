@@ -37,6 +37,7 @@ import {
 } from './layout';
 import { useSession } from './session';
 import { conversationTopic, type Change, type ToolCall } from './store';
+import { recordRecentFile } from './recentFiles';
 import { cssViewportWidth } from './uiZoom';
 import { useStoreTopics } from './useStoreTopic';
 import { t } from '../i18n';
@@ -69,6 +70,7 @@ export type RightChangesValue = {
 };
 
 export type RightFilesValue = {
+  workspaceId: string | null;
   tree: FileNode[];
   treeTruncated: boolean;
   treeReady: boolean;
@@ -413,6 +415,7 @@ export function RightPaneProvider({
       if (gen !== fileGen.current) return;
       setActiveFilePath(path);
       setFile(content);
+      recordRecentFile(wsId, path);
       setDraftText(content.text ?? '');
       versionRef.current = content.version;
       if (!opts?.preserveEditor) setEditorMode('preview');
@@ -542,6 +545,7 @@ export function RightPaneProvider({
   }), [cid, hasChanges, totals, visibleChanges, openPaths, toggleChange, diffs]);
 
   const filesValue = useMemo<RightFilesValue>(() => ({
+    workspaceId,
     tree,
     treeTruncated,
     treeReady,
@@ -558,7 +562,7 @@ export function RightPaneProvider({
     saveFile,
     reloadFile,
   }), [
-    tree, treeTruncated, treeReady, expandedDirs, toggleDirectory,
+    workspaceId, tree, treeTruncated, treeReady, expandedDirs, toggleDirectory,
     activeFilePath, fileTargetLine, file, editorMode, setEditorMode, draftText,
     setDraftText, saveState, saveFile, reloadFile,
   ]);
