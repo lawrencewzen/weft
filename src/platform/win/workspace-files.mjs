@@ -4,6 +4,7 @@ import {
   decode,
   detect,
   encode,
+  encodingForWrite,
   isTextEncodingDetectEnabled,
 } from './text-encoding.mjs';
 
@@ -35,20 +36,24 @@ export function inspectWorkspaceText(buf, env = process.env, platform = process.
 }
 
 /**
- * Existing files keep the on-disk encoding (utf8-bom keeps the BOM).
- * Missing files and detection-off writes are UTF-8.
- * `before` is decoded with the same encoding so line diffs stay on characters.
+ * Existing files keep the on-disk encoding (utf8-bom keeps the BOM), except
+ * `.ps1` full-file writes use utf8-bom unless the file is already GBK.
+ * Missing files and detection-off writes are UTF-8 (utf8-bom for `.ps1`
+ * when detection is on). `before` is decoded with the on-disk encoding so
+ * line diffs stay on characters. `filePath` selects the `.ps1` rule.
  */
-export function encodeWorkspaceSave(text, existingBytes, env = process.env, platform = process.platform) {
+export function encodeWorkspaceSave(text, existingBytes, env = process.env, platform = process.platform, filePath) {
   const value = String(text ?? '');
   if (!isTextEncodingDetectEnabled(platform, env)) {
     const before = existingBytes && existingBytes.length ? existingBytes.toString('utf8') : '';
     return { bytes: Buffer.from(value, 'utf8'), before };
   }
   if (!existingBytes || existingBytes.length === 0) {
-    return { bytes: encode(value, 'utf8'), before: existingBytes ? decode(existingBytes, 'utf8') : '' };
+    const enc = encodingForWrite(filePath, undefined, 'write');
+    return { bytes: encode(value, enc), before: existingBytes ? decode(existingBytes, 'utf8') : '' };
   }
-  const enc = detect(existingBytes);
-  const before = decode(existingBytes, enc);
+  const existingEnc = detect(existingBytes);
+  const enc = encodingForWrite(filePath, existingEnc, 'write');
+  const before = decode(existingBytes, existingEnc);
   return { bytes: encode(value, enc), before };
 }

@@ -15,6 +15,32 @@ export function isTextEncodingDetectEnabled(platform = process.platform, env = p
   return String(env?.WEFT_TEXT_ENCODING_DETECT ?? '').trim() === '1';
 }
 
+/**
+ * True when the last path segment ends with `.ps1` (any slash style, any case).
+ * `.psm1` / `.psd1` / `.ps1.bak` do not match.
+ */
+export function isPowerShellScriptPath(filePath) {
+  const normalized = String(filePath ?? '').replace(/\\/g, '/');
+  const base = normalized.slice(normalized.lastIndexOf('/') + 1);
+  return base.length >= 4 && base.slice(-4).toLowerCase() === '.ps1';
+}
+
+/**
+ * Encoding to pass to `encode()` for a write or append.
+ * Non-`.ps1` keeps `existingEnc` or defaults to utf8. `.ps1` stays GBK when
+ * already GBK; append of an existing file keeps that encoding and never
+ * emits a BOM (utf8-bom append uses utf8 so EF BB BF is not inserted in
+ * the middle); other `.ps1` full-file writes use utf8-bom.
+ */
+export function encodingForWrite(filePath, existingEnc, mode) {
+  if (!isPowerShellScriptPath(filePath)) return existingEnc ?? 'utf8';
+  if (existingEnc === 'gbk') return 'gbk';
+  if (mode === 'append' && existingEnc != null) {
+    return existingEnc === 'utf8-bom' ? 'utf8' : existingEnc;
+  }
+  return 'utf8-bom';
+}
+
 function asBuffer(bytes) {
   if (Buffer.isBuffer(bytes)) return bytes;
   if (bytes instanceof Uint8Array) return Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength);

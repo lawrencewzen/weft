@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -9,9 +10,12 @@ import { createEditTool, createReadTool } from '@earendil-works/pi-durable/tools
 import { createWorkspaceEnv } from '../../src/kernel/workspace-env.mjs';
 import {
   GBK_BINARY_VIEW_MAX_BYTES,
+  UTF8_BOM,
   decode,
   detect,
   encode,
+  encodingForWrite,
+  isPowerShellScriptPath,
   isTextEncodingDetectEnabled,
 } from '../../src/platform/win/text-encoding.mjs';
 
@@ -306,5 +310,156 @@ test('official createReadTool reads a PNG as an image', async () => {
     assert.equal(image?.mimeType, 'image/png');
     assert.equal(image?.type, 'image');
     assert.deepEqual(Buffer.from(image.data, 'base64'), PNG_1X1);
+  });
+});
+
+test('isPowerShellScriptPath: .ps1 only, any slash and case', () => {
+  assert.equal(isPowerShellScriptPath('foo.ps1'), true);
+  assert.equal(isPowerShellScriptPath('FOO.PS1'), true);
+  assert.equal(isPowerShellScriptPath('dir\\a.ps1'), true);
+  assert.equal(isPowerShellScriptPath('dir/a.ps1'), true);
+  assert.equal(isPowerShellScriptPath('foo.psm1'), false);
+  assert.equal(isPowerShellScriptPath('foo.psd1'), false);
+  assert.equal(isPowerShellScriptPath('foo.ps1.bak'), false);
+  assert.equal(isPowerShellScriptPath('foo.py'), false);
+});
+
+test('encodingForWrite matrix for .ps1 vs other files', () => {
+  assert.equal(encodingForWrite('hi.ps1', undefined, 'write'), 'utf8-bom');
+  assert.equal(encodingForWrite('hi.ps1', 'utf8', 'write'), 'utf8-bom');
+  assert.equal(encodingForWrite('hi.ps1', 'utf8-bom', 'write'), 'utf8-bom');
+  assert.equal(encodingForWrite('hi.ps1', 'gbk', 'write'), 'gbk');
+  assert.equal(encodingForWrite('hi.ps1', 'utf8', 'append'), 'utf8');
+  assert.equal(encodingForWrite('hi.py', undefined, 'write'), 'utf8');
+  assert.equal(encodingForWrite('notes.py', 'gbk', 'write'), 'gbk');
+  assert.equal(encodingForWrite('hi.ps1', undefined, 'append'), 'utf8-bom');
+  assert.equal(encodingForWrite('hi.ps1', 'utf8-bom', 'append'), 'utf8');
+});
+
+test('writeFile new hi.ps1 uses UTF-8 BOM and keeps Chinese', async () => {
+  await withDetectEnv(true, async ({ dir, env }) => {
+    const wrote = await env.writeFile('hi.ps1', "Write-Output '中文自检'\n", context);
+    assert.equal(wrote.ok, true, wrote.ok ? '' : wrote.error.message);
+    const onDisk = await readFile(path.join(dir, 'hi.ps1'));
+    assert.equal(onDisk.subarray(0, 3).equals(UTF8_BOM), true);
+    assert.equal(detect(onDisk), 'utf8-bom');
+    const text = decode(onDisk, 'utf8-bom');
+    assert.equal(text.includes('中文自检'), true);
+    assert.equal(text.includes('\uFFFD'), false);
+  });
+});
+
+test('writeFile upgrades existing utf8 .ps1 to a single UTF-8 BOM', async () => {
+  await withDetectEnv(true, async ({ dir, env }) => {
+    await writeFile(path.join(dir, 'hi.ps1'), Buffer.from("Write-Output '中文'\n", 'utf8'));
+    const wrote = await env.writeFile('hi.ps1', "Write-Output '中文自检'\n", context);
+    assert.equal(wrote.ok, true, wrote.ok ? '' : wrote.error.message);
+    const onDisk = await readFile(path.join(dir, 'hi.ps1'));
+    assert.equal(detect(onDisk), 'utf8-bom');
+    assert.equal(onDisk.subarray(0, 3).equals(UTF8_BOM), true);
+    assert.equal(onDisk.subarray(0, 6).equals(Buffer.concat([UTF8_BOM, UTF8_BOM])), false);
+    assert.equal(onDisk.includes(Buffer.concat([UTF8_BOM, UTF8_BOM])), false);
+    assert.equal(decode(onDisk, 'utf8-bom').includes('中文自检'), true);
+  });
+});
+
+test('writeFile keeps existing GBK .ps1 as GBK without a BOM', async () => {
+  await withDetectEnv(true, async ({ dir, env }) => {
+    const original = gbkBytes("Write-Output '你好世界'\n");
+    await writeFile(path.join(dir, 'hi.ps1'), original);
+    const before = await env.readTextFile('hi.ps1', context);
+    assert.equal(before.ok, true);
+    const wrote = await env.writeFile('hi.ps1', before.value.replace('你好世界', '你好 Weft'), context);
+    assert.equal(wrote.ok, true, wrote.ok ? '' : wrote.error.message);
+    const onDisk = await readFile(path.join(dir, 'hi.ps1'));
+    assert.equal(detect(onDisk), 'gbk');
+    assert.equal(onDisk.subarray(0, 3).equals(UTF8_BOM), false);
+    assert.deepEqual(onDisk, gbkBytes("Write-Output '你好 Weft'\n"));
+  });
+});
+
+test('writeFile new hi.py stays utf8 without BOM', async () => {
+  await withDetectEnv(true, async ({ dir, env }) => {
+    const wrote = await env.writeFile('hi.py', '打印("你好")\n', context);
+    assert.equal(wrote.ok, true, wrote.ok ? '' : wrote.error.message);
+    const onDisk = await readFile(path.join(dir, 'hi.py'));
+    assert.equal(detect(onDisk), 'utf8');
+    assert.deepEqual(onDisk, Buffer.from('打印("你好")\n', 'utf8'));
+  });
+});
+
+test('appendFile on existing utf8 .ps1 does not insert a BOM in the middle', async () => {
+  await withDetectEnv(true, async ({ dir, env }) => {
+    await writeFile(path.join(dir, 'hi.ps1'), Buffer.from("Write-Output '你好'\n", 'utf8'));
+    const appended = await env.appendFile('hi.ps1', "Write-Output '世界'\n", context);
+    assert.equal(appended.ok, true, appended.ok ? '' : appended.error.message);
+    const onDisk = await readFile(path.join(dir, 'hi.ps1'));
+    assert.equal(onDisk.includes(UTF8_BOM), false);
+    const text = onDisk.toString('utf8');
+    assert.equal(text.includes('你好'), true);
+    assert.equal(text.includes('世界'), true);
+  });
+});
+
+test('detection off: new .ps1 is utf8 without BOM', { skip: process.platform === 'win32' }, async () => {
+  await withDetectEnv(false, async ({ dir, env }) => {
+    const wrote = await env.writeFile('hi.ps1', "Write-Output '中文自检'\n", context);
+    assert.equal(wrote.ok, true, wrote.ok ? '' : wrote.error.message);
+    const onDisk = await readFile(path.join(dir, 'hi.ps1'));
+    assert.deepEqual(onDisk, Buffer.from("Write-Output '中文自检'\n", 'utf8'));
+    assert.equal(detect(onDisk), 'utf8');
+  });
+});
+
+function powershellExeAvailable() {
+  const probe = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', 'exit 0'], {
+    timeout: 15_000,
+    windowsHide: true,
+  });
+  return probe.error == null && probe.status === 0;
+}
+
+test('powershell.exe -File reads a UTF-8 BOM .ps1 as Chinese', async (t) => {
+  if (!powershellExeAvailable()) {
+    t.skip('powershell.exe not available');
+    return;
+  }
+  await withDetectEnv(true, async ({ dir, env }) => {
+    // OutputEncoding is only so Node can read the pipe as UTF-8; it does not
+    // change how powershell.exe decodes the .ps1 (that is the BOM under test).
+    const script = [
+      '[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false',
+      '$OutputEncoding = [Console]::OutputEncoding',
+      "Write-Output '中文自检'",
+      '',
+    ].join('\n');
+    const wrote = await env.writeFile('hi.ps1', script, context);
+    assert.equal(wrote.ok, true, wrote.ok ? '' : wrote.error.message);
+    const onDisk = await readFile(path.join(dir, 'hi.ps1'));
+    assert.equal(onDisk.subarray(0, 3).equals(UTF8_BOM), true);
+
+    const ran = spawnSync(
+      'powershell.exe',
+      ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', path.join(dir, 'hi.ps1')],
+      { encoding: 'buffer', timeout: 20_000, windowsHide: true },
+    );
+    assert.equal(ran.status, 0, String(ran.stderr ?? ran.error?.message ?? ''));
+    const out = Buffer.from(ran.stdout ?? []).toString('utf8');
+    assert.equal(out.includes('中文自检'), true, out);
+    assert.equal(out.includes('\uFFFD'), false, out);
+
+    const noBomPath = path.join(dir, 'nobom.ps1');
+    await writeFile(noBomPath, Buffer.from(script, 'utf8'));
+    const control = spawnSync(
+      'powershell.exe',
+      ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', noBomPath],
+      { encoding: 'buffer', timeout: 20_000, windowsHide: true },
+    );
+    const controlOut = Buffer.from(control.stdout ?? []).toString('utf8');
+    // English runners use ACP 437/1252; a difference is evidence, not a requirement.
+    // UTF-8 system ACP (Windows UTF-8 beta) can make both succeed.
+    if (!controlOut.includes('中文自检')) {
+      assert.equal(out.includes('中文自检'), true);
+    }
   });
 });
