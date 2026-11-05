@@ -6603,6 +6603,12 @@
           },
           "maxTokens": {
             "type": "boolean"
+          },
+          "images": {
+            "type": "boolean"
+          },
+          "thinkingLevel": {
+            "type": "boolean"
           }
         },
         "description": "哪些字段被用户覆盖。未覆盖的键省略。"
@@ -6759,6 +6765,32 @@
             "items": {
               "$ref": "#/components/schemas/ProviderModel"
             }
+          },
+          "defaultModel": {
+            "description": "全局默认模型属于该 Provider 时为其 modelId，否则 null",
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "images": {
+            "description": "该 Provider 默认图片输入能力；自定义端点可在创建/编辑时指定",
+            "type": "boolean"
+          },
+          "defaultThinkingLevel": {
+            "description": "该 Provider 默认思考档位",
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ThinkingLevel"
+              }
+            ]
           }
         },
         "description": "模型 Provider 视图。响应和日志都不含明文 API key。"
@@ -7195,6 +7227,22 @@
           },
           "apiKey": {
             "type": "string"
+          },
+          "defaultModel": {
+            "type": "string"
+          },
+          "images": {
+            "type": "boolean"
+          },
+          "defaultThinkingLevel": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ThinkingLevel"
+              }
+            ]
           }
         },
         "description": "新增自定义接口。先拉 /models，成功才保存。"
@@ -7222,6 +7270,28 @@
               },
               {
                 "type": "integer"
+              }
+            ]
+          },
+          "images": {
+            "description": "该模型是否支持图片输入；null 清除覆盖",
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "boolean"
+              }
+            ]
+          },
+          "thinkingLevel": {
+            "description": "该模型的思考档位；null 清除覆盖",
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ThinkingLevel"
               }
             ]
           }
@@ -7265,6 +7335,27 @@
           },
           "apiKey": {
             "type": "string"
+          },
+          "images": {
+            "description": "null 清除，回到跟随模型",
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "boolean"
+              }
+            ]
+          },
+          "defaultThinkingLevel": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ThinkingLevel"
+              }
+            ]
           }
         },
         "description": "修改已保存的 Provider。name 内置和自定义都可改显示名；baseUrl / api 仅自定义；apiKey 内置也可用来换 Key。"

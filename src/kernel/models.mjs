@@ -11,7 +11,7 @@ import { openAICompletionsApi } from '@earendil-works/pi-ai/api/openai-completio
 import { openAIResponsesApi } from '@earendil-works/pi-ai/api/openai-responses.lazy';
 import { createProvider } from '@earendil-works/pi-ai/models';
 import { builtinProviders } from '@earendil-works/pi-ai/providers/all';
-import { thinkingLevelMapFromSupportedLevels } from '../core/thinking-level.mjs';
+import { applyCapabilityOverrides, thinkingLevelMapFromSupportedLevels } from '../core/thinking-level.mjs';
 import { contextWindowFromEnv } from '../core/usage.mjs';
 import { normalizeProvidersV3 } from '../core/provider-config.mjs';
 import { normalizeHttpUrl } from '../core/model-sources.mjs';
@@ -217,8 +217,11 @@ function catalogMaxTokens(model) {
  * catalog (or user override) and is not capped here.
  * maxTokens: overrides.maxTokens > WEFT_MAX_OUTPUT_TOKENS > min(catalog, 32768),
  * then capMaxTokens against the effective context window.
+ * Image input and thinking fields come from `applyCapabilityOverrides`.
+ * When context, output cap, and those fields are all unchanged, the original
+ * model object is returned.
  */
-function applyModelOverrides(model, overrides, env) {
+function applyModelOverrides(model, overrides, env, providerDefaults) {
   const over = overrides && typeof overrides === 'object' ? overrides[model.id] : null;
   const fallbackWindow = contextWindowFromEnv(env);
   let contextWindow = over?.contextWindow;
@@ -233,24 +236,39 @@ function applyModelOverrides(model, overrides, env) {
     maxTokens = explicitMax ?? Math.min(catalogMaxTokens(model), DEFAULT_MAX_OUTPUT_TOKENS);
   }
   maxTokens = capMaxTokens(maxTokens, contextWindow);
-  if (model.contextWindow === contextWindow && model.maxTokens === maxTokens) return model;
+
+  const caps = applyCapabilityOverrides(model, over, providerDefaults);
+  if (
+    model.contextWindow === contextWindow
+    && model.maxTokens === maxTokens
+    && caps.input === model.input
+    && caps.reasoning === model.reasoning
+    && caps.thinkingLevelMap === model.thinkingLevelMap
+    && caps.defaultThinkingLevel === model.defaultThinkingLevel
+  ) {
+    return model;
+  }
+
   const next = clonePlain(model);
   next.contextWindow = contextWindow;
   next.maxTokens = maxTokens;
+  next.input = Array.isArray(caps.input) ? caps.input.slice() : caps.input;
+  next.reasoning = caps.reasoning;
+  if (caps.defaultThinkingLevel != null) next.defaultThinkingLevel = caps.defaultThinkingLevel;
   return next;
 }
 
-function overlayProvider(provider, overrides, env) {
+function overlayProvider(provider, overrides, env, providerDefaults) {
   if (!provider) return provider;
   return new Proxy(provider, {
     get(target, prop, receiver) {
       if (prop === 'getModels') {
-        return () => target.getModels().map((model) => applyModelOverrides(model, overrides, env));
+        return () => target.getModels().map((model) => applyModelOverrides(model, overrides, env, providerDefaults));
       }
       if (prop === 'getAllModels') {
         return () => {
           const list = typeof target.getAllModels === 'function' ? target.getAllModels() : target.getModels();
-          return list.map((model) => applyModelOverrides(model, overrides, env));
+          return list.map((model) => applyModelOverrides(model, overrides, env, providerDefaults));
         };
       }
       const value = Reflect.get(target, prop, receiver);
@@ -305,6 +323,10 @@ export function buildCustomProvider(entry, { env, fetchImpl } = {}) {
     api,
     baseUrl,
   }));
+  const providerDefaults = {
+    images: entry.images,
+    defaultThinkingLevel: entry.defaultThinkingLevel,
+  };
   return overlayProvider(createProvider({
     id,
     name,
@@ -313,7 +335,7 @@ export function buildCustomProvider(entry, { env, fetchImpl } = {}) {
     models,
     fetchModels: (context) => fetchCustomProviderModels(context, { id, api, baseUrl, fetchImpl }),
     api: apiStreams(api),
-  }), entry.overrides || {}, env);
+  }), entry.overrides || {}, env, providerDefaults);
 }
 
 export function buildBuiltinProvider(entry, { env } = {}) {
@@ -391,6 +413,8 @@ function fingerprintOf(entry, env) {
     entry.api || '',
     entry.enabled || [],
     entry.overrides || {},
+    entry.images,
+    entry.defaultThinkingLevel || '',
     maxOutputTokensFromEnv(env),
     contextWindowFromEnv(env),
   ]);

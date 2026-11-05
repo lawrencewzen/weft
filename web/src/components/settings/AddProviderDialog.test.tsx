@@ -4,7 +4,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AddProviderDialog } from './AddProviderDialog';
-import type { Available, Model, Provider } from '../../data/providerTypes';
+import type { Available, Model, PatchProviderRequest, Provider } from '../../data/providerTypes';
 
 let root: Root | null = null;
 let host: HTMLDivElement | null = null;
@@ -194,7 +194,7 @@ describe('AddProviderDialog', () => {
     await act(async () => { await Promise.resolve(); });
     const dd = host!.querySelector('[data-testid="next-add-model-dropdown"]') as HTMLButtonElement;
     await act(async () => { dd.click(); });
-    const options = [...host!.querySelectorAll('[data-testid="next-add-model-option"]')];
+    const options = [...document.querySelectorAll('[data-testid="next-add-model-option"]')];
     expect(options).toHaveLength(2);
     expect(options[0].textContent).toContain('Grok 4.7');
     expect(options[0].textContent).toContain('256K');
@@ -568,5 +568,387 @@ describe('AddProviderDialog', () => {
     });
 
     expect(onConnect).not.toHaveBeenCalled();
+  });
+
+  it('toggles password visibility with the eye toggle button', async () => {
+    await render(<AddProviderDialog {...props()} />);
+    await act(async () => {
+      (host!.querySelector('[data-vendor="anthropic"]') as HTMLElement).click();
+    });
+
+    const input = host!.querySelector('[data-testid="next-key-input"]') as HTMLInputElement;
+    const toggle = host!.querySelector('[data-testid="next-key-toggle"]') as HTMLButtonElement;
+    expect(input.type).toBe('password');
+    expect(toggle.title).toBe('显示 Key');
+
+    await act(async () => {
+      toggle.click();
+    });
+    expect(input.type).toBe('text');
+    expect(toggle.title).toBe('隐藏 Key');
+
+    await act(async () => {
+      toggle.click();
+    });
+    expect(input.type).toBe('password');
+    expect(toggle.title).toBe('显示 Key');
+  });
+
+  it('uses i18n for show/hide key titles in English', async () => {
+    await render(<AddProviderDialog {...props({ lang: 'en' })} />);
+    await act(async () => {
+      (host!.querySelector('[data-vendor="anthropic"]') as HTMLElement).click();
+    });
+
+    const toggle = host!.querySelector('[data-testid="next-key-toggle"]') as HTMLButtonElement;
+    expect(toggle.title).toBe('Show key');
+    await act(async () => {
+      toggle.click();
+    });
+    expect(toggle.title).toBe('Hide key');
+  });
+
+  it('renders Images and Default thinking dropdowns for custom endpoint and allows selection', async () => {
+    vi.useFakeTimers();
+    try {
+      const onConnectCustom = vi.fn(async () => {
+        const p = providerOf('custom-test', 'Custom endpoint');
+        p.kind = 'custom';
+        return p;
+      });
+      const onCreate = vi.fn();
+
+      await render(<AddProviderDialog {...props({ onConnectCustom, onCreate })} />);
+      await act(async () => {
+        (host!.querySelector('[data-vendor="custom"]') as HTMLElement).click();
+      });
+
+      const urlInput = host!.querySelector('[data-testid="next-custom-url"]') as HTMLInputElement;
+      const keyInput = host!.querySelector('[data-testid="next-custom-key"]') as HTMLInputElement;
+
+      await act(async () => {
+        const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
+        setter?.call(urlInput, 'http://127.0.0.1:8000/v1');
+        urlInput.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+      await act(async () => {
+        const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
+        setter?.call(keyInput, 'sk-test');
+        keyInput.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+
+      const testBtn = host!.querySelector('[data-testid="next-add-test"]') as HTMLButtonElement;
+      await act(async () => {
+        testBtn.click();
+      });
+      await act(async () => {
+        vi.advanceTimersByTime(500);
+      });
+      expect(onConnectCustom).toHaveBeenCalled();
+
+      // Images dropdown defaults to "跟随模型"
+      const imagesBtn = host!.querySelector('[data-testid="next-add-images-dropdown"]') as HTMLButtonElement;
+      expect(imagesBtn).not.toBeNull();
+      expect(imagesBtn.textContent).toContain('跟随模型');
+
+      await act(async () => {
+        imagesBtn.click();
+      });
+      const optSupported = document.querySelector('[data-testid="next-add-images-option-supported"]') as HTMLElement;
+      await act(async () => {
+        optSupported.click();
+      });
+      expect(imagesBtn.textContent).toContain('支持');
+
+      // Thinking dropdown defaults to "跟随模型"
+      const thinkingBtn = host!.querySelector('[data-testid="next-add-thinking-dropdown"]') as HTMLButtonElement;
+      expect(thinkingBtn).not.toBeNull();
+      expect(thinkingBtn.textContent).toContain('跟随模型');
+
+      await act(async () => {
+        thinkingBtn.click();
+      });
+      const optHigh = document.querySelector('[data-testid="next-add-thinking-option-high"]') as HTMLElement;
+      await act(async () => {
+        optHigh.click();
+      });
+      expect(thinkingBtn.textContent).toContain('高');
+
+      // Submit
+      const createBtn = host!.querySelector('[data-testid="next-provider-finish"]') as HTMLButtonElement;
+      await act(async () => {
+        createBtn.click();
+      });
+
+      expect(onCreate).toHaveBeenCalledWith('custom-test', {
+        name: '自定义接口',
+        enabled: ['grok-4-7', 'grok-unknown'],
+        defaultModel: 'grok-4-7',
+        images: true,
+        defaultThinkingLevel: 'high',
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('new custom endpoint without touching images/thinking dropdowns: does not include images or defaultThinkingLevel in connect/create', async () => {
+    vi.useFakeTimers();
+    try {
+      const onConnectCustom = vi.fn(async (_form: Record<string, unknown>) => {
+        const p = providerOf('custom-test', 'Custom endpoint');
+        p.kind = 'custom';
+        return p;
+      });
+      const onCreate = vi.fn(async (_id: string, _patch: Record<string, unknown>) => {});
+
+      await render(<AddProviderDialog {...props({ onConnectCustom, onCreate })} />);
+      await act(async () => {
+        (host!.querySelector('[data-vendor="custom"]') as HTMLElement).click();
+      });
+
+      const urlInput = host!.querySelector('[data-testid="next-custom-url"]') as HTMLInputElement;
+      await act(async () => {
+        const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
+        setter?.call(urlInput, 'http://127.0.0.1:8000/v1');
+        urlInput.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+
+      const testBtn = host!.querySelector('[data-testid="next-add-test"]') as HTMLButtonElement;
+      await act(async () => {
+        testBtn.click();
+      });
+      await act(async () => {
+        vi.advanceTimersByTime(500);
+      });
+      expect(onConnectCustom).toHaveBeenCalled();
+      const connectArgs = onConnectCustom.mock.calls[0]![0];
+      expect(connectArgs).not.toHaveProperty('images');
+      expect(connectArgs).not.toHaveProperty('defaultThinkingLevel');
+
+      const createBtn = host!.querySelector('[data-testid="next-provider-finish"]') as HTMLButtonElement;
+      await act(async () => {
+        createBtn.click();
+      });
+
+      expect(onCreate).toHaveBeenCalledWith('custom-test', {
+        name: '自定义接口',
+        enabled: ['grok-4-7', 'grok-unknown'],
+        defaultModel: 'grok-4-7',
+      });
+      const createPayload = onCreate.mock.calls[0]![1];
+      expect(createPayload).not.toHaveProperty('images');
+      expect(createPayload).not.toHaveProperty('defaultThinkingLevel');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('supports Edit mode: prepopulates custom values, shows Save, and calls onSaveEdit without unchanged values', async () => {
+    const existing = providerOf('custom-edit', 'DeepSeek Local');
+    existing.kind = 'custom';
+    existing.baseUrl = 'http://10.0.0.5:8000/v1';
+    existing.images = true;
+    existing.defaultThinkingLevel = 'medium';
+    existing.defaultModel = 'grok-unknown';
+
+    const onSaveEdit = vi.fn(async (_id: string, _patch: PatchProviderRequest) => {});
+    const onClose = vi.fn();
+
+    await render(
+      <AddProviderDialog
+        {...props({ onClose })}
+        editTarget={existing}
+        onSaveEdit={onSaveEdit}
+      />,
+    );
+
+    expect(host!.textContent).toContain('编辑接口');
+    const nameInput = host!.querySelector('[data-testid="next-custom-name"]') as HTMLInputElement;
+    expect(nameInput.value).toBe('DeepSeek Local');
+
+    const urlInput = host!.querySelector('[data-testid="next-custom-url"]') as HTMLInputElement;
+    expect(urlInput.value).toBe('http://10.0.0.5:8000/v1');
+
+    const imagesBtn = host!.querySelector('[data-testid="next-add-images-dropdown"]') as HTMLButtonElement;
+    expect(imagesBtn.textContent).toContain('支持');
+
+    const thinkingBtn = host!.querySelector('[data-testid="next-add-thinking-dropdown"]') as HTMLButtonElement;
+    expect(thinkingBtn.textContent).toContain('中');
+
+    const saveBtn = host!.querySelector('[data-testid="next-provider-finish"]') as HTMLButtonElement;
+    expect(saveBtn.textContent).toBe('保存');
+
+    await act(async () => {
+      saveBtn.click();
+    });
+
+    expect(onSaveEdit).toHaveBeenCalledWith('custom-edit', {
+      name: 'DeepSeek Local',
+      baseUrl: 'http://10.0.0.5:8000/v1',
+    });
+    expect(onSaveEdit.mock.calls[0]![1]).not.toHaveProperty('defaultModel');
+    expect(onSaveEdit.mock.calls[0]![1]).not.toHaveProperty('images');
+    expect(onSaveEdit.mock.calls[0]![1]).not.toHaveProperty('defaultThinkingLevel');
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it('supports Edit mode for builtin provider: shows Display name and key input, allows saving without defaultModel when only name changes', async () => {
+    const existing = providerOf('deepseek', 'DeepSeek');
+    existing.kind = 'builtin';
+    existing.defaultModel = 'grok-4-7';
+
+    const onSaveEdit = vi.fn(async (_id: string, _patch: PatchProviderRequest) => {});
+    const onClose = vi.fn();
+
+    await render(
+      <AddProviderDialog
+        {...props({ onClose })}
+        editTarget={existing}
+        onSaveEdit={onSaveEdit}
+      />,
+    );
+
+    expect(host!.textContent).toContain('编辑接口');
+    const nameInput = host!.querySelector('[data-testid="next-config-name"]') as HTMLInputElement;
+    expect(nameInput.value).toBe('DeepSeek');
+
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
+      setter?.call(nameInput, 'DeepSeek Renamed');
+      nameInput.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+
+    const keyInput = host!.querySelector('[data-testid="next-key-input"]') as HTMLInputElement;
+    expect(keyInput).not.toBeNull();
+    expect(keyInput.placeholder).toBe('••••••••••••••••');
+
+    const saveBtn = host!.querySelector('[data-testid="next-provider-finish"]') as HTMLButtonElement;
+    expect(saveBtn.textContent).toBe('保存');
+
+    await act(async () => {
+      saveBtn.click();
+    });
+
+    expect(onSaveEdit).toHaveBeenCalledWith('deepseek', {
+      name: 'DeepSeek Renamed',
+    });
+    expect(onSaveEdit.mock.calls[0]![1]).not.toHaveProperty('defaultModel');
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it('create mode: defaults to displaying and highlighting the first model', async () => {
+    const onConnect = vi.fn(async () => providerOf('xai', 'Grok'));
+    await render(<AddProviderDialog {...props({ onConnect })} />);
+    await act(async () => { await Promise.resolve(); });
+
+    const ddBtn = host!.querySelector('[data-testid="next-add-model-dropdown"]') as HTMLButtonElement;
+    expect(ddBtn).not.toBeNull();
+    expect(ddBtn.textContent).toContain('Grok 4.7');
+
+    await act(async () => {
+      ddBtn.click();
+    });
+
+    const options = document.querySelectorAll('[data-testid="next-add-model-option"]');
+    expect(options.length).toBe(2);
+    expect(options[0]!.classList.contains('on')).toBe(true);
+    expect(options[0]!.textContent).toContain('✓');
+    expect(options[0]!.textContent).toContain('Grok 4.7');
+    expect(options[1]!.classList.contains('on')).toBe(false);
+    expect(options[1]!.textContent).not.toContain('✓');
+  });
+
+  it('edit mode: when defaultModel is null initially, shows placeholder and sends defaultModel only when changed', async () => {
+    const existing = providerOf('deepseek', 'DeepSeek');
+    existing.kind = 'builtin';
+    existing.defaultModel = null;
+
+    const onSaveEdit = vi.fn(async (_id: string, _patch: PatchProviderRequest) => {});
+
+    await render(
+      <AddProviderDialog
+        {...props()}
+        editTarget={existing}
+        onSaveEdit={onSaveEdit}
+      />,
+    );
+
+    // Initial placeholder
+    const modelBtn = host!.querySelector('[data-testid="next-add-model-dropdown"]') as HTMLButtonElement;
+    expect(modelBtn.textContent).toContain('未选择');
+
+    // Select a model
+    await act(async () => {
+      modelBtn.click();
+    });
+    const opt = document.querySelector('[data-testid="next-add-model-option"][data-model="grok-4-7"]') as HTMLElement;
+    await act(async () => {
+      opt.click();
+    });
+    expect(modelBtn.textContent).toContain('Grok 4.7');
+
+    const saveBtn = host!.querySelector('[data-testid="next-provider-finish"]') as HTMLButtonElement;
+    await act(async () => {
+      saveBtn.click();
+    });
+
+    expect(onSaveEdit).toHaveBeenCalledWith('deepseek', {
+      name: 'DeepSeek',
+      defaultModel: 'grok-4-7',
+    });
+  });
+
+  it('edit mode: changing images from supported to follow model sends images: null in patch', async () => {
+    const existing = providerOf('custom-edit', 'DeepSeek Local');
+    existing.kind = 'custom';
+    existing.baseUrl = 'http://10.0.0.5:8000/v1';
+    existing.images = true;
+    existing.defaultThinkingLevel = 'medium';
+    existing.defaultModel = 'grok-unknown';
+
+    const onSaveEdit = vi.fn(async (_id: string, _patch: PatchProviderRequest) => {});
+    const onClose = vi.fn();
+
+    await render(
+      <AddProviderDialog
+        {...props({ onClose })}
+        editTarget={existing}
+        onSaveEdit={onSaveEdit}
+      />,
+    );
+
+    const imagesBtn = host!.querySelector('[data-testid="next-add-images-dropdown"]') as HTMLButtonElement;
+    expect(imagesBtn.textContent).toContain('支持');
+
+    await act(async () => {
+      imagesBtn.click();
+    });
+    const optFollow = document.querySelector('[data-testid="next-add-images-option-follow"]') as HTMLElement;
+    await act(async () => {
+      optFollow.click();
+    });
+    expect(imagesBtn.textContent).toContain('跟随模型');
+
+    const saveBtn = host!.querySelector('[data-testid="next-provider-finish"]') as HTMLButtonElement;
+    await act(async () => {
+      saveBtn.click();
+    });
+
+    expect(onSaveEdit).toHaveBeenCalledWith('custom-edit', {
+      name: 'DeepSeek Local',
+      baseUrl: 'http://10.0.0.5:8000/v1',
+      images: null,
+    });
+    expect(onSaveEdit.mock.calls[0]![1]).not.toHaveProperty('defaultModel');
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it('customOnly mode only displays Custom in the left list', async () => {
+    await render(<AddProviderDialog {...props()} customOnly />);
+    const leftText = host!.querySelector('.mp-add-left')?.textContent || '';
+    expect(leftText).not.toContain('Grok');
+    expect(leftText).not.toContain('Anthropic');
+    expect(leftText).toContain('自定义接口');
   });
 });

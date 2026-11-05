@@ -10,6 +10,7 @@ import { agentShellKind } from '../../src/platform/win/shell.mjs';
 import { isAutoContinueText } from '../../src/kernel/continuation.mjs';
 import { createSkillTool, SKILL_TOOL_DESCRIPTION } from '../../src/kernel/skill-tool.mjs';
 import { SKILL_LIST_INTRO } from '../../src/core/skills.mjs';
+import { writeSampleEcho, writeSampleSkills } from './_sample-extensions.mjs';
 
 const TOKEN = 'unit-kernel-agent-config-token';
 const request = (base, method, apiPath, body) => serverRequest(base, method, apiPath, body, TOKEN);
@@ -47,6 +48,8 @@ test('autoTitleFromText still skips auto-continue text', () => {
 
 test('new conversation: empty instructions, all tools, enabled skills, Agent name', { timeout: 30000 }, async () => {
   const dataDir = await mkdtemp(path.join(tmpdir(), 'piw-kagent-'));
+  await writeSampleSkills(path.join(dataDir, 'skills'));
+  await writeSampleEcho(path.join(dataDir, 'plugins'));
   const record = path.join(dataDir, 'requests.jsonl');
   const srv = await startServer({
     token: TOKEN,
@@ -114,6 +117,7 @@ test('skill tool is read-only load-by-name', async () => {
 
 test('main agent skill tool loads body; disabled or unknown skills error', { timeout: 40000 }, async () => {
   const dataDir = await mkdtemp(path.join(tmpdir(), 'piw-kskill-'));
+  await writeSampleSkills(path.join(dataDir, 'skills'));
   const record = path.join(dataDir, 'requests.jsonl');
   const script = path.join(dataDir, 'faux.json');
   await writeFile(script, JSON.stringify({

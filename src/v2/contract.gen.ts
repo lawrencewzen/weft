@@ -1516,6 +1516,8 @@ export interface components {
         ModelOverridden: {
             contextWindow?: boolean;
             maxTokens?: boolean;
+            images?: boolean;
+            thinkingLevel?: boolean;
         };
         /**
          * @description pi-ai 思考档位。界面按模型支持的显示为关 / 低 / 中 / 高 / 更高 / 最高。
@@ -1558,6 +1560,12 @@ export interface components {
             auth: components["schemas"]["ProviderAuth"];
             status: components["schemas"]["ProviderStatus"];
             models: components["schemas"]["ProviderModel"][];
+            /** @description 全局默认模型属于该 Provider 时为其 modelId，否则 null */
+            defaultModel?: null | string;
+            /** @description 该 Provider 默认图片输入能力；自定义端点可在创建/编辑时指定 */
+            images?: boolean;
+            /** @description 该 Provider 默认思考档位 */
+            defaultThinkingLevel?: null | components["schemas"]["ThinkingLevel"];
         };
         /** @description 可接入的内置 Provider。 */
         AvailableProvider: {
@@ -1666,12 +1674,19 @@ export interface components {
             baseUrl: string;
             api: components["schemas"]["CustomApi"];
             apiKey?: string;
+            defaultModel?: string;
+            images?: boolean;
+            defaultThinkingLevel?: null | components["schemas"]["ThinkingLevel"];
         };
         ModelOverridePatch: {
             /** @description 新的上下文上限；null 清除覆盖 */
             contextWindow?: null | number;
             /** @description 新的 max tokens；null 清除覆盖 */
             maxTokens?: null | number;
+            /** @description 该模型是否支持图片输入；null 清除覆盖 */
+            images?: null | boolean;
+            /** @description 该模型的思考档位；null 清除覆盖 */
+            thinkingLevel?: null | components["schemas"]["ThinkingLevel"];
         };
         /** @description 修改已保存的 Provider。name 内置和自定义都可改显示名；baseUrl / api 仅自定义；apiKey 内置也可用来换 Key。 */
         PatchProviderRequest: {
@@ -1685,6 +1700,9 @@ export interface components {
             baseUrl?: string;
             api?: components["schemas"]["CustomApi"];
             apiKey?: string;
+            /** @description null 清除，回到跟随模型 */
+            images?: null | boolean;
+            defaultThinkingLevel?: null | components["schemas"]["ThinkingLevel"];
         };
         /** @description 回答登录会话当前 prompt。 */
         LoginAnswerRequest: {

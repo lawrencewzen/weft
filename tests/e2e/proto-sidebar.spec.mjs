@@ -160,6 +160,7 @@ test('conversation rows have no native title tooltip; action buttons keep theirs
   const state = await openProto(page);
 
   const liveRows = page.getByTestId('next-conv-row');
+  await expect(liveRows.first()).toBeVisible();
   expect(await liveRows.count()).toBeGreaterThan(0);
   for (const row of await liveRows.all()) {
     await expect(row).not.toHaveAttribute('title');

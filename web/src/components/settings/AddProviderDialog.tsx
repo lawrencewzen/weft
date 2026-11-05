@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { BrandIcon } from '../BrandIcon';
+import { Dropdown } from '../ui/Dropdown';
 import { providerBrand } from '../../data/providerBrand';
 import { formatNumber } from '../../data/providerFormat';
 import type {
@@ -7,7 +8,9 @@ import type {
   CustomApiProtocol,
   LoginSession,
   Model,
+  PatchProviderRequest,
   Provider,
+  ThinkingLevel,
 } from '../../data/providerTypes';
 import { t, type Lang } from '../../i18n';
 import { LoginSessionView } from './LoginSessionView';
@@ -61,9 +64,22 @@ type Props = {
     baseUrl: string;
     api: CustomApiProtocol;
     apiKey?: string;
+    defaultModel?: string;
+    images?: boolean;
+    defaultThinkingLevel?: ThinkingLevel | null;
   }) => Promise<Provider>;
-  onCreate: (id: string, patch: { name: string; enabled: string[]; defaultModel: string }) => Promise<void>;
+  onCreate: (id: string, patch: {
+    name: string;
+    enabled: string[];
+    defaultModel: string;
+    images?: boolean;
+    defaultThinkingLevel?: ThinkingLevel | null;
+  }) => Promise<void>;
   onRollback: (ids: string[]) => Promise<void>;
+  editTarget?: Provider | null;
+  onSaveEdit?: (id: string, patch: PatchProviderRequest) => Promise<unknown>;
+  onTest?: (id: string) => Promise<unknown>;
+  customOnly?: boolean;
 };
 
 const CHECK_SVG = (
@@ -76,6 +92,20 @@ const CHECK_SVG = (
 const DASH_SVG = (
   <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
     <circle cx="10" cy="10" r="7.5" strokeDasharray="2.5 2.5" />
+  </svg>
+);
+
+const EYE_SVG = (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+    <circle cx="12" cy="12" r="3" />
+  </svg>
+);
+
+const EYE_OFF_SVG = (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+    <line x1="1" y1="1" x2="23" y2="23" />
   </svg>
 );
 
@@ -105,17 +135,32 @@ export function AddProviderDialog({
   onConnectCustom,
   onCreate,
   onRollback,
+  editTarget,
+  onSaveEdit,
+  onTest,
+  customOnly,
 }: Props) {
+  const isEdit = Boolean(editTarget);
   const [search, setSearch] = useState('');
-  const [selectedId, setSelectedId] = useState<string>('xai');
-  const [configName, setConfigName] = useState('');
+  const [selectedId, setSelectedId] = useState<string>(() => (
+    editTarget
+      ? (editTarget.kind === 'custom' ? 'custom' : editTarget.id)
+      : (customOnly ? 'custom' : 'xai')
+  ));
+  const [configName, setConfigName] = useState(() => (editTarget ? editTarget.name : ''));
   const [apiKeyInput, setApiKeyInput] = useState('');
-  const [customUrl, setCustomUrl] = useState('');
+  const [customUrl, setCustomUrl] = useState(() => (editTarget?.baseUrl || ''));
   const [customKey, setCustomKey] = useState('');
-  const [models, setModels] = useState<Model[]>([]);
-  const [chosenId, setChosenId] = useState('');
-  const [connectedId, setConnectedId] = useState<string | null>(null);
-  const [ddOpen, setDdOpen] = useState(false);
+  const [showKey, setShowKey] = useState(false);
+  const [models, setModels] = useState<Model[]>(() => (editTarget?.models || []));
+  const [chosenId, setChosenId] = useState(() => (editTarget ? (editTarget.defaultModel || '') : ''));
+  const [imagesSupport, setImagesSupport] = useState<boolean | null>(() => (
+    typeof editTarget?.images === 'boolean' ? editTarget.images : null
+  ));
+  const [thinkingDefault, setThinkingDefault] = useState<ThinkingLevel | null>(() => (
+    editTarget?.defaultThinkingLevel || null
+  ));
+  const [connectedId, setConnectedId] = useState<string | null>(() => (editTarget ? editTarget.id : null));
   const [acpFoldOpen, setAcpFoldOpen] = useState(false);
   const [oauthOpen, setOauthOpen] = useState(false);
   const [testing, setTesting] = useState(false);
@@ -127,7 +172,6 @@ export function AddProviderDialog({
   const autoKeyRef = useRef<string>('');
   const selectedIdRef = useRef(selectedId);
   const isOpenRef = useRef(isOpen);
-  const ddRef = useRef<HTMLDivElement | null>(null);
   const closingRef = useRef(false);
   const revertTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const testBtnRef = useRef<HTMLButtonElement | null>(null);
@@ -143,50 +187,90 @@ export function AddProviderDialog({
   const grokVendor = available.find((item) => item.id === 'xai') || null;
   const apiVendors = available.filter((item) => item.id !== 'xai');
 
-  const leftItems: LeftItem[] = [
-    ...(grokVendor
-      ? [{
-          kind: 'vendor' as const,
-          id: grokVendor.id,
-          name: grokVendor.name,
-          brand: grokVendor.brand || providerBrand(grokVendor.id),
-          connected: grokVendor.connected && !sessionIds.includes(grokVendor.id),
-          vendor: grokVendor,
-        }]
-      : []),
-    ...apiVendors.map((vendor) => ({
-      kind: 'vendor' as const,
-      id: vendor.id,
-      name: vendor.name,
-      brand: vendor.brand || providerBrand(vendor.id),
-      connected: vendor.connected && !sessionIds.includes(vendor.id),
-      vendor,
-    })),
-    {
-      kind: 'custom',
-      id: 'custom',
-      name: t(lang, 'dlg_add_custom_title'),
-      brand: null,
-      connected: false,
-    },
-    ...ACP_CATALOG.map((acp) => ({
-      kind: 'acp' as const,
-      id: acp.id,
-      name: acp.name,
-      brand: acp.brand,
-      connected: false,
-      acp,
-    })),
-  ];
+  const isCustomOnly = Boolean(customOnly || isEdit || (!grokVendor && apiVendors.length === 0));
+
+  const editItem: LeftItem | null = editTarget
+    ? {
+        kind: editTarget.kind === 'custom' ? ('custom' as const) : ('vendor' as const),
+        id: editTarget.kind === 'custom' ? 'custom' : editTarget.id,
+        name: editTarget.name,
+        brand: editTarget.brand || providerBrand(editTarget.id),
+        connected: false,
+        vendor: available.find((item) => item.id === editTarget.id) || {
+          id: editTarget.id,
+          name: editTarget.name,
+          brand: editTarget.brand || providerBrand(editTarget.id),
+          authMethods: [editTarget.auth?.type === 'oauth' ? 'oauth' : 'api_key'],
+          modelCount: editTarget.models?.length || 0,
+          popular: false,
+          envDetected: false,
+          connected: true,
+        },
+      }
+    : null;
+
+  const leftItems: LeftItem[] = editItem
+    ? [editItem]
+    : isCustomOnly
+      ? [
+          {
+            kind: 'custom',
+            id: 'custom',
+            name: t(lang, 'dlg_add_custom_title'),
+            brand: null,
+            connected: false,
+          },
+        ]
+      : [
+          ...(grokVendor
+            ? [{
+                kind: 'vendor' as const,
+                id: grokVendor.id,
+                name: grokVendor.name,
+                brand: grokVendor.brand || providerBrand(grokVendor.id),
+                connected: grokVendor.connected && !sessionIds.includes(grokVendor.id),
+                vendor: grokVendor,
+              }]
+            : []),
+          ...apiVendors.map((vendor) => ({
+            kind: 'vendor' as const,
+            id: vendor.id,
+            name: vendor.name,
+            brand: vendor.brand || providerBrand(vendor.id),
+            connected: vendor.connected && !sessionIds.includes(vendor.id),
+            vendor,
+          })),
+          {
+            kind: 'custom',
+            id: 'custom',
+            name: t(lang, 'dlg_add_custom_title'),
+            brand: null,
+            connected: false,
+          },
+          ...ACP_CATALOG.map((acp) => ({
+            kind: 'acp' as const,
+            id: acp.id,
+            name: acp.name,
+            brand: acp.brand,
+            connected: false,
+            acp,
+          })),
+        ];
 
   const selected = leftItems.find((item) => item.id === selectedId) || leftItems[0] || null;
   const vendor = selected?.kind === 'vendor' ? selected.vendor : undefined;
   const isRelogin = Boolean(loginSession && vendor && loginSession.providerId === vendor.id);
-  const alreadyConnected = Boolean(vendor?.connected && !sessionIds.includes(vendor.id) && !isRelogin);
+  const alreadyConnected = Boolean(
+    !isEdit
+    && vendor?.connected
+    && !sessionIds.includes(vendor.id)
+    && !isRelogin,
+  );
   const grokDetected = Boolean(vendor?.id === 'xai' && vendor.localLogin?.detected);
   const envDetected = Boolean(vendor?.envDetected);
-  const isReady = Boolean(connectedId && models.length > 0 && !alreadyConnected);
+  const isReady = Boolean((connectedId || isEdit) && models.length > 0 && !alreadyConnected);
   const isAcp = selected?.kind === 'acp';
+  const isAcpComingSoon = isAcp;
   const isCustom = selected?.kind === 'custom';
   const isGrok = vendor?.id === 'xai';
 
@@ -211,25 +295,40 @@ export function AddProviderDialog({
     closingRef.current = false;
     setSessionIds([]);
     setSearch('');
-    setSelectedId('xai');
-    setConfigName('');
-    setApiKeyInput('');
-    setCustomUrl('');
-    setCustomKey('');
-    setModels([]);
-    setChosenId('');
-    setConnectedId(null);
-    setDdOpen(false);
+    if (editTarget) {
+      setSelectedId(editTarget.kind === 'custom' ? 'custom' : editTarget.id);
+      setConfigName(editTarget.name);
+      setCustomUrl(editTarget.baseUrl || '');
+      setCustomKey('');
+      setShowKey(false);
+      setModels(editTarget.models || []);
+      setChosenId(editTarget.defaultModel || '');
+      setImagesSupport(typeof editTarget.images === 'boolean' ? editTarget.images : null);
+      setThinkingDefault(editTarget.defaultThinkingLevel || null);
+      setConnectedId(editTarget.id);
+    } else {
+      setSelectedId(customOnly ? 'custom' : 'xai');
+      setConfigName('');
+      setApiKeyInput('');
+      setCustomUrl('');
+      setCustomKey('');
+      setShowKey(false);
+      setModels([]);
+      setChosenId('');
+      setConnectedId(null);
+      setImagesSupport(null);
+      setThinkingDefault(null);
+    }
     setAcpFoldOpen(false);
     setOauthOpen(false);
     setTesting(false);
     setTestSuccess(false);
     setCreating(false);
     setErrorMsg(null);
-  }, [isOpen]);
+  }, [isOpen, editTarget, customOnly]);
 
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen || editTarget) return;
     if (selectedId === 'custom') return;
     const acp = ACP_CATALOG.find((item) => item.id === selectedId);
     if (acp) {
@@ -238,7 +337,7 @@ export function AddProviderDialog({
     }
     const hit = available.find((item) => item.id === selectedId);
     if (hit) setConfigName(hit.name);
-  }, [isOpen, selectedId, available]);
+  }, [isOpen, selectedId, available, editTarget]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -301,13 +400,12 @@ export function AddProviderDialog({
     if (!isOpen) return;
     function onKey(e: KeyboardEvent) {
       if (e.key !== 'Escape') return;
+      if (document.querySelector('.mp-add-dd-menu, .mp-menu')) {
+        return;
+      }
       e.preventDefault();
       e.stopPropagation();
       e.stopImmediatePropagation();
-      if (ddOpen) {
-        setDdOpen(false);
-        return;
-      }
       if (closingRef.current) return;
       clearRevertTimer();
       setTesting(false);
@@ -322,16 +420,7 @@ export function AddProviderDialog({
     }
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
-  }, [isOpen, ddOpen]);
-
-  useEffect(() => {
-    if (!ddOpen) return;
-    function onDown(e: MouseEvent) {
-      if (ddRef.current && !ddRef.current.contains(e.target as Node)) setDdOpen(false);
-    }
-    window.addEventListener('mousedown', onDown);
-    return () => window.removeEventListener('mousedown', onDown);
-  }, [ddOpen]);
+  }, [isOpen]);
 
   if (!isOpen || !selected) return null;
 
@@ -434,6 +523,9 @@ export function AddProviderDialog({
         baseUrl: customUrl.trim(),
         api: 'openai-completions',
         ...(customKey.trim() ? { apiKey: customKey.trim() } : {}),
+        defaultModel: chosenId || undefined,
+        ...(imagesSupport !== null ? { images: imagesSupport } : {}),
+        ...(thinkingDefault !== null ? { defaultThinkingLevel: thinkingDefault } : {}),
       }));
       await executeConnect(connectPromise, 'custom', isExplicit);
     } catch (err) {
@@ -448,10 +540,44 @@ export function AddProviderDialog({
     }
   }
 
+  async function executeTestExisting(id: string) {
+    if (!onTest) return;
+    clearRevertTimer();
+    setTesting(true);
+    setTestSuccess(false);
+    setErrorMsg(null);
+    try {
+      const minDelayPromise = new Promise<void>((resolve) => { setTimeout(resolve, 500); });
+      const [res] = await Promise.allSettled([onTest(id), minDelayPromise]);
+      if (!isOpenRef.current || closingRef.current) return;
+      if (res.status === 'fulfilled') {
+        setTesting(false);
+        setTestSuccess(true);
+        revertTimerRef.current = setTimeout(() => {
+          if (isOpenRef.current && !closingRef.current) setTestSuccess(false);
+        }, 1500);
+      } else {
+        const err = res.reason;
+        setErrorMsg(err instanceof Error ? err.message : String(err));
+        setTesting(false);
+        setTestSuccess(false);
+      }
+    } catch (err) {
+      if (!isOpenRef.current || closingRef.current) return;
+      setErrorMsg(err instanceof Error ? err.message : String(err));
+      setTesting(false);
+      setTestSuccess(false);
+    }
+  }
+
   async function handleTest() {
     if (isAcp || alreadyConnected || testing || testSuccess || creating) return;
     if (isCustom) {
-      await runCustomConnect(true);
+      if (customKey.trim() || !isEdit) {
+        await runCustomConnect(true);
+      } else if (isEdit && onTest && editTarget) {
+        await executeTestExisting(editTarget.id);
+      }
       return;
     }
     if (!vendor) return;
@@ -465,6 +591,7 @@ export function AddProviderDialog({
     }
     if (apiKeyInput.trim()) await runConnect({ method: 'api_key', apiKey: apiKeyInput.trim() }, true);
     else if (vendor.envDetected) await runConnect({ method: 'env' }, true);
+    else if (isEdit && onTest && editTarget) await executeTestExisting(editTarget.id);
     else setErrorMsg(t(lang, 'form_fill_required'));
   }
 
@@ -497,6 +624,40 @@ export function AddProviderDialog({
   }
 
   async function handleCreate() {
+    if (editTarget) {
+      setCreating(true);
+      setErrorMsg(null);
+      try {
+        const patch: PatchProviderRequest = {
+          name: (configName.trim() || editTarget.name).slice(0, 80),
+        };
+        if (isCustom) {
+          const initialImages = typeof editTarget.images === 'boolean' ? editTarget.images : null;
+          if (imagesSupport !== initialImages) {
+            patch.images = imagesSupport;
+          }
+          const initialThinking = editTarget.defaultThinkingLevel || null;
+          if (thinkingDefault !== initialThinking) {
+            patch.defaultThinkingLevel = thinkingDefault;
+          }
+          if (customUrl.trim()) patch.baseUrl = customUrl.trim();
+          if (customKey.trim()) patch.apiKey = customKey.trim();
+        } else {
+          if (apiKeyInput.trim()) patch.apiKey = apiKeyInput.trim();
+        }
+        if (chosenId && chosenId !== (editTarget.defaultModel || '')) {
+          patch.defaultModel = chosenId;
+        }
+        await onSaveEdit?.(editTarget.id, patch);
+        onClose();
+      } catch (err) {
+        setErrorMsg(err instanceof Error ? err.message : String(err));
+      } finally {
+        setCreating(false);
+      }
+      return;
+    }
+
     if (!isReady || !connectedId || creating) return;
     const defaultModel = chosenId || models[0]?.id;
     if (!defaultModel) return;
@@ -510,6 +671,10 @@ export function AddProviderDialog({
         name: (configName.trim() || selected.name).slice(0, 80),
         enabled: models.map((item) => item.id),
         defaultModel,
+        ...(isCustom ? {
+          ...(imagesSupport !== null ? { images: imagesSupport } : {}),
+          ...(thinkingDefault !== null ? { defaultThinkingLevel: thinkingDefault } : {}),
+        } : {}),
       });
       if (leftover.length) await onRollback(leftover);
       onClose();
@@ -532,7 +697,6 @@ export function AddProviderDialog({
     setCustomUrl('');
     setCustomKey('');
     setErrorMsg(null);
-    setDdOpen(false);
     setOauthOpen(false);
     setAcpFoldOpen(false);
     setTesting(false);
@@ -542,6 +706,8 @@ export function AddProviderDialog({
     setChosenId('');
     setConnectedId(null);
     autoKeyRef.current = '';
+    setImagesSupport(null);
+    setThinkingDefault(null);
   }
 
   const q = search.trim().toLowerCase();
@@ -550,7 +716,9 @@ export function AddProviderDialog({
   const apiList = leftItems.filter((item) => (item.kind === 'vendor' && item.id !== 'xai') || item.kind === 'custom').filter(match);
   const acpList = leftItems.filter((item) => item.kind === 'acp').filter(match);
 
-  const chosen = models.find((item) => item.id === chosenId) || models[0];
+  const chosen = (chosenId ? models.find((item) => item.id === chosenId) : null)
+    || (!editTarget ? models[0] : null)
+    || null;
   const grokAccount = vendor?.localLogin?.account || '';
 
   function renderGroup(label: string, items: LeftItem[]) {
@@ -591,9 +759,15 @@ export function AddProviderDialog({
             onChange={(e) => setSearch(e.target.value)}
           />
           <div className="mp-add-list">
-            {renderGroup(t(lang, 'dlg_add_grp_builtin'), builtinList)}
-            {renderGroup(t(lang, 'dlg_add_grp_apikey'), apiList)}
-            {renderGroup(t(lang, 'dlg_add_grp_acp'), acpList)}
+            {isCustomOnly ? (
+              renderGroup(t(lang, 'dlg_add_custom_title'), leftItems)
+            ) : (
+              <>
+                {renderGroup(t(lang, 'dlg_add_grp_builtin'), builtinList)}
+                {renderGroup(t(lang, 'dlg_add_grp_apikey'), apiList)}
+                {renderGroup(t(lang, 'dlg_add_grp_acp'), acpList)}
+              </>
+            )}
           </div>
         </div>
         <div className="mp-add-right">
@@ -602,7 +776,7 @@ export function AddProviderDialog({
               <BrandIcon brand={selected.brand} size={18} />
             </span>
             <div>
-              <b>{t(lang, 'dlg_add_provider_title')}</b>
+              <b>{isEdit ? t(lang, 'provider_act_edit') : t(lang, 'dlg_add_provider_title')}</b>
               <small>{subtitleOf(selected, lang)}</small>
             </div>
             <span className="mp-add-sp">
@@ -611,7 +785,7 @@ export function AddProviderDialog({
                 type="button"
                 className="mp-btn"
                 data-testid="next-add-test"
-                disabled={testing || testSuccess || creating || isAcp || alreadyConnected}
+                disabled={testing || testSuccess || creating}
                 onClick={() => void handleTest()}
               >
                 {testing
@@ -705,18 +879,26 @@ export function AddProviderDialog({
                   <label>{t(lang, 'dlg_key_label')}</label>
                   <div className="mp-add-in">
                     <input
-                      type="password"
+                      type={showKey ? 'text' : 'password'}
                       className="mono"
                       data-testid="next-custom-key"
                       value={customKey}
-                      placeholder="sk-…"
+                      placeholder={isEdit ? '••••••••••••••••' : 'sk-…'}
                       onChange={(e) => {
                         setCustomKey(e.target.value);
                         setTestSuccess(false);
                       }}
                       onBlur={(e) => void handleKeyBlur(e)}
                     />
-                    <span className="mp-add-det">{DASH_SVG}</span>
+                    <button
+                      type="button"
+                      className="mp-key-toggle"
+                      data-testid="next-key-toggle"
+                      title={showKey ? t(lang, 'dlg_key_hide') : t(lang, 'dlg_key_show')}
+                      onClick={() => setShowKey((s) => !s)}
+                    >
+                      {showKey ? EYE_OFF_SVG : EYE_SVG}
+                    </button>
                   </div>
                 </div>
               </>
@@ -727,22 +909,34 @@ export function AddProviderDialog({
                 <label>{t(lang, 'dlg_key_label')}</label>
                 <div className="mp-add-in">
                   <input
-                    type="password"
+                    type={showKey ? 'text' : 'password'}
                     className="mono"
                     data-testid="next-key-input"
                     value={apiKeyInput}
-                    placeholder={envDetected && vendor.envVar
+                    placeholder={isEdit ? '••••••••••••••••' : (envDetected && vendor.envVar
                       ? t(lang, 'dlg_add_env_placeholder', { env: vendor.envVar })
-                      : 'sk-…'}
+                      : 'sk-…')}
                     onChange={(e) => {
                       setApiKeyInput(e.target.value);
                       setTestSuccess(false);
                     }}
                     onBlur={(e) => void handleKeyBlur(e)}
                   />
-                  <span className={`mp-add-det${envDetected ? ' ok' : ''}`} data-testid={envDetected ? 'next-detected-check' : undefined}>
-                    {envDetected ? CHECK_SVG : DASH_SVG}
-                  </span>
+                  {envDetected && !isEdit ? (
+                    <span className="mp-add-det ok" data-testid="next-detected-check">
+                      {CHECK_SVG}
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      className="mp-key-toggle"
+                      data-testid="next-key-toggle"
+                      title={showKey ? t(lang, 'dlg_key_hide') : t(lang, 'dlg_key_show')}
+                      onClick={() => setShowKey((s) => !s)}
+                    >
+                      {showKey ? EYE_OFF_SVG : EYE_SVG}
+                    </button>
+                  )}
                 </div>
               </div>
             )}
@@ -775,45 +969,110 @@ export function AddProviderDialog({
               <div className="mp-add-f">
                 <label>{t(lang, 'dlg_add_default_model')}</label>
                 <div className="mp-add-in">
-                  <div className="mp-add-dd" ref={ddRef}>
-                    <button
-                      type="button"
-                      className={`mp-add-dd-btn${ddOpen ? ' open' : ''}`}
-                      data-testid="next-add-model-dropdown"
+                  <div className="mp-add-dd">
+                    <Dropdown
+                      triggerTestId="next-add-model-dropdown"
+                      triggerClassName="mp-add-dd-btn"
                       disabled={!isReady}
-                      onClick={() => isReady && setDdOpen((open) => !open)}
-                    >
-                      {isReady && chosen ? chosen.name : t(lang, 'dlg_add_models_pending')}
-                      {CHEV_SVG}
-                    </button>
-                    {ddOpen && isReady && (
-                      <div className="mp-add-dd-menu">
-                        {models.map((model) => {
-                          const on = model.id === (chosen?.id || '');
-                          return (
-                            <div
-                              key={model.id}
-                              className={`mp-add-dd-it${on ? ' on' : ''}`}
-                              data-testid="next-add-model-option"
-                              data-model={model.id}
-                              onClick={() => {
-                                setChosenId(model.id);
-                                setDdOpen(false);
-                              }}
-                            >
-                              <span className="ck">{on ? '✓' : ''}</span>
-                              <span>{model.name}</span>
-                              {model.contextWindow != null ? (
-                                <span className="cx">{formatNumber(model.contextWindow)}</span>
-                              ) : null}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
+                      value={chosen?.id}
+                      onSelect={(id) => setChosenId(id)}
+                      triggerContent={
+                        <>
+                          <span>
+                            {isReady
+                              ? (chosen ? chosen.name : t(lang, 'provider_default_unselected'))
+                              : t(lang, 'dlg_add_models_pending')}
+                          </span>
+                          {CHEV_SVG}
+                        </>
+                      }
+                      items={models.map((model) => ({
+                        value: model.id,
+                        label: model.name,
+                        testId: 'next-add-model-option',
+                        dataModel: model.id,
+                        extra: model.contextWindow != null ? formatNumber(model.contextWindow) : null,
+                      }))}
+                    />
                   </div>
                 </div>
               </div>
+            )}
+
+            {!isAcpComingSoon && !alreadyConnected && isCustom && (
+              <>
+                <div className="mp-add-f">
+                  <label>{t(lang, 'dlg_add_images_label')}</label>
+                  <div className="mp-add-in">
+                    <div className="mp-add-dd">
+                      <Dropdown<boolean | null>
+                        triggerTestId="next-add-images-dropdown"
+                        triggerClassName="mp-add-dd-btn"
+                        menuTestId="next-add-images-menu"
+                        value={imagesSupport}
+                        onSelect={(val) => setImagesSupport(val)}
+                        triggerContent={
+                          <>
+                            <span>
+                              {imagesSupport === null
+                                ? t(lang, 'dlg_add_follow_model')
+                                : imagesSupport
+                                  ? t(lang, 'dlg_add_images_supported')
+                                  : t(lang, 'dlg_add_images_unsupported')}
+                            </span>
+                            {CHEV_SVG}
+                          </>
+                        }
+                        items={[
+                          { value: null, label: t(lang, 'dlg_add_follow_model'), testId: 'next-add-images-option-follow' },
+                          { value: true, label: t(lang, 'dlg_add_images_supported'), testId: 'next-add-images-option-supported' },
+                          { value: false, label: t(lang, 'dlg_add_images_unsupported'), testId: 'next-add-images-option-unsupported' },
+                        ]}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mp-add-f">
+                  <label>{t(lang, 'dlg_add_thinking_label')}</label>
+                  <div className="mp-add-in">
+                    <div className="mp-add-dd">
+                      <Dropdown<ThinkingLevel | null>
+                        triggerTestId="next-add-thinking-dropdown"
+                        triggerClassName="mp-add-dd-btn"
+                        menuTestId="next-add-thinking-menu"
+                        value={thinkingDefault}
+                        onSelect={(val) => setThinkingDefault(val)}
+                        triggerContent={
+                          <>
+                            <span>
+                              {thinkingDefault === null
+                                ? t(lang, 'dlg_add_follow_model')
+                                : thinkingDefault === 'off'
+                                  ? t(lang, 'dlg_add_thinking_off')
+                                  : thinkingDefault === 'low'
+                                    ? t(lang, 'dlg_add_thinking_low')
+                                    : thinkingDefault === 'medium'
+                                      ? t(lang, 'dlg_add_thinking_medium')
+                                      : thinkingDefault === 'high'
+                                        ? t(lang, 'dlg_add_thinking_high')
+                                        : thinkingDefault}
+                            </span>
+                            {CHEV_SVG}
+                          </>
+                        }
+                        items={[
+                          { value: null, label: t(lang, 'dlg_add_follow_model'), testId: 'next-add-thinking-option-follow' },
+                          { value: 'off', label: t(lang, 'dlg_add_thinking_off'), testId: 'next-add-thinking-option-off' },
+                          { value: 'low', label: t(lang, 'dlg_add_thinking_low'), testId: 'next-add-thinking-option-low' },
+                          { value: 'medium', label: t(lang, 'dlg_add_thinking_medium'), testId: 'next-add-thinking-option-medium' },
+                          { value: 'high', label: t(lang, 'dlg_add_thinking_high'), testId: 'next-add-thinking-option-high' },
+                        ]}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </>
             )}
 
             {errorMsg && <div className="mp-add-err" data-testid="next-test-result">{errorMsg}</div>}
@@ -832,10 +1091,10 @@ export function AddProviderDialog({
                 type="button"
                 className="mp-btn mp-pri"
                 data-testid="next-provider-finish"
-                disabled={creating || !isReady}
+                disabled={creating || (!isReady && !isEdit)}
                 onClick={() => void handleCreate()}
               >
-                {t(lang, 'dlg_add_create')}
+                {creating ? t(lang, 'provider_status_run') : isEdit ? t(lang, 'btn_save') : t(lang, 'dlg_add_create')}
               </button>
             )}
           </div>

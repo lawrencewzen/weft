@@ -28,6 +28,7 @@ type Props = {
     value: string,
   ) => Promise<void>;
   onRefreshModels?: (providerId: string) => Promise<void>;
+  onEditProvider?: (p: Provider) => void;
 };
 
 export function ProviderList({
@@ -44,6 +45,7 @@ export function ProviderList({
   onToggleModel,
   onSaveOverride,
   onRefreshModels,
+  onEditProvider,
 }: Props) {
   const [menuId, setMenuId] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
@@ -214,26 +216,20 @@ export function ProviderList({
                           {t(lang, 'provider_act_relogin')}
                         </div>
                       )}
-                      {p.kind === 'custom' && (
-                        <div
-                          data-testid="next-provider-edit"
-                          onClick={() => {
-                            setMenuId(null);
+                      <div
+                        data-testid="next-provider-edit"
+                        onClick={() => {
+                          setMenuId(null);
+                          if (onEditProvider) {
+                            onEditProvider(p);
+                          } else {
                             setEditTarget(p);
                             setEditForm({ name: p.name, baseUrl: p.baseUrl || '', api: p.api || 'openai-completions', apiKey: '' });
-                          }}
-                        >
-                          {t(lang, 'provider_act_edit')}
-                        </div>
-                      )}
-                      {p.auth.type === 'api_key' && (
-                        <div
-                          data-testid="next-provider-key"
-                          onClick={() => { setMenuId(null); setKeyTarget(p); setNewKey(''); }}
-                        >
-                          {t(lang, 'provider_act_key')}
-                        </div>
-                      )}
+                          }
+                        }}
+                      >
+                        {t(lang, 'provider_act_edit')}
+                      </div>
                       <div
                         className="mp-danger"
                         data-testid="next-provider-delete"

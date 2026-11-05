@@ -10,6 +10,7 @@ import { phrase } from '../../src/v2/phrases/index.ts';
 import { ROOT } from './_root.mjs';
 import { readDiscovery, request, startServer, stopServer } from './_server.mjs';
 import { makeTempDir, removeTempDir } from './_tmp.mjs';
+import { writeSampleEcho, writeSampleSkills } from './_sample-extensions.mjs';
 
 const TOKEN = 'v2-ext-http-token';
 
@@ -243,7 +244,9 @@ test('plugins import, enable/disable, and same codes as the old API', { timeout:
   const src = await mkdtemp(path.join(tmpdir(), 'weft-v2-plug-'));
   const folder = await writePlugin(src, 'word-count', 'word_count');
   const broken = await writePlugin(src, 'broken', 'broken_tool', { exportTool: false });
-  const srv = await startServer({ token: TOKEN, env: { WEFT_LLM: 'faux' } });
+  const dataDir = await makeTempDir('weft-v2-plug-data-');
+  await writeSampleEcho(path.join(dataDir, 'plugins'));
+  const srv = await startServer({ token: TOKEN, dataDir, env: { WEFT_LLM: 'faux' } });
   try {
     const discovery = await readDiscovery(srv.dataDir);
     const listed = await getV2(srv.base, '/api/v2/plugins', discovery.token);
@@ -291,11 +294,14 @@ test('plugins import, enable/disable, and same codes as the old API', { timeout:
     assert.equal(missing.body.code, 'err_plugin_not_found');
   } finally {
     await stopServer(srv);
+    await removeTempDir(dataDir);
   }
 });
 
 test('skills create, patch, delete, and builtin cannot be removed', { timeout: 40_000 }, async () => {
-  const srv = await startServer({ token: TOKEN, env: { WEFT_LLM: 'faux' } });
+  const dataDir = await makeTempDir('weft-v2-skill-data-');
+  await writeSampleSkills(path.join(dataDir, 'skills'));
+  const srv = await startServer({ token: TOKEN, dataDir, env: { WEFT_LLM: 'faux' } });
   try {
     const discovery = await readDiscovery(srv.dataDir);
     const listed = await getV2(srv.base, '/api/v2/skills', discovery.token);
@@ -357,5 +363,6 @@ test('skills create, patch, delete, and builtin cannot be removed', { timeout: 4
     assert.equal(v2Builtin.body.error, phrase('zh', 'err_skill_builtin'));
   } finally {
     await stopServer(srv);
+    await removeTempDir(dataDir);
   }
 });

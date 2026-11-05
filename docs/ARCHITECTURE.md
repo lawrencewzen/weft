@@ -45,8 +45,8 @@ flowchart LR
 - **模型**：对话自己选的 `{ modelSourceId, modelId }`，否则 `settings.models.default`，再否则第一个可用源上的第一个模型。
 - **卡住与重试**：只使用 Pi Durable 的 `stream.timeoutMs` 和 `retry`。不另写看门狗，也不在卡住时自动提交下一句。停止是 `conversation.abort(context, { background: true })`，进行中的运行和后台子 Agent 一起停。
 - **工具沙箱**：所有路径解析后必须位于工作区根目录内。`write` / `edit` 的工具结果保留 `details`（path、before、after、行数），右栏 diff 从这些条目汇总：同一路径以本对话第一次改动的 before 为基线，和磁盘当前内容比较。`bash` 使用环境变量白名单、进程组 SIGKILL、1 MiB 输出上限；完整 OS 沙箱（bubblewrap）为 v1 之后的工作。
-- **Skills**：`skills/<id>/SKILL.md`（前言里的 `id` / `name` / `description` + 正文）。仓库自带的 Skill 与 `$WEFT_DATA_DIR/skills` 中用户新建的 Skill 合并，同名时用户副本优先。`settings.skills[id] === false` 表示关闭，缺省为开启。主 Agent 的系统提示 skills section 只列启用技能的清单（固定首句 + 每技能一行 `- <id>: <description>`）；判断用得上时调用 `skill({ name })` 按 id（其次按 name）加载完整正文。关掉或未启用的技能不出现在清单里，工具也读不到。子 Agent 没有清单，也没有 `skill` 工具。
-- **插件**：`plugins/<id>/plugin.json` 声明 `main`（插件目录内的相对 `.mjs`）和 `tools`。加载器 `import()` 该模块，并按工具名查找导出的函数。只有已开启且加载成功的工具会进入模型工具列表，并由 Harness 执行；关闭、冲突或加载失败的名字仍是 `E_UNKNOWN_TOOL`。内置工具白名单不变。导入必须指向本机目录，模块能加载才复制到数据目录；只提交名称和描述会被拒绝。相对路径先按进程工作目录解析，不存在时再按安装目录解析。`examples/plugins/` 下的示例不会自动加载。工具函数收到 `(args, ctx)`，`ctx.workspacePath` 是当前工作区。插件代码在进程内运行，没有额外沙箱。
+- **Skills**：`skills/<id>/SKILL.md`（前言里的 `id` / `name` / `description` + 正文）。安装目录下的 `skills/`（内网包为空）与 `$WEFT_DATA_DIR/skills` 中用户新建的 Skill 合并，同名时用户副本优先。`settings.skills[id] === false` 表示关闭，缺省为开启。主 Agent 的系统提示 skills section 只列启用技能的清单（固定首句 + 每技能一行 `- <id>: <description>`）；判断用得上时调用 `skill({ name })` 按 id（其次按 name）加载完整正文。关掉或未启用的技能不出现在清单里，工具也读不到。子 Agent 没有清单，也没有 `skill` 工具。
+- **插件**：`plugins/<id>/plugin.json` 声明 `main`（插件目录内的相对 `.mjs`）和 `tools`。加载器 `import()` 该模块，并按工具名查找导出的函数。只有已开启且加载成功的工具会进入模型工具列表，并由 Harness 执行；关闭、冲突或加载失败的名字仍是 `E_UNKNOWN_TOOL`。内置工具白名单不变。安装目录下的 `plugins/` 内网包为空，不预装示例插件。导入必须指向本机目录，模块能加载才复制到数据目录；只提交名称和描述会被拒绝。相对路径先按进程工作目录解析，不存在时再按安装目录解析。`examples/plugins/` 下的示例不会自动加载。工具函数收到 `(args, ctx)`，`ctx.workspacePath` 是当前工作区。插件代码在进程内运行，没有额外沙箱。
 
 ## 耐久性设计
 

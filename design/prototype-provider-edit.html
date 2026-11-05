@@ -1,0 +1,1266 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="white-light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Weft - Provider & Model Settings Prototype</title>
+<style>
+/* Weft Design Tokens */
+[data-theme="white-light"] {
+  color-scheme: light;
+  --bg: #fcfcfc;
+  --side: #f5f5f5;
+  --panel: #ffffff;
+  --panel-h: #fafafa;
+  --ink: #1f1f1f;
+  --ink2: #363636;
+  --ink3: #4f4f4f;
+  --mute: #6e6e6e;
+  --faint: #999999;
+  --faint2: #b0b0b0;
+  --dis: #c8c8c8;
+  --bd3: #d2d2d2;
+  --bd2: #dcdcdc;
+  --line: #e8e8e8;
+  --line2: #efefef;
+  --line3: #f2f2f2;
+  --sel: #ebebeb;
+  --hover: #efefef;
+  --sub: #f7f7f7;
+  --sub2: #f3f3f3;
+  --field: #f6f6f6;
+  --accent: #1f1f1f;
+  --on-accent: #ffffff;
+  --ok: #2e8c5a;
+  --ok-ink: #2e8c5a;
+  --fail: #cf3a3a;
+  --scrim: rgba(0, 0, 0, 0.28);
+  --fs-ui: 13px;
+  --fs-sm: 12px;
+  --fs-xs: 11px;
+  --fs-em: 13.5px;
+  --fs-title: 15px;
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+[data-theme="white-dark"] {
+  color-scheme: dark;
+  --bg: #181818;
+  --side: #141414;
+  --panel: #1f1f1f;
+  --panel-h: #232323;
+  --ink: #e4e4e4;
+  --ink2: #cfcfcf;
+  --ink3: #b4b4b4;
+  --mute: #8f8f8f;
+  --faint: #6b6b6b;
+  --faint2: #575757;
+  --dis: #454545;
+  --bd3: #3a3a3a;
+  --bd2: #333333;
+  --line: #2a2a2a;
+  --line2: #262626;
+  --line3: #222222;
+  --sel: #282828;
+  --hover: #222222;
+  --sub: #191919;
+  --sub2: #232323;
+  --field: #161616;
+  --accent: #e4e4e4;
+  --on-accent: #181818;
+  --ok: #4ec283;
+  --ok-ink: #4ec283;
+  --fail: #e25c5c;
+  --scrim: rgba(0, 0, 0, 0.55);
+  --fs-ui: 13px;
+  --fs-sm: 12px;
+  --fs-xs: 11px;
+  --fs-em: 13.5px;
+  --fs-title: 15px;
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--ink);
+  font-size: var(--fs-ui);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+button, input, select {
+  font: inherit;
+  color: inherit;
+}
+.mono {
+  font-family: var(--mono);
+}
+
+/* Prototype View Selector */
+.proto-header {
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+  padding: 10px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+.proto-nav {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.proto-btn {
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 6px;
+  border: 1px solid var(--bd3);
+  background: var(--panel);
+  color: var(--mute);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+}
+.proto-btn:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+.proto-btn.active {
+  background: var(--accent);
+  color: var(--on-accent);
+  border-color: var(--accent);
+}
+
+/* Settings Container */
+.container {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 30px 20px;
+}
+
+/* Settings Shell */
+.settings-shell {
+  width: 980px;
+  height: 660px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  display: flex;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0,0,0,.12);
+  position: relative;
+}
+
+/* Settings Left Nav */
+.ns-nav {
+  width: 190px;
+  background: var(--side);
+  border-right: 1px solid var(--line2);
+  padding: 16px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex-shrink: 0;
+}
+.ns-nav-h {
+  font-size: 14px;
+  font-weight: 600;
+  padding: 4px 10px 14px;
+  color: var(--ink);
+}
+.ns-nav-item {
+  display: flex;
+  align-items: center;
+  height: 32px;
+  padding: 0 10px;
+  border-radius: 7px;
+  color: var(--mute);
+  font-size: var(--fs-ui);
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  width: 100%;
+  text-align: left;
+}
+.ns-nav-item:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+.ns-nav-item.active {
+  background: var(--sel);
+  color: var(--ink);
+  font-weight: 500;
+}
+
+/* Settings Content */
+.ns-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: var(--panel);
+  overflow-y: auto;
+}
+
+.mp-head {
+  padding: 24px 28px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.mp-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.mp-btn-add {
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 7px;
+  border: 1px solid var(--bd3);
+  background: var(--panel);
+  color: var(--ink);
+  font-size: var(--fs-ui);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.mp-btn-add:hover {
+  background: var(--hover);
+}
+
+.mp-body {
+  padding: 0 28px 28px;
+}
+
+.mp-card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+  margin-bottom: 16px;
+}
+
+.mp-pgrp {
+  font-size: var(--fs-sm);
+  color: var(--faint);
+  padding: 14px 4px 6px;
+}
+
+/* Provider List Rows */
+.mp-plist {
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr) 136px 166px 146px;
+}
+.mp-prow {
+  display: contents;
+}
+.mp-prow > .mp-c {
+  display: flex;
+  align-items: center;
+  min-height: 64px;
+  padding: 10px 16px 10px 0;
+  border-top: 1px solid var(--line2);
+  cursor: pointer;
+  min-width: 0;
+  box-sizing: border-box;
+}
+.mp-prow.mp-first > .mp-c {
+  border-top: 0;
+}
+.mp-prow > .mp-c:first-child {
+  padding-left: 14px;
+}
+.mp-prow > .mp-c:last-child {
+  padding-right: 14px;
+  justify-content: flex-end;
+  gap: 6px;
+}
+.mp-prow:hover > .mp-c {
+  background: var(--sub);
+}
+.mp-prow.mp-open > .mp-c {
+  background: none;
+}
+.mp-prow.mp-open:hover > .mp-c {
+  background: var(--sub);
+}
+
+.mp-av {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  border: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--ink3);
+  background: var(--panel);
+  flex-shrink: 0;
+}
+.mp-pn {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 1px;
+}
+.mp-pn-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--fs-em);
+  font-weight: 600;
+  color: var(--ink);
+}
+.mp-pn-desc {
+  font-size: var(--fs-sm);
+  color: var(--mute);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mp-pn-desc .mp-k {
+  font-family: var(--mono);
+}
+.mp-cnt {
+  font-size: var(--fs-sm);
+  color: var(--mute);
+  font-variant-numeric: tabular-nums;
+}
+.mp-st {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fs-sm);
+  color: var(--mute);
+  white-space: nowrap;
+}
+.mp-st i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ok);
+  flex-shrink: 0;
+}
+.mp-st small {
+  color: var(--faint);
+  font-size: var(--fs-xs);
+  margin-left: 4px;
+}
+
+.mp-btn {
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 7px;
+  border: 1px solid var(--bd3);
+  background: var(--panel);
+  font-size: var(--fs-ui);
+  cursor: pointer;
+  white-space: nowrap;
+  color: var(--ink);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+}
+.mp-btn:hover {
+  background: var(--hover);
+}
+.mp-btn.mp-pri {
+  background: var(--accent);
+  color: var(--on-accent);
+  border-color: var(--accent);
+}
+.mp-btn.mp-pri:hover {
+  opacity: .9;
+}
+
+.mp-more {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  border: 0;
+  background: none;
+  color: var(--faint);
+  cursor: pointer;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+}
+.mp-more:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+.mp-chev {
+  width: 12px;
+  color: var(--faint);
+  transition: transform .15s;
+  flex-shrink: 0;
+}
+.mp-prow.mp-open .mp-chev {
+  transform: rotate(90deg);
+}
+
+/* Popover Menu on More */
+.mp-pop {
+  position: absolute;
+  right: 0;
+  top: 32px;
+  min-width: 150px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  box-shadow: 0 8px 28px rgba(0,0,0,.12);
+  padding: 4px;
+  z-index: 30;
+  text-align: left;
+}
+.mp-pop div {
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: var(--fs-ui);
+  color: var(--ink);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.mp-pop div:hover {
+  background: var(--hover);
+}
+.mp-pop div.mp-edit-action {
+  font-weight: 500;
+  color: var(--ink);
+}
+.mp-pop div.mp-danger {
+  color: var(--fail);
+}
+
+/* Expanded Models Subtable */
+.mp-models {
+  grid-column: 1 / -1;
+  padding: 0 14px 10px 58px;
+  background: var(--panel);
+}
+.mp-mt {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 88px 88px 140px 70px;
+  align-items: center;
+}
+.mp-mt > *, .mp-mt .mp-c, .mp-mt .mp-h {
+  padding-right: 16px;
+  box-sizing: border-box;
+}
+.mp-mt > :nth-child(5n), .mp-mt .mp-c.mp-last, .mp-mt .mp-h.mp-last {
+  padding-right: 0;
+  justify-content: flex-end;
+}
+.mp-mt .mp-h {
+  font-size: var(--fs-xs);
+  font-weight: normal;
+  color: var(--faint);
+  height: 30px;
+  display: flex;
+  align-items: center;
+  border-top: 1px solid var(--line2);
+}
+.mp-mt .mp-h.mp-r {
+  justify-content: flex-end;
+}
+.mp-mt .mp-c {
+  height: 40px;
+  display: flex;
+  align-items: center;
+  border-top: 1px solid var(--line3);
+  font-size: var(--fs-ui);
+  min-width: 0;
+  color: var(--ink);
+}
+.mp-mt-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink);
+}
+.mp-num {
+  font-family: var(--mono);
+  font-size: var(--fs-sm);
+  font-variant-numeric: tabular-nums;
+  justify-content: flex-end;
+}
+.mp-caps {
+  display: flex;
+  gap: 4px;
+}
+.mp-caps span {
+  font-size: var(--fs-xs);
+  color: var(--mute);
+}
+.mp-caps span + span::before {
+  content: "·";
+  margin-right: 4px;
+  color: var(--faint);
+}
+
+.mp-sw {
+  width: 30px;
+  height: 18px;
+  border-radius: 9px;
+  background: var(--bd2);
+  display: flex;
+  justify-content: flex-start;
+  padding: 2px;
+  border: 0;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background .15s;
+  box-sizing: border-box;
+}
+.mp-sw::after {
+  content: "";
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--panel);
+  box-shadow: 0 1px 2px rgba(0,0,0,.15);
+}
+.mp-sw.mp-on {
+  background: var(--accent);
+  justify-content: flex-end;
+}
+
+/* ==================== SCREEN 2: EXACT DIALOG STYLES ==================== */
+.mp-mask.mp-mask-add {
+  position: fixed;
+  inset: 0;
+  background: var(--scrim);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+}
+.mp-dlg.mp-dlg-add {
+  width: min(880px, calc(100vw - 48px));
+  height: 620px;
+  max-height: calc(100vh - 48px);
+  border-radius: 16px;
+  border: 1px solid var(--bd3);
+  flex-direction: row;
+  overflow: hidden;
+  box-shadow: 0 24px 72px rgba(0,0,0,.22);
+  background: var(--panel);
+  display: flex;
+  position: relative;
+}
+
+.mp-add-left {
+  width: 290px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--line2);
+  background: var(--side);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.mp-add-search {
+  margin: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 8px 12px;
+  font: inherit;
+  font-size: var(--fs-ui);
+  background: var(--panel);
+  color: var(--ink);
+  outline: none;
+}
+.mp-add-search:focus {
+  border-color: var(--bd3);
+}
+.mp-add-list {
+  flex: 1;
+  overflow: auto;
+  padding: 0 8px 12px;
+}
+.mp-add-grp {
+  font-size: var(--fs-sm);
+  color: var(--faint);
+  padding: 12px 10px 6px;
+}
+.mp-add-it {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 40px;
+  padding: 0 10px;
+  border-radius: 9px;
+  cursor: pointer;
+  font-size: var(--fs-em);
+  color: var(--ink);
+}
+.mp-add-it:hover {
+  background: var(--hover);
+}
+.mp-add-it.on {
+  background: var(--sel);
+}
+.mp-add-it .mp-av {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+}
+.mp-add-n {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mp-add-ck {
+  color: var(--ok);
+  font-size: 13px;
+}
+
+.mp-add-right {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+}
+.mp-add-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 20px 6px;
+}
+.mp-add-head .mp-add-logo {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+}
+.mp-add-head b {
+  font-size: var(--fs-title);
+  font-weight: 500;
+  display: block;
+  color: var(--ink);
+}
+.mp-add-head small {
+  color: var(--mute);
+  font-size: var(--fs-sm);
+}
+.mp-add-sp {
+  margin-left: auto;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.mp-add-head .mp-x {
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  border-radius: 7px;
+  color: var(--mute);
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+.mp-add-head .mp-x:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+
+.mp-add-form {
+  flex: 1;
+  overflow: auto;
+  padding: 8px 20px 30px;
+}
+.mp-add-f {
+  margin-bottom: 14px;
+}
+.mp-add-f > label {
+  display: block;
+  font-size: var(--fs-ui);
+  font-weight: 500;
+  color: var(--ink);
+  margin-bottom: 8px;
+}
+.mp-add-in {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.mp-add-in input {
+  flex: 1;
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 9px 12px;
+  font: var(--fs-ui) var(--font);
+  background: var(--field, var(--sub));
+  color: var(--ink);
+  outline: none;
+  box-sizing: border-box;
+}
+.mp-add-in input.mono {
+  font-family: var(--mono);
+  font-size: var(--fs-ui);
+}
+.mp-key-toggle {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  border: 1px solid var(--bd3);
+  background: var(--panel);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: var(--mute);
+  cursor: pointer;
+  transition: all .15s;
+}
+.mp-key-toggle:hover {
+  background: var(--hover);
+  color: var(--ink);
+  border-color: var(--faint);
+}
+
+/* Dropdown */
+.mp-add-dd {
+  position: relative;
+  flex: 1;
+}
+.mp-add-dd-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--bd3);
+  border-radius: 9px;
+  padding: 9px 10px 9px 12px;
+  font: var(--fs-ui) var(--font);
+  background: var(--panel);
+  color: var(--ink);
+  cursor: pointer;
+  text-align: left;
+  box-shadow: 0 1px 2px rgba(0,0,0,.04);
+}
+.mp-add-dd-btn:hover {
+  border-color: var(--faint);
+}
+.mp-add-dd-btn.open {
+  border-color: var(--faint);
+}
+.mp-add-dd-btn .chev {
+  margin-left: auto;
+  width: 16px;
+  height: 16px;
+  color: var(--mute);
+  transition: transform .15s;
+  flex-shrink: 0;
+}
+.mp-add-dd-btn.open .chev {
+  transform: rotate(180deg);
+}
+
+.mp-add-dd-menu {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 20;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: 0 10px 32px rgba(0,0,0,.14);
+  padding: 6px;
+  max-height: 260px;
+  overflow: auto;
+}
+.mp-add-dd-it {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: var(--fs-ui);
+  color: var(--ink);
+}
+.mp-add-dd-it:hover {
+  background: var(--hover);
+}
+.mp-add-dd-it.on {
+  background: var(--sel);
+}
+.mp-add-dd-it .ck {
+  width: 14px;
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.mp-add-foot {
+  padding: 12px 20px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  border-top: 1px solid var(--line2);
+}
+</style>
+</head>
+<body>
+
+<!-- View Switcher -->
+<header class="proto-header">
+  <div class="proto-nav">
+    <button class="proto-btn active" id="btn-view-s1" onclick="setView('s1')">
+      ① 列表页 · 编辑菜单 (Screen 1)
+    </button>
+    <button class="proto-btn" id="btn-view-s2" onclick="setView('s2')">
+      ② 服务商配置弹窗 · 仅保留 Custom (Screen 2)
+    </button>
+  </div>
+  <div>
+    <button class="proto-btn" onclick="toggleTheme()">切换主题</button>
+  </div>
+</header>
+
+<main class="container">
+  <div class="settings-shell">
+
+    <!-- Left Nav -->
+    <aside class="ns-nav">
+      <div class="ns-nav-h">Settings</div>
+      <button class="ns-nav-item">General</button>
+      <button class="ns-nav-item active">Models</button>
+      <button class="ns-nav-item">Git</button>
+      <button class="ns-nav-item">GitLab CI</button>
+      <button class="ns-nav-item">Plugins</button>
+      <button class="ns-nav-item">Skills</button>
+      <button class="ns-nav-item">About</button>
+    </aside>
+
+    <!-- Main Providers View (Screen 1) -->
+    <section class="ns-content">
+      <div class="mp-head">
+        <h2 class="mp-title">Providers</h2>
+        <button class="mp-btn-add" onclick="openDialog('create')">+ New Provider</button>
+      </div>
+
+      <div class="mp-body">
+        <div class="mp-card">
+
+          <!-- Group 1: Built-in Agent -->
+          <div class="mp-pgrp mp-pgrp-builtin">Built-in Agent</div>
+          <div class="mp-plist mp-plist-builtin">
+            <div class="mp-prow mp-first">
+              <span class="mp-c">
+                <span class="mp-av">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+                </span>
+              </span>
+              <span class="mp-c">
+                <span class="mp-pn">
+                  <span class="mp-pn-name">
+                    <span>Grok</span>
+                    <svg class="mp-chev" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4.5 2.5 8 6l-3.5 3.5"/></svg>
+                  </span>
+                  <span class="mp-pn-desc">Account login</span>
+                </span>
+              </span>
+              <span class="mp-c mp-cnt">Enabled 4 / 4</span>
+              <span class="mp-c">
+                <span class="mp-st"><i></i>OK<small>3d ago</small></span>
+              </span>
+              <span class="mp-c">
+                <button type="button" class="mp-btn">Test</button>
+                <button type="button" class="mp-more" onclick="toggleMenu('pop-grok')">
+                  ⋯
+                  <div class="mp-pop" id="pop-grok" style="display:none;">
+                    <div class="mp-edit-action" onclick="openDialog('edit', 'Grok')">Edit</div>
+                    <div class="mp-danger">Remove</div>
+                  </div>
+                </button>
+              </span>
+            </div>
+          </div>
+
+          <!-- Group 2: Endpoints -->
+          <div class="mp-pgrp" id="group-key-tag">Custom Endpoints</div>
+          <div class="mp-plist">
+            <div class="mp-prow mp-open">
+              <span class="mp-c">
+                <span class="mp-av">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 13c3-3 8-3 12 0 2-3 5-3 6-2-2 4-2 7 0 9-4 2-8 1-11-1-3 0-5-2-7-6z"/></svg>
+                </span>
+              </span>
+              <span class="mp-c">
+                <span class="mp-pn">
+                  <span class="mp-pn-name">
+                    <span>DeepSeek</span>
+                    <svg class="mp-chev" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4.5 2.5 8 6l-3.5 3.5"/></svg>
+                  </span>
+                  <span class="mp-pn-desc">API Key <span class="mp-k">····75e2</span></span>
+                </span>
+              </span>
+              <span class="mp-c mp-cnt">Enabled 2 / 2</span>
+              <span class="mp-c">
+                <span class="mp-st"><i></i>OK<small>3d ago</small></span>
+              </span>
+              <span class="mp-c">
+                <button type="button" class="mp-btn">Test</button>
+                <button type="button" class="mp-more" onclick="toggleMenu('pop-deepseek')">
+                  ⋯
+                  <div class="mp-pop" id="pop-deepseek" style="display:block;">
+                    <div class="mp-edit-action" onclick="openDialog('edit', 'DeepSeek')">Edit</div>
+                    <div class="mp-danger">Remove</div>
+                  </div>
+                </button>
+              </span>
+            </div>
+
+            <!-- DeepSeek Models Table -->
+            <div class="mp-models">
+              <div class="mp-mt">
+                <span class="mp-h">Model</span>
+                <span class="mp-h mp-r">Context</span>
+                <span class="mp-h mp-r">Max output</span>
+                <span class="mp-h">Capabilities</span>
+                <span class="mp-h mp-r mp-last">Enable</span>
+
+                <!-- Model 1 -->
+                <span class="mp-c mp-mt-name" title="deepseek-chat">DeepSeek V4.1 Flash</span>
+                <span class="mp-c mp-num"><span class="mp-v">1M</span></span>
+                <span class="mp-c mp-num"><span class="mp-v">384K</span></span>
+                <span class="mp-c">
+                  <span class="mp-caps">
+                    <span>Images</span>
+                    <span>Reasoning</span>
+                  </span>
+                </span>
+                <span class="mp-c mp-last">
+                  <button type="button" class="mp-sw mp-on" onclick="this.classList.toggle('mp-on')"></button>
+                </span>
+
+                <!-- Model 2 -->
+                <span class="mp-c mp-mt-name" title="deepseek-reasoner">DeepSeek V4 Pro</span>
+                <span class="mp-c mp-num"><span class="mp-v">1M</span></span>
+                <span class="mp-c mp-num"><span class="mp-v">384K</span></span>
+                <span class="mp-c">
+                  <span class="mp-caps">
+                    <span>Reasoning</span>
+                  </span>
+                </span>
+                <span class="mp-c mp-last">
+                  <button type="button" class="mp-sw mp-on" onclick="this.classList.toggle('mp-on')"></button>
+                </span>
+              </div>
+            </div>
+
+          </div>
+
+        </div>
+      </div>
+    </section>
+  </div>
+</main>
+
+<!-- ==================== SCREEN 2: ADD / EDIT PROVIDER DIALOG ==================== -->
+<div class="mp-mask mp-mask-add" id="dlg-provider" style="display:none;" onclick="if(event.target===this)closeDialog()">
+  <div class="mp-dlg mp-dlg-add">
+    
+    <!-- Left Column -->
+    <div class="mp-add-left">
+      <input class="mp-add-search" placeholder="Search" value="">
+      <div class="mp-add-list">
+        <div class="mp-add-grp">Custom</div>
+        <div class="mp-add-it on">
+          <span class="mp-av">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v8M8 6h8M6 10h12v4a6 6 0 0 1-12 0v-4zM12 20v2"/></svg>
+          </span>
+          <span class="mp-add-n">Custom endpoint</span>
+          <span class="mp-add-ck">✓</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right Column (Form) -->
+    <div class="mp-add-right">
+      <!-- Header -->
+      <div class="mp-add-head">
+        <span class="mp-av mp-add-logo">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v8M8 6h8M6 10h12v4a6 6 0 0 1-12 0v-4zM12 20v2"/></svg>
+        </span>
+        <div>
+          <b id="dlg-title-text">New Provider</b>
+          <small>OpenAI-compatible endpoint</small>
+        </div>
+        <span class="mp-add-sp">
+          <button type="button" class="mp-btn">Test</button>
+          <button type="button" class="mp-x" onclick="closeDialog()">×</button>
+        </span>
+      </div>
+
+      <!-- Form Fields -->
+      <div class="mp-add-form">
+        <!-- Field 1: Display name -->
+        <div class="mp-add-f">
+          <label>Display name</label>
+          <div class="mp-add-in">
+            <input id="in-name" value="Custom endpoint">
+          </div>
+        </div>
+
+        <!-- Field 2: Base URL -->
+        <div class="mp-add-f">
+          <label>Base URL</label>
+          <div class="mp-add-in">
+            <input class="mono" id="in-url" value="http://10.0.0.5:8000/v1">
+          </div>
+        </div>
+
+        <!-- Field 3: API Key -->
+        <div class="mp-add-f">
+          <label>API Key</label>
+          <div class="mp-add-in">
+            <input type="password" class="mono" id="in-apikey" value="sk-xxxxxxxxxxxxxxxx" placeholder="sk-…">
+            <button type="button" class="mp-key-toggle" id="btn-toggle-key" onclick="toggleKeyVisibility()" title="Show API Key">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                <circle cx="12" cy="12" r="3"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Field 4: Default model -->
+        <div class="mp-add-f">
+          <label>Default model</label>
+          <div class="mp-add-in">
+            <div class="mp-add-dd" id="dd-model">
+              <button type="button" class="mp-add-dd-btn" onclick="toggleDropdown('dd-model-menu')">
+                <span id="txt-model">qwen2.5-coder-32b</span>
+                <svg class="chev" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 6l4 4 4-4"/></svg>
+              </button>
+              <div class="mp-add-dd-menu" id="dd-model-menu" style="display:none;">
+                <div class="mp-add-dd-it on" onclick="selectModel('qwen2.5-coder-32b')"><span class="ck">✓</span>qwen2.5-coder-32b</div>
+                <div class="mp-add-dd-it" onclick="selectModel('deepseek-chat')"><span class="ck"></span>deepseek-chat</div>
+                <div class="mp-add-dd-it" onclick="selectModel('deepseek-coder')"><span class="ck"></span>deepseek-coder</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Field 5: Images (图片支持下拉框) -->
+        <div class="mp-add-f">
+          <label>Images</label>
+          <div class="mp-add-in">
+            <div class="mp-add-dd" id="dd-images">
+              <button type="button" class="mp-add-dd-btn" onclick="toggleDropdown('dd-images-menu')">
+                <span id="txt-images">Supported</span>
+                <svg class="chev" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 6l4 4 4-4"/></svg>
+              </button>
+              <div class="mp-add-dd-menu" id="dd-images-menu" style="display:none;">
+                <div class="mp-add-dd-it on" id="opt-img-on" onclick="selectImages('Supported')"><span class="ck">✓</span>Supported</div>
+                <div class="mp-add-dd-it" id="opt-img-off" onclick="selectImages('Not supported')"><span class="ck"></span>Not supported</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Field 6: Default thinking (默认思考强度下拉框) -->
+        <div class="mp-add-f">
+          <label>Default thinking</label>
+          <div class="mp-add-in">
+            <div class="mp-add-dd" id="dd-thinking">
+              <button type="button" class="mp-add-dd-btn" onclick="toggleDropdown('dd-thinking-menu')">
+                <span id="txt-thinking">Medium</span>
+                <svg class="chev" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 6l4 4 4-4"/></svg>
+              </button>
+              <div class="mp-add-dd-menu" id="dd-thinking-menu" style="display:none;">
+                <div class="mp-add-dd-it" id="opt-th-off" onclick="selectThinking('Off')"><span class="ck"></span>Off</div>
+                <div class="mp-add-dd-it" id="opt-th-low" onclick="selectThinking('Low')"><span class="ck"></span>Low</div>
+                <div class="mp-add-dd-it on" id="opt-th-med" onclick="selectThinking('Medium')"><span class="ck">✓</span>Medium</div>
+                <div class="mp-add-dd-it" id="opt-th-high" onclick="selectThinking('High')"><span class="ck"></span>High</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Footer -->
+      <div class="mp-add-foot">
+        <button type="button" class="mp-btn" onclick="closeDialog()">Cancel</button>
+        <button type="button" class="mp-btn mp-pri" id="btn-submit" onclick="closeDialog()">Create</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// View switching
+function setView(view) {
+  document.getElementById('btn-view-s1').classList.toggle('active', view === 's1');
+  document.getElementById('btn-view-s2').classList.toggle('active', view === 's2');
+  const dlg = document.getElementById('dlg-provider');
+  if (view === 's1') {
+    dlg.style.display = 'none';
+  } else {
+    openDialog('create');
+  }
+}
+
+// Dialog open/close
+function openDialog(mode, name) {
+  const dlg = document.getElementById('dlg-provider');
+  const title = document.getElementById('dlg-title-text');
+  const submit = document.getElementById('btn-submit');
+  const nameInput = document.getElementById('in-name');
+
+  if (mode === 'edit') {
+    title.textContent = 'Edit Provider';
+    submit.textContent = 'Save';
+    nameInput.value = name || 'Custom endpoint';
+  } else {
+    title.textContent = 'New Provider';
+    submit.textContent = 'Create';
+    nameInput.value = 'Custom endpoint';
+  }
+
+  dlg.style.display = 'flex';
+  document.getElementById('btn-view-s1').classList.remove('active');
+  document.getElementById('btn-view-s2').classList.add('active');
+  closeAllDropdowns();
+}
+
+function closeDialog() {
+  document.getElementById('dlg-provider').style.display = 'none';
+  document.getElementById('btn-view-s1').classList.add('active');
+  document.getElementById('btn-view-s2').classList.remove('active');
+  closeAllDropdowns();
+}
+
+// Popover menu toggle
+function toggleMenu(id) {
+  const el = document.getElementById(id);
+  const isOpen = el.style.display === 'block';
+  document.querySelectorAll('.mp-pop').forEach(p => p.style.display = 'none');
+  if (!isOpen) el.style.display = 'block';
+}
+
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.mp-more')) {
+    document.querySelectorAll('.mp-pop').forEach(p => p.style.display = 'none');
+  }
+  if (!e.target.closest('.mp-add-dd')) {
+    closeAllDropdowns();
+  }
+});
+
+// Dropdowns
+function toggleDropdown(id) {
+  const el = document.getElementById(id);
+  const isShown = el.style.display === 'block';
+  closeAllDropdowns();
+  if (!isShown) {
+    el.style.display = 'block';
+    el.previousElementSibling.classList.add('open');
+    if (id === 'dd-thinking-menu') {
+      const form = document.querySelector('.mp-add-form');
+      form.scrollTo({ top: form.scrollHeight, behavior: 'smooth' });
+    }
+  }
+}
+
+function closeAllDropdowns() {
+  document.querySelectorAll('.mp-add-dd-menu').forEach(m => m.style.display = 'none');
+  document.querySelectorAll('.mp-add-dd-btn').forEach(b => b.classList.remove('open'));
+}
+
+function selectModel(val) {
+  document.getElementById('txt-model').textContent = val;
+  const menu = document.getElementById('dd-model-menu');
+  menu.querySelectorAll('.mp-add-dd-it').forEach(it => {
+    const on = it.textContent.includes(val);
+    it.classList.toggle('on', on);
+    it.querySelector('.ck').textContent = on ? '✓' : '';
+  });
+  closeAllDropdowns();
+}
+
+function selectImages(val) {
+  document.getElementById('txt-images').textContent = val;
+  const menu = document.getElementById('dd-images-menu');
+  menu.querySelectorAll('.mp-add-dd-it').forEach(it => {
+    const on = it.textContent.includes(val);
+    it.classList.toggle('on', on);
+    it.querySelector('.ck').textContent = on ? '✓' : '';
+  });
+  closeAllDropdowns();
+}
+
+function selectThinking(val) {
+  document.getElementById('txt-thinking').textContent = val;
+  const menu = document.getElementById('dd-thinking-menu');
+  menu.querySelectorAll('.mp-add-dd-it').forEach(it => {
+    const on = it.textContent.includes(val);
+    it.classList.toggle('on', on);
+    it.querySelector('.ck').textContent = on ? '✓' : '';
+  });
+  closeAllDropdowns();
+}
+
+const EYE_OPEN_SVG = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
+const EYE_CLOSED_SVG = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`;
+
+function toggleKeyVisibility() {
+  const input = document.getElementById('in-apikey');
+  const btn = document.getElementById('btn-toggle-key');
+  const isPass = input.type === 'password';
+  input.type = isPass ? 'text' : 'password';
+  btn.innerHTML = isPass ? EYE_CLOSED_SVG : EYE_OPEN_SVG;
+  btn.title = isPass ? 'Hide API Key' : 'Show API Key';
+}
+
+function setBranch(b) {
+  document.body.classList.toggle('is-intranet', b === 'intranet');
+  document.getElementById('btn-br-intra').classList.toggle('active', b === 'intranet');
+  document.getElementById('btn-br-main').classList.toggle('active', b === 'main');
+  const tag = document.getElementById('group-key-tag');
+  if (tag) tag.textContent = b === 'intranet' ? 'Custom Endpoints' : 'API Key';
+}
+
+// Theme
+function toggleTheme() {
+  const html = document.documentElement;
+  const cur = html.getAttribute('data-theme');
+  html.setAttribute('data-theme', cur === 'white-dark' ? 'white-light' : 'white-dark');
+}
+</script>
+
+</body>
+</html>

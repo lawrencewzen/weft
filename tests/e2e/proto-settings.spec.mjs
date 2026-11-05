@@ -58,7 +58,7 @@ test('general: language, appearance, theme and font size apply immediately', asy
   expectClean(state);
 });
 
-test('providers: rows, groups, expand, Grok auto-detect, Anthropic key, custom, cancel rollback, no 服务商', async ({ page }) => {
+test('providers: rows, groups, expand, custom add/edit, cancel rollback, no 服务商', async ({ page }) => {
   const state = await openProto(page);
   await page.getByTestId('next-open-settings').click();
   await page.getByTestId('next-settings-nav-providers').click();
@@ -103,61 +103,83 @@ test('providers: rows, groups, expand, Grok auto-detect, Anthropic key, custom, 
   await ctxInput.press('Enter');
   await expect(page.locator('[data-testid=next-model-row][data-model="deepseek-flash"] .mp-num .mp-v').first()).toHaveText('500K');
 
-  // Cancel rollback: Grok auto-connects, cancel must DELETE
+  // Cancel rollback: cancel must close dialog
   await page.getByTestId('next-provider-add').click();
   await expect(page.getByTestId('next-add-dialog')).toBeVisible();
-  await expect(page.locator('[data-testid=next-vendor-card][data-vendor="xai"]')).toBeVisible();
+  await expect(page.locator('[data-testid=next-vendor-card][data-vendor="custom"]')).toBeVisible();
   const addClose = page.getByTestId('next-add-close');
   await expect(addClose).toHaveCSS('border-style', 'none');
   const addCloseBox = await addClose.boundingBox();
   // 28px CSS × --ui-zoom 0.9 → 25.2 visual (Playwright boundingBox)
   expect(Math.abs((addCloseBox?.width ?? 0) - 25.2)).toBeLessThan(1);
   expect(Math.abs((addCloseBox?.height ?? 0) - 25.2)).toBeLessThan(1);
-  await expect(page.getByTestId('next-add-model-dropdown')).toBeEnabled({ timeout: 10_000 });
   await page.getByTestId('next-add-cancel').click();
   await expect(page.getByTestId('next-add-dialog')).toHaveCount(0);
   await expect(rows).toHaveCount(3);
 
-  // Grok auto-detect → test button feedback → dropdown → create
-  await page.getByTestId('next-provider-add').click();
-  await expect(page.getByTestId('next-add-model-dropdown')).toBeEnabled({ timeout: 10_000 });
-  await expect(page.getByTestId('next-detected-check')).toBeVisible();
-  await page.getByTestId('next-add-test').click();
-  await expect(page.getByTestId('next-provider-finish')).toBeEnabled();
-  await expect(page.getByTestId('next-add-test')).toHaveText(/已连通|Connected/);
-  await page.getByTestId('next-add-model-dropdown').click();
-  await expect(page.getByTestId('next-add-model-option').first()).toBeVisible();
-  await expect(page.getByTestId('next-add-model-option').first()).not.toHaveText(/grok-/i);
-  await page.getByTestId('next-provider-finish').click();
+  // 验证未设为全局默认的提供商编辑时默认模型显示「未选择」
+  const gatewayRow = rows.filter({ hasText: '内网网关' });
+  await gatewayRow.getByTestId('next-provider-more').click();
+  await page.getByTestId('next-provider-edit').click();
+  await expect(page.getByTestId('next-add-dialog')).toBeVisible();
+  await expect(page.getByTestId('next-add-model-dropdown')).toContainText('未选择');
+  await page.getByTestId('next-add-cancel').click();
   await expect(page.getByTestId('next-add-dialog')).toHaveCount(0);
-  await expect(rows).toHaveCount(4);
-  await expect(rows.filter({ hasText: 'Grok' })).toBeVisible();
-  await expect(page.locator('[data-testid=next-provider-group][data-group="builtin"]')).toBeVisible();
 
-  // OpenAI: fill Key → 测试 → dropdown → create（Anthropic 已预置）
+  // Custom: 新建自定义端点 → 编辑改名（默认模型不变）→ 编辑把图片改成支持、再改回跟随模型
   await page.getByTestId('next-provider-add').click();
-  await page.locator('[data-testid=next-vendor-card][data-vendor="openai"]').click();
-  await page.getByTestId('next-key-input').fill('sk-demo-1234');
-  await page.getByTestId('next-add-test').click();
-  await expect(page.getByTestId('next-add-model-dropdown')).toBeEnabled({ timeout: 10_000 });
-  await page.getByTestId('next-provider-finish').click();
-  await expect(page.locator('[data-testid=next-provider-row][data-id="openai"]')).toBeVisible();
-
-  // Custom
-  await page.getByTestId('next-provider-add').click();
-  await page.locator('[data-testid=next-vendor-card][data-vendor="custom"]').click();
+  await expect(page.getByTestId('next-add-dialog')).toBeVisible();
   await page.getByTestId('next-custom-name').fill('Local vLLM');
   await page.getByTestId('next-custom-url').fill('http://127.0.0.1:8000/v1');
   await page.getByTestId('next-add-test').click();
   await expect(page.getByTestId('next-add-model-dropdown')).toBeEnabled({ timeout: 10_000 });
+  await expect(page.getByTestId('next-add-images-dropdown')).toContainText('跟随模型');
+  await expect(page.getByTestId('next-add-thinking-dropdown')).toContainText('跟随模型');
   await page.getByTestId('next-provider-finish').click();
+  await expect(page.getByTestId('next-add-dialog')).toHaveCount(0);
+  await expect(rows).toHaveCount(4);
   await expect(rows.filter({ hasText: 'Local vLLM' })).toBeVisible();
 
-  const rowToRemove = rows.filter({ hasText: 'Local vLLM' });
-  await rowToRemove.getByTestId('next-provider-more').click();
+  // 编辑改名（默认模型不变）
+  const customRow = rows.filter({ hasText: 'Local vLLM' });
+  await customRow.getByTestId('next-provider-more').click();
+  await page.getByTestId('next-provider-edit').click();
+  await expect(page.getByTestId('next-add-dialog')).toBeVisible();
+  await page.getByTestId('next-custom-name').fill('Local vLLM Renamed');
+  await page.getByTestId('next-provider-finish').click();
+  await expect(page.getByTestId('next-add-dialog')).toHaveCount(0);
+  await expect(rows.filter({ hasText: 'Local vLLM Renamed' })).toBeVisible();
+  await expect(page.getByTestId('next-provider-default-picker')).toContainText('llama3.3:70b');
+
+  // 编辑把图片改成支持
+  const renamedRow = rows.filter({ hasText: 'Local vLLM Renamed' });
+  await renamedRow.getByTestId('next-provider-more').click();
+  await page.getByTestId('next-provider-edit').click();
+  await expect(page.getByTestId('next-add-dialog')).toBeVisible();
+  await expect(page.getByTestId('next-add-images-dropdown')).toContainText('跟随模型');
+  await page.getByTestId('next-add-images-dropdown').click();
+  await page.getByTestId('next-add-images-option-supported').click();
+  await expect(page.getByTestId('next-add-images-dropdown')).toContainText('支持');
+  await page.getByTestId('next-provider-finish').click();
+  await expect(page.getByTestId('next-add-dialog')).toHaveCount(0);
+
+  // 再改回跟随模型
+  await renamedRow.getByTestId('next-provider-more').click();
+  await page.getByTestId('next-provider-edit').click();
+  await expect(page.getByTestId('next-add-dialog')).toBeVisible();
+  await expect(page.getByTestId('next-add-images-dropdown')).toContainText('支持');
+  await page.getByTestId('next-add-images-dropdown').click();
+  await page.getByTestId('next-add-images-option-follow').click();
+  await expect(page.getByTestId('next-add-images-dropdown')).toContainText('跟随模型');
+  await page.getByTestId('next-provider-finish').click();
+  await expect(page.getByTestId('next-add-dialog')).toHaveCount(0);
+
+  // 删除
+  await renamedRow.getByTestId('next-provider-more').click();
   await page.getByTestId('next-provider-delete').click();
   await page.getByTestId('next-confirm-ok').click();
-  await expect(rows.filter({ hasText: 'Local vLLM' })).toHaveCount(0);
+  await expect(rows.filter({ hasText: 'Local vLLM Renamed' })).toHaveCount(0);
+  await expect(rows).toHaveCount(3);
 
   expectClean(state);
 });
@@ -175,6 +197,7 @@ test('deleting all providers shows the no-model state', async ({ page }) => {
     await page.getByTestId('next-confirm-ok').click();
   }
   await expect(page.getByTestId('next-provider-row')).toHaveCount(0);
+  await expect(page.getByTestId('next-provider-default-picker')).toBeDisabled();
 
   await page.locator('.next-settings-close').click();
   await expect(page.getByTestId('next-no-model')).toBeVisible();
@@ -265,6 +288,62 @@ test('git connections, plugins, skills and about', async ({ page }) => {
   await page.getByTestId('next-settings-nav-about').click();
   await expect(page.getByTestId('next-about-version')).toHaveText('0.1.0-prototype');
   await expect(page.getByTestId('next-about-protocol')).toHaveText('2.0.0');
+
+  expectClean(state);
+});
+
+test('dropdown alignment under default zoom: default picker (downward & right-aligned) and edit dialog thinking (upward & left-aligned)', async ({ page }) => {
+  const state = await openProto(page);
+  await page.getByTestId('next-open-settings').click();
+  await page.getByTestId('next-settings-nav-providers').click();
+
+  // ① 默认模型选择器（向下展开，右对齐）
+  const picker = page.getByTestId('next-provider-default-picker');
+  await expect(picker).toBeVisible();
+  const pickerBox = await picker.boundingBox();
+  expect(pickerBox).not.toBeNull();
+
+  await picker.click();
+  const pickerMenu = page.locator('.mp-menu');
+  await expect(pickerMenu).toBeVisible();
+  const pickerMenuBox = await pickerMenu.boundingBox();
+  expect(pickerMenuBox).not.toBeNull();
+
+  // 向下展开时 |menu.y - (trigger.y+trigger.height)| ≤ 6
+  expect(Math.abs(pickerMenuBox.y - (pickerBox.y + pickerBox.height))).toBeLessThanOrEqual(6);
+  // 右对齐时 |(menu.x+menu.width) - (trigger.x+trigger.width)| ≤ 2
+  expect(Math.abs((pickerMenuBox.x + pickerMenuBox.width) - (pickerBox.x + pickerBox.width))).toBeLessThanOrEqual(2);
+
+  // 关闭默认模型选择器
+  await page.keyboard.press('Escape');
+  await expect(pickerMenu).toHaveCount(0);
+
+  // ② 编辑对话框「默认思考」下拉（向上展开，左对齐）
+  const customRow = page.getByTestId('next-provider-row').filter({ hasText: '内网网关' });
+  await customRow.getByTestId('next-provider-more').click();
+  await page.getByTestId('next-provider-edit').click();
+  await expect(page.getByTestId('next-add-dialog')).toBeVisible();
+
+  // 打开「默认思考」下拉
+  const thinkingBtn = page.getByTestId('next-add-thinking-dropdown');
+  await expect(thinkingBtn).toBeVisible();
+  const thinkingBox = await thinkingBtn.boundingBox();
+  expect(thinkingBox).not.toBeNull();
+
+  await thinkingBtn.click();
+  const thinkingMenu = page.getByTestId('next-add-thinking-menu');
+  await expect(thinkingMenu).toBeVisible();
+  const thinkingMenuBox = await thinkingMenu.boundingBox();
+  expect(thinkingMenuBox).not.toBeNull();
+
+  const viewport = page.viewportSize();
+  expect(thinkingMenuBox.y).toBeGreaterThanOrEqual(0);
+  expect(thinkingMenuBox.y + thinkingMenuBox.height).toBeLessThanOrEqual(viewport.height);
+
+  // 向上展开时 |(menu.y+menu.height) - trigger.y| ≤ 6
+  expect(Math.abs((thinkingMenuBox.y + thinkingMenuBox.height) - thinkingBox.y)).toBeLessThanOrEqual(6);
+  // 左对齐时 |menu.x - trigger.x| ≤ 2
+  expect(Math.abs(thinkingMenuBox.x - thinkingBox.x)).toBeLessThanOrEqual(2);
 
   expectClean(state);
 });

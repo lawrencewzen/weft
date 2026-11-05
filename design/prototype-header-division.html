@@ -1,0 +1,860 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="white-light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Weft · 顶栏渐变毛玻璃效果原型对比</title>
+  <style>
+    :root {
+      --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      --font-mono: ui-monospace, "SF Mono", Monaco, "Cascadia Code", "Roboto Mono", Consolas, monospace;
+      --fs-xs: 11.5px;
+      --fs-sm: 12.5px;
+      --fs-ui: 13.5px;
+      --fs-em: 14px;
+      --fs-body: 14.5px;
+      --fs-title: 15px;
+    }
+
+    [data-theme="white-dark"] {
+      color-scheme: dark;
+      --bg: #181818;
+      --side: #141414;
+      --panel: #1f1f1f;
+      --ink: #e4e4e4;
+      --ink2: #cfcfcf;
+      --ink3: #b4b4b4;
+      --mute: #8f8f8f;
+      --faint: #6b6b6b;
+      --line: #2a2a2a;
+      --line2: #262626;
+      --line3: #222222;
+      --hover: #222222;
+      --add: #30d158;
+      --del: #ff453a;
+    }
+
+    [data-theme="white-light"] {
+      color-scheme: light;
+      --bg: #fcfcfc;
+      --side: #f5f5f5;
+      --panel: #ffffff;
+      --ink: #1f1f1f;
+      --ink2: #363636;
+      --ink3: #4f4f4f;
+      --mute: #6e6e6e;
+      --faint: #999999;
+      --line: #e8e8e8;
+      --line2: #efefef;
+      --line3: #f2f2f2;
+      --hover: #efefef;
+      --add: #1a7f37;
+      --del: #cf222e;
+    }
+
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: var(--font-sans);
+      background: #0d0d0d;
+      color: #eaeaea;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 20px;
+      min-height: 100vh;
+    }
+
+    /* 顶部控制面板 */
+    .proto-ctrl-bar {
+      width: 100%;
+      max-width: 1240px;
+      background: #18181a;
+      border: 1px solid #28282c;
+      border-radius: 14px;
+      padding: 16px 20px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    }
+
+    .proto-title-group h1 {
+      font-size: 16px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #fff;
+    }
+
+    .proto-title-group p {
+      font-size: 13px;
+      color: #888890;
+      margin-top: 4px;
+    }
+
+    .ctrl-options {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .opt-btn {
+      background: #242428;
+      border: 1px solid #333338;
+      color: #cfcfd4;
+      padding: 7px 14px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .opt-btn:hover {
+      background: #2e2e34;
+      color: #fff;
+      border-color: #44444c;
+    }
+
+    .opt-btn.active {
+      background: #0a84ff;
+      border-color: #0a84ff;
+      color: #fff;
+      box-shadow: 0 0 12px rgba(10, 132, 255, 0.4);
+    }
+
+    .theme-select {
+      background: #242428;
+      border: 1px solid #333338;
+      color: #cfcfd4;
+      padding: 7px 12px;
+      border-radius: 8px;
+      font-size: 13px;
+      cursor: pointer;
+      outline: none;
+    }
+
+    /* 模拟应用主窗口 */
+    .mock-window-frame {
+      width: 100%;
+      max-width: 1240px;
+      height: 640px;
+      background: var(--bg);
+      border-radius: 12px;
+      border: 1px solid #333;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 25px 60px rgba(0, 0, 0, 0.7);
+      position: relative;
+    }
+
+    .mock-browser-bar {
+      height: 38px;
+      background: #222224;
+      border-bottom: 1px solid #333338;
+      display: flex;
+      align-items: center;
+      padding: 0 16px;
+      gap: 16px;
+      flex-shrink: 0;
+      z-index: 30;
+    }
+
+    .window-dots {
+      display: flex;
+      gap: 8px;
+    }
+    .window-dot {
+      width: 11px;
+      height: 11px;
+      border-radius: 50%;
+    }
+    .window-dot.r { background: #ff5f56; }
+    .window-dot.y { background: #ffbd2e; }
+    .window-dot.g { background: #27c93f; }
+
+    .mock-address-pill {
+      flex: 1;
+      max-width: 480px;
+      margin: 0 auto;
+      height: 24px;
+      background: #18181a;
+      border: 1px solid #333338;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--font-mono);
+      font-size: 11.5px;
+      color: #9999a0;
+    }
+
+    /* 三栏布局 */
+    .app-shell {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+      background: var(--bg);
+      position: relative;
+    }
+
+    /* 左侧栏 */
+    .left-col {
+      width: 220px;
+      background: var(--side);
+      border-right: 1px solid var(--line);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+      z-index: 25;
+    }
+
+    .left-header {
+      height: 52px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 14px;
+      font-size: 13.5px;
+      font-weight: 600;
+      color: var(--ink);
+      border-bottom: 1px solid var(--line3);
+    }
+
+    .left-item {
+      padding: 8px 14px;
+      font-size: 13px;
+      color: var(--mute);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      border-radius: 6px;
+      margin: 2px 6px;
+    }
+    .left-item.active {
+      color: var(--ink);
+      background: var(--hover);
+      font-weight: 500;
+    }
+
+    /* 右侧栏 */
+    .right-col {
+      width: 260px;
+      background: var(--panel);
+      border-left: 1px solid var(--line);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+      z-index: 25;
+    }
+
+    .right-tabs-bar {
+      height: 52px;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 14px;
+      border-bottom: 1px solid var(--line3);
+      font-size: 12.5px;
+      color: var(--mute);
+    }
+
+    .right-tabs-group {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .right-tabs-bar b {
+      color: var(--ink);
+      font-weight: 600;
+    }
+
+    .right-content {
+      padding: 16px;
+      font-size: 13px;
+      color: var(--mute);
+    }
+
+    /* 中间对话栏 */
+    .center-col {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      background: var(--bg);
+      min-width: 0;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .icon-btn {
+      width: 28px;
+      height: 28px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: transparent;
+      border: none;
+      color: var(--ink3);
+      border-radius: 6px;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .icon-btn:hover {
+      background: var(--hover);
+      color: var(--ink);
+    }
+
+    .ico-panel {
+      width: 15px;
+      height: 12px;
+      border: 1.5px solid currentColor;
+      border-radius: 3px;
+      position: relative;
+      display: block;
+    }
+    .ico-panel::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 1.5px;
+      background: currentColor;
+    }
+    .ico-panel-left::after { left: 3px; }
+    .ico-panel-right::after { right: 4px; }
+
+    /* =============================================================
+       核心对比：4 种顶栏渐变毛玻璃效果
+       ============================================================= */
+
+    .top-header-bar {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 20;
+      box-sizing: border-box;
+      padding: 0 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      transition: all 0.2s ease;
+    }
+
+    .top-title {
+      font-size: var(--fs-title);
+      font-weight: 600;
+      color: var(--ink);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* -------------------------------------------------------------
+       模式 A：渐变雾气消隐毛玻璃（Gradient Fade Blur · 强烈推荐 ★）
+       顶栏高度 64px，底边无硬线，背景由实色向透明渐变淡出，
+       文字滑上去时如雾气般丝滑消融，没有任何突兀切断感！
+       ------------------------------------------------------------- */
+    .mode-gradient-fog .top-header-bar {
+      height: 64px;
+      background: linear-gradient(
+        to bottom,
+        color-mix(in srgb, var(--bg) 96%, transparent) 0%,
+        color-mix(in srgb, var(--bg) 85%, transparent) 40%,
+        color-mix(in srgb, var(--bg) 40%, transparent) 80%,
+        transparent 100%
+      );
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      -webkit-mask-image: linear-gradient(to bottom, black 0%, black 50%, transparent 100%);
+      mask-image: linear-gradient(to bottom, black 0%, black 50%, transparent 100%);
+      border-bottom: none;
+      box-shadow: none;
+    }
+
+    /* -------------------------------------------------------------
+       模式 B：深阶多级平滑模糊（Progressive Blur Gradient）
+       利用分层渐进式模糊，上密下疏，配合微弱的 0.5px 极细渐变分割线
+       ------------------------------------------------------------- */
+    .mode-progressive .top-header-bar {
+      height: 56px;
+      background: linear-gradient(
+        to bottom,
+        color-mix(in srgb, var(--bg) 92%, transparent) 0%,
+        color-mix(in srgb, var(--bg) 70%, transparent) 65%,
+        transparent 100%
+      );
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-bottom: 1px solid color-mix(in srgb, var(--line2) 50%, transparent);
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03);
+    }
+
+    /* -------------------------------------------------------------
+       模式 C：文字流双向遮罩溶化（Dual Mask Fade）
+       顶栏半透轻浮，主要靠聊天滚动流在接近顶部 60px 时由不透明向透明完全渐隐
+       ------------------------------------------------------------- */
+    .mode-mask-melt .top-header-bar {
+      height: 52px;
+      background: color-mix(in srgb, var(--bg) 50%, transparent);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border-bottom: 1px solid var(--line3);
+    }
+    .mode-mask-melt .chat-scroll-area {
+      -webkit-mask-image: linear-gradient(to bottom, transparent 0px, black 64px, black calc(100% - 64px), transparent 100%);
+      mask-image: linear-gradient(to bottom, transparent 0px, black 64px, black calc(100% - 64px), transparent 100%);
+    }
+
+    /* -------------------------------------------------------------
+       模式 D：现状对照（固定硬底边 + 统一平坦毛玻璃，无渐变）
+       ------------------------------------------------------------- */
+    .mode-flat-current .top-header-bar {
+      height: 52px;
+      background: color-mix(in srgb, var(--bg) 65%, transparent);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--line2);
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+    }
+
+    /* 滚动对话流 */
+    .chat-scroll-area {
+      flex: 1;
+      overflow-y: auto;
+      padding: 76px 24px 96px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 20px;
+      min-height: 0;
+      scroll-behavior: smooth;
+    }
+
+    .chat-container {
+      width: 100%;
+      max-width: 740px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .user-bubble {
+      align-self: flex-end;
+      max-width: 80%;
+      background: var(--hover);
+      border: 1px solid var(--line2);
+      border-radius: 16px;
+      padding: 10px 16px;
+      font-size: var(--fs-body);
+      line-height: 1.6;
+      color: var(--ink);
+    }
+
+    .agent-msg {
+      align-self: flex-start;
+      max-width: 100%;
+      font-size: var(--fs-body);
+      line-height: 1.7;
+      color: var(--ink);
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .tool-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 12px;
+      border-radius: 6px;
+      background: var(--hover);
+      border: 1px solid var(--line3);
+      font-size: 12.5px;
+      color: var(--mute);
+      font-family: var(--font-mono);
+    }
+
+    .mock-change-card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      overflow: hidden;
+      font-size: 13px;
+      width: 100%;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.04);
+      margin-top: 8px;
+    }
+    .mock-change-head {
+      padding: 10px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--line2);
+      background: var(--panel);
+    }
+    .mock-change-head-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 500;
+      color: var(--ink);
+    }
+    .mock-change-rows {
+      padding: 6px 0;
+    }
+    .mock-change-row {
+      padding: 6px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      color: var(--ink2);
+      font-size: 12.5px;
+      font-family: var(--font-mono);
+    }
+
+    .mock-composer-box {
+      width: 100%;
+      max-width: 740px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 14px 16px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.04);
+      color: var(--faint);
+      font-size: 13.5px;
+      margin-top: 10px;
+    }
+
+    /* 方案说明对比网格 */
+    .proto-notes-grid {
+      width: 100%;
+      max-width: 1240px;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 16px;
+    }
+
+    .note-card {
+      background: #18181a;
+      border: 1px solid #28282c;
+      border-radius: 12px;
+      padding: 16px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .note-card:hover {
+      border-color: #444;
+      transform: translateY(-2px);
+    }
+
+    .note-card.active {
+      border-color: #0a84ff;
+      background: #1a1e27;
+      box-shadow: 0 0 20px rgba(10, 132, 255, 0.2);
+    }
+
+    .note-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .note-title {
+      font-size: 14.5px;
+      font-weight: 600;
+      color: #fff;
+    }
+
+    .note-tag {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 2px 7px;
+      border-radius: 4px;
+      background: #2c2c2e;
+      color: #98989f;
+    }
+
+    .note-card.active .note-tag {
+      background: #0a84ff;
+      color: #fff;
+    }
+
+    .note-desc {
+      font-size: 13px;
+      color: #98989f;
+      line-height: 1.6;
+    }
+
+    .note-highlight {
+      font-size: 12px;
+      color: #30d158;
+      background: rgba(48, 209, 88, 0.08);
+      border: 1px solid rgba(48, 209, 88, 0.2);
+      padding: 6px 10px;
+      border-radius: 6px;
+      margin-top: 4px;
+    }
+
+    .scroll-hint {
+      position: absolute;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(10, 132, 255, 0.9);
+      color: #fff;
+      font-size: 12px;
+      font-weight: 500;
+      padding: 6px 14px;
+      border-radius: 20px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+      pointer-events: none;
+      animation: pulse 2s infinite ease-in-out;
+      z-index: 25;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 0.9; transform: translate(-50%, 0); }
+      50% { opacity: 0.4; transform: translate(-50%, 3px); }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 控制栏 -->
+  <div class="proto-ctrl-bar">
+    <div class="proto-title-group">
+      <h1>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"></circle>
+          <path d="M12 2a10 10 0 0 1 10 10"></path>
+        </svg>
+        顶栏「渐变毛玻璃」方案对比
+      </h1>
+      <p>请点击下方切换方案，然后在中间窗口<b>向上滚动内容</b>，亲自观察文字滑入顶栏时的渐变溶解过程！</p>
+    </div>
+
+    <div class="ctrl-options">
+      <button class="opt-btn active" onclick="setMode('mode-gradient-fog')">★ 方案 1：渐变消隐雾气毛玻璃（最推荐）</button>
+      <button class="opt-btn" onclick="setMode('mode-progressive')">方案 2：平滑级联渐变（带微弱光晕线）</button>
+      <button class="opt-btn" onclick="setMode('mode-mask-melt')">方案 3：内容层渐变溶化（Dual Mask Fade）</button>
+      <button class="opt-btn" onclick="setMode('mode-flat-current')">对照组：之前平坦硬底边（无渐变）</button>
+
+      <select class="theme-select" onchange="setTheme(this.value)">
+        <option value="white-light" selected>浅色模式 (截图原色)</option>
+        <option value="white-dark">深色模式</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- 模拟应用窗口 -->
+  <div class="mock-window-frame" id="appFrame">
+    <div class="mock-browser-bar">
+      <div class="window-dots">
+        <span class="window-dot r"></span>
+        <span class="window-dot y"></span>
+        <span class="window-dot g"></span>
+      </div>
+      <div class="mock-address-pill">
+        127.0.0.1:3300/c/be925a80-a887-4384-9329-cbdc47557a30
+      </div>
+    </div>
+
+    <!-- 三栏区域 -->
+    <div class="app-shell mode-gradient-fog" id="appShell">
+      <!-- 左栏 -->
+      <aside class="left-col">
+        <div class="left-header">
+          <span>Weft</span>
+          <button class="icon-btn" title="收起左侧栏">
+            <span class="ico-panel ico-panel-left"></span>
+          </button>
+        </div>
+        <div class="left-item active">
+          <span>💬</span>
+          <span>我想要给weft增加...</span>
+        </div>
+        <div class="left-item">
+          <span>📁</span>
+          <span>重构会话列表加载</span>
+        </div>
+      </aside>
+
+      <!-- 中间对话栏 -->
+      <main class="center-col">
+        <!-- 渐变毛玻璃顶栏 -->
+        <header class="top-header-bar">
+          <span class="top-title">我想要给weft增加antigravity acp</span>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <button class="icon-btn" title="选项" style="font-size:13px;">⋯</button>
+          </div>
+        </header>
+
+        <!-- 对话内容流 -->
+        <div class="chat-scroll-area" id="chatScrollArea">
+          <div class="chat-container">
+            <div class="user-bubble">
+              我想要给weft增加antigravity acp
+            </div>
+            <div class="agent-msg">
+              <div class="tool-chip">Ran which agy antigravity gemini 2&gt;/dev/null... ›</div>
+              <p>接下来会把官方 ACP provider 打成 Weft 能加载的包，并接到现有的 Provider / 登录流程上。</p>
+              <div class="tool-chip">Ran rg -n "dlg_add_acp|dlg_add_grp_acp|dlg..." ... ›</div>
+              <p>前端已经有 ACP 目录，我接着看接入链路还缺哪一段。</p>
+              <div class="tool-chip">Ran python3 scripts/bundle-antigravity-acp.mjs ›</div>
+              <p>已经完成 Supervisor 进程代理配置，现在开始测试通道双向握手。</p>
+              <p>Claude Code 仍是「即将支持」。</p>
+
+              <!-- 20 files changed 摘要卡片 -->
+              <div class="mock-change-card">
+                <div class="mock-change-head">
+                  <div class="mock-change-head-left">
+                    <span>± 20 files changed</span>
+                    <span style="font-family:var(--font-mono);font-size:12px;margin-left:6px;">
+                      <span style="color:var(--add);font-weight:600;">+1,736</span>
+                      <span style="color:var(--del);font-weight:600;">−81</span>
+                    </span>
+                  </div>
+                  <span style="color:var(--mute);font-size:12px;cursor:pointer;">View changes ›</span>
+                </div>
+                <div class="mock-change-rows">
+                  <div class="mock-change-row">
+                    <span>📄 antigravity-acp.test.mjs <span style="color:var(--faint);">tests/unit/</span></span>
+                    <span><span style="color:var(--add);">+523</span> <span style="color:var(--faint);">−0</span></span>
+                  </div>
+                  <div class="mock-change-row">
+                    <span>📄 src/core/antigravity-acp.mjs <span style="color:var(--faint);">src/core/</span></span>
+                    <span><span style="color:var(--add);">+332</span> <span style="color:var(--faint);">−0</span></span>
+                  </div>
+                  <div class="mock-change-row">
+                    <span>📄 contract/openapi.yaml <span style="color:var(--faint);">contract/</span></span>
+                    <span><span style="color:var(--add);">+4</span> <span style="color:var(--del);">−3</span></span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 底部输入框 -->
+              <div class="mock-composer-box">
+                Describe the task, @ to reference a file
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="scroll-hint">↕ 请在此区域内上下滑动滚轮测试渐变效果</div>
+      </main>
+
+      <!-- 右栏 -->
+      <aside class="right-col">
+        <div class="right-tabs-bar">
+          <div class="right-tabs-group">
+            <b>20 files</b>
+            <span>Changes</span>
+            <span style="font-size:12px;color:var(--faint);">File</span>
+            <span style="font-size:12px;color:var(--faint);">Terminal</span>
+          </div>
+          <button class="icon-btn" title="收起右栏">
+            <span class="ico-panel ico-panel-right"></span>
+          </button>
+        </div>
+        <div class="right-content">
+          <div style="font-size: 12px; margin-bottom: 8px; color: var(--ink2);">antigravity-acp.test.mjs</div>
+          <div style="font-size: 12px; margin-bottom: 8px; color: var(--ink2);">src/core/antigravity-acp.mjs</div>
+          <div style="font-size: 12px; color: var(--mute);">+ 18 files</div>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <!-- 说明对比卡片 -->
+  <div class="proto-notes-grid">
+    <div class="note-card active" onclick="setMode('mode-gradient-fog')">
+      <div class="note-header">
+        <span class="note-title">方案 1：渐变消隐雾气毛玻璃（最推荐 ★）</span>
+        <span class="note-tag" style="background:#30d158;color:#000;">极佳质感</span>
+      </div>
+      <p class="note-desc">
+        • <b>完全去除任何生硬底边线</b>，顶栏从顶部实色向下方平滑渐变透明；<br>
+        • 结合 <code style="color:#0a84ff;">mask-image</code> 与 <code style="color:#0a84ff;">backdrop-filter</code>，当文字往上滚动滑入顶栏时，像走入清晨晨雾一样自然隐去；<br>
+        • 彻底告别文字半透穿透时的重叠脏乱感，非常柔和高级！
+      </p>
+      <div class="note-highlight">✓ 经典 Apple / iOS / macOS 雾气渐隐顶栏质感</div>
+    </div>
+
+    <div class="note-card" onclick="setMode('mode-progressive')">
+      <div class="note-header">
+        <span class="note-title">方案 2：平滑级联渐变（带微弱光晕线）</span>
+        <span class="note-tag">微光晕</span>
+      </div>
+      <p class="note-desc">
+        上部实体、下部平滑淡出，底部辅以一条极浅（50% 半透）的微弱光晕分割线，兼顾渐变柔和感与分界秩序感。
+      </p>
+    </div>
+
+    <div class="note-card" onclick="setMode('mode-mask-melt')">
+      <div class="note-header">
+        <span class="note-title">方案 3：内容层渐变溶化（Dual Mask Fade）</span>
+        <span class="note-tag">内容渐隐</span>
+      </div>
+      <p class="note-desc">
+        在滚动流自身的顶部添加一段渐变遮罩，文字还没碰到顶栏文字之前，就自然渐变溶解淡出。
+      </p>
+    </div>
+
+    <div class="note-card" onclick="setMode('mode-flat-current')">
+      <div class="note-header">
+        <span class="note-title">对照组：之前平坦硬底边（无渐变）</span>
+        <span class="note-tag">生硬现状</span>
+      </div>
+      <p class="note-desc">
+        整块矩形 65% 不透明，有一条生硬的深色边框底线。文字穿上去时产生硬切与文字透出，缺乏过渡。
+      </p>
+    </div>
+  </div>
+
+  <script>
+    function setMode(mode) {
+      const shell = document.getElementById('appShell');
+      shell.className = 'app-shell ' + mode;
+
+      document.querySelectorAll('.opt-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.note-card').forEach(c => c.classList.remove('active'));
+
+      const map = {
+        'mode-gradient-fog': 0,
+        'mode-progressive': 1,
+        'mode-mask-melt': 2,
+        'mode-flat-current': 3
+      };
+      const idx = map[mode];
+      if (idx !== undefined) {
+        document.querySelectorAll('.opt-btn')[idx]?.classList.add('active');
+        document.querySelectorAll('.note-card')[idx]?.classList.add('active');
+      }
+    }
+
+    function setTheme(theme) {
+      document.documentElement.setAttribute('data-theme', theme);
+    }
+  </script>
+</body>
+</html>

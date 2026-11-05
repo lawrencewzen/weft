@@ -18,6 +18,7 @@ import {
 import { createWorkspaceEnv } from '../../src/kernel/workspace-env.mjs';
 import { ROOT } from './_root.mjs';
 import { killChild, request as serverRequest, startServer, stopServer } from './_server.mjs';
+import { writeSampleEcho } from './_sample-extensions.mjs';
 
 const TOKEN = 'unit-kernel-tools-token';
 const README = 'docs/deep/nested/folder/structure/README.md';
@@ -579,6 +580,7 @@ test('kernel path: write plus edit records the diff and tool events', { timeout:
 
 test('kernel path: the main agent offers every workspace tool plus plugins and dispatch', { timeout: 40_000 }, async () => {
   const dataDir = await mkdtemp(path.join(tmpdir(), 'piw-ktools-'));
+  await writeSampleEcho(path.join(dataDir, 'plugins'));
   const toolLog = path.join(dataDir, 'tools.log');
   const script = await writeScript(dataDir, 'tools.json', [
     { text: 'all-tools' },

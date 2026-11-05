@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 // Build a Windows x64 zip that runs Weft without a system Node install.
 // The frontend must already be built (npm run build:web). devDependencies are
-// not installed. Node.exe is the official binary, checked against SHASUMS256.txt.
+// not installed. Node.exe is the official binary. Its sha256 always comes from
+// https://nodejs.org/dist/v<ver>/SHASUMS256.txt, or from WEFT_NODE_SHASUMS_FILE
+// when that local copy is set. Mirrors only speed up the zip download.
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { cp, mkdtemp, open, mkdir, readFile, readdir, rm, stat, writeFile, realpath } from 'node:fs/promises';
@@ -14,6 +16,9 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 /** Latest Node 22 at or above engines.node, checked against nodejs.org on 2026-10-31. */
 export const NODE_VERSION = '22.23.4';
+
+/** Built-in zip fallback. Checksums are never taken from this host. */
+const NODE_MIRROR_ROOT = 'https://npmmirror.com/mirrors/node';
 
 export const REQUIRED_APP_PATHS = [
   'server.mjs',
@@ -422,13 +427,50 @@ async function pathExists(target) {
   }
 }
 
-async function fetchBuffer(url) {
+function officialNodeDist(nodeVersion) {
+  return `https://nodejs.org/dist/v${nodeVersion}`;
+}
+
+function envText(env, key) {
+  const value = env?.[key];
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+/**
+ * Dist root → `.../v<version>`. A URL whose last path segment is already
+ * `v<version>` is returned unchanged, so `/v<ver>` is not appended twice.
+ */
+export function resolveNodeDistBase(base, nodeVersion) {
+  const trimmed = String(base || '').trim().replace(/\/+$/, '');
+  if (!trimmed) throw new Error('Node 下载地址为空');
+  const segment = trimmed.slice(trimmed.lastIndexOf('/') + 1);
+  if (segment === `v${nodeVersion}`) return trimmed;
+  return `${trimmed}/v${nodeVersion}`;
+}
+
+/** Zip bases: configured mirrors, then nodejs.org, then the built-in npmmirror fallback. */
+export function nodeArchiveBases(nodeVersion, env = process.env) {
+  const ordered = [];
+  const push = (raw) => {
+    const text = String(raw || '').trim();
+    if (!text) return;
+    const base = resolveNodeDistBase(text, nodeVersion);
+    if (!ordered.includes(base)) ordered.push(base);
+  };
+  push(envText(env, 'WEFT_NODE_MIRROR'));
+  push(envText(env, 'NODE_DIST_URL'));
+  push(officialNodeDist(nodeVersion));
+  push(NODE_MIRROR_ROOT);
+  return ordered;
+}
+
+async function fetchBuffer(url, timeoutMs = 60_000, fetchImpl = fetch) {
   let lastErr;
-  for (let attempt = 1; attempt <= 3; attempt += 1) {
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
     try {
-      const res = await fetch(url, {
+      const res = await fetchImpl(url, {
         redirect: 'follow',
-        signal: AbortSignal.timeout(180_000),
+        signal: AbortSignal.timeout(timeoutMs),
         headers: { 'user-agent': 'weft-pack-release' },
       });
       if (!res.ok) throw new Error(`${url} 返回 HTTP ${res.status}`);
@@ -436,27 +478,116 @@ async function fetchBuffer(url) {
     } catch (err) {
       lastErr = err;
       console.error(`下载失败（第 ${attempt} 次）：${err instanceof Error ? err.message : err}`);
-      if (attempt < 3) await new Promise((resolve) => setTimeout(resolve, 1000 * attempt));
+      if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, 1000 * attempt));
     }
   }
   throw lastErr;
 }
 
-async function downloadVerified(url, sumsText, fileName) {
+async function downloadVerified(url, sumsText, fileName, timeoutMs, fetchImpl, sumsNote) {
   const expected = expectedSha256(sumsText, fileName);
   if (!expected) throw new Error(`SHASUMS256.txt 没有 ${fileName}`);
   let last = '';
-  for (let attempt = 1; attempt <= 3; attempt += 1) {
-    const buf = await fetchBuffer(url);
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    const buf = await fetchBuffer(url, timeoutMs, fetchImpl);
     const actual = sha256Hex(buf);
     if (actual === expected) {
-      console.log(`${fileName} sha256 已对照官方 SHASUMS256.txt：${actual}`);
+      console.log(`${fileName} 从 ${url} 下载，sha256 已对照${sumsNote}：${actual}`);
       return buf;
     }
     last = actual;
     console.error(`${fileName} sha256 不符（第 ${attempt} 次）：${actual}`);
   }
-  throw new Error(`下载 ${fileName} 的 sha256 与官方记录不一致：${last}，期望 ${expected}`);
+  throw new Error(`下载 ${fileName} 的 sha256 与${sumsNote}不一致：${last}，期望 ${expected}`);
+}
+
+async function loadNodeSums({ nodeVersion, env, fetchImpl }) {
+  const officialUrl = `${officialNodeDist(nodeVersion)}/SHASUMS256.txt`;
+  const file = envText(env, 'WEFT_NODE_SHASUMS_FILE');
+  if (file) {
+    try {
+      const sums = await readFile(file, 'utf8');
+      console.log(`SHASUMS256.txt 来自本地文件 ${file}`);
+      return { sums, sumsNote: '本地 SHASUMS256.txt' };
+    } catch (err) {
+      console.warn(`读取本地 SHASUMS256.txt 失败（${file}）：${err instanceof Error ? err.message : err}`);
+    }
+  }
+  console.log(`获取官方 SHASUMS256.txt：${officialUrl}`);
+  try {
+    const sums = (await fetchBuffer(officialUrl, 15_000, fetchImpl)).toString('utf8');
+    console.log(`SHASUMS256.txt 来自官方 ${officialUrl}`);
+    return { sums, sumsNote: '官方 SHASUMS256.txt' };
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err);
+    throw new Error(
+      `无法获取官方 SHASUMS256.txt（${officialUrl}）：${reason}。断网时可设置 WEFT_NODE_SHASUMS_FILE 指向本地副本`,
+    );
+  }
+}
+
+export async function acquireNodeExe({
+  nodeVersion = NODE_VERSION,
+  outDir,
+  root = ROOT,
+  fetchImpl = fetch,
+  env = process.env,
+} = {}) {
+  if (!outDir) throw new Error('缺少输出目录');
+  const resolvedOut = path.resolve(outDir);
+  const { sums, sumsNote } = await loadNodeSums({ nodeVersion, env, fetchImpl });
+  const archiveName = `node-v${nodeVersion}-win-x64.zip`;
+  const exeName = `node-v${nodeVersion}-win-x64/node.exe`;
+  const standalone = expectedSha256(sums, 'win-x64/node.exe');
+  if (!standalone) throw new Error('SHASUMS256.txt 没有 win-x64/node.exe');
+
+  const cacheLocations = [
+    envText(env, 'WEFT_NODE_EXE'),
+    path.join(resolvedOut, '.cache', `node-${nodeVersion}-win-x64.exe`),
+    path.join(root, 'dist', '.cache', `node-${nodeVersion}-win-x64.exe`),
+  ].filter(Boolean);
+
+  for (const loc of cacheLocations) {
+    if (!await pathExists(loc)) continue;
+    try {
+      const buf = await readFile(loc);
+      const hash = sha256Hex(buf);
+      if (hash === standalone) {
+        console.log(`使用本地 node.exe 缓存 (${loc})，sha256 已对照${sumsNote}：${hash}`);
+        return { exe: buf, exeHash: hash, sumsNote, zipSource: null };
+      }
+      console.warn(`忽略本地 node.exe 缓存 (${loc})，sha256 与${sumsNote}不符：${hash}`);
+    } catch { /* ignore read error, try next */ }
+  }
+
+  const bases = nodeArchiveBases(nodeVersion, env);
+  let archive = null;
+  let zipSource = null;
+  for (const base of bases) {
+    const url = `${base}/${archiveName}`;
+    try {
+      console.log(`尝试从 ${base} 下载 ${archiveName}`);
+      archive = await downloadVerified(url, sums, archiveName, 180_000, fetchImpl, sumsNote);
+      zipSource = base;
+      break;
+    } catch (err) {
+      console.warn(`从 ${base} 下载 ${archiveName} 失败，尝试备选源：${err instanceof Error ? err.message : err}`);
+    }
+  }
+  if (!archive) throw new Error(`无法从任何源下载并校验 ${archiveName}`);
+
+  const exe = extractZipEntry(archive, exeName);
+  const exeHash = sha256Hex(exe);
+  if (standalone !== exeHash) {
+    throw new Error(`解出的 node.exe sha256 ${exeHash} 与${sumsNote}中 win-x64/node.exe ${standalone} 不一致`);
+  }
+  console.log(`node.exe sha256 已对照${sumsNote}：${exeHash}`);
+  try {
+    const defaultCache = path.join(resolvedOut, '.cache', `node-${nodeVersion}-win-x64.exe`);
+    await mkdir(path.dirname(defaultCache), { recursive: true });
+    await writeFile(defaultCache, exe);
+  } catch { /* ignore cache write failure */ }
+  return { exe, exeHash, sumsNote, zipSource };
 }
 
 function npmEnv() {
@@ -590,22 +721,7 @@ export async function packRelease({
     await stripPostinstall(appDir);
     const packages = await listTopPackages(path.join(appDir, 'node_modules'));
 
-    const base = `https://nodejs.org/dist/v${nodeVersion}`;
-    const archiveName = `node-v${nodeVersion}-win-x64.zip`;
-    const exeName = `node-v${nodeVersion}-win-x64/node.exe`;
-    console.log(`下载 ${base}/SHASUMS256.txt`);
-    const sums = (await fetchBuffer(`${base}/SHASUMS256.txt`)).toString('utf8');
-    console.log(`下载 ${archiveName}`);
-    let archive = await downloadVerified(`${base}/${archiveName}`, sums, archiveName);
-    const exe = extractZipEntry(archive, exeName);
-    archive = null;
-    const standalone = expectedSha256(sums, 'win-x64/node.exe');
-    const exeHash = sha256Hex(exe);
-    if (!standalone) throw new Error('SHASUMS256.txt 没有 win-x64/node.exe');
-    if (standalone !== exeHash) {
-      throw new Error(`解出的 node.exe sha256 ${exeHash} 与官方 win-x64/node.exe ${standalone} 不一致`);
-    }
-    console.log(`node.exe sha256 已对照官方 SHASUMS256.txt：${exeHash}`);
+    const { exe, exeHash } = await acquireNodeExe({ nodeVersion, outDir, root });
     await mkdir(path.join(stage, 'node'), { recursive: true });
     await writeFile(path.join(stage, 'node', 'node.exe'), exe);
 

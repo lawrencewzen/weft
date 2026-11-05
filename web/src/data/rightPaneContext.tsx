@@ -27,7 +27,6 @@ import { defaultExpanded, dirPaths, expandAncestors, isMarkdownPath, toggleDir }
 import type { Lang } from './lang';
 import {
   defaultRightOpen,
-  isRightOverlayWidth,
   persistRightOpen,
   readRightTab,
   readRightWidth,
@@ -37,7 +36,7 @@ import {
 } from './layout';
 import { useSession } from './session';
 import { conversationTopic, type Change, type ToolCall } from './store';
-import { cssViewportWidth, visualToCss } from './uiZoom';
+import { cssViewportWidth } from './uiZoom';
 import { useStoreTopics } from './useStoreTopic';
 import { t } from '../i18n';
 
@@ -48,11 +47,6 @@ export type RightLayoutValue = {
   open: boolean;
   setOpen: (open: boolean) => void;
   toggleRight: () => void;
-  rbDx: number;
-  rbTr: string;
-  rightBtnOp: number;
-  rightBtnPe: 'auto' | 'none';
-  rpBtnOp: number;
   tab: RightTab;
   setTab: (tab: RightTab) => void;
   width: number;
@@ -185,63 +179,13 @@ export function RightPaneProvider({
   const draftRef = useRef(draftText);
   draftRef.current = draftText;
 
-  const [rightOpening, setRightOpening] = useState(false);
-  const [rbDx, setRbDx] = useState(0);
-  const [rbAnim, setRbAnim] = useState(false);
-  const rbDxRef = useRef(0);
-  const rightTimer = useRef<number | null>(null);
-
   const setOpen = useCallback((next: boolean) => {
     setOpenState(next);
-    setRightOpening(false);
-    setRbAnim(false);
-    setRbDx(0);
     persistRightOpen(next, cssViewportWidth());
   }, []);
 
   const toggleRight = useCallback(() => {
-    if (isRightOverlayWidth(cssViewportWidth())) {
-      setOpen(!open);
-      return;
-    }
-    const closing = open;
-    if (closing) {
-      const rb = document.querySelector<HTMLElement>('[data-testid="next-right-collapse"]');
-      const hb = document.querySelector<HTMLElement>('[data-testid="next-right-toggle"]');
-      if (rb && hb) {
-        const rbLeft = visualToCss(rb.getBoundingClientRect().left);
-        const hbLeft = visualToCss(hb.getBoundingClientRect().left);
-        rbDxRef.current = Math.round(rbLeft - (hbLeft - (rbDxRef.current || 0)));
-      }
-    }
-    const dx = rbDxRef.current || 50;
-    if (closing) {
-      setOpenState(false);
-      persistRightOpen(false, cssViewportWidth());
-      setRightOpening(false);
-      setRbAnim(false);
-      setRbDx(dx);
-      if (typeof window !== 'undefined') {
-        window.requestAnimationFrame(() => {
-          window.requestAnimationFrame(() => {
-            setRbAnim(true);
-            setRbDx(0);
-          });
-        });
-      }
-    } else {
-      setOpenState(true);
-      persistRightOpen(true, cssViewportWidth());
-      setRightOpening(true);
-      setRbAnim(true);
-      setRbDx(dx);
-    }
-    if (rightTimer.current) window.clearTimeout(rightTimer.current);
-    rightTimer.current = window.setTimeout(() => {
-      if (!closing) {
-        setRightOpening(false);
-      }
-    }, 230);
+    setOpen(!open);
   }, [open, setOpen]);
 
   const setTab = useCallback((next: RightTab) => {
@@ -527,21 +471,10 @@ export function RightPaneProvider({
     }
   }, [wsId, lang, onToast]);
 
-  const isRightOverlay = isRightOverlayWidth(cssViewportWidth());
-  const rightBtnOp = !open || rightOpening || isRightOverlay ? 1 : 0;
-  const rightBtnPe: 'auto' | 'none' = (!open || isRightOverlay) ? 'auto' : 'none';
-  const rpBtnOp = open && (!rightOpening || isRightOverlay) ? 1 : 0;
-  const rbTr = rbAnim ? 'transform .22s cubic-bezier(.3,.8,.3,1)' : 'none';
-
   const layoutValue = useMemo<RightLayoutValue>(() => ({
     open,
     setOpen,
     toggleRight,
-    rbDx,
-    rbTr,
-    rightBtnOp,
-    rightBtnPe,
-    rpBtnOp,
     tab,
     setTab,
     width,
@@ -549,8 +482,15 @@ export function RightPaneProvider({
     persistWidth,
     selectedCommandId,
   }), [
-    open, setOpen, toggleRight, rbDx, rbTr, rightBtnOp, rightBtnPe, rpBtnOp,
-    tab, setTab, width, setWidth, persistWidth, selectedCommandId,
+    open,
+    setOpen,
+    toggleRight,
+    tab,
+    setTab,
+    width,
+    setWidth,
+    persistWidth,
+    selectedCommandId,
   ]);
 
   const changesValue = useMemo<RightChangesValue>(() => ({

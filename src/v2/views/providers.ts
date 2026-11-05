@@ -100,7 +100,7 @@ export type RawModel = {
   reasoning: boolean;
   thinkingLevels?: string[];
   defaultThinkingLevel?: string | null;
-  overridden: { contextWindow?: boolean; maxTokens?: boolean };
+  overridden: { contextWindow?: boolean; maxTokens?: boolean; images?: boolean; thinkingLevel?: boolean };
 };
 
 export type RawProvider = {
@@ -114,6 +114,9 @@ export type RawProvider = {
   lastTest?: RawLastTest;
   status?: ProviderStatus;
   models: RawModel[];
+  defaultModel?: string | null;
+  images?: boolean;
+  defaultThinkingLevel?: string | null;
 };
 
 export type RawAvailable = {
@@ -199,6 +202,8 @@ export function modelView(model: RawModel): ProviderModel {
     overridden: {
       ...(model.overridden?.contextWindow ? { contextWindow: true } : {}),
       ...(model.overridden?.maxTokens ? { maxTokens: true } : {}),
+      ...(model.overridden?.images ? { images: true } : {}),
+      ...(model.overridden?.thinkingLevel ? { thinkingLevel: true } : {}),
     },
   };
 }
@@ -216,7 +221,12 @@ export function providerView(raw: RawProvider, lang: Lang): Provider {
       ? { state: 'testing', ...(typeof raw.status.testedAt === 'number' ? { testedAt: raw.status.testedAt } : {}) }
       : statusView(raw.lastTest, lang),
     models: raw.models.map(modelView),
+    defaultModel: raw.defaultModel || null,
   };
+  if (typeof raw.images === 'boolean') item.images = raw.images;
+  if (raw.defaultThinkingLevel) {
+    item.defaultThinkingLevel = raw.defaultThinkingLevel as NonNullable<Provider['defaultThinkingLevel']>;
+  }
   if (raw.kind === 'custom') {
     if (raw.api) item.api = raw.api;
     if (raw.baseUrl) item.baseUrl = raw.baseUrl;

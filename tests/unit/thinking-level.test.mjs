@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { getBuiltinModels } from '@earendil-works/pi-ai/providers/all';
 import { createSqliteStore } from '../../src/store/sqlite.mjs';
 import {
+  applyCapabilityOverrides,
   configureThinkingLevel,
   defaultThinkingLevelOf,
   effectiveThinkingLevel,
@@ -78,6 +79,94 @@ test('defaultThinkingLevel clamps medium to the nearest supported level', () => 
     thinkingLevels: ['high', 'max'],
     defaultThinkingLevel: 'high',
   });
+  assert.equal(defaultThinkingLevelOf({ ...forced, defaultThinkingLevel: 'max' }), 'max');
+  assert.equal(defaultThinkingLevelOf({ ...forced, defaultThinkingLevel: 'off' }), 'high');
+  assert.equal(defaultThinkingLevelOf({ ...forced, defaultThinkingLevel: 'nope' }), 'high');
+});
+
+test('defaultThinkingLevelOf uses a canonical model.defaultThinkingLevel', () => {
+  const model = {
+    reasoning: true,
+    thinkingLevelMap: {
+      off: 'off',
+      minimal: 'minimal',
+      low: 'low',
+      medium: 'medium',
+      high: 'high',
+      xhigh: null,
+      max: null,
+    },
+  };
+  assert.equal(defaultThinkingLevelOf(model), 'medium');
+  const high = { ...model, defaultThinkingLevel: 'high' };
+  const off = { ...model, defaultThinkingLevel: 'off' };
+  assert.equal(defaultThinkingLevelOf(high), 'high');
+  assert.equal(defaultThinkingLevelOf(off), 'off');
+  assert.equal(defaultThinkingLevelOf({ ...model, defaultThinkingLevel: 'nope' }), 'medium');
+  assert.equal(effectiveThinkingLevel(high, null), 'high');
+  assert.equal(effectiveThinkingLevel(high, undefined), 'high');
+  assert.equal(effectiveThinkingLevel(off, null), 'off');
+  assert.equal(effectiveThinkingLevel(high, 'low'), 'low');
+  assert.equal(configureThinkingLevel(high, null), 'high');
+  assert.equal(configureThinkingLevel(high, undefined), 'high');
+  assert.equal(configureThinkingLevel(off, null), 'off');
+  assert.equal(configureThinkingLevel(high, 'low'), 'low');
+});
+
+test('applyCapabilityOverrides keeps images and thinking on one calculation', () => {
+  const catalog = {
+    reasoning: true,
+    input: ['text', 'image'],
+    thinkingLevelMap: {
+      off: 'off',
+      minimal: null,
+      low: 'low',
+      medium: 'medium',
+      high: 'high',
+      xhigh: null,
+      max: null,
+    },
+  };
+  const high = applyCapabilityOverrides(catalog, null, { defaultThinkingLevel: 'high' });
+  assert.equal(high.input, catalog.input);
+  assert.equal(high.reasoning, true);
+  assert.equal(high.thinkingLevelMap, catalog.thinkingLevelMap);
+  assert.equal(high.defaultThinkingLevel, 'high');
+  assert.equal(configureThinkingLevel({ ...catalog, ...high }, null), 'high');
+  assert.deepEqual(thinkingLevelsOf({ ...catalog, ...high }), ['off', 'low', 'medium', 'high']);
+
+  const off = applyCapabilityOverrides(catalog, { thinkingLevel: 'off' }, { defaultThinkingLevel: 'high' });
+  assert.equal(off.reasoning, true);
+  assert.equal(off.defaultThinkingLevel, 'off');
+  assert.equal(off.thinkingLevelMap, catalog.thinkingLevelMap);
+  assert.equal(configureThinkingLevel({ ...catalog, ...off }, null), 'off');
+
+  const bare = { reasoning: false, input: ['text'] };
+  const raised = applyCapabilityOverrides(bare, null, { defaultThinkingLevel: 'high' });
+  assert.equal(raised.reasoning, true);
+  assert.equal(raised.thinkingLevelMap, undefined);
+  assert.equal(raised.defaultThinkingLevel, 'high');
+  assert.equal(JSON.stringify(raised).includes('none'), false);
+  const raisedModel = { ...bare, ...raised };
+  assert.equal(raisedModel.thinkingLevelMap, undefined);
+  assert.equal(configureThinkingLevel(raisedModel, null), 'high');
+  assert.deepEqual(thinkingLevelsOf(raisedModel), ['off', 'minimal', 'low', 'medium', 'high']);
+
+  const original = ['text', 'image'];
+  const kept = applyCapabilityOverrides({ input: original, reasoning: false }, null, {});
+  assert.equal(kept.input, original);
+  const removed = applyCapabilityOverrides({ input: original, reasoning: false }, null, { images: false });
+  assert.deepEqual(removed.input, ['text']);
+  assert.deepEqual(original, ['text', 'image']);
+  const modelWins = applyCapabilityOverrides({ input: original }, { images: true }, { images: false });
+  assert.equal(modelWins.input, original);
+  const text = ['text'];
+  const added = applyCapabilityOverrides({ input: text }, { images: true }, { images: false });
+  assert.deepEqual(added.input, ['text', 'image']);
+  assert.deepEqual(text, ['text']);
+  const levelWins = applyCapabilityOverrides(catalog, { thinkingLevel: 'low' }, { defaultThinkingLevel: 'high' });
+  assert.equal(levelWins.defaultThinkingLevel, 'low');
+  assert.equal(levelWins.thinkingLevelMap, catalog.thinkingLevelMap);
 });
 
 test('custom effort.supported_levels maps to off plus known names; missing means no thinking', () => {

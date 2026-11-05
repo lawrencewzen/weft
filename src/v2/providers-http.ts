@@ -57,6 +57,9 @@ export type ProviderServiceLike = {
     baseUrl?: unknown;
     api?: unknown;
     apiKey?: unknown;
+    defaultModel?: unknown;
+    images?: unknown;
+    defaultThinkingLevel?: unknown;
   }) => Promise<RawProvider | null>;
   testProvider: (id: string) => Promise<RawProvider | null>;
 };
@@ -168,6 +171,9 @@ export async function handleProvidersApi(ctx: ProvidersHttpCtx, opts: ProvidersH
         baseUrl: body.baseUrl,
         api: body.api,
         apiKey: body.apiKey,
+        defaultModel: body.defaultModel,
+        images: body.images,
+        defaultThinkingLevel: body.defaultThinkingLevel,
       });
       opts.onProvidersChanged?.();
       await sendProvider(created);
