@@ -445,6 +445,62 @@ test('an existing transcript stays on the write/edit list instead of snapshottin
   });
 });
 
+test('a model-config entry before the first user message still snapshots', { timeout: 60_000 }, async () => {
+  await withHarnessLock(async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'weft-snap-model-'));
+    const dataDir = path.join(root, 'data');
+    await mkdir(dataDir);
+    const repo = await initGitRepo(root);
+    await writeFile(path.join(repo, 'note.txt'), 'base\n');
+    await git(repo, ['add', '-A']);
+    await git(repo, ['commit', '-m', 'init']);
+    const env = { ...process.env, WEFT_LLM: 'faux', WEFT_FAUX_TEXT: 'ok' };
+    delete env.WEFT_FAUX_SCRIPT;
+    const store = createSqliteStore(dataDir);
+    const kernel = await openConversationKernel({ dataDir, store, demo: true, env });
+    try {
+      const ws = await store.createWorkspace({
+        name: 'model',
+        path: repo,
+        source: 'local',
+        rootPath: repo,
+      });
+      const conv = await kernel.createConversation({
+        workspaceId: ws.id,
+        workspacePath: repo,
+        title: 'model',
+      });
+      const conversation = await kernel.harness.conversation(conv.harnessId, kernel.context);
+      await conversation.commit(async (tx) => {
+        await tx.appendEntry(conv.harnessId, {
+          kind: 'pi.system',
+          data: { reason: 'model', model: { provider: 'faux', modelId: 'faux-1' } },
+        });
+      }, kernel.context);
+      const view = await conversation.viewState(kernel.context);
+      const kinds = (view.value?.entries || []).map((entry) => entry.kind);
+      view.dispose();
+      assert.ok(kinds.includes('pi.system'), JSON.stringify(kinds));
+      assert.equal(kinds.includes('pi.user'), false, JSON.stringify(kinds));
+      const posted = await kernel.postMessage(conv, 'go');
+      assert.equal(posted.status, 202, JSON.stringify(posted.body));
+      const done = await waitDone(kernel, store, conv);
+      assert.equal(done.status, 'done', JSON.stringify(done));
+      await writeFile(path.join(repo, 'note.txt'), 'after\n');
+      const rows = byPath(await kernel.changes(conv.id));
+      const note = rows.get('note.txt');
+      assert.ok(note, JSON.stringify([...rows.keys()]));
+      assert.equal(note.status, 'modified');
+      assert.equal(note.added, 1);
+      assert.equal(note.removed, 1);
+    } finally {
+      await kernel.close();
+      store.close();
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+});
+
 test('UTF-8 BOM and CRLF diffs match the change counts', { timeout: 60_000 }, async () => {
   await withHarnessLock(async () => {
     const root = await mkdtemp(path.join(tmpdir(), 'weft-snap-text-'));

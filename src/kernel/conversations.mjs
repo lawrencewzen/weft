@@ -599,10 +599,12 @@ export async function openConversationKernel({
     return withSnapshotLock(conv.id, async () => {
       const existing = await readSnapshot(conv.harnessId);
       if (existing) return existing;
-      // A conversation that already has transcript entries was started before
-      // snapshots existed. Photographing it now would hide those edits.
+      // A conversation that already has a user message started before snapshots
+      // existed. Photographing it now would hide those edits. Model configuration
+      // and other non-user entries do not count: applyModel can write them
+      // before the first send.
       const transcript = await readTranscript(conv.harnessId);
-      const started = (transcript.entries || []).length > 0;
+      const started = (transcript.entries || []).some((entry) => entry?.kind === 'pi.user');
       let stored = { mode: 'fallback', tree: '' };
       if (!started) {
         const workspacePath = conv.workspacePath || '';
