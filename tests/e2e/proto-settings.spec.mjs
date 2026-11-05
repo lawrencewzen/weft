@@ -229,18 +229,21 @@ test('git connections, plugins, skills and about', async ({ page }) => {
   await page.getByTestId('next-confirm-ok').click();
   await expect(page.getByTestId('next-git-row')).toHaveCount(2);
 
-  // Plugins: toggle one, import another.
+  // Plugins: toggle the first row (Ask, sorted by name), import another.
   await page.getByTestId('next-settings-nav-plugins').click();
-  await expect(page.getByTestId('next-plugin-row')).toHaveCount(3);
-  await expect(page.getByTestId('next-plugin-fail').first()).toContainText('找不到插件 main');
-  const firstSwitch = page.getByTestId('next-plugin-row').first().getByTestId('next-plugin-toggle');
+  await expect(page.getByTestId('next-plugin-row')).toHaveCount(4);
+  const firstRow = page.getByTestId('next-plugin-row').first();
+  await expect(firstRow).toHaveAttribute('data-id', 'ask');
+  await expect(page.locator('[data-testid=next-plugin-row][data-id="broken-loader"]').getByTestId('next-plugin-fail')).toContainText('找不到插件 main');
+  const firstSwitch = firstRow.getByTestId('next-plugin-toggle');
+  await expect(firstSwitch).toHaveAttribute('aria-pressed', 'true');
   await firstSwitch.click();
   await expect(firstSwitch).toHaveAttribute('aria-pressed', 'false');
   await firstSwitch.click();
   await expect(firstSwitch).toHaveAttribute('aria-pressed', 'true');
   await page.getByTestId('next-plugin-path').fill('C:\\work\\plugins\\lint-helper');
   await page.getByTestId('next-plugin-import').click();
-  await expect(page.getByTestId('next-plugin-row')).toHaveCount(4);
+  await expect(page.getByTestId('next-plugin-row')).toHaveCount(5);
   await expect(page.getByTestId('next-plugin-row').filter({ hasText: 'lint-helper' })).toBeVisible();
 
   // Skills: add, toggle, delete; the bundled one is read-only.

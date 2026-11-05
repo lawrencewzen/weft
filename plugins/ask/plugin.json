@@ -1,0 +1,25 @@
+{
+  "id": "ask",
+  "name": "Ask",
+  "description": "向用户提选择题并结束本轮。Ask the user multiple-choice questions and end the turn.",
+  "version": "0.1.0",
+  "source": "bundled",
+  "main": "index.mjs",
+  "tools": [
+    {
+      "name": "ask_user_question",
+      "description": "向用户提 1 到 4 道选择题并结束本轮。Ask 1-4 multiple-choice questions, then end this turn. Pass { questions: [{ question, header (≤12 characters), multiSelect, options: [{ label, description }] }] }. Each question needs 2-4 options. The UI adds an Other free-text choice; do not add an Other option yourself. Returns immediately and ends the turn. Do not continue or poll. 单独调用这个工具，不要在同一批里调用其他工具（同批有其他工具时本轮不会结束）。 Call this tool alone; do not call other tools in the same batch, or this turn will not end.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "questions": {
+            "type": "array",
+            "description": "1 to 4 questions. The UI adds Other; do not include it."
+          }
+        },
+        "required": ["questions"],
+        "additionalProperties": false
+      }
+    }
+  ]
+}

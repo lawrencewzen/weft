@@ -61,6 +61,18 @@ export type MockTool = {
   totalLines: number;
   output: string;
   liveText?: string;
+  /** ask_user_question. Resolved to contract strings when the tool entity is built. */
+  ask?: MockAsk;
+};
+
+export type MockAsk = {
+  questions: Array<{
+    question: Bilingual;
+    header: Bilingual;
+    multiSelect: boolean;
+    options: Array<{ label: Bilingual; description: Bilingual }>;
+  }>;
+  answer: NonNullable<ToolCall['ask']>['answer'];
 };
 
 export type MockGroup = {

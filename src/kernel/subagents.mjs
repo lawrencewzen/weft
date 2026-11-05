@@ -21,6 +21,7 @@ import {
   SUBAGENT_REPORTER_KIND,
   SUBAGENTS_DOC_KIND,
 } from './ids.mjs';
+import { ASK_TOOL_NAME } from './ask.mjs';
 import { formatSubagentReport, parseSubagentOutcome } from './subagent-report.mjs';
 
 export const TITLE_DESCRIPTION = 'A one-line summary of at most 20 characters, in the user\'s language, saying what this subagent will do. Shown as the heading to the user. Do not include a file path.';
@@ -35,6 +36,8 @@ export const SUBAGENT_INSTRUCTIONS = [
 ].join(' ');
 export const SUBAGENT_DESCRIPTION = `${DELEGATE_DESCRIPTION} On spawn, pass that text as message. \`name\` is used later with send, wait, and stop. Also pass title on spawn.`;
 const DISPATCH_TOOLS = new Set(['delegate', 'subagent', 'skill']);
+/** Dispatch tools, plus ask: a child cannot question the user. */
+export const CHILD_HIDDEN_TOOLS = new Set([...DISPATCH_TOOLS, ASK_TOOL_NAME]);
 const NAME_CAP = 30;
 
 // Example 23: the main conversation maps background names to child conversations.
@@ -159,7 +162,7 @@ function childDetails(conversationId, name, title) {
 }
 
 function childTools(parentAgent) {
-  return (parentAgent?.tools || []).filter((tool) => tool?.name && !DISPATCH_TOOLS.has(tool.name));
+  return (parentAgent?.tools || []).filter((tool) => tool?.name && !CHILD_HIDDEN_TOOLS.has(tool.name));
 }
 
 async function assistantText(api, entryId, context) {
@@ -191,8 +194,8 @@ function parentTextFromChild(name, text) {
 /**
  * Dispatch tools for the main agent. A child is configured with this extension
  * removed, so it cannot delegate, spawn, or load skills. `prepareChild` sets
- * fixed no-ask instructions and keeps the parent's workspace/plugin tools,
- * model, and cwd.
+ * fixed no-ask instructions and keeps the parent's workspace tools and plugin
+ * tools except ask_user_question, model, and cwd.
  */
 export function createSubagentExtension({
   prepareChild,
