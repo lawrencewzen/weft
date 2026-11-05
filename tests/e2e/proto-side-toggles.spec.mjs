@@ -713,3 +713,60 @@ test('rapid double-click maintains is-sliding and sb-hide-first-folder throughou
 
   expectClean(state);
 });
+
+test('midway animation reversal does not jump between adjacent frames and lands at correct target', async ({ page }) => {
+  const state = await openProto(page);
+
+  const leftBtn = page.locator('.side-toggle-left');
+  await expect(leftBtn).toBeVisible();
+
+  const firstWsIcon = page.locator('[data-testid="next-ws-toggle"] .sb-ic').first();
+  await expect(firstWsIcon).toBeVisible();
+  const initialFolderBox = await firstWsIcon.boundingBox();
+  expect(initialFolderBox).not.toBeNull();
+
+  // 1. Start collapse
+  await leftBtn.click();
+  // Wait ~80ms until icon is in flight
+  await page.waitForTimeout(80);
+
+  // 2. Measure adjacent frames across reversal
+  const frameData = await page.evaluate(() => {
+    return new Promise((resolve) => {
+      const getPos = () => {
+        const ico = document.querySelector('[data-testid="next-strip-projects"] .sb-ic');
+        if (!ico) return null;
+        const r = ico.getBoundingClientRect();
+        return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+      };
+
+      requestAnimationFrame(() => {
+        const pre = getPos();
+        // Trigger reversal in this frame
+        document.querySelector('.side-toggle-left')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+        requestAnimationFrame(() => {
+          const post = getPos();
+          const dist = pre && post ? Math.hypot(post.x - pre.x, post.y - pre.y) : null;
+          resolve({ pre, post, dist });
+        });
+      });
+    });
+  });
+
+  expect(frameData.pre).not.toBeNull();
+  expect(frameData.post).not.toBeNull();
+  expect(frameData.pre.y).toBeLessThan(initialFolderBox.y - 5);
+  // Displacement between adjacent frames around reversal must not jump (<= 12px)
+  expect(frameData.dist).toBeLessThanOrEqual(12);
+
+  // 3. Wait for settlement and assert correct final landing position
+  await page.waitForTimeout(300);
+  await expect(firstWsIcon).toBeVisible();
+  const settledFolderBox = await firstWsIcon.boundingBox();
+  expect(settledFolderBox).not.toBeNull();
+  expect(Math.abs(settledFolderBox.x - initialFolderBox.x)).toBeLessThanOrEqual(1);
+  expect(Math.abs(settledFolderBox.y - initialFolderBox.y)).toBeLessThanOrEqual(1);
+
+  expectClean(state);
+});

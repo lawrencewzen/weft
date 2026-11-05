@@ -51,17 +51,20 @@ export function useStripProjectsFlip({ leftOpen, stripBtnRef, sidebarRef, hasPro
     sidebarEl.classList.add('sb-hide-first-folder');
 
     const stripIcon = stripBtn.querySelector('.sb-ic') ?? stripBtn;
-    const baseBox = stripIcon.getBoundingClientRect();
-    const stripPos = { x: baseBox.left, y: baseBox.top };
-
-    let start = leftOpen ? stripPos : folderPos;
-    const target = leftOpen ? folderPos : stripPos;
+    let start: { x: number; y: number } | null = null;
     if (currentAnimRef.current) {
       const curBox = stripIcon.getBoundingClientRect();
+      start = { x: curBox.left, y: curBox.top };
       currentAnimRef.current.cancel();
       currentAnimRef.current = null;
-      start = { x: curBox.left, y: curBox.top };
     }
+
+    const baseBox = stripIcon.getBoundingClientRect();
+    const stripPos = { x: baseBox.left, y: baseBox.top };
+    if (!start) {
+      start = leftOpen ? stripPos : folderPos;
+    }
+    const target = leftOpen ? folderPos : stripPos;
 
     const zoom = readUiZoom();
     const fromX = visualToCss(start.x - baseBox.left, zoom);
