@@ -102,13 +102,24 @@ describe('layout prefs', () => {
     writeRightTab('files');
     expect(readRightTab()).toBe('files');
     expect(mem.getItem(LS_RIGHT_TAB)).toBe('files');
-    writeRightTab('term');
-    expect(readRightTab()).toBe('term');
-    expect(mem.getItem(LS_RIGHT_TAB)).toBe('term');
     writeRightTab('changes');
     expect(readRightTab()).toBe('changes');
     expect(mem.getItem(LS_RIGHT_TAB)).toBe('changes');
+    mem.setItem(LS_RIGHT_TAB, 'term');
+    expect(readRightTab()).toBe('changes');
     expect(mem.getItem(LS_RIGHT_OPEN)).toBeNull();
+  });
+
+  it('falls back to changes when stored right tab is term or unknown', () => {
+    const mem = new MemoryStorage();
+    // @ts-expect-error test stub
+    globalThis.localStorage = mem;
+    mem.setItem(LS_RIGHT_TAB, 'term');
+    expect(readRightTab()).toBe('changes');
+    mem.setItem(LS_RIGHT_TAB, 'unknown-tab');
+    expect(readRightTab()).toBe('changes');
+    mem.setItem(LS_RIGHT_TAB, 'subagents');
+    expect(readRightTab()).toBe('changes');
   });
 
   it('persists explicit workspace open flags under weft_next_ keys', () => {
