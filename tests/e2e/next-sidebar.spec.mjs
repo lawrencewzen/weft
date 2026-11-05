@@ -258,8 +258,11 @@ test('774px viewport (860 CSS px × 0.9) collapses the sidebar and does not scro
     const ws = await createWorkspace(srv, 'narrow', prepared.dirs[0]);
     await createConversation(srv, ws.id, 'chat');
     await loginNext(page, srv);
-    // Closed overlay panels stay in the tree (no display:none); assert they are not visible.
-    await expect(page.getByTestId('next-sidebar')).toBeHidden();
+    // Collapsed overlay panels stay as a narrow strip (54px CSS × 0.9 = 48.6 visual px).
+    await expect(page.getByTestId('next-sidebar')).toBeVisible();
+    const sbBox = await page.getByTestId('next-sidebar').boundingBox();
+    expect(sbBox).not.toBeNull();
+    expect(Math.abs(sbBox.width - 54 * 0.9)).toBeLessThanOrEqual(1.5);
     const box = await page.evaluate(() => {
       const html = document.documentElement;
       const body = document.body;
@@ -381,15 +384,20 @@ test('clicking the left collapse button slides the sidebar away and the expand b
     expect(await panelTransitionSeconds(page, 'next-sidebar')).toBeGreaterThan(0);
 
     await page.getByTestId('next-left-collapse').click();
-    await expect(page.getByTestId('next-sidebar')).toBeHidden();
     await expect(page.getByTestId('next-left-open')).toBeVisible();
     await expect(page.getByTestId('next-left-divider')).toBeHidden();
-    await expect(page.getByTestId('next-sidebar')).toHaveAttribute('inert');
-    await expect(page.getByTestId('next-sidebar')).toHaveAttribute('aria-hidden', 'true');
+    await expect.poll(async () => {
+      const b = await page.getByTestId('next-sidebar').boundingBox();
+      return b ? Math.abs(b.width - 54 * 0.9) : 999;
+    }).toBeLessThanOrEqual(1.5);
+    await expect(page.getByTestId('next-sidebar')).not.toHaveAttribute('inert');
 
     await page.getByTestId('next-left-open').click();
-    await expect(page.getByTestId('next-sidebar')).toBeVisible();
     await expect(page.getByTestId('next-left-collapse')).toBeVisible();
+    await expect.poll(async () => {
+      const b = await page.getByTestId('next-sidebar').boundingBox();
+      return b ? b.width : 0;
+    }).toBeGreaterThan(150);
     await expect(page.getByTestId('next-sidebar')).not.toHaveAttribute('inert');
   } finally {
     await srv.kill();

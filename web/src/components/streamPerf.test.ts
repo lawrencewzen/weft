@@ -260,7 +260,6 @@ describe('streamPerf: 20,000 chars across 2,000 deltas (T55-2b)', () => {
                   activeConversationId: cid,
                   activeAgentId: null,
                   draftWorkspaceId: null,
-                  onCollapse: () => {},
                   onToast: () => {},
                   onConfirm: async () => true,
                   onRemoveWorkspace: async () => {},
