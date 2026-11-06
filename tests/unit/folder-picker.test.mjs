@@ -1,6 +1,6 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdir, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { realpathSync } from 'node:fs';
@@ -151,6 +151,7 @@ describe('folder picker', { concurrency: 1 }, () => {
     let winCalls = 0;
     const win = await pickFolder({
       platform: 'win32',
+      env: { Path: '', PATH: '', PATHEXT: '.EXE' },
       runner: () => { winCalls += 1; return resolvedRunner({ stdout: '/tmp/x' })(); },
       startDir: '/tmp/start',
       prompt: 'Select folder',
@@ -360,6 +361,61 @@ describe('folder picker', { concurrency: 1 }, () => {
       else process.env.WEFT_WORKSPACE_ROOT = prev;
       await removeTempDir(dataDir);
       if (created) await rm(ssh, { recursive: false, force: true }).catch(() => {});
+    }
+  });
+
+  test('win32 pickFolder dispatches to powershell and shares one timed-out dialog', async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), 'weft-pwsh-'));
+    await writeFile(path.join(dir, 'pwsh.exe'), '');
+    const env = { Path: dir, PATH: dir, PATHEXT: '.EXE' };
+    const startDir = 'D:\\起点\\项目';
+    let seen = null;
+    let killed = 0;
+    try {
+      const picked = await pickFolder({
+        platform: 'win32',
+        env,
+        startDir,
+        prompt: 'Select folder',
+        runner: (file, args, options) => {
+          seen = { file, args, start: options?.env?.WEFT_FOLDER_PICK_START };
+          return resolvedRunner({ error: null, stdout: 'D:\\工作\\项目\r\n', stderr: '' })();
+        },
+      });
+      assert.deepEqual(picked, { status: 'picked', path: 'D:\\工作\\项目' });
+      assert.equal(seen.file, 'pwsh.exe');
+      assert.equal(seen.args[0], '-NoProfile');
+      assert.equal(seen.args[1], '-NonInteractive');
+      assert.equal(seen.args[2], '-STA');
+      assert.equal(seen.args[3], '-EncodedCommand');
+      assert.equal(seen.start, startDir);
+      const script = Buffer.from(seen.args[4], 'base64').toString('utf16le');
+      assert.equal(script.includes(startDir), false);
+      assert.match(script, /FolderBrowserDialog/);
+
+      const pending = pickFolder({
+        platform: 'win32',
+        env,
+        startDir,
+        timeoutMs: 40,
+        runner: () => ({
+          promise: new Promise(() => {}),
+          kill() { killed += 1; },
+        }),
+      });
+      const again = pickFolder({
+        platform: 'win32',
+        env,
+        startDir,
+        timeoutMs: 40,
+        runner: () => { throw new Error('second dialog'); },
+      });
+      const [a, b] = await Promise.all([pending, again]);
+      assert.deepEqual(a, { status: 'cancelled' });
+      assert.deepEqual(b, { status: 'cancelled' });
+      assert.equal(killed, 1);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
     }
   });
 

@@ -297,7 +297,9 @@ export async function handleExtensionsApi(opts: {
 
   if (method === 'GET' && pathname === '/api/v2/workspace-root/dirs') {
     try {
-      const listed = await listBrowsableDirs(url.searchParams.get('path'));
+      const listed = await listBrowsableDirs(url.searchParams.get('path'), {
+        view: url.searchParams.get('view'),
+      });
       sendV2(res, pathname, method, 200, workspaceDirsView(listed));
     } catch (err) {
       const status = Number((err as { status?: number })?.status) || 400;

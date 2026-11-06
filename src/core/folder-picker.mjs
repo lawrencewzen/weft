@@ -2,16 +2,18 @@
  * Native folder picker for the local Weft server.
  *
  * The browser cannot see a full local path, so the server opens the system
- * dialog (Claude Desktop's "Select folder"). Only macOS is implemented here.
- * Other platforms return unsupported; Windows belongs on the intranet line.
+ * dialog (Claude Desktop's "Select folder"). macOS uses osascript. Windows
+ * uses src/platform/win/folder-picker.mjs (pwsh, then powershell.exe).
+ * Other platforms return unsupported.
  *
- * The dialog is started with execFile('osascript', argv). Arguments stay in
- * the argv array and are never joined into a shell command.
+ * Dialogs are started with execFile. Arguments stay in the argv array and
+ * are never joined into a shell command.
  * Tests inject `runner` and never launch a real window.
  */
 
 import { execFile } from 'node:child_process';
 import path from 'node:path';
+import { pickWin32Folder } from '../platform/win/folder-picker.mjs';
 import { resolveAllowedWorkspacePath } from './workspace-guard.mjs';
 
 /** Kill the dialog if the user never answers. */
@@ -145,9 +147,10 @@ async function pickDarwin({ runner, startDir, prompt, timeoutMs }) {
   return osascriptOutcome(result.value);
 }
 
-/** Platform dispatch. Missing platforms stay unsupported (no Linux/Windows dialog). */
+/** Platform dispatch. Linux stays unsupported. */
 const PLATFORM_PICKERS = {
   darwin: pickDarwin,
+  win32: pickWin32Folder,
 };
 
 /**
@@ -155,11 +158,11 @@ const PLATFORM_PICKERS = {
  * `runner(file, args)` returns `{ promise, kill }` and replaces execFile in tests.
  * Concurrent calls share the in-flight dialog instead of opening another one.
  */
-export async function pickFolder({ platform, runner, startDir, prompt, timeoutMs } = {}) {
+export async function pickFolder({ platform, runner, startDir, prompt, timeoutMs, env } = {}) {
   if (inflight) return inflight;
   const pick = PLATFORM_PICKERS[platform];
   const promise = (pick
-    ? pick({ runner, startDir, prompt, timeoutMs })
+    ? pick({ runner, startDir, prompt, timeoutMs, env })
     : Promise.resolve({ status: 'unsupported' })
   ).catch(() => ({ status: 'unsupported' })).finally(() => {
     if (inflight === promise) inflight = null;
@@ -228,7 +231,7 @@ export async function pickWorkspaceFolder({
   if (isFolderPickerOff(env) || !isLoopbackRequestHost(host)) {
     return { status: 'unsupported' };
   }
-  const picked = await pickFolder({ platform, runner, startDir, prompt, timeoutMs });
+  const picked = await pickFolder({ platform, runner, startDir, prompt, timeoutMs, env });
   if (picked.status !== 'picked') return { status: picked.status };
   const path = await resolveAllowedWorkspacePath(picked.path, { dataDir });
   return { status: 'picked', path };

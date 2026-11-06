@@ -182,8 +182,11 @@ export interface paths {
         /**
          * 列出可浏览的子目录
          * @description 与旧 GET /api/workspace-root/dirs 相同，复用 listBrowsableDirs。
-         *     缺省列出默认起点，也可以列到该起点之外。`parent` 可以一路走到文件系统根，再往上为 null。`/` 可浏览但不可选为工作区；用户主目录可以选。
-         *     敏感目录（`~/.ssh`、`~/.gnupg`、系统目录）返回 400 E_PATH，文案按 lang 出成句。
+         *     缺省列出默认起点，也可以列到该起点之外。`parent` 可以一路走到文件系统根。
+         *     非 Windows 上，文件系统根的 `parent` 为 null。`/` 可浏览但不可选为工作区；用户主目录可以选。
+         *     Windows 上盘根（如 `D:\`）的 `parent` 为空串，表示上一层是盘符列表；盘根本身可以选为工作区。
+         *     查询 `view=drives` 仅 Windows：返回盘符列表（`path` 为空串，`parent` 为 null，`selectable` 与 `git` 为 false）。`entries` 是当前存在的盘，`name` 如 `D:`，`path` 如 `D:\`。按 A–Z 用 fs.access 探测，单盘失败或超时则跳过，不会被未就绪的盘卡住。非 Windows 返回 404 E_PATH。
+         *     敏感目录（`~/.ssh`、`~/.gnupg`、系统目录；Windows 另含 `%SystemRoot%` 及其子目录，默认 `C:\Windows`，比较不区分大小写）返回 400 E_PATH，文案按 lang 出成句。符号链接和 junction 解析后再判断，不能绕过。
          */
         get: operations["listWorkspaceRootDirs"];
         put?: never;
@@ -209,7 +212,7 @@ export interface paths {
          *     只有请求 Host 是回环地址（127.0.0.1、localhost、[::1]，可带端口）时才弹；其它 Host 返回 unsupported，避免远程访问时窗口弹到服务器桌面上。
          *     环境变量 WEFT_FOLDER_PICKER=off 时一律 unsupported。
          *     同一时间只弹一个窗口；已有窗口时后来的请求等待同一次结果。10 分钟无结果则结束该进程并返回 cancelled。
-         *     macOS 用 osascript 的 choose folder（argv，不经 shell）。其它平台目前返回 unsupported。
+         *     macOS 用 osascript 的 choose folder（argv，不经 shell）。Windows 用 pwsh（找不到则回退 powershell.exe）跑 FolderBrowserDialog：`-NoProfile -NonInteractive -STA -EncodedCommand`，不经 shell；起点目录走环境变量，不写进脚本。非交互会话直接退出并返回 unsupported。Linux 返回 unsupported。
          *     起点目录是 defaultWorkspaceRoot()。选中路径再走与 resolveAllowedWorkspacePath 相同的敏感目录校验，被拦时 400 PathNotAllowed。
          *     无请求体。与其它写接口一样，Content-Type 须为 application/json。
          */
@@ -2248,7 +2251,11 @@ export interface components {
         WorkspaceDirs: {
             root: string;
             path: string;
-            /** @description 没有上一级，或上一级是敏感目录时为 null。文件系统根为 null。 */
+            /**
+             * @description 没有上一级，或上一级是敏感目录时为 null。
+             *     非 Windows 的文件系统根为 null。Windows 盘符列表（view=drives）为 null。
+             *     Windows 盘根（如 `D:\`）为空串，表示上一层是盘符列表。
+             */
             parent: null | string;
             selectable: boolean;
             git: boolean;
@@ -2273,7 +2280,10 @@ export interface components {
             path: string;
             git: boolean;
         };
-        /** @description 本地路径不能作为工作区（不存在、是 `/`、或落在 `~/.ssh`、`~/.gnupg` 和系统目录）。用户主目录本身允许。 */
+        /**
+         * @description 本地路径不能作为工作区（不存在、是 `/`、或落在 `~/.ssh`、`~/.gnupg` 和系统目录）。
+         *     Windows 上 `%SystemRoot%`（默认 `C:\Windows`）及其子目录同样拒绝，比较不区分大小写；盘根 `C:\`、`D:\` 仍允许。用户主目录本身允许。符号链接和 junction 解析后再判断。
+         */
         PathNotAllowed: {
             /** @description 按 lang 出成句 */
             error: string;
@@ -2832,8 +2842,10 @@ export interface operations {
     listWorkspaceRootDirs: {
         parameters: {
             query?: {
-                /** @description 要列出的目录。缺省为工作区根目录。 */
+                /** @description 要列出的目录。缺省为工作区根目录。`view=drives` 时忽略。 */
                 path?: string;
+                /** @description `drives` 列出盘符，仅 Windows。其它值忽略，仍按 path 列目录。 */
+                view?: string;
                 lang?: string;
             };
             header?: never;
@@ -2869,7 +2881,7 @@ export interface operations {
                     "application/json": components["schemas"]["V2Error"];
                 };
             };
-            /** @description 路径不存在 */
+            /** @description 路径不存在。非 Windows 请求 view=drives 时也是 404 E_PATH。 */
             404: {
                 headers: {
                     [name: string]: unknown;

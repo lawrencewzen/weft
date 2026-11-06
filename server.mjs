@@ -806,7 +806,9 @@ async function routeApi(req, res, url) {
 
   if (m === 'GET' && p === '/api/workspace-root/dirs') {
     try {
-      sendJson(res, 200, await listBrowsableDirs(url.searchParams.get('path')));
+      sendJson(res, 200, await listBrowsableDirs(url.searchParams.get('path'), {
+        view: url.searchParams.get('view'),
+      }));
     } catch (err) {
       sendJson(res, err.status || 400, { error: err.message || 'path is not allowed', code: err.code || 'E_PATH' });
     }
