@@ -11,7 +11,7 @@ Weft 是基于 Pi Durable（`@earendil-works/pi-durable`，作为库嵌入）的
 
 ## 核心模型
 - **工作区（Workspace）** > **对话（Conversation）** > **主 Agent（Main Agent）** > **子 Agent（Sub Agents）**。
-- 每个对话默认只有一个主 Agent：理解需求、拆任务、管理子 Agent、汇总结果；简单对话不派子 Agent。主 Agent 没有角色。`instructions` 保持空字符串；系统提示词是 Pi Durable section，顺序为 preamble（不带标签）、rules、environment、project_context、skills。preamble 和 rules 是固定短文案。environment 写实际工作目录、平台和 shell；没选项目时不写工作目录。project_context 只收录工作区根目录的 AGENTS.md，没有、为空或读失败就整段省略。子 Agent 没有 preamble、rules 和 skills，有 environment、project_context，以及原来的固定 instructions。
+- 每个对话默认只有一个主 Agent：理解需求、拆任务、管理子 Agent、汇总结果；简单对话不派子 Agent。主 Agent 没有角色，也不设 `instructions`（`null` 清除该字段，已存的空字符串在下次配置时清掉，不渲染空的 instructions 段）；系统提示词是 Pi Durable section，顺序为 preamble（不带标签）、rules、environment、project_context、skills。preamble 和 rules 是固定短文案。environment 写实际工作目录、平台和 shell；没选项目时不写工作目录。project_context 只收录工作区根目录的 AGENTS.md，没有、为空或读失败就整段省略。子 Agent 没有 preamble、rules 和 skills，有 environment、project_context，以及原来的固定 instructions。
 - 子 Agent 是主 Agent 用 `delegate` / `subagent` 在某个对话里生成的独立实例，只属于该对话。没有固定角色模板。
 - 需求支持断点续跑、自动继续、状态监控、多 Agent 并行。多 Agent 协作由主 Agent 用子 Agent 派活，宿主不轮换 Agent。
 

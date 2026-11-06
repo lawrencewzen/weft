@@ -1,7 +1,8 @@
 // Main-agent and sub-agent system prompt sections.
 // Pi Durable renders each section as <key>…</key> ({ tag: false } stays bare),
-// appends the conversation's instructions last, and resends a section only when
-// its text changes. instructions itself stays an empty string on the main agent.
+// appends the conversation's instructions last when that field is set, and
+// resends a section only when its text changes. The main agent clears
+// instructions, so that section is omitted. A sub-agent still sets its fixed text.
 //
 // Environment (verified against Harness.buildEnv and openConversationKernel):
 // a conversation with no agent cwd gets input.env === undefined. The host env

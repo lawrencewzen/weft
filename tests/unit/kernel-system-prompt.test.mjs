@@ -64,7 +64,6 @@ function mainPrompt({ cwd, project, skills }) {
   ];
   if (project) parts.push(tagged('project_context', project));
   if (skills) parts.push(tagged('skills', skills));
-  parts.push(tagged('instructions', ''));
   return joinPrompt(parts);
 }
 
@@ -196,8 +195,9 @@ test('rendered main-agent prompt: sections, workspaces, AGENTS.md, and no projec
       skills,
     });
     assert.deepEqual(sectionKeys(first.systems[0]), [
-      'preamble', 'rules', 'environment', 'project_context', 'skills', 'instructions',
+      'preamble', 'rules', 'environment', 'project_context', 'skills',
     ]);
+    assert.equal(first.prompt.includes('<instructions>'), false);
     assert.equal(first.prompt, expectedAlpha);
     assert.equal(first.prompt.includes('CLAUDE_SHOULD_NOT_APPEAR'), false);
     assert.equal(first.prompt.includes('NESTED_AGENTS_SHOULD_NOT_APPEAR'), false);
@@ -336,6 +336,24 @@ test('rendered main-agent prompt: sections, workspaces, AGENTS.md, and no projec
     assert.match(nonePrompt, /Shell: bash \(use the bash tool\)/);
     assert.match(skills, new RegExp(`^${SKILL_LIST_INTRO}`));
     assert.match(skills, /^- commit-message: /m);
+
+    const legacy = await makeProject(store, kernel, dataDir, 'legacy-empty');
+    const legacyHandle = await kernel.harness.conversation(legacy.conv.harnessId, kernel.context);
+    await legacyHandle.configure({ instructions: '' }, kernel.context);
+    assert.equal((await legacyHandle.agent(kernel.context)).instructions, '');
+    await (await legacyHandle.submit({
+      type: 'input',
+      content: 'legacy empty instructions',
+      requestId: 'legacy-empty-instructions',
+    }, kernel.context)).wait(kernel.context);
+    const withEmpty = await rendered(kernel, legacy.conv.harnessId);
+    assert.match(withEmpty.prompt, /<instructions>\n\n<\/instructions>/);
+    await say(kernel, store, legacy.conv, 'cleared');
+    const cleared = await rendered(kernel, legacy.conv.harnessId);
+    assert.equal((await legacyHandle.agent(kernel.context)).instructions, undefined);
+    assert.equal(cleared.prompt, mainPrompt({ cwd: legacy.root, skills }));
+    assert.equal(cleared.prompt.includes('<instructions>'), false);
+    assert.equal(cleared.systems.some((message) => message.sections?.instructions === null), true);
   } finally {
     if (opened) {
       await opened.kernel.close();

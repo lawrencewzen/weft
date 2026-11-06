@@ -1,8 +1,11 @@
 // Agent adapter for one Pi Durable conversation.
-// The main agent keeps instructions as an empty string. Its system prompt is
-// Pi Durable sections, in order: preamble, rules, environment, project_context,
-// skills. The skills section is a one-line catalog; the skill tool loads a body
-// on demand. Children get environment and project_context, not the others.
+// The main agent does not set instructions. AgentChange uses null to clear the
+// stored field, so an empty string left by older conversations is removed on
+// the next configure and Pi Durable does not render an instructions section.
+// The system prompt is sections, in order: preamble, rules, environment,
+// project_context, skills. The skills section is a one-line catalog; the skill
+// tool loads a body on demand. Children get environment and project_context,
+// not the others, and keep their own fixed instructions.
 import { randomUUID } from 'node:crypto';
 import { Type } from '@earendil-works/pi-ai';
 import { defineExtension, defineTool, section } from '@earendil-works/pi-durable';
@@ -148,7 +151,8 @@ export function createAgentHost({
     if (!conversation) return;
     await plugins.refresh();
     await conversation.configure({
-      instructions: '',
+      // null clears the field. '' is stored and rendered as an empty section.
+      instructions: null,
       tools: toolsFor(),
     }, context);
     if (typeof resolveModel === 'function') await resolveModel(conv);

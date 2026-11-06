@@ -74,7 +74,7 @@ test('new conversation: empty instructions, all tools, enabled skills, Agent nam
     assert.equal(Object.hasOwn(main, 'roleId'), false);
 
     const [call] = await readRecords(record);
-    assert.equal(sectionInner(call, 'instructions'), '');
+    assert.equal((call.sections || []).some((section) => section.key === 'instructions'), false);
     assert.equal(/You are a helpful coding assistant|default coding Agent|规划角色|编码角色/.test(sectionText(call, 'instructions')), false);
     const skills = sectionInner(call, 'skills');
     assert.equal(skills.split('\n')[0], SKILL_LIST_INTRO);
