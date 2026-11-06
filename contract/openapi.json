@@ -7301,7 +7301,7 @@
             "$ref": "#/components/schemas/ProviderKind"
           },
           "brand": {
-            "description": "品牌图标 id。自定义为 null",
+            "description": "品牌图标 id。自定义提供商仅当模型非空、且每个模型的 brand 相同且非空时取该品牌，否则为 null",
             "oneOf": [
               {
                 "type": "null"
