@@ -1,6 +1,7 @@
 // Foreground and background subagents, as in Pi Durable examples 22 and 23.
 // Ownership, abort, and restart reuse belong to the Harness. This module
-// configures a self-contained child (task text plus fixed no-ask instructions)
+// configures a self-contained child (task text plus fixed no-ask instructions;
+// environment and project_context come from the shared prompt sections)
 // and reads what the tools already committed: details, the ownership index, and
 // the background name document.
 import { Type } from '@earendil-works/pi-ai';
@@ -25,7 +26,7 @@ import { ASK_TOOL_NAME } from './ask.mjs';
 import { formatSubagentReport, parseSubagentOutcome } from './subagent-report.mjs';
 
 export const TITLE_DESCRIPTION = 'A one-line summary of at most 20 characters, in the user\'s language, saying what this subagent will do. Shown as the heading to the user. Do not include a file path.';
-export const DELEGATE_DESCRIPTION = 'Run a self-contained task on a subagent and return its answer. The subagent cannot see this conversation, or your instructions; put everything it needs in task: what to do, where, when it is done, and what to report back. The subagent will not ask questions; if its report says the work is incomplete, you decide whether to fill in the missing information and re-dispatch, do it yourself, or ask the user. Pass title: a short heading (at most 20 characters, user\'s language, no file path) shown to the user.';
+export const DELEGATE_DESCRIPTION = 'Use this for independent tasks that can run on their own. Do simple work yourself. Run a self-contained task on a subagent and return its answer. The subagent cannot see this conversation, or your instructions; put everything it needs in task: what to do, where, when it is done, and what to report back. The subagent will not ask questions; if its report says the work is incomplete, you decide whether to fill in the missing information and re-dispatch, do it yourself, or ask the user. Pass title: a short heading (at most 20 characters, user\'s language, no file path) shown to the user.';
 export const SUBAGENT_INSTRUCTIONS = [
   'You are a subagent dispatched to complete one task independently.',
   'You cannot ask the user questions, and you will not receive answers.',

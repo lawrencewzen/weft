@@ -1,7 +1,8 @@
 // Agent adapter for one Pi Durable conversation.
-// The main agent has empty instructions, every workspace tool, enabled plugin
-// tools, skill, and delegate / subagent. The skills section is a one-line catalog;
-// the skill tool loads a body on demand. Children get none of that.
+// The main agent keeps instructions as an empty string. Its system prompt is
+// Pi Durable sections, in order: preamble, rules, environment, project_context,
+// skills. The skills section is a one-line catalog; the skill tool loads a body
+// on demand. Children get environment and project_context, not the others.
 import { randomUUID } from 'node:crypto';
 import { Type } from '@earendil-works/pi-ai';
 import { defineExtension, defineTool, section } from '@earendil-works/pi-durable';
@@ -13,6 +14,7 @@ import { createPluginHost } from './plugins.mjs';
 import { isAutoContinueText } from './continuation.mjs';
 import { EXT_BUILTIN_TOOLS, EXT_SKILLS } from './ids.mjs';
 import { createSkillTool } from './skill-tool.mjs';
+import { isMainAgent, systemPromptSections } from './system-prompt.mjs';
 import { workspaceTools } from './tools.mjs';
 
 const LOOSE_PARAMS = Type.Object({}, { additionalProperties: true });
@@ -34,7 +36,7 @@ export function autoTitleFromText(currentTitle, text) {
  * real workspace tools first; those names are left alone. Plugin tools are
  * installed when a conversation is configured.
  */
-export function installAgentExtensions(registry, bridge) {
+export function installAgentExtensions(registry, bridge, { dataDir } = {}) {
   if (!registry) throw new Error('registry is required');
   const skillTool = createSkillTool({
     loadSkill: (name) => (
@@ -47,11 +49,11 @@ export function installAgentExtensions(registry, bridge) {
   registry.install(defineExtension({
     name: EXT_SKILLS,
     sections: [
+      ...systemPromptSections({ dataDir }),
       section('skills', async (input) => {
         try {
-          const names = new Set((input?.agent?.tools || []).map((tool) => tool.name));
           // Children drop delegate / subagent / skill; they stay self-contained.
-          if (!names.has('delegate') && !names.has('subagent')) return undefined;
+          if (!isMainAgent(input?.agent)) return undefined;
           if (typeof bridge.skillPrompt !== 'function') return undefined;
           const text = String((await bridge.skillPrompt()) || '').trim();
           return text || undefined;
