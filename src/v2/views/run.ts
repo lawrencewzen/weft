@@ -173,12 +173,16 @@ function errorView(llmError: LlmErrorLike | null | undefined, lang: Lang = 'zh')
     return out;
   }
   const reason = reasonOf(llmError, code, message);
+  const detail = typeof llmError.detail === 'string' ? llmError.detail : modelDetail(llmError, message);
   if (reason === 'no_model') message = 'err_no_model';
-  else if (reason === 'model_error') message = runErrorMessage(lang, reason, modelDetail(llmError, message));
+  else if (reason === 'model_error') message = runErrorMessage(lang, reason, detail);
   else {
-    const human = runErrorMessage(lang, reason, typeof llmError.detail === 'string' ? llmError.detail : '');
+    const human = runErrorMessage(lang, reason, detail);
     if (human) message = human;
-    else if (!message || message === reason || message === code) message = '';
+    else if (message && message !== reason && message !== code) {
+      // A caller already supplied a sentence, such as a missing submission record.
+    } else if (detail && detail !== reason && detail !== code) message = detail;
+    else message = phrase(lang, 'run_err_unfinished');
   }
   const out: NonNullable<RunState['error']> = {
     code,

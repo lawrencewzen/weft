@@ -161,10 +161,10 @@ test('run errors are human and canContinue follows the harness reason', () => {
     ['model_error', true, 'zh', '模型请求失败：provider exploded'],
     ['model_error', true, 'en', 'Model request failed: provider exploded'],
     ['no_model', false, 'zh', 'err_no_model'],
-    ['aborted', false, 'zh', ''],
-    ['reset', false, 'zh', ''],
-    ['nothing_to_answer', false, 'zh', ''],
-    ['orphaned', false, 'en', ''],
+    ['aborted', false, 'zh', '这一轮没有完成。'],
+    ['reset', false, 'zh', '这一轮没有完成。'],
+    ['nothing_to_answer', false, 'zh', '这一轮没有完成。'],
+    ['orphaned', false, 'en', 'This turn did not finish.'],
   ];
   for (const [reason, canContinue, lang, message] of cases) {
     const detail = reason === 'model_error' ? 'provider exploded' : undefined;
@@ -182,7 +182,7 @@ test('run errors are human and canContinue follows the harness reason', () => {
         llmError: { code: 'aborted', reason: 'aborted', message: 'aborted' },
       });
       assert.equal(view.error.canContinue, false);
-      assert.equal(view.error.message.includes('aborted'), false);
+      assert.equal(view.error.message, '这一轮没有完成。');
       continue;
     }
     assert.equal(failed.status, 'failed', reason);

@@ -1,5 +1,5 @@
-// Human text for a failed run. The kernel has no request language, so it uses zh;
-// the v2 view rebuilds the same sentence for the snapshot's lang.
+// Human text for a failed run. The kernel stores code, reason, and detail.
+// This module turns those into a sentence for the request language.
 import { phrase, type Lang } from './index.ts';
 
 export const CONTINUABLE_REASONS = new Set([
@@ -13,7 +13,7 @@ export function canContinueReason(reason: unknown): boolean {
   return CONTINUABLE_REASONS.has(String(reason || ''));
 }
 
-/** Empty string when this reason has no dedicated sentence. */
+/** Empty string when this reason has no dedicated sentence. Callers then use `run_err_unfinished`. */
 export function runErrorMessage(lang: Lang, reason: unknown, detail = ''): string {
   const key = String(reason || '');
   if (key === 'no_model') return 'err_no_model';

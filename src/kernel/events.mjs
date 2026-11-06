@@ -8,7 +8,6 @@ import { extractPasteTexts, parseUserMessageParts } from '../core/user-message-p
 import { overlayContextWindow, presentContext } from '../core/usage.mjs';
 import { askByToolCall } from './ask.mjs';
 import { isAutoContinueText } from './continuation.mjs';
-import { runErrorMessage } from '../v2/phrases/run-error.ts';
 import { parentNoteText, USER_TO_SUBAGENT_KIND } from './subagent-control.mjs';
 import { isSubagentReportText } from './subagent-report.mjs';
 import { latestCallUsage, reportedUsage } from './usage.mjs';
@@ -172,19 +171,17 @@ function usageEvent(entry, ctx) {
   return { event: 'usage', data: presented };
 }
 
+/** Code, reason, and redacted detail only. Sentences are built by the v2 view for `lang`. */
 function errorForSubmission(record) {
   const raw = typeof record.detail === 'string' ? record.detail : '';
   const detail = raw ? redactAuthText(raw) : '';
   const reason = typeof record.reason === 'string' ? record.reason : '';
   if (reason === 'no_model' || /\bE_NO_MODEL\b/.test(detail)) {
-    return { code: 'E_NO_MODEL', message: 'err_no_model', reason: 'no_model' };
+    return { code: 'E_NO_MODEL', reason: 'no_model' };
   }
   const effective = reason || 'model_error';
-  const human = runErrorMessage('zh', effective, detail);
-  const message = human || (detail && detail !== effective ? detail : '');
   const out = {
     code: effective === 'model_error' ? 'E_LLM' : effective,
-    message,
     reason: effective,
   };
   if (detail) out.detail = detail;

@@ -160,7 +160,7 @@ test('harness batches map onto the contract events', () => {
   assert.equal(events[6].data.delayMs, DEFAULT_RETRY_POLICY.baseDelayMs);
   assert.deepEqual(events[7].data, { code: 'E_LLM', message: 'boom' });
   assert.equal(events[8].data.status, 'failed');
-  assert.deepEqual(events[9].data, { code: 'E_NO_MODEL', message: 'err_no_model', reason: 'no_model' });
+  assert.deepEqual(events[9].data, { code: 'E_NO_MODEL', reason: 'no_model' });
   assert.equal(events[10].data.status, 'failed');
   assert.equal(events[11].data.status, 'done');
   assert.equal(names.includes('usage_changed'), false);
@@ -220,7 +220,7 @@ test('status is the last submission record', () => {
   const failed = statusFromSubmission({ status: 'unanswered', reason: 'model_error', detail: 'provider exploded' });
   assert.equal(failed.status, 'failed');
   assert.equal(failed.llmError.code, 'E_LLM');
-  assert.equal(failed.llmError.message, '模型请求失败：provider exploded');
+  assert.equal(Object.hasOwn(failed.llmError, 'message'), false);
   assert.equal(failed.llmError.detail, 'provider exploded');
   assert.equal(failed.llmError.reason, 'model_error');
   assert.equal(statusFromSubmission({ status: 'unanswered', reason: 'no_model' }).llmError.code, 'E_NO_MODEL');
@@ -1105,7 +1105,8 @@ test('last submission: a faux error stays failed after restart', { timeout: 4000
     const body = await waitForStatus(first.base, convId, (row) => row.status === 'failed' || row.status === 'done');
     assert.equal(body.status, 'failed', first.logs());
     assert.equal(body.llmError?.code, 'E_LLM');
-    assert.match(body.llmError?.message || '', /provider exploded/);
+    assert.equal(body.llmError?.detail, 'provider exploded');
+    assert.equal(Object.hasOwn(body.llmError || {}, 'message'), false);
     pointer = appPointer(dataDir, convId);
     assert.equal(pointer, Number(sent.body.runId));
   } finally {
@@ -1118,7 +1119,8 @@ test('last submission: a faux error stays failed after restart', { timeout: 4000
     const got = await request(second.base, 'GET', `/api/conversations/${convId}`);
     assert.equal(got.body.status, 'failed', second.logs());
     assert.equal(got.body.llmError?.code, 'E_LLM');
-    assert.match(got.body.llmError?.message || '', /provider exploded/);
+    assert.equal(got.body.llmError?.detail, 'provider exploded');
+    assert.equal(Object.hasOwn(got.body.llmError || {}, 'message'), false);
     assert.equal(appPointer(dataDir, convId), pointer);
   } finally {
     await stopServer(second);

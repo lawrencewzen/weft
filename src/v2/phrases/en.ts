@@ -6,6 +6,7 @@ export const en: Record<string, string> = {
   run_err_restart_limit: 'This turn was interrupted repeatedly and stopped.',
   run_err_faulted: 'This turn hit an internal error.',
   run_err_model: 'Model request failed: {detail}',
+  run_err_unfinished: 'This turn did not finish.',
   tool_sum_join: ' · ',
   tool_sum_names_join: ', ',
   tool_sum_read: 'read {n} files',
