@@ -37,7 +37,7 @@ function formatClosedError(error) {
 export function watchHarnessClosed(harness) {
   if (!harness || typeof harness.closed?.then !== 'function') return;
   harness.closed.then((end) => {
-    if (end?.reason !== 'failed') return;
+    if (end?.kind !== 'failed') return;
     console.error(`WEFT_HARNESS_CLOSED ${formatClosedError(end.error)}`);
     process.exit(1);
   });

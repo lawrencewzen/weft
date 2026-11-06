@@ -329,6 +329,11 @@ test('rendered main-agent prompt: sections, workspaces, AGENTS.md, and no projec
     await say(kernel, store, none, 'no cwd');
     const nonePrompt = (await rendered(kernel, none.harnessId)).prompt;
     assert.equal(nonePrompt, mainPrompt({ skills }));
+    const frozen = await readFile(
+      path.join(ROOT, 'tests/fixtures/pi-durable-1.4.0/system-prompt-no-project.txt'),
+      'utf8',
+    );
+    assert.equal(nonePrompt.replace(/Platform: .*/, 'Platform: __PLATFORM__'), frozen);
     assert.equal(nonePrompt.includes('Working directory:'), false);
     assert.equal(nonePrompt.includes('project_context'), false);
     assert.equal(nonePrompt.includes(process.cwd()), false);
