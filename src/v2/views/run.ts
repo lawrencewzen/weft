@@ -10,6 +10,11 @@
 import { phrase, type Lang } from '../phrases/index.ts';
 import { canContinueReason, runErrorMessage } from '../phrases/run-error.ts';
 import type { components } from '../contract.gen.ts';
+import {
+  compactionFailureMessage,
+  compactionView,
+  isCompactionModelError,
+} from './compaction.ts';
 import { activeToolSummary, toolGroupSummaryView, type ToolLike } from './tools.ts';
 import type { ThreadMessage, ThreadSubagent } from './thread.ts';
 
@@ -95,6 +100,11 @@ export type RunStateInput = {
   activeTool?: ActiveTool | null;
   now?: number;
   stallAfterMs?: number;
+  /** pi.live, or null when the conversation has no watch yet. */
+  live?: {
+    compactions?: Array<{ trigger?: unknown }> | null;
+    compactionFailure?: { trigger?: unknown; error?: unknown } | null;
+  } | null;
 };
 
 function isRealSubagent(agent: ThreadSubagent | null | undefined): boolean {
@@ -175,7 +185,9 @@ function errorView(llmError: LlmErrorLike | null | undefined, lang: Lang = 'zh')
   const reason = reasonOf(llmError, code, message);
   const detail = typeof llmError.detail === 'string' ? llmError.detail : modelDetail(llmError, message);
   if (reason === 'no_model') message = 'err_no_model';
-  else if (reason === 'model_error') message = runErrorMessage(lang, reason, detail);
+  else if (reason === 'model_error' && isCompactionModelError(detail || message)) {
+    message = compactionFailureMessage(lang, detail || message);
+  } else if (reason === 'model_error') message = runErrorMessage(lang, reason, detail);
   else {
     const human = runErrorMessage(lang, reason, detail);
     if (human) message = human;
@@ -224,6 +236,7 @@ export function runStateView({
   activeTool = null,
   now,
   stallAfterMs,
+  live = null,
 }: RunStateInput = {}): RunState {
   const runStatus = normalizeRunStatus(status);
   const running = runStatus === 'running';
@@ -241,5 +254,6 @@ export function runStateView({
     lastActivityAt: last,
     stalledSince: stalledSinceOf(running, last, t, threshold),
     activeTool: running ? activeTool : null,
+    compaction: compactionView(live, lang),
   };
 }

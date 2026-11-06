@@ -320,11 +320,20 @@ test('pi.compaction is not a user or assistant bubble', () => {
     },
   ];
   const { messages } = messagesFromEntries(entries);
-  assert.deepEqual(messages.map((message) => ({ role: message.role, text: message.text })), [
-    { role: 'user', text: EARLY_A },
-    { role: 'assistant', text: SUMMARY_TEXT },
-    { role: 'user', text: KEPT },
+  assert.deepEqual(messages.map((message) => ({
+    role: message.role,
+    kind: message.kind,
+    text: message.text,
+  })), [
+    { role: 'user', kind: undefined, text: EARLY_A },
+    { role: 'assistant', kind: undefined, text: SUMMARY_TEXT },
+    { role: 'note', kind: 'compaction', text: undefined },
+    { role: 'user', kind: undefined, text: KEPT },
   ]);
+  assert.equal(messages.some((message) => (
+    (message.role === 'user' || message.role === 'assistant')
+    && String(message.text || '').includes(SUMMARY_MARK)
+  )), false);
   assert.equal(JSON.stringify(messages).includes(SUMMARY_MARK), false);
 
   const ctx = createMapContext();

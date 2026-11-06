@@ -1,6 +1,6 @@
 /** Conversation thread: messages → ThreadItem list + ToolCall rows. No DOM. */
 
-import type { Lang } from '../phrases/index.ts';
+import { phrase, type Lang } from '../phrases/index.ts';
 import type { components } from '../contract.gen.ts';
 import { isPromptUserMessage } from './continuation.ts';
 import { parseSubagentReport } from './subagent-report.ts';
@@ -206,6 +206,16 @@ export async function buildThread(
         id: messageId(m),
         noteKind: 'correction',
         text: messageText(m),
+      });
+      continue;
+    }
+
+    if (m?.role === 'note' && m.kind === 'compaction') {
+      items.push({
+        kind: 'system_note',
+        id: messageId(m),
+        noteKind: 'compaction',
+        text: phrase(lang, 'compaction_note'),
       });
       continue;
     }
