@@ -83,12 +83,12 @@ status 取值：`idle | running | waiting | failed | done | stopped`。应用库
 ## 5. 持久性/恢复语义
 - 工具调用有稳定 `toolCallId`。恢复时已完成的调用**不得重放**（写文件幂等：同 toolCallId 不重复执行）。
 - 进程重启：有 harness id 且未结束的会话由 Harness `resume()` 接着跑，状态是 `running`，完成后 `done`。没有 harness id 的旧对话不参与恢复，也不出现在列表里。`write` / `edit` / `bash` 中断后不重放。
-- 卡住只靠 `stream.timeoutMs`；可重试的模型错误由 Harness `retry` 处理。不自动提交下一句用户输入。助手 `stopReason` 为 `length` 时，内核用 GenerationTask `onYield` 在同一 run 里追加一条以 `[auto-continue]` 开头的用户消息继续生成，同一条真实用户消息之后最多连续 8 次。
+- 卡住只靠 `stream.timeoutMs`；可重试的模型错误由 Harness `retry` 处理。不自动提交下一句用户输入。助手 `stopReason` 为 `length` 时这一轮结束，不追加用户消息。带工具调用的 `length` 回答不执行那些工具。继续用 Pi Durable 的 `continue` 提交，不写用户消息。旧记录里以 `[auto-continue]` 开头的用户消息仍然隐藏。
 - 工具结果会随下一轮请求发回模型。输出为空时用 `(no output)`，避免模型以为调用没有发生。
 - `E_NO_MODEL` 不重试。流超时按 retry 重试，次数用尽后 `failed`。
 
 ## 6. faux 模型脚本
-JSON：`{"turns":[ {"text":"..."} | {"text":"...","stopReason":"length"} | {"tool":"write","args":{...}} | {"text":"...","tool":"write","args":{...}} | {"tools":[{"tool":"read","args":{...}}]} | {"cut":true} | {"end":true} | {"delayMs":N} ]}`。一个对象是一次模型调用。文字和紧跟的工具调用放在同一个对象里，合成一条助手消息，Harness 自己跑完工具回合。只有文字、没有工具调用时这一轮结束，剩下的对象留给下一条用户消息。文字回合可带 `stopReason`（如 `length`），交给 Harness；`length` 会触发内核 `onYield` 自动续写。`{"cut":true}` 变成可重试的 `terminated` 错误。`{"end":true}` 是空助手消息，占住一轮，让脚本的下一拍留给下一次模型调用。回合上的 `usage` 仅在带有数字 token 字段时进入会话用量（例如 `{"text":"ok","usage":{"total_tokens":16400}}`）；没有 `usage` 时作曲栏保持 `—`。
+JSON：`{"turns":[ {"text":"..."} | {"text":"...","stopReason":"length"} | {"tool":"write","args":{...}} | {"text":"...","tool":"write","args":{...}} | {"tools":[{"tool":"read","args":{...}}]} | {"cut":true} | {"end":true} | {"delayMs":N} ]}`。一个对象是一次模型调用。文字和紧跟的工具调用放在同一个对象里，合成一条助手消息，Harness 自己跑完工具回合。只有文字、没有工具调用时这一轮结束，剩下的对象留给下一条用户消息。文字回合可带 `stopReason`（如 `length`），交给 Harness；`length` 结束这一轮，不自动续写。工具回合带 `stopReason: "length"` 时工具不执行。`{"cut":true}` 变成可重试的 `terminated` 错误。`{"end":true}` 是空助手消息，占住一轮，让脚本的下一拍留给下一次模型调用。回合上的 `usage` 仅在带有数字 token 字段时进入会话用量（例如 `{"text":"ok","usage":{"total_tokens":16400}}`）；没有 `usage` 时作曲栏保持 `—`。
 
 ## 7. data-testid 约定（E2E）
 | testid | 元素 |
@@ -102,7 +102,7 @@ JSON：`{"turns":[ {"text":"..."} | {"text":"...","stopReason":"length"} | {"too
 | `composer-context-limit` | 作曲栏上下文上限按钮（如 `128k`），点击打开档位菜单 |
 | `composer-agent` / `composer-agent-menu` | 作曲栏当前模型；点击按来源列出模型，可选「默认」跟随设置绑定 |
 | `message` (+`data-role`) / `message-body` / `message-sender` / `message-chip` | 消息、渲染体（Markdown → HTML）、发送者小字、该回复实际用的模型标签 |
-| `auto-continue-note` | 自动续写提示行，不是用户气泡 |
+| `auto-continue-note` | 旧自动续写提示行。服务端不再产出这条 note |
 | `output-truncated` / `continue-truncated` | 仍以 `length` 结束时的截断提示和「继续」按钮 |
 | `tool-row` (+`data-tool`,`data-path`) / `tool-row-path` / `tool-row-added` / `tool-row-removed` / `tool-row-detail` | 工具行（点击展开输出；write/edit 打开右栏 diff） |
 | `tool-group-elapsed` | 运行中且组在线程末尾时，摘要行右侧的用时 |

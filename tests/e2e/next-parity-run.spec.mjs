@@ -20,7 +20,7 @@ const exists = (p) => fs.access(p).then(() => true, () => false);
 const TEXT_A = '这是一个 TypeScript/Node.js 项目，用于开发相关。';
 const TEXT_B = '第二轮已经看完，结论里有顿号、和的字。';
 
-test('auto-continue is a gray note, not a user bubble, including after refresh', async ({ page }) => {
+test('a length stop shows the truncated banner and no auto-continue note, including after refresh', async ({ page }) => {
   const prepared = await prepareWorkspaces(['cont']);
   const ws = prepared.dirs[0];
   const scriptPath = path.join(prepared.root, 'continue.json');
@@ -44,35 +44,32 @@ test('auto-continue is a gray note, not a user bubble, including after refresh',
     const users = page.getByTestId('next-item-user');
     await expect(users).toHaveCount(1);
     await expect(users).toContainText('写一段长回答');
-    await expect(page.getByTestId('next-auto-continue-note')).toHaveCount(1);
-    await expect(page.getByTestId('next-auto-continue-note')).toContainText('输出达到长度上限，已自动续写');
+    await expect(page.getByTestId('next-auto-continue-note')).toHaveCount(0);
     const assistants = page.getByTestId('next-item-assistant');
-    await expect(assistants).toHaveCount(2);
+    await expect(assistants).toHaveCount(1);
     await expect(assistants.nth(0).getByTestId('next-markdown')).toContainText('part-one');
-    await expect(assistants.nth(1).getByTestId('next-markdown')).toContainText('part-two');
-    await expect(page.getByTestId('next-truncated')).toHaveCount(0);
+    await expect(assistants).not.toContainText('part-two');
+    const truncated = page.getByTestId('next-truncated');
+    await expect(truncated).toHaveCount(1);
+    await expect(truncated).toContainText('输出达到长度上限被截断');
 
     await page.reload();
     await expect(page.getByTestId('next-item-user')).toHaveCount(1, { timeout: 20000 });
-    await expect(page.getByTestId('next-auto-continue-note')).toHaveCount(1);
-    await expect(page.getByTestId('next-item-assistant')).toHaveCount(2);
+    await expect(page.getByTestId('next-auto-continue-note')).toHaveCount(0);
+    await expect(page.getByTestId('next-item-assistant')).toHaveCount(1);
     await expect(page.getByTestId('next-item-assistant').nth(0).getByTestId('next-markdown')).toContainText('part-one');
-    await expect(page.getByTestId('next-item-assistant').nth(1).getByTestId('next-markdown')).toContainText('part-two');
-    await expect(page.getByTestId('next-truncated')).toHaveCount(0);
+    await expect(page.getByTestId('next-truncated')).toHaveCount(1);
   } finally {
     await srv.kill();
   }
 });
 
-test('hitting the auto-continue cap shows a continue button', async ({ page }) => {
+test('continue does not post a user message', async ({ page }) => {
   const prepared = await prepareWorkspaces(['cap']);
   const ws = prepared.dirs[0];
   const scriptPath = path.join(prepared.root, 'cap.json');
   await fs.writeFile(scriptPath, JSON.stringify({
-    turns: Array.from({ length: 9 }, (_, i) => ({
-      text: `chunk-${i + 1}`,
-      stopReason: 'length',
-    })),
+    turns: [{ text: 'chunk-1', stopReason: 'length' }],
   }));
   const srv = await startServer({
     extraEnv: {
@@ -85,14 +82,17 @@ test('hitting the auto-continue cap shows a continue button', async ({ page }) =
     await openNextChat(page, srv, conv.id);
     await sendNext(page, 'keep going');
     await waitRunDone(page);
-    await expect(page.getByTestId('next-auto-continue-note')).toHaveCount(8);
-    await expect(page.getByTestId('next-item-assistant')).toHaveCount(9);
+    await expect(page.getByTestId('next-auto-continue-note')).toHaveCount(0);
+    await expect(page.getByTestId('next-item-assistant')).toHaveCount(1);
     const truncated = page.getByTestId('next-truncated');
     await expect(truncated).toHaveCount(1);
     await expect(truncated).toContainText('输出达到长度上限被截断');
     await expect(page.getByTestId('next-continue')).toBeVisible();
     await page.getByTestId('next-continue').click();
-    await expect(page.getByTestId('next-item-user').filter({ hasText: '继续' })).toHaveCount(1);
+    await expect(page.getByTestId('next-item-user')).toHaveCount(1);
+    await expect(page.getByTestId('next-item-user').filter({ hasText: '继续' })).toHaveCount(0);
+    await expect(page.getByTestId('next-item-assistant')).toHaveCount(1);
+    await expect(page.getByTestId('next-stop')).toHaveCount(0);
   } finally {
     await srv.kill();
   }

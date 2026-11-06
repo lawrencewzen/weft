@@ -1095,8 +1095,10 @@ export interface paths {
         put?: never;
         /**
          * 点「继续」
-         * @description 等同于发送 MANUAL_CONTINUE_TEXT（「继续」）。
-         *     `requestId` 缺省时服务端生成；同一个 requestId 重复请求返回同一个 runId。
+         * @description 用 Pi Durable 的 `submit({ type: 'continue' })` 在当前上下文上再跑一轮，不写用户消息。
+         *     只在空闲时接受。对话正忙返回 409，`code` 为 `ConversationBusy`。
+         *     没有工作区同样是 409，`code` 为 `E_NO_WORKSPACE`。
+         *     `requestId` 缺省时服务端生成；同一个 requestId 重复请求返回同一个 runId，不重复提交。
          */
         post: operations["continueConversation"];
         delete?: never;
@@ -1659,8 +1661,8 @@ export interface components {
             body: string;
         };
         /**
-         * @description 系统提示。auto_continue 和 compaction 的 text 是服务端按语言出成的句子。
-         *     compaction 对应一条 pi.compaction 条目，放在该条目的时间位置。
+         * @description 系统提示。correction 是交接，note 是给子 Agent 插话后的通知。
+         *     compaction 的 text 是服务端按语言出成的句子，对应一条 pi.compaction 条目，放在该条目的时间位置。
          */
         ThreadItemSystemNote: {
             /**
@@ -1670,7 +1672,7 @@ export interface components {
             kind: "system_note";
             id: string;
             /** @enum {string} */
-            noteKind: "auto_continue" | "correction" | "note" | "compaction";
+            noteKind: "correction" | "note" | "compaction";
             text: string;
         };
         /** @description 对话流里的一项。按 kind 区分。 */
@@ -1695,7 +1697,13 @@ export interface components {
             /** @description status 为 failed 时带上，否则 null */
             error: null | {
                 code: string;
+                /** @description 按 lang 出成的人话。model_error 带脱敏后的原始错误 */
                 message: string;
+                /**
+                 * @description 这一轮还能用继续再跑。reason 为 model_error、interrupted、restart_limit、faulted 时为 true。
+                 *     no_model、aborted、reset、nothing_to_answer、orphaned、E_SUBMISSION_MISSING 等为 false。
+                 */
+                canContinue: boolean;
                 retry?: {
                     attempt: number;
                     delayMs: number;
@@ -6314,7 +6322,7 @@ export interface operations {
                     "application/json": components["schemas"]["V2Error"];
                 };
             };
-            /** @description 对话没有工作区 */
+            /** @description 没有工作区（E_NO_WORKSPACE），或对话正忙（ConversationBusy） */
             409: {
                 headers: {
                     [name: string]: unknown;

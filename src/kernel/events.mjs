@@ -171,15 +171,25 @@ function usageEvent(entry, ctx) {
   return { event: 'usage', data: presented };
 }
 
+/** Code, reason, and redacted detail only. Sentences are built by the v2 view for `lang`. */
 function errorForSubmission(record) {
-  const detail = typeof record.detail === 'string' ? record.detail : '';
-  if (record.reason === 'no_model' || /\bE_NO_MODEL\b/.test(detail)) {
-    return { code: 'E_NO_MODEL', message: 'err_no_model' };
+  const raw = typeof record.detail === 'string' ? record.detail : '';
+  const detail = raw ? redactAuthText(raw) : '';
+  const reason = typeof record.reason === 'string' ? record.reason : '';
+  if (reason === 'no_model' || /\bE_NO_MODEL\b/.test(detail)) {
+    return { code: 'E_NO_MODEL', reason: 'no_model' };
   }
-  return {
-    code: record.reason === 'model_error' ? 'E_LLM' : (record.reason || 'E_LLM'),
-    message: redactAuthText(detail || record.reason || 'model error'),
+  const effective = reason || 'model_error';
+  const out = {
+    code: effective === 'model_error' ? 'E_LLM' : effective,
+    reason: effective,
   };
+  if (detail) out.detail = detail;
+  return out;
+}
+
+function isRunSubmission(record) {
+  return record?.type === 'input' || record?.type === 'continue';
 }
 
 function unavailableTool(entry) {
@@ -351,11 +361,11 @@ export function mapHarnessBatch(batch, ctx) {
       events.push({ event: 'status', data: { status: 'failed' } });
       continue;
     }
-    if (ev.type === 'submission' && ev.record?.type === 'input' && ev.record.status === 'done') {
+    if (ev.type === 'submission' && isRunSubmission(ev.record) && ev.record.status === 'done') {
       events.push({ event: 'status', data: { status: 'done' } });
       continue;
     }
-    if (ev.type === 'submission' && ev.record?.type === 'input' && ev.record.status === 'unanswered') {
+    if (ev.type === 'submission' && isRunSubmission(ev.record) && ev.record.status === 'unanswered') {
       if (ev.record.reason === 'aborted') {
         events.push({ event: 'status', data: { status: 'stopped' } });
         continue;

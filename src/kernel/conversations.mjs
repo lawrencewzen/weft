@@ -7,7 +7,7 @@ import { randomUUID } from 'node:crypto';
 import { readFile, stat } from 'node:fs/promises';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { createModels } from '@earendil-works/pi-ai/models';
-import { ConversationTranscript, createRegistry } from '@earendil-works/pi-durable';
+import { ConversationBusy, ConversationTranscript, createRegistry } from '@earendil-works/pi-durable';
 import { liveDiff } from '../core/diff.mjs';
 import { redactAuthText } from '../core/redact.mjs';
 import { resolveInWorkspace } from '../core/paths.mjs';
@@ -52,7 +52,6 @@ import {
 } from './workspace-snapshot.mjs';
 import { decodeWorkspaceBytes } from './workspace-text.mjs';
 import { installUsageExtension } from './usage.mjs';
-import { installContinuationExtension } from './continuation.mjs';
 import { createAntigravityCwdExtension } from './antigravity-cwd.mjs';
 import { createWorkspaceEnv } from './workspace-env.mjs';
 import { createCompactionControl } from './compaction-settings.mjs';
@@ -216,7 +215,6 @@ export async function openConversationKernel({
   registry.install(createWorkspaceExtension());
   installAgentExtensions(registry, agentBridge, { dataDir });
   installUsageExtension(registry);
-  installContinuationExtension(registry);
   installPluginReload(registry, agentBridge);
   const subagentExtension = createSubagentExtension({
     prepareChild: (parent) => subagentApi.prepareChild(parent),
@@ -1110,6 +1108,18 @@ export async function openConversationKernel({
       }
       const given = typeof options.requestId === 'string' ? options.requestId.trim() : '';
       const requestId = given || prepared?.requestId || randomUUID();
+      if (options.continue) {
+        try {
+          const submission = await conversation.submit({ type: 'continue', requestId }, context);
+          await store.updateConversation(current.id, { lastSubmissionId: submission.id });
+          return { status: 202, body: { runId: String(submission.id), status: 'running' } };
+        } catch (err) {
+          if (err instanceof ConversationBusy || err?.name === 'ConversationBusy') {
+            return { status: 409, body: { error: 'conversation is busy', code: 'ConversationBusy' } };
+          }
+          throw err;
+        }
+      }
       let content = options.content !== undefined ? options.content : text;
       let entry;
       const mode = sendModeOf(options.mode);

@@ -41,7 +41,6 @@ import {
   type KernelChange,
   type KernelDiffBody,
 } from './views/changes.ts';
-import { MANUAL_CONTINUE_TEXT } from './views/continuation.ts';
 import { compactionSettingsView, validateCompactionPatch } from '../core/settings.mjs';
 import {
   conversationSnapshot,
@@ -212,6 +211,8 @@ export type PostMessage = (
     content?: unknown;
     mode?: SendMode;
     answer?: Record<string, unknown>;
+    /** Pi Durable continue submission: no user message. Busy conversations return 409. */
+    continue?: boolean;
   },
 ) => Promise<{ status: number; body?: { runId?: unknown; error?: unknown; code?: unknown } }>;
 export type WithdrawMessageFn = (
@@ -1406,16 +1407,14 @@ export function createV2Handler(opts: {
         sendV2(res, pathname, method, 400, { error: 'invalid requestId', code: 'E_BAD_REQUEST' } satisfies V2Error);
         return true;
       }
-      let text: string;
+      let text = '';
       let content: unknown = '';
       let answer: Record<string, unknown> | undefined;
       let sendImages: MessageImage[] = [];
       let sendPastes: string[] = [];
       let sendFiles: Array<{ path: string; name?: string; bytes?: number }> = [];
-      if (continueMatch) {
-        text = MANUAL_CONTINUE_TEXT;
-        content = text;
-      } else {
+      const continuing = Boolean(continueMatch);
+      if (!continuing) {
         if (body.text != null && typeof body.text !== 'string') {
           sendV2(res, pathname, method, 400, { error: 'text required', code: 'E_BAD_REQUEST' } satisfies V2Error);
           return true;
@@ -1554,7 +1553,13 @@ export function createV2Handler(opts: {
         mode = parsedMode.value;
       }
       try {
-        const posted = await opts.postMessage(conv, text, { requestId, content, mode, answer });
+        const posted = await opts.postMessage(conv, text, {
+          requestId,
+          content,
+          mode,
+          answer,
+          continue: continuing,
+        });
         if (posted.status === 404) {
           sendV2(res, pathname, method, 404, { error: 'not found' } satisfies V2Error);
           return true;
