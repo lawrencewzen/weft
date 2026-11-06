@@ -52,6 +52,7 @@ describe('Thread failure and continue (T105-2)', () => {
       onContinue?: (requestId?: string) => Promise<unknown>;
       lang?: 'zh' | 'en';
       actions?: ConversationActions;
+      compaction?: components['schemas']['RunState']['compaction'];
     } = {},
   ) {
     const sessionValue: SessionValue = {
@@ -79,6 +80,7 @@ describe('Thread failure and continue (T105-2)', () => {
             actions={props.actions || makeActions()}
             stickNonce={0}
             onContinue={props.onContinue}
+            compaction={props.compaction}
           />
         </RightPaneProvider>
       </SessionContext.Provider>
@@ -221,5 +223,39 @@ describe('Thread failure and continue (T105-2)', () => {
     });
 
     expect(host!.querySelector('[data-testid="next-run-error"]')).toBeNull();
+  });
+
+  it('shows the compacting line while a compaction runs, and no error', async () => {
+    await act(async () => {
+      root!.render(renderThread({ failed: false, compaction: { state: 'running', trigger: 'manual' } }));
+    });
+    expect(host!.querySelector('[data-testid="next-thread-compacting"]')?.textContent).toBe('正在压缩上下文');
+    expect(host!.querySelector('[data-testid="next-compaction-error"]')).toBeNull();
+  });
+
+  it('shows the compaction error last, with no continue button', async () => {
+    await act(async () => {
+      root!.render(renderThread({
+        failed: false,
+        compaction: { state: 'failed', trigger: 'threshold', error: '压缩失败：超时' },
+      }));
+    });
+    const el = host!.querySelector('[data-testid="next-compaction-error"]')!;
+    expect(el.textContent).toBe('压缩失败：超时');
+    expect(el.className).toContain('llm-error');
+    expect(el.querySelector('button')).toBeNull();
+    expect(el.parentElement!.lastElementChild).toBe(el);
+  });
+
+  it('shows a blocking compaction failure once when the run error has the same sentence', async () => {
+    await act(async () => {
+      root!.render(renderThread({
+        failed: true,
+        error: { code: 'model_error', message: '压缩失败：超时', canContinue: false },
+        compaction: { state: 'failed', error: '压缩失败：超时' },
+      }));
+    });
+    expect(host!.querySelector('[data-testid="next-run-error"]')).not.toBeNull();
+    expect(host!.querySelector('[data-testid="next-compaction-error"]')).toBeNull();
   });
 });

@@ -9,7 +9,7 @@ const protoFile = path.join(root, 'design', 'prototype', 'index.html');
 test.use({ locale: 'zh-CN', viewport: { width: 1440, height: 900 } });
 test.describe.configure({ timeout: 120_000 });
 
-test('prototype context window UI: context in model menu, presets, custom input, warn banner, and non-clickable chip', async ({ page }) => {
+test('prototype context window UI: context in model menu, presets, custom input, warn chip without banner, and non-clickable chip', async ({ page }) => {
   expect(
     fs.existsSync(protoFile),
     'prototype build missing: run `npm run build:proto` first',
@@ -76,8 +76,7 @@ test('prototype context window UI: context in model menu, presets, custom input,
 
   await expect(contextChip).toHaveText('96%');
   await expect(contextChip).toHaveClass(/is-warn/);
-  await expect(page.getByTestId('next-context-banner')).toBeVisible();
-  await expect(page.getByTestId('next-context-banner')).toContainText('96%');
+  await expect(page.getByTestId('next-context-banner')).toHaveCount(0);
 
   // Re-open model menu, context row shows 50k · 自定义
   await modelChip.click();
