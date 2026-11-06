@@ -75,13 +75,23 @@ export function extensionsEntities(db: MockDb): TopicEntities {
 }
 
 export function conversationValue(conv: MockConv): EntityValue {
-  return (lang: Lang) => ({
-    ...conv.view,
-    run: {
-      ...conv.view.run,
-      pendingText: conv.view.run.status === 'running' && conv.pending ? tr(conv.pending, lang) : null,
-    },
-  });
+  return (lang: Lang) => {
+    const error = conv.error
+      ? {
+          code: conv.error.code,
+          message: tr(conv.error.message, lang),
+          canContinue: conv.error.canContinue,
+        }
+      : conv.view.run.error;
+    return {
+      ...conv.view,
+      run: {
+        ...conv.view.run,
+        error,
+        pendingText: conv.view.run.status === 'running' && conv.pending ? tr(conv.pending, lang) : null,
+      },
+    };
+  };
 }
 
 export function itemValue(item: MockItem): EntityValue {

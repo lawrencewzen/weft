@@ -51,7 +51,9 @@ test('a length stop shows the truncated banner and no auto-continue note, includ
     await expect(assistants).not.toContainText('part-two');
     const truncated = page.getByTestId('next-truncated');
     await expect(truncated).toHaveCount(1);
-    await expect(truncated).toContainText('输出达到长度上限被截断');
+    await expect(truncated).toContainText('回复被截断');
+    await expect(truncated.getByRole('button')).toHaveCount(0);
+    await expect(page.getByTestId('next-continue')).toHaveCount(0);
 
     await page.reload();
     await expect(page.getByTestId('next-item-user')).toHaveCount(1, { timeout: 20000 });
@@ -59,6 +61,9 @@ test('a length stop shows the truncated banner and no auto-continue note, includ
     await expect(page.getByTestId('next-item-assistant')).toHaveCount(1);
     await expect(page.getByTestId('next-item-assistant').nth(0).getByTestId('next-markdown')).toContainText('part-one');
     await expect(page.getByTestId('next-truncated')).toHaveCount(1);
+    await expect(page.getByTestId('next-truncated')).toContainText('回复被截断');
+    await expect(page.getByTestId('next-truncated').getByRole('button')).toHaveCount(0);
+    await expect(page.getByTestId('next-continue')).toHaveCount(0);
   } finally {
     await srv.kill();
   }
@@ -69,12 +74,13 @@ test('continue does not post a user message', async ({ page }) => {
   const ws = prepared.dirs[0];
   const scriptPath = path.join(prepared.root, 'cap.json');
   await fs.writeFile(scriptPath, JSON.stringify({
-    turns: [{ text: 'chunk-1', stopReason: 'length' }],
+    turns: [{ error: '503 Service Unavailable' }],
   }));
   const srv = await startServer({
     extraEnv: {
       WEFT_FAUX_SCRIPT: scriptPath,
       WEFT_WORKSPACE_ROOT: prepared.root,
+      WEFT_RETRY_MAX: '1',
     },
   });
   try {
@@ -83,15 +89,28 @@ test('continue does not post a user message', async ({ page }) => {
     await sendNext(page, 'keep going');
     await waitRunDone(page);
     await expect(page.getByTestId('next-auto-continue-note')).toHaveCount(0);
-    await expect(page.getByTestId('next-item-assistant')).toHaveCount(1);
-    const truncated = page.getByTestId('next-truncated');
-    await expect(truncated).toHaveCount(1);
-    await expect(truncated).toContainText('输出达到长度上限被截断');
-    await expect(page.getByTestId('next-continue')).toBeVisible();
-    await page.getByTestId('next-continue').click();
+    const runError = page.getByTestId('next-run-error');
+    await expect(runError).toBeVisible();
+    await expect(runError).toContainText('503 Service Unavailable');
+    const contBtn = page.getByTestId('next-run-continue');
+    await expect(contBtn).toBeVisible();
+
+    await fs.writeFile(scriptPath, JSON.stringify({
+      turns: [
+        { text: 'recovered after continue' },
+        { text: 'recovered after continue' },
+        { text: 'recovered after continue' },
+      ],
+    }));
+
+    await contBtn.click();
+    await waitRunDone(page);
+    await expect(page.getByTestId('next-run-error')).toHaveCount(0);
     await expect(page.getByTestId('next-item-user')).toHaveCount(1);
     await expect(page.getByTestId('next-item-user').filter({ hasText: '继续' })).toHaveCount(0);
-    await expect(page.getByTestId('next-item-assistant')).toHaveCount(1);
+    const assistants = page.getByTestId('next-item-assistant');
+    await expect(assistants).toHaveCount(1);
+    await expect(assistants.nth(0).getByTestId('next-markdown')).toContainText('recovered after continue');
     await expect(page.getByTestId('next-stop')).toHaveCount(0);
   } finally {
     await srv.kill();

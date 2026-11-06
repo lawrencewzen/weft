@@ -21,6 +21,7 @@ import type {
   Bilingual,
   Change,
   Diff,
+  Lang,
   MockConv,
   MockDb,
   MockGroup,
@@ -92,6 +93,14 @@ function clip(text: string, max: number): string {
 
 function planFor(text: string): Plan {
   const body = clip(text, 60);
+  if (/^(继续|continue)/i.test(text)) {
+    return {
+      tools: [],
+      reply: /continue/i.test(text)
+        ? 'Execution resumed and completed. All steps have been processed.'
+        : '已继续执行并完成回复。所有步骤均已处理完毕。',
+    };
+  }
   if (/(卡住|stall)/i.test(text)) {
     return {
       tools: [
@@ -721,6 +730,7 @@ function finishRun(db: MockDb, conv: MockConv, hub: MockHub): void {
     stalledSince: null,
     activeTool: null,
   };
+  conv.error = null;
   touch(conv);
   publishConversationView(conv, hub);
   publishSummary(db, hub, conv.view.id);
@@ -776,9 +786,11 @@ async function execute(db: MockDb, conv: MockConv, hub: MockHub, run: RunHandle,
     }
   }
   if (run.cancelled) return;
-  group.live = false;
-  group.running = false;
-  refreshGroup(conv, hub, group, false);
+  if (group.toolIds.length > 0) {
+    group.live = false;
+    group.running = false;
+    refreshGroup(conv, hub, group, false);
+  }
   const ack = interjections.length
     ? `收到插话：${interjections.map((item) => `「${clip(item, 36)}」`).join('、')}。我把当前这一步做完后一起看了。\n\n`
     : '';
@@ -858,6 +870,7 @@ export function startRun(
     stalledSince: null,
     activeTool: null,
   };
+  conv.error = null;
   conv.pending = THINKING;
   touch(conv);
   publishConversationView(conv, hub);
@@ -1074,13 +1087,33 @@ export function stopConversation(db: MockDb, conv: MockConv, hub: MockHub): void
     stalledSince: null,
     activeTool: null,
   };
+  conv.error = null;
   conv.pending = null;
   touch(conv);
   publishConversationView(conv, hub);
   publishSummary(db, hub, conv.view.id);
 }
 
-export function continueConversation(db: MockDb, conv: MockConv, hub: MockHub): string {
-  if (conv.run) return conv.run.id;
-  return startRun(db, conv, hub, '继续');
+export type ContinueResult =
+  | { ok: true; runId: string }
+  | { ok: false; status: number; error: string; code?: string };
+
+export function continueConversation(db: MockDb, conv: MockConv, hub: MockHub, lang: Lang = 'zh'): ContinueResult {
+  if (typeof window !== 'undefined' && window.__protoFailContinue) {
+    return {
+      ok: false,
+      status: 500,
+      error: lang === 'en' ? 'Service error, failed to continue' : '服务异常，继续请求失败',
+      code: 'E_FAIL',
+    };
+  }
+  if (conv.run && conv.view.run.status === 'running') {
+    return { ok: false, status: 409, error: lang === 'en' ? 'Already running' : '正在运行中', code: 'E_BUSY' };
+  }
+  const canContinue = Boolean(conv.view.run.error?.canContinue || conv.error?.canContinue);
+  if (conv.view.run.status !== 'failed' || !canContinue) {
+    return { ok: false, status: 400, error: lang === 'en' ? 'Cannot continue in current state' : '当前状态不能继续', code: 'E_CANNOT_CONTINUE' };
+  }
+  const runId = startRun(db, conv, hub, lang === 'en' ? 'Continue' : '继续');
+  return { ok: true, runId };
 }

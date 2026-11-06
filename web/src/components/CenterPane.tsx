@@ -254,6 +254,9 @@ export function CenterPane({
         toolsById={toolsById}
         lang={lang}
         running={conversation.run.status === 'running'}
+        failed={conversation.run.status === 'failed'}
+        error={conversation.run.error}
+        onContinue={actions.continueRun}
         pending={waitingForAgent(shownItems, {
           running: conversation.run.status === 'running',
           pending: optimistic.sending,

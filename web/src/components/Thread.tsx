@@ -1,4 +1,5 @@
-import { memo, useLayoutEffect, useMemo, useRef } from 'react';
+import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import type { components } from '../../../src/v2/contract.gen';
 import { modelAttribution, type ConversationModel } from '../data/composerModel';
 import { matchDispatchSubagents } from '../data/dispatchCard';
 import type { Lang } from '../data/lang';
@@ -16,6 +17,7 @@ import { SystemNote } from './SystemNote';
 import { ToolGroup } from './ToolGroup';
 import { UserMessage } from './UserMessage';
 import { WorkspaceChip } from './WorkspaceChip';
+import { createSendRequest, errorMessage } from './sendRequest';
 
 const STICK_PX = 80;
 
@@ -54,6 +56,9 @@ type Props = {
   className?: string;
   testId?: string;
   onToolGroupRender?: () => void;
+  failed?: boolean;
+  error?: components['schemas']['RunState']['error'];
+  onContinue?: (requestId?: string) => Promise<unknown>;
 };
 
 
@@ -198,11 +203,39 @@ export function Thread({
   className,
   testId = 'next-thread',
   onToolGroupRender,
+  failed = false,
+  error = null,
+  onContinue,
 }: Props) {
   const { providers } = useProviders();
   const scroller = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
   const empty = items.length === 0;
+
+  const continueReq = useRef(createSendRequest());
+  const [continueBusy, setContinueBusy] = useState(false);
+  const [continueError, setContinueError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setContinueError(null);
+  }, [conversationId, failed]);
+
+  async function handleContinue() {
+    if (continueBusy) return;
+    const continueFn = onContinue || actions?.continueRun;
+    if (!continueFn) return;
+    const requestId = continueReq.current.begin('continue');
+    setContinueBusy(true);
+    setContinueError(null);
+    try {
+      await continueFn(requestId);
+      continueReq.current.succeed();
+    } catch (err) {
+      setContinueError(errorMessage(err, t(lang, 'send_failed')));
+    } finally {
+      setContinueBusy(false);
+    }
+  }
 
   useLayoutEffect(() => {
     const el = scroller.current;
@@ -212,7 +245,7 @@ export function Thread({
     const padBottom = inner ? parseFloat(getComputedStyle(inner).paddingBottom) || 0 : 0;
     const maxScroll = Math.max(0, el.scrollHeight - el.clientHeight);
     el.scrollTop = maxScroll <= padBottom + 1 ? 0 : maxScroll;
-  }, [items, pending, stickNonce]);
+  }, [items, pending, stickNonce, failed, error?.message]);
 
   useLayoutEffect(() => {
     const el = scroller.current;
@@ -265,8 +298,7 @@ export function Thread({
                   key={item.id}
                   item={item}
                   lang={lang}
-                  canContinue={item.truncated && !running}
-                  onContinue={(requestId) => actions.continueRun(requestId)}
+                  running={running}
                   attribution={modelAttribution(item.model, providers, conversationModel)}
                 />
               );
@@ -306,6 +338,30 @@ export function Thread({
           <div className="thread-pending" data-testid="next-thread-pending">
             <span className="run-spin" aria-hidden="true"><span /></span>
             <span className="thread-pending-text">{pendingText || t(lang, 'pending_thinking')}</span>
+          </div>
+        ) : null}
+        {!running && failed && error?.message ? (
+          <div
+            className="llm-error"
+            data-testid="next-run-error"
+            role="alert"
+            title={error.code || undefined}
+          >
+            <div className="llm-error-text">
+              <span>{error.message}</span>
+              {continueError ? <span className="llm-error-inline-err">{continueError}</span> : null}
+            </div>
+            {error.canContinue ? (
+              <button
+                type="button"
+                className="btn llm-error-continue"
+                data-testid="next-run-continue"
+                disabled={continueBusy}
+                onClick={() => { void handleContinue(); }}
+              >
+                {t(lang, 'btn_continue')}
+              </button>
+            ) : null}
           </div>
         ) : null}
       </div>

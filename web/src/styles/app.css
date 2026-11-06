@@ -1011,7 +1011,43 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.6; backgroun
 .handoff-note[data-kind="correction"] { align-self: stretch; border-radius: 8px; background: transparent; color: var(--mute); padding: 0; }
 .handoff-note[data-kind="correction"] span { display: block; overflow-wrap: anywhere; }
 .handoff-note[data-kind="note"] { align-self: flex-start; }
-.llm-error { padding: 10px 12px; border-radius: 10px; border: 1px solid var(--err-bg); background: var(--err-bg); color: var(--err-ink); font-size: var(--fs-ui); }
+.llm-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--err-bg);
+  background: var(--err-bg);
+  color: var(--err-ink);
+  font-size: var(--fs-ui);
+  width: 100%;
+  box-sizing: border-box;
+}
+.llm-error-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+.llm-error-inline-err {
+  font-size: var(--fs-xs);
+  opacity: 0.9;
+}
+.llm-error-continue {
+  height: 26px;
+  padding: 0 10px;
+  font-size: var(--fs-ui);
+  flex-shrink: 0;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  color: var(--ink);
+}
+.llm-error-continue:hover:not(:disabled) {
+  background: var(--hover);
+}
 .msg-truncated {
   display: flex;
   align-items: center;
@@ -1021,7 +1057,6 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.6; backgroun
   font-size: var(--fs-sm);
   color: var(--faint);
 }
-.msg-truncated .btn { height: 24px; padding: 0 8px; font-size: var(--fs-ui); }
 .llm-error-code { font-family: var(--mono); font-size: var(--fs-xs); opacity: .8; margin-bottom: 2px; }
 .thread-empty { margin: auto; text-align: center; color: var(--mute); font-size: var(--fs-ui); padding: 40px 24px; }
 .empty-home-title { font-size: var(--fs-em); color: var(--ink3); margin-bottom: 6px; }
@@ -2280,7 +2315,6 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.6; backgroun
   border-radius: 0;
   background: transparent;
 }
-.handoff-note[data-kind="auto_continue"] { align-self: center; }
 
 /* Right pane: changes / files */
 .col-right {
