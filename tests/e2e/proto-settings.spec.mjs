@@ -123,11 +123,22 @@ test('providers: rows, groups, expand, Grok auto-detect, Anthropic key, custom, 
   await page.getByTestId('next-settings-nav-providers').click();
 
   const rows = page.getByTestId('next-provider-row');
-  await expect(rows).toHaveCount(3);
+  await expect(rows).toHaveCount(5);
   await expect(rows.nth(0)).toContainText('DeepSeek');
   await expect(rows.nth(1)).toContainText('Anthropic');
   await expect(rows.nth(1)).toContainText('k7Qa');
-  await expect(rows.nth(2)).toContainText('内网网关');
+  const dsRow = rows.filter({ hasText: '自建 DeepSeek' });
+  const glmRow = rows.filter({ hasText: '智谱 GLM' });
+  const gwRow = rows.filter({ hasText: '内网网关' });
+  await expect(dsRow).toBeVisible();
+  await expect(glmRow).toBeVisible();
+  await expect(gwRow).toBeVisible();
+
+  // T100-2: Custom provider icons: DeepSeek, ChatGLM, plug
+  await expect(dsRow.locator('.mp-av .brand-icon img')).toHaveAttribute('src', /DeepSeek/);
+  await expect(glmRow.locator('.mp-av .brand-icon img')).toHaveAttribute('src', /ChatGLM/);
+  await expect(gwRow.locator('.mp-av .brand-icon .brand-icon-plug')).toBeVisible();
+
   await expect(page.getByTestId('next-provider-group')).toHaveCount(1);
   await expect(page.locator('[data-testid=next-provider-group][data-group="apikey"]')).toBeVisible();
   await expect(page.locator('#root')).not.toContainText('服务商');
@@ -162,6 +173,16 @@ test('providers: rows, groups, expand, Grok auto-detect, Anthropic key, custom, 
   await ctxInput.press('Enter');
   await expect(page.locator('[data-testid=next-model-row][data-model="deepseek-flash"] .mp-num .mp-v').first()).toHaveText('500K');
 
+  // Expand '内网网关' to check its model icons
+  await gwRow.click();
+  const qwenModelRow = page.locator('[data-testid=next-model-row][data-model="qwen3-coder-480b"]');
+  const glmModelRow = page.locator('[data-testid=next-model-row][data-model="glm-5.2-fp8"]');
+  const internalModelRow = page.locator('[data-testid=next-model-row][data-model="my-internal-model"]');
+  await expect(qwenModelRow.locator('.mp-mt-name .brand-icon img')).toHaveAttribute('src', /Qwen/);
+  await expect(glmModelRow.locator('.mp-mt-name .brand-icon img')).toHaveAttribute('src', /ChatGLM/);
+  await expect(internalModelRow.locator('.mp-mt-name .brand-icon .brand-icon-plug')).toBeVisible();
+  await gwRow.click();
+
   // Cancel rollback: Grok auto-connects, cancel must DELETE
   await page.getByTestId('next-provider-add').click();
   await expect(page.getByTestId('next-add-dialog')).toBeVisible();
@@ -175,7 +196,7 @@ test('providers: rows, groups, expand, Grok auto-detect, Anthropic key, custom, 
   await expect(page.getByTestId('next-add-model-dropdown')).toBeEnabled({ timeout: 10_000 });
   await page.getByTestId('next-add-cancel').click();
   await expect(page.getByTestId('next-add-dialog')).toHaveCount(0);
-  await expect(rows).toHaveCount(3);
+  await expect(rows).toHaveCount(5);
 
   // Grok auto-detect → test button feedback → dropdown → create
   await page.getByTestId('next-provider-add').click();
@@ -189,7 +210,7 @@ test('providers: rows, groups, expand, Grok auto-detect, Anthropic key, custom, 
   await expect(page.getByTestId('next-add-model-option').first()).not.toHaveText(/grok-/i);
   await page.getByTestId('next-provider-finish').click();
   await expect(page.getByTestId('next-add-dialog')).toHaveCount(0);
-  await expect(rows).toHaveCount(4);
+  await expect(rows).toHaveCount(6);
   await expect(rows.filter({ hasText: 'Grok' })).toBeVisible();
   await expect(page.locator('[data-testid=next-provider-group][data-group="builtin"]')).toBeVisible();
 
@@ -225,10 +246,10 @@ test('deleting all providers shows the no-model state', async ({ page }) => {
   const state = await openProto(page);
   await page.getByTestId('next-open-settings').click();
   await page.getByTestId('next-settings-nav-providers').click();
-  await expect(page.getByTestId('next-provider-row')).toHaveCount(3);
+  await expect(page.getByTestId('next-provider-row')).toHaveCount(5);
 
   // Delete all seeded providers
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < 5; i++) {
     await page.getByTestId('next-provider-row').first().getByTestId('next-provider-more').click();
     await page.getByTestId('next-provider-delete').click();
     await page.getByTestId('next-confirm-ok').click();

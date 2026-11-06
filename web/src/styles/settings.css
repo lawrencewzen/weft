@@ -235,12 +235,24 @@ html[data-theme$="-dark"] .ns-ws-dialog {
 .mp-mt .mp-h.mp-r { justify-content: flex-end; }
 .mp-mt .mp-c { height: 40px; display: flex; align-items: center; border-top: 1px solid var(--line3); font-size: var(--fs-ui); min-width: 0; color: var(--ink); }
 .mp-mt-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: var(--ink);
+}
+.mp-mt-name .brand-icon {
+  flex-shrink: 0;
+}
+.mp-mt-name-text {
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--ink);
 }
 .mp-mt-name.mp-mt-off { color: var(--faint); }
+.mp-mt-name.mp-mt-off .brand-icon { opacity: 0.5; }
 .mp-num { font-family: var(--mono); font-size: var(--fs-sm); font-variant-numeric: tabular-nums; justify-content: flex-end; }
 .mp-num .mp-v { padding: 2px 6px; margin-right: -6px; border-radius: 5px; cursor: pointer; position: relative; color: var(--ink); }
 .mp-num .mp-v:hover { background: var(--hover); }

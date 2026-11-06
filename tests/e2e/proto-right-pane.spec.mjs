@@ -91,6 +91,21 @@ test('diff, file tree, preview, save and the 409 conflict demo', async ({ page }
   expect(await page.getByTestId('next-file-node').count()).toBeGreaterThan(15);
   await expect(page.locator('[data-testid=next-file-node][data-path="web/src/data/store.ts"]')).toHaveCount(1);
 
+  // T100-2: secret.log, dist, node_modules are marked is-ignored; package.json is not.
+  const secretLogNode = page.locator('[data-testid=next-file-node][data-path="secret.log"]');
+  const distNode = page.locator('[data-testid=next-file-node][data-path="dist"]');
+  const nodeModulesNode = page.locator('[data-testid=next-file-node][data-path="node_modules"]');
+  const packageJsonNode = page.locator('[data-testid=next-file-node][data-path="package.json"]');
+  await expect(secretLogNode).toHaveClass(/is-ignored/);
+  await expect(distNode).toHaveClass(/is-ignored/);
+  await expect(nodeModulesNode).toHaveClass(/is-ignored/);
+  await expect(packageJsonNode).not.toHaveClass(/is-ignored/);
+
+  // Opening secret.log displays its content
+  await secretLogNode.click();
+  await expect(page.getByTestId('next-file-editor')).toContainText('local debug log');
+  await expect(secretLogNode).toHaveClass(/active/);
+
   // Markdown files open in the editor tab with a preview.
   await page.locator('[data-testid=next-file-node][data-path="README.md"]').click();
   await expect(page.getByTestId('next-file-editor')).toContainText('常用命令');

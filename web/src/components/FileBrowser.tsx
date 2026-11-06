@@ -245,7 +245,7 @@ function FileTreeRows({
             <button
               key={row.path}
               type="button"
-              className={`file-tree-row is-dir${row.expanded ? ' is-open' : ''}`}
+              className={`file-tree-row is-dir${row.expanded ? ' is-open' : ''}${row.ignored ? ' is-ignored' : ''}`}
               style={{ paddingLeft: 8 + row.depth * 14 }}
               title={row.path}
               data-testid="next-file-node"
@@ -261,7 +261,7 @@ function FileTreeRows({
             <button
               key={row.path}
               type="button"
-              className={`file-tree-row${row.path === activeFilePath ? ' active' : ''}`}
+              className={`file-tree-row${row.path === activeFilePath ? ' active' : ''}${row.ignored ? ' is-ignored' : ''}`}
               style={{ paddingLeft: 8 + row.depth * 14 }}
               title={row.path}
               data-testid="next-file-node"
