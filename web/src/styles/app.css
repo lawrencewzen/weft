@@ -372,16 +372,22 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.6; backgroun
   opacity: 0; width: 22px; height: 22px; border-radius: 6px; display: flex; align-items: center; justify-content: center;
   cursor: pointer; color: var(--mute); border: none; background: transparent; padding: 0;
 }
+.sb-sec-add[data-testid="next-ws-new"] {
+  opacity: 1;
+  color: var(--mute);
+}
 .sb-sec:hover .sb-sec-add, .sec:hover .add { opacity: 1; }
 .sb-sec-add:hover, .sec .add:hover { background: var(--hover); color: var(--ink); }
 .sb-sec-add.is-busy,
 .sb-sec-add:disabled,
+.sb-sec-add[data-testid="next-ws-new"]:disabled,
 .sb-add-project.is-busy,
 .sb-add-project:disabled {
   pointer-events: none;
   opacity: .7;
 }
-.sb-sec .sb-sec-add.is-busy {
+.sb-sec .sb-sec-add.is-busy,
+.sb-sec-add[data-testid="next-ws-new"].is-busy {
   opacity: 1;
 }
 .sb-spin {
