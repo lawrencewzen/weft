@@ -204,11 +204,23 @@ export function modelView(model: RawModel): ProviderModel {
   };
 }
 
+/** Custom providers show one brand only when every model already resolved to that same brand. */
+function brandFromModels(models: ProviderModel[]): string | null {
+  if (models.length === 0) return null;
+  const brand = models[0]?.brand ?? null;
+  if (!brand) return null;
+  for (const model of models) {
+    if (model.brand !== brand) return null;
+  }
+  return brand;
+}
+
 export function providerView(raw: RawProvider, lang: Lang): Provider {
+  const models = raw.models.map(modelView);
   const item: Provider = {
     id: raw.id,
     kind: raw.kind,
-    brand: raw.kind === 'custom' ? null : providerBrand(raw.id),
+    brand: raw.kind === 'custom' ? brandFromModels(models) : providerBrand(raw.id),
     name: raw.kind === 'custom' || raw.nameCustom
       ? raw.name
       : displayProviderName(raw.id, raw.name, lang),
@@ -216,7 +228,7 @@ export function providerView(raw: RawProvider, lang: Lang): Provider {
     status: raw.status?.state === 'testing'
       ? { state: 'testing', ...(typeof raw.status.testedAt === 'number' ? { testedAt: raw.status.testedAt } : {}) }
       : statusView(raw.lastTest, lang),
-    models: raw.models.map(modelView),
+    models,
   };
   if (raw.kind === 'custom') {
     if (raw.api) item.api = raw.api;

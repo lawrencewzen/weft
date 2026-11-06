@@ -1685,7 +1685,7 @@ export interface components {
             /** @description 内置为 catalog id（如 deepseek）；自定义为 custom- + 8 位 hex */
             id: string;
             kind: components["schemas"]["ProviderKind"];
-            /** @description 品牌图标 id。自定义为 null */
+            /** @description 品牌图标 id。自定义提供商仅当模型非空、且每个模型的 brand 相同且非空时取该品牌，否则为 null */
             brand: null | string;
             name: string;
             api?: components["schemas"]["CustomApi"];
