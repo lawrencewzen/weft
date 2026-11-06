@@ -146,4 +146,5 @@ test('about page shows the service version, protocol version, and demo flag', as
   await expect(page.getByTestId('next-about-version')).toHaveText(info.serviceVersion);
   await expect(page.getByTestId('next-about-protocol')).toHaveText(info.protocolVersion);
   await expect(page.getByTestId('next-about-demo')).toHaveText('已开启');
+  await expect(page.getByTestId('next-settings-about')).not.toContainText('致谢');
 });

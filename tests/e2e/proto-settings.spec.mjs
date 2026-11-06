@@ -348,6 +348,7 @@ test('git connections, plugins, skills and about', async ({ page }) => {
   await page.getByTestId('next-settings-nav-about').click();
   await expect(page.getByTestId('next-about-version')).toHaveText('0.1.0-prototype');
   await expect(page.getByTestId('next-about-protocol')).toHaveText('2.0.0');
+  await expect(page.getByTestId('next-settings-about')).not.toContainText('致谢');
 
   expectClean(state);
 });
