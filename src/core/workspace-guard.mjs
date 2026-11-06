@@ -42,9 +42,8 @@ function filesystemRoot(resolved) {
 
 /**
  * Directories the picker must not enter and that cannot be a workspace:
- * ~/.ssh, ~/.gnupg, and system directories. The filesystem root and $HOME
- * are not sensitive to browse (the picker walks through them) but
- * resolveAllowedWorkspacePath still rejects them as a workspace.
+ * ~/.ssh, ~/.gnupg, and system directories. The filesystem root is not
+ * sensitive to browse (the picker walks up to it). $HOME itself is allowed.
  */
 async function isSensitive(resolved, home) {
   if (!resolved || filesystemRoot(resolved)) return false;
@@ -73,8 +72,10 @@ async function browseParent(current, home) {
 
 /**
  * Resolve `inputPath` with realpath. Paths under DATA_DIR/workspaces are
- * always allowed. Any other existing path is allowed except the filesystem
- * root, `$HOME` itself, `~/.ssh`, `~/.gnupg`, and system directories.
+ * checked first and always allowed, including when that directory lives
+ * under a system prefix such as /var (macOS temp dirs are /private/var).
+ * Any other existing path is allowed except `/`, `~/.ssh`, `~/.gnupg`,
+ * and system directories. The home directory itself is allowed.
  * WEFT_WORKSPACE_ROOT is not an allowlist; it is only the folder picker's
  * default start (see defaultWorkspaceRoot / listBrowsableDirs).
  */
@@ -97,10 +98,9 @@ export async function resolveAllowedWorkspacePath(inputPath, { dataDir } = {}) {
   const dataWs = await realOrResolve(path.join(dataDir, 'workspaces'));
 
   if (isUnder(dataWs, resolved)) return resolved;
-
-  if (filesystemRoot(resolved) || resolved === home || await isSensitive(resolved, home)) {
-    throw fail('path is forbidden');
-  }
+  if (resolved === '/') throw fail('path is forbidden');
+  if (resolved === home) return resolved;
+  if (await isSensitive(resolved, home)) throw fail('path is forbidden');
   return resolved;
 }
 
@@ -110,7 +110,7 @@ const MAX_BROWSE_ENTRIES = 500;
  * Folder picker for the new-workspace dialog. Lists sub-folders of `inputPath`
  * (default: defaultWorkspaceRoot()). Navigation is not limited to that start
  * directory. Hidden folders and symlinks into sensitive directories are skipped.
- * The filesystem root and $HOME can be listed but are not selectable. Read-only.
+ * `/` can be listed but is not selectable. $HOME is selectable. Read-only.
  */
 export async function listBrowsableDirs(inputPath) {
   const root = await realOrResolve(defaultWorkspaceRoot());
@@ -152,7 +152,7 @@ export async function listBrowsableDirs(inputPath) {
     root,
     path: current,
     parent: await browseParent(current, home),
-    selectable: current !== home && !filesystemRoot(current),
+    selectable: current !== '/',
     git: existsSync(path.join(current, '.git')),
     entries: entries.slice(0, MAX_BROWSE_ENTRIES),
     truncated: entries.length > MAX_BROWSE_ENTRIES,

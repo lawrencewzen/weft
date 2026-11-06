@@ -110,10 +110,47 @@ test('POST /api/v2/workspaces local empty, path outside the start dir, sensitive
     assert.equal(elsewhere.status, 201, elsewhere.text);
     assert.equal(elsewhere.body.path, nativeReal(outside));
 
+    const homePath = os.homedir();
+    const homeReal = nativeReal(homePath);
+    const homeCreated = await sendV2(srv.base, 'POST', '/api/v2/workspaces', discovery.token, {
+      name: 'from-home',
+      source: 'local',
+      path: homePath,
+    });
+    assert.equal(homeCreated.status, 201, homeCreated.text);
+    assert.equal(homeCreated.body.path, homeReal);
+    const homeAgain = await sendV2(srv.base, 'POST', '/api/v2/workspaces', discovery.token, {
+      name: 'from-home-again',
+      source: 'local',
+      path: homePath,
+    });
+    assert.equal(homeAgain.status, 201, homeAgain.text);
+    assert.equal(homeAgain.body.id, homeCreated.body.id);
+    assert.equal(homeAgain.body.name, 'from-home');
+    assert.equal(homeAgain.body.path, homeReal);
+
+    const again = await sendV2(srv.base, 'POST', '/api/v2/workspaces', discovery.token, {
+      name: 'elsewhere-again',
+      source: 'local',
+      path: outside,
+    });
+    assert.equal(again.status, 201, again.text);
+    assert.equal(again.body.id, elsewhere.body.id);
+    assert.equal(again.body.name, 'elsewhere');
+    const listed = await getV2(srv.base, '/api/v2/workspaces', discovery.token);
+    assert.equal(listed.status, 200, listed.text);
+    const samePath = listed.body.workspaces.filter((row) => row.path === nativeReal(outside));
+    assert.equal(samePath.length, 1);
+    assert.equal(samePath[0].id, elsewhere.body.id);
+    const homeRows = listed.body.workspaces.filter((row) => row.path === homeReal);
+    assert.equal(homeRows.length, 1);
+    assert.equal(homeRows[0].id, homeCreated.body.id);
+
+    const deniedPath = existsSync('/etc') ? '/etc' : 'bad\u0000path';
     const denied = await sendV2(srv.base, 'POST', '/api/v2/workspaces', discovery.token, {
       name: 'nope',
       source: 'local',
-      path: os.homedir(),
+      path: deniedPath,
     });
     assert.equal(denied.status, 400, denied.text);
     assertChecked('/api/v2/workspaces', 'POST', 400, denied.body);
@@ -135,7 +172,7 @@ test('POST /api/v2/workspaces local empty, path outside the start dir, sensitive
     const enDenied = await sendV2(srv.base, 'POST', '/api/v2/workspaces?lang=en', discovery.token, {
       name: 'nope-en',
       source: 'local',
-      path: os.homedir(),
+      path: existsSync('/etc') ? '/etc' : 'bad\u0000path',
     });
     assert.equal(enDenied.status, 400);
     assert.equal(enDenied.body.error, phrase('en', 'ws_err_path'));

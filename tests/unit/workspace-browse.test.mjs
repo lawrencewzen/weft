@@ -76,17 +76,33 @@ test('lists visible sub-folders, marks git repos, and can leave the start direct
   });
 });
 
-test('refuses sensitive paths and ones that do not exist; home and filesystem root are not workspaces', async () => {
+test('home is allowed and parent walks to the filesystem root; sensitive paths stay refused', async () => {
   const { base, root } = await tree();
   await withRoot(root, async () => {
     await assert.rejects(listBrowsableDirs(path.join(root, 'missing')), (err) => err.status === 404);
     await assert.rejects(
-      () => resolveAllowedWorkspacePath(os.homedir(), { dataDir: base }),
+      () => resolveAllowedWorkspacePath(`inside\0root`, { dataDir: base }),
       (err) => err.code === 'E_PATH' && /path is forbidden/.test(err.message),
     );
-    const homeListing = await listBrowsableDirs(os.homedir());
-    assert.equal(homeListing.selectable, false);
-    assert.equal(homeListing.entries.some((e) => e.name === '.ssh' || e.name === '.gnupg'), false);
+
+    const home = await fs.realpath(os.homedir());
+    const allowedHome = await resolveAllowedWorkspacePath(os.homedir(), { dataDir: base });
+    assert.equal(allowedHome, home);
+    let cursor = await listBrowsableDirs(home);
+    assert.equal(cursor.path, home);
+    assert.equal(cursor.selectable, true);
+    assert.equal(cursor.entries.some((e) => e.name === '.ssh' || e.name === '.gnupg'), false);
+    const seen = [];
+    while (cursor.parent != null) {
+      seen.push(cursor.path);
+      assert.ok(seen.length < 64, 'parent chain did not reach the filesystem root');
+      const next = cursor.parent;
+      cursor = await listBrowsableDirs(next);
+      assert.equal(cursor.path, await fs.realpath(next));
+    }
+    assert.equal(cursor.parent, null);
+    assert.equal(cursor.path, path.parse(home).root);
+    assert.ok(seen.includes(home));
 
     if (existsSync('/etc')) {
       await assert.rejects(listBrowsableDirs('/etc'), /path is forbidden/);
@@ -102,6 +118,18 @@ test('refuses sensitive paths and ones that do not exist; home and filesystem ro
       assert.equal(fsRoot.entries.some((e) => e.name === 'etc' || e.name === 'proc' || e.name === 'sys'), false);
       await assert.rejects(
         () => resolveAllowedWorkspacePath('/', { dataDir: base }),
+        /path is forbidden/,
+      );
+    }
+    if (existsSync('/var/tmp')) {
+      const dataDir = await fs.mkdtemp(path.join('/var/tmp', 'weft-data-'));
+      made.push(dataDir);
+      const underVar = path.join(dataDir, 'workspaces', 'proj');
+      await fs.mkdir(underVar, { recursive: true });
+      const fromVar = await resolveAllowedWorkspacePath(underVar, { dataDir });
+      assert.equal(fromVar, nativeReal(underVar));
+      await assert.rejects(
+        () => resolveAllowedWorkspacePath('/var/tmp', { dataDir }),
         /path is forbidden/,
       );
     }

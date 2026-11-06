@@ -83,6 +83,7 @@ export type ExtensionsHost = {
     rootPath?: string;
     worktrees?: unknown[];
   }) => Promise<WorkspaceRecord>;
+  findActiveWorkspaceByPath: (wsPath: string) => Promise<WorkspaceRecord | null | undefined>;
   restoreWorkspaceByPath: (wsPath: string, name: string) => Promise<WorkspaceRecord | null | undefined>;
   getSettings: () => Promise<ExtensionsSettings>;
   putSettings: (patch: Record<string, unknown>) => Promise<unknown>;
@@ -281,7 +282,8 @@ export async function handleExtensionsApi(opts: {
       sendV2(res, pathname, method, status, pathErrorView(lang, err as { message?: unknown }, defaultWorkspaceRoot()));
       return true;
     }
-    const ws = (await host.restoreWorkspaceByPath(resolved, name))
+    const ws = (await host.findActiveWorkspaceByPath(resolved))
+      || (await host.restoreWorkspaceByPath(resolved, name))
       || await host.createWorkspace({ name, path: resolved, source: 'local', rootPath: resolved, worktrees: [] });
     opts.onSidebarChanged?.();
     sendV2(res, pathname, method, 201, createdWorkspaceView(ws));

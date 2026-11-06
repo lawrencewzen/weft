@@ -49,7 +49,7 @@ Full OS sandbox (bubblewrap / nsjail) is **deferred**. Mitigations are the env a
 
 ### Workspace path limits (finding 3)
 
-`POST /api/workspaces` with `path` is resolved via `fs.realpath`. Paths under `$WEFT_DATA_DIR/workspaces` are always allowed. Any other existing path may be a workspace; `WEFT_WORKSPACE_ROOT` (default `$HOME/projects` if that directory exists, else `$HOME`) is only the folder browser's starting directory, not an allowlist. Never the filesystem root, `$HOME` itself, `~/.ssh`, `~/.gnupg`, `/etc`, `/var`, `/usr`, `/bin`, `/boot`, `/dev`, `/proc`, `/sys`, or `/root`. Omitted `path` creates `$WEFT_DATA_DIR/workspaces/<id>/repo`. Rejected paths return 400.
+`POST /api/workspaces` with `path` is resolved via `fs.realpath`. Paths under `$WEFT_DATA_DIR/workspaces` are checked first and always allowed, including when that directory is under `/var` (macOS temporary directories resolve to `/private/var`). Any other existing path may be a workspace; `WEFT_WORKSPACE_ROOT` (default `$HOME/projects` if that directory exists, else `$HOME`) is only the folder browser's starting directory, not an allowlist. Never `/`, `~/.ssh`, `~/.gnupg`, `/etc`, `/var`, `/usr`, `/bin`, `/boot`, `/dev`, `/proc`, `/sys`, or `/root`. The home directory itself is allowed. Choosing a path that is already an unremoved local workspace returns that row and does not create another. Omitted `path` creates `$WEFT_DATA_DIR/workspaces/<id>/repo`. Rejected paths return 400.
 
 ### API key + baseUrl (finding 4)
 
