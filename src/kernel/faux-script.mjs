@@ -353,6 +353,10 @@ function requestSnapshot(context) {
     users: messages.filter((message) => message?.role === 'user').map((message) => (
       typeof message.content === 'string' ? message.content : ''
     )),
+    messages: messages.map((message) => ({
+      role: message?.role || '',
+      text: messageText(message),
+    })),
   };
 }
 

@@ -11,7 +11,7 @@
 | `WEFT_LLM` | `openai` \| `faux`。`faux` 只在显式要求时使用 | 测试设 `faux` |
 | `WEFT_FAUX_SCRIPT` | faux 模型脚本 JSON 路径（见 §6）。设置后即视为要求演示模型 | fixtures/*.json |
 | `LLM_API` | `faux` 时使用演示模型；其他值不单独打开演示模型 | 测试可设 `faux` |
-| `WEFT_RETRY_BASE_MS` / `WEFT_RETRY_MAX` | 交给 Harness `retry`。`WEFT_RETRY_MAX` 含第一次尝试，默认 5，`maxRetries` 为该值减 1。`baseDelayMs` 默认 200 | 50 / 5 |
+| `WEFT_RETRY_BASE_MS` / `WEFT_RETRY_MAX` | 交给 Harness `retry`。`WEFT_RETRY_MAX` 含第一次尝试，默认 10，`maxRetries` 为该值减 1。`baseDelayMs` 默认 2000。单次退避为 `min(baseDelayMs * 2^(attempt-1), maxAgentDelayMs)`，`maxAgentDelayMs` 沿用 Pi Durable 默认 60000 | 50 / 5 |
 | `WEFT_STREAM_TIMEOUT_MS` | 交给 Harness `stream.timeoutMs`。超时后按 retry 重试。默认 120000 | 不设 |
 | `WEFT_MAX_OUTPUT_TOKENS` | 显式设置且为正整数时，覆盖 pi-ai 目录里该模型的 `maxTokens`。未设或非正整数时：目录有则用目录值，否则 32768。最终不超过该模型的上下文窗口 | 不设 |
 | `WEFT_TOKEN` | 可选登录。不设时 `/api` 与 SSE 不鉴权，不读不写 `auth.token`，`GET /login` 一律 302 `/`，启动不打印 `WEFT_LOGIN` / `WEFT_TOKEN`。设置后所有 `/api` 需 `Authorization: Bearer` 或 cookie `weft_token`；SSE 可用一次性 `?ticket=`；`GET /login?token=` 校验后种 cookie 并 302 `/`，否则 401 | 不设 |
