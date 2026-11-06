@@ -3,7 +3,6 @@ import { t } from '../../i18n';
 
 export type AboutService = {
   serviceVersion: string;
-  protocolVersion: string;
 };
 
 type Props = {
@@ -31,12 +30,6 @@ export function AboutPage({ lang, service }: Props) {
           <b>{t(lang, 'about_version')}</b>
         </div>
         <span data-testid="next-about-version">{service.serviceVersion || '—'}</span>
-      </div>
-      <div className="ns-pref-row">
-        <div className="ns-pref-copy">
-          <b>{t(lang, 'about_protocol')}</b>
-        </div>
-        <span data-testid="next-about-protocol">{service.protocolVersion || '—'}</span>
       </div>
       <div className="ns-pref-row">
         <div className="ns-pref-copy">

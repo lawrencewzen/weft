@@ -29,7 +29,6 @@ export function App() {
   const [error, setError] = useState<string | null>(null);
   const [service, setService] = useState<AboutService>({
     serviceVersion: '',
-    protocolVersion: '',
   });
   const [demo, setDemo] = useState(false);
 
@@ -56,15 +55,13 @@ export function App() {
           const body = await res.json() as {
             demo?: unknown;
             serviceVersion?: unknown;
-            protocolVersion?: unknown;
           };
           setService({
             serviceVersion: typeof body.serviceVersion === 'string' ? body.serviceVersion : '',
-            protocolVersion: typeof body.protocolVersion === 'string' ? body.protocolVersion : '',
           });
           setDemo(body.demo === true);
         } catch {
-          setService({ serviceVersion: '', protocolVersion: '' });
+          setService({ serviceVersion: '' });
           setDemo(false);
         }
         setReady(true);

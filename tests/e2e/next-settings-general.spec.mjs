@@ -132,7 +132,7 @@ test('dark appearance darkens panes without horizontal scroll', async ({ page })
   expect(lightLuma, 'sidebar after light').toBeGreaterThan(0.7);
 });
 
-test('about page shows the service version and protocol version', async ({ page }) => {
+test('about page shows the service version', async ({ page }) => {
   await boot(page);
   await page.getByTestId('next-open-settings').click();
   await page.getByTestId('next-settings-nav-about').click();
@@ -144,6 +144,5 @@ test('about page shows the service version and protocol version', async ({ page 
   expect(info.serviceVersion).toMatch(/\d/);
   await expect(page.getByTestId('next-about-name')).toHaveText('Weft');
   await expect(page.getByTestId('next-about-version')).toHaveText(info.serviceVersion);
-  await expect(page.getByTestId('next-about-protocol')).toHaveText(info.protocolVersion);
   await expect(page.getByTestId('next-settings-about')).not.toContainText('致谢');
 });

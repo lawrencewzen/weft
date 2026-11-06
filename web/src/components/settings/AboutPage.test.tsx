@@ -39,17 +39,16 @@ describe('AboutPage', () => {
     await cleanup();
   });
 
-  it('renders about page with version, repo, and runtime, but no upstream credit or demo model row', async () => {
+  it('renders about page with version, repo, and runtime, but no upstream credit, demo model or protocol version row', async () => {
     await render(
       <AboutPage
         lang="zh"
-        service={{ serviceVersion: '0.2.0', protocolVersion: '2.0.0' }}
+        service={{ serviceVersion: '0.2.0' }}
       />,
     );
 
     expect(host?.textContent).toContain('Weft');
     expect(host?.textContent).toContain('0.2.0');
-    expect(host?.textContent).toContain('2.0.0');
     expect(host?.textContent).toContain('github.com/lawrencewzen/weft');
     expect(host?.textContent).toContain('MIT');
     expect(host?.textContent).toContain('Pi Durable Runtime 已连接');
@@ -61,15 +60,18 @@ describe('AboutPage', () => {
     // Must not contain demo model row
     expect(host?.textContent).not.toContain('演示模型');
 
+    // Must not contain protocol version row
+    expect(host?.textContent).not.toContain('协议版本');
+
     const links = Array.from(host?.querySelectorAll('a') ?? []).map((a) => a.getAttribute('href'));
     expect(links).toEqual(['https://github.com/lawrencewzen/weft']);
   });
 
-  it('renders in English without upstream credit or demo model row', async () => {
+  it('renders in English without upstream credit, demo model or protocol version row', async () => {
     await render(
       <AboutPage
         lang="en"
-        service={{ serviceVersion: '0.2.0', protocolVersion: '2.0.0' }}
+        service={{ serviceVersion: '0.2.0' }}
       />,
     );
 
@@ -81,6 +83,7 @@ describe('AboutPage', () => {
     expect(host?.textContent).not.toContain('Thanks');
     expect(host?.textContent).not.toContain('Upstream');
     expect(host?.textContent).not.toContain('Demo model');
+    expect(host?.textContent).not.toContain('Protocol version');
 
     const links = Array.from(host?.querySelectorAll('a') ?? []).map((a) => a.getAttribute('href'));
     expect(links).toEqual(['https://github.com/lawrencewzen/weft']);
