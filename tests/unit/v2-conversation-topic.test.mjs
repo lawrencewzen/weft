@@ -1585,4 +1585,46 @@ test('in-process: last subscriber leaving flushes and drops text timers', async 
   }
 });
 
+test('an English subscriber sees an English failure live and after refresh', { timeout: 45_000 }, async () => {
+  const srv = await startScriptServer([{ error: 'provider exploded' }], { WEFT_RETRY_MAX: '1' });
+  try {
+    const discovery = await readDiscovery(srv.dataDir);
+    const { conv } = await openConversation(srv.base);
+    const session = await openEvents({
+      port: srv.port,
+      token: discovery.token,
+      topics: `conversation:${conv.id}`,
+      lang: 'en',
+    });
+    await waitEvents(session, (list) => list.some((ev) => ev.event === 'snapshot'));
+    const sent = await postV2(srv.base, `/api/v2/conversations/${conv.id}/messages`, discovery.token, {
+      text: 'break',
+    });
+    assert.equal(sent.status, 202, sent.text);
+    const events = await waitEvents(session, (list) => list.some((ev) => (
+      ev.event === 'upsert'
+      && ev.data?.entity === 'conversation'
+      && ev.data?.id === conv.id
+      && ev.data?.value?.run?.status === 'failed'
+    )), 40000);
+    session.close();
+    const live = [...events].reverse().find((ev) => (
+      ev.event === 'upsert'
+      && ev.data?.entity === 'conversation'
+      && ev.data?.id === conv.id
+      && ev.data?.value?.run?.status === 'failed'
+    ));
+    assert.equal(live.data.value.run.error.message, 'Model request failed: provider exploded');
+    assert.equal(live.data.value.run.error.canContinue, true);
+    assert.equal(live.data.value.run.error.message.includes('模型'), false);
+
+    const refreshed = await getV2(srv.base, `/api/v2/conversations/${conv.id}?lang=en`, discovery.token);
+    assert.equal(refreshed.status, 200, refreshed.text);
+    assert.equal(refreshed.body.conversation.run.error.message, 'Model request failed: provider exploded');
+    assert.equal(refreshed.body.conversation.run.error.canContinue, true);
+  } finally {
+    await stopServer(srv);
+  }
+});
+
 

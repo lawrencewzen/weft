@@ -19,7 +19,7 @@ import {
 import { messagesFromEntries } from '../../src/kernel/events.mjs';
 import { harnessSqlitePath } from '../../src/kernel/migrate-weft-ids.mjs';
 import { createPluginHost, mapPluginResult } from '../../src/kernel/plugins.mjs';
-import { CONTINUE_TEXT } from '../../src/kernel/continuation-text.mjs';
+import { AUTO_CONTINUE_PREFIX } from '../../src/kernel/continuation-text.mjs';
 import { formatSubagentReport } from '../../src/kernel/subagent-report.mjs';
 import { CHILD_HIDDEN_TOOLS } from '../../src/kernel/subagents.mjs';
 import { ask_user_question } from '../../plugins/ask/index.mjs';
@@ -260,7 +260,7 @@ test('answer text names each question, and the view backfills or skips', () => {
     userEntry(4, formatSubagentReport({ name: 'scout', kind: 'answered', body: 'done the scan' })),
   ]));
   assert.equal(reported.ask.answer, null);
-  const continued = viewOf(askEntries([userEntry(4, CONTINUE_TEXT)]));
+  const continued = viewOf(askEntries([userEntry(4, `${AUTO_CONTINUE_PREFIX} more`)]));
   assert.equal(continued.ask.answer, null);
 
   const spec = JSON.parse(readFileSync(path.join(ROOT, 'contract/openapi.json'), 'utf8'));

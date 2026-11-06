@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import path from 'node:path';
 import { ROOT } from './_root.mjs';
 import { createSqliteStore } from '../../src/store/sqlite.mjs';
+import { runStateView } from '../../src/v2/views/run.ts';
 import { makeTempDir, removeTempDir } from './_tmp.mjs';
 import { request as serverRequest, startServer, stopServer } from './_server.mjs';
 
@@ -40,7 +41,11 @@ test('unconfigured server refuses a turn instead of answering with the faux scri
     const done = await waitFinished(srv.base, id);
     assert.equal(done.status, 'failed');
     assert.equal(done.llmError?.code, 'E_NO_MODEL');
-    assert.equal(done.llmError?.message, 'err_no_model');
+    assert.equal(done.llmError?.reason, 'no_model');
+    assert.equal(Object.hasOwn(done.llmError, 'message'), false);
+    const view = runStateView({ status: 'failed', lang: 'zh', llmError: done.llmError });
+    assert.equal(view.error.message, 'err_no_model');
+    assert.equal(view.error.canContinue, false);
     assert.equal(done.messages.some((message) => message.role === 'assistant'), false);
     assert.equal(done.messages.some((message) => String(message.text || '').includes('reported usage')), false);
     assert.equal(done.messages.some((message) => message.role === 'user' && message.text === '你好'), true);
@@ -110,7 +115,11 @@ test('a provider with every model disabled fails with E_NO_MODEL', async () => {
     const done = await waitFinished(srv.base, id);
     assert.equal(done.status, 'failed');
     assert.equal(done.llmError?.code, 'E_NO_MODEL');
-    assert.equal(done.llmError?.message, 'err_no_model');
+    assert.equal(done.llmError?.reason, 'no_model');
+    assert.equal(Object.hasOwn(done.llmError, 'message'), false);
+    const view = runStateView({ status: 'failed', lang: 'en', llmError: done.llmError });
+    assert.equal(view.error.message, 'err_no_model');
+    assert.equal(view.error.canContinue, false);
   } finally {
     await stopServer(srv);
     await removeTempDir(dir);

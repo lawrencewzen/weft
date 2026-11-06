@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { compileSchema } from '../../src/v2/validate.ts';
 import { phrase } from '../../src/v2/phrases/index.ts';
+import { statusFromSubmission } from '../../src/kernel/events.mjs';
 import { toolGroupSummaryView } from '../../src/v2/views/tools.ts';
 import {
   conversationStatus,
@@ -127,14 +128,18 @@ test('failed carries llmError; startedAt is null without a harness timestamp', (
   });
   assertRun(view, 'failed');
   assert.equal(view.status, 'failed');
-  assert.deepEqual(view.error, { code: 'E_LLM', message: 'model exploded' });
+  assert.deepEqual(view.error, {
+    code: 'E_LLM',
+    message: '模型请求失败：model exploded',
+    canContinue: true,
+  });
   assert.equal(view.startedAt, 1_700_000_000_000);
   assert.equal(view.pendingText, null);
 
   const missing = runStateView({ status: 'error' });
   assertRun(missing, 'error-default');
   assert.equal(missing.status, 'failed');
-  assert.deepEqual(missing.error, { code: 'E_LLM', message: '' });
+  assert.deepEqual(missing.error, { code: 'E_LLM', message: '', canContinue: false });
   assert.equal(missing.startedAt, null);
 
   const withRetry = runStateView({
@@ -143,6 +148,55 @@ test('failed carries llmError; startedAt is null without a harness timestamp', (
   });
   assertRun(withRetry, 'retry');
   assert.deepEqual(withRetry.error.retry, { attempt: 2, delayMs: 400 });
+});
+
+test('run errors are human and canContinue follows the harness reason', () => {
+  const cases = [
+    ['interrupted', true, 'zh', '服务中断，这一轮没有完成。'],
+    ['interrupted', true, 'en', 'The service was interrupted before this turn finished.'],
+    ['restart_limit', true, 'zh', '这一轮多次中断，已停止。'],
+    ['restart_limit', true, 'en', 'This turn was interrupted repeatedly and stopped.'],
+    ['faulted', true, 'zh', '这一轮出现内部错误。'],
+    ['faulted', true, 'en', 'This turn hit an internal error.'],
+    ['model_error', true, 'zh', '模型请求失败：provider exploded'],
+    ['model_error', true, 'en', 'Model request failed: provider exploded'],
+    ['no_model', false, 'zh', 'err_no_model'],
+    ['aborted', false, 'zh', '这一轮没有完成。'],
+    ['reset', false, 'zh', '这一轮没有完成。'],
+    ['nothing_to_answer', false, 'zh', '这一轮没有完成。'],
+    ['orphaned', false, 'en', 'This turn did not finish.'],
+  ];
+  for (const [reason, canContinue, lang, message] of cases) {
+    const detail = reason === 'model_error' ? 'provider exploded' : undefined;
+    const failed = statusFromSubmission({
+      type: 'continue',
+      status: reason === 'aborted' ? 'unanswered' : 'unanswered',
+      reason,
+      ...(detail ? { detail } : {}),
+    });
+    if (reason === 'aborted') {
+      assert.equal(failed.status, 'stopped');
+      const view = runStateView({
+        status: 'failed',
+        lang,
+        llmError: { code: 'aborted', reason: 'aborted', message: 'aborted' },
+      });
+      assert.equal(view.error.canContinue, false);
+      assert.equal(view.error.message, '这一轮没有完成。');
+      continue;
+    }
+    assert.equal(failed.status, 'failed', reason);
+    const view = runStateView({ status: 'failed', lang, llmError: failed.llmError });
+    assert.equal(view.error.canContinue, canContinue, reason);
+    assert.equal(view.error.message, message, `${reason} ${lang}`);
+    assert.notEqual(view.error.message, reason);
+  }
+  const missing = runStateView({
+    status: 'failed',
+    llmError: { code: 'E_SUBMISSION_MISSING', message: '找不到这次运行的记录' },
+  });
+  assert.equal(missing.error.canContinue, false);
+  assert.equal(missing.error.message, '找不到这次运行的记录');
 });
 
 test('recovering is running so the composer can stop', () => {
