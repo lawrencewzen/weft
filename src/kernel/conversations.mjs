@@ -7,7 +7,7 @@ import { randomUUID } from 'node:crypto';
 import { readFile, stat } from 'node:fs/promises';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { createModels } from '@earendil-works/pi-ai/models';
-import { createRegistry } from '@earendil-works/pi-durable';
+import { ConversationTranscript, createRegistry } from '@earendil-works/pi-durable';
 import { liveDiff } from '../core/diff.mjs';
 import { redactAuthText } from '../core/redact.mjs';
 import { resolveInWorkspace } from '../core/paths.mjs';
@@ -165,6 +165,10 @@ export async function openConversationKernel({
   const agentBridge = {};
   const subagentApi = {};
   const watches = new Map();
+  // One official ConversationTranscript per harness conversation. The watch window
+  // merges into it; loadEarlier/fillGap run only for a hole that is still open.
+  const histories = new Map();
+  const historyLocks = new Map();
   const tails = new Map();
   const listeners = new Map();
   const sends = new Map();
@@ -253,7 +257,7 @@ export async function openConversationKernel({
   async function readView(harnessId) {
     const conversation = await harness.conversation(harnessId, context);
     if (!conversation) return null;
-    // Active transcript, the same slice viewState().entries used to be.
+    // Active transcript the model sees: compaction head plus the entries it keeps.
     return conversation.context(context);
   }
 
@@ -323,11 +327,94 @@ export async function openConversationKernel({
     });
   }
 
+  function withHistory(key, fn) {
+    const prev = historyLocks.get(key) || Promise.resolve();
+    const run = prev.then(fn, fn);
+    historyLocks.set(key, run.then(() => {}, () => {}));
+    return run;
+  }
+
+  function historySlot(conversation) {
+    const key = Number(conversation.id);
+    const existing = histories.get(key);
+    if (existing) return existing;
+    // Official loader: one range page and no cursor. ConversationTranscript turns
+    // the previous page's bound into the next maxEntryId or gap.
+    const transcript = new ConversationTranscript((query, limit, ctx) => (
+      conversation.entries(query, limit, undefined, ctx)
+    ));
+    const slot = { key, transcript, view: null };
+    histories.set(key, slot);
+    return slot;
+  }
+
+  function historyEntryList(view) {
+    const entries = [];
+    for (const item of view?.items || []) {
+      if (item?.kind === 'entry') entries.push(item.entry);
+    }
+    return entries;
+  }
+
+  function historyHasHole(view) {
+    return (view?.items || []).some((item) => item?.kind === 'earlier' || item?.kind === 'gap');
+  }
+
+  async function syncHistoryWindow(slot, conversation) {
+    const watch = await conversation.watch(context);
+    try {
+      slot.view = slot.transcript.merge(watch.value);
+    } finally {
+      await watch.stop();
+    }
+  }
+
+  async function advanceHistory(slot) {
+    const items = slot.view?.items || [];
+    const earlier = items.find((item) => item?.kind === 'earlier');
+    if (earlier) {
+      slot.view = await slot.transcript.loadEarlier(context);
+      return;
+    }
+    const gap = items.find((item) => item?.kind === 'gap');
+    if (gap) slot.view = await slot.transcript.fillGap(gap, context);
+  }
+
+  /**
+   * Entries the user can still see. `entryId` stops at the official page that
+   * contains it. Otherwise only an open earlier marker or gap is paged, one
+   * ConversationTranscript page at a time. A transcript that already reaches
+   * that point does not call entries() again. A page that adds nothing throws
+   * instead of dropping the rest of the history.
+   */
+  async function readHistory(harnessId, entryId) {
+    const conversation = await harness.conversation(harnessId, context);
+    if (!conversation) return [];
+    const slot = historySlot(conversation);
+    const want = entryId == null || entryId === '' ? null : String(entryId);
+    return withHistory(slot.key, async () => {
+      await syncHistoryWindow(slot, conversation);
+      let spins = 0;
+      while (slot.view && historyHasHole(slot.view)) {
+        if (want && historyEntryList(slot.view).some((entry) => String(entry.id) === want)) break;
+        const before = slot.view.items;
+        await advanceHistory(slot);
+        if (!slot.view || slot.view.items === before) {
+          throw new Error('transcript page made no progress');
+        }
+        if (++spins > 100000) throw new Error('transcript page did not converge');
+      }
+      return historyEntryList(slot.view);
+    });
+  }
+
   async function readTranscript(harnessId) {
-    const view = await readView(harnessId);
-    if (!view) return { messages: [], usage: null, entries: [] };
-    const mapped = messagesFromEntries(view.entries);
-    return { ...mapped, entries: view.entries || [] };
+    const entries = await readHistory(harnessId);
+    const mapped = messagesFromEntries(entries);
+    // `usage` here is the newest reported call in the stored history. The context
+    // chip must not use it: a call from before the compaction head is not the
+    // context the model sees. present() reads that from readView().
+    return { ...mapped, entries };
   }
 
   async function resolveTitleModel(conv) {
@@ -380,15 +467,23 @@ export async function openConversationKernel({
 
   async function attach(row) {
     if (!row?.harnessId || watches.has(row.id)) return;
-    const watch = await watchConversation(row.harnessId);
-    if (!watch) return;
+    const conversation = await harness.conversation(row.harnessId, context);
+    if (!conversation) return;
+    const slot = historySlot(conversation);
+    const watch = await conversation.watch(context);
     const mapCtx = createMapContext({ retry: settings.retry });
     const projector = createViewProjector();
     watches.set(row.id, { stream: watch, mapCtx, projector, harnessId: row.harnessId });
+    await withHistory(slot.key, () => {
+      slot.view = slot.transcript.merge(watch.value);
+    });
     await applyView(row.id, watch.value, mapCtx, projector);
     watch.start((call) => enqueue(row.id, async () => {
       if (call?.kind !== 'value') return;
       try {
+        await withHistory(slot.key, () => {
+          slot.view = slot.transcript.merge(call.value);
+        });
         await applyView(row.id, call.value, mapCtx, projector);
       } catch (err) {
         console.error(`WEFT_KERNEL_EVENT ${redactAuthText(err instanceof Error ? (err.stack || err.message) : err)}`);
@@ -904,16 +999,14 @@ export async function openConversationKernel({
     async getMessageImage(cid, messageId, index) {
       const conv = await store.getConversation(cid);
       if (!conv?.harnessId) return null;
-      const view = await readView(conv.harnessId);
-      if (!view) return null;
-      return findUserMessageImage(view.entries, messageId, index);
+      const entries = await readHistory(conv.harnessId, messageId);
+      return findUserMessageImage(entries, messageId, index);
     },
     async getMessagePaste(cid, messageId, index) {
       const conv = await store.getConversation(cid);
       if (!conv?.harnessId) return null;
-      const view = await readView(conv.harnessId);
-      if (!view) return null;
-      return findUserMessagePaste(view.entries, messageId, index);
+      const entries = await readHistory(conv.harnessId, messageId);
+      return findUserMessagePaste(entries, messageId, index);
     },
     async present(conv, { includeMessages = false } = {}) {
       if (!conv?.harnessId) {
@@ -921,18 +1014,13 @@ export async function openConversationKernel({
       }
       const view = await submissionView(conv);
       const status = view.status;
-      let usage = null;
       let messages;
+      // Context percent follows the active transcript. The full history still
+      // holds the pre-compaction call, and that number must not raise the chip.
+      const harnessView = await readView(conv.harnessId);
+      const usage = presentContext(latestCallUsage(harnessView?.entries)).usage;
       if (includeMessages) {
-        const transcript = await readTranscript(conv.harnessId);
-        usage = presentContext(transcript.usage).usage;
-        messages = transcript.messages;
-      } else {
-        // Newest assistant that reported tokens, not blindly the last message.
-        // The active transcript is still required: a fixed-size descending scan can miss an
-        // older reported call and would change the old list API.
-        const harnessView = await readView(conv.harnessId);
-        usage = presentContext(latestCallUsage(harnessView?.entries)).usage;
+        messages = (await readTranscript(conv.harnessId)).messages;
       }
       const out = { ...conv, status, usage, sends: await sendsView(conv) };
       if (view.llmError) out.llmError = view.llmError;
