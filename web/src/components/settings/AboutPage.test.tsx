@@ -39,11 +39,11 @@ describe('AboutPage', () => {
     await cleanup();
   });
 
-  it('renders about page with version, repo, and runtime, but no upstream credit', async () => {
+  it('renders about page with version, repo, and runtime, but no upstream credit or demo model row', async () => {
     await render(
       <AboutPage
         lang="zh"
-        service={{ serviceVersion: '0.2.0', protocolVersion: '2.0.0', demo: false }}
+        service={{ serviceVersion: '0.2.0', protocolVersion: '2.0.0' }}
       />,
     );
 
@@ -58,15 +58,18 @@ describe('AboutPage', () => {
     expect(host?.textContent).not.toContain('致谢');
     expect(host?.textContent).not.toContain('上游');
 
+    // Must not contain demo model row
+    expect(host?.textContent).not.toContain('演示模型');
+
     const links = Array.from(host?.querySelectorAll('a') ?? []).map((a) => a.getAttribute('href'));
     expect(links).toEqual(['https://github.com/lawrencewzen/weft']);
   });
 
-  it('renders in English without upstream credit', async () => {
+  it('renders in English without upstream credit or demo model row', async () => {
     await render(
       <AboutPage
         lang="en"
-        service={{ serviceVersion: '0.2.0', protocolVersion: '2.0.0', demo: true }}
+        service={{ serviceVersion: '0.2.0', protocolVersion: '2.0.0' }}
       />,
     );
 
@@ -77,6 +80,7 @@ describe('AboutPage', () => {
 
     expect(host?.textContent).not.toContain('Thanks');
     expect(host?.textContent).not.toContain('Upstream');
+    expect(host?.textContent).not.toContain('Demo model');
 
     const links = Array.from(host?.querySelectorAll('a') ?? []).map((a) => a.getAttribute('href'));
     expect(links).toEqual(['https://github.com/lawrencewzen/weft']);

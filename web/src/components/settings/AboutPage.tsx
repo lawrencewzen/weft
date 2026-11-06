@@ -4,7 +4,6 @@ import { t } from '../../i18n';
 export type AboutService = {
   serviceVersion: string;
   protocolVersion: string;
-  demo: boolean;
 };
 
 type Props = {
@@ -38,14 +37,6 @@ export function AboutPage({ lang, service }: Props) {
           <b>{t(lang, 'about_protocol')}</b>
         </div>
         <span data-testid="next-about-protocol">{service.protocolVersion || '—'}</span>
-      </div>
-      <div className="ns-pref-row">
-        <div className="ns-pref-copy">
-          <b>{t(lang, 'about_demo')}</b>
-        </div>
-        <span data-testid="next-about-demo">
-          {t(lang, service.demo ? 'about_demo_on' : 'about_demo_off')}
-        </span>
       </div>
       <div className="ns-pref-row">
         <div className="ns-pref-copy">

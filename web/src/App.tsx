@@ -30,8 +30,8 @@ export function App() {
   const [service, setService] = useState<AboutService>({
     serviceVersion: '',
     protocolVersion: '',
-    demo: false,
   });
+  const [demo, setDemo] = useState(false);
 
   useEffect(() => subscribePrefs(() => setLang(getPreferredLang())), []);
   useEffect(() => watchSystemAppearance(), []);
@@ -61,10 +61,11 @@ export function App() {
           setService({
             serviceVersion: typeof body.serviceVersion === 'string' ? body.serviceVersion : '',
             protocolVersion: typeof body.protocolVersion === 'string' ? body.protocolVersion : '',
-            demo: body.demo === true,
           });
+          setDemo(body.demo === true);
         } catch {
-          setService({ serviceVersion: '', protocolVersion: '', demo: false });
+          setService({ serviceVersion: '', protocolVersion: '' });
+          setDemo(false);
         }
         setReady(true);
       } catch (err) {
@@ -108,7 +109,7 @@ export function App() {
 
   return (
     <SessionProvider conversationId={conversationId} subagent={subagent} lang={lang}>
-      <AppShell route={route} lang={lang} demo={service.demo} service={service} settingsPage={settingsPage} />
+      <AppShell route={route} lang={lang} demo={demo} service={service} settingsPage={settingsPage} />
     </SessionProvider>
   );
 }
