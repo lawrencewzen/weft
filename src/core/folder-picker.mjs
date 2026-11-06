@@ -11,6 +11,7 @@
  */
 
 import { execFile } from 'node:child_process';
+import path from 'node:path';
 import { resolveAllowedWorkspacePath } from './workspace-guard.mjs';
 
 /** Kill the dialog if the user never answers. */
@@ -88,6 +89,16 @@ function isAppleScriptCancel(text) {
   return /\(-128\)/.test(text) || /user cancell?ed/i.test(text);
 }
 
+/**
+ * Real osascript prints a POSIX absolute path. Tests inject the runner on
+ * every OS and hand back a real absolute path of that OS (a Windows temp
+ * path does not start with `/`). Relative or empty stdout is not a pick.
+ * This does not add a Windows dialog: platform `win32` never reaches here.
+ */
+function isAbsolutePick(picked) {
+  return path.posix.isAbsolute(picked) || path.win32.isAbsolute(picked);
+}
+
 function osascriptOutcome(result) {
   const error = result?.error ?? null;
   const stderr = `${result?.stderr ?? ''}\n${error?.stderr ?? ''}\n${error?.message ?? ''}`;
@@ -96,7 +107,7 @@ function osascriptOutcome(result) {
   if (isAppleScriptCancel(stderr)) return { status: 'cancelled' };
   if (error) return { status: 'unsupported' };
   const picked = normalizePosixPath(stdout);
-  if (!picked.startsWith('/')) return { status: 'unsupported' };
+  if (!isAbsolutePick(picked)) return { status: 'unsupported' };
   return { status: 'picked', path: picked };
 }
 

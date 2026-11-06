@@ -32,6 +32,25 @@ function resolvedRunner(result) {
 }
 
 describe('folder picker', { concurrency: 1 }, () => {
+  test('injected absolute paths are picked, relative stdout is unsupported', async () => {
+    const winPath = 'C:\\Users\\example\\proj';
+    const picked = await pickFolder({
+      platform: 'darwin',
+      startDir: '/tmp/start',
+      prompt: 'Select folder',
+      runner: resolvedRunner({ error: null, stdout: `${winPath}/\n`, stderr: '' }),
+    });
+    assert.deepEqual(picked, { status: 'picked', path: winPath });
+
+    const relative = await pickFolder({
+      platform: 'darwin',
+      startDir: '/tmp/start',
+      prompt: 'Select folder',
+      runner: resolvedRunner({ error: null, stdout: 'proj/\n', stderr: '' }),
+    });
+    assert.deepEqual(relative, { status: 'unsupported' });
+  });
+
   test('dialog timeout is 10 minutes', () => {
     assert.equal(FOLDER_PICK_TIMEOUT_MS, 600_000);
   });
