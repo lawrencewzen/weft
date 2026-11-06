@@ -474,6 +474,8 @@ export function projectViewUpdate(projector, view, mapCtx) {
     const key = String(entry.id);
     if (projector.seen.has(key)) continue;
     projector.seen.add(key);
+    // pi.compaction is a head marker. T107-3 draws the notice; it is not a bubble.
+    if (entry.kind === 'pi.compaction') continue;
     if (!snapshot && (entry.kind === 'pi.user' || entry.kind === 'pi.assistant')) {
       const done = messageDone(entry);
       if (entry.kind === 'pi.assistant' && mapCtx?.liveId) {
@@ -614,6 +616,8 @@ export function messagesFromEntries(entries) {
   const answered = new Set();
   const messages = [];
   for (const entry of entries || []) {
+    // A compaction head is a user message for the model. It is not a chat bubble.
+    if (entry?.kind === 'pi.compaction') continue;
     if (entry?.kind === USER_TO_SUBAGENT_KIND) {
       const data = entry.data && typeof entry.data === 'object' && !Array.isArray(entry.data)
         ? entry.data
