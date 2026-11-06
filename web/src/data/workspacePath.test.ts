@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { shortenWorkspacePath } from './workspacePath';
+import { shortenWorkspacePath, splitBreadcrumbs } from './workspacePath';
 
 describe('shortenWorkspacePath', () => {
   it('replaces a mac home prefix with ~ and keeps a short rest', () => {
@@ -41,3 +41,55 @@ describe('shortenWorkspacePath', () => {
     expect(shortenWorkspacePath('D:\\data\\weft')).toBe('D:\\data\\weft');
   });
 });
+
+describe('splitBreadcrumbs', () => {
+  it('returns empty array for empty input', () => {
+    expect(splitBreadcrumbs('')).toEqual([]);
+  });
+
+  it('splits Windows path with drive letter', () => {
+    expect(splitBreadcrumbs('D:\\work\\sandbox\\playground')).toEqual([
+      { name: 'D:\\', path: 'D:\\' },
+      { name: 'work', path: 'D:\\work' },
+      { name: 'sandbox', path: 'D:\\work\\sandbox' },
+      { name: 'playground', path: 'D:\\work\\sandbox\\playground' },
+    ]);
+  });
+
+  it('handles Windows drive root', () => {
+    expect(splitBreadcrumbs('D:\\')).toEqual([
+      { name: 'D:\\', path: 'D:\\' },
+    ]);
+    expect(splitBreadcrumbs('C:')).toEqual([
+      { name: 'C:\\', path: 'C:\\' },
+    ]);
+  });
+
+  it('splits POSIX path', () => {
+    expect(splitBreadcrumbs('/Users/alice/projects/weft')).toEqual([
+      { name: '/', path: '/' },
+      { name: 'Users', path: '/Users' },
+      { name: 'alice', path: '/Users/alice' },
+      { name: 'projects', path: '/Users/alice/projects' },
+      { name: 'weft', path: '/Users/alice/projects/weft' },
+    ]);
+  });
+
+  it('handles POSIX root', () => {
+    expect(splitBreadcrumbs('/')).toEqual([
+      { name: '/', path: '/' },
+    ]);
+  });
+
+  it('handles home-relative paths', () => {
+    expect(splitBreadcrumbs('~/.ssh')).toEqual([
+      { name: '~', path: '~' },
+      { name: '.ssh', path: '~/.ssh' },
+    ]);
+    expect(splitBreadcrumbs('~\\.ssh')).toEqual([
+      { name: '~', path: '~' },
+      { name: '.ssh', path: '~\\.ssh' },
+    ]);
+  });
+});
+

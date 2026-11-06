@@ -88,3 +88,57 @@ export function shortenWorkspacePath(raw: string, opts: ShortenWorkspacePathOpts
   if (prefix.length >= max) return `${display.slice(0, Math.max(0, max - 1))}${ELLIPSIS}`;
   return prefix + clipTail(last, max - prefix.length);
 }
+
+export type Breadcrumb = {
+  name: string;
+  path: string;
+};
+
+export function splitBreadcrumbs(raw: string): Breadcrumb[] {
+  const input = String(raw || '').trim();
+  if (!input) return [];
+
+  if (input.startsWith('~')) {
+    const isWin = input.includes('\\');
+    const sep = isWin ? '\\' : '/';
+    const parts = input.replace(/[\\/]+$/, '').split(/[\\/]+/).filter(Boolean);
+    const crumbs: Breadcrumb[] = [];
+    let curr = '';
+    for (let i = 0; i < parts.length; i++) {
+      curr = i === 0 ? parts[i] : `${curr}${sep}${parts[i]}`;
+      crumbs.push({ name: parts[i], path: curr });
+    }
+    return crumbs;
+  }
+
+  const isWin = /^[A-Za-z]:[\\/]/.test(input) || /^[A-Za-z]:$/.test(input);
+  if (isWin) {
+    const driveLetter = input.slice(0, 2);
+    const rest = input.slice(2).replace(/^[\\/]+/, '').replace(/[\\/]+$/, '');
+    const driveRoot = `${driveLetter}\\`;
+    const crumbs: Breadcrumb[] = [{ name: driveRoot, path: driveRoot }];
+    if (!rest) return crumbs;
+    const parts = rest.split(/[\\/]+/).filter(Boolean);
+    let curr = driveRoot;
+    for (let i = 0; i < parts.length; i++) {
+      curr = i === 0 ? `${driveLetter}\\${parts[i]}` : `${curr}\\${parts[i]}`;
+      crumbs.push({ name: parts[i], path: curr });
+    }
+    return crumbs;
+  }
+
+  // POSIX
+  const clean = input.replace(/\/+$/, '');
+  if (!clean || clean === '/') {
+    return [{ name: '/', path: '/' }];
+  }
+  const parts = clean.split('/').filter(Boolean);
+  const crumbs: Breadcrumb[] = [{ name: '/', path: '/' }];
+  let curr = '';
+  for (const part of parts) {
+    curr = `${curr}/${part}`;
+    crumbs.push({ name: part, path: curr });
+  }
+  return crumbs;
+}
+

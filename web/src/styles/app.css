@@ -374,6 +374,26 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.6; backgroun
 }
 .sb-sec:hover .sb-sec-add, .sec:hover .add { opacity: 1; }
 .sb-sec-add:hover, .sec .add:hover { background: var(--hover); color: var(--ink); }
+.sb-sec-add.is-busy,
+.sb-sec-add:disabled,
+.sb-add-project.is-busy,
+.sb-add-project:disabled {
+  pointer-events: none;
+  opacity: .7;
+}
+.sb-sec .sb-sec-add.is-busy {
+  opacity: 1;
+}
+.sb-spin {
+  width: 12px;
+  height: 12px;
+  border: 1.5px solid var(--line);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin .8s linear infinite;
+  display: inline-block;
+  vertical-align: middle;
+}
 
 .sb-scroll, .scroll {
   flex: 1; overflow-y: auto; overflow-x: hidden; min-height: 0; padding-bottom: 8px; display: flex; flex-direction: column; gap: 2px;

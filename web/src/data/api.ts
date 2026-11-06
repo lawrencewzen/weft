@@ -626,6 +626,17 @@ export function createWorkspace(body: CreateWorkspaceRequest, lang?: string): Pr
   });
 }
 
+export type WorkspacePickResult =
+  | { status: 'picked'; path: string }
+  | { status: 'cancelled' }
+  | { status: 'unsupported' };
+
+export function pickWorkspaceRoot(lang?: string): Promise<WorkspacePickResult> {
+  return requestJson<WorkspacePickResult>(withLang('/api/v2/workspace-root/pick', lang), {
+    method: 'POST',
+  });
+}
+
 export function getWorkspaceRoot(lang?: string): Promise<WorkspaceRoot> {
   return requestJson<WorkspaceRoot>(withLang('/api/v2/workspace-root', lang));
 }
