@@ -15,19 +15,25 @@ function fail(message, status = 400) {
  * Windows compares with path.win32 and ignores case, so `C:\\USERS\\x\\.SSH`
  * is the same directory as `C:\\Users\\x\\.ssh`.
  */
+function pathApi(platform) {
+  return platform === 'win32' ? path.win32 : path.posix;
+}
+
 function isUnder(root, resolved, platform = process.platform) {
   if (!root || !resolved) return false;
+  const p = pathApi(platform);
   if (platform === 'win32') {
-    const r = path.win32.resolve(root);
-    const target = path.win32.resolve(resolved);
+    const r = p.resolve(root);
+    const target = p.resolve(resolved);
     const rl = r.toLowerCase();
     const tl = target.toLowerCase();
     if (tl === rl) return true;
     const prefix = rl.endsWith('\\') ? rl : `${rl}\\`;
     return tl.startsWith(prefix);
   }
-  const r = path.resolve(root);
-  return resolved === r || resolved.startsWith(r + path.sep);
+  // posix, not the host path API: Windows CI still checks Unix rules with platform: 'linux'.
+  const r = p.resolve(root);
+  return resolved === r || resolved.startsWith(r + p.sep);
 }
 
 async function realOrResolve(p) {
@@ -56,7 +62,7 @@ function filesystemRoot(resolved, platform = process.platform) {
     if (!root) return false;
     return path.win32.resolve(resolved).toLowerCase() === path.win32.resolve(root).toLowerCase();
   }
-  const root = path.parse(resolved).root;
+  const root = path.posix.parse(resolved).root;
   return Boolean(root) && resolved === root;
 }
 
@@ -97,7 +103,7 @@ export function pathIsSensitive(resolved, {
   prefixes = SYSTEM_PREFIXES,
 } = {}) {
   if (!resolved || filesystemRoot(resolved, platform)) return false;
-  const join = platform === 'win32' ? path.win32.join : path.join;
+  const join = pathApi(platform).join;
   if (home) {
     if (isUnder(join(home, '.ssh'), resolved, platform)) return true;
     if (isUnder(join(home, '.gnupg'), resolved, platform)) return true;
