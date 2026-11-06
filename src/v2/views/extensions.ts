@@ -272,21 +272,14 @@ export function gitCloneFailureView(
 export function pathErrorView(
   lang: Lang,
   err: { message?: unknown; code?: unknown },
-  allowedRoot: string,
 ): PathNotAllowed {
   const raw = asString(err.message);
-  let text: string;
-  if (/not under an allowed workspace root/i.test(raw)) {
-    text = allowedRoot ? phrase(lang, 'ws_err_path_root', { root: allowedRoot }) : phrase(lang, 'ws_err_path');
-  } else if (/path is not allowed|path is forbidden|^path\b|path is /i.test(raw)) {
-    text = phrase(lang, 'ws_err_path');
-  } else {
-    text = phrase(lang, 'ws_err_generic');
-  }
+  const text = /path is not allowed|path is forbidden|not under an allowed workspace root|^path\b|path is /i.test(raw)
+    ? phrase(lang, 'ws_err_path')
+    : phrase(lang, 'ws_err_generic');
   return {
     error: text,
     code: 'E_PATH',
-    allowedRoot,
   };
 }
 

@@ -279,7 +279,7 @@ export async function handleExtensionsApi(opts: {
       resolved = await resolveAllowedWorkspacePath(rawPath, { dataDir: host.dataDir });
     } catch (err) {
       const status = Number((err as { status?: number })?.status) || 400;
-      sendV2(res, pathname, method, status, pathErrorView(lang, err as { message?: unknown }, defaultWorkspaceRoot()));
+      sendV2(res, pathname, method, status, pathErrorView(lang, err as { message?: unknown }));
       return true;
     }
     const ws = (await host.findActiveWorkspaceByPath(resolved))
@@ -301,7 +301,7 @@ export async function handleExtensionsApi(opts: {
       sendV2(res, pathname, method, 200, workspaceDirsView(listed));
     } catch (err) {
       const status = Number((err as { status?: number })?.status) || 400;
-      sendV2(res, pathname, method, status, pathErrorView(lang, err as { message?: unknown }, defaultWorkspaceRoot()));
+      sendV2(res, pathname, method, status, pathErrorView(lang, err as { message?: unknown }));
     }
     return true;
   }

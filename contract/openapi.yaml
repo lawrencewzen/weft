@@ -5919,13 +5919,11 @@ components:
           description: 按 lang 出成句
         code:
           type: string
-        allowedRoot:
-          type: string
         detail:
           type: string
         via:
           type: string
-      description: 新建工作区失败。路径被拒绝时带 allowedRoot（默认浏览起点，不是白名单边界）；Git 失败带 code / via。
+      description: 新建工作区失败。路径被拒绝时 code 为 E_PATH；Git 失败带 code / via。
     GitCloneFailure:
       type: object
       additionalProperties: false
@@ -6035,7 +6033,6 @@ components:
       required:
         - error
         - code
-        - allowedRoot
       properties:
         error:
           type: string
@@ -6043,9 +6040,7 @@ components:
         code:
           type: string
           const: E_PATH
-        allowedRoot:
-          type: string
-      description: 本地路径不能作为工作区（不存在、是 `/`、或落在 `~/.ssh`、`~/.gnupg` 和系统目录）。用户主目录本身允许。allowedRoot 是默认浏览起点，不是白名单边界。
+      description: 本地路径不能作为工作区（不存在、是 `/`、或落在 `~/.ssh`、`~/.gnupg` 和系统目录）。用户主目录本身允许。
     Plugin:
       type: object
       additionalProperties: false

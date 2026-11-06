@@ -2195,12 +2195,11 @@ export interface components {
             /** @description GitLab 项目 id，需同时带 connectionId */
             projectId?: string | number;
         };
-        /** @description 新建工作区失败。路径被拒绝时带 allowedRoot（默认浏览起点，不是白名单边界）；Git 失败带 code / via。 */
+        /** @description 新建工作区失败。路径被拒绝时 code 为 E_PATH；Git 失败带 code / via。 */
         WorkspaceCreateError: {
             /** @description 按 lang 出成句 */
             error: string;
             code?: string;
-            allowedRoot?: string;
             detail?: string;
             via?: string;
         };
@@ -2246,13 +2245,12 @@ export interface components {
             path: string;
             git: boolean;
         };
-        /** @description 本地路径不能作为工作区（不存在、是 `/`、或落在 `~/.ssh`、`~/.gnupg` 和系统目录）。用户主目录本身允许。allowedRoot 是默认浏览起点，不是白名单边界。 */
+        /** @description 本地路径不能作为工作区（不存在、是 `/`、或落在 `~/.ssh`、`~/.gnupg` 和系统目录）。用户主目录本身允许。 */
         PathNotAllowed: {
             /** @description 按 lang 出成句 */
             error: string;
             /** @constant */
             code: "E_PATH";
-            allowedRoot: string;
         };
         /** @description 插件。失败原因由服务端按 lang 出成句。 */
         Plugin: {

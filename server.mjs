@@ -891,7 +891,6 @@ async function routeApi(req, res, url) {
     } catch (err) {
       sendJson(res, err.status || 400, {
         error: err.message || 'path is not allowed',
-        allowedRoot: defaultWorkspaceRoot(),
       });
       return;
     }

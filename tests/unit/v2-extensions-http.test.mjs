@@ -155,9 +155,8 @@ test('POST /api/v2/workspaces local empty, path outside the start dir, sensitive
     assert.equal(denied.status, 400, denied.text);
     assertChecked('/api/v2/workspaces', 'POST', 400, denied.body);
     assert.equal(denied.body.code, 'E_PATH');
-    const configuredRoot = path.resolve(wsRoot);
     assert.equal(denied.body.error, phrase('zh', 'ws_err_path'));
-    assert.equal(denied.body.allowedRoot, configuredRoot);
+    assert.equal(Object.hasOwn(denied.body, 'allowedRoot'), false);
 
     const fileProto = await sendV2(srv.base, 'POST', '/api/v2/workspaces', discovery.token, {
       name: 'file-git',
@@ -176,7 +175,7 @@ test('POST /api/v2/workspaces local empty, path outside the start dir, sensitive
     });
     assert.equal(enDenied.status, 400);
     assert.equal(enDenied.body.error, phrase('en', 'ws_err_path'));
-    assert.equal(enDenied.body.allowedRoot, path.resolve(wsRoot));
+    assert.equal(Object.hasOwn(enDenied.body, 'allowedRoot'), false);
 
     const unauth = await sendV2(srv.base, 'POST', '/api/v2/workspaces', '', { name: 'x', source: 'local' });
     assert.equal(unauth.status, 401);

@@ -96,15 +96,16 @@ test('skillView and catalogErrorView zh/en', () => {
   assert.equal(zh.code, 'err_skill_builtin');
 });
 
-test('pathErrorView: legacy root sentence stays, forbidden paths do not name a root', () => {
-  const zh = pathErrorView('zh', { message: 'path is not under an allowed workspace root' }, '/home/me/projects');
-  const en = pathErrorView('en', { message: 'path is forbidden' }, '/home/me/projects');
+test('pathErrorView uses the path sentence and does not include allowedRoot', () => {
+  const zh = pathErrorView('zh', { message: 'path is not under an allowed workspace root' });
+  const en = pathErrorView('en', { message: 'path is forbidden' });
   ok(validatePath, zh, 'path-zh');
   ok(validatePath, en, 'path-en');
   assert.equal(zh.code, 'E_PATH');
-  assert.equal(zh.error, phrase('zh', 'ws_err_path_root', { root: '/home/me/projects' }));
+  assert.equal(zh.error, phrase('zh', 'ws_err_path'));
   assert.equal(en.error, phrase('en', 'ws_err_path'));
-  assert.equal(en.allowedRoot, '/home/me/projects');
+  assert.equal(Object.hasOwn(zh, 'allowedRoot'), false);
+  assert.equal(Object.hasOwn(en, 'allowedRoot'), false);
 });
 
 test('gitCloneFailureView distinguishes connection vs clone codes', () => {
