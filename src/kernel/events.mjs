@@ -478,6 +478,12 @@ export function projectViewUpdate(projector, view, mapCtx) {
     const key = String(entry.id);
     if (projector.seen.has(key)) continue;
     projector.seen.add(key);
+    // Not a user or assistant bubble. The summary stays out of message.done.
+    // The thread note is rebuilt from this entry; the event only refreshes SSE.
+    if (entry.kind === 'pi.compaction') {
+      if (!snapshot) events.push({ event: 'compaction', data: { entryId: key } });
+      continue;
+    }
     if (!snapshot && (entry.kind === 'pi.user' || entry.kind === 'pi.assistant')) {
       const done = messageDone(entry);
       if (entry.kind === 'pi.assistant' && mapCtx?.liveId) {
@@ -516,9 +522,6 @@ export function projectViewUpdate(projector, view, mapCtx) {
           }
         }
       }
-    }
-    if (entry.kind === 'pi.compaction' && !snapshot) {
-      events.push({ event: 'compaction', data: { entryId: key } });
     }
     if (entry.kind === 'pi.tool-result') {
       const result = entry.model?.[0];
@@ -622,6 +625,8 @@ export function messagesFromEntries(entries) {
   const answered = new Set();
   const messages = [];
   for (const entry of entries || []) {
+    // The model sees this entry as a user summary. The thread gets a system note,
+    // not a user or assistant bubble, and the summary text is not copied out.
     if (entry?.kind === 'pi.compaction') {
       messages.push({
         id: String(entry.id),
