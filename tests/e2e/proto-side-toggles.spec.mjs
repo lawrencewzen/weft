@@ -524,26 +524,55 @@ test('project icon slides from first folder to narrow strip during collapse, and
   const stripProjects = page.getByTestId('next-strip-projects');
   const stripIcon = stripProjects.locator('.sb-ic');
 
-  // Collapse
-  const collapseSamples = [];
-  const startCollapse = Date.now();
-  const clickCollapsePromise = page.click('.side-toggle-left');
-
-  while (Date.now() - startCollapse < 280) {
-    const s = await page.evaluate(() => {
-      const sp = document.querySelector('[data-testid="next-strip-projects"]');
-      const spI = sp ? sp.querySelector('.sb-ic') : null;
+  // Record inside the page. The first sample pauses the animation at time 0,
+  // so it is the start position rather than whatever frame the next Playwright
+  // round-trip happens to see.
+  await page.evaluate(() => {
+    window.__collapseSamples = [];
+    window.__collapseHooked = false;
+    const read = (sp, anim) => {
+      const spI = sp.querySelector('.sb-ic');
       const wsI = document.querySelector('[data-testid="next-ws-toggle"] .sb-ic');
-      if (!sp || !spI || getComputedStyle(sp).display === 'none') return null;
+      if (!spI) return;
       const r = spI.getBoundingClientRect();
-      const wsVis = wsI ? getComputedStyle(wsI).visibility : null;
-      return { x: r.left, y: r.top, wsVis };
+      window.__collapseSamples.push({
+        x: r.left,
+        y: r.top,
+        wsVis: wsI ? getComputedStyle(wsI).visibility : null,
+        time: Number(anim.currentTime) || 0,
+      });
+    };
+    const obs = new MutationObserver(() => {
+      const sp = document.querySelector('[data-testid="next-strip-projects"]');
+      if (!sp || getComputedStyle(sp).display === 'none' || window.__collapseHooked) return;
+      const anim = sp.getAnimations()[0];
+      if (!anim) return;
+      window.__collapseHooked = true;
+      const at = anim.currentTime;
+      anim.pause();
+      anim.currentTime = 0;
+      read(sp, anim);
+      anim.currentTime = at;
+      anim.play();
+      const started = performance.now();
+      const tick = () => {
+        if (!window.__collapseHooked || performance.now() - started > 280) return;
+        read(sp, anim);
+        requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
     });
-    if (s) collapseSamples.push(s);
-    await page.waitForTimeout(15);
-  }
-  await clickCollapsePromise;
+    obs.observe(document.body, { attributes: true, subtree: true, attributeFilter: ['class'] });
+    window.__collapseObs = obs;
+  });
+
+  await page.click('.side-toggle-left');
+  await page.waitForFunction(() => window.__collapseSamples && window.__collapseSamples.length >= 3);
   await page.waitForTimeout(100);
+  const collapseSamples = await page.evaluate(() => {
+    window.__collapseObs?.disconnect();
+    return window.__collapseSamples;
+  });
 
   expect(collapseSamples.length).toBeGreaterThanOrEqual(3);
 
@@ -564,6 +593,10 @@ test('project icon slides from first folder to narrow strip during collapse, and
   // x converged to narrow strip center (center ~ 24.3 visual px)
   const stripCenterX = settledStripBox.x + settledStripBox.width / 2;
   expect(Math.abs(stripCenterX - 27 * 0.9)).toBeLessThanOrEqual(1.5);
+  await page.waitForFunction(() => {
+    const sp = document.querySelector('[data-testid="next-strip-projects"]');
+    return !sp || sp.getAnimations().every((anim) => anim.playState === 'finished');
+  });
 
   // --- Expand ---
   const expandSamples = [];
