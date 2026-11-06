@@ -192,8 +192,7 @@ test('english UI chrome has no Chinese on the main surfaces', async ({ page }) =
   await assertNoChineseChrome(page, 'right tab changes');
   await page.getByTestId('next-right-tab-files').click();
   await assertNoChineseChrome(page, 'right tab files');
-  await page.getByTestId('next-right-tab-term').click();
-  await assertNoChineseChrome(page, 'right tab terminal');
+  await expect(page.getByTestId('next-right-tab-term')).toHaveCount(0);
 
   // Sub-agent strip expanded
   const strip = page.getByTestId('next-agents-strip');

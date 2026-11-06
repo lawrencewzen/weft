@@ -3,6 +3,8 @@ import {
   changeByTitle,
   changeHasDiff,
   changeSignature,
+  changeStatusLetter,
+  changeStatusTitle,
   diffTotals,
   flattenDiff,
   formatChangeBy,
@@ -96,10 +98,34 @@ describe('flattenDiff', () => {
 });
 
 describe('change list helpers', () => {
-  it('hides +0 −0 files unless they have an error', () => {
+  it('hides +0 −0 files unless they have an error or status', () => {
     expect(changeHasDiff({ added: 0, removed: 0 })).toBe(false);
     expect(changeHasDiff({ added: 1, removed: 0 })).toBe(true);
     expect(changeHasDiff({ added: 0, removed: 0, error: 'too large' })).toBe(true);
+    expect(changeHasDiff({ added: 0, removed: 0, status: 'renamed' })).toBe(true);
+    expect(changeHasDiff({ added: 0, removed: 0, status: 'deleted' })).toBe(true);
+    expect(changeHasDiff({ added: 0, removed: 0, status: 'added' })).toBe(true);
+    expect(changeHasDiff({ added: 0, removed: 0, status: 'modified' })).toBe(false);
+  });
+
+  it('maps change status to letter and i18n title', () => {
+    expect(changeStatusLetter('added')).toBe('A');
+    expect(changeStatusLetter('modified')).toBe('M');
+    expect(changeStatusLetter('deleted')).toBe('D');
+    expect(changeStatusLetter('renamed')).toBe('R');
+    expect(changeStatusLetter(null)).toBeNull();
+    expect(changeStatusLetter(undefined)).toBeNull();
+
+    expect(changeStatusTitle('added', 'zh')).toBe('新增');
+    expect(changeStatusTitle('modified', 'zh')).toBe('修改');
+    expect(changeStatusTitle('deleted', 'zh')).toBe('删除');
+    expect(changeStatusTitle('renamed', 'zh')).toBe('重命名');
+
+    expect(changeStatusTitle('added', 'en')).toBe('Added');
+    expect(changeStatusTitle('modified', 'en')).toBe('Modified');
+    expect(changeStatusTitle('deleted', 'en')).toBe('Deleted');
+    expect(changeStatusTitle('renamed', 'en')).toBe('Renamed');
+    expect(changeStatusTitle(undefined, 'zh')).toBeNull();
   });
 
   it('sums added/removed and fingerprints a change for refetch', () => {

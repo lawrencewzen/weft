@@ -131,13 +131,10 @@ test('prototype runs from file:// with mock data, no network and no console erro
   await expect(page.locator('.draft-hero-hint')).toContainText('weft');
   await expect(page.getByTestId('next-ws-chip')).toContainText('weft');
 
-  // New chat right pane has changes, files, and term tabs.
+  // New chat right pane has changes and files tabs; terminal tab is gone.
   await expect(page.getByTestId('next-right-tab-changes')).toBeVisible();
   await expect(page.getByTestId('next-right-tab-files')).toBeVisible();
-  await expect(page.getByTestId('next-right-tab-term')).toBeVisible();
-  await page.getByTestId('next-right-tab-term').click();
-  await expect(page.getByTestId('next-term-pane')).toContainText('还没有命令输出');
-  await page.getByTestId('next-right-tab-changes').click();
+  await expect(page.getByTestId('next-right-tab-term')).toHaveCount(0);
 
   // The draft workspace chip really retargets the conversation.
   await page.getByTestId('next-ws-chip').click();

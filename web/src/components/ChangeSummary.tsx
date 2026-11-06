@@ -3,12 +3,14 @@ import type { Lang } from '../data/lang';
 import { useRightActions, useRightLayout } from '../data/rightPaneContext';
 import type { Change } from '../data/store';
 import {
+  dedupeRenamedChanges,
   getShownChanges,
   isChangeSummaryCollapsible,
   remainingHiddenCount,
   sortChanges,
   splitChangePath,
 } from '../data/changeSummary';
+import { changeStatusLetter, changeStatusTitle } from '../data/diffView';
 import { t } from '../i18n';
 
 type Props = {
@@ -67,7 +69,8 @@ export function ChangeSummary({ changes, lang }: Props) {
   const { openChangeDiff } = useRightActions();
   const [expanded, setExpanded] = useState(false);
 
-  const sorted = useMemo(() => sortChanges(changes), [changes]);
+  const deduped = useMemo(() => dedupeRenamedChanges(changes), [changes]);
+  const sorted = useMemo(() => sortChanges(deduped), [deduped]);
   const collapsible = useMemo(() => isChangeSummaryCollapsible(sorted.length), [sorted.length]);
   const shown = useMemo(() => getShownChanges(sorted, expanded), [sorted, expanded]);
   const remaining = useMemo(() => remainingHiddenCount(sorted.length), [sorted.length]);
@@ -75,14 +78,14 @@ export function ChangeSummary({ changes, lang }: Props) {
   const { totalAdd, totalDel } = useMemo(() => {
     let add = 0;
     let del = 0;
-    for (const c of changes) {
+    for (const c of deduped) {
       add += c.added || 0;
       del += c.removed || 0;
     }
     return { totalAdd: add, totalDel: del };
-  }, [changes]);
+  }, [deduped]);
 
-  if (!changes.length) return null;
+  if (!deduped.length) return null;
 
   function openDiff(path: string) {
     if (!path) return;
@@ -115,7 +118,7 @@ export function ChangeSummary({ changes, lang }: Props) {
       >
         {DIFF_ICON}
         <span className="change-summary-head-title">
-          {t(lang, 'change_summary_title', { n: changes.length })}
+          {t(lang, 'change_summary_title', { n: deduped.length })}
         </span>
         <span className="change-summary-head-sum">
           <span className="add">+{totalAdd.toLocaleString('en-US')}</span>{' '}
@@ -131,6 +134,10 @@ export function ChangeSummary({ changes, lang }: Props) {
           const split = splitChangePath(change.path);
           const add = change.added || 0;
           const del = change.removed || 0;
+          const statusLetter = changeStatusLetter(change.status);
+          const statusTitle = changeStatusTitle(change.status, lang);
+          const isRenamed = change.status === 'renamed' && !!change.oldPath;
+          const rowTitle = isRenamed ? `${change.oldPath} → ${change.path}` : change.path;
 
           return (
             <button
@@ -139,11 +146,25 @@ export function ChangeSummary({ changes, lang }: Props) {
               className="change-summary-row"
               data-testid="next-change-summary-row"
               data-path={change.path}
-              title={change.path}
+              title={rowTitle}
               onClick={() => openDiff(change.path)}
             >
               {FILE_ICON}
-              <span className="change-summary-row-name">{split.name}</span>
+              {statusLetter ? (
+                <span
+                  className={`changed-file-status is-${change.status}`}
+                  data-testid="next-change-summary-status"
+                  data-status={change.status}
+                  title={statusTitle || undefined}
+                >
+                  {statusLetter}
+                </span>
+              ) : null}
+              <span
+                className={`change-summary-row-name${change.status === 'deleted' ? ' is-deleted' : ''}`}
+              >
+                {split.name}
+              </span>
               <span className="change-summary-row-dir">
                 <span>{split.dir}</span>
               </span>

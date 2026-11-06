@@ -29,6 +29,7 @@ export type ToolOutput = components['schemas']['ToolOutput'];
 export type FileContent = components['schemas']['FileContent'];
 export type FileNode = components['schemas']['FileNode'];
 export type FileTree = components['schemas']['FileTree'];
+export type FileSearchResult = components['schemas']['FileSearchResult'];
 export type SaveResult = components['schemas']['SaveResult'];
 export type WorkspaceDirEntry = components['schemas']['WorkspaceDirEntry'];
 export type WorkspaceDirs = components['schemas']['WorkspaceDirs'];
@@ -61,6 +62,18 @@ export type MockTool = {
   totalLines: number;
   output: string;
   liveText?: string;
+  /** ask_user_question. Resolved to contract strings when the tool entity is built. */
+  ask?: MockAsk;
+};
+
+export type MockAsk = {
+  questions: Array<{
+    question: Bilingual;
+    header: Bilingual;
+    multiSelect: boolean;
+    options: Array<{ label: Bilingual; description: Bilingual }>;
+  }>;
+  answer: NonNullable<ToolCall['ask']>['answer'];
 };
 
 export type MockGroup = {

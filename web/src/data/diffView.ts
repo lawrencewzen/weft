@@ -75,9 +75,30 @@ export function flattenDiff(diff: Diff | null | undefined): DiffRow[] {
   return rows;
 }
 
-export function changeHasDiff(change: { added: number; removed: number; error?: string | null }): boolean {
+export function changeHasDiff(change: { added: number; removed: number; error?: string | null; status?: string }): boolean {
   if (change.error) return true;
+  if (change.status === 'renamed' || change.status === 'deleted' || change.status === 'added') return true;
   return (Number(change.added) || 0) !== 0 || (Number(change.removed) || 0) !== 0;
+}
+
+export const STATUS_LETTERS: Record<string, string> = {
+  added: 'A',
+  modified: 'M',
+  deleted: 'D',
+  renamed: 'R',
+};
+
+export function changeStatusLetter(status: string | null | undefined): string | null {
+  if (!status) return null;
+  return STATUS_LETTERS[status] || null;
+}
+
+export function changeStatusTitle(status: string | null | undefined, lang: Lang = 'zh'): string | null {
+  if (status === 'added') return t(lang, 'change_status_added');
+  if (status === 'modified') return t(lang, 'change_status_modified');
+  if (status === 'deleted') return t(lang, 'change_status_deleted');
+  if (status === 'renamed') return t(lang, 'change_status_renamed');
+  return null;
 }
 
 export function diffTotals(list: Array<{ added: number; removed: number }>): { added: number; removed: number } {

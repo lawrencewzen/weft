@@ -243,9 +243,11 @@ test('foreground delegate returns the child answer; tools and name are self-cont
     assert.equal(/Pick a subagent/i.test(JSON.stringify(parentCall.sections || [])), false);
     const childCall = records.find((row) => !(row.tools || []).includes('delegate'));
     assert.ok(childCall, JSON.stringify(records));
+    assert.equal((parentCall.tools || []).includes('ask_user_question'), true);
     assert.equal((childCall.tools || []).includes('delegate'), false);
     assert.equal((childCall.tools || []).includes('subagent'), false);
     assert.equal((childCall.tools || []).includes('skill'), false);
+    assert.equal((childCall.tools || []).includes('ask_user_question'), false);
     assert.equal(sectionInner(childCall, 'instructions'), SUBAGENT_INSTRUCTIONS);
     assert.equal(sectionInner(childCall, 'skills'), '');
     assert.equal(/Skills you can load with the skill tool/i.test(JSON.stringify(childCall.sections || [])), false);

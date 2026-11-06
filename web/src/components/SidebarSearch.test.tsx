@@ -279,6 +279,14 @@ describe('SidebarSearch', () => {
     const input = document.querySelector<HTMLInputElement>('[data-testid="next-search-input"]')!;
     const escBtn = document.querySelector<HTMLButtonElement>('.search-palette-esc')!;
 
+    // Opening the palette schedules a frame that focuses the input again.
+    // Flush it before Tab, or that frame can steal focus back from Esc.
+    await act(async () => {
+      await new Promise<void>((resolve) => {
+        requestAnimationFrame(() => resolve());
+      });
+    });
+
     input.focus();
     expect(document.activeElement).toBe(input);
 

@@ -23,6 +23,7 @@ import {
   removeWorkspace,
   saveWorkspaceFile,
   sendMessage,
+  sendAnswer,
   uploadWorkspaceFile,
   getMessagePaste,
   withdrawMessage,
@@ -152,6 +153,20 @@ describe('api client', () => {
       requestId: 'held-fp',
       files,
       pastes,
+    });
+  });
+
+  it('includes answer on sendMessage and sendAnswer when provided', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(202, { runId: 'run-ans' }));
+    vi.stubGlobal('fetch', fetchMock);
+    const answer = {
+      toolCallId: 'tool-ask-1',
+      answers: [{ questionIndex: 0, selected: ['npm'] }],
+    };
+    await expect(sendAnswer('c1', answer, 'req-ans')).resolves.toEqual({ runId: 'run-ans' });
+    expect(JSON.parse(String(fetchMock.mock.calls[0][1].body))).toEqual({
+      requestId: 'req-ans',
+      answer,
     });
   });
 

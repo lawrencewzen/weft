@@ -5,6 +5,7 @@ import {
   lstat,
   mkdtemp,
   mkdir,
+  open,
   readdir,
   readFile,
   realpath,
@@ -23,10 +24,14 @@ import {
   contentVersion,
   emptyFileContent,
   fileNodeView,
+  hashFile,
   looksBinary,
   maxFileBytes,
   readWorkspaceFile,
   saveWorkspaceFile,
+  SVG_IMAGE_CSP,
+  WORKSPACE_IMAGE_MAX_BYTES,
+  workspaceImageMediaType,
   workspaceTreeView,
   writeFileAtomic,
   WORKSPACE_TREE_MAX_ENTRIES,
@@ -119,13 +124,33 @@ test('readWorkspaceFile flags binary, tooLarge, directory, missing', async () =>
   await writeFile(path.join(root, 'nul.bin'), Buffer.from([0x00, 0x01, 0x02]));
   await writeFile(path.join(root, 'bad.bin'), Buffer.from([0xff, 0xfe, 0xfd]));
   await writeFile(path.join(root, 'big.txt'), 'abcdefghij');
+  // A NUL keeps the stub binary on Windows, where encoding detection is always
+  // on and the four PNG magic bytes alone decode as GBK.
+  await writeFile(path.join(root, 'pic.PNG'), Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x00]));
+  await writeFile(path.join(root, 'icon.svg'), '<svg></svg>');
   const env = { WEFT_V2_MAX_FILE_BYTES: '4' };
 
   const text = await readWorkspaceFile(root, 'ok.txt');
   assert.equal(text.binary, false);
   assert.equal(text.tooLarge, false);
   assert.equal(text.text, 'hello\n');
+  assert.equal(text.image, undefined);
   assert.equal(text.version, contentVersion('hello\n'));
+
+  const pic = await readWorkspaceFile(root, 'pic.PNG');
+  assert.equal(pic.image, true);
+  assert.equal(pic.binary, true);
+  assert.equal(pic.text, null);
+
+  const largePic = await readWorkspaceFile(root, 'pic.PNG', { WEFT_V2_MAX_FILE_BYTES: '1' });
+  assert.equal(largePic.tooLarge, true);
+  assert.equal(largePic.image, true);
+  assert.equal(largePic.text, null);
+
+  const svg = await readWorkspaceFile(root, 'icon.svg');
+  assert.equal(svg.image, true);
+  assert.equal(svg.binary, false);
+  assert.equal(svg.text, '<svg></svg>');
 
   const bin = await readWorkspaceFile(root, 'nul.bin');
   assert.equal(bin.binary, true);
@@ -435,4 +460,230 @@ test('GET/PUT /api/v2/workspaces/{id}/files and tree: contract, sandbox, binary,
   } finally {
     await stopServer(srv);
   }
+});
+
+test('workspaceImageMediaType is the extension whitelist, case-insensitive', () => {
+  assert.equal(workspaceImageMediaType('a.png'), 'image/png');
+  assert.equal(workspaceImageMediaType('a.jpg'), 'image/jpeg');
+  assert.equal(workspaceImageMediaType('a.jpeg'), 'image/jpeg');
+  assert.equal(workspaceImageMediaType('dir/A.GIF'), 'image/gif');
+  assert.equal(workspaceImageMediaType('a.webp'), 'image/webp');
+  assert.equal(workspaceImageMediaType('a.bmp'), 'image/bmp');
+  assert.equal(workspaceImageMediaType('a.svg'), 'image/svg+xml');
+  assert.equal(workspaceImageMediaType('a.ico'), 'image/x-icon');
+  assert.equal(workspaceImageMediaType('Photo.PNG'), 'image/png');
+  assert.equal(workspaceImageMediaType('note.txt'), null);
+  assert.equal(workspaceImageMediaType('noext'), null);
+  assert.equal(workspaceImageMediaType('pic.png.txt'), null);
+  assert.equal(workspaceImageMediaType('.png'), null);
+  assert.equal(workspaceImageMediaType('file.'), null);
+});
+
+async function getRaw(base, apiPath, headers = {}) {
+  const res = await fetch(base + apiPath, { headers });
+  const buf = Buffer.from(await res.arrayBuffer());
+  let body = null;
+  if ((res.headers.get('content-type') || '').includes('application/json')) {
+    try { body = buf.length ? JSON.parse(buf.toString('utf8')) : null; } catch { body = null; }
+  }
+  return { status: res.status, buf, body, headers: res.headers };
+}
+
+async function issueSessionCookie(base, token) {
+  const issued = await fetch(`${base}/api/v2/auth/web-code`, {
+    method: 'POST',
+    headers: {
+      authorization: `Bearer ${token}`,
+      'content-type': 'application/json',
+    },
+    body: '{}',
+  });
+  assert.equal(issued.status, 200);
+  const { code } = await issued.json();
+  const login = await fetch(`${base}/auth?code=${encodeURIComponent(code)}`, { redirect: 'manual' });
+  assert.equal(login.status, 302);
+  const setCookie = login.headers.get('set-cookie') || '';
+  const match = /weft_session=([^;]+)/.exec(setCookie);
+  assert.ok(match, setCookie);
+  return `weft_session=${match[1]}`;
+}
+
+test('GET /files/raw streams images: whitelist, 415, sandbox, 413, 304, headers, cookie', { timeout: 40_000 }, async () => {
+  const srv = await startServer({
+    token: TOKEN,
+    env: { WEFT_LLM: 'faux' },
+  });
+  try {
+    const discovery = await readDiscovery(srv.dataDir);
+    const ws = await request(srv.base, 'POST', '/api/workspaces', { name: 'v2-raw' }, TOKEN);
+    assert.equal(ws.status, 201, JSON.stringify(ws.body));
+    const wid = ws.body.id;
+    const root = ws.body.path;
+    const bearer = { authorization: `Bearer ${discovery.token}` };
+    const rawUrl = (rel) => `/api/v2/workspaces/${wid}/files/raw?path=${encodeURIComponent(rel)}`;
+
+    const pngBytes = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x00, 0x01]);
+    const samples = [
+      ['shot.png', 'image/png', pngBytes],
+      ['shot.jpg', 'image/jpeg', Buffer.from('jpg-bytes')],
+      ['shot.jpeg', 'image/jpeg', Buffer.from('jpeg-bytes')],
+      ['shot.gif', 'image/gif', Buffer.from('gif-bytes')],
+      ['shot.webp', 'image/webp', Buffer.from('webp-bytes')],
+      ['shot.bmp', 'image/bmp', Buffer.from('bmp-bytes')],
+      ['shot.svg', 'image/svg+xml', Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>')],
+      ['shot.ico', 'image/x-icon', Buffer.from('ico-bytes')],
+      ['Photo.JPEG', 'image/jpeg', Buffer.from('upper-jpeg')],
+    ];
+    for (const [name, mediaType, bytes] of samples) {
+      await writeFile(path.join(root, name), bytes);
+      const res = await getRaw(srv.base, rawUrl(name), bearer);
+      assert.equal(res.status, 200, `${name} ${res.buf.toString('utf8')}`);
+      assert.equal(res.headers.get('content-type'), mediaType, name);
+      assert.equal(res.buf.equals(bytes), true, name);
+      assert.equal(res.headers.get('x-content-type-options'), 'nosniff', name);
+      assert.equal(res.headers.get('content-disposition'), 'inline', name);
+      assert.equal(res.headers.get('cache-control'), 'private, no-cache', name);
+      assert.equal(res.headers.get('etag'), `"${await hashFile(path.join(root, name))}"`, name);
+    }
+
+    const png = await getRaw(srv.base, rawUrl('shot.png'), bearer);
+    assert.notEqual(png.headers.get('content-security-policy'), SVG_IMAGE_CSP);
+    const svg = await getRaw(srv.base, rawUrl('shot.svg'), bearer);
+    assert.equal(svg.headers.get('content-security-policy'), SVG_IMAGE_CSP);
+    assert.equal(svg.headers.get('x-content-type-options'), 'nosniff');
+    assert.equal(svg.headers.get('content-disposition'), 'inline');
+
+    const meta = await getV2(srv.base, `/api/v2/workspaces/${wid}/files?path=${encodeURIComponent('shot.png')}`, discovery.token);
+    assert.equal(meta.status, 200, meta.text);
+    assertChecked(`/api/v2/workspaces/${wid}/files`, 'GET', 200, meta.body);
+    assert.equal(meta.body.image, true);
+    assert.equal(meta.body.binary, true);
+    assert.equal(meta.body.text, null);
+
+    await writeFile(path.join(root, 'note.txt'), 'hello\n');
+    const textMeta = await getV2(srv.base, `/api/v2/workspaces/${wid}/files?path=${encodeURIComponent('note.txt')}`, discovery.token);
+    assert.equal(textMeta.status, 200, textMeta.text);
+    assert.equal(Object.hasOwn(textMeta.body, 'image'), false);
+
+    const rejected = ['note.txt', 'noext', 'pic.png.txt', '.png'];
+    await writeFile(path.join(root, 'noext'), 'x');
+    await writeFile(path.join(root, 'pic.png.txt'), 'x');
+    await writeFile(path.join(root, '.png'), 'x');
+    for (const name of rejected) {
+      const res = await getRaw(srv.base, rawUrl(name), bearer);
+      assert.equal(res.status, 415, name);
+      assert.equal(res.body.code, 'E_MEDIA', name);
+      assertChecked(`/api/v2/workspaces/${wid}/files/raw`, 'GET', 415, res.body);
+    }
+
+    await writeFile(path.join(root, '..', 'secret.png'), Buffer.from('TOP-SECRET-PIXELS'));
+    await symlink(path.join(root, '..', 'secret.png'), path.join(root, 'escape.png'));
+    const parent = await getRaw(srv.base, rawUrl('../secret.png'), bearer);
+    assert.equal(parent.status, 403);
+    assert.equal(parent.body.code, 'E_SANDBOX');
+    assertChecked(`/api/v2/workspaces/${wid}/files/raw`, 'GET', 403, parent.body);
+    assert.equal(parent.buf.includes(Buffer.from('TOP-SECRET-PIXELS')), false);
+
+    const linked = await getRaw(srv.base, rawUrl('escape.png'), bearer);
+    assert.equal(linked.status, 403);
+    assert.equal(linked.body.code, 'E_SANDBOX');
+    assert.equal(linked.buf.includes(Buffer.from('TOP-SECRET-PIXELS')), false);
+
+    await symlink(path.join(root, 'shot.png'), path.join(root, 'link.png'));
+    const inside = await getRaw(srv.base, rawUrl('link.png'), bearer);
+    assert.equal(inside.status, 200);
+    assert.equal(inside.buf.equals(pngBytes), true);
+    assert.equal(inside.headers.get('content-type'), 'image/png');
+
+    const fh = await open(path.join(root, 'huge.png'), 'w');
+    await fh.truncate(WORKSPACE_IMAGE_MAX_BYTES + 1);
+    await fh.close();
+    const huge = await getRaw(srv.base, rawUrl('huge.png'), bearer);
+    assert.equal(huge.status, 413);
+    assert.equal(huge.body.code, 'E_TOO_LARGE');
+    assertChecked(`/api/v2/workspaces/${wid}/files/raw`, 'GET', 413, huge.body);
+    assert.ok(huge.buf.length < 1000);
+
+    const etag = png.headers.get('etag');
+    const cached = await getRaw(srv.base, rawUrl('shot.png'), { ...bearer, 'if-none-match': etag });
+    assert.equal(cached.status, 304);
+    assert.equal(cached.buf.length, 0);
+    assert.equal(cached.headers.get('etag'), etag);
+    assert.equal(cached.headers.get('cache-control'), 'private, no-cache');
+    assert.equal(cached.headers.get('x-content-type-options'), 'nosniff');
+    assert.equal(cached.headers.get('content-disposition'), 'inline');
+
+    const stale = await getRaw(srv.base, rawUrl('shot.png'), { ...bearer, 'if-none-match': '"deadbeefdeadbeef"' });
+    assert.equal(stale.status, 200);
+    assert.equal(stale.buf.equals(pngBytes), true);
+
+    const listed = await getRaw(srv.base, rawUrl('shot.png'), { ...bearer, 'if-none-match': `"nope", ${etag}` });
+    assert.equal(listed.status, 304);
+
+    await mkdir(path.join(root, 'folder'));
+    await mkdir(path.join(root, 'pics.png'));
+    const dir = await getRaw(srv.base, rawUrl('folder'), bearer);
+    assert.equal(dir.status, 400);
+    assertChecked(`/api/v2/workspaces/${wid}/files/raw`, 'GET', 400, dir.body);
+    const dirNamedPng = await getRaw(srv.base, rawUrl('pics.png'), bearer);
+    assert.equal(dirNamedPng.status, 400);
+    assert.equal(dirNamedPng.body.code, 'E_BAD_REQUEST');
+
+    const missing = await getRaw(srv.base, rawUrl('missing.png'), bearer);
+    assert.equal(missing.status, 404);
+    assertChecked(`/api/v2/workspaces/${wid}/files/raw`, 'GET', 404, missing.body);
+
+    const noPath = await getRaw(srv.base, `/api/v2/workspaces/${wid}/files/raw`, bearer);
+    assert.equal(noPath.status, 400);
+    assert.equal(noPath.body.code, 'E_BAD_REQUEST');
+
+    const cookie = await issueSessionCookie(srv.base, discovery.token);
+    const withCookie = await getRaw(srv.base, rawUrl('shot.png'), { cookie });
+    assert.equal(withCookie.status, 200);
+    assert.equal(withCookie.buf.equals(pngBytes), true);
+    assert.equal(withCookie.headers.get('content-type'), 'image/png');
+
+    const unauth = await getRaw(srv.base, rawUrl('shot.png'));
+    assert.equal(unauth.status, 401);
+    assert.equal(unauth.body.code, 'E_UNAUTHORIZED');
+    assertChecked(`/api/v2/workspaces/${wid}/files/raw`, 'GET', 401, unauth.body);
+
+    const badCookie = await getRaw(srv.base, rawUrl('shot.png'), { cookie: 'weft_session=not-a-session' });
+    assert.equal(badCookie.status, 401);
+    assert.equal(badCookie.body.code, 'E_UNAUTHORIZED');
+  } finally {
+    await stopServer(srv);
+  }
+});
+
+test('prototype seed returns the embedded preview png from /files/raw', async () => {
+  const {
+    SEED_PREVIEW_PNG_BASE64,
+    readRepoFile,
+    readRepoFileRaw,
+    seedWeftRepo,
+  } = await import('../../web/proto/mock/repo.ts');
+  const repo = seedWeftRepo();
+  const content = readRepoFile(repo, 'design/preview.png');
+  assert.equal(content.image, true);
+  assert.equal(content.binary, true);
+  assert.equal(content.text, null);
+  assert.equal(content.size > 0, true);
+
+  const raw = readRepoFileRaw(repo, 'design/preview.png');
+  assert.equal(raw.mediaType, 'image/png');
+  assert.equal(Buffer.from(raw.bytes).toString('base64'), SEED_PREVIEW_PNG_BASE64);
+  assert.equal(raw.bytes[0], 0x89);
+  assert.equal(raw.bytes[1], 0x50);
+
+  const text = readRepoFileRaw(repo, 'README.md');
+  assert.equal(text.status, 415);
+  assert.equal(text.code, 'E_MEDIA');
+  const escape = readRepoFileRaw(repo, '../secret.png');
+  assert.equal(escape.status, 403);
+  assert.equal(escape.code, 'E_SANDBOX');
+  const missing = readRepoFileRaw(repo, 'design/missing.png');
+  assert.equal(missing.status, 404);
+  const dir = readRepoFileRaw(repo, 'design');
+  assert.equal(dir.status, 400);
 });

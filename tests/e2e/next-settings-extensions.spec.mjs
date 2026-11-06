@@ -207,8 +207,13 @@ test('plugins import, fail with server copy, and toggle', async ({ page }) => {
   await boot(page);
   await openSettingsNav(page, 'plugins');
   await expect(page.getByTestId('next-settings-plugins')).toBeVisible();
-  await expect(page.getByTestId('next-settings-plugins')).toContainText('还没有插件');
-  await expect(page.getByTestId('next-plugin-row')).toHaveCount(0);
+  const ask = pluginRow(page, 'Ask');
+  await expect(ask).toBeVisible();
+  await expect(ask).toContainText('ask_user_question');
+  await expect(ask).toContainText('内置');
+  await expect(ask.getByTestId('next-plugin-toggle')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByTestId('next-plugin-row')).toHaveCount(1);
+  await expect(page.getByTestId('next-settings-plugins')).not.toContainText('还没有插件');
 
   await page.getByTestId('next-plugin-import').click();
   await expect(page.getByTestId('next-plugin-error')).toHaveText('请填写本机插件目录');
@@ -221,7 +226,8 @@ test('plugins import, fail with server copy, and toggle', async ({ page }) => {
   await expect(word).toContainText('word_count');
   await expect(word).toContainText('本地导入');
   await expect(word).toContainText('0.1.0');
-  await expect(page.getByTestId('next-plugin-row')).toHaveCount(1);
+  await expect(page.getByTestId('next-plugin-row')).toHaveCount(2);
+  await expect(ask).toBeVisible();
   await expect(page.getByTestId('next-toast')).toContainText('Word Count');
 
   await page.getByTestId('next-plugin-path').fill('examples/plugins/broken');

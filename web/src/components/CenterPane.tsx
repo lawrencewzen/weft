@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { refreshWorkspaceGit } from '../data/api';
+import { findPendingAsk } from '../data/ask';
 import type { ResolvedModel } from '../data/composerModel';
 import type { Lang } from '../data/lang';
 import { writeActiveWorkspace } from '../data/layout';
@@ -12,7 +13,10 @@ import { useConversation, useDraftSend } from '../data/useConversation';
 import { usePendingSend, waitingForAgent } from '../data/usePendingSend';
 import { t } from '../i18n';
 import type { components } from '../../../src/v2/contract.gen';
+import { AgentsStrip } from './AgentsStrip';
+import { AskPanel } from './AskPanel';
 import { Composer } from './Composer';
+import { StallStrip } from './StallStrip';
 import { StatusBar } from './StatusBar';
 import { Thread } from './Thread';
 
@@ -24,6 +28,7 @@ type Props = {
   workspaceId?: string | null;
   workspace?: Workspace | null;
   isDraft?: boolean;
+  maximized?: boolean;
   lang: Lang;
   demo?: boolean;
   onNewWorkspace?: () => void;
@@ -61,6 +66,7 @@ export function CenterPane({
   workspaceId,
   workspace = null,
   isDraft: isDraftProp = false,
+  maximized = false,
   lang,
   demo = false,
   onNewWorkspace,
@@ -115,6 +121,7 @@ export function CenterPane({
   const draftActions = useDraftSend(workspaceId, modelForCreate, thinkingLevelForCreate);
   const [stickNonce, setStickNonce] = useState(0);
   const bumpStick = useCallback(() => setStickNonce((n) => n + 1), []);
+  const [dismissedAskId, setDismissedAskId] = useState<string | null>(null);
   const refreshId = workspace?.id || workspaceId || conversation?.workspaceId || null;
 
   useEffect(() => {
@@ -126,7 +133,12 @@ export function CenterPane({
     const draft = draftView(workspaceId || '', lang);
     const projectName = workspace && !isChatWorkspace(workspace) ? workspace.name : null;
     return (
-      <main className="col-center" data-testid="next-center">
+      <main
+        className="col-center"
+        data-testid="next-center"
+        inert={maximized || undefined}
+        aria-hidden={maximized || undefined}
+      >
         <StatusBar
           conversation={draft}
           lang={lang}
@@ -170,7 +182,12 @@ export function CenterPane({
 
   if (missing) {
     return (
-      <main className="col-center" data-testid="next-center">
+      <main
+        className="col-center"
+        data-testid="next-center"
+        inert={maximized || undefined}
+        aria-hidden={maximized || undefined}
+      >
         <header className="next-status">
           <div className="next-status-inner">
             <div className="top-heading" />
@@ -186,7 +203,12 @@ export function CenterPane({
 
   if (!conversation) {
     return (
-      <main className="col-center" data-testid="next-center">
+      <main
+        className="col-center"
+        data-testid="next-center"
+        inert={maximized || undefined}
+        aria-hidden={maximized || undefined}
+      >
         <header className="next-status" data-testid="next-status">
           <div className="next-status-inner">
             <div className="top-heading">
@@ -210,8 +232,16 @@ export function CenterPane({
     item.kind === 'tool_group' && (item.live || item.summary.running)
   ));
 
+  const rawPendingAsk = findPendingAsk(shownItems, toolsById);
+  const activePendingAsk = rawPendingAsk && rawPendingAsk.id !== dismissedAskId ? rawPendingAsk : null;
+
   return (
-    <main className="col-center" data-testid="next-center">
+    <main
+      className="col-center"
+      data-testid="next-center"
+      inert={maximized || undefined}
+      aria-hidden={maximized || undefined}
+    >
       <StatusBar
         conversation={conversation}
         lang={lang}
@@ -219,22 +249,40 @@ export function CenterPane({
         hidePending={liveTools}
         workspace={workspace}
       />
-        <Thread
-          items={shownItems}
-          toolsById={toolsById}
-          lang={lang}
-          running={conversation.run.status === 'running'}
-          pending={waitingForAgent(shownItems, {
-            running: conversation.run.status === 'running',
-            pending: optimistic.sending,
-          })}
-          pendingText={conversation.run.pendingText}
-          actions={actions}
-          stickNonce={stickNonce}
-          conversationId={cid}
-          conversationModel={conversation.model}
-          changes={changes}
-        />
+      <Thread
+        items={shownItems}
+        toolsById={toolsById}
+        lang={lang}
+        running={conversation.run.status === 'running'}
+        pending={waitingForAgent(shownItems, {
+          running: conversation.run.status === 'running',
+          pending: optimistic.sending,
+        })}
+        pendingText={conversation.run.pendingText}
+        actions={actions}
+        stickNonce={stickNonce}
+        conversationId={cid}
+        conversationModel={conversation.model}
+        changes={changes}
+      />
+      {activePendingAsk ? (
+        <footer className="center-composer">
+          <div className="composer-stack">
+            {cid ? <StallStrip run={conversation.run} lang={lang} onStop={actions.stop} /> : null}
+            {cid ? <AgentsStrip cid={cid} lang={lang} /> : null}
+            <AskPanel
+              key={activePendingAsk.id}
+              cid={cid || ''}
+              tool={activePendingAsk}
+              lang={lang}
+              canStop={Boolean(conversation.run.canStop)}
+              onStop={actions.stop}
+              onAnswered={bumpStick}
+              onDismiss={() => setDismissedAskId(activePendingAsk.id)}
+            />
+          </div>
+        </footer>
+      ) : (
         <Composer
           key={cid || 'draft'}
           lang={lang}
@@ -256,6 +304,7 @@ export function CenterPane({
             optimistic.dropLocal(requestId);
           }}
         />
+      )}
     </main>
   );
 }

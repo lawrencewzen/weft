@@ -9,6 +9,7 @@ import {
   publishProviders,
   publishRemove,
   publishSummary,
+  publishTool,
   publishWorkspaces,
   recomputeContext,
   touch,
@@ -21,13 +22,17 @@ import { branchesOf, pluginForLang, tokenFails } from './extensions';
 import {
   EXTERNAL_TOUCH_MS,
   createRepo,
+  isRawFileHit,
   posixPath,
+  queryRepoTree,
   readRepoFile,
+  readRepoFileRaw,
   repoTree,
   saveRepoFile,
   textDiff,
   touchRepoFile,
 } from './repo';
+import { searchRepoFiles } from './file-search';
 import {
   conversationValue,
   itemValue,
@@ -116,6 +121,21 @@ function readBody(init?: RequestInit): Record<string, unknown> {
 
 function str(value: unknown): string {
   return typeof value === 'string' ? value : '';
+}
+
+function requestHeader(init: RequestInit | undefined, name: string): string {
+  const headers = init?.headers;
+  if (!headers) return '';
+  if (typeof Headers !== 'undefined' && headers instanceof Headers) return headers.get(name) || '';
+  if (Array.isArray(headers)) {
+    const hit = headers.find(([key]) => key.toLowerCase() === name.toLowerCase());
+    return hit ? String(hit[1]) : '';
+  }
+  const rec = headers as Record<string, string>;
+  for (const key of Object.keys(rec)) {
+    if (key.toLowerCase() === name.toLowerCase()) return String(rec[key] ?? '');
+  }
+  return '';
 }
 
 function modelLabel(db: MockDb, model: ResolvedModel | null): string {
@@ -1184,7 +1204,43 @@ export function handleMockRequest(db: MockDb, hub: MockHub, rawUrl: string, init
     const workspaceId = decodeURIComponent(wsTreeMatch[1]);
     const repo = db.repos.get(workspaceId);
     if (!repo) return fail(404, '工作区不存在');
-    return ok(repoTree(repo));
+    const dir = url.searchParams.get('dir');
+    if (dir == null || dir.trim() === '') return ok(repoTree(repo));
+    const listed = queryRepoTree(repo, dir);
+    if (!listed.ok) return fail(listed.status, listed.error, listed.code);
+    return ok(listed.tree);
+  }
+  const wsSearchMatch = /^\/api\/v2\/workspaces\/([^/]+)\/file-search$/.exec(path);
+  if (wsSearchMatch && method === 'GET') {
+    const workspaceId = decodeURIComponent(wsSearchMatch[1]);
+    const repo = db.repos.get(workspaceId);
+    if (!repo) return fail(404, '工作区不存在');
+    return ok(searchRepoFiles(repo, url.searchParams.get('q') ?? '', url.searchParams.get('limit')));
+  }
+  const wsRawMatch = /^\/api\/v2\/workspaces\/([^/]+)\/files\/raw$/.exec(path);
+  if (wsRawMatch && method === 'GET') {
+    const workspaceId = decodeURIComponent(wsRawMatch[1]);
+    const repo = db.repos.get(workspaceId);
+    if (!repo) return fail(404, lang === 'en' ? 'Workspace not found' : '工作区不存在');
+    const raw = url.searchParams.get('path');
+    if (raw == null || raw === '') return fail(400, 'path required', 'E_BAD_REQUEST');
+    const result = readRepoFileRaw(repo, raw);
+    if (!isRawFileHit(result)) return fail(result.status, result.error, result.code);
+    const headers: Record<string, string> = {
+      'content-type': result.mediaType,
+      'content-disposition': 'inline',
+      'cache-control': 'private, no-cache',
+      etag: result.etag,
+      'x-content-type-options': 'nosniff',
+    };
+    if (result.mediaType === 'image/svg+xml') {
+      headers['content-security-policy'] = "default-src 'none'; style-src 'unsafe-inline'; sandbox";
+    }
+    const inm = requestHeader(init, 'if-none-match');
+    if (inm && inm.split(',').map((part) => part.trim()).includes(result.etag)) {
+      return { status: 304, headers };
+    }
+    return { status: 200, bytes: result.bytes, headers };
   }
   const wsFilesMatch = /^\/api\/v2\/workspaces\/([^/]+)\/files$/.exec(path);
   if (wsFilesMatch) {
@@ -1556,9 +1612,61 @@ export function handleMockRequest(db: MockDb, hub: MockHub, rawUrl: string, init
     if (!parsedImages.ok) return fail(400, parsedImages.error, parsedImages.code);
     const files = Array.isArray(body.files) ? (body.files as components['schemas']['SendMessageFile'][]) : undefined;
     const pastes = Array.isArray(body.pastes) ? (body.pastes as string[]) : undefined;
+
+    const answer = body.answer as components['schemas']['AskAnswerRequest'] | undefined;
+    if (answer != null) {
+      if (typeof answer !== 'object' || Array.isArray(answer)) {
+        return fail(400, 'invalid answer', 'E_BAD_REQUEST');
+      }
+      if (parsedImages.images.length || (files && files.length > 0) || (pastes && pastes.length > 0)) {
+        return fail(400, 'answer cannot include attachments', 'E_BAD_REQUEST');
+      }
+      const tool = conv.tools[answer.toolCallId];
+      if (!tool || !tool.ask) {
+        return fail(400, '提问不存在', 'E_BAD_REQUEST');
+      }
+      if (tool.ask.answer != null) {
+        return fail(409, 'already answered', 'E_ASK_ANSWERED');
+      }
+      const skipped = Boolean(answer.skipped);
+      tool.ask.answer = {
+        answers: skipped ? [] : (answer.answers || []),
+        skipped,
+      };
+      if (skipped) {
+        tool.hint = { zh: '已跳过', en: 'Skipped' };
+      } else {
+        const parts: string[] = [];
+        for (const ans of tool.ask.answer.answers) {
+          const items = [...ans.selected, ...(ans.other ? [ans.other] : [])];
+          if (items.length) parts.push(items.join(', '));
+        }
+        const summary = parts.join('；') || '已回答';
+        tool.hint = { zh: summary, en: summary };
+      }
+      const group = conv.items.find((item) => item.kind === 'tool_group' && item.toolIds.includes(tool.id));
+      const groupId = group && group.kind === 'tool_group' ? group.id : `group:${tool.id}`;
+      publishTool(conv, hub, tool, groupId);
+      touch(conv);
+      publishConversationView(conv, hub);
+      publishSummary(db, hub, conv.view.id);
+      return accepted({ runId: nextId(db, 'run') });
+    }
+
     if (!text && parsedImages.images.length === 0 && (!files || files.length === 0) && (!pastes || pastes.length === 0)) {
       return fail(400, '消息不能为空', 'E_BAD_REQUEST');
     }
+
+    for (const t of Object.values(conv.tools)) {
+      if (t.ask && t.ask.answer === null) {
+        t.ask.answer = { answers: [], skipped: true };
+        t.hint = { zh: '已跳过', en: 'Skipped' };
+        const g = conv.items.find((item) => item.kind === 'tool_group' && item.toolIds.includes(t.id));
+        const gid = g && g.kind === 'tool_group' ? g.id : `group:${t.id}`;
+        publishTool(conv, hub, t, gid);
+      }
+    }
+
     const requestId = typeof body.requestId === 'string' && body.requestId
       ? body.requestId
       : nextId(db, 'req');
@@ -1618,9 +1726,9 @@ export function handleMockRequest(db: MockDb, hub: MockHub, rawUrl: string, init
 /** Everything the prototype serves, wrapped in a real `Response`. */
 export function mockResponse(db: MockDb, hub: MockHub, rawUrl: string, init?: RequestInit): Response {
   const reply = handleMockRequest(db, hub, rawUrl, init);
-  if (reply.status === 204) {
+  if (reply.status === 204 || reply.status === 304) {
     return new Response(null, {
-      status: 204,
+      status: reply.status,
       headers: reply.headers,
     });
   }

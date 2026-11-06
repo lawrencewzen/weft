@@ -95,7 +95,7 @@ test('diff, file tree, preview, save and the 409 conflict demo', async ({ page }
   await page.locator('[data-testid=next-file-node][data-path="README.md"]').click();
   await expect(page.getByTestId('next-file-editor')).toContainText('常用命令');
   await page.getByTestId('next-file-open-editor').click();
-  await page.locator('.md-editor-content').fill('# weft\n\n原型里改过的一行\n');
+  await page.locator('.cm-content').fill('# weft\n\n原型里改过的一行\n');
   await page.getByTestId('next-file-save').click();
   await expect(page.getByTestId('next-toast')).toContainText('已保存');
   const savedVersion = await page.evaluate(() => (window.__protoRequests || [])
@@ -119,7 +119,7 @@ test('diff, file tree, preview, save and the 409 conflict demo', async ({ page }
   await expect(page.getByTestId('next-file-editor')).toContainText('保存冲突演示');
   await page.waitForTimeout(1_600);
   await page.getByTestId('next-file-open-editor').click();
-  await page.locator('.md-editor-content').fill('# 冲突演示\n\n我加了一行\n');
+  await page.locator('.cm-content').fill('# 冲突演示\n\n我加了一行\n');
   await page.getByTestId('next-file-save').click();
   await expect(page.getByTestId('next-file-conflict')).toBeVisible();
   const conflict = await page.evaluate(() => (window.__protoRequests || [])
@@ -127,7 +127,7 @@ test('diff, file tree, preview, save and the 409 conflict demo', async ({ page }
   expect(conflict).toBe(true);
   await page.getByTestId('next-file-reload').click();
   await expect(page.getByTestId('next-file-conflict')).toHaveCount(0);
-  await expect(page.locator('.md-editor-content')).toContainText('外部修改');
+  await expect(page.locator('.cm-content')).toContainText('外部修改');
 
   // Clicking an edit tool row jumps to that file's diff in the changes tab.
   await page.getByTestId('next-tool-group-summary').nth(1).click();
@@ -163,6 +163,95 @@ test('a simulated edit lands in the changes list with its diff', async ({ page }
   // The same file is now marked as modified in the file tree.
   await page.getByTestId('next-right-tab-files').click();
   await expect(page.locator('[data-testid=next-file-node][data-path="web/src/data/store.ts"]')).toContainText('M');
+
+  expectClean(state);
+});
+
+test('diff long line wraps in default narrow pane and unwraps when widened', async ({ page }) => {
+  const state = await openProto(page);
+
+  const testRow = page.locator('[data-testid=next-change-row][data-path="web/src/data/store.test.ts"]');
+  await expect(testRow).toBeVisible();
+  const diffLines = testRow.locator('.diff-lines');
+  await expect(diffLines).toBeVisible();
+
+  // 1. In default narrow pane: .diff-lines scrollWidth <= clientWidth
+  const scrollInfo = await diffLines.evaluate((el) => ({
+    scrollWidth: el.scrollWidth,
+    clientWidth: el.clientWidth,
+  }));
+  expect(scrollInfo.scrollWidth).toBeLessThanOrEqual(scrollInfo.clientWidth);
+
+  // Short single-line vs long line in store.test.ts
+  const shortLine = testRow.locator('[data-testid=next-diff-line]').filter({ hasText: 'const store = createEntityStore()' }).first();
+  const longLine = testRow.locator('[data-testid=next-diff-line]').filter({ hasText: 'textDelta(store' }).first();
+  await expect(shortLine).toBeVisible();
+  await expect(longLine).toBeVisible();
+
+  // user-select: none on line number and sign
+  await expect(longLine.locator('.n.new')).toHaveCSS('user-select', 'none');
+  await expect(longLine.locator('.sign')).toHaveCSS('user-select', 'none');
+  await expect(longLine.locator('.code')).toHaveCSS('white-space', 'pre-wrap');
+  await expect(longLine.locator('.code')).toHaveCSS('overflow-wrap', 'anywhere');
+
+  const shortBox = await shortLine.boundingBox();
+  const longBox = await longLine.boundingBox();
+  expect(shortBox).not.toBeNull();
+  expect(longBox).not.toBeNull();
+
+  // 2. Long line height > single line height
+  expect(longBox.height).toBeGreaterThan(shortBox.height);
+
+  // 3. Line background width equals pane width
+  const linesBox = await diffLines.boundingBox();
+  expect(linesBox).not.toBeNull();
+  expect(Math.abs(longBox.width - linesBox.width)).toBeLessThanOrEqual(1);
+
+  // 4. Line number x coordinate matches other lines
+  const shortNumBox = await shortLine.locator('.n.new').boundingBox();
+  const longNumBox = await longLine.locator('.n.new').boundingBox();
+  expect(shortNumBox).not.toBeNull();
+  expect(longNumBox).not.toBeNull();
+  expect(Math.abs(longNumBox.x - shortNumBox.x)).toBeLessThanOrEqual(1);
+
+  const shortSignBox = await shortLine.locator('.sign').boundingBox();
+  const longSignBox = await longLine.locator('.sign').boundingBox();
+  expect(shortSignBox).not.toBeNull();
+  expect(longSignBox).not.toBeNull();
+  expect(Math.abs(longSignBox.x - shortSignBox.x)).toBeLessThanOrEqual(1);
+
+  // Drag divider to widen the right pane beyond long line length
+  const divider = page.locator('.col-divider[data-side="right"]');
+  await expect(divider).toBeVisible();
+  const divBox = await divider.boundingBox();
+  expect(divBox).not.toBeNull();
+
+  // Drag divider to the left to widen the right pane
+  await page.mouse.move(divBox.x - 2, divBox.y + 100);
+  await page.mouse.down();
+  await page.mouse.move(divBox.x - 2 - 350, divBox.y + 100, { steps: 10 });
+  await page.mouse.up();
+
+  // When widened, the long line does not wrap, height equals single line height
+  await expect.poll(async () => {
+    const widenedLongBox = await longLine.boundingBox();
+    const widenedShortBox = await shortLine.boundingBox();
+    if (!widenedLongBox || !widenedShortBox) return null;
+    return Math.abs(widenedLongBox.height - widenedShortBox.height);
+  }).toBeLessThanOrEqual(1);
+
+  // Verify selecting across lines does not copy line numbers or +/- signs
+  const selectedText = await testRow.locator('.diff-lines').evaluate((el) => {
+    const sel = window.getSelection();
+    sel?.removeAllRanges();
+    const range = document.createRange();
+    range.selectNodeContents(el);
+    sel?.addRange(range);
+    return sel?.toString() || '';
+  });
+  expect(selectedText).toContain('const store = createEntityStore();');
+  expect(selectedText).not.toMatch(/^\s*\d+/m);
+  expect(selectedText).not.toMatch(/^\s*[+−]/m);
 
   expectClean(state);
 });

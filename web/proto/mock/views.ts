@@ -130,6 +130,20 @@ export function toolValue(tool: MockTool, groupId: string): EntityValue {
         totalLines: tool.totalLines,
         ...(tool.liveText != null && tool.liveText !== '' ? { text: tool.liveText } : {}),
       },
+      ...(tool.ask ? {
+        ask: {
+          questions: tool.ask.questions.map((question) => ({
+            question: tr(question.question, lang),
+            header: tr(question.header, lang),
+            multiSelect: question.multiSelect,
+            options: question.options.map((option) => ({
+              label: tr(option.label, lang),
+              description: tr(option.description, lang),
+            })),
+          })),
+          answer: tool.ask.answer,
+        },
+      } : {}),
     };
     return call as unknown as object;
   };

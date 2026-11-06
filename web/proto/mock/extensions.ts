@@ -15,6 +15,18 @@ const HOUR = 3_600_000;
 export function seedPlugins(): Plugin[] {
   return [
     {
+      id: 'ask',
+      name: 'Ask',
+      description: '向用户提选择题并结束本轮。',
+      version: '0.1.0',
+      source: 'bundled',
+      enabled: true,
+      loaded: true,
+      error: null,
+      errorCode: null,
+      tools: [{ name: 'ask_user_question', description: '提 1 到 4 道选择题，然后结束本轮' }],
+    },
+    {
       id: 'echo',
       name: 'echo',
       description: '把输入原样返回，用来确认插件链路是通的。',

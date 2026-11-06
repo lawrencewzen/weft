@@ -16,6 +16,7 @@ import { presentContext } from '../core/usage.mjs';
 import { createCredentialStore, createModelsStore } from '../core/provider-stores.mjs';
 import { createProviderService } from '../core/provider-service.mjs';
 import { configureThinkingLevel } from '../core/thinking-level.mjs';
+import { buildAskSubmission } from './ask.mjs';
 import {
   createMapContext,
   mapHarnessBatch,
@@ -36,6 +37,19 @@ import { maybeGenerateConversationTitle } from './title.mjs';
 import { createSubagentControl } from './subagent-control.mjs';
 import { createSubagentExtension, createSubagentHost } from './subagents.mjs';
 import { createWorkspaceExtension, workspaceTools } from './tools.mjs';
+import {
+  CHANGE_CACHE_MS,
+  WorkspaceSnapshot,
+  appendOutsideChanges,
+  captureWorktree,
+  decorateGitChanges,
+  gitPrefix,
+  indexFileFor,
+  isOutsideWorkspacePath,
+  listWorktreeChanges,
+  readTreeBlob,
+} from './workspace-snapshot.mjs';
+import { decodeWorkspaceBytes } from './workspace-text.mjs';
 import { installUsageExtension } from './usage.mjs';
 import { installContinuationExtension } from './continuation.mjs';
 import { createWorkspaceEnv } from './workspace-env.mjs';
@@ -150,6 +164,10 @@ export async function openConversationKernel({
   const tails = new Map();
   const listeners = new Map();
   const sends = new Map();
+  const changeCache = new Map();
+  const changeGen = new Map();
+  const changeInflight = new Map();
+  const snapshotLocks = new Map();
   const allListeners = new Set();
   const settings = kernelSettings(env);
   let agentHost;
@@ -186,6 +204,18 @@ export async function openConversationKernel({
     env: async ({ cwd }) => (cwd ? createWorkspaceEnv({ cwd }) : undefined), // main Agent and sub-agents; bash env allow-list lives here
   });
   const { harness, context } = kernel;
+
+  function invalidateChangeCache(cid) {
+    changeGen.set(cid, (changeGen.get(cid) || 0) + 1);
+    changeCache.delete(cid);
+  }
+
+  function withSnapshotLock(cid, fn) {
+    const prev = snapshotLocks.get(cid) || Promise.resolve();
+    const run = prev.then(fn, fn);
+    snapshotLocks.set(cid, run.then(() => {}, () => {}));
+    return run;
+  }
 
   function enqueue(cid, fn) {
     const prev = tails.get(cid) || Promise.resolve();
@@ -299,6 +329,7 @@ export async function openConversationKernel({
   }
 
   async function deliver(cid, ev) {
+    if (ev?.event === 'tool.end') invalidateChangeCache(cid);
     push(cid, ev);
     if (ev.event === 'status') {
       const conv = await store.getConversation(cid);
@@ -447,7 +478,7 @@ export async function openConversationKernel({
         err.code = 'E_TOO_LARGE';
         throw err;
       }
-      return { missing: false, text: await readFile(abs, 'utf8') };
+      return { missing: false, text: decodeWorkspaceBytes(await readFile(abs)) };
     } catch (err) {
       if (err.code === 'ENOENT') return { missing: true, text: '' };
       if (abs === filePath) {
@@ -541,6 +572,257 @@ export async function openConversationKernel({
     return mergeFileChanges(sources, { workspacePath });
   }
 
+  async function readSnapshot(harnessId) {
+    if (harnessId == null) return null;
+    try {
+      const snap = await harness.snapshot(WorkspaceSnapshot, harnessId, context);
+      if (!snap || (snap.mode !== 'git' && snap.mode !== 'fallback')) return null;
+      return { mode: snap.mode, tree: typeof snap.tree === 'string' ? snap.tree : '' };
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * First send captures the worktree. Later sends reuse the stored tree id.
+   * Failure is recorded as fallback so a missing git does not run on every refresh.
+   */
+  async function ensureWorkspaceSnapshot(conv) {
+    if (!conv?.id || conv.harnessId == null) return { mode: 'fallback', tree: '' };
+    return withSnapshotLock(conv.id, async () => {
+      const existing = await readSnapshot(conv.harnessId);
+      if (existing) return existing;
+      // A conversation that already has a user message started before snapshots
+      // existed. Photographing it now would hide those edits. Model configuration
+      // and other non-user entries do not count: applyModel can write them
+      // before the first send.
+      const transcript = await readTranscript(conv.harnessId);
+      const started = (transcript.entries || []).some((entry) => entry?.kind === 'pi.user');
+      let stored = { mode: 'fallback', tree: '' };
+      if (!started) {
+        const workspacePath = conv.workspacePath || '';
+        const captured = workspacePath
+          ? await captureWorktree({
+            cwd: workspacePath,
+            indexFile: indexFileFor(dataDir, conv.id, workspacePath),
+            env,
+          })
+          : { mode: 'fallback', tree: '' };
+        if (captured.mode === 'git' && captured.tree) stored = { mode: 'git', tree: captured.tree };
+      }
+      try {
+        await harness.commit(async (tx) => {
+          const state = await tx.doc(WorkspaceSnapshot, conv.harnessId);
+          if (state.mode === 'git' || state.mode === 'fallback') return;
+          state.mode = stored.mode;
+          state.tree = stored.tree;
+        }, context);
+      } catch (err) {
+        console.error(`WEFT_CHANGE_SNAPSHOT ${redactAuthText(err instanceof Error ? err.message : err)}`);
+        return { mode: 'fallback', tree: '' };
+      }
+      return stored;
+    });
+  }
+
+  async function rowsFromBaselines(workspacePath, baselines) {
+    const rows = [];
+    for (const baseline of baselines) {
+      if (baseline.oversized) {
+        rows.push({
+          path: baseline.path,
+          added: baseline.added ?? 0,
+          removed: baseline.removed ?? 0,
+          toolCallId: baseline.toolCallId,
+          by: baseline.by ?? null,
+          error: '文件过大',
+        });
+        continue;
+      }
+      let disk;
+      try {
+        disk = await diskText(workspacePath, baseline.path, baseline);
+      } catch (err) {
+        if (err.code === 'E_TOO_LARGE') {
+          rows.push({
+            path: baseline.path,
+            added: baseline.added ?? 0,
+            removed: baseline.removed ?? 0,
+            toolCallId: baseline.toolCallId,
+            by: baseline.by ?? null,
+            error: '文件过大',
+          });
+          continue;
+        }
+        throw err;
+      }
+      const diff = liveDiff({
+        path: baseline.path,
+        before: baseline.before ?? '',
+        storedAfter: baseline.after ?? '',
+        diskText: disk,
+      });
+      rows.push({
+        path: baseline.path,
+        added: diff.added,
+        removed: diff.removed,
+        toolCallId: baseline.toolCallId,
+        by: baseline.by ?? null,
+      });
+    }
+    return rows;
+  }
+
+  async function computeChanges(cid) {
+    const conv = await store.getConversation(cid);
+    const baselines = await baselinesFor(cid);
+    const workspacePath = conv?.workspacePath || await workspacePathFor(cid);
+    const snap = conv?.harnessId != null ? await readSnapshot(conv.harnessId) : null;
+    if (!snap || snap.mode !== 'git' || !snap.tree) {
+      return { cache: false, rows: await rowsFromBaselines(workspacePath, baselines) };
+    }
+    try {
+      const entries = await listWorktreeChanges({
+        cwd: workspacePath,
+        indexFile: indexFileFor(dataDir, cid, workspacePath),
+        baseTree: snap.tree,
+        env,
+      });
+      const gitRows = decorateGitChanges(entries, baselines);
+      const outside = await rowsFromBaselines(
+        workspacePath,
+        baselines.filter((row) => isOutsideWorkspacePath(row.path)),
+      );
+      return { cache: true, rows: appendOutsideChanges(gitRows, outside) };
+    } catch (err) {
+      console.error(`WEFT_CHANGE_DIFF ${redactAuthText(err instanceof Error ? err.message : err)}`);
+      return { cache: false, rows: await rowsFromBaselines(workspacePath, baselines) };
+    }
+  }
+
+  async function changes(cid) {
+    const gen = changeGen.get(cid) || 0;
+    const hit = changeCache.get(cid);
+    if (hit && hit.gen === gen && Date.now() - hit.at < CHANGE_CACHE_MS) return hit.rows;
+    const pending = changeInflight.get(cid);
+    if (pending && pending.gen === gen) return pending.promise;
+    const promise = computeChanges(cid).then((result) => {
+      if (result.cache && (changeGen.get(cid) || 0) === gen) {
+        changeCache.set(cid, { at: Date.now(), gen, rows: result.rows });
+      }
+      return result.rows;
+    }).finally(() => {
+      if (changeInflight.get(cid)?.promise === promise) changeInflight.delete(cid);
+    });
+    changeInflight.set(cid, { gen, promise });
+    return promise;
+  }
+
+  async function legacyDiff(workspacePath, baseline) {
+    if (baseline.oversized || baseline.error) {
+      return {
+        status: 200,
+        body: {
+          path: baseline.path,
+          added: baseline.added ?? 0,
+          removed: baseline.removed ?? 0,
+          error: '文件过大',
+        },
+      };
+    }
+    try {
+      const disk = await diskText(workspacePath, baseline.path, baseline);
+      return {
+        status: 200,
+        body: liveDiff({
+          path: baseline.path,
+          before: baseline.before ?? '',
+          storedAfter: baseline.after ?? '',
+          diskText: disk,
+        }),
+      };
+    } catch (err) {
+      if (err.code === 'E_TOO_LARGE') return { status: 200, body: { path: baseline.path, error: '文件过大' } };
+      throw err;
+    }
+  }
+
+  async function gitDiff(cid, row) {
+    if (row.error) {
+      return {
+        status: 200,
+        body: {
+          path: row.path,
+          added: row.added ?? 0,
+          removed: row.removed ?? 0,
+          error: row.error,
+        },
+      };
+    }
+    const conv = await store.getConversation(cid);
+    const snap = conv?.harnessId != null ? await readSnapshot(conv.harnessId) : null;
+    const workspacePath = await workspacePathFor(cid);
+    if (!snap || snap.mode !== 'git' || !snap.tree) return legacyDiff(workspacePath, row);
+    const prefix = await gitPrefix(workspacePath, env);
+    let before = '';
+    if (row.status !== 'added') {
+      const blob = await readTreeBlob({
+        cwd: workspacePath,
+        tree: snap.tree,
+        prefix,
+        rel: row.status === 'renamed' ? (row.oldPath || row.path) : row.path,
+        env,
+      });
+      if (blob.tooLarge || blob.binary) {
+        return {
+          status: 200,
+          body: { path: row.path, added: row.added ?? 0, removed: row.removed ?? 0, error: '文件过大' },
+        };
+      }
+      before = blob.text || '';
+    }
+    let disk = '';
+    if (row.status !== 'deleted') {
+      let read;
+      try {
+        read = await readWorkspaceText(workspacePath, row.path);
+      } catch (err) {
+        if (err?.code === 'E_TOO_LARGE') {
+          return {
+            status: 200,
+            body: { path: row.path, added: row.added ?? 0, removed: row.removed ?? 0, error: '文件过大' },
+          };
+        }
+        throw err;
+      }
+      disk = read.missing || read.text == null ? '' : read.text;
+    }
+    return {
+      status: 200,
+      body: liveDiff({
+        path: row.path,
+        before,
+        storedAfter: before,
+        diskText: disk,
+      }),
+    };
+  }
+
+  async function diff(cid, filePath) {
+    const want = String(filePath ?? '').replaceAll('\\', '/');
+    const rows = await changes(cid);
+    const row = rows.find((item) => {
+      const current = String(item.path ?? '').replaceAll('\\', '/');
+      const previous = item.oldPath ? String(item.oldPath).replaceAll('\\', '/') : '';
+      return current === want || previous === want;
+    });
+    if (!row) return { status: 404, body: { error: 'no diff' } };
+    if (row.status) return gitDiff(cid, row);
+    const baseline = (await baselinesFor(cid)).find((item) => String(item.path ?? '').replaceAll('\\', '/') === want);
+    if (!baseline) return { status: 404, body: { error: 'no diff' } };
+    return legacyDiff(await workspacePathFor(cid), baseline);
+  }
+
   async function createConversation(fields) {
     const conv = await store.createConversation({ ...fields });
     const created = await harness.createConversation({
@@ -604,76 +886,8 @@ export async function openConversationKernel({
     stopConversation(cid) {
       return subagents.stopConversation(cid);
     },
-    async changes(cid) {
-      const workspacePath = await workspacePathFor(cid);
-      const rows = [];
-      for (const baseline of await baselinesFor(cid)) {
-        if (baseline.oversized) {
-          rows.push({
-            path: baseline.path,
-            added: baseline.added ?? 0,
-            removed: baseline.removed ?? 0,
-            toolCallId: baseline.toolCallId,
-            by: baseline.by ?? null,
-            error: '文件过大',
-          });
-          continue;
-        }
-        let disk;
-        try {
-          disk = await diskText(workspacePath, baseline.path, baseline);
-        } catch (err) {
-          if (err.code === 'E_TOO_LARGE') {
-            rows.push({
-              path: baseline.path,
-              added: baseline.added ?? 0,
-              removed: baseline.removed ?? 0,
-              toolCallId: baseline.toolCallId,
-              by: baseline.by ?? null,
-              error: '文件过大',
-            });
-            continue;
-          }
-          throw err;
-        }
-        const diff = liveDiff({
-          path: baseline.path,
-          before: baseline.before ?? '',
-          storedAfter: baseline.after ?? '',
-          diskText: disk,
-        });
-        rows.push({
-          path: baseline.path,
-          added: diff.added,
-          removed: diff.removed,
-          toolCallId: baseline.toolCallId,
-          by: baseline.by ?? null,
-        });
-      }
-      return rows;
-    },
-    async diff(cid, filePath) {
-      const want = String(filePath ?? '').replaceAll('\\', '/');
-      const baseline = (await baselinesFor(cid)).find((row) => String(row.path ?? '').replaceAll('\\', '/') === want);
-      if (!baseline) return { status: 404, body: { error: 'no diff' } };
-      if (baseline.oversized) return { status: 200, body: { path: baseline.path, error: '文件过大' } };
-      const workspacePath = await workspacePathFor(cid);
-      try {
-        const disk = await diskText(workspacePath, baseline.path, baseline);
-        return {
-          status: 200,
-          body: liveDiff({
-            path: baseline.path,
-            before: baseline.before ?? '',
-            storedAfter: baseline.after ?? '',
-            diskText: disk,
-          }),
-        };
-      } catch (err) {
-        if (err.code === 'E_TOO_LARGE') return { status: 200, body: { path: baseline.path, error: '文件过大' } };
-        throw err;
-      }
-    },
+    changes,
+    diff,
     async getMessageImage(cid, messageId, index) {
       const conv = await store.getConversation(cid);
       if (!conv?.harnessId) return null;
@@ -720,15 +934,31 @@ export async function openConversationKernel({
       if (routes) {
         await applyModel(conversation, current);
       }
+      try {
+        await ensureWorkspaceSnapshot(current);
+      } catch (err) {
+        console.error(`WEFT_CHANGE_SNAPSHOT ${redactAuthText(err instanceof Error ? err.message : err)}`);
+      }
       const given = typeof options.requestId === 'string' ? options.requestId.trim() : '';
       const requestId = given || prepared?.requestId || randomUUID();
-      const content = options.content !== undefined ? options.content : text;
+      let content = options.content !== undefined ? options.content : text;
+      let entry;
       const mode = sendModeOf(options.mode);
+      if (options.answer) {
+        const prior = recentSendsFor(sends, current.id).find((row) => row.requestId === requestId && !row.dropped);
+        if (prior) return { status: 202, body: { runId: String(prior.submissionId), status: 'running' } };
+        const transcript = current.harnessId ? await readTranscript(current.harnessId) : { entries: [] };
+        const decided = buildAskSubmission(transcript.entries, options.answer);
+        if (!decided.ok) return { status: decided.status, body: { error: decided.error, code: decided.code } };
+        content = decided.content;
+        entry = decided.entry;
+      }
       const submission = await conversation.submit({
         type: 'input',
         content,
         requestId,
         whenBusy: whenBusyForMode(mode),
+        ...(entry ? { entry } : {}),
       }, context);
       let entryId = null;
       try {
@@ -739,7 +969,9 @@ export async function openConversationKernel({
       }
       rememberSend(sends, current.id, requestId, submission.id, {
         mode,
-        text: typeof text === 'string' ? text : '',
+        text: options.answer && typeof content === 'string'
+          ? content
+          : (typeof text === 'string' ? text : ''),
         entryId,
       });
       await store.updateConversation(current.id, { lastSubmissionId: submission.id });

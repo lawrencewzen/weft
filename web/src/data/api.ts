@@ -17,6 +17,8 @@ export type DiffLine = components['schemas']['DiffLine'];
 export type FileNode = components['schemas']['FileNode'];
 export type FileTree = components['schemas']['FileTree'];
 export type FileContent = components['schemas']['FileContent'];
+export type FileSearchHit = components['schemas']['FileSearchHit'];
+export type FileSearchResult = components['schemas']['FileSearchResult'];
 export type SaveResult = components['schemas']['SaveResult'];
 export type SaveFileRequest = components['schemas']['SaveFileRequest'];
 export type ConversationView = components['schemas']['ConversationView'];
@@ -35,6 +37,15 @@ export type PatchPluginRequest = components['schemas']['PatchPluginRequest'];
 export type Skill = components['schemas']['Skill'];
 export type SkillList = components['schemas']['SkillList'];
 export type ResolvedModel = components['schemas']['ResolvedModel'];
+
+export type AskOption = components['schemas']['AskOption'];
+export type AskQuestion = components['schemas']['AskQuestion'];
+export type AskSelection = components['schemas']['AskSelection'];
+export type AskAnswerState = components['schemas']['AskAnswerState'];
+export type AskCall = components['schemas']['AskCall'];
+export type AskAnswerRequest = components['schemas']['AskAnswerRequest'];
+export type ThreadItem = components['schemas']['ThreadItem'];
+export type ToolCall = components['schemas']['ToolCall'];
 
 import type {
   Available,
@@ -262,19 +273,22 @@ export function sendMessage(
   mode?: SendMode,
   files?: components['schemas']['SendMessageFile'][],
   pastes?: string[],
+  answer?: components['schemas']['AskAnswerRequest'],
 ): Promise<RunAccepted> {
   const id = requestId ?? randomId();
   const body: {
-    text: string;
+    text?: string;
     requestId: string;
     images?: components['schemas']['MessageImage'][];
     mode?: SendMode;
     files?: components['schemas']['SendMessageFile'][];
     pastes?: string[];
+    answer?: components['schemas']['AskAnswerRequest'];
   } = {
-    text,
+    ...(text || !answer ? { text } : {}),
     requestId: id,
   };
+  if (answer) body.answer = answer;
   if (images?.length) body.images = images;
   if (mode === 'steer' || mode === 'queue') body.mode = mode;
   if (files?.length) body.files = files;
@@ -283,6 +297,14 @@ export function sendMessage(
     method: 'POST',
     body: JSON.stringify(body),
   });
+}
+
+export function sendAnswer(
+  cid: string,
+  answer: components['schemas']['AskAnswerRequest'],
+  requestId?: string,
+): Promise<RunAccepted> {
+  return sendMessage(cid, '', requestId, undefined, undefined, undefined, undefined, answer);
 }
 
 export function uploadWorkspaceFile(
@@ -442,6 +464,14 @@ export function workspaceTreeUrl(workspaceId: string): string {
   return `/api/v2/workspaces/${encodeURIComponent(workspaceId)}/tree`;
 }
 
+export function workspaceFileSearchUrl(workspaceId: string, q: string, limit?: number): string {
+  const params = new URLSearchParams({ q });
+  if (limit != null) {
+    params.set('limit', String(limit));
+  }
+  return `/api/v2/workspaces/${encodeURIComponent(workspaceId)}/file-search?${params.toString()}`;
+}
+
 export function workspaceFileUrl(workspaceId: string, filePath: string): string {
   const params = new URLSearchParams({ path: filePath });
   return `/api/v2/workspaces/${encodeURIComponent(workspaceId)}/files?${params.toString()}`;
@@ -453,6 +483,15 @@ export function getConversationDiff(cid: string, filePath: string): Promise<Diff
 
 export function getWorkspaceTree(workspaceId: string): Promise<FileTree> {
   return requestJson<FileTree>(workspaceTreeUrl(workspaceId));
+}
+
+export function searchWorkspaceFiles(
+  workspaceId: string,
+  q: string,
+  limit?: number,
+  signal?: AbortSignal,
+): Promise<FileSearchResult> {
+  return requestJson<FileSearchResult>(workspaceFileSearchUrl(workspaceId, q, limit), { signal });
 }
 
 export function getWorkspaceFile(workspaceId: string, filePath: string): Promise<FileContent> {

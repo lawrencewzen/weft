@@ -4,8 +4,11 @@ import { expectClean, openProto } from './helpers/proto.mjs';
 test.use({ locale: 'zh-CN', viewport: { width: 1280, height: 800 } });
 test.describe.configure({ timeout: 120_000 });
 
-function expectedChatWidth(centerCssPx) {
-  return Math.min(centerCssPx - 32, Math.max(420, Math.min(centerCssPx * 0.55, 760)));
+function expectedChatWidth(centerCssPx, mode = 'wider') {
+  if (mode === 'standard') {
+    return Math.min(centerCssPx - 32, Math.max(420, Math.min(centerCssPx * 0.55, 760)));
+  }
+  return Math.min(centerCssPx - 40, Math.max(520, Math.min(centerCssPx * 0.76, 1000)));
 }
 
 async function measureRoot(page) {
@@ -138,17 +141,17 @@ test('sidebar click menu and model menu (with submenu) stick to their triggers',
   expectClean(state);
 });
 
-test('thread and composer width follow 55% of the center pane with 420–760 clamps', async ({ page }) => {
+test('thread and composer width follow 76% of the center pane with 520–1000 clamps by default (wider)', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   const state = await openProto(page);
   await expect(page.locator('.thread-inner')).toBeVisible();
   await expect(page.locator('.composer-stack')).toBeVisible();
 
   const cases = [
-    { center: 1000, chat: 550 },
-    { center: 600, chat: 420 },
-    { center: 400, chat: 368 },
-    { center: 1600, chat: 760 },
+    { center: 1000, chat: 760 },
+    { center: 600, chat: 520 },
+    { center: 400, chat: 360 },
+    { center: 1600, chat: 1000 },
   ];
   for (const row of cases) {
     expect(expectedChatWidth(row.center)).toBeCloseTo(row.chat, 5);
@@ -171,6 +174,50 @@ test('thread and composer width follow 55% of the center pane with 420–760 cla
     };
   });
   expect(Math.abs(live.inner - expectedChatWidth(live.center))).toBeLessThanOrEqual(1);
+  expect(Math.abs(live.stack - live.inner)).toBeLessThanOrEqual(1);
+
+  expectClean(state);
+});
+
+test('thread and composer width follow 55% of the center pane with 420–760 clamps when set to standard', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const state = await openProto(page);
+  await page.getByTestId('next-open-settings').click();
+  await expect(page.getByTestId('next-settings-general')).toBeVisible();
+  await page.locator('[data-testid=next-pref-chat-width] button[data-width="standard"]').click();
+  await expect(page.locator('html')).toHaveAttribute('data-chat-width', 'standard');
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('next-settings')).toHaveCount(0);
+  await expect(page.locator('.thread-inner')).toBeVisible();
+  await expect(page.locator('.composer-stack')).toBeVisible();
+
+  const cases = [
+    { center: 1000, chat: 550 },
+    { center: 600, chat: 420 },
+    { center: 400, chat: 368 },
+    { center: 1600, chat: 760 },
+  ];
+  for (const row of cases) {
+    expect(expectedChatWidth(row.center, 'standard')).toBeCloseTo(row.chat, 5);
+    const measured = await measureChatAt(page, row.center);
+    expect(Math.abs(measured.inner - row.chat), `thread-inner at ${row.center}px center`).toBeLessThanOrEqual(1);
+    expect(Math.abs(measured.stack - row.chat), `composer-stack at ${row.center}px center`).toBeLessThanOrEqual(1);
+  }
+
+  await page.getByTestId('next-right-collapse').click();
+  await expect(page.locator('.next-shell')).toHaveClass(/right-closed/);
+  const live = await page.evaluate(() => {
+    const center = document.querySelector('.col-center');
+    const inner = document.querySelector('.thread-inner');
+    const stack = document.querySelector('.composer-stack');
+    const read = (el) => Number.parseFloat(getComputedStyle(el).width);
+    return {
+      center: center?.offsetWidth ?? 0,
+      inner: inner ? read(inner) : 0,
+      stack: stack ? read(stack) : 0,
+    };
+  });
+  expect(Math.abs(live.inner - expectedChatWidth(live.center, 'standard'))).toBeLessThanOrEqual(1);
   expect(Math.abs(live.stack - live.inner)).toBeLessThanOrEqual(1);
 
   expectClean(state);

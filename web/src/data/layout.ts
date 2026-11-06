@@ -8,6 +8,11 @@ export const RIGHT_W_MIN = 320;
 export const RIGHT_W_MAX = 900;
 export const RIGHT_W_DEFAULT = 440;
 
+export const FILE_TREE_W_MIN = 140;
+export const FILE_PREVIEW_W_MIN = 280;
+export const FILE_TREE_W_DEFAULT = 200;
+export const FILE_LAYOUT_MIN_TOTAL = FILE_TREE_W_MIN + FILE_PREVIEW_W_MIN; // 420
+
 export const LS_LEFT_OPEN = 'weft_next_left_open';
 export const LS_LEFT_W = 'weft_next_left_w';
 export const LS_OPEN_WORKSPACES = 'weft_next_open_workspaces';
@@ -16,6 +21,7 @@ export const LS_ACTIVE_WS = 'weft_next_active_ws';
 export const LS_RIGHT_OPEN = 'weft_next_right_open';
 export const LS_RIGHT_W = 'weft_next_right_w';
 export const LS_RIGHT_TAB = 'weft_next_right_tab';
+export const LS_FILE_TREE_W = 'weft_next_file_tree_w';
 
 export type OpenRecord = Record<string, boolean>;
 
@@ -104,9 +110,28 @@ export function persistRightOpen(open: boolean, viewportWidth: number): void {
   if (!isRightOverlayWidth(viewportWidth)) writePref(LS_RIGHT_OPEN, open);
 }
 
-export type RightTab = 'changes' | 'files' | 'term' | 'subagents';
+export function readFileTreeWidth(): number {
+  try {
+    const raw = storage()?.getItem(LS_FILE_TREE_W);
+    if (raw == null || raw === '') return FILE_TREE_W_DEFAULT;
+    const n = Number(raw);
+    return Number.isFinite(n) && n >= FILE_TREE_W_MIN ? n : FILE_TREE_W_DEFAULT;
+  } catch {
+    return FILE_TREE_W_DEFAULT;
+  }
+}
 
-const RIGHT_TABS = new Set<RightTab>(['changes', 'files', 'term']);
+export function writeFileTreeWidth(width: number): void {
+  try {
+    storage()?.setItem(LS_FILE_TREE_W, String(Math.max(FILE_TREE_W_MIN, Math.round(width))));
+  } catch {
+    /* ignore quota */
+  }
+}
+
+export type RightTab = 'changes' | 'files';
+
+const RIGHT_TABS = new Set<RightTab>(['changes', 'files']);
 
 export function readRightTab(): RightTab {
   const raw = storage()?.getItem(LS_RIGHT_TAB);
