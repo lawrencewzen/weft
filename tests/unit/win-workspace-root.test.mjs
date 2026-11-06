@@ -38,6 +38,10 @@ test('windows sensitive paths ignore case and still allow drive roots', () => {
   assert.equal(winSensitive('C:\\WINDOWS'), true);
   assert.equal(winSensitive('C:\\Windows\\System32', HOME, windowsSystemRoot({})), true);
   assert.equal(winSensitive('D:\\work'), false);
+  assert.equal(winSensitive('D:\\var\\www'), false);
+  assert.equal(winSensitive('D:\\bin\\tool'), false);
+  assert.equal(winSensitive('C:\\usr\\x'), false);
+  assert.equal(winSensitive('C:\\etc'), false);
   assert.equal(winSensitive('D:\\'), false);
   assert.equal(winSensitive('d:/'), false);
   assert.equal(winSensitive('C:\\'), false);
@@ -57,7 +61,25 @@ test('windows sensitive paths ignore case and still allow drive roots', () => {
   assert.equal(pathIsSensitive('/home/x', { home: '/home/x', platform: 'linux' }), false);
   assert.equal(pathIsSensitive('/', { home: '/home/x', platform: 'linux' }), false);
   assert.equal(pathIsSensitive('/etc/ssh', { home: '/home/x', platform: 'linux' }), true);
+  assert.equal(pathIsSensitive('/etc', { home: '/home/x', platform: 'linux' }), true);
+  assert.equal(pathIsSensitive('/var/x', { home: '/home/x', platform: 'linux' }), true);
   assert.equal(pathIsSensitive('D:\\work', { home: HOME, platform: 'linux', systemRoot: SYSTEM }), false);
+
+  if (process.platform === 'win32') {
+    const drive = path.parse(process.cwd()).root;
+    assert.match(drive, /^[A-Za-z]:\\$/);
+    const home = os.homedir();
+    const systemRoot = windowsSystemRoot();
+    for (const name of ['var\\www', 'bin\\tool', 'usr\\x', 'etc']) {
+      const full = path.win32.join(drive, name);
+      assert.equal(pathIsSensitive(full, { home, platform: 'win32', systemRoot }), false, full);
+    }
+    assert.equal(pathIsSensitive(path.win32.join(home, '.SSH'), { home, platform: 'win32', systemRoot }), true);
+    assert.equal(
+      pathIsSensitive(path.win32.join(systemRoot, 'System32'), { home, platform: 'win32', systemRoot }),
+      true,
+    );
+  }
 });
 
 test('view=drives lists ready letters and one hung drive does not block the rest', async () => {

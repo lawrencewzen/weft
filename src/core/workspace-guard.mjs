@@ -93,22 +93,25 @@ export function windowsSystemRoot(env = process.env) {
  * Directories the picker must not enter and that cannot be a workspace.
  * `resolved` is an absolute path (realpath already applied by callers).
  * Drive roots and `/` are not sensitive. $HOME itself is not sensitive.
- * On win32, comparison is case-insensitive and `%SystemRoot%` (default
- * `C:\\Windows`) and its children are sensitive in addition to SYSTEM_PREFIXES.
+ * On win32, comparison is case-insensitive. Only ~/.ssh, ~/.gnupg, and
+ * `%SystemRoot%` (default `C:\\Windows`) plus its children are sensitive.
+ * Unix SYSTEM_PREFIXES are not applied: path.win32.resolve would pin `/var`
+ * onto the process drive and block ordinary folders such as `D:\\var\\www`.
  */
 export function pathIsSensitive(resolved, {
   home,
   platform = process.platform,
   systemRoot = null,
-  prefixes = SYSTEM_PREFIXES,
+  prefixes,
 } = {}) {
   if (!resolved || filesystemRoot(resolved, platform)) return false;
+  const activePrefixes = prefixes ?? (platform === 'win32' ? [] : SYSTEM_PREFIXES);
   const join = pathApi(platform).join;
   if (home) {
     if (isUnder(join(home, '.ssh'), resolved, platform)) return true;
     if (isUnder(join(home, '.gnupg'), resolved, platform)) return true;
   }
-  for (const prefix of prefixes) {
+  for (const prefix of activePrefixes) {
     if (isUnder(prefix, resolved, platform)) return true;
   }
   if (platform === 'win32' && systemRoot && isUnder(systemRoot, resolved, platform)) return true;
@@ -119,19 +122,13 @@ export function pathIsSensitive(resolved, {
  * Directories the picker must not enter and that cannot be a workspace:
  * ~/.ssh, ~/.gnupg, and system directories. The filesystem root is not
  * sensitive to browse (the picker walks up to it). $HOME itself is allowed.
- * Windows also refuses %SystemRoot% and its children. Symlinks and junctions
- * are already resolved by the caller, so they cannot point around this check.
+ * Windows refuses %SystemRoot% and its children, and does not apply Unix
+ * SYSTEM_PREFIXES. Symlinks and junctions are already resolved by the caller,
+ * so they cannot point around this check.
  */
 async function isSensitive(resolved, home) {
   if (!resolved || filesystemRoot(resolved)) return false;
   const prefixes = [];
-  for (const prefix of SYSTEM_PREFIXES) {
-    prefixes.push(prefix);
-    try {
-      const real = await fs.realpath(prefix);
-      if (real !== prefix) prefixes.push(real);
-    } catch { /* missing */ }
-  }
   let systemRoot = null;
   if (process.platform === 'win32') {
     const configured = windowsSystemRoot();
@@ -140,6 +137,14 @@ async function isSensitive(resolved, home) {
       const real = await fs.realpath(configured);
       if (real && real.toLowerCase() !== configured.toLowerCase()) prefixes.push(real);
     } catch { /* keep the configured path */ }
+  } else {
+    for (const prefix of SYSTEM_PREFIXES) {
+      prefixes.push(prefix);
+      try {
+        const real = await fs.realpath(prefix);
+        if (real !== prefix) prefixes.push(real);
+      } catch { /* missing */ }
+    }
   }
   return pathIsSensitive(resolved, { home, systemRoot, prefixes });
 }

@@ -142,7 +142,7 @@ export interface paths {
         /**
          * 新建工作区
          * @description 请求体带 `source`：`local` 用本机目录（`path` 缺省时在数据目录下建空目录），`git` 克隆仓库。
-         *     本地路径用 realpath。`$WEFT_DATA_DIR/workspaces` 之下先判断、始终允许（含该目录位于 `/var` 时）。其它已存在路径不再要求位于 `WEFT_WORKSPACE_ROOT` 之下。仍拒绝 `/`、`~/.ssh`、`~/.gnupg` 和系统目录；用户主目录本身允许。路径已是未移除的本地工作区时返回那一条，不另建。Git 只允许 https / ssh / git@；存储的 URL 去掉凭据。
+         *     本地路径用 realpath。`$WEFT_DATA_DIR/workspaces` 之下先判断、始终允许（含该目录位于 `/var` 时）。其它已存在路径不再要求位于 `WEFT_WORKSPACE_ROOT` 之下。仍拒绝 `/`、`~/.ssh`、`~/.gnupg` 和系统目录；用户主目录本身允许。Windows 的系统目录只指 `%SystemRoot%`（默认 `C:\Windows`）及其子目录，不把 `/etc`、`/var`、`/usr`、`/bin` 等 Unix 前缀套到当前盘。路径已是未移除的本地工作区时返回那一条，不另建。Git 只允许 https / ssh / git@；存储的 URL 去掉凭据。
          *     `connectionId` / `projectId` 走已保存的 Git 连接。成功后 `workspaces` 主题更新。失败原因按 `lang` 出成句，并带结构化 `code`。
          */
         post: operations["createWorkspace"];
@@ -186,7 +186,7 @@ export interface paths {
          *     非 Windows 上，文件系统根的 `parent` 为 null。`/` 可浏览但不可选为工作区；用户主目录可以选。
          *     Windows 上盘根（如 `D:\`）的 `parent` 为空串，表示上一层是盘符列表；盘根本身可以选为工作区。
          *     查询 `view=drives` 仅 Windows：返回盘符列表（`path` 为空串，`parent` 为 null，`selectable` 与 `git` 为 false）。`entries` 是当前存在的盘，`name` 如 `D:`，`path` 如 `D:\`。按 A–Z 用 fs.access 探测，单盘失败或超时则跳过，不会被未就绪的盘卡住。非 Windows 返回 404 E_PATH。
-         *     敏感目录（`~/.ssh`、`~/.gnupg`、系统目录；Windows 另含 `%SystemRoot%` 及其子目录，默认 `C:\Windows`，比较不区分大小写）返回 400 E_PATH，文案按 lang 出成句。符号链接和 junction 解析后再判断，不能绕过。
+         *     敏感目录返回 400 E_PATH，文案按 lang 出成句。非 Windows 为 `~/.ssh`、`~/.gnupg` 和系统目录（`/etc`、`/var`、`/usr`、`/bin` 等）。Windows 比较不区分大小写，只拦 `~/.ssh`、`~/.gnupg` 和 `%SystemRoot%`（默认 `C:\Windows`）及其子目录，不把 Unix 前缀套到当前盘（`D:\var\www` 这种普通目录可选）。符号链接和 junction 解析后再判断，不能绕过。
          */
         get: operations["listWorkspaceRootDirs"];
         put?: never;
@@ -2282,7 +2282,7 @@ export interface components {
         };
         /**
          * @description 本地路径不能作为工作区（不存在、是 `/`、或落在 `~/.ssh`、`~/.gnupg` 和系统目录）。
-         *     Windows 上 `%SystemRoot%`（默认 `C:\Windows`）及其子目录同样拒绝，比较不区分大小写；盘根 `C:\`、`D:\` 仍允许。用户主目录本身允许。符号链接和 junction 解析后再判断。
+         *     Windows 比较不区分大小写，系统目录只指 `%SystemRoot%`（默认 `C:\Windows`）及其子目录，不套用 Unix 前缀；盘根 `C:\`、`D:\` 以及 `D:\var`、`D:\bin` 这类普通目录仍允许。用户主目录本身允许。符号链接和 junction 解析后再判断。
          */
         PathNotAllowed: {
             /** @description 按 lang 出成句 */
