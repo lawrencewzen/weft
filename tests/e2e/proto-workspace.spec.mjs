@@ -216,8 +216,10 @@ test('T101-4b Acceptance 3: non-Windows paths do not show "此电脑" in breadcr
   await page.getByTestId('proto-pick-unsupported').click();
   await expect(page.getByTestId('next-ws-dialog')).toBeVisible();
 
-  // Enter home path ~/.ssh
+  // The dialog fills the path from the first directory listing. Wait for that
+  // write to finish; typing earlier is replaced by the default D:\work.
   const pathInput = page.getByTestId('next-ws-path');
+  await expect(pathInput).toHaveValue('D:\\work');
   await pathInput.fill('~/.ssh');
   await pathInput.press('Enter');
 
