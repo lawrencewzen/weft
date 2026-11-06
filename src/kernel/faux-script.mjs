@@ -236,11 +236,13 @@ export function fauxTurnFromScript(turns, context) {
       errorMessage: String(turn.error),
     });
   } else if (calls.length) {
-    // Text followed by tool calls is one assistant message. The Harness runs the tools.
+    // Text followed by tool calls is one assistant message. The Harness runs the tools
+    // when stopReason is toolUse. An explicit length stop leaves the calls unrun.
     const blocks = [];
     if (text) blocks.push(fauxText(text));
     blocks.push(...calls);
-    message = fauxAssistantMessage(blocks, { stopReason: 'toolUse' });
+    const extra = { stopReason: turn.stopReason ? String(turn.stopReason) : 'toolUse' };
+    message = fauxAssistantMessage(blocks, extra);
   } else if (turn.end) {
     message = fauxAssistantMessage('');
   } else {
@@ -278,11 +280,14 @@ export function createScriptFloorExtension() {
 
 /** Explicit demo script only. WEFT_FAUX_TOOL_LOG records the offered tool names for tests. */
 export function scriptedDemoStep(scriptPath, env = process.env, hooks = {}) {
-  const script = JSON.parse(readFileSync(scriptPath, 'utf8'));
-  const turns = script?.turns;
+  const readTurns = () => {
+    const script = JSON.parse(readFileSync(scriptPath, 'utf8'));
+    return script?.turns;
+  };
   const logPath = String(env.WEFT_FAUX_TOOL_LOG || '').trim();
   const ready = String(env.WEFT_FAUX_HOLD_READY || '').trim();
   return async (context, streamOptions) => {
+    const turns = readTurns();
     if (logPath) appendFileSync(logPath, `${JSON.stringify(offeredToolNames(context))}\n`);
     const have = scriptAssistantCount(context);
     const floor = scriptAssistantFloor(streamOptions?.sessionId);

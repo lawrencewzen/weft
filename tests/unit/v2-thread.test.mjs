@@ -3,13 +3,9 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { compileSchema } from '../../src/v2/validate.ts';
-import { phrase } from '../../src/v2/phrases/index.ts';
 import { toolGroupKey } from '../../src/v2/views/tools.ts';
 import {
   AUTO_CONTINUE_PREFIX,
-  CONTINUE_TEXT,
-  MANUAL_CONTINUE_TEXT,
-  MAX_AUTO_CONTINUES,
   isAutoContinueText,
   isPromptUserMessage,
 } from '../../src/v2/views/continuation.ts';
@@ -20,9 +16,6 @@ import {
 } from '../../src/v2/views/subagent-report.ts';
 import {
   AUTO_CONTINUE_PREFIX as publicPrefix,
-  CONTINUE_TEXT as publicContinue,
-  MANUAL_CONTINUE_TEXT as publicManual,
-  MAX_AUTO_CONTINUES as publicMax,
   isAutoContinueText as publicIsAuto,
   isPromptUserMessage as publicIsPrompt,
 } from '../../src/kernel/continuation-text.mjs';
@@ -74,18 +67,17 @@ test('v2 subagent-report helpers match the kernel implementation', () => {
   assert.equal(parseSubagentReport('please look at this'), parseFromPublic('please look at this'));
 });
 
+const LEGACY_AUTO = `${AUTO_CONTINUE_PREFIX} 上一条回复因输出长度上限被截断`;
+
 test('v2 continuation helpers match the kernel implementation', () => {
   assert.equal(AUTO_CONTINUE_PREFIX, publicPrefix);
-  assert.equal(CONTINUE_TEXT, publicContinue);
-  assert.equal(MANUAL_CONTINUE_TEXT, publicManual);
-  assert.equal(MAX_AUTO_CONTINUES, publicMax);
-  const texts = ['hello', `${AUTO_CONTINUE_PREFIX} more`, CONTINUE_TEXT, ''];
+  const texts = ['hello', `${AUTO_CONTINUE_PREFIX} more`, LEGACY_AUTO, ''];
   for (const text of texts) {
     assert.equal(isAutoContinueText(text), publicIsAuto(text));
   }
   const messages = [
     { role: 'user', text: 'hello' },
-    { role: 'user', text: CONTINUE_TEXT },
+    { role: 'user', text: LEGACY_AUTO },
     { role: 'user', kind: 'auto-continue', text: 'x' },
     { role: 'user', kind: 'subagent-report', text: 'anything' },
     { role: 'user', text: formatSubagentReport({ name: 'a', kind: 'answered', body: 'done' }) },
@@ -106,7 +98,7 @@ test('each ThreadItem kind is produced and contract-valid', async () => {
     { id: 'r1', role: 'user', text: answered },
     { id: 'n1', role: 'note', text: 'parent pinged the child' },
     { id: 'c1', role: 'assistant', kind: 'correction', text: 'handoff' },
-    { id: 'ac1', role: 'user', kind: 'auto-continue', text: CONTINUE_TEXT },
+    { id: 'ac1', role: 'user', kind: 'auto-continue', text: LEGACY_AUTO },
   ], {
     lang: 'zh',
     workspacePath: '/ws',
@@ -115,8 +107,9 @@ test('each ThreadItem kind is produced and contract-valid', async () => {
   });
   assertValidThread(thread, 'all-kinds');
   assert.deepEqual(thread.items.map((item) => item.kind), [
-    'user', 'assistant', 'tool_group', 'subagent_report', 'system_note', 'system_note', 'system_note',
+    'user', 'assistant', 'tool_group', 'subagent_report', 'system_note', 'system_note',
   ]);
+  assert.equal(thread.items.some((item) => item.id === 'ac1'), false);
   assert.equal(thread.items[0].pathRefs[0].path, 'src/a.ts');
   assert.equal(thread.items[1].model, 'grok-build');
   assert.equal(thread.items[1].streaming, false);
@@ -130,8 +123,6 @@ test('each ThreadItem kind is produced and contract-valid', async () => {
   assert.equal(thread.items[3].name, 'scout');
   assert.equal(thread.items[4].noteKind, 'note');
   assert.equal(thread.items[5].noteKind, 'correction');
-  assert.equal(thread.items[6].noteKind, 'auto_continue');
-  assert.equal(thread.items[6].text, phrase('zh', 'auto_continue_note'));
   assert.equal(thread.tools.length, 1);
   assert.equal(thread.tools[0].id, 'c1');
 });
@@ -294,20 +285,19 @@ test('subagent report finds the child by name, or null when missing', async () =
   assert.equal(findAgentForReport('scout', [{ id: 'conv:agent:0', name: 'scout' }]), null);
 });
 
-test('auto_continue, correction, and note become system_note', async () => {
+test('legacy auto-continue messages are omitted; correction and note stay', async () => {
   const thread = await buildThread([
-    { id: 'ac', role: 'user', text: CONTINUE_TEXT },
+    { id: 'ac', role: 'user', text: LEGACY_AUTO },
     { id: 'cor', role: 'assistant', kind: 'correction', text: 'switched model' },
     { id: 'note', role: 'note', text: '  pinged scout  ' },
     { id: 'empty-note', role: 'note', text: '  ' },
   ], { lang: 'en', exists: none });
   assertValidThread(thread, 'system-notes');
-  assert.equal(thread.items.length, 3);
-  assert.equal(thread.items[0].noteKind, 'auto_continue');
-  assert.equal(thread.items[0].text, phrase('en', 'auto_continue_note'));
-  assert.notEqual(thread.items[0].text, CONTINUE_TEXT);
-  assert.equal(thread.items[1].noteKind, 'correction');
-  assert.equal(thread.items[1].text, 'switched model');
-  assert.equal(thread.items[2].noteKind, 'note');
-  assert.equal(thread.items[2].text, 'pinged scout');
+  assert.equal(thread.items.length, 2);
+  assert.equal(thread.items.some((item) => item.id === 'ac'), false);
+  assert.equal(thread.items.some((item) => item.text === LEGACY_AUTO), false);
+  assert.equal(thread.items[0].noteKind, 'correction');
+  assert.equal(thread.items[0].text, 'switched model');
+  assert.equal(thread.items[1].noteKind, 'note');
+  assert.equal(thread.items[1].text, 'pinged scout');
 });

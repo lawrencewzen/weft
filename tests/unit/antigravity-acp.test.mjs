@@ -519,5 +519,7 @@ test('a missing Antigravity workspace is a zh and en phrase', () => {
     lang: 'zh',
     llmError: { code: 'E_LLM', message: 'provider exploded' },
   });
-  assert.equal(other.error.message, 'provider exploded');
+  assert.equal(other.error.message, '模型请求失败：provider exploded');
+  assert.equal(other.error.canContinue, true);
+  assert.equal(zh.error.canContinue, false);
 });

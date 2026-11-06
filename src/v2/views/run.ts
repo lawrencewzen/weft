@@ -8,6 +8,7 @@
  */
 
 import { phrase, type Lang } from '../phrases/index.ts';
+import { canContinueReason, runErrorMessage } from '../phrases/run-error.ts';
 import type { components } from '../contract.gen.ts';
 import { activeToolSummary, toolGroupSummaryView, type ToolLike } from './tools.ts';
 import type { ThreadMessage, ThreadSubagent } from './thread.ts';
@@ -73,6 +74,8 @@ export function activeToolView(
 export type LlmErrorLike = {
   code?: unknown;
   message?: unknown;
+  reason?: unknown;
+  detail?: unknown;
   retry?: {
     attempt?: unknown;
     delayMs?: unknown;
@@ -134,13 +137,53 @@ function asStartedAt(value: unknown): number | null {
   return null;
 }
 
+const MODEL_ERROR_PREFIX = {
+  zh: '模型请求失败：',
+  en: 'Model request failed: ',
+} as const;
+
+function reasonOf(llmError: LlmErrorLike, code: string, message: string): string {
+  if (typeof llmError.reason === 'string' && llmError.reason) return llmError.reason;
+  if (code === 'E_NO_MODEL' || message === 'err_no_model') return 'no_model';
+  if (code === 'E_SUBMISSION_MISSING') return 'E_SUBMISSION_MISSING';
+  if (code === 'E_LLM') return 'model_error';
+  return code;
+}
+
+function modelDetail(llmError: LlmErrorLike, message: string): string {
+  if (typeof llmError.detail === 'string') return llmError.detail;
+  if (message.startsWith(MODEL_ERROR_PREFIX.zh)) return message.slice(MODEL_ERROR_PREFIX.zh.length);
+  if (message.startsWith(MODEL_ERROR_PREFIX.en)) return message.slice(MODEL_ERROR_PREFIX.en.length);
+  return message;
+}
+
 function errorView(llmError: LlmErrorLike | null | undefined, lang: Lang = 'zh'): RunState['error'] {
-  if (!llmError) return { code: 'E_LLM', message: '' };
+  if (!llmError) return { code: 'E_LLM', message: '', canContinue: false };
+  const code = String(llmError.code || 'E_LLM');
   let message = String(llmError.message || '');
-  if (message === 'agy_err_no_workspace') message = phrase(lang, message);
+  if (message === 'agy_err_no_workspace') {
+    const out: NonNullable<RunState['error']> = {
+      code,
+      message: phrase(lang, message),
+      canContinue: false,
+    };
+    const attempt = Number(llmError.retry?.attempt);
+    const delayMs = Number(llmError.retry?.delayMs);
+    if (Number.isFinite(attempt) && Number.isFinite(delayMs)) out.retry = { attempt, delayMs };
+    return out;
+  }
+  const reason = reasonOf(llmError, code, message);
+  if (reason === 'no_model') message = 'err_no_model';
+  else if (reason === 'model_error') message = runErrorMessage(lang, reason, modelDetail(llmError, message));
+  else {
+    const human = runErrorMessage(lang, reason, typeof llmError.detail === 'string' ? llmError.detail : '');
+    if (human) message = human;
+    else if (!message || message === reason || message === code) message = '';
+  }
   const out: NonNullable<RunState['error']> = {
-    code: String(llmError.code || 'E_LLM'),
+    code,
     message,
+    canContinue: canContinueReason(reason),
   };
   const attempt = Number(llmError.retry?.attempt);
   const delayMs = Number(llmError.retry?.delayMs);

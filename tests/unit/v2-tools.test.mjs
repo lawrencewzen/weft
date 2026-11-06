@@ -557,8 +557,8 @@ test('every key tools can request exists in both zh and en catalogs', () => {
   }
 });
 
-test('pending and auto-continue keys exist in both catalogs', () => {
-  for (const key of ['pending_thinking', 'pending_subagents', 'auto_continue_note']) {
+test('pending and run-error keys exist in both catalogs', () => {
+  for (const key of ['pending_thinking', 'pending_subagents', 'run_err_interrupted', 'run_err_restart_limit', 'run_err_faulted', 'run_err_model']) {
     assert.equal(Object.hasOwn(zh, key), true, `zh missing ${key}`);
     assert.equal(Object.hasOwn(en, key), true, `en missing ${key}`);
     assert.notEqual(phrase('zh', key, { n: 2 }), phrase('en', key, { n: 2 }));

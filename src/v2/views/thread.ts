@@ -1,6 +1,6 @@
 /** Conversation thread: messages → ThreadItem list + ToolCall rows. No DOM. */
 
-import { phrase, type Lang } from '../phrases/index.ts';
+import type { Lang } from '../phrases/index.ts';
 import type { components } from '../contract.gen.ts';
 import { isPromptUserMessage } from './continuation.ts';
 import { parseSubagentReport } from './subagent-report.ts';
@@ -152,7 +152,7 @@ async function pathRefsFor(
 /**
  * Messages → thread items. Rules:
  * consecutive tools form one group; empty assistants are skipped (and do not split a group);
- * subagent reports and auto-continues are not user bubbles.
+ * subagent reports are not user bubbles. Legacy auto-continue user messages are omitted.
  */
 export async function buildThread(
   messages: ThreadMessage[] | null | undefined,
@@ -239,15 +239,7 @@ export async function buildThread(
         });
         continue;
       }
-      if (!isPromptUserMessage(m)) {
-        items.push({
-          kind: 'system_note',
-          id: messageId(m),
-          noteKind: 'auto_continue',
-          text: phrase(lang, 'auto_continue_note'),
-        });
-        continue;
-      }
+      if (!isPromptUserMessage(m)) continue;
       const userItem: components['schemas']['ThreadItemUser'] = {
         kind: 'user',
         id: messageId(m),

@@ -2,7 +2,10 @@
 export const en: Record<string, string> = {
   pending_thinking: 'Thinking',
   pending_subagents: '· {n} sub-agents',
-  auto_continue_note: 'Output hit the length limit; continued automatically',
+  run_err_interrupted: 'The service was interrupted before this turn finished.',
+  run_err_restart_limit: 'This turn was interrupted repeatedly and stopped.',
+  run_err_faulted: 'This turn hit an internal error.',
+  run_err_model: 'Model request failed: {detail}',
   tool_sum_join: ' · ',
   tool_sum_names_join: ', ',
   tool_sum_read: 'read {n} files',

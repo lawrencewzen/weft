@@ -160,7 +160,7 @@ test('harness batches map onto the contract events', () => {
   assert.equal(events[6].data.delayMs, DEFAULT_RETRY_POLICY.baseDelayMs);
   assert.deepEqual(events[7].data, { code: 'E_LLM', message: 'boom' });
   assert.equal(events[8].data.status, 'failed');
-  assert.deepEqual(events[9].data, { code: 'E_NO_MODEL', message: 'err_no_model' });
+  assert.deepEqual(events[9].data, { code: 'E_NO_MODEL', message: 'err_no_model', reason: 'no_model' });
   assert.equal(events[10].data.status, 'failed');
   assert.equal(events[11].data.status, 'done');
   assert.equal(names.includes('usage_changed'), false);
@@ -220,7 +220,9 @@ test('status is the last submission record', () => {
   const failed = statusFromSubmission({ status: 'unanswered', reason: 'model_error', detail: 'provider exploded' });
   assert.equal(failed.status, 'failed');
   assert.equal(failed.llmError.code, 'E_LLM');
-  assert.equal(failed.llmError.message, 'provider exploded');
+  assert.equal(failed.llmError.message, '模型请求失败：provider exploded');
+  assert.equal(failed.llmError.detail, 'provider exploded');
+  assert.equal(failed.llmError.reason, 'model_error');
   assert.equal(statusFromSubmission({ status: 'unanswered', reason: 'no_model' }).llmError.code, 'E_NO_MODEL');
   assert.throws(() => statusFromSubmission(undefined), /Unexpected submission status/);
 });
