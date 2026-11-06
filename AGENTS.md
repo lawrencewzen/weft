@@ -1,6 +1,6 @@
 # 协作规则（Weft）
 
-Weft 是基于 Pi Durable（`@earendil-works/pi-durable`，作为库嵌入）的 Web 编码工作台，fork 自 xiaomoBoy/pi-durable-assistant（MIT）。目标运行环境：内网 Windows，Node 22。
+Weft 是基于 Pi Durable（@earendil-works/pi-durable，作为库嵌入）的 Web 编码工作台。目标运行环境：内网 Windows，Node 22。
 
 ## 内核（硬性规定）
 - 运行时内核必须是 Pi Durable（`@earendil-works/pi-durable` 的 Harness）：对话、任务、检查点、断点续跑、子 Agent、中止、压缩都用它提供的机制，模型调用走 `@earendil-works/pi-ai`。
