@@ -6,6 +6,7 @@ import { createModels } from '@earendil-works/pi-ai/models';
 import { createSqliteStore } from '../../src/store/sqlite.mjs';
 import { createCredentialStore, createModelsStore } from '../../src/core/provider-stores.mjs';
 import {
+  builtinProviderById,
   createKernelModels,
   explicitDemo,
   fetchCustomProviderModels,
@@ -50,13 +51,13 @@ test('chat runtime uses a real model when one is connected, and faux only when a
   assert.equal(selectChatRuntime('', { llmApi: 'openai-completions' }), 'none');
 });
 
-function customProvider(id, { baseUrl, enabled, overrides = {}, name = id } = {}) {
+function customProvider(id, { baseUrl, enabled, overrides = {}, name = id, api = 'openai-completions' } = {}) {
   return {
     id,
     kind: 'custom',
     name,
     baseUrl,
-    api: 'openai-completions',
+    api,
     enabled,
     overrides,
   };
@@ -157,9 +158,11 @@ test('builtin catalog metadata is kept and user/env overrides apply', async () =
     { id: 'deepseek', kind: 'builtin', enabled: ['deepseek-flash'], overrides: {} },
   ], { providerId: 'deepseek', modelId: 'deepseek-flash' });
 
+  const rawFlash = builtinProviderById('deepseek').getModels().find((item) => item.id === 'deepseek-flash');
+  assert.ok(rawFlash.maxTokens > 32768);
   const flash = (await modelOf(base, {}, { LLM_CONTEXT_WINDOW: '200000' })).model;
   assert.equal(flash.contextWindow, 1_000_000);
-  assert.equal(flash.maxTokens, 32768);
+  assert.equal(flash.maxTokens, rawFlash.maxTokens);
   assert.equal(flash.reasoning, true);
   assert.equal(flash.thinkingLevelMap.low, 'low');
   assert.deepEqual(flash.input, ['text', 'image']);
@@ -174,7 +177,8 @@ test('builtin catalog metadata is kept and user/env overrides apply', async () =
     }),
   ], { providerId: CUSTOM_DEFAULT, modelId: 'not-a-real-model' }))).model;
   assert.equal(unknown.contextWindow, 128000);
-  assert.equal(unknown.maxTokens, 32768);
+  assert.equal(unknown.maxTokens, 0);
+  assert.equal(unknown.api, 'openai-completions');
   assert.equal(unknown.reasoning, Boolean(0));
   assert.deepEqual(unknown.input, ['text']);
 
@@ -187,7 +191,7 @@ test('builtin catalog metadata is kept and user/env overrides apply', async () =
     },
   ], { providerId: 'deepseek', modelId: 'deepseek-flash' }))).model;
   assert.equal(userWindow.contextWindow, 256000);
-  assert.equal(userWindow.maxTokens, 32768);
+  assert.equal(userWindow.maxTokens, rawFlash.maxTokens);
   assert.equal(userWindow.reasoning, true);
 
   const envMax = (await modelOf(base, {}, { WEFT_MAX_OUTPUT_TOKENS: '2048' })).model;
@@ -239,7 +243,8 @@ test('builtin DeepSeek request uses catalog reasoning and stored Authorization',
   assert.ok(hit, JSON.stringify(seen));
   assert.equal(hit.authorization, `Bearer ${KEY_DS}`);
   assert.equal(hit.body.model, 'deepseek-flash');
-  assert.equal(hit.body.max_tokens, 32768);
+  assert.ok(hit.body.max_tokens > 32768);
+  assert.equal(hit.body.max_tokens, model.maxTokens);
   assert.deepEqual(hit.body.thinking, { type: 'disabled' });
   assert.equal(Object.prototype.hasOwnProperty.call(hit.body, 'reasoning'), false);
   assert.equal(Object.prototype.hasOwnProperty.call(hit.body, 'reasoning_effort'), false);
@@ -289,6 +294,76 @@ test('custom OpenAI-compatible provider sends to baseUrl with Authorization', as
     assert.ok(hit, JSON.stringify(fake.seen));
     assert.equal(hit.authorization, `Bearer ${KEY_DEFAULT}`);
     assert.equal(hit.body.model, 'model-default');
+    assert.equal(Object.hasOwn(hit.body, 'max_tokens'), false);
+    assert.equal(Object.hasOwn(hit.body, 'max_completion_tokens'), false);
+  } finally {
+    store.close();
+    await fake.close();
+    await removeTempDir(dir);
+  }
+});
+
+test('unknown openai-completions sends the per-model maxTokens and no field when unset', async () => {
+  const fake = await startFakeModel({ mode: 'openai', text: 'limited' });
+  const dir = await makeTempDir('weft-kmodels-limit-');
+  const store = createSqliteStore(dir);
+  const credentials = createCredentialStore(store);
+  try {
+    await credentials.modify(CUSTOM_DEFAULT, async () => ({ type: 'api_key', key: KEY_DEFAULT }));
+    const models = createModels({ credentials });
+    const settings = v3Settings([
+      customProvider(CUSTOM_DEFAULT, {
+        baseUrl: fake.baseUrl,
+        enabled: ['model-default'],
+        overrides: { 'model-default': { maxTokens: 1234 } },
+      }),
+    ], { providerId: CUSTOM_DEFAULT, modelId: 'model-default' });
+    const routes = createKernelModels({ models, getSettings: async () => settings, env: { WEFT_MAX_OUTPUT_TOKENS: '999' } });
+    const ref = await routes.modelFor({});
+    const model = models.getModel(ref.provider, ref.modelId);
+    assert.equal(model.maxTokens, 1234);
+    const stream = models.streamSimple(model, {
+      messages: [{ role: 'user', content: 'ping', timestamp: Date.now() }],
+    }, { maxRetries: 0 });
+    await stream.result();
+    const hit = fake.seen.find((item) => item.path.endsWith('/chat/completions'));
+    assert.ok(hit, JSON.stringify(fake.seen));
+    const sent = hit.body.max_tokens ?? hit.body.max_completion_tokens;
+    assert.equal(sent, 1234);
+  } finally {
+    store.close();
+    await fake.close();
+    await removeTempDir(dir);
+  }
+});
+
+test('unknown anthropic-messages sends the 64000 default', async () => {
+  const fake = await startFakeModel({ mode: 'openai', text: 'unused' });
+  const dir = await makeTempDir('weft-kmodels-anth-');
+  const store = createSqliteStore(dir);
+  const credentials = createCredentialStore(store);
+  try {
+    await credentials.modify(CUSTOM_DEFAULT, async () => ({ type: 'api_key', key: KEY_DEFAULT }));
+    const models = createModels({ credentials });
+    const settings = v3Settings([
+      customProvider(CUSTOM_DEFAULT, {
+        baseUrl: fake.baseUrl,
+        api: 'anthropic-messages',
+        enabled: ['claude-unknown'],
+      }),
+    ], { providerId: CUSTOM_DEFAULT, modelId: 'claude-unknown' });
+    const routes = createKernelModels({ models, getSettings: async () => settings, env: {} });
+    const ref = await routes.modelFor({});
+    const model = models.getModel(ref.provider, ref.modelId);
+    assert.equal(model.api, 'anthropic-messages');
+    assert.equal(model.maxTokens, 64000);
+    const stream = models.streamSimple(model, {
+      messages: [{ role: 'user', content: 'ping', timestamp: Date.now() }],
+    }, { maxRetries: 0 });
+    await stream.result().catch(() => {});
+    const hit = fake.seen.find((item) => item.body && (item.body.max_tokens != null || item.body.messages));
+    assert.ok(hit, JSON.stringify(fake.seen.map((item) => item.path)));
+    assert.equal(hit.body.max_tokens, 64000);
   } finally {
     store.close();
     await fake.close();

@@ -270,8 +270,8 @@ test('several retryable failures then recover in the same turn, one answer', { t
   }
 });
 
-test('exhausted retries fail the run as model_error; canContinue stays absent', { timeout: 20_000 }, async () => {
-  // main has no T106 canContinue. model_error is presented as llmError.code E_LLM.
+test('exhausted retries fail the run as model_error; v2 canContinue is true', { timeout: 20_000 }, async () => {
+  // Kernel status stays code/reason/detail. canContinue is a v2 view field.
   const failed = statusFromSubmission({
     status: 'unanswered',
     reason: 'model_error',
@@ -308,7 +308,9 @@ test('exhausted retries fail the run as model_error; canContinue stays absent', 
     await watch.stop();
     assert.equal(body.status, 'failed', `${srv.logs()}\n${JSON.stringify(body)}`);
     assert.equal(body.llmError.code, 'E_LLM');
-    assert.match(body.llmError.message, /503 Service Unavailable/);
+    assert.equal(body.llmError.reason, 'model_error');
+    assert.match(body.llmError.detail, /503 Service Unavailable/);
+    assert.equal(body.llmError.message, undefined);
     assert.equal(body.llmError.retry, undefined);
     assert.equal(Object.hasOwn(body, 'canContinue'), false);
     assert.equal(JSON.stringify(body).includes('canContinue'), false);
@@ -328,10 +330,10 @@ test('exhausted retries fail the run as model_error; canContinue stays absent', 
     const run = snap.conversation.run;
     assert.equal(run.status, 'failed');
     assert.equal(run.error.code, 'E_LLM');
-    assert.match(run.error.message, /503 Service Unavailable/);
+    assert.equal(run.error.message, '模型请求失败：503 Service Unavailable');
+    assert.equal(run.error.canContinue, true);
     assert.equal(run.error.retry, undefined);
     assert.equal(Object.hasOwn(run, 'canContinue'), false);
-    assert.equal(JSON.stringify(snap).includes('canContinue'), false);
     assert.equal(snap.conversation.status, 'failed');
   } finally {
     await stopServer(srv);
@@ -371,7 +373,8 @@ test('400 and 401 fail on the first attempt and are not backed off', { timeout: 
       await watch.stop();
       assert.equal(body.status, 'failed', `${item.error}\n${srv.logs()}\n${JSON.stringify(body)}`);
       assert.equal(body.llmError.code, 'E_LLM');
-      assert.match(body.llmError.message, new RegExp(item.error.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+      assert.match(body.llmError.detail, new RegExp(item.error.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+      assert.equal(body.llmError.message, undefined);
       assert.equal(body.messages.some((message) => message.text === item.success), false);
       assert.deepEqual(watch.events.filter((ev) => ev.event === 'retry'), []);
       assert.equal(elapsed < baseDelayMs, true, `${item.error} took ${elapsed}ms`);

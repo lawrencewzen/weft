@@ -121,6 +121,7 @@ test('listProviders reports builtin catalog, custom cache, auth types, and overr
     assert.deepEqual(alpha.overridden, { contextWindow: true });
     const beta = custom.models.find((item) => item.id === 'beta');
     assert.equal(beta.contextWindow, null);
+    assert.equal(beta.maxTokens, null);
     assert.equal(beta.enabled, true);
   }, {
     settings: {

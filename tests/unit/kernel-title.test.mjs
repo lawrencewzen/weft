@@ -5,7 +5,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { createModels } from '@earendil-works/pi-ai/models';
 import { contentText } from '@earendil-works/pi-ai';
 import { fauxAssistantMessage } from '@earendil-works/pi-ai/providers/faux';
-import { CONTINUE_TEXT } from '../../src/kernel/continuation-text.mjs';
+import { AUTO_CONTINUE_PREFIX } from '../../src/kernel/continuation-text.mjs';
 import { scriptPool, titleReplyFromScript, titleTurnFromScript } from '../../src/kernel/faux-script.mjs';
 import { FAUX_MODEL, registerFaux } from '../../src/kernel/index.mjs';
 import {
@@ -135,7 +135,7 @@ test('shouldGenerateTitle skips subagents, non-done, user titles, and already ge
 
 test('firstTurnTexts uses the first real user prompt and first assistant text', () => {
   assert.deepEqual(firstTurnTexts([
-    { role: 'user', text: CONTINUE_TEXT, kind: 'auto-continue' },
+    { role: 'user', text: `${AUTO_CONTINUE_PREFIX} more`, kind: 'auto-continue' },
     { role: 'user', text: '帮我写一个用户登录页面' },
     { role: 'assistant', text: '' },
     { role: 'assistant', text: '好的' },
@@ -296,7 +296,7 @@ test('subagent, auto-continue, failed, and stopped runs do not generate', async 
     {
       readTranscript: async () => ({
         messages: [
-          { role: 'user', text: CONTINUE_TEXT },
+          { role: 'user', text: `${AUTO_CONTINUE_PREFIX} more` },
           { role: 'assistant', text: '续写' },
         ],
       }),

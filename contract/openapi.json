@@ -5102,7 +5102,7 @@
       "post": {
         "operationId": "continueConversation",
         "summary": "点「继续」",
-        "description": "等同于发送 MANUAL_CONTINUE_TEXT（「继续」）。\n`requestId` 缺省时服务端生成；同一个 requestId 重复请求返回同一个 runId。\n",
+        "description": "用 Pi Durable 的 `submit({ type: 'continue' })` 在当前上下文上再跑一轮，不写用户消息。\n只在空闲时接受。对话正忙返回 409，`code` 为 `ConversationBusy`。\n没有工作区同样是 409，`code` 为 `E_NO_WORKSPACE`。\n`requestId` 缺省时服务端生成；同一个 requestId 重复请求返回同一个 runId，不重复提交。\n",
         "security": [
           {
             "bearerAuth": []
@@ -5174,7 +5174,7 @@
             }
           },
           "409": {
-            "description": "对话没有工作区",
+            "description": "没有工作区（E_NO_WORKSPACE），或对话正忙（ConversationBusy）",
             "content": {
               "application/json": {
                 "schema": {
@@ -6860,7 +6860,6 @@
           "noteKind": {
             "type": "string",
             "enum": [
-              "auto_continue",
               "correction",
               "note"
             ]
@@ -6869,7 +6868,7 @@
             "type": "string"
           }
         },
-        "description": "系统提示。auto_continue 的 text 是服务端出成的句子。"
+        "description": "系统提示。correction 是交接，note 是给子 Agent 插话后的通知。"
       },
       "ThreadItem": {
         "oneOf": [
@@ -6981,14 +6980,20 @@
                 "additionalProperties": false,
                 "required": [
                   "code",
-                  "message"
+                  "message",
+                  "canContinue"
                 ],
                 "properties": {
                   "code": {
                     "type": "string"
                   },
                   "message": {
-                    "type": "string"
+                    "type": "string",
+                    "description": "按 lang 出成的人话。model_error 带脱敏后的原始错误"
+                  },
+                  "canContinue": {
+                    "type": "boolean",
+                    "description": "这一轮还能用继续再跑。reason 为 model_error、interrupted、restart_limit、faulted 时为 true。\nno_model、aborted、reset、nothing_to_answer、orphaned、E_SUBMISSION_MISSING 等为 false。\n"
                   },
                   "retry": {
                     "type": "object",
