@@ -282,7 +282,7 @@ paths:
       summary: 新建工作区
       description: |
         请求体带 `source`：`local` 用本机目录（`path` 缺省时在数据目录下建空目录），`git` 克隆仓库。
-        本地路径用 realpath。`$WEFT_DATA_DIR/workspaces` 之下先判断、始终允许（含该目录位于 `/var` 时）。其它已存在路径不再要求位于 `WEFT_WORKSPACE_ROOT` 之下。仍拒绝 `/`、`~/.ssh`、`~/.gnupg` 和系统目录；用户主目录本身允许。路径已是未移除的本地工作区时返回那一条，不另建。Git 只允许 https / ssh / git@；存储的 URL 去掉凭据。
+        本地路径用 realpath。`$WEFT_DATA_DIR/workspaces` 之下先判断、始终允许（含该目录位于 `/var` 时）。其它已存在路径不再要求位于 `WEFT_WORKSPACE_ROOT` 之下。仍拒绝 `/`、`~/.ssh`、`~/.gnupg` 和系统目录；用户主目录本身允许。Windows 的系统目录只指 `%SystemRoot%`（默认 `C:\Windows`）及其子目录，不把 `/etc`、`/var`、`/usr`、`/bin` 等 Unix 前缀套到当前盘。路径已是未移除的本地工作区时返回那一条，不另建。Git 只允许 https / ssh / git@；存储的 URL 去掉凭据。
         `connectionId` / `projectId` 走已保存的 Git 连接。成功后 `workspaces` 主题更新。失败原因按 `lang` 出成句，并带结构化 `code`。
       security:
         - bearerAuth: []
@@ -376,8 +376,11 @@ paths:
       summary: 列出可浏览的子目录
       description: |
         与旧 GET /api/workspace-root/dirs 相同，复用 listBrowsableDirs。
-        缺省列出默认起点，也可以列到该起点之外。`parent` 可以一路走到文件系统根，再往上为 null。`/` 可浏览但不可选为工作区；用户主目录可以选。
-        敏感目录（`~/.ssh`、`~/.gnupg`、系统目录）返回 400 E_PATH，文案按 lang 出成句。
+        缺省列出默认起点，也可以列到该起点之外。`parent` 可以一路走到文件系统根。
+        非 Windows 上，文件系统根的 `parent` 为 null。`/` 可浏览但不可选为工作区；用户主目录可以选。
+        Windows 上盘根（如 `D:\`）的 `parent` 为空串，表示上一层是盘符列表；盘根本身可以选为工作区。
+        查询 `view=drives` 仅 Windows：返回盘符列表（`path` 为空串，`parent` 为 null，`selectable` 与 `git` 为 false）。`entries` 是当前存在的盘，`name` 如 `D:`，`path` 如 `D:\`。按 A–Z 用 fs.access 探测，单盘失败或超时则跳过，不会被未就绪的盘卡住。非 Windows 返回 404 E_PATH。
+        敏感目录返回 400 E_PATH，文案按 lang 出成句。非 Windows 为 `~/.ssh`、`~/.gnupg` 和系统目录（`/etc`、`/var`、`/usr`、`/bin` 等）。Windows 比较不区分大小写，只拦 `~/.ssh`、`~/.gnupg` 和 `%SystemRoot%`（默认 `C:\Windows`）及其子目录，不把 Unix 前缀套到当前盘（`D:\var\www` 这种普通目录可选）。符号链接和 junction 解析后再判断，不能绕过。
       security:
         - bearerAuth: []
         - sessionCookie: []
@@ -386,7 +389,13 @@ paths:
           in: query
           schema:
             type: string
-          description: 要列出的目录。缺省为工作区根目录。
+          description: 要列出的目录。缺省为工作区根目录。`view=drives` 时忽略。
+        - name: view
+          in: query
+          schema:
+            type: string
+          description: |
+            `drives` 列出盘符，仅 Windows。其它值忽略，仍按 path 列目录。
         - name: lang
           in: query
           schema:
@@ -412,7 +421,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/V2Error"
         "404":
-          description: 路径不存在
+          description: 路径不存在。非 Windows 请求 view=drives 时也是 404 E_PATH。
           content:
             application/json:
               schema:
@@ -438,7 +447,7 @@ paths:
         只有请求 Host 是回环地址（127.0.0.1、localhost、[::1]，可带端口）时才弹；其它 Host 返回 unsupported，避免远程访问时窗口弹到服务器桌面上。
         环境变量 WEFT_FOLDER_PICKER=off 时一律 unsupported。
         同一时间只弹一个窗口；已有窗口时后来的请求等待同一次结果。10 分钟无结果则结束该进程并返回 cancelled。
-        macOS 用 osascript 的 choose folder（argv，不经 shell）。其它平台目前返回 unsupported。
+        macOS 用 osascript 的 choose folder（argv，不经 shell）。Windows 用 pwsh（找不到则回退 powershell.exe）跑 FolderBrowserDialog：`-NoProfile -NonInteractive -STA -EncodedCommand`，不经 shell；起点目录走环境变量，不写进脚本。非交互会话直接退出并返回 unsupported。Linux 返回 unsupported。
         起点目录是 defaultWorkspaceRoot()。选中路径再走与 resolveAllowedWorkspacePath 相同的敏感目录校验，被拦时 400 PathNotAllowed。
         无请求体。与其它写接口一样，Content-Type 须为 application/json。
       security:
@@ -6023,7 +6032,10 @@ components:
         path:
           type: string
         parent:
-          description: 没有上一级，或上一级是敏感目录时为 null。文件系统根为 null。
+          description: |
+            没有上一级，或上一级是敏感目录时为 null。
+            非 Windows 的文件系统根为 null。Windows 盘符列表（view=drives）为 null。
+            Windows 盘根（如 `D:\`）为空串，表示上一层是盘符列表。
           oneOf:
             - type: "null"
             - type: string
@@ -6096,7 +6108,9 @@ components:
         code:
           type: string
           const: E_PATH
-      description: 本地路径不能作为工作区（不存在、是 `/`、或落在 `~/.ssh`、`~/.gnupg` 和系统目录）。用户主目录本身允许。
+      description: |
+        本地路径不能作为工作区（不存在、是 `/`、或落在 `~/.ssh`、`~/.gnupg` 和系统目录）。
+        Windows 比较不区分大小写，系统目录只指 `%SystemRoot%`（默认 `C:\Windows`）及其子目录，不套用 Unix 前缀；盘根 `C:\`、`D:\` 以及 `D:\var`、`D:\bin` 这类普通目录仍允许。用户主目录本身允许。符号链接和 junction 解析后再判断。
     Plugin:
       type: object
       additionalProperties: false

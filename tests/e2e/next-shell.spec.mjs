@@ -55,10 +55,11 @@ test('GET /auth?code= exchanges a web-code for a session and shows protocol 2.0.
     expect(body.code).toBeTruthy();
 
     await page.goto(`${srv.url}/auth?code=${encodeURIComponent(body.code)}`);
-    await expect(page).toHaveURL(/http:\/\/127\.0\.0\.1:\d+\/$/);
+    // Empty account: the shell replaces `/` with `/new` once the workspace list is ready.
+    // goto returns after that replace, so the address to wait for is the settled /new URL.
+    await expect(page).toHaveURL(/http:\/\/127\.0\.0\.1:\d+\/new$/);
     await expect(page.getByTestId('next-app')).toBeVisible();
     await expect(page.getByTestId('next-sidebar')).toBeVisible();
-    await expect(page).toHaveURL(/\/new$/);
     await expect(page.getByTestId('next-home-title')).toHaveCount(0);
     await expect(page.getByTestId('next-home-add')).toHaveCount(0);
     await expect(page.getByTestId('next-ws-chip')).toContainText('选择项目');

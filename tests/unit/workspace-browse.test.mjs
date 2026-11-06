@@ -93,14 +93,15 @@ test('home is allowed and parent walks to the filesystem root; sensitive paths s
     assert.equal(cursor.selectable, true);
     assert.equal(cursor.entries.some((e) => e.name === '.ssh' || e.name === '.gnupg'), false);
     const seen = [];
-    while (cursor.parent != null) {
+    while (cursor.parent != null && cursor.parent !== '') {
       seen.push(cursor.path);
       assert.ok(seen.length < 64, 'parent chain did not reach the filesystem root');
       const next = cursor.parent;
       cursor = await listBrowsableDirs(next);
       assert.equal(cursor.path, await fs.realpath(next));
     }
-    assert.equal(cursor.parent, null);
+    if (process.platform === 'win32') assert.equal(cursor.parent, '');
+    else assert.equal(cursor.parent, null);
     assert.equal(cursor.path, path.parse(home).root);
     assert.ok(seen.includes(home));
 
