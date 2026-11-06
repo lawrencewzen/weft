@@ -15,7 +15,8 @@ import {
   projectViewUpdate,
 } from '../../src/kernel/events.mjs';
 import { FAUX_MODEL } from '../../src/kernel/index.mjs';
-import { openConversationKernel, readConversationEntries } from '../../src/kernel/conversations.mjs';
+import { openConversationKernel } from '../../src/kernel/conversations.mjs';
+import { formatPasteBlock } from '../../src/core/user-message-parts.mjs';
 import { nameFromTask } from '../../src/kernel/subagents.mjs';
 import { createSqliteStore } from '../../src/store/sqlite.mjs';
 import { conversationSnapshot } from '../../src/v2/views/conversation.ts';
@@ -164,30 +165,132 @@ async function compact(kernel, harnessId) {
   return { handle, active };
 }
 
-test('history pages follow the official entries cursor', async () => {
-  const pages = [
-    { items: [{ id: 1 }, { id: 2 }], next: { n: 1 } },
-    { items: [{ id: 3 }], next: { n: 2 } },
-    { items: [{ id: 4 }] },
-  ];
+const PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+
+function userEntry(text, extra = []) {
+  const content = extra.length
+    ? [{ type: 'text', text }, ...extra]
+    : text;
+  return {
+    kind: 'pi.user',
+    model: [{ role: 'user', content, timestamp: Date.now() }],
+  };
+}
+
+function traceEntries(handle) {
+  const proto = Object.getPrototypeOf(handle);
+  if (proto.entries?.weftTrace) return proto.entries.weftTrace;
+  const original = proto.entries;
   const calls = [];
-  const entries = await readConversationEntries((query, limit, cursor) => {
-    calls.push({ query, limit, cursor });
-    return pages[calls.length - 1];
-  }, { call: true }, 2);
-  assert.deepEqual(entries.map((entry) => entry.id), [1, 2, 3, 4]);
-  assert.deepEqual(calls.map((call) => call.cursor), [undefined, { n: 1 }, { n: 2 }]);
-  assert.deepEqual(calls[0].query, { order: 'ascending' });
-  assert.equal(calls.every((call) => call.limit === 2), true);
-  const once = await readConversationEntries(async () => ({ items: [{ id: 9 }] }), null);
-  assert.deepEqual(once, [{ id: 9 }]);
-  let spins = 0;
-  const repeated = await readConversationEntries(async () => {
-    spins += 1;
-    return { items: [{ id: spins }], next: { stuck: true } };
-  }, null, 1);
-  assert.equal(spins, 2);
-  assert.deepEqual(repeated.map((entry) => entry.id), [1, 2]);
+  const traced = async function entries(query, limit, cursor, ctx) {
+    calls.push({
+      conversationId: Number(this.id),
+      order: query?.order || '',
+      minEntryId: query?.minEntryId ?? null,
+      maxEntryId: query?.maxEntryId ?? null,
+      limit,
+      cursor: cursor ?? null,
+    });
+    return original.call(this, query, limit, cursor, ctx);
+  };
+  traced.weftTrace = { calls, restore() { proto.entries = original; } };
+  proto.entries = traced;
+  return traced.weftTrace;
+}
+
+function callsSince(calls, from, harnessId) {
+  return calls.slice(from).filter((call) => call.conversationId === Number(harnessId));
+}
+
+test('a multi-page history is read in official ranges and is not scanned again', { timeout: 120000 }, async () => {
+  const dataDir = await mkdtemp(path.join(tmpdir(), 'piw-compact-pages-'));
+  let opened = null;
+  let restore = null;
+  try {
+    opened = await openKernel(dataDir, { WEFT_FAUX_TEXT: 'ok' });
+    const { store, kernel } = opened;
+    const { conv } = await makeConversation(store, kernel, dataDir);
+    const conversation = await kernel.harness.conversation(conv.harnessId, kernel.context);
+    const traced = traceEntries(conversation);
+    restore = traced.restore;
+    const drafts = [];
+    for (let i = 0; i < 80; i += 1) drafts.push(userEntry(`MARK_${i}`));
+    drafts.push(userEntry('EARLY_MEDIA', [
+      { type: 'text', text: formatPasteBlock('PASTE_BODY_EARLY') },
+      { type: 'image', data: PNG, mimeType: 'image/png', name: 'early.png' },
+    ]));
+    for (let i = 81; i < 161; i += 1) drafts.push(userEntry(`MARK_${i}`));
+    drafts.push(userEntry('LATE_MEDIA', [
+      { type: 'image', data: PNG, mimeType: 'image/png', name: 'late.png' },
+    ]));
+    const ids = [];
+    await conversation.commit(async (tx) => {
+      for (const draft of drafts) {
+        ids.push((await tx.appendEntry(conv.harnessId, draft)).id);
+      }
+    }, kernel.context);
+    const earlyId = ids[80];
+    const lateId = ids[ids.length - 1];
+    const firstId = ids[0];
+    const mark = traced.calls.length;
+    const lateImage = await kernel.getMessageImage(conv.id, lateId, 0);
+    const lateCalls = callsSince(traced.calls, mark, conv.harnessId);
+    assert.equal(lateImage?.name, 'late.png', JSON.stringify(lateImage));
+    assert.deepEqual(lateCalls, [], `recent image scanned storage: ${JSON.stringify(lateCalls)}`);
+
+    const earlyMark = traced.calls.length;
+    const earlyImage = await kernel.getMessageImage(conv.id, earlyId, 0);
+    const earlyCalls = callsSince(traced.calls, earlyMark, conv.harnessId);
+    assert.equal(earlyImage?.name, 'early.png', JSON.stringify(earlyCalls));
+    assert.equal(earlyCalls.length >= 1, true, JSON.stringify(earlyCalls));
+    assert.equal(earlyCalls.every((call) => (
+      call.limit === 50 && call.cursor == null && (call.maxEntryId != null || call.minEntryId != null)
+    )), true, JSON.stringify(earlyCalls));
+
+    const threadMark = traced.calls.length;
+    const snap = await snapshotOf(kernel, store, conv);
+    const threadCalls = callsSince(traced.calls, threadMark, conv.harnessId);
+    const texts = threadRows(snap).map((row) => row.text);
+    assert.equal(texts.some((text) => text.startsWith('MARK_0')), true, texts.slice(0, 3).map(clip).join(' | '));
+    assert.equal(texts.some((text) => text.includes('EARLY_MEDIA')), true);
+    assert.equal(texts.some((text) => text.includes('LATE_MEDIA')), true);
+    assert.equal(snap.items.some((item) => String(item.id) === String(firstId)), true);
+    assert.equal(threadCalls.length >= 1, true, `image read already scanned every page: ${JSON.stringify(earlyCalls)}`);
+    assert.equal(threadCalls.every((call) => (
+      call.limit === 50 && call.cursor == null && (call.maxEntryId != null || call.minEntryId != null)
+    )), true, JSON.stringify(threadCalls));
+    const ranges = [...earlyCalls, ...threadCalls].map((call) => (
+      `${call.order}:${call.minEntryId}:${call.maxEntryId}`
+    ));
+    assert.equal(new Set(ranges).size, ranges.length, `repeated range: ${JSON.stringify(ranges)}`);
+
+    const againMark = traced.calls.length;
+    const again = await snapshotOf(kernel, store, conv);
+    assert.deepEqual(threadRows(again).map((row) => row.text), texts);
+    const imageAgain = await kernel.getMessageImage(conv.id, earlyId, 0);
+    const paste = await kernel.getMessagePaste(conv.id, earlyId, 0);
+    assert.equal(imageAgain?.name, 'early.png');
+    assert.equal(paste, 'PASTE_BODY_EARLY');
+    assert.deepEqual(callsSince(traced.calls, againMark, conv.harnessId), []);
+
+    await kernel.close();
+    store.close();
+    opened = null;
+    const restartMark = traced.calls.length;
+    opened = await openKernel(dataDir, { WEFT_FAUX_TEXT: 'ok' });
+    const restartCalls = callsSince(traced.calls, restartMark, conv.harnessId);
+    assert.equal(restartCalls.length >= 2, true, JSON.stringify(restartCalls));
+    assert.equal(restartCalls.every((call) => call.limit === 50 && call.cursor == null), true, JSON.stringify(restartCalls));
+    const quiet = traced.calls.length;
+    const reopened = await snapshotOf(opened.kernel, opened.store, conv);
+    assert.equal(threadRows(reopened).some((row) => row.text.startsWith('MARK_0')), true);
+    assert.deepEqual(callsSince(traced.calls, quiet, conv.harnessId), []);
+  } finally {
+    if (restore) restore();
+    if (opened?.kernel) await opened.kernel.close();
+    if (opened?.store) opened.store.close();
+    await rm(dataDir, { recursive: true, force: true });
+  }
 });
 
 test('pi.compaction is not a user or assistant bubble', () => {
