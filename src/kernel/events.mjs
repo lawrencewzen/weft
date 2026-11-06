@@ -381,7 +381,17 @@ export function createViewProjector() {
     run: false,
     retryKey: '',
     queued: false,
+    compactionKey: '',
   };
+}
+
+function compactionKeyOf(live) {
+  const running = Array.isArray(live?.compactions) ? live.compactions : [];
+  const failure = live?.compactionFailure;
+  return JSON.stringify({
+    running: running.map((row) => [row?.taskId, row?.trigger, row?.blocking, row?.attempt]),
+    failure: failure ? [failure.taskId, failure.trigger, failure.error] : null,
+  });
 }
 
 function liveOf(view) {
@@ -416,6 +426,7 @@ export function projectViewUpdate(projector, view, mapCtx) {
   const run = live.run != null;
   const queued = queuedInputs(inboxOf(view));
   const nextText = textOf(live.generation?.message?.content);
+  const compactionKey = compactionKeyOf(live);
 
   if (!snapshot) {
     if (run && !projector.run) {
@@ -423,6 +434,9 @@ export function projectViewUpdate(projector, view, mapCtx) {
     }
     if (queued && !projector.queued) {
       events.push({ event: 'status', data: { status: 'running' } });
+    }
+    if (compactionKey !== projector.compactionKey) {
+      events.push({ event: 'compaction', data: {} });
     }
     const retry = live.generation?.retry;
     if (retry && (retry.at != null || retry.error)) {
@@ -503,6 +517,9 @@ export function projectViewUpdate(projector, view, mapCtx) {
         }
       }
     }
+    if (entry.kind === 'pi.compaction' && !snapshot) {
+      events.push({ event: 'compaction', data: { entryId: key } });
+    }
     if (entry.kind === 'pi.tool-result') {
       const result = entry.model?.[0];
       const callId = result?.toolCallId == null ? '' : String(result.toolCallId);
@@ -582,6 +599,7 @@ export function projectViewUpdate(projector, view, mapCtx) {
   projector.text = nextText;
   projector.run = run;
   projector.queued = queued;
+  projector.compactionKey = compactionKey;
   projector.ready = true;
   return { events, refresh: snapshot, runEnded };
 }
@@ -604,6 +622,14 @@ export function messagesFromEntries(entries) {
   const answered = new Set();
   const messages = [];
   for (const entry of entries || []) {
+    if (entry?.kind === 'pi.compaction') {
+      messages.push({
+        id: String(entry.id),
+        role: 'note',
+        kind: 'compaction',
+      });
+      continue;
+    }
     if (entry?.kind === USER_TO_SUBAGENT_KIND) {
       const data = entry.data && typeof entry.data === 'object' && !Array.isArray(entry.data)
         ? entry.data

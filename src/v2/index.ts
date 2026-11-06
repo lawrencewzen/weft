@@ -42,6 +42,7 @@ import {
   type KernelDiffBody,
 } from './views/changes.ts';
 import { MANUAL_CONTINUE_TEXT } from './views/continuation.ts';
+import { compactionSettingsView, validateCompactionPatch } from '../core/settings.mjs';
 import {
   conversationSnapshot,
   findPresentedTool,
@@ -89,6 +90,8 @@ type WebCode = components['schemas']['WebCode'];
 type RestartAccepted = components['schemas']['RestartAccepted'];
 type ConversationSnapshot = components['schemas']['ConversationSnapshot'];
 type RunAccepted = components['schemas']['RunAccepted'];
+type CompactionSettingsView = components['schemas']['CompactionSettingsView'];
+type CompactAccepted = components['schemas']['CompactAccepted'];
 type StopAccepted = components['schemas']['StopAccepted'];
 type ToolOutput = components['schemas']['ToolOutput'];
 type WorkspacesSnapshot = components['schemas']['WorkspacesSnapshot'];
@@ -132,6 +135,8 @@ type V2JsonBody =
   | ConversationSnapshot
   | ConversationView
   | RunAccepted
+  | CompactionSettingsView
+  | CompactAccepted
   | StopAccepted
   | ToolOutput
   | WorkspacesSnapshot
@@ -630,6 +635,12 @@ export function createV2Handler(opts: {
   extensions?: ExtensionsHost;
   onExtensionsChanged?: () => void;
   gitStatus?: GitStatusCache;
+  getSettings?: () => Promise<unknown>;
+  putSettings?: (patch: Record<string, unknown>) => Promise<unknown>;
+  compactConversation?: (
+    id: string,
+    instructions?: string,
+  ) => Promise<{ status: number; body?: { taskId?: unknown; error?: unknown; code?: unknown } }>;
 }): V2Handler {
   const { serviceVersion, startedAt, auth, hub } = opts;
   const pid = opts.pid ?? process.pid;
@@ -702,6 +713,51 @@ export function createV2Handler(opts: {
         console.log('WEFT_SERVICE_RESTART');
         opts.onRestart?.();
       });
+      return true;
+    }
+
+    if (method === 'GET' && pathname === '/api/v2/settings') {
+      if (!opts.getSettings) {
+        sendV2(res, pathname, method, 500, { error: 'settings not ready', code: 'E_INTERNAL' } satisfies V2Error);
+        return true;
+      }
+      try {
+        const stored = await opts.getSettings();
+        sendV2(res, pathname, method, 200, compactionSettingsView(stored) satisfies components['schemas']['CompactionSettingsView']);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'read settings failed';
+        sendV2(res, pathname, method, 500, { error: message, code: 'E_INTERNAL' } satisfies V2Error);
+      }
+      return true;
+    }
+
+    if (method === 'PUT' && pathname === '/api/v2/settings') {
+      const body = await readObjectBody(req, res, pathname, method);
+      if (!body) return true;
+      const extra = Object.keys(body).filter((key) => key !== 'compaction');
+      if (extra.length) {
+        sendV2(res, pathname, method, 400, { error: 'invalid body', code: 'E_BAD_REQUEST' } satisfies V2Error);
+        return true;
+      }
+      const patch: Record<string, unknown> = {};
+      if (Object.prototype.hasOwnProperty.call(body, 'compaction')) patch.compaction = body.compaction;
+      const invalid = validateCompactionPatch(patch);
+      if (invalid) {
+        sendV2(res, pathname, method, 400, { error: invalid, code: 'E_BAD_REQUEST' } satisfies V2Error);
+        return true;
+      }
+      if (!opts.putSettings || !opts.getSettings) {
+        sendV2(res, pathname, method, 500, { error: 'settings not ready', code: 'E_INTERNAL' } satisfies V2Error);
+        return true;
+      }
+      try {
+        if (Object.keys(patch).length) await opts.putSettings(patch);
+        const stored = await opts.getSettings();
+        sendV2(res, pathname, method, 200, compactionSettingsView(stored) satisfies components['schemas']['CompactionSettingsView']);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'save settings failed';
+        sendV2(res, pathname, method, 500, { error: message, code: 'E_INTERNAL' } satisfies V2Error);
+      }
       return true;
     }
 
@@ -1595,6 +1651,57 @@ export function createV2Handler(opts: {
       return true;
     }
 
+    const compactMatch = /^\/api\/v2\/conversations\/([^/]+)\/compact$/.exec(pathname);
+    if (method === 'POST' && compactMatch) {
+      const id = decodeURIComponent(compactMatch[1]);
+      const body = await readObjectBody(req, res, pathname, method);
+      if (!body) return true;
+      let instructions: string | undefined;
+      if (Object.prototype.hasOwnProperty.call(body, 'instructions') && body.instructions != null) {
+        if (typeof body.instructions !== 'string') {
+          sendV2(res, pathname, method, 400, { error: 'invalid instructions', code: 'E_BAD_REQUEST' } satisfies V2Error);
+          return true;
+        }
+        const trimmed = body.instructions.trim();
+        if (trimmed) instructions = trimmed;
+      }
+      if (!opts.compactConversation) {
+        sendV2(res, pathname, method, 500, { error: 'kernel not ready', code: 'E_INTERNAL' } satisfies V2Error);
+        return true;
+      }
+      try {
+        const compacted = await opts.compactConversation(id, instructions);
+        if (compacted.status === 404) {
+          sendV2(res, pathname, method, 404, { error: 'not found', code: 'E_NOT_FOUND' } satisfies V2Error);
+          return true;
+        }
+        if (compacted.status === 409) {
+          sendV2(res, pathname, method, 409, { error: 'busy', code: 'E_BUSY' } satisfies V2Error);
+          return true;
+        }
+        const taskId = compacted.body?.taskId == null ? '' : String(compacted.body.taskId);
+        if (compacted.status !== 202 || !taskId) {
+          const message = typeof compacted.body?.error === 'string' && compacted.body.error
+            ? compacted.body.error
+            : 'compact failed';
+          const code = typeof compacted.body?.code === 'string' && compacted.body.code
+            ? compacted.body.code
+            : 'E_INTERNAL';
+          sendV2(res, pathname, method, compacted.status >= 400 ? compacted.status : 500, {
+            error: message,
+            code,
+          } satisfies V2Error);
+          return true;
+        }
+        opts.notifyConversation?.(id);
+        sendV2(res, pathname, method, 202, { taskId } satisfies components['schemas']['CompactAccepted']);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'compact failed';
+        sendV2(res, pathname, method, 500, { error: message, code: 'E_INTERNAL' } satisfies V2Error);
+      }
+      return true;
+    }
+
     const toolOutMatch = /^\/api\/v2\/conversations\/([^/]+)\/tools\/([^/]+)\/output$/.exec(pathname);
     if (method === 'GET' && toolOutMatch) {
       const id = decodeURIComponent(toolOutMatch[1]);
@@ -1826,6 +1933,12 @@ export function createV2Runtime(opts: {
   patchConversation?: PatchConversationFn;
   providerService?: ProviderServiceLike | null;
   extensions?: ExtensionsHost;
+  getSettings?: () => Promise<unknown>;
+  putSettings?: (patch: Record<string, unknown>) => Promise<unknown>;
+  compactConversation?: (
+    id: string,
+    instructions?: string,
+  ) => Promise<{ status: number; body?: { taskId?: unknown; error?: unknown; code?: unknown } }>;
 }): V2Runtime {
   const pid = opts.pid ?? process.pid;
   const auth = createV2Auth({
@@ -1953,6 +2066,9 @@ export function createV2Runtime(opts: {
     extensions: opts.extensions,
     onExtensionsChanged: () => extensionsTopic.notify(),
     gitStatus,
+    getSettings: opts.getSettings,
+    putSettings: opts.putSettings,
+    compactConversation: opts.compactConversation,
   });
 
   return {

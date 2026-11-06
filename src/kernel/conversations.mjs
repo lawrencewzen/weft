@@ -55,6 +55,8 @@ import { installUsageExtension } from './usage.mjs';
 import { installContinuationExtension } from './continuation.mjs';
 import { createAntigravityCwdExtension } from './antigravity-cwd.mjs';
 import { createWorkspaceEnv } from './workspace-env.mjs';
+import { createCompactionControl } from './compaction-settings.mjs';
+import { readTriggerPercent } from '../core/settings.mjs';
 
 const DETAIL_CAP = 1024 * 1024;
 
@@ -159,7 +161,16 @@ export async function openConversationKernel({
     env,
     extraProviders,
   });
-  const modelRoutes = createKernelModels({ models, getSettings, env, extraProviders });
+  const compaction = createCompactionControl(models);
+  const modelRoutes = createKernelModels({
+    models,
+    getSettings,
+    env,
+    extraProviders,
+    onSynced(stored) {
+      compaction.setPercent(readTriggerPercent(stored));
+    },
+  });
   const routes = faux ? null : modelRoutes;
   const registry = createRegistry();
   const agentBridge = {};
@@ -173,7 +184,15 @@ export async function openConversationKernel({
   const changeInflight = new Map();
   const snapshotLocks = new Map();
   const allListeners = new Set();
-  const settings = kernelSettings(env);
+  const baseSettings = kernelSettings(env);
+  if (typeof getSettings === 'function') {
+    try {
+      compaction.setPercent(readTriggerPercent(await getSettings()));
+    } catch {
+      compaction.setPercent(readTriggerPercent(null));
+    }
+  }
+  const settings = () => ({ ...baseSettings, compaction: compaction.current() });
   let agentHost;
 
   async function conversationIdFor(harnessId) {
@@ -382,7 +401,7 @@ export async function openConversationKernel({
     if (!row?.harnessId || watches.has(row.id)) return;
     const watch = await watchConversation(row.harnessId);
     if (!watch) return;
-    const mapCtx = createMapContext({ retry: settings.retry });
+    const mapCtx = createMapContext({ retry: baseSettings.retry });
     const projector = createViewProjector();
     watches.set(row.id, { stream: watch, mapCtx, projector, harnessId: row.harnessId });
     await applyView(row.id, watch.value, mapCtx, projector);
@@ -915,9 +934,15 @@ export async function openConversationKernel({
       if (!view) return null;
       return findUserMessagePaste(view.entries, messageId, index);
     },
+    liveStateFor(cid) {
+      const watch = watches.get(cid);
+      const docs = watch?.stream?.value?.docs;
+      const live = docs && typeof docs === 'object' ? docs['pi.live'] : null;
+      return live && typeof live === 'object' ? live : null;
+    },
     async present(conv, { includeMessages = false } = {}) {
       if (!conv?.harnessId) {
-        return { ...conv, status: 'idle', messages: includeMessages ? [] : undefined, sends: [] };
+        return { ...conv, status: 'idle', messages: includeMessages ? [] : undefined, sends: [], live: null };
       }
       const view = await submissionView(conv);
       const status = view.status;
@@ -934,12 +959,50 @@ export async function openConversationKernel({
         const harnessView = await readView(conv.harnessId);
         usage = presentContext(latestCallUsage(harnessView?.entries)).usage;
       }
-      const out = { ...conv, status, usage, sends: await sendsView(conv) };
+      const out = { ...conv, status, usage, sends: await sendsView(conv), live: this.liveStateFor(conv.id) };
       if (view.llmError) out.llmError = view.llmError;
       if (includeMessages) out.messages = messages;
       return out;
     },
+    /**
+     * Official Conversation.compact. It always admits a task and returns its id.
+     * Nothing to compact completes with an empty result (no summary, no failure).
+     * A busy conversation still accepts it; the summary is placed at the next
+     * boundary. A second call admits another task. Official placement keeps the
+     * furthest cut and may settle a nearer summary as stale. This does not add a lock.
+     */
+    async compact(cid, instructions) {
+      const conv = await store.getConversation(cid);
+      if (!conv) return { status: 404, body: { error: 'conversation not found', code: 'E_NOT_FOUND' } };
+      const conversation = await conversationFor(conv);
+      if (!conversation) return { status: 404, body: { error: 'conversation not found', code: 'E_NOT_FOUND' } };
+      try {
+        await modelRoutes.warm();
+      } catch (err) {
+        const message = redactAuthText(err instanceof Error ? err.message : err);
+        return { status: 500, body: { error: message || 'settings refresh failed', code: 'E_INTERNAL' } };
+      }
+      try {
+        const taskId = await conversation.compact(instructions, context);
+        return { status: 202, body: { taskId: String(taskId) } };
+      } catch (err) {
+        if (err?.name === 'ConversationBusy') {
+          return { status: 409, body: { error: 'busy', code: 'E_BUSY' } };
+        }
+        const message = redactAuthText(err instanceof Error ? err.message : err);
+        return { status: 500, body: { error: message || 'compact failed', code: 'E_INTERNAL' } };
+      }
+    },
+    async noteSettings(stored) {
+      compaction.setPercent(readTriggerPercent(stored));
+      await modelRoutes.warm();
+    },
     async postMessage(conv, text, options = {}) {
+      try {
+        await modelRoutes.warm();
+      } catch (err) {
+        console.error(`WEFT_COMPACTION_SETTINGS ${redactAuthText(err instanceof Error ? err.message : err)}`);
+      }
       const conversation = await conversationFor(conv);
       if (!conversation) return { status: 404, body: { error: 'conversation not found' } };
       const prepared = agentHost ? await agentHost.prepareSend(conv, text) : null;

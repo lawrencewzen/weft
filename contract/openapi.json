@@ -129,6 +129,138 @@
         }
       }
     },
+    "/api/v2/settings": {
+      "get": {
+        "operationId": "getSettings",
+        "summary": "读取压缩触发点",
+        "description": "全局一个值，存在现有 settings 里。缺省或旧数据没有该字段时为 80。\n改完不必重启：下一次官方压缩判断读取当时的 settings。\n",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "当前压缩设置",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompactionSettingsView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "未授权",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "客户端错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "服务端错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "operationId": "putSettings",
+        "summary": "设置压缩触发点",
+        "description": "`triggerPercent` 必须是 60 到 90 的整数。缺字段不改现有值。非法返回 400。\n写入后下一次判断即用新值，不重启进程。\n",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompactionSettingsPatch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "写入后的压缩设置",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompactionSettingsView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "triggerPercent 不是 60 到 90 的整数",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "未授权",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "客户端错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "服务端错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v2/auth/web-code": {
       "post": {
         "operationId": "createWebCode",
@@ -5206,6 +5338,114 @@
         }
       }
     },
+    "/api/v2/conversations/{id}/compact": {
+      "post": {
+        "operationId": "compactConversation",
+        "summary": "手动压缩当前对话",
+        "description": "调用 Pi Durable `Conversation.compact(instructions)`。成功受理返回 202 和任务 id。\n官方行为：总会先受理一个压缩任务。没有可压缩前缀时任务完成且没有摘要（不写 compactionFailure，状态回到 idle，不产生 note）。\n对话正在跑时也受理，摘要在下一个回合边界写入。再点一次会再受理一个任务，不在宿主侧加锁；\n多个摘要同时在飞时，切得更远的那次留下，较近的放置可能以 stale 结束。\n`instructions` 可省略。官方 `compact()` 不因忙抛 ConversationBusy；若运行时抛了该错误，这里返回 409。\n",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "对话 id"
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompactRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "已受理手动压缩",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompactAccepted"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "instructions 不是字符串",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "未授权",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "对话不存在",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "官方拒绝（ConversationBusy）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "客户端错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "服务端错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v2/conversations/{id}/tools/{toolId}/output": {
       "get": {
         "operationId": "getToolOutput",
@@ -5899,6 +6139,67 @@
           "requestId": {
             "type": "string",
             "description": "幂等键。缺省时服务端生成。同一个 requestId 重复提交返回同一个 runId。"
+          }
+        }
+      },
+      "CompactionSettingsView": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "compaction"
+        ],
+        "properties": {
+          "compaction": {
+            "$ref": "#/components/schemas/CompactionPreference"
+          }
+        },
+        "description": "全局压缩触发点。"
+      },
+      "CompactionPreference": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "triggerPercent"
+        ],
+        "properties": {
+          "triggerPercent": {
+            "type": "integer",
+            "minimum": 60,
+            "maximum": 90,
+            "description": "自动压缩触发点，占模型上下文窗口的百分比。整数 60–90，缺省 80。全局一个值，不按模型单独设置。"
+          }
+        }
+      },
+      "CompactionSettingsPatch": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "compaction": {
+            "$ref": "#/components/schemas/CompactionPreference"
+          }
+        },
+        "description": "只改压缩触发点。省略 compaction 表示不改。"
+      },
+      "CompactRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "instructions": {
+            "type": "string",
+            "description": "传给官方 compact 的可选说明。省略则不带。"
+          }
+        }
+      },
+      "CompactAccepted": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "taskId"
+        ],
+        "properties": {
+          "taskId": {
+            "type": "string",
+            "description": "Pi Durable 这次手动压缩任务的 id。"
           }
         }
       },
@@ -6862,14 +7163,15 @@
             "enum": [
               "auto_continue",
               "correction",
-              "note"
+              "note",
+              "compaction"
             ]
           },
           "text": {
             "type": "string"
           }
         },
-        "description": "系统提示。auto_continue 的 text 是服务端出成的句子。"
+        "description": "系统提示。auto_continue 和 compaction 的 text 是服务端按语言出成的句子。\ncompaction 对应一条 pi.compaction 条目，放在该条目的时间位置。\n"
       },
       "ThreadItem": {
         "oneOf": [
@@ -7062,6 +7364,37 @@
                 }
               }
             ]
+          },
+          "compaction": {
+            "description": "压缩状态，来自 pi.live.compactions 与 pi.live.compactionFailure。\n有运行中的压缩时为 running（多条时 trigger 取最后一条）；否则若保留着失败记录则为 failed；否则 idle。\n失败的 error 是脱敏后的人话。阻塞压缩失败导致的 model_error 使用同一句人话。\nSSE 上压缩变化会让 conversation 重新 upsert，这个字段跟着更新。\n",
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "state"
+            ],
+            "properties": {
+              "state": {
+                "type": "string",
+                "enum": [
+                  "idle",
+                  "running",
+                  "failed"
+                ]
+              },
+              "trigger": {
+                "type": "string",
+                "enum": [
+                  "manual",
+                  "threshold",
+                  "overflow"
+                ],
+                "description": "running 或 failed 时有。idle 省略。"
+              },
+              "error": {
+                "type": "string",
+                "description": "failed 时的人话。中文为「压缩失败：原因」，英文为 Compaction failed 加原因。"
+              }
+            }
           }
         },
         "description": "当前运行状态。供输入框、停止按钮、等待提示和主对话卡住判定使用。"

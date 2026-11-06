@@ -9,6 +9,11 @@
 
 import { phrase, type Lang } from '../phrases/index.ts';
 import type { components } from '../contract.gen.ts';
+import {
+  compactionFailureMessage,
+  compactionView,
+  isCompactionModelError,
+} from './compaction.ts';
 import { activeToolSummary, toolGroupSummaryView, type ToolLike } from './tools.ts';
 import type { ThreadMessage, ThreadSubagent } from './thread.ts';
 
@@ -92,6 +97,11 @@ export type RunStateInput = {
   activeTool?: ActiveTool | null;
   now?: number;
   stallAfterMs?: number;
+  /** pi.live, or null when the conversation has no watch yet. */
+  live?: {
+    compactions?: Array<{ trigger?: unknown }> | null;
+    compactionFailure?: { trigger?: unknown; error?: unknown } | null;
+  } | null;
 };
 
 function isRealSubagent(agent: ThreadSubagent | null | undefined): boolean {
@@ -138,6 +148,7 @@ function errorView(llmError: LlmErrorLike | null | undefined, lang: Lang = 'zh')
   if (!llmError) return { code: 'E_LLM', message: '' };
   let message = String(llmError.message || '');
   if (message === 'agy_err_no_workspace') message = phrase(lang, message);
+  if (isCompactionModelError(message)) message = compactionFailureMessage(lang, message);
   const out: NonNullable<RunState['error']> = {
     code: String(llmError.code || 'E_LLM'),
     message,
@@ -177,6 +188,7 @@ export function runStateView({
   activeTool = null,
   now,
   stallAfterMs,
+  live = null,
 }: RunStateInput = {}): RunState {
   const runStatus = normalizeRunStatus(status);
   const running = runStatus === 'running';
@@ -194,5 +206,6 @@ export function runStateView({
     lastActivityAt: last,
     stalledSince: stalledSinceOf(running, last, t, threshold),
     activeTool: running ? activeTool : null,
+    compaction: compactionView(live, lang),
   };
 }

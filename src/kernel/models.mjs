@@ -407,6 +407,7 @@ export function createKernelModels({
   env = process.env,
   fetchImpl,
   extraProviders = [],
+  onSynced,
 } = {}) {
   if (!models || typeof models.setProvider !== 'function') throw new Error('models is required');
   const fingerprints = new Map();
@@ -450,6 +451,7 @@ export function createKernelModels({
     for (const id of [...fingerprints.keys()]) {
       if (!wanted.has(id)) drop(id);
     }
+    if (typeof onSynced === 'function') onSynced(settings);
   }
 
   return {

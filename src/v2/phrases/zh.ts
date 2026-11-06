@@ -3,6 +3,8 @@ export const zh: Record<string, string> = {
   pending_thinking: '思考中',
   pending_subagents: '· {n} 个子 Agent',
   auto_continue_note: '输出达到长度上限，已自动续写',
+  compaction_note: '已压缩较早的上下文',
+  compaction_failed: '压缩失败：{reason}',
   tool_sum_join: ' · ',
   tool_sum_names_join: '、',
   tool_sum_read: '读了 {n} 个文件',

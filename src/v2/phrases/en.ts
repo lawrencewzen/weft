@@ -3,6 +3,8 @@ export const en: Record<string, string> = {
   pending_thinking: 'Thinking',
   pending_subagents: '· {n} sub-agents',
   auto_continue_note: 'Output hit the length limit; continued automatically',
+  compaction_note: 'Earlier context was compacted',
+  compaction_failed: 'Compaction failed: {reason}',
   tool_sum_join: ' · ',
   tool_sum_names_join: ', ',
   tool_sum_read: 'read {n} files',

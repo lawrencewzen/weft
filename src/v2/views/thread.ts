@@ -210,6 +210,16 @@ export async function buildThread(
       continue;
     }
 
+    if (m?.role === 'note' && m.kind === 'compaction') {
+      items.push({
+        kind: 'system_note',
+        id: messageId(m),
+        noteKind: 'compaction',
+        text: phrase(lang, 'compaction_note'),
+      });
+      continue;
+    }
+
     if (m?.role === 'note') {
       const note = String(m.text || '').trim();
       if (!note) continue;
