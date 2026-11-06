@@ -40,7 +40,7 @@ flowchart LR
 ```
 
 ## 关键概念
-- **Agent** = 一条 Harness 对话上的运行（配置 + 检查点），可多个并行。主 Agent 的 `instructions` 为空字符串；工具是全部内置工作区工具、已启用的插件工具、`skill` 和 `delegate` / `subagent`；系统提示词的 skills section 只列启用技能的清单（名字 + 一句简介），正文由主 Agent 按需用 `skill` 工具加载。未知工具名在执行前被拒绝（`E_UNKNOWN_TOOL`），不会发出 `tool.start`。
+- **Agent** = 一条 Harness 对话上的运行（配置 + 检查点），可多个并行。主 Agent 不设 `instructions`：`configure` 传 `null` 清除该字段（Pi Durable 的 `AgentChange` 里 `null` 表示清除），已存的空字符串在下次配置后不再渲染成 `<instructions>`。系统提示词是 Pi Durable section，顺序为 preamble（不带标签）、rules、environment、project_context、skills。preamble 与 rules 是固定短文案。environment 按这次请求写工作目录、平台和 shell：没选项目时不写工作目录，也不写 project_context（无 cwd 时 `input.env` 为空，不把进程目录当工作目录；未选项目的对话目录在数据目录 `chats/` 下，同样不写）。project_context 只放工作区根目录 `AGENTS.md`（不读 `CLAUDE.md`、不读子目录）；没有、为空或读失败则整段省略，超过 32KB 按字节截断且不切断多字节字符。skills section 只列启用技能的清单（名字 + 一句简介），正文由主 Agent 按需用 `skill` 工具加载。工具是全部内置工作区工具、已启用的插件工具、`skill` 和 `delegate` / `subagent`。子 Agent 没有 preamble、rules、skills，有 environment、project_context 和固定的 no-ask `instructions`。未知工具名在执行前被拒绝（`E_UNKNOWN_TOOL`），不会发出 `tool.start`。
 - **多 Agent 协作**：主 Agent 用 `delegate` / `subagent` 派子 Agent，另开 Harness 对话。子 Agent 是自包含派活，不套角色模板。宿主不轮换 Agent。`GET /api/conversations/:cid` 的 `agents[]` 是主 Agent（`name: 'Agent'`）加上子 Agent 实例。演示见 [SUBAGENTS.md](SUBAGENTS.md)。
 - **模型**：对话自己选的 `{ modelSourceId, modelId }`，否则 `settings.models.default`，再否则第一个可用源上的第一个模型。
 - **卡住与重试**：只使用 Pi Durable 的 `stream.timeoutMs` 和 `retry`。不另写看门狗，也不在卡住时自动提交下一句。停止是 `conversation.abort(context, { background: true })`，进行中的运行和后台子 Agent 一起停。

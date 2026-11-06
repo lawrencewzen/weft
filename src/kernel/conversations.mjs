@@ -185,7 +185,7 @@ export async function openConversationKernel({
   }
 
   registry.install(createWorkspaceExtension());
-  installAgentExtensions(registry, agentBridge);
+  installAgentExtensions(registry, agentBridge, { dataDir });
   installUsageExtension(registry);
   installContinuationExtension(registry);
   installPluginReload(registry, agentBridge);
