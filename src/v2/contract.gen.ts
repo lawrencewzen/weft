@@ -193,6 +193,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/workspace-root/pick": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 弹出系统选择文件夹窗口
+         * @description 浏览器拿不到本机完整路径，由本机服务端弹系统窗口，对标桌面端 Select folder。
+         *     只有请求 Host 是回环地址（127.0.0.1、localhost、[::1]，可带端口）时才弹；其它 Host 返回 unsupported，避免远程访问时窗口弹到服务器桌面上。
+         *     环境变量 WEFT_FOLDER_PICKER=off 时一律 unsupported。
+         *     同一时间只弹一个窗口；已有窗口时后来的请求等待同一次结果。10 分钟无结果则结束该进程并返回 cancelled。
+         *     macOS 用 osascript 的 choose folder（argv，不经 shell）。其它平台目前返回 unsupported。
+         *     起点目录是 defaultWorkspaceRoot()。选中路径再走与 resolveAllowedWorkspacePath 相同的敏感目录校验，被拦时 400 PathNotAllowed。
+         *     无请求体。与其它写接口一样，Content-Type 须为 application/json。
+         */
+        post: operations["pickWorkspaceFolder"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/git/connections": {
         parameters: {
             query?: never;
@@ -2201,6 +2227,19 @@ export interface components {
             entries: components["schemas"]["WorkspaceDirEntry"][];
             truncated: boolean;
         };
+        /** @description POST /api/v2/workspace-root/pick 的 200 响应。 */
+        WorkspaceFolderPick: {
+            /** @constant */
+            status: "picked";
+            /** @description 选中的绝对路径 */
+            path: string;
+        } | {
+            /** @constant */
+            status: "cancelled";
+        } | {
+            /** @constant */
+            status: "unsupported";
+        };
         WorkspaceDirEntry: {
             name: string;
             path: string;
@@ -2810,6 +2849,65 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PathNotAllowed"];
+                };
+            };
+            /** @description 客户端错误 */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 服务端错误 */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+        };
+    };
+    pickWorkspaceFolder: {
+        parameters: {
+            query?: {
+                /** @description 路径错误文案语言。 */
+                lang?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description picked 带绝对路径；cancelled 为用户取消或超时；unsupported 为当前环境不能弹窗。 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceFolderPick"];
+                };
+            };
+            /** @description 选中的路径不允许 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PathNotAllowed"];
+                };
+            };
+            /** @description 未授权 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
                 };
             };
             /** @description 客户端错误 */

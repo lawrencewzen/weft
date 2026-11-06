@@ -15,6 +15,7 @@ import { cloneGitRepo, stripGitUrlCredentials } from '../../core/git-import.mjs'
 import { listGitlabBranches, listGitlabProjects, testGitlabConnection } from '../../core/gitlab-api.mjs';
 import { describePlugins, installPlugin, PLUGIN_ID } from '../../core/plugins.mjs';
 import { createSkill, deleteSkill, listSkillRecords, listSkills, SKILL_ID, updateSkill } from '../../core/skills.mjs';
+import { pickWorkspaceFolder } from '../../core/folder-picker.mjs';
 import { defaultWorkspaceRoot, listBrowsableDirs, resolveAllowedWorkspacePath } from '../../core/workspace-guard.mjs';
 import { usesConnectionClone } from '../../core/workspace-git.mjs';
 import { phrase, type Lang } from '../phrases/index.ts';
@@ -190,6 +191,7 @@ export async function handleExtensionsApi(opts: {
   const isExtensionsPath = pathname === '/api/v2/workspaces' && method === 'POST'
     || pathname === '/api/v2/workspace-root'
     || pathname === '/api/v2/workspace-root/dirs'
+    || pathname === '/api/v2/workspace-root/pick'
     || pathname.startsWith('/api/v2/git/connections')
     || pathname === '/api/v2/plugins'
     || pathname.startsWith('/api/v2/plugins/')
@@ -295,6 +297,23 @@ export async function handleExtensionsApi(opts: {
     try {
       const listed = await listBrowsableDirs(url.searchParams.get('path'));
       sendV2(res, pathname, method, 200, workspaceDirsView(listed));
+    } catch (err) {
+      const status = Number((err as { status?: number })?.status) || 400;
+      sendV2(res, pathname, method, status, pathErrorView(lang, err as { message?: unknown }, defaultWorkspaceRoot()));
+    }
+    return true;
+  }
+
+  if (method === 'POST' && pathname === '/api/v2/workspace-root/pick') {
+    try {
+      const picked = await pickWorkspaceFolder({
+        host: req.headers.host,
+        platform: process.platform,
+        startDir: defaultWorkspaceRoot(),
+        prompt: 'Select folder',
+        dataDir: host.dataDir,
+      });
+      sendV2(res, pathname, method, 200, picked);
     } catch (err) {
       const status = Number((err as { status?: number })?.status) || 400;
       sendV2(res, pathname, method, status, pathErrorView(lang, err as { message?: unknown }, defaultWorkspaceRoot()));

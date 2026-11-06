@@ -428,6 +428,59 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/V2Error"
+  /api/v2/workspace-root/pick:
+    post:
+      operationId: pickWorkspaceFolder
+      summary: 弹出系统选择文件夹窗口
+      description: |
+        浏览器拿不到本机完整路径，由本机服务端弹系统窗口，对标桌面端 Select folder。
+        只有请求 Host 是回环地址（127.0.0.1、localhost、[::1]，可带端口）时才弹；其它 Host 返回 unsupported，避免远程访问时窗口弹到服务器桌面上。
+        环境变量 WEFT_FOLDER_PICKER=off 时一律 unsupported。
+        同一时间只弹一个窗口；已有窗口时后来的请求等待同一次结果。10 分钟无结果则结束该进程并返回 cancelled。
+        macOS 用 osascript 的 choose folder（argv，不经 shell）。其它平台目前返回 unsupported。
+        起点目录是 defaultWorkspaceRoot()。选中路径再走与 resolveAllowedWorkspacePath 相同的敏感目录校验，被拦时 400 PathNotAllowed。
+        无请求体。与其它写接口一样，Content-Type 须为 application/json。
+      security:
+        - bearerAuth: []
+        - sessionCookie: []
+      parameters:
+        - name: lang
+          in: query
+          schema:
+            type: string
+            default: zh
+          description: 路径错误文案语言。
+      responses:
+        "200":
+          description: picked 带绝对路径；cancelled 为用户取消或超时；unsupported 为当前环境不能弹窗。
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceFolderPick"
+        "400":
+          description: 选中的路径不允许
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PathNotAllowed"
+        "401":
+          description: 未授权
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        4XX:
+          description: 客户端错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        5XX:
+          description: 服务端错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
   /api/v2/git/connections:
     get:
       operationId: listGitConnections
@@ -5930,6 +5983,37 @@ components:
         truncated:
           type: boolean
       description: GET /api/v2/workspace-root/dirs。
+    WorkspaceFolderPick:
+      oneOf:
+        - type: object
+          additionalProperties: false
+          required:
+            - status
+            - path
+          properties:
+            status:
+              type: string
+              const: picked
+            path:
+              type: string
+              description: 选中的绝对路径
+        - type: object
+          additionalProperties: false
+          required:
+            - status
+          properties:
+            status:
+              type: string
+              const: cancelled
+        - type: object
+          additionalProperties: false
+          required:
+            - status
+          properties:
+            status:
+              type: string
+              const: unsupported
+      description: POST /api/v2/workspace-root/pick 的 200 响应。
     WorkspaceDirEntry:
       type: object
       additionalProperties: false
