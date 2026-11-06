@@ -2,6 +2,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from '@playwright/test';
 
+// T101-2: never open a real folder dialog from Playwright. Workers inherit this.
+process.env.WEFT_FOLDER_PICKER = 'off';
+
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const executablePath = process.env.WEFT_CHROME || undefined;
 const ci = !!process.env.CI;
