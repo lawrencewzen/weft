@@ -524,26 +524,58 @@ test('project icon slides from first folder to narrow strip during collapse, and
   const stripProjects = page.getByTestId('next-strip-projects');
   const stripIcon = stripProjects.locator('.sb-ic');
 
-  // Collapse
-  const collapseSamples = [];
-  const startCollapse = Date.now();
-  const clickCollapsePromise = page.click('.side-toggle-left');
-
-  while (Date.now() - startCollapse < 280) {
-    const s = await page.evaluate(() => {
+  // Helper to pause Web Animations API animation and sample at deterministic keyframe points
+  const captureFlipAnimation = async (triggerAction) => {
+    const animPromise = page.evaluate(async () => {
       const sp = document.querySelector('[data-testid="next-strip-projects"]');
       const spI = sp ? sp.querySelector('.sb-ic') : null;
       const wsI = document.querySelector('[data-testid="next-ws-toggle"] .sb-ic');
-      if (!sp || !spI || getComputedStyle(sp).display === 'none') return null;
-      const r = spI.getBoundingClientRect();
-      const wsVis = wsI ? getComputedStyle(wsI).visibility : null;
-      return { x: r.left, y: r.top, wsVis };
+      const getAnims = () => (sp ? sp.getAnimations().concat(spI ? spI.getAnimations() : []) : []);
+
+      const anim = await new Promise((resolve, reject) => {
+        let attempts = 0;
+        function check() {
+          attempts++;
+          const current = getAnims();
+          if (current.length > 0) {
+            resolve(current[0]);
+          } else if (attempts > 300) {
+            reject(new Error('Animation on strip projects button not found'));
+          } else {
+            requestAnimationFrame(check);
+          }
+        }
+        check();
+      });
+
+      anim.pause();
+      const duration = anim.effect.getTiming().duration;
+      // Sample start (0), intermediate points, and end (0.999 just before fill:none interval boundary)
+      const pcts = [0, 0.25, 0.5, 0.75, 0.999];
+      const samples = pcts.map((pct) => {
+        anim.currentTime = duration * pct;
+        const r = spI ? spI.getBoundingClientRect() : null;
+        const wsVis = wsI ? getComputedStyle(wsI).visibility : null;
+        return {
+          pct,
+          time: anim.currentTime,
+          x: r ? r.left : null,
+          y: r ? r.top : null,
+          wsVis,
+        };
+      });
+
+      anim.finish();
+      return samples;
     });
-    if (s) collapseSamples.push(s);
-    await page.waitForTimeout(15);
-  }
-  await clickCollapsePromise;
-  await page.waitForTimeout(100);
+
+    const [samples] = await Promise.all([animPromise, triggerAction()]);
+    return samples;
+  };
+
+  // Collapse
+  const collapseSamples = await captureFlipAnimation(() => page.click('.side-toggle-left'));
+  await page.waitForTimeout(300);
 
   expect(collapseSamples.length).toBeGreaterThanOrEqual(3);
 
@@ -566,25 +598,8 @@ test('project icon slides from first folder to narrow strip during collapse, and
   expect(Math.abs(stripCenterX - 27 * 0.9)).toBeLessThanOrEqual(1.5);
 
   // --- Expand ---
-  const expandSamples = [];
-  const startExpand = Date.now();
-  const clickExpandPromise = page.click('.side-toggle-left');
-
-  while (Date.now() - startExpand < 280) {
-    const s = await page.evaluate(() => {
-      const sp = document.querySelector('[data-testid="next-strip-projects"]');
-      const spI = sp ? sp.querySelector('.sb-ic') : null;
-      const wsI = document.querySelector('[data-testid="next-ws-toggle"] .sb-ic');
-      if (!sp || !spI || getComputedStyle(sp).display === 'none') return null;
-      const r = spI.getBoundingClientRect();
-      const wsVis = wsI ? getComputedStyle(wsI).visibility : null;
-      return { x: r.left, y: r.top, wsVis };
-    });
-    if (s) expandSamples.push(s);
-    await page.waitForTimeout(15);
-  }
-  await clickExpandPromise;
-  await page.waitForTimeout(100);
+  const expandSamples = await captureFlipAnimation(() => page.click('.side-toggle-left'));
+  await page.waitForTimeout(300);
 
   expect(expandSamples.length).toBeGreaterThanOrEqual(3);
   // y is monotonically increasing towards first folder position
