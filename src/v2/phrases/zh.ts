@@ -116,7 +116,6 @@ export const zh: Record<string, string> = {
   ws_err_git_timeout: '克隆超时。请稍后重试。',
   ws_err_git_unknown: '克隆失败。',
   ws_err_path: '无法使用该本地路径',
-  ws_err_path_root: '该路径不在允许的根目录内：{root}',
   ws_err_generic: '创建工作区失败',
   chat_workspace: '对话',
   ws_err_conn_auth: '认证失败。令牌无效或已过期，请到设置 → Git 重新测试该连接。',

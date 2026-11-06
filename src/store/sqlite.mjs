@@ -278,6 +278,7 @@ export function createSqliteStore(dir, { log = console } = {}) {
     listWs: db.prepare('SELECT * FROM workspaces WHERE removed_at IS NULL'),
     removeWs: db.prepare('UPDATE workspaces SET removed_at = ? WHERE id = ? AND removed_at IS NULL'),
     findRemovedWs: db.prepare("SELECT * FROM workspaces WHERE removed_at IS NOT NULL AND path = ? AND COALESCE(source, 'local') = 'local' ORDER BY removed_at DESC LIMIT 1"),
+    findActiveWs: db.prepare("SELECT * FROM workspaces WHERE removed_at IS NULL AND path = ? AND COALESCE(source, 'local') = 'local' ORDER BY rowid ASC LIMIT 1"),
     restoreWs: db.prepare('UPDATE workspaces SET removed_at = NULL, name = ? WHERE id = ?'),
     getWs: db.prepare('SELECT * FROM workspaces WHERE id = ?'),
     getSettings: db.prepare('SELECT json FROM settings WHERE id = ?'),
@@ -387,6 +388,10 @@ export function createSqliteStore(dir, { log = console } = {}) {
     },
     async removeWorkspace(id) {
       return q.removeWs.run(Date.now(), id).changes > 0;
+    },
+    /** An unremoved local workspace at this path, if one already exists. */
+    async findActiveWorkspaceByPath(wsPath) {
+      return wsFromRow(q.findActiveWs.get(wsPath));
     },
     /** A removed local workspace at the same path comes back with its conversations. */
     async restoreWorkspaceByPath(wsPath, name) {

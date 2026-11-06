@@ -77,4 +77,33 @@ describe('ModelTable', () => {
     expect(row.textContent).not.toContain('deepseek-flash');
     expect(row.querySelector('.mp-mt-id')).toBeNull();
   });
+
+  it('renders a BrandIcon with size 14 and fades disabled rows', async () => {
+    await render(
+      <ModelTable
+        lang="zh"
+        provider={providerOf([
+          model({ id: 'm1', name: 'DeepSeek Chat', brand: 'deepseek', enabled: true }),
+          model({ id: 'm2', name: 'Internal Model', brand: null, enabled: false }),
+        ])}
+        onToggleModel={vi.fn(async () => {})}
+        onSaveOverride={vi.fn(async () => {})}
+      />,
+    );
+    const row1 = host!.querySelector('[data-testid="next-model-row"][data-model="m1"]') as HTMLElement;
+    const icon1 = row1.querySelector('.mp-mt-name .brand-icon') as HTMLElement;
+    expect(icon1).not.toBeNull();
+    expect(icon1.style.width).toBe('14px');
+    expect(icon1.style.height).toBe('14px');
+    expect(row1.querySelector('.mp-mt-name')?.classList.contains('mp-mt-off')).toBe(false);
+
+    const row2 = host!.querySelector('[data-testid="next-model-row"][data-model="m2"]') as HTMLElement;
+    const icon2 = row2.querySelector('.mp-mt-name .brand-icon') as HTMLElement;
+    expect(icon2).not.toBeNull();
+    expect(icon2.style.width).toBe('14px');
+    expect(icon2.style.height).toBe('14px');
+    // brand is null, so fallback plug svg is rendered
+    expect(icon2.querySelector('.brand-icon-plug')).not.toBeNull();
+    expect(row2.querySelector('.mp-mt-name')?.classList.contains('mp-mt-off')).toBe(true);
+  });
 });

@@ -49,4 +49,32 @@ describe('file tree expand state', () => {
     expect(isMarkdownPath('README.MD')).toBe(true);
     expect(isMarkdownPath('live/qa-file-live.txt')).toBe(false);
   });
+
+  it('marks ignored files and directories and propagates ignored to child items', () => {
+    const treeWithIgnored = [
+      { path: 'package.json', type: 'file' as const },
+      { path: 'secret.log', type: 'file' as const, ignored: true },
+      { path: 'dist', type: 'dir' as const, ignored: true },
+      { path: 'dist/bundle.js', type: 'file' as const },
+      { path: 'node_modules', type: 'dir' as const, ignored: true },
+      { path: 'node_modules/pkg', type: 'dir' as const },
+      { path: 'node_modules/pkg/index.js', type: 'file' as const },
+      { path: 'src', type: 'dir' as const },
+      { path: 'src/main.ts', type: 'file' as const },
+    ];
+    const expanded = new Set(['dist', 'node_modules', 'node_modules/pkg', 'src']);
+    const rows = visibleTreeRows(treeWithIgnored, expanded);
+
+    const byPath = new Map(rows.map((r) => [r.path, r]));
+    expect(byPath.get('package.json')?.ignored).toBeUndefined();
+    expect(byPath.get('src')?.ignored).toBeUndefined();
+    expect(byPath.get('src/main.ts')?.ignored).toBeUndefined();
+
+    expect(byPath.get('secret.log')?.ignored).toBe(true);
+    expect(byPath.get('dist')?.ignored).toBe(true);
+    expect(byPath.get('dist/bundle.js')?.ignored).toBe(true);
+    expect(byPath.get('node_modules')?.ignored).toBe(true);
+    expect(byPath.get('node_modules/pkg')?.ignored).toBe(true);
+    expect(byPath.get('node_modules/pkg/index.js')?.ignored).toBe(true);
+  });
 });

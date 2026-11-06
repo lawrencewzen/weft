@@ -70,7 +70,8 @@ function wsNode(page, name) {
   return page.getByTestId('next-ws-node').filter({ hasText: name });
 }
 
-test('git connection tests, imports a project, and never echoes the token', async ({ page }) => {
+test.skip('git connection tests, imports a project, and never echoes the token', async ({ page }) => {
+  // Git 导入暂时隐藏
   test.setTimeout(180_000);
   gitlab = await startFakeGitlab({
     token: PAT,
@@ -163,43 +164,35 @@ test('git connection tests, imports a project, and never echoes the token', asyn
   expect(leaked, 'network responses never include the git token').toEqual([]);
 });
 
-test('local folder browser creates a workspace and refuses out-of-range paths', async ({ page }) => {
+test('local folder browser creates a workspace and can leave the start directory', async ({ page }) => {
   test.setTimeout(90_000);
   const prepared = await boot(page);
   fs.writeFileSync(path.join(prepared.dirs[0], 'hello.txt'), 'hello-ws\n');
 
   await page.getByTestId('next-ws-new').click();
   await expect(page.getByTestId('next-ws-dialog')).toBeVisible();
-  await expect(page.getByTestId('next-ws-tab-local')).toHaveClass(/is-on/);
-  await expect(page.getByTestId('next-dir-up')).toHaveCount(0);
-  await expect(page.getByTestId('next-ws-path')).toHaveAttribute('readonly', '');
+  await expect(page.getByTestId('next-ws-create')).toBeDisabled();
+  await expect(page.getByTestId('next-ws-path')).not.toHaveAttribute('readonly', '');
+  const aboveStart = page.locator(`[data-testid="next-breadcrumb-item"][title="${path.dirname(prepared.root)}"]`);
+  await expect(aboveStart).toBeEnabled();
   const alpha = page.getByTestId('next-dir-row').filter({ hasText: 'alpha' });
   await expect(alpha).toBeVisible();
-  await alpha.getByTestId('next-dir-choose').click();
-  await expect(page.getByTestId('next-ws-path')).toHaveValue(prepared.dirs[0]);
-  await expect(page.getByTestId('next-ws-name')).toHaveValue('alpha');
-  await expect(alpha).toHaveClass(/is-on/);
-  await page.getByTestId('next-ws-name').fill('本地样本');
 
-  await alpha.locator('.ns-dir-name').click();
-  await expect(page.getByTestId('next-dir-up')).toBeVisible();
-  await page.getByTestId('next-dir-up').click();
-  await expect(page.getByTestId('next-dir-up')).toHaveCount(0);
+  await alpha.click();
+  await expect(page.getByTestId('next-ws-path')).toHaveValue(prepared.dirs[0]);
+  await expect(page.getByTestId('next-ws-create')).toBeEnabled();
+
+  const startCrumb = page.locator(`[data-testid="next-breadcrumb-item"][title="${prepared.root}"]`);
+  await startCrumb.click();
+  await expect(page.getByTestId('next-ws-path')).toHaveValue(prepared.root);
+  await expect(aboveStart).toBeEnabled();
   await expect(page.getByTestId('next-dir-row').filter({ hasText: 'alpha' })).toBeVisible();
 
+  await page.getByTestId('next-dir-row').filter({ hasText: 'alpha' }).click();
   await page.getByTestId('next-ws-create').click();
-  await expect(wsNode(page, '本地样本')).toBeVisible();
+  await expect(wsNode(page, 'alpha')).toBeVisible();
   await expect(page.getByTestId('next-draft-row')).toHaveCount(0);
   await expect(page).toHaveURL(/\/w\/[^/]+\/new/);
-
-  await page.getByTestId('next-ws-new').click();
-  await page.getByTestId('next-ws-tab-git').click();
-  await page.getByTestId('next-ws-source-address').click();
-  await page.getByTestId('next-ws-name').fill('坏仓库');
-  await page.getByTestId('next-ws-create').click();
-  await expect(page.getByTestId('next-ws-error')).toHaveText('请填写 Git 仓库地址');
-  await expect(page.getByTestId('next-ws-dialog')).toBeVisible();
-  await expect(wsNode(page, '坏仓库')).toHaveCount(0);
 });
 
 test('plugins import, fail with server copy, and toggle', async ({ page }) => {

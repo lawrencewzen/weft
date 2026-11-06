@@ -283,3 +283,83 @@ test('right pane changes tab has no oversized svg icons (regression guard agains
 
   expectClean(state);
 });
+
+test('projects section add button is always visible (computed opacity 1) while other add buttons remain hover-only', async ({ page }) => {
+  const state = await openProto(page);
+
+  const wsNewBtn = page.getByTestId('next-ws-new');
+  await expect(wsNewBtn).toBeVisible();
+
+  // Move mouse away to ensure mouse is not hovering the projects section
+  await page.mouse.move(600, 600);
+
+  // 1. next-ws-new computed opacity is 1 when mouse is not hovering
+  const opacity = await wsNewBtn.evaluate((el) => getComputedStyle(el).opacity);
+  expect(opacity).toBe('1');
+
+  // 2. Computed color matches --mute in light theme
+  const muteColor = await page.evaluate(() => {
+    const probe = document.createElement('span');
+    probe.style.color = 'var(--mute)';
+    document.body.appendChild(probe);
+    const color = getComputedStyle(probe).color;
+    probe.remove();
+    return color;
+  });
+  const btnColor = await wsNewBtn.evaluate((el) => getComputedStyle(el).color);
+  expect(btnColor).toBe(muteColor);
+
+  // 3. Other add buttons (like workspace row next-ws-add) remain opacity 0 when not hovering
+  const wsAddBtn = page.getByTestId('next-ws-add').first();
+  await expect(wsAddBtn).toBeAttached();
+  const otherOpacity = await wsAddBtn.evaluate((el) => getComputedStyle(el).opacity);
+  expect(otherOpacity).toBe('0');
+
+  // 4. Hovering next-ws-new maintains hover styles (var(--hover), var(--ink))
+  await wsNewBtn.hover();
+  const hoverBg = await wsNewBtn.evaluate((el) => getComputedStyle(el).backgroundColor);
+  expect(hoverBg).not.toBe('rgba(0, 0, 0, 0)');
+  expect(hoverBg).not.toBe('transparent');
+
+  // 5. Disabled and busy states on next-ws-new
+  const disabledOpacity = await wsNewBtn.evaluate((el) => {
+    el.setAttribute('disabled', '');
+    const op = getComputedStyle(el).opacity;
+    el.removeAttribute('disabled');
+    return op;
+  });
+  expect(disabledOpacity).toBe('0.7');
+
+  const busyState = await wsNewBtn.evaluate((el) => {
+    el.classList.add('is-busy');
+    const op = getComputedStyle(el).opacity;
+    const pe = getComputedStyle(el).pointerEvents;
+    el.classList.remove('is-busy');
+    return { op, pe };
+  });
+  expect(busyState.op).toBe('1');
+  expect(busyState.pe).toBe('none');
+
+  // 6. Visible in dark theme
+  await page.getByTestId('next-appearance-toggle').click();
+  await page.mouse.move(600, 600);
+  const darkOpacity = await wsNewBtn.evaluate((el) => getComputedStyle(el).opacity);
+  expect(darkOpacity).toBe('1');
+  const darkMuteColor = await page.evaluate(() => {
+    const probe = document.createElement('span');
+    probe.style.color = 'var(--mute)';
+    document.body.appendChild(probe);
+    const color = getComputedStyle(probe).color;
+    probe.remove();
+    return color;
+  });
+  const darkBtnColor = await wsNewBtn.evaluate((el) => getComputedStyle(el).color);
+  expect(darkBtnColor).toBe(darkMuteColor);
+
+  // 7. Left collapsed narrow strip does not show next-ws-new
+  await page.getByTestId('next-left-collapse').click();
+  await expect(page.locator('.next-shell')).toHaveClass(/left-closed/);
+  await expect(wsNewBtn).toBeHidden();
+
+  expectClean(state);
+});

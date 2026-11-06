@@ -36,6 +36,7 @@ const STRIP = [
   'WEFT_TEXT_ENCODING_DETECT',
   'WEFT_TERMINAL_APP',
   'WEFT_TERMINAL_MOCK',
+  'WEFT_FOLDER_PICKER',
 ];
 
 function childEnv(dataDir, { token, extra = {} } = {}) {
@@ -54,6 +55,8 @@ function childEnv(dataDir, { token, extra = {} } = {}) {
     WEFT_STDIN_EXIT: '1',
     ...(token ? { WEFT_TOKEN: token } : {}),
     ...extra,
+    // T101-2: unit servers must not open a real folder dialog. extra cannot turn it back on.
+    WEFT_FOLDER_PICKER: 'off',
   };
 }
 

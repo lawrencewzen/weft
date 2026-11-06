@@ -1,8 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { realpathSync } from 'node:fs';
+import { existsSync, realpathSync } from 'node:fs';
 import { mkdtemp, mkdir, symlink, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import os, { tmpdir } from 'node:os';
 import path from 'node:path';
 import { PROTOCOL_VERSION } from '../../src/v2/version.ts';
 import { validateResponse } from '../../src/v2/validate.ts';
@@ -69,9 +69,9 @@ async function writePlugin(dir, id, toolName, { exportTool = true } = {}) {
   return folder;
 }
 
-test('POST /api/v2/workspaces local empty, path out of bounds, git file: rejected', { timeout: 40_000 }, async () => {
+test('POST /api/v2/workspaces local empty, path outside the start dir, sensitive path rejected, git file: rejected', { timeout: 40_000 }, async () => {
   const wsRoot = await makeTempDir('weft-v2-wsroot-');
-  const outside = await mkdtemp(path.join(tmpdir(), 'weft-v2-outside-'));
+  const outside = await makeTempDir('weft-v2-outside-');
   const srv = await startServer({
     token: TOKEN,
     env: { WEFT_LLM: 'faux', WEFT_WORKSPACE_ROOT: wsRoot },
@@ -103,17 +103,61 @@ test('POST /api/v2/workspaces local empty, path out of bounds, git file: rejecte
     assert.equal(local.status, 201, local.text);
     assert.equal(local.body.path, nativeReal(inside));
 
+    const elsewhere = await sendV2(srv.base, 'POST', '/api/v2/workspaces', discovery.token, {
+      name: 'elsewhere',
+      source: 'local',
+      path: outside,
+    });
+    assert.equal(elsewhere.status, 201, elsewhere.text);
+    assert.equal(elsewhere.body.path, nativeReal(outside));
+
+    const homePath = os.homedir();
+    const homeReal = nativeReal(homePath);
+    const homeCreated = await sendV2(srv.base, 'POST', '/api/v2/workspaces', discovery.token, {
+      name: 'from-home',
+      source: 'local',
+      path: homePath,
+    });
+    assert.equal(homeCreated.status, 201, homeCreated.text);
+    assert.equal(homeCreated.body.path, homeReal);
+    const homeAgain = await sendV2(srv.base, 'POST', '/api/v2/workspaces', discovery.token, {
+      name: 'from-home-again',
+      source: 'local',
+      path: homePath,
+    });
+    assert.equal(homeAgain.status, 201, homeAgain.text);
+    assert.equal(homeAgain.body.id, homeCreated.body.id);
+    assert.equal(homeAgain.body.name, 'from-home');
+    assert.equal(homeAgain.body.path, homeReal);
+
+    const again = await sendV2(srv.base, 'POST', '/api/v2/workspaces', discovery.token, {
+      name: 'elsewhere-again',
+      source: 'local',
+      path: outside,
+    });
+    assert.equal(again.status, 201, again.text);
+    assert.equal(again.body.id, elsewhere.body.id);
+    assert.equal(again.body.name, 'elsewhere');
+    const listed = await getV2(srv.base, '/api/v2/workspaces', discovery.token);
+    assert.equal(listed.status, 200, listed.text);
+    const samePath = listed.body.workspaces.filter((row) => row.path === nativeReal(outside));
+    assert.equal(samePath.length, 1);
+    assert.equal(samePath[0].id, elsewhere.body.id);
+    const homeRows = listed.body.workspaces.filter((row) => row.path === homeReal);
+    assert.equal(homeRows.length, 1);
+    assert.equal(homeRows[0].id, homeCreated.body.id);
+
+    const deniedPath = existsSync('/etc') ? '/etc' : 'bad\u0000path';
     const denied = await sendV2(srv.base, 'POST', '/api/v2/workspaces', discovery.token, {
       name: 'nope',
       source: 'local',
-      path: outside,
+      path: deniedPath,
     });
     assert.equal(denied.status, 400, denied.text);
     assertChecked('/api/v2/workspaces', 'POST', 400, denied.body);
     assert.equal(denied.body.code, 'E_PATH');
-    const configuredRoot = path.resolve(wsRoot);
-    assert.equal(denied.body.error, phrase('zh', 'ws_err_path_root', { root: configuredRoot }));
-    assert.equal(denied.body.allowedRoot, configuredRoot);
+    assert.equal(denied.body.error, phrase('zh', 'ws_err_path'));
+    assert.equal(Object.hasOwn(denied.body, 'allowedRoot'), false);
 
     const fileProto = await sendV2(srv.base, 'POST', '/api/v2/workspaces', discovery.token, {
       name: 'file-git',
@@ -128,10 +172,11 @@ test('POST /api/v2/workspaces local empty, path out of bounds, git file: rejecte
     const enDenied = await sendV2(srv.base, 'POST', '/api/v2/workspaces?lang=en', discovery.token, {
       name: 'nope-en',
       source: 'local',
-      path: outside,
+      path: existsSync('/etc') ? '/etc' : 'bad\u0000path',
     });
     assert.equal(enDenied.status, 400);
-    assert.equal(enDenied.body.error, phrase('en', 'ws_err_path_root', { root: path.resolve(wsRoot) }));
+    assert.equal(enDenied.body.error, phrase('en', 'ws_err_path'));
+    assert.equal(Object.hasOwn(enDenied.body, 'allowedRoot'), false);
 
     const unauth = await sendV2(srv.base, 'POST', '/api/v2/workspaces', '', { name: 'x', source: 'local' });
     assert.equal(unauth.status, 401);
@@ -142,10 +187,11 @@ test('POST /api/v2/workspaces local empty, path out of bounds, git file: rejecte
   }
 });
 
-test('workspace-root listing stays inside the allowed root', { timeout: 40_000 }, async () => {
+test('workspace-root listing starts at the default dir and can leave it', { timeout: 40_000 }, async () => {
   const wsRoot = await makeTempDir('weft-v2-browse-');
   await mkdir(path.join(wsRoot, 'keep'));
-  const outside = await mkdtemp(path.join(tmpdir(), 'weft-v2-browse-out-'));
+  const outside = await makeTempDir('weft-v2-browse-out-');
+  await mkdir(path.join(outside, 'leaf'));
   const srv = await startServer({
     token: TOKEN,
     env: { WEFT_LLM: 'faux', WEFT_WORKSPACE_ROOT: wsRoot },
@@ -166,15 +212,35 @@ test('workspace-root listing stays inside the allowed root', { timeout: 40_000 }
     assert.deepEqual(dirs.body.entries.map((e) => e.name), ['keep']);
     assert.equal(dirs.body.entries[0].path, path.join(realRoot, 'keep'));
 
+    assert.equal(typeof dirs.body.parent, 'string');
+    const up = await getV2(
+      srv.base,
+      `/api/v2/workspace-root/dirs?path=${encodeURIComponent(dirs.body.parent)}`,
+      discovery.token,
+    );
+    assert.equal(up.status, 200, up.text);
+
     const escaped = await getV2(
       srv.base,
       `/api/v2/workspace-root/dirs?path=${encodeURIComponent(outside)}`,
       discovery.token,
     );
-    assert.equal(escaped.status, 400);
-    assertChecked('/api/v2/workspace-root/dirs', 'GET', 400, escaped.body);
-    assert.equal(escaped.body.code, 'E_PATH');
-    assert.equal(escaped.body.error.includes(outside), false);
+    assert.equal(escaped.status, 200, escaped.text);
+    assertChecked('/api/v2/workspace-root/dirs', 'GET', 200, escaped.body);
+    assert.deepEqual(escaped.body.entries.map((e) => e.name), ['leaf']);
+
+    if (existsSync('/etc')) {
+      const blocked = await getV2(
+        srv.base,
+        `/api/v2/workspace-root/dirs?path=${encodeURIComponent('/etc')}`,
+        discovery.token,
+      );
+      assert.equal(blocked.status, 400);
+      assertChecked('/api/v2/workspace-root/dirs', 'GET', 400, blocked.body);
+      assert.equal(blocked.body.code, 'E_PATH');
+      assert.equal(blocked.body.error, phrase('zh', 'ws_err_path'));
+      assert.equal(blocked.body.error.includes('/etc'), false);
+    }
   } finally {
     await stopServer(srv);
     await removeTempDir(wsRoot);
@@ -204,7 +270,7 @@ async function aliasedWorkspaceRoot() {
   return { alias, canonical, outside };
 }
 
-test('alias WEFT_WORKSPACE_ROOT (8.3 or symlink) allows children and rejects outside', { timeout: 40_000 }, async () => {
+test('alias WEFT_WORKSPACE_ROOT (8.3 or symlink) allows children and directories outside the alias', { timeout: 40_000 }, async () => {
   const { alias, canonical, outside } = await aliasedWorkspaceRoot();
   const srv = await startServer({
     token: TOKEN,
@@ -222,13 +288,13 @@ test('alias WEFT_WORKSPACE_ROOT (8.3 or symlink) allows children and rejects out
     assert.equal(created.body.path, nativeReal(inside));
     assert.equal(created.body.path, nativeReal(path.join(canonical, 'inside')));
 
-    const denied = await sendV2(srv.base, 'POST', '/api/v2/workspaces', discovery.token, {
+    const createdOutside = await sendV2(srv.base, 'POST', '/api/v2/workspaces', discovery.token, {
       name: 'outside',
       source: 'local',
       path: outside,
     });
-    assert.equal(denied.status, 400);
-    assert.equal(denied.body.code, 'E_PATH');
+    assert.equal(createdOutside.status, 201, createdOutside.text);
+    assert.equal(createdOutside.body.path, nativeReal(outside));
 
     const dirs = await getV2(srv.base, '/api/v2/workspace-root/dirs', discovery.token);
     assert.equal(dirs.status, 200);
