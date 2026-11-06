@@ -265,8 +265,7 @@ export function Thread({
                   key={item.id}
                   item={item}
                   lang={lang}
-                  canContinue={item.truncated && !running}
-                  onContinue={(requestId) => actions.continueRun(requestId)}
+                  running={running}
                   attribution={modelAttribution(item.model, providers, conversationModel)}
                 />
               );

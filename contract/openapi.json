@@ -6981,7 +6981,8 @@
                 "additionalProperties": false,
                 "required": [
                   "code",
-                  "message"
+                  "message",
+                  "canContinue"
                 ],
                 "properties": {
                   "code": {
@@ -6989,6 +6990,9 @@
                   },
                   "message": {
                     "type": "string"
+                  },
+                  "canContinue": {
+                    "type": "boolean"
                   },
                   "retry": {
                     "type": "object",

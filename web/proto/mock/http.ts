@@ -1732,7 +1732,11 @@ export function handleMockRequest(
   if (continueMatch && method === 'POST') {
     const conv = getConv(db, decodeURIComponent(continueMatch[1]));
     if (!conv) return fail(404, '对话不存在');
-    return accepted({ runId: continueConversation(db, conv, hub) });
+    const result = continueConversation(db, conv, hub);
+    if (!result.ok) {
+      return fail(result.status, result.error, result.code);
+    }
+    return accepted({ runId: result.runId });
   }
   const toolMatch = /^\/api\/v2\/conversations\/([^/]+)\/tools\/([^/]+)\/output$/.exec(path);
   if (toolMatch && method === 'GET') {

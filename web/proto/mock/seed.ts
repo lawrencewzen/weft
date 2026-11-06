@@ -60,6 +60,7 @@ function conversation(input: {
   diffs?: Record<string, MockConv['diffs'][string]>;
   subagents?: Subagent[];
   status?: ConversationView['status'];
+  run?: RunState;
   archived?: boolean;
 }): MockConv {
   const tools = input.tools || {};
@@ -76,7 +77,7 @@ function conversation(input: {
       thinkingLevel: input.thinkingLevel !== undefined
         ? input.thinkingLevel
         : (input.model === null ? null : (input.model?.modelId === 'claude-fable-5-1' ? 'medium' : 'high')),
-      run: { ...IDLE_RUN },
+      run: input.run ? { ...input.run } : { ...IDLE_RUN },
       context: context(input.used),
       itemIds: input.items.map((item) => item.id),
       sends: [],
@@ -106,8 +107,9 @@ function assistant(
   text: string,
   model = 'deepseek-flash',
   pathRefs: { text: string; path: string; line?: number }[] = [],
+  truncated = false,
 ): MockItem {
-  return { kind: 'assistant', id, text, pathRefs, model, streaming: false, truncated: false };
+  return { kind: 'assistant', id, text, pathRefs, model, streaming: false, truncated };
 }
 
 function group(
@@ -582,6 +584,105 @@ function richConversation(now: number, threads: Map<string, MockSubThread>): Moc
     text: '顺便把深色模式也检查一下',
   }];
   return rich;
+}
+
+function failedConversation(now: number): MockConv {
+  return conversation({
+    id: 'c-failed',
+    workspaceId: 'ws-weft',
+    title: '模型调用失败',
+    updatedAt: now - 10 * MINUTE,
+    used: 12_000,
+    status: 'failed',
+    run: {
+      ...IDLE_RUN,
+      status: 'failed',
+      error: {
+        code: 'model_failed',
+        message: '模型请求失败：503 Service Unavailable',
+        canContinue: true,
+      },
+    },
+    items: [
+      user('failed-u1', '帮我分析一下系统性能瓶颈并提出优化建议。'),
+    ],
+  });
+}
+
+function interruptedConversation(now: number): MockConv {
+  return conversation({
+    id: 'c-interrupted',
+    workspaceId: 'ws-weft',
+    title: '服务中断',
+    updatedAt: now - 12 * MINUTE,
+    used: 18_000,
+    status: 'failed',
+    run: {
+      ...IDLE_RUN,
+      status: 'failed',
+      error: {
+        code: 'interrupted',
+        message: '服务中断，这一轮没有完成。',
+        canContinue: true,
+      },
+    },
+    items: [
+      user('interrupted-u1', '重构路由模块并添加错误拦截器。'),
+    ],
+  });
+}
+
+function noModelFailedConversation(now: number): MockConv {
+  return conversation({
+    id: 'c-no-model-failed',
+    workspaceId: 'ws-weft',
+    title: '未配置模型',
+    updatedAt: now - 14 * MINUTE,
+    used: 1_000,
+    status: 'failed',
+    model: null,
+    thinkingLevel: null,
+    run: {
+      ...IDLE_RUN,
+      status: 'failed',
+      error: {
+        code: 'no_model',
+        message: '未配置可用模型，无法发起调用。',
+        canContinue: false,
+      },
+    },
+    items: [
+      user('nomodel-u1', '帮我检查代码。'),
+    ],
+  });
+}
+
+function truncatedConversation(now: number): MockConv {
+  return conversation({
+    id: 'c-truncated',
+    workspaceId: 'ws-weft',
+    title: '输出截断示例',
+    updatedAt: now - 16 * MINUTE,
+    used: 64_000,
+    status: 'idle',
+    items: [
+      user('truncated-u1', '请列出所有已废弃的旧版本接口和迁移说明。'),
+      assistant(
+        'truncated-a1',
+        [
+          '以下是已废弃接口的整理（按模块划分）：',
+          '',
+          '1. `/api/legacy/export`：原旧版导出功能，改用 `/api/v2/conversations/{id}` 快照',
+          '2. `/api/legacy/status`：原轮询状态接口，改用 `/api/v2/events` SSE 流',
+          '3. `/api/legacy/tools`：原独立工具列表，合并进对话视图',
+          '4. `/api/legacy/config`：配置项迁移至 `/api/v2/providers`',
+        ].join('\n'),
+        'deepseek-flash',
+        [],
+        true,
+      ),
+    ],
+  });
 }
 
 function testsConversation(now: number): MockConv {
@@ -1153,6 +1254,10 @@ export function createSeed(now: number): MockDb {
   const subagents = seedSubThreads(now);
   const conversations = [
     richConversation(now, subagents),
+    failedConversation(now),
+    interruptedConversation(now),
+    noModelFailedConversation(now),
+    truncatedConversation(now),
     askConversation(now),
     testsConversation(now),
     docsConversation(now, subagents),

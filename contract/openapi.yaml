@@ -4552,11 +4552,14 @@ components:
               required:
                 - code
                 - message
+                - canContinue
               properties:
                 code:
                   type: string
                 message:
                   type: string
+                canContinue:
+                  type: boolean
                 retry:
                   type: object
                   additionalProperties: false

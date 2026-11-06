@@ -1623,6 +1623,7 @@ export interface components {
             error: null | {
                 code: string;
                 message: string;
+                canContinue: boolean;
                 retry?: {
                     attempt: number;
                     delayMs: number;

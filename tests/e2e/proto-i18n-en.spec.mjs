@@ -15,7 +15,6 @@ const EXCLUDE_SEL = [
   '[data-testid="next-item-user"]',
   '[data-testid="next-item-assistant"]',
   '[data-testid="next-item-system-note"]',
-  '[data-testid="next-auto-continue-note"]',
   '[data-testid="next-item-subagent-report"]',
   '[data-testid="next-subagent-report"]',
   '[data-testid="next-tool-group-list"]',

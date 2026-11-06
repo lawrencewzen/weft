@@ -248,6 +248,7 @@ export function CenterPane({
         demo={demo}
         hidePending={liveTools}
         workspace={workspace}
+        onContinue={actions.continueRun}
       />
       <Thread
         items={shownItems}

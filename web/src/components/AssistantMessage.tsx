@@ -3,7 +3,6 @@ import type { Lang } from '../data/lang';
 import type { components } from '../../../src/v2/contract.gen';
 import { t } from '../i18n';
 import { BrandIcon } from './BrandIcon';
-import { createSendRequest, errorMessage } from './sendRequest';
 import { Markdown } from './Markdown';
 
 type Item = components['schemas']['ThreadItemAssistant'];
@@ -58,31 +57,12 @@ export function useStreamingThrottle(text: string, streaming: boolean, intervalM
 type Props = {
   item: Item;
   lang: Lang;
-  canContinue: boolean;
-  onContinue: (requestId: string) => Promise<unknown>;
+  running?: boolean;
   attribution?: { brand: string | null; displayName: string } | null;
 };
 
-export function AssistantMessage({ item, lang, canContinue, onContinue, attribution = null }: Props) {
-  const req = useRef(createSendRequest());
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+export function AssistantMessage({ item, lang, running = false, attribution = null }: Props) {
   const markdownText = useStreamingThrottle(item.text, Boolean(item.streaming), 100);
-
-  async function continueRun() {
-    if (busy) return;
-    const requestId = req.current.begin('continue');
-    setBusy(true);
-    setError(null);
-    try {
-      await onContinue(requestId);
-      req.current.succeed();
-    } catch (err) {
-      setError(errorMessage(err, t(lang, 'send_failed')));
-    } finally {
-      setBusy(false);
-    }
-  }
 
   return (
     <div
@@ -109,19 +89,9 @@ export function AssistantMessage({ item, lang, canContinue, onContinue, attribut
         />
         {item.streaming ? <span className="msg-stream-spin" data-testid="next-stream-spin" aria-hidden="true" /> : null}
       </div>
-      {item.truncated && canContinue ? (
+      {item.truncated && !running ? (
         <div className="msg-truncated" data-testid="next-truncated">
           <span>{t(lang, 'output_truncated')}</span>
-          <button
-            type="button"
-            className="btn"
-            data-testid="next-continue"
-            disabled={busy}
-            onClick={() => { void continueRun(); }}
-          >
-            {t(lang, 'btn_continue')}
-          </button>
-          {error ? <span className="composer-error">{error}</span> : null}
         </div>
       ) : null}
     </div>
