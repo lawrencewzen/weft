@@ -629,6 +629,27 @@ function handlePatchProvider(
 type MockDir = { entries: WorkspaceDirEntry[]; git: boolean };
 
 const DIRS: Record<string, MockDir> = {
+  'C:\\': {
+    git: false,
+    entries: [
+      { name: 'Projects', path: 'C:\\Projects', git: false },
+      { name: 'Windows', path: 'C:\\Windows', git: false },
+    ],
+  },
+  'C:\\Projects': {
+    git: false,
+    entries: [
+      { name: 'demo', path: 'C:\\Projects\\demo', git: false },
+    ],
+  },
+  'C:\\Projects\\demo': { git: false, entries: [] },
+  'C:\\Windows': {
+    git: false,
+    entries: [
+      { name: 'System32', path: 'C:\\Windows\\System32', git: false },
+    ],
+  },
+  'C:\\Windows\\System32': { git: false, entries: [] },
   'D:\\': {
     git: false,
     entries: [
@@ -652,6 +673,19 @@ const DIRS: Record<string, MockDir> = {
     git: false,
     entries: [],
   },
+  '/': {
+    git: false,
+    entries: [
+      { name: 'Users', path: '/Users', git: false },
+    ],
+  },
+  '/Users': {
+    git: false,
+    entries: [
+      { name: 'alice', path: '/Users/alice', git: false },
+    ],
+  },
+  '/Users/alice': { git: false, entries: [] },
   '~': {
     git: false,
     entries: [
@@ -690,15 +724,29 @@ const DIRS: Record<string, MockDir> = {
 };
 
 function normalizeDir(raw: string): string {
-  const text = String(raw || '').trim().replaceAll('/', '\\').replace(/\\+$/, '');
-  return text || WORK_ROOT;
+  const input = String(raw || '').trim();
+  if (!input) return WORK_ROOT;
+  if (input.startsWith('/') && !input.includes('\\')) {
+    const clean = input.replace(/\/+$/, '');
+    return clean || '/';
+  }
+  const win = input.replaceAll('/', '\\');
+  if (/^[a-zA-Z]:\\?$/.test(win)) {
+    return `${win.slice(0, 1).toUpperCase()}:\\`;
+  }
+  return win.replace(/\\+$/, '') || WORK_ROOT;
 }
 
 function parentDir(path: string): string | null {
-  const norm = path.replaceAll('/', '\\').replace(/\\+$/, '');
+  const norm = normalizeDir(path);
   if (!norm) return null;
-  if (/^[a-zA-Z]:$/.test(norm)) return null;
+  if (/^[a-zA-Z]:\\$/.test(norm)) return '';
   if (norm === '~' || norm === '\\' || norm === '/') return null;
+  if (norm.startsWith('/') && !norm.includes('\\')) {
+    const at = norm.lastIndexOf('/');
+    if (at <= 0) return '/';
+    return norm.slice(0, at);
+  }
   const at = norm.lastIndexOf('\\');
   if (at < 0) return null;
   if (at === 2 && norm[1] === ':') {
@@ -717,7 +765,7 @@ function dirsView(path: string, lang: Lang): MockReply {
     return fail(404, lang === 'en' ? 'Directory not found in the prototype' : '原型里没有这个目录', 'E_PATH');
   }
   const blocked = isBlockedPath(normalized);
-  const isFsRoot = normalized === 'D:\\' || normalized === '\\' || normalized === '/' || normalized === '~';
+  const isFsRoot = /^[a-zA-Z]:\\$/.test(normalized) || normalized === '\\' || normalized === '/' || normalized === '~';
   const view: WorkspaceDirs = {
     root: WORK_ROOT,
     path: normalized,
@@ -1205,6 +1253,20 @@ export function handleMockRequest(
     return showProtoPickModal(lang);
   }
   if (path === '/api/v2/workspace-root/dirs' && method === 'GET') {
+    if (url.searchParams.get('view') === 'drives') {
+      return ok({
+        path: '',
+        parent: null,
+        selectable: false,
+        git: false,
+        entries: [
+          { name: 'C:', path: 'C:\\', git: false },
+          { name: 'D:', path: 'D:\\', git: false },
+        ],
+        truncated: false,
+        root: WORK_ROOT,
+      });
+    }
     return dirsView(url.searchParams.get('path') || WORK_ROOT, lang);
   }
 

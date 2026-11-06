@@ -649,6 +649,13 @@ export function listWorkspaceDirs(dirPath?: string, lang?: string): Promise<Work
   return requestJson<WorkspaceDirs>(`/api/v2/workspace-root/dirs${query ? `?${query}` : ''}`);
 }
 
+export function listWorkspaceDrives(lang?: string): Promise<WorkspaceDirs> {
+  const params = new URLSearchParams();
+  params.set('view', 'drives');
+  if (lang) params.set('lang', lang);
+  return requestJson<WorkspaceDirs>(`/api/v2/workspace-root/dirs?${params.toString()}`);
+}
+
 function gitPath(id?: string, suffix = ''): string {
   if (!id) return `/api/v2/git/connections${suffix}`;
   return `/api/v2/git/connections/${encodeURIComponent(id)}${suffix}`;
