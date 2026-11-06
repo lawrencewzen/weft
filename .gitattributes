@@ -1,0 +1,4 @@
+# The golden prompt is compared byte for byte. Keep LF on Windows checkouts.
+tests/fixtures/pi-durable-1.4.0/system-prompt-no-project.txt text eol=lf
+tests/fixtures/pi-durable-1.4.0/manifest.json text eol=lf
+tests/fixtures/pi-durable-1.4.0/**/*.sqlite binary

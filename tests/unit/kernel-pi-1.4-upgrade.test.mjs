@@ -69,8 +69,11 @@ test('a 1.4.0 sqlite directory opens, keeps tool and subagent history, and accep
     await mkdir(path.join(dataDir, 'ws'), { recursive: true });
     await cp(path.join(FIXTURE, 'weft.sqlite'), storePath);
     await cp(path.join(FIXTURE, 'harness', 'session.sqlite'), harnessPath);
-    rewritePaths(storePath, manifest.dataDir, dataDir);
-    rewritePaths(harnessPath, manifest.dataDir, dataDir);
+    // Stored records are JSON (`json_valid`). A Windows temp path's backslashes
+    // would fail that check. Forward slashes address the same directory.
+    const storedDir = dataDir.replaceAll('\\', '/');
+    rewritePaths(storePath, manifest.dataDir, storedDir);
+    rewritePaths(harnessPath, manifest.dataDir, storedDir);
 
     store = createSqliteStore(dataDir);
     kernel = await openConversationKernel({
