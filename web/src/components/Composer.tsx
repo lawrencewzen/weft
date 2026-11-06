@@ -132,6 +132,7 @@ export function Composer({
 }: Props) {
   const [draft, setDraft] = useState('');
   const [compactBusy, setCompactBusy] = useState(false);
+  const [ctxOpenNonce, setCtxOpenNonce] = useState(0);
   const [compactRequestError, setCompactRequestError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -522,6 +523,7 @@ export function Composer({
                       onManage={openManage}
                       contextWindow={selected?.contextWindow || context.window}
                       onSetContextWindow={(w) => { void setWindow(w); }}
+                      openContextNonce={ctxOpenNonce}
                       compact={conversationId && !isDraft ? {
                         state: compactRunning ? 'running' : compactionState,
                         error: compactError,
@@ -577,6 +579,7 @@ export function Composer({
                     lang={lang}
                     context={context}
                     selected={selected}
+                    onOpen={() => setCtxOpenNonce((n) => n + 1)}
                   />
                 ) : null}
                 {stopMode ? (

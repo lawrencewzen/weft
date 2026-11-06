@@ -11,9 +11,10 @@ type Props = {
   lang: Lang;
   context: ContextUsage;
   selected?: ComposerModelOption | null;
+  onOpen?: () => void;
 };
 
-export function ContextChip({ lang, context, selected }: Props) {
+export function ContextChip({ lang, context, selected, onOpen }: Props) {
   const warn = contextIsWarn(context.level);
   const remain = contextRemainPercent(context);
   const ringRadius = 7.5;
@@ -21,10 +22,13 @@ export function ContextChip({ lang, context, selected }: Props) {
   const windowTokens = context.window || selected?.contextWindow || 0;
 
   return (
-    <span
+    <button
+      type="button"
       className={`context-chip${warn ? ' is-warn' : ''}`}
       data-testid="next-context-chip"
       data-level={context.level}
+      aria-haspopup="true"
+      onClick={onOpen}
       title={t(lang, 'ctx_title', {
         used: formatTokenCount(context.used),
         window: formatTokenCount(windowTokens),
@@ -45,6 +49,6 @@ export function ContextChip({ lang, context, selected }: Props) {
         />
       </svg>
       <span className="context-chip-pct">{t(lang, 'ctx_percent', { n: context.percent })}</span>
-    </span>
+    </button>
   );
 }

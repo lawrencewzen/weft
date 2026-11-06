@@ -2072,7 +2072,9 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.6; backgroun
 .ws-chip svg { width: 15px; height: 15px; color: var(--mute); flex-shrink: 0; }
 .ws-chip .model-chip-caret { font-size: 9px; color: var(--faint); }
 .ws-chip.is-empty .model-chip-name { color: var(--mute); }
-.context-chip { flex-shrink: 0; cursor: default; }
+.context-chip { flex-shrink: 0; cursor: pointer; }
+.context-chip:hover { background: var(--hover); }
+.context-chip:focus-visible { outline: 1px solid var(--faint); outline-offset: 1px; }
 .model-chip-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .model-chip-caret { font-size: 10px; color: var(--mute); }
 .model-chip:hover, .model-chip.is-open { background: var(--hover); }
@@ -2167,7 +2169,10 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.6; backgroun
   border-radius: 9px; padding: 8px 10px; cursor: pointer; text-align: left; font-size: var(--fs-ui);
   color: var(--ink); position: relative; box-sizing: border-box;
 }
-.dr:hover, .dr.is-open, .dr:focus-visible { background: var(--hover); outline: none; }
+.dr:hover, .dr.is-open { background: var(--hover); }
+.dr:focus-visible { outline: none; }
+/* Keyboard focus only tints a row while no submenu is open, so it never doubles up with the open row. */
+.dmenu:not(:has(.dr.is-open)) .dr:focus-visible { background: var(--hover); }
 .dr .k { flex-shrink: 0; }
 .dr .v {
   margin-left: auto; color: var(--mute); font-size: var(--fs-ui); white-space: nowrap;
@@ -2177,12 +2182,13 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.6; backgroun
 .dr.dis { cursor: default; color: var(--faint); }
 .dr.dis:hover { background: none; }
 .dr.dis .v { color: var(--faint); }
-.dr:disabled { cursor: default; color: var(--faint); }
-.dr:disabled:hover { background: none; }
-.dr .run-spin { width: 12px; height: 12px; }
-.dr .run-spin span { display: none; }
-.dr .run-spin::before { border-width: 1.5px; border-color: var(--line); border-top-color: var(--mute); }
-.dr.is-err .v { color: var(--err-ink); }
+.mi:disabled { cursor: default; color: var(--faint); }
+.mi:disabled:hover { background: none; }
+.mi.is-err .meta { color: var(--err-ink); }
+.mi .run-spin { width: 12px; height: 12px; }
+.mi .run-spin span { display: none; }
+.mi .run-spin::before { border-width: 1.5px; border-color: var(--line); border-top-color: var(--mute); }
+.context-menu-sep { height: 1px; background: var(--line3); margin: 4px 2px; }
 .ns-pref-input { display: flex; align-items: center; gap: 6px; }
 .ns-pref-input input {
   width: 64px; height: 30px; padding: 0 8px; border: 1px solid var(--line); border-radius: 8px;

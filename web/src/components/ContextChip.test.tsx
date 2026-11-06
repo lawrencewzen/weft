@@ -2,7 +2,7 @@
 
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ContextChip } from './ContextChip';
 import type { ContextUsage } from '../data/composerModel';
 
@@ -38,31 +38,30 @@ describe('ContextChip component', () => {
     await cleanup();
   });
 
-  it('renders as a non-interactive span without popup menu attributes', async () => {
+  it('renders a focusable button that keeps its title and calls onOpen', async () => {
     const context: ContextUsage = {
       used: 48_200,
       window: 64_000,
       percent: 75,
       level: 'ok',
     };
+    const onOpen = vi.fn();
 
-    await render(<ContextChip lang="zh" context={context} />);
+    await render(<ContextChip lang="zh" context={context} onOpen={onOpen} />);
 
-    const chip = host?.querySelector('[data-testid="next-context-chip"]');
+    const chip = host?.querySelector('[data-testid="next-context-chip"]') as HTMLButtonElement;
     expect(chip).not.toBeNull();
-    expect(chip?.tagName.toLowerCase()).toBe('span');
-    expect(chip?.getAttribute('aria-haspopup')).toBeNull();
-    expect(chip?.textContent).toContain('75%');
-    expect(chip?.getAttribute('title')).toContain('48.2k / 64k');
-    expect(chip?.getAttribute('title')).toContain('已用 75%');
-    expect(chip?.getAttribute('title')).toContain('剩余 25%');
+    expect(chip.tagName.toLowerCase()).toBe('button');
+    expect(chip.type).toBe('button');
+    expect(chip.textContent).toContain('75%');
+    expect(chip.getAttribute('title')).toContain('48.2k / 64k');
+    expect(chip.getAttribute('title')).toContain('已用 75%');
+    expect(chip.getAttribute('title')).toContain('剩余 25%');
 
-    // Click does not open any menu
     await act(async () => {
-      (chip as HTMLElement).click();
+      chip.click();
     });
-    expect(document.querySelector('[data-testid="next-context-menu"]')).toBeNull();
-    expect(document.querySelector('.context-menu')).toBeNull();
+    expect(onOpen).toHaveBeenCalledTimes(1);
   });
 
   it('adds is-warn class when context level is warn or full', async () => {

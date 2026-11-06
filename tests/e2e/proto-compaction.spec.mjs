@@ -12,6 +12,8 @@ async function openConv(page, id) {
 async function openMenu(page) {
   await page.getByTestId('next-model-chip').click();
   await expect(page.getByTestId('next-model-menu')).toBeVisible();
+  await page.getByTestId('next-menu-context').hover();
+  await expect(page.getByTestId('next-sub-context')).toBeVisible();
 }
 
 test('1. c-compacted shows a grey compaction note, not a user bubble; no context banner', async ({ page }) => {
@@ -37,7 +39,7 @@ test('2. menu compact: running state with spinner and thread line, then the note
 
   await openMenu(page);
   const row = page.getByTestId('next-menu-compact');
-  await expect(row).toHaveText('压缩');
+  await expect(row).toHaveText('立即压缩');
   await expect(row).toBeEnabled();
   await row.click();
 
@@ -154,5 +156,84 @@ test('6. English labels and dark theme', async ({ page }) => {
   await page.keyboard.press('Escape');
   await openConv(page, 'c-compacted');
   await expect(page.getByTestId('next-item-system-note')).toHaveText('Earlier context was compacted');
+  await expectClean(state);
+});
+
+test('7. main menu has no compact row; Context submenu starts with compact now, a separator, then the windows', async ({ page }) => {
+  const state = await openProto(page);
+  await openConv(page, 'c-docs');
+  await page.getByTestId('next-model-chip').click();
+  const menu = page.getByTestId('next-model-menu');
+  await expect(menu.getByTestId('next-menu-model')).toBeVisible();
+  await expect(menu.getByTestId('next-menu-thinking')).toBeVisible();
+  await expect(menu.getByTestId('next-menu-context')).toBeVisible();
+  await expect(menu.getByTestId('next-menu-compact')).toHaveCount(0);
+
+  await page.getByTestId('next-menu-context').hover();
+  const sub = page.getByTestId('next-sub-context');
+  await expect(sub).toBeVisible();
+  const order = await sub.locator('.context-menu-list').evaluate((el) => [...el.children].slice(0, 3).map((c) => (
+    c.getAttribute('data-testid') || c.getAttribute('role') || c.className
+  )));
+  expect(order[0]).toBe('next-menu-compact');
+  expect(order[1]).toBe('separator');
+  await expect(page.getByTestId('next-menu-compact')).toHaveText('立即压缩');
+  await expect(sub.getByTestId('next-context-option').first()).toBeVisible();
+  await expectClean(state);
+});
+
+test('8. only the Context row is highlighted while its submenu is open, even after keyboard focus elsewhere', async ({ page }) => {
+  const state = await openProto(page);
+  await openConv(page, 'c-docs');
+  await page.getByTestId('next-model-chip').click();
+  // keyboard focus on the Model row, then the pointer settles on the Context row
+  await page.keyboard.press('Tab');
+  await page.getByTestId('next-menu-model').focus();
+  await page.getByTestId('next-menu-context').hover();
+  await expect(page.getByTestId('next-sub-context')).toBeVisible();
+  const bgs = await page.evaluate(() => Object.fromEntries(
+    [...document.querySelectorAll('[data-testid=next-model-menu] > .dr')].map((el) => [
+      el.getAttribute('data-testid'),
+      { bg: getComputedStyle(el).backgroundColor, hover: el.matches(':hover') },
+    ]),
+  ));
+  expect(bgs['next-menu-context'].bg).not.toBe('rgba(0, 0, 0, 0)');
+  for (const id of ['next-menu-model', 'next-menu-thinking']) {
+    if (bgs[id]) expect(bgs[id].bg, id).toBe('rgba(0, 0, 0, 0)');
+  }
+  await expectClean(state);
+});
+
+test('9. clicking the context percent opens the Context submenu; keyboard works; click again closes', async ({ page }) => {
+  const state = await openProto(page);
+  await openConv(page, 'c-docs');
+  const chip = page.getByTestId('next-context-chip');
+  await expect(chip).toHaveAttribute('title', /已用 86%/);
+  await chip.click();
+  await expect(page.getByTestId('next-model-menu')).toBeVisible();
+  await expect(page.getByTestId('next-sub-context')).toBeVisible();
+  await expect(page.getByTestId('next-menu-compact')).toBeVisible();
+  await chip.click();
+  await expect(page.getByTestId('next-model-menu')).toBeHidden();
+
+  await chip.focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('next-sub-context')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('next-model-menu')).toBeHidden();
+  await chip.focus();
+  await page.keyboard.press('Space');
+  await expect(page.getByTestId('next-sub-context')).toBeVisible();
+  await expectClean(state);
+});
+
+test('10. a draft conversation has no compact now', async ({ page }) => {
+  const state = await openProto(page);
+  await page.getByTestId('next-new-chat').click();
+  await expect(page).toHaveURL(/#\/(w\/[^/]+\/)?new$/);
+  await page.getByTestId('next-context-chip').click();
+  await expect(page.getByTestId('next-sub-context')).toBeVisible();
+  await expect(page.getByTestId('next-menu-compact')).toHaveCount(0);
   await expectClean(state);
 });
