@@ -9,12 +9,12 @@ const mode = process.env.WEFT_KERNEL_MODE;
 
 if (mode === 'fail') {
   watchHarnessClosed({
-    closed: Promise.resolve({ reason: 'failed', error: new Error('disk full') }),
+    closed: Promise.resolve({ kind: 'failed', error: new Error('disk full') }),
   });
   setInterval(() => {}, 1000);
 } else if (mode === 'close') {
   watchHarnessClosed({
-    closed: Promise.resolve({ reason: 'closed' }),
+    closed: Promise.resolve({ kind: 'closed' }),
   });
   setTimeout(() => process.exit(0), 100);
 } else {

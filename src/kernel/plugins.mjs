@@ -3,11 +3,11 @@
 // the same extension name replaces the previous tools in one step. A tool call
 // that already started keeps the implementation it took; the next phase,
 // request, or call resolves the registry again. This module does not schedule.
-import { Type } from '@earendil-works/pi-ai';
+import { obj } from '@earendil-works/pi-schema';
 import { defineExtension, defineTool, GenerationTask, hook } from '@earendil-works/pi-durable';
 import { EXT_PLUGIN_RELOAD, EXT_PLUGIN_TOOLS } from './ids.mjs';
 
-const LOOSE_PARAMS = Type.Object({}, { additionalProperties: true });
+const LOOSE_PARAMS = obj({}, { open: true });
 const EXTENSION = EXT_PLUGIN_TOOLS;
 const DETAILS_MAX_BYTES = 64 * 1024;
 

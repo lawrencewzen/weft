@@ -1,13 +1,13 @@
 // HTTP facade over one Pi Durable Harness.
 // Dialogue state lives in the Harness. This module records the conversation
-// index, maps watchEvents onto the connected SSE clients, and reads diffs
+// index, maps Conversation.watch onto the connected SSE clients, and reads diffs
 // back out of tool-result entries.
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { readFile, stat } from 'node:fs/promises';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { createModels } from '@earendil-works/pi-ai/models';
-import { createRegistry, watchEvents } from '@earendil-works/pi-durable';
+import { createRegistry } from '@earendil-works/pi-durable';
 import { liveDiff } from '../core/diff.mjs';
 import { redactAuthText } from '../core/redact.mjs';
 import { resolveInWorkspace } from '../core/paths.mjs';
@@ -19,11 +19,12 @@ import { configureThinkingLevel } from '../core/thinking-level.mjs';
 import { buildAskSubmission } from './ask.mjs';
 import {
   createMapContext,
-  mapHarnessBatch,
+  createViewProjector,
   mergeFileChanges,
   findUserMessageImage,
   findUserMessagePaste,
   messagesFromEntries,
+  projectViewUpdate,
   statusFromSubmission,
   writesFromEntries,
 } from './events.mjs';
@@ -35,7 +36,7 @@ import { installPluginReload } from './plugins.mjs';
 import { createAgentHost, installAgentExtensions } from './agent-config.mjs';
 import { maybeGenerateConversationTitle } from './title.mjs';
 import { createSubagentControl } from './subagent-control.mjs';
-import { createSubagentExtension, createSubagentHost } from './subagents.mjs';
+import { createSubagentExtension, createSubagentHost, readTaskGraph } from './subagents.mjs';
 import { createWorkspaceExtension, workspaceTools } from './tools.mjs';
 import {
   CHANGE_CACHE_MS,
@@ -252,12 +253,14 @@ export async function openConversationKernel({
   async function readView(harnessId) {
     const conversation = await harness.conversation(harnessId, context);
     if (!conversation) return null;
-    const view = await conversation.viewState(context);
-    try {
-      return view.value;
-    } finally {
-      view.dispose();
-    }
+    // Active transcript, the same slice viewState().entries used to be.
+    return conversation.context(context);
+  }
+
+  async function watchConversation(harnessId) {
+    const conversation = await harness.conversation(harnessId, context);
+    if (!conversation) return null;
+    return conversation.watch(context);
   }
 
   async function submissionView(conv) {
@@ -360,26 +363,33 @@ export async function openConversationKernel({
     return providers.contextWindowFor(conv);
   }
 
-  async function applyBatch(cid, batch, mapCtx) {
+  async function applyView(cid, view, mapCtx, projector) {
     const conv = await store.getConversation(cid);
     mapCtx.contextWindow = await conversationWindow(conv);
-    const mapped = mapHarnessBatch(batch, mapCtx);
+    const mapped = projectViewUpdate(projector, view, mapCtx);
     for (const ev of mapped.events) await deliver(cid, ev);
-    if (mapped.refresh) {
-      const conv = await store.getConversation(cid);
-      const status = (await submissionView(conv)).status;
-      await deliver(cid, { event: 'status', data: { status } });
+    if (mapped.refresh || mapped.runEnded) {
+      const current = await store.getConversation(cid);
+      const status = await submissionView(current);
+      if (mapped.runEnded && status.status === 'failed' && status.llmError) {
+        await deliver(cid, { event: 'error', data: status.llmError });
+      }
+      await deliver(cid, { event: 'status', data: { status: status.status } });
     }
   }
 
   async function attach(row) {
     if (!row?.harnessId || watches.has(row.id)) return;
-    const stream = await watchEvents(harness, row.harnessId, context);
+    const watch = await watchConversation(row.harnessId);
+    if (!watch) return;
     const mapCtx = createMapContext({ retry: settings.retry });
-    watches.set(row.id, { stream, mapCtx, harnessId: row.harnessId });
-    stream.start((batch) => enqueue(row.id, async () => {
+    const projector = createViewProjector();
+    watches.set(row.id, { stream: watch, mapCtx, projector, harnessId: row.harnessId });
+    await applyView(row.id, watch.value, mapCtx, projector);
+    watch.start((call) => enqueue(row.id, async () => {
+      if (call?.kind !== 'value') return;
       try {
-        await applyBatch(row.id, batch, mapCtx);
+        await applyView(row.id, call.value, mapCtx, projector);
       } catch (err) {
         console.error(`WEFT_KERNEL_EVENT ${redactAuthText(err instanceof Error ? (err.stack || err.message) : err)}`);
       }
@@ -437,7 +447,7 @@ export async function openConversationKernel({
     context,
     readTranscript,
     emit: (cid, event, data) => deliver(cid, { event, data }),
-    watchEvents,
+    watchConversation,
     cidFor,
   });
   subagentApi.prepareChild = subagents.prepareChild;
@@ -850,12 +860,8 @@ export async function openConversationKernel({
     harness,
     context,
     async hasActiveWork() {
-      const graph = await harness.taskGraph(context);
-      try {
-        return Object.keys(graph.value?.tasks || {}).length > 0;
-      } finally {
-        graph.dispose();
-      }
+      const graph = await readTaskGraph(harness, context);
+      return Object.keys(graph?.tasks || {}).length > 0;
     },
     async close() {
       for (const watch of watches.values()) {
@@ -923,7 +929,7 @@ export async function openConversationKernel({
         messages = transcript.messages;
       } else {
         // Newest assistant that reported tokens, not blindly the last message.
-        // viewState is still required: a fixed-size descending scan can miss an
+        // The active transcript is still required: a fixed-size descending scan can miss an
         // older reported call and would change the old list API.
         const harnessView = await readView(conv.harnessId);
         usage = presentContext(latestCallUsage(harnessView?.entries)).usage;

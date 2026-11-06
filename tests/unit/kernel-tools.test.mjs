@@ -4,7 +4,7 @@ import path from 'node:path';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
-import { Type } from '@earendil-works/pi-ai';
+import { num, obj, opt, str } from '@earendil-works/pi-schema';
 import { parseSSE } from '../../src/core/sse.mjs';
 import { fauxTurnFromScript, offeredToolNames } from '../../src/kernel/faux-script.mjs';
 import {
@@ -158,9 +158,9 @@ test('withIntent: bash with description runs; the original tool does not see it'
   const wrapped = withIntent({
     name: 'bash',
     description: 'run a command',
-    parameters: Type.Object({
-      command: Type.String(),
-      timeout: Type.Optional(Type.Number()),
+    parameters: obj({
+      command: str(),
+      timeout: opt(num()),
     }),
     async execute(args) {
       seen = args;

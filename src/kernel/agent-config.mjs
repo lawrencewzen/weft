@@ -7,7 +7,7 @@
 // tool loads a body on demand. Children get environment and project_context,
 // not the others, and keep their own fixed instructions.
 import { randomUUID } from 'node:crypto';
-import { Type } from '@earendil-works/pi-ai';
+import { obj } from '@earendil-works/pi-schema';
 import { defineExtension, defineTool, section } from '@earendil-works/pi-durable';
 import { agentEventData, mapConvStatusToAgent } from '../core/agents.mjs';
 import { TOOLS } from '../core/config.mjs';
@@ -20,7 +20,7 @@ import { createSkillTool } from './skill-tool.mjs';
 import { isMainAgent, systemPromptSections } from './system-prompt.mjs';
 import { workspaceTools } from './tools.mjs';
 
-const LOOSE_PARAMS = Type.Object({}, { additionalProperties: true });
+const LOOSE_PARAMS = obj({}, { open: true });
 
 const DEFAULT_TITLE = 'New conversation';
 
