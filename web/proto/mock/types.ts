@@ -116,6 +116,8 @@ export type MockConv = {
   view: ConversationView;
   /** Language-dependent waiting line kept next to the view. */
   pending: Bilingual | null;
+  /** Language-dependent run error. */
+  error?: { code: string; message: Bilingual; canContinue: boolean } | null;
   items: MockItem[];
   tools: Record<string, MockTool>;
   changes: Change[];

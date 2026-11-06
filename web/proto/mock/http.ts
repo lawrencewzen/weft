@@ -105,7 +105,18 @@ function valueOf<T>(value: EntityValue, lang: Lang): T {
 }
 
 function langOf(url: URL): Lang {
-  return url.searchParams.get('lang') === 'en' ? 'en' : 'zh';
+  const query = url.searchParams.get('lang');
+  if (query === 'en' || query === 'zh') return query;
+  if (typeof window !== 'undefined') {
+    try {
+      const stored = window.localStorage?.getItem('weft_lang');
+      if (stored === 'en' || stored === 'zh') return stored;
+      if (document.documentElement.lang === 'en') return 'en';
+    } catch {
+      // ignore storage access errors
+    }
+  }
+  return 'zh';
 }
 
 function readBody(init?: RequestInit): Record<string, unknown> {
@@ -1731,8 +1742,8 @@ export function handleMockRequest(
   const continueMatch = /^\/api\/v2\/conversations\/([^/]+)\/continue$/.exec(path);
   if (continueMatch && method === 'POST') {
     const conv = getConv(db, decodeURIComponent(continueMatch[1]));
-    if (!conv) return fail(404, '对话不存在');
-    const result = continueConversation(db, conv, hub);
+    if (!conv) return fail(404, lang === 'en' ? 'Conversation not found' : '对话不存在');
+    const result = continueConversation(db, conv, hub, lang);
     if (!result.ok) {
       return fail(result.status, result.error, result.code);
     }

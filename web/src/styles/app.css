@@ -1016,12 +1016,14 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.6; backgroun
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 8px 12px;
+  padding: 10px 14px;
   border-radius: 10px;
   border: 1px solid var(--err-bg);
   background: var(--err-bg);
   color: var(--err-ink);
   font-size: var(--fs-ui);
+  width: 100%;
+  box-sizing: border-box;
 }
 .llm-error-text {
   display: flex;
@@ -1039,6 +1041,12 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.6; backgroun
   padding: 0 10px;
   font-size: var(--fs-ui);
   flex-shrink: 0;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  color: var(--ink);
+}
+.llm-error-continue:hover:not(:disabled) {
+  background: var(--hover);
 }
 .msg-truncated {
   display: flex;

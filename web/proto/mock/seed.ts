@@ -62,6 +62,7 @@ function conversation(input: {
   status?: ConversationView['status'];
   run?: RunState;
   archived?: boolean;
+  error?: MockConv['error'];
 }): MockConv {
   const tools = input.tools || {};
   return {
@@ -83,6 +84,7 @@ function conversation(input: {
       sends: [],
     },
     pending: null,
+    error: input.error || null,
     items: input.items,
     tools,
     changes: input.changes || [],
@@ -594,6 +596,11 @@ function failedConversation(now: number): MockConv {
     updatedAt: now - 10 * MINUTE,
     used: 12_000,
     status: 'failed',
+    error: {
+      code: 'model_failed',
+      message: hint('模型请求失败：503 Service Unavailable', 'Model request failed: 503 Service Unavailable'),
+      canContinue: true,
+    },
     run: {
       ...IDLE_RUN,
       status: 'failed',
@@ -617,6 +624,11 @@ function interruptedConversation(now: number): MockConv {
     updatedAt: now - 12 * MINUTE,
     used: 18_000,
     status: 'failed',
+    error: {
+      code: 'interrupted',
+      message: hint('服务中断，这一轮没有完成。', 'Service interrupted, this turn did not complete.'),
+      canContinue: true,
+    },
     run: {
       ...IDLE_RUN,
       status: 'failed',
@@ -627,7 +639,66 @@ function interruptedConversation(now: number): MockConv {
       },
     },
     items: [
-      user('interrupted-u1', '重构路由模块并添加错误拦截器。'),
+      user('interrupted-u1', '请分析当前路由模块的整体架构，并给出详细的重构方案和代码草稿。'),
+      assistant(
+        'interrupted-a1',
+        [
+          '### 路由模块现状分析',
+          '',
+          '目前路由集中在单一入口文件中，包含以下问题：',
+          '1. **职责过重**：协议校验、路由分发、错误捕获均在同一函数中。',
+          '2. **扩展性差**：新增接口需要改动多处核心映射表。',
+          '3. **测试困难**：无法单独针对单个路由分支进行单测。',
+          '',
+          '### 建议重构方案',
+          '- 将每个子路由拆分为独立的 handler。',
+          '- 统一错误拦截器处理 4xx 和 5xx。',
+          '- 使用中间件链管理鉴权和上下文注入。',
+          '',
+          '### 代码重构示意',
+          '```ts',
+          '// router.ts',
+          'export interface RouteHandler {',
+          '  path: string;',
+          '  method: "GET" | "POST" | "PUT" | "DELETE";',
+          '  handle(req: Request): Promise<Response>;',
+          '}',
+          '',
+          'export class Router {',
+          '  private routes = new Map<string, RouteHandler>();',
+          '',
+          '  register(route: RouteHandler) {',
+          '    this.routes.set(`${route.method}:${route.path}`, route);',
+          '  }',
+          '',
+          '  async dispatch(req: Request): Promise<Response> {',
+          '    const key = `${req.method}:${req.url}`;',
+          '    const handler = this.routes.get(key);',
+          '    if (!handler) {',
+          '      return new Response("Not Found", { status: 404 });',
+          '    }',
+          '    try {',
+          '      return await handler.handle(req);',
+          '    } catch (err) {',
+          '      return this.handleError(err);',
+          '    }',
+          '  }',
+          '',
+          '  private handleError(err: unknown): Response {',
+          '    console.error("Route error:", err);',
+          '    return new Response("Internal Server Error", { status: 500 });',
+          '  }',
+          '}',
+          '```',
+          '',
+          '### 实施步骤',
+          '1. 创建统一错误拦截中间件。',
+          '2. 迁移基础会话路由。',
+          '3. 迁移配置和凭据接口。',
+          '4. 增加集成测试覆盖率。',
+        ].join('\n'),
+      ),
+      user('interrupted-u2', '重构路由模块并添加错误拦截器。'),
     ],
   });
 }
@@ -642,6 +713,11 @@ function noModelFailedConversation(now: number): MockConv {
     status: 'failed',
     model: null,
     thinkingLevel: null,
+    error: {
+      code: 'no_model',
+      message: hint('未配置可用模型，无法发起调用。', 'No model configured, cannot run.'),
+      canContinue: false,
+    },
     run: {
       ...IDLE_RUN,
       status: 'failed',

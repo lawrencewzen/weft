@@ -248,13 +248,15 @@ export function CenterPane({
         demo={demo}
         hidePending={liveTools}
         workspace={workspace}
-        onContinue={actions.continueRun}
       />
       <Thread
         items={shownItems}
         toolsById={toolsById}
         lang={lang}
         running={conversation.run.status === 'running'}
+        failed={conversation.run.status === 'failed'}
+        error={conversation.run.error}
+        onContinue={actions.continueRun}
         pending={waitingForAgent(shownItems, {
           running: conversation.run.status === 'running',
           pending: optimistic.sending,

@@ -1,13 +1,13 @@
 // @vitest-environment jsdom
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { StatusBar } from './StatusBar';
 import type { components } from '../../../src/v2/contract.gen';
 
 type ConversationView = components['schemas']['ConversationView'];
 
-describe('StatusBar (T105-2)', () => {
+describe('StatusBar', () => {
   let root: Root | null = null;
   let host: HTMLDivElement | null = null;
 
@@ -32,26 +32,26 @@ describe('StatusBar (T105-2)', () => {
   });
 
   function makeConv(
-    error: components['schemas']['RunState']['error'],
-    status: ConversationView['status'] = 'failed',
+    title: string,
+    id = 'c-test',
   ): ConversationView {
     return {
-      id: 'c-test',
+      id,
       workspaceId: 'ws-1',
-      title: '测试对话',
+      title,
       updatedAt: 1000,
-      status,
+      status: 'idle',
       model: null,
       context: { used: 0, window: 128000, percent: 0, level: 'ok' },
       itemIds: [],
       run: {
-        status,
+        status: 'idle',
         startedAt: null,
         pendingText: null,
         canSend: true,
         canStop: false,
         lockedReason: null,
-        error,
+        error: null,
         lastActivityAt: null,
         stalledSince: null,
         activeTool: null,
@@ -59,106 +59,29 @@ describe('StatusBar (T105-2)', () => {
     };
   }
 
-  it('renders message, puts code in title attribute, and does not show code in text', async () => {
-    const conv = makeConv({
-      code: 'interrupted',
-      message: '服务中断，这一轮没有完成。',
-      canContinue: true,
-    });
+  it('renders conversation title and does not render error banner', async () => {
+    const conv = makeConv('测试对话标题');
 
     await act(async () => {
       root!.render(<StatusBar conversation={conv} lang="zh" />);
     });
 
-    const errorEl = host!.querySelector('[data-testid="next-run-error"]');
-    expect(errorEl).not.toBeNull();
-    expect(errorEl!.getAttribute('title')).toBe('interrupted');
-    expect(errorEl!.textContent).toContain('服务中断，这一轮没有完成。');
-    expect(errorEl!.textContent).not.toContain('interrupted');
+    const statusEl = host!.querySelector('[data-testid="next-status"]');
+    expect(statusEl).not.toBeNull();
+    expect(statusEl!.textContent).toContain('测试对话标题');
+    expect(host!.querySelector('[data-testid="next-run-error"]')).toBeNull();
+    expect(host!.querySelector('[data-testid="next-run-continue"]')).toBeNull();
   });
 
-  it('shows continue button when canContinue is true', async () => {
-    const conv = makeConv({
-      code: 'model_failed',
-      message: '模型请求失败：503',
-      canContinue: true,
-    });
+  it('renders new conversation placeholder when id is empty', async () => {
+    const conv = makeConv('新对话', '');
 
     await act(async () => {
       root!.render(<StatusBar conversation={conv} lang="zh" />);
     });
 
-    const btn = host!.querySelector('[data-testid="next-run-continue"]');
-    expect(btn).not.toBeNull();
-    expect(btn!.textContent).toBe('继续');
-  });
-
-  it('hides continue button when canContinue is false', async () => {
-    const conv = makeConv({
-      code: 'no_model',
-      message: '未配置可用模型',
-      canContinue: false,
-    });
-
-    await act(async () => {
-      root!.render(<StatusBar conversation={conv} lang="zh" />);
-    });
-
-    const btn = host!.querySelector('[data-testid="next-run-continue"]');
-    expect(btn).toBeNull();
-  });
-
-  it('calls onContinue when clicked, disables while waiting, and displays error if continue fails', async () => {
-    let rejectPromise: ((err: Error) => void) | null = null;
-    const onContinue = vi.fn().mockImplementation(() => new Promise((_, reject) => {
-      rejectPromise = reject;
-    }));
-
-    const conv = makeConv({
-      code: 'model_failed',
-      message: '模型请求失败：503',
-      canContinue: true,
-    });
-
-    await act(async () => {
-      root!.render(<StatusBar conversation={conv} lang="zh" onContinue={onContinue} />);
-    });
-
-    const btn = host!.querySelector<HTMLButtonElement>('[data-testid="next-run-continue"]')!;
-    expect(btn).not.toBeNull();
-    expect(btn.disabled).toBe(false);
-
-    // Click continue
-    await act(async () => {
-      btn.click();
-    });
-
-    expect(onContinue).toHaveBeenCalledTimes(1);
-    expect(btn.disabled).toBe(true);
-
-    // Reject the continue call
-    await act(async () => {
-      rejectPromise!(new Error('网络请求超时'));
-    });
-
-    expect(btn.disabled).toBe(false);
-    const errorEl = host!.querySelector('[data-testid="next-run-error"]')!;
-    expect(errorEl.textContent).toContain('网络请求超时');
-  });
-
-  it('displays in English when lang is en', async () => {
-    const conv = makeConv({
-      code: 'interrupted',
-      message: 'Service interrupted',
-      canContinue: true,
-    });
-
-    await act(async () => {
-      root!.render(<StatusBar conversation={conv} lang="en" />);
-    });
-
-    const btn = host!.querySelector('[data-testid="next-run-continue"]');
-    expect(btn).not.toBeNull();
-    expect(btn!.textContent).toBe('Continue');
+    const titleEl = host!.querySelector('.top-title');
+    expect(titleEl).not.toBeNull();
+    expect(titleEl!.textContent).toBe('新对话');
   });
 });
