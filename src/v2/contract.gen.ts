@@ -142,7 +142,7 @@ export interface paths {
         /**
          * 新建工作区
          * @description 请求体带 `source`：`local` 用本机目录（`path` 缺省时在数据目录下建空目录），`git` 克隆仓库。
-         *     本地路径校验与旧接口相同（resolveAllowedWorkspacePath）。Git 只允许 https / ssh / git@；存储的 URL 去掉凭据。
+         *     本地路径用 realpath。`$WEFT_DATA_DIR/workspaces` 之下始终允许；其它已存在路径不再要求位于 `WEFT_WORKSPACE_ROOT` 之下。仍拒绝文件系统根、`$HOME` 本身、`~/.ssh`、`~/.gnupg` 和系统目录。Git 只允许 https / ssh / git@；存储的 URL 去掉凭据。
          *     `connectionId` / `projectId` 走已保存的 Git 连接。成功后 `workspaces` 主题更新。失败原因按 `lang` 出成句，并带结构化 `code`。
          */
         post: operations["createWorkspace"];
@@ -160,8 +160,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * 可浏览的工作区根目录
-         * @description 与旧 GET /api/workspace-root 相同，返回 defaultWorkspaceRoot()。
+         * 文件夹浏览器的默认起点
+         * @description 与旧 GET /api/workspace-root 相同，返回 defaultWorkspaceRoot()。这是浏览起点，不是路径白名单。
          */
         get: operations["getWorkspaceRoot"];
         put?: never;
@@ -182,7 +182,8 @@ export interface paths {
         /**
          * 列出可浏览的子目录
          * @description 与旧 GET /api/workspace-root/dirs 相同，复用 listBrowsableDirs。
-         *     只列出允许根目录以内的文件夹；越界 400 E_PATH，文案按 lang 出成句。
+         *     缺省列出默认起点，也可以列到该起点之外，直到文件系统根。文件系统根和 `$HOME` 可浏览但不可选为工作区。
+         *     敏感目录（`~/.ssh`、`~/.gnupg`、系统目录）返回 400 E_PATH，文案按 lang 出成句。
          */
         get: operations["listWorkspaceRootDirs"];
         put?: never;
@@ -2194,7 +2195,7 @@ export interface components {
             /** @description GitLab 项目 id，需同时带 connectionId */
             projectId?: string | number;
         };
-        /** @description 新建工作区失败。路径越界带 allowedRoot；Git 失败带 code / via。 */
+        /** @description 新建工作区失败。路径被拒绝时带 allowedRoot（默认浏览起点，不是白名单边界）；Git 失败带 code / via。 */
         WorkspaceCreateError: {
             /** @description 按 lang 出成句 */
             error: string;
@@ -2220,7 +2221,7 @@ export interface components {
         WorkspaceDirs: {
             root: string;
             path: string;
-            /** @description 已在根目录时为 null */
+            /** @description 没有上一级，或上一级是敏感目录时为 null。文件系统根为 null。 */
             parent: null | string;
             selectable: boolean;
             git: boolean;
@@ -2245,7 +2246,7 @@ export interface components {
             path: string;
             git: boolean;
         };
-        /** @description 本地路径不在允许范围内。 */
+        /** @description 本地路径不能作为工作区（不存在、是文件系统根或主目录、或落在敏感目录）。allowedRoot 是默认浏览起点，不是白名单边界。 */
         PathNotAllowed: {
             /** @description 按 lang 出成句 */
             error: string;

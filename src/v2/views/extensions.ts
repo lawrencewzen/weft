@@ -276,9 +276,9 @@ export function pathErrorView(
 ): PathNotAllowed {
   const raw = asString(err.message);
   let text: string;
-  if (/not under an allowed workspace root|path is not allowed|path is forbidden/i.test(raw)) {
+  if (/not under an allowed workspace root/i.test(raw)) {
     text = allowedRoot ? phrase(lang, 'ws_err_path_root', { root: allowedRoot }) : phrase(lang, 'ws_err_path');
-  } else if (/^path\b/i.test(raw) || /path is /i.test(raw)) {
+  } else if (/path is not allowed|path is forbidden|^path\b|path is /i.test(raw)) {
     text = phrase(lang, 'ws_err_path');
   } else {
     text = phrase(lang, 'ws_err_generic');

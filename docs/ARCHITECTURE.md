@@ -77,7 +77,7 @@ flowchart LR
 { source: 'local' | 'git', gitUrl, branch, rootPath, worktrees: [] }
 ```
 
-本地 `path` 必须位于 `$WEFT_DATA_DIR/workspaces` 或 `$WEFT_WORKSPACE_ROOT`（默认 `$HOME/projects` 若存在，否则 `$HOME`）之下，且不得为 `/`、`$HOME` 本身、`~/.ssh`、`~/.gnupg` 或系统目录。省略 `path` 时在 data dir 下创建空仓库目录。
+本地 `path` 用 `realpath` 解析。`$WEFT_DATA_DIR/workspaces` 之下始终允许。其它已存在的路径不再要求位于 `$WEFT_WORKSPACE_ROOT` 之下（该变量只是文件夹浏览器的默认起点：未设置时为 `$HOME/projects`，该目录不存在则为 `$HOME`）。仍拒绝文件系统根、`$HOME` 本身、`~/.ssh`、`~/.gnupg` 和系统目录。省略 `path` 时在 data dir 下创建空仓库目录。
 
 **TODO：git worktree 尚未实现。** `worktrees` 目前恒为空数组，预留给后续 `git worktree add`（每个对话/Agent 独立工作树、互不覆盖工作区文件）。不要在当前版本假设存在多 worktree。
 
