@@ -91,5 +91,41 @@ describe('splitBreadcrumbs', () => {
       { name: '.ssh', path: '~\\.ssh' },
     ]);
   });
+
+  it('handles thisPc option for drives view and Windows paths', () => {
+    expect(splitBreadcrumbs('', { thisPc: '此电脑' })).toEqual([
+      { name: '此电脑', path: '' },
+    ]);
+    expect(splitBreadcrumbs('D:\\work\\sandbox', { thisPc: '此电脑' })).toEqual([
+      { name: '此电脑', path: '' },
+      { name: 'D:\\', path: 'D:\\' },
+      { name: 'work', path: 'D:\\work' },
+      { name: 'sandbox', path: 'D:\\work\\sandbox' },
+    ]);
+    expect(splitBreadcrumbs('D:\\', { thisPc: '此电脑', parent: '' })).toEqual([
+      { name: '此电脑', path: '' },
+      { name: 'D:\\', path: 'D:\\' },
+    ]);
+    expect(splitBreadcrumbs('C:', { thisPc: 'This PC' })).toEqual([
+      { name: 'This PC', path: '' },
+      { name: 'C:\\', path: 'C:\\' },
+    ]);
+  });
+
+  it('does not prepend thisPc for non-Windows paths unless parent is empty string', () => {
+    expect(splitBreadcrumbs('/Users/alice/projects', { thisPc: '此电脑' })).toEqual([
+      { name: '/', path: '/' },
+      { name: 'Users', path: '/Users' },
+      { name: 'alice', path: '/Users/alice' },
+      { name: 'projects', path: '/Users/alice/projects' },
+    ]);
+    expect(splitBreadcrumbs('/', { thisPc: '此电脑', parent: null })).toEqual([
+      { name: '/', path: '/' },
+    ]);
+    expect(splitBreadcrumbs('~/.ssh', { thisPc: '此电脑' })).toEqual([
+      { name: '~', path: '~' },
+      { name: '.ssh', path: '~/.ssh' },
+    ]);
+  });
 });
 
