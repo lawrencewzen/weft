@@ -25,6 +25,7 @@ import type {
   MockConv,
   MockDb,
   MockGroup,
+  MockNote,
   MockTool,
   FollowUp,
   RunHandle,
@@ -1116,4 +1117,55 @@ export function continueConversation(db: MockDb, conv: MockConv, hub: MockHub, l
   }
   const runId = startRun(db, conv, hub, lang === 'en' ? 'Continue' : '继续');
   return { ok: true, runId };
+}
+
+const COMPACT_MS = 1800;
+
+export type CompactResult = { ok: true; taskId: string } | { ok: false; status: number; error: string; code?: string };
+
+/** POST /compact: always accepted. Running conversations place the summary at the next boundary. */
+export function compactConversation(db: MockDb, conv: MockConv, hub: MockHub): CompactResult {
+  const taskId = nextId(db, 'compact');
+  conv.compaction = { state: 'running', trigger: 'manual' };
+  publishConversationView(conv, hub);
+  const settle = (): void => {
+    if (conv.run) {
+      conv.compactTimer = window.setTimeout(settle, 400);
+      return;
+    }
+    conv.compactTimer = undefined;
+    if (conv.compactFails) {
+      conv.compaction = {
+        state: 'failed',
+        trigger: 'manual',
+        error: {
+          zh: '压缩失败：模型请求超时',
+          en: 'Compaction failed: model request timed out',
+        },
+      };
+    } else {
+      conv.compaction = { state: 'idle' };
+      const note: MockNote = {
+        kind: 'system_note',
+        id: nextId(db, 'note'),
+        noteKind: 'compaction',
+        text: '已压缩较早的上下文',
+        i18n: { zh: '已压缩较早的上下文', en: 'Earlier context was compacted' },
+      };
+      conv.items.push(note);
+      conv.view.itemIds.push(note.id);
+      conv.view.context = {
+        ...conv.view.context,
+        used: Math.round(conv.view.context.window * 0.12),
+        percent: 12,
+        level: 'ok',
+      };
+      publishItem(conv, hub, note);
+    }
+    touch(conv);
+    publishConversationView(conv, hub);
+  };
+  if (conv.compactTimer) window.clearTimeout(conv.compactTimer);
+  conv.compactTimer = window.setTimeout(settle, COMPACT_MS);
+  return { ok: true, taskId };
 }

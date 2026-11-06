@@ -761,6 +761,50 @@ function truncatedConversation(now: number): MockConv {
   });
 }
 
+function compactedConversation(now: number): MockConv {
+  return conversation({
+    id: 'c-compacted',
+    workspaceId: 'ws-weft',
+    title: '压缩过的长对话',
+    updatedAt: now - 14 * MINUTE,
+    used: 36_000,
+    items: [
+      user('compacted-u1', '把 store 里的订阅逻辑拆成独立模块。'),
+      assistant('compacted-a1', '已经拆成 `subscribe.ts`，store 只保留数据读写。'),
+      {
+        kind: 'system_note',
+        id: 'compacted-n1',
+        noteKind: 'compaction',
+        text: '已压缩较早的上下文',
+        i18n: hint('已压缩较早的上下文', 'Earlier context was compacted'),
+      },
+      user('compacted-u2', '再补一组订阅取消的单测。'),
+      assistant('compacted-a2', '补了 3 个用例，覆盖重复取消和取消后不再收到事件。'),
+    ],
+  });
+}
+
+function compactFailedConversation(now: number): MockConv {
+  const conv = conversation({
+    id: 'c-compact-failed',
+    workspaceId: 'ws-weft',
+    title: '压缩失败示例',
+    updatedAt: now - 15 * MINUTE,
+    used: 168_000,
+    items: [
+      user('cfail-u1', '继续梳理剩下的接口迁移清单。'),
+      assistant('cfail-a1', '清单已经整理到第 6 项，剩余部分见下一条。'),
+    ],
+  });
+  conv.compactFails = true;
+  conv.compaction = {
+    state: 'failed',
+    trigger: 'threshold',
+    error: hint('压缩失败：模型请求超时', 'Compaction failed: model request timed out'),
+  };
+  return conv;
+}
+
 function testsConversation(now: number): MockConv {
   const grep = tool({
     id: 'tests-t1',
@@ -1334,6 +1378,8 @@ export function createSeed(now: number): MockDb {
     interruptedConversation(now),
     noModelFailedConversation(now),
     truncatedConversation(now),
+    compactedConversation(now),
+    compactFailedConversation(now),
     askConversation(now),
     testsConversation(now),
     docsConversation(now, subagents),
@@ -1423,5 +1469,6 @@ export function createSeed(now: number): MockDb {
     messagePastes: new Map(),
     workspaceUploads: new Map(),
     glab: seedGlab(),
+    settings: { compaction: { triggerPercent: 80 } },
   };
 }

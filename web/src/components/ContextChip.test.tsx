@@ -2,8 +2,8 @@
 
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ContextBanner, ContextChip } from './ContextChip';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { ContextChip } from './ContextChip';
 import type { ContextUsage } from '../data/composerModel';
 
 let root: Root | null = null;
@@ -77,38 +77,5 @@ describe('ContextChip component', () => {
 
     const chip = host?.querySelector('[data-testid="next-context-chip"]');
     expect(chip?.classList.contains('is-warn')).toBe(true);
-  });
-
-  it('renders ContextBanner only when warn or full', async () => {
-    const onNewChat = vi.fn();
-    const okContext: ContextUsage = {
-      used: 10_000,
-      window: 64_000,
-      percent: 15,
-      level: 'ok',
-    };
-
-    await render(<ContextBanner lang="zh" context={okContext} onNewChat={onNewChat} />);
-    expect(host?.querySelector('[data-testid="next-context-banner"]')).toBeNull();
-
-    await cleanup();
-
-    const warnContext: ContextUsage = {
-      used: 52_000,
-      window: 64_000,
-      percent: 81,
-      level: 'warn',
-    };
-
-    await render(<ContextBanner lang="zh" context={warnContext} onNewChat={onNewChat} />);
-    const banner = host?.querySelector('[data-testid="next-context-banner"]');
-    expect(banner).not.toBeNull();
-    expect(banner?.textContent).toContain('81%');
-
-    const newBtn = host?.querySelector('[data-testid="next-context-new"]') as HTMLButtonElement;
-    await act(async () => {
-      newBtn.click();
-    });
-    expect(onNewChat).toHaveBeenCalled();
   });
 });

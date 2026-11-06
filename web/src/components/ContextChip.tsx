@@ -13,31 +13,6 @@ type Props = {
   selected?: ComposerModelOption | null;
 };
 
-export function ContextBanner({
-  lang,
-  context,
-  onNewChat,
-}: {
-  lang: Lang;
-  context: ContextUsage;
-  onNewChat: () => void;
-}) {
-  if (!contextIsWarn(context.level)) return null;
-  return (
-    <div className="composer-ctx-banner" data-testid="next-context-banner" data-level={context.level}>
-      <span>{t(lang, 'ctx_banner', { n: context.percent })}</span>
-      <button
-        type="button"
-        className="composer-ctx-new"
-        data-testid="next-context-new"
-        onClick={onNewChat}
-      >
-        {t(lang, 'ctx_banner_new')}
-      </button>
-    </div>
-  );
-}
-
 export function ContextChip({ lang, context, selected }: Props) {
   const warn = contextIsWarn(context.level);
   const remain = contextRemainPercent(context);

@@ -14,7 +14,7 @@ import {
   recomputeContext,
   touch,
 } from './db';
-import { continueConversation, sendMessage, stopConversation, withdrawMessage } from './run';
+import { compactConversation, continueConversation, sendMessage, stopConversation, withdrawMessage } from './run';
 import { parseSendImages } from '../../../src/v2/views/message-images';
 import { inferCustomProviderBrand, inferModelBrand } from './brand';
 import { mockProviderName } from './providerNames';
@@ -1020,6 +1020,24 @@ export function handleMockRequest(
     return ok({});
   }
 
+  if (path === '/api/v2/settings') {
+    if (method === 'PUT') {
+      const next = body.compaction as { triggerPercent?: unknown } | undefined;
+      if (next !== undefined) {
+        const n = next?.triggerPercent;
+        if (typeof n !== 'number' || !Number.isInteger(n) || n < 60 || n > 90) {
+          return fail(
+            400,
+            lang === 'en' ? 'triggerPercent must be an integer from 60 to 90' : 'triggerPercent 必须是 60 到 90 的整数',
+            'E_BAD_REQUEST',
+          );
+        }
+        db.settings.compaction.triggerPercent = n;
+      }
+    }
+    return ok({ compaction: { ...db.settings.compaction } });
+  }
+
   if (path === '/api/v2/service') {
     return ok({
       protocolVersion: '2.0.0',
@@ -1748,6 +1766,17 @@ export function handleMockRequest(
       return fail(result.status, result.error, result.code);
     }
     return accepted({ runId: result.runId });
+  }
+  const compactMatch = /^\/api\/v2\/conversations\/([^/]+)\/compact$/.exec(path);
+  if (compactMatch && method === 'POST') {
+    const conv = getConv(db, decodeURIComponent(compactMatch[1]));
+    if (!conv) return fail(404, lang === 'en' ? 'Conversation not found' : '对话不存在');
+    if (body.instructions !== undefined && typeof body.instructions !== 'string') {
+      return fail(400, 'instructions must be a string', 'E_BAD_REQUEST');
+    }
+    const result = compactConversation(db, conv, hub);
+    if (!result.ok) return fail(result.status, result.error, result.code);
+    return accepted({ taskId: result.taskId });
   }
   const toolMatch = /^\/api\/v2\/conversations\/([^/]+)\/tools\/([^/]+)\/output$/.exec(path);
   if (toolMatch && method === 'GET') {

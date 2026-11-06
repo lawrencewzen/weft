@@ -36,6 +36,7 @@ type Props = {
   onManage: () => void;
   contextWindow?: number;
   onSetContextWindow?: (window: number | null) => void;
+  compact?: { state: 'idle' | 'running' | 'failed'; error?: string | null; onCompact: () => void };
 };
 
 export function ModelChip({
@@ -49,6 +50,7 @@ export function ModelChip({
   onManage,
   contextWindow = 0,
   onSetContextWindow,
+  compact,
 }: Props) {
   const [open, setOpen] = useState(false);
   const [subMenu, setSubMenu] = useState<'model' | 'thinking' | 'context' | null>(null);
@@ -541,6 +543,25 @@ export function ModelChip({
                   <span className="v">{contextWindow ? formatTokenCount(contextWindow) : ''}</span>
                 </div>
               )}
+
+              {compact ? (
+                <button
+                  type="button"
+                  className={`dr${compact.error ? ' is-err' : ''}`}
+                  data-testid="next-menu-compact"
+                  data-state={compact.state}
+                  disabled={compact.state === 'running'}
+                  aria-busy={compact.state === 'running'}
+                  onClick={compact.onCompact}
+                >
+                  <span className="k">{t(lang, 'ctx_compact')}</span>
+                  <span className="v">
+                    {compact.state === 'running' ? (
+                      <span className="run-spin" data-testid="next-compact-spin" aria-hidden="true"><span /></span>
+                    ) : compact.error || ''}
+                  </span>
+                </button>
+              ) : null}
 
               <div className="mfoot">
                 <span>{t(lang, 'model_only_this_chat')}</span>
