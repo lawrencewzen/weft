@@ -123,11 +123,22 @@ test('providers: rows, groups, expand, custom add/edit, cancel rollback, no 服�
   await page.getByTestId('next-settings-nav-providers').click();
 
   const rows = page.getByTestId('next-provider-row');
-  await expect(rows).toHaveCount(3);
+  await expect(rows).toHaveCount(5);
   await expect(rows.nth(0)).toContainText('DeepSeek');
   await expect(rows.nth(1)).toContainText('Anthropic');
   await expect(rows.nth(1)).toContainText('k7Qa');
-  await expect(rows.nth(2)).toContainText('内网网关');
+  const dsRow = rows.filter({ hasText: '自建 DeepSeek' });
+  const glmRow = rows.filter({ hasText: '智谱 GLM' });
+  const gwRow = rows.filter({ hasText: '内网网关' });
+  await expect(dsRow).toBeVisible();
+  await expect(glmRow).toBeVisible();
+  await expect(gwRow).toBeVisible();
+
+  // T100-2: Custom provider icons: DeepSeek, ChatGLM, plug
+  await expect(dsRow.locator('.mp-av .brand-icon img')).toHaveAttribute('src', /DeepSeek/);
+  await expect(glmRow.locator('.mp-av .brand-icon img')).toHaveAttribute('src', /ChatGLM/);
+  await expect(gwRow.locator('.mp-av .brand-icon .brand-icon-plug')).toBeVisible();
+
   await expect(page.getByTestId('next-provider-group')).toHaveCount(1);
   await expect(page.locator('[data-testid=next-provider-group][data-group="apikey"]')).toBeVisible();
   await expect(page.locator('#root')).not.toContainText('服务商');
@@ -162,9 +173,21 @@ test('providers: rows, groups, expand, custom add/edit, cancel rollback, no 服�
   await ctxInput.press('Enter');
   await expect(page.locator('[data-testid=next-model-row][data-model="deepseek-flash"] .mp-num .mp-v').first()).toHaveText('500K');
 
-  // Cancel rollback: cancel must close dialog
+  // Expand '内网网关' to check its model icons
+  await gwRow.click();
+  const qwenModelRow = page.locator('[data-testid=next-model-row][data-model="qwen3-coder-480b"]');
+  const glmModelRow = page.locator('[data-testid=next-model-row][data-model="glm-5.2-fp8"]');
+  const internalModelRow = page.locator('[data-testid=next-model-row][data-model="my-internal-model"]');
+  await expect(qwenModelRow.locator('.mp-mt-name .brand-icon img')).toHaveAttribute('src', /Qwen/);
+  await expect(glmModelRow.locator('.mp-mt-name .brand-icon img')).toHaveAttribute('src', /ChatGLM/);
+  await expect(internalModelRow.locator('.mp-mt-name .brand-icon .brand-icon-plug')).toBeVisible();
+  await gwRow.click();
+
+  // Cancel rollback: cancel must close dialog. customOnly shows only the custom card.
+
   await page.getByTestId('next-provider-add').click();
   await expect(page.getByTestId('next-add-dialog')).toBeVisible();
+  await expect(page.locator('[data-testid=next-vendor-card]')).toHaveCount(1);
   await expect(page.locator('[data-testid=next-vendor-card][data-vendor="custom"]')).toBeVisible();
   const addClose = page.getByTestId('next-add-close');
   await expect(addClose).toHaveCSS('border-style', 'none');
@@ -174,7 +197,7 @@ test('providers: rows, groups, expand, custom add/edit, cancel rollback, no 服�
   expect(Math.abs((addCloseBox?.height ?? 0) - 25.2)).toBeLessThan(1);
   await page.getByTestId('next-add-cancel').click();
   await expect(page.getByTestId('next-add-dialog')).toHaveCount(0);
-  await expect(rows).toHaveCount(3);
+  await expect(rows).toHaveCount(5);
 
   // 验证未设为全局默认的提供商编辑时默认模型显示「未选择」
   const gatewayRow = rows.filter({ hasText: '内网网关' });
@@ -196,7 +219,7 @@ test('providers: rows, groups, expand, custom add/edit, cancel rollback, no 服�
   await expect(page.getByTestId('next-add-thinking-dropdown')).toContainText('跟随模型');
   await page.getByTestId('next-provider-finish').click();
   await expect(page.getByTestId('next-add-dialog')).toHaveCount(0);
-  await expect(rows).toHaveCount(4);
+  await expect(rows).toHaveCount(6);
   await expect(rows.filter({ hasText: 'Local vLLM' })).toBeVisible();
 
   // 编辑改名（默认模型不变）
@@ -238,7 +261,7 @@ test('providers: rows, groups, expand, custom add/edit, cancel rollback, no 服�
   await page.getByTestId('next-provider-delete').click();
   await page.getByTestId('next-confirm-ok').click();
   await expect(rows.filter({ hasText: 'Local vLLM Renamed' })).toHaveCount(0);
-  await expect(rows).toHaveCount(3);
+  await expect(rows).toHaveCount(5);
 
   expectClean(state);
 });
@@ -247,10 +270,10 @@ test('deleting all providers shows the no-model state', async ({ page }) => {
   const state = await openProto(page);
   await page.getByTestId('next-open-settings').click();
   await page.getByTestId('next-settings-nav-providers').click();
-  await expect(page.getByTestId('next-provider-row')).toHaveCount(3);
+  await expect(page.getByTestId('next-provider-row')).toHaveCount(5);
 
   // Delete all seeded providers
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < 5; i++) {
     await page.getByTestId('next-provider-row').first().getByTestId('next-provider-more').click();
     await page.getByTestId('next-provider-delete').click();
     await page.getByTestId('next-confirm-ok').click();

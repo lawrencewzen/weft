@@ -142,7 +142,7 @@ export interface paths {
         /**
          * 新建工作区
          * @description 请求体带 `source`：`local` 用本机目录（`path` 缺省时在数据目录下建空目录），`git` 克隆仓库。
-         *     本地路径校验与旧接口相同（resolveAllowedWorkspacePath）。Git 只允许 https / ssh / git@；存储的 URL 去掉凭据。
+         *     本地路径用 realpath。`$WEFT_DATA_DIR/workspaces` 之下先判断、始终允许（含该目录位于 `/var` 时）。其它已存在路径不再要求位于 `WEFT_WORKSPACE_ROOT` 之下。仍拒绝 `/`、`~/.ssh`、`~/.gnupg` 和系统目录；用户主目录本身允许。路径已是未移除的本地工作区时返回那一条，不另建。Git 只允许 https / ssh / git@；存储的 URL 去掉凭据。
          *     `connectionId` / `projectId` 走已保存的 Git 连接。成功后 `workspaces` 主题更新。失败原因按 `lang` 出成句，并带结构化 `code`。
          */
         post: operations["createWorkspace"];
@@ -160,8 +160,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * 可浏览的工作区根目录
-         * @description 与旧 GET /api/workspace-root 相同，返回 defaultWorkspaceRoot()。
+         * 文件夹浏览器的默认起点
+         * @description 与旧 GET /api/workspace-root 相同，返回 defaultWorkspaceRoot()。这是浏览起点，不是路径白名单。
          */
         get: operations["getWorkspaceRoot"];
         put?: never;
@@ -182,11 +182,38 @@ export interface paths {
         /**
          * 列出可浏览的子目录
          * @description 与旧 GET /api/workspace-root/dirs 相同，复用 listBrowsableDirs。
-         *     只列出允许根目录以内的文件夹；越界 400 E_PATH，文案按 lang 出成句。
+         *     缺省列出默认起点，也可以列到该起点之外。`parent` 可以一路走到文件系统根，再往上为 null。`/` 可浏览但不可选为工作区；用户主目录可以选。
+         *     敏感目录（`~/.ssh`、`~/.gnupg`、系统目录）返回 400 E_PATH，文案按 lang 出成句。
          */
         get: operations["listWorkspaceRootDirs"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/workspace-root/pick": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 弹出系统选择文件夹窗口
+         * @description 浏览器拿不到本机完整路径，由本机服务端弹系统窗口，对标桌面端 Select folder。
+         *     只有请求 Host 是回环地址（127.0.0.1、localhost、[::1]，可带端口）时才弹；其它 Host 返回 unsupported，避免远程访问时窗口弹到服务器桌面上。
+         *     环境变量 WEFT_FOLDER_PICKER=off 时一律 unsupported。
+         *     同一时间只弹一个窗口；已有窗口时后来的请求等待同一次结果。10 分钟无结果则结束该进程并返回 cancelled。
+         *     macOS 用 osascript 的 choose folder（argv，不经 shell）。其它平台目前返回 unsupported。
+         *     起点目录是 defaultWorkspaceRoot()。选中路径再走与 resolveAllowedWorkspacePath 相同的敏感目录校验，被拦时 400 PathNotAllowed。
+         *     无请求体。与其它写接口一样，Content-Type 须为 application/json。
+         */
+        post: operations["pickWorkspaceFolder"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1692,7 +1719,7 @@ export interface components {
             /** @description 内置为 catalog id（如 deepseek）；自定义为 custom- + 8 位 hex */
             id: string;
             kind: components["schemas"]["ProviderKind"];
-            /** @description 品牌图标 id。自定义为 null */
+            /** @description 品牌图标 id。自定义提供商仅当模型非空、且每个模型的 brand 相同且非空时取该品牌，否则为 null */
             brand: null | string;
             name: string;
             api?: components["schemas"]["CustomApi"];
@@ -2196,12 +2223,11 @@ export interface components {
             /** @description GitLab 项目 id，需同时带 connectionId */
             projectId?: string | number;
         };
-        /** @description 新建工作区失败。路径越界带 allowedRoot；Git 失败带 code / via。 */
+        /** @description 新建工作区失败。路径被拒绝时 code 为 E_PATH；Git 失败带 code / via。 */
         WorkspaceCreateError: {
             /** @description 按 lang 出成句 */
             error: string;
             code?: string;
-            allowedRoot?: string;
             detail?: string;
             via?: string;
         };
@@ -2222,25 +2248,37 @@ export interface components {
         WorkspaceDirs: {
             root: string;
             path: string;
-            /** @description 已在根目录时为 null */
+            /** @description 没有上一级，或上一级是敏感目录时为 null。文件系统根为 null。 */
             parent: null | string;
             selectable: boolean;
             git: boolean;
             entries: components["schemas"]["WorkspaceDirEntry"][];
             truncated: boolean;
         };
+        /** @description POST /api/v2/workspace-root/pick 的 200 响应。 */
+        WorkspaceFolderPick: {
+            /** @constant */
+            status: "picked";
+            /** @description 选中的绝对路径 */
+            path: string;
+        } | {
+            /** @constant */
+            status: "cancelled";
+        } | {
+            /** @constant */
+            status: "unsupported";
+        };
         WorkspaceDirEntry: {
             name: string;
             path: string;
             git: boolean;
         };
-        /** @description 本地路径不在允许范围内。 */
+        /** @description 本地路径不能作为工作区（不存在、是 `/`、或落在 `~/.ssh`、`~/.gnupg` 和系统目录）。用户主目录本身允许。 */
         PathNotAllowed: {
             /** @description 按 lang 出成句 */
             error: string;
             /** @constant */
             code: "E_PATH";
-            allowedRoot: string;
         };
         /** @description 插件。失败原因由服务端按 lang 出成句。 */
         Plugin: {
@@ -2838,6 +2876,65 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PathNotAllowed"];
+                };
+            };
+            /** @description 客户端错误 */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 服务端错误 */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+        };
+    };
+    pickWorkspaceFolder: {
+        parameters: {
+            query?: {
+                /** @description 路径错误文案语言。 */
+                lang?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description picked 带绝对路径；cancelled 为用户取消或超时；unsupported 为当前环境不能弹窗。 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceFolderPick"];
+                };
+            };
+            /** @description 选中的路径不允许 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PathNotAllowed"];
+                };
+            };
+            /** @description 未授权 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
                 };
             };
             /** @description 客户端错误 */

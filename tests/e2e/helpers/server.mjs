@@ -53,6 +53,8 @@ export async function startServer({ script = 'basic.json', dataDir, port = 0, ex
     // Never launch a real terminal window from e2e (T51-12). extraEnv can override with a JSONL path.
     WEFT_TERMINAL_MOCK: '1',
     ...extraEnv,
+    // T101-2: never open a real folder dialog from e2e. extraEnv cannot turn it back on.
+    WEFT_FOLDER_PICKER: 'off',
   };
   if (!Object.prototype.hasOwnProperty.call(extraEnv, 'WEFT_LAUNCHED_BY')) delete env.WEFT_LAUNCHED_BY;
   if (!Object.prototype.hasOwnProperty.call(extraEnv, 'WEFT_IDLE_EXIT_MINUTES')) delete env.WEFT_IDLE_EXIT_MINUTES;

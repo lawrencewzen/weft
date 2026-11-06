@@ -96,7 +96,23 @@ function restStartsWithBrand(rest: string, brand: BrandRecord): boolean {
   return false;
 }
 
-/** Match model ids against keyword regexes; first hit wins. */
+/**
+ * Substring fallbacks used only after the generated rule table misses.
+ * Brand ids are the ones already present in brand-data.json (ernie → Wenxin).
+ * Order is the task list; the first contained keyword wins.
+ */
+const MODEL_KEYWORD_BRANDS: ReadonlyArray<readonly [string, string]> = [
+  ['deepseek', 'DeepSeek'],
+  ['qwen', 'Qwen'],
+  ['kimi', 'Kimi'],
+  ['minimax', 'Minimax'],
+  ['doubao', 'Doubao'],
+  ['hunyuan', 'Hunyuan'],
+  ['ernie', 'Wenxin'],
+  ['baichuan', 'Baichuan'],
+];
+
+/** Match model ids against keyword regexes; first hit wins. GLM is special-cased first. */
 export function createBrandIcons(data: BrandData | null | undefined): BrandIcons {
   const brands = Array.isArray(data?.brands) ? data.brands : [];
   const byId = new Map<unknown, BrandRecord>();
@@ -119,8 +135,14 @@ export function createBrandIcons(data: BrandData | null | undefined): BrandIcons
   function brandForModel(modelId: unknown): BrandRecord | null {
     const model = asText(modelId).toLowerCase();
     if (!model) return null;
+    // Any "glm" substring is ChatGLM, ahead of the rule table. The table maps
+    // glm-5 / glm-4 to ZAI and glm-4v to GLMV; those names are ChatGLM too.
+    if (model.includes('glm')) return resolveBrand('ChatGLM');
     for (const rule of rules) {
       if (rule.patterns.some((re) => re.test(model))) return resolveBrand(rule.brand);
+    }
+    for (const [keyword, brandId] of MODEL_KEYWORD_BRANDS) {
+      if (model.includes(keyword)) return resolveBrand(brandId);
     }
     return null;
   }

@@ -56,6 +56,7 @@ type Props = {
   onConfirm: (opts: ConfirmOpts) => Promise<boolean>;
   onRemoveWorkspace: (workspaceId: string) => Promise<void>;
   onNewWorkspace: () => void;
+  wsBusy?: boolean;
 };
 
 export function Sidebar({
@@ -66,6 +67,7 @@ export function Sidebar({
   onConfirm,
   onRemoveWorkspace,
   onNewWorkspace,
+  wsBusy = false,
 }: Props) {
   const { workspaces, groups, chats, archived } = useWorkspaces();
   const { status } = useSession();
@@ -310,13 +312,14 @@ export function Sidebar({
             <span>{t(lang, 'projects_label')}</span>
             <button
               type="button"
-              className="sb-sec-add add btn-icon-xs"
+              className={`sb-sec-add add btn-icon-xs${wsBusy ? ' is-busy' : ''}`}
               data-testid="next-ws-new"
+              disabled={wsBusy}
               title={t(lang, 'add_project')}
               aria-label={t(lang, 'new_workspace')}
               onClick={onNewWorkspace}
             >
-              {PLUS_ICON}
+              {wsBusy ? <span className="sb-spin" aria-hidden="true" /> : PLUS_ICON}
             </button>
           </div>
 
@@ -342,11 +345,12 @@ export function Sidebar({
             {!groups.length ? (
               <button
                 type="button"
-                className="sb-row row sb-add-project"
+                className={`sb-row row sb-add-project${wsBusy ? ' is-busy' : ''}`}
                 data-testid="next-ws-empty-add"
+                disabled={wsBusy}
                 onClick={onNewWorkspace}
               >
-                <span className="sb-ic ic" aria-hidden="true">{PLUS_ICON}</span>
+                <span className="sb-ic ic" aria-hidden="true">{wsBusy ? <span className="sb-spin" aria-hidden="true" /> : PLUS_ICON}</span>
                 <span className="sb-row-text">{t(lang, 'add_project')}</span>
               </button>
             ) : null}

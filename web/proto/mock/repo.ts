@@ -146,7 +146,7 @@ function ignoreRules(repo: MockRepo): IgnoreRule[] {
 
 function hiddenInFullTree(filePath: string): boolean {
   const parts = filePath.split('/');
-  return parts.includes('.git') || parts.includes('node_modules');
+  return parts.includes('.git');
 }
 
 function ancestorIgnored(filePath: string, ignoredDirs: Set<string>): boolean {
@@ -755,6 +755,10 @@ export function seedWeftRepo(): MockRepo {
     {
       path: '.gitignore',
       text: ['node_modules/', 'public-next/', 'design/prototype/index.html', '.env', 'dist/', 'secret.log', ''].join('\n'),
+    },
+    {
+      path: 'node_modules/.package-lock.json',
+      text: '{\n  "name": "weft",\n  "lockfileVersion": 3\n}\n',
     },
     {
       path: 'dist/bundle.js',

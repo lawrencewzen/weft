@@ -372,8 +372,34 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.6; backgroun
   opacity: 0; width: 22px; height: 22px; border-radius: 6px; display: flex; align-items: center; justify-content: center;
   cursor: pointer; color: var(--mute); border: none; background: transparent; padding: 0;
 }
+.sb-sec-add[data-testid="next-ws-new"] {
+  opacity: 1;
+  color: var(--mute);
+}
 .sb-sec:hover .sb-sec-add, .sec:hover .add { opacity: 1; }
 .sb-sec-add:hover, .sec .add:hover { background: var(--hover); color: var(--ink); }
+.sb-sec-add.is-busy,
+.sb-sec-add:disabled,
+.sb-sec-add[data-testid="next-ws-new"]:disabled,
+.sb-add-project.is-busy,
+.sb-add-project:disabled {
+  pointer-events: none;
+  opacity: .7;
+}
+.sb-sec .sb-sec-add.is-busy,
+.sb-sec-add[data-testid="next-ws-new"].is-busy {
+  opacity: 1;
+}
+.sb-spin {
+  width: 12px;
+  height: 12px;
+  border: 1.5px solid var(--line);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin .8s linear infinite;
+  display: inline-block;
+  vertical-align: middle;
+}
 
 .sb-scroll, .scroll {
   flex: 1; overflow-y: auto; overflow-x: hidden; min-height: 0; padding-bottom: 8px; display: flex; flex-direction: column; gap: 2px;
@@ -2622,6 +2648,10 @@ button.file-tree-row:hover { background: var(--side); }
 .file-tree-row.is-dir { color: var(--ink2); }
 .file-tree-row.is-dir .ws-chev { width: 12px; height: 12px; flex-shrink: 0; transition: transform .15s; }
 .file-tree-row.is-open .ws-chev { transform: rotate(90deg); }
+.file-tree-row.is-ignored,
+.file-tree-row.is-ignored .file-tree-name { color: var(--faint); }
+.file-tree-row.is-ignored.active,
+.file-tree-row.is-ignored.active .file-tree-name { color: var(--ink); }
 .file-tree-name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-family: var(--mono); font-size: var(--fs-sm); }
 .file-tree-row.is-dir .file-tree-name { font-family: var(--font); font-size: var(--fs-sm); }
 .file-tree-mod { font-family: var(--mono); font-size: var(--fs-xs); color: var(--wait-ink); }

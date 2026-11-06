@@ -10,6 +10,7 @@ import deepseek from '@lobehub/icons-static-svg/icons/deepseek.svg?raw';
 import moonshot from '@lobehub/icons-static-svg/icons/moonshot.svg?raw';
 import kimi from '@lobehub/icons-static-svg/icons/kimi.svg?raw';
 import zhipu from '@lobehub/icons-static-svg/icons/zhipu.svg?raw';
+import chatglm from '@lobehub/icons-static-svg/icons/chatglm.svg?raw';
 import openrouter from '@lobehub/icons-static-svg/icons/openrouter.svg?raw';
 import ollama from '@lobehub/icons-static-svg/icons/ollama.svg?raw';
 import lmstudio from '@lobehub/icons-static-svg/icons/lmstudio.svg?raw';
@@ -55,6 +56,7 @@ const ICONS: Record<string, string> = {
   moonshot,
   kimi,
   zhipu,
+  chatglm,
   openrouter,
   ollama,
   lmstudio,

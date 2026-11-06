@@ -1,5 +1,12 @@
 import { useCallback, useEffect, useRef, useState, type MouseEvent, type PointerEvent } from 'react';
-import { removeWorkspace } from '../data/api';
+import {
+  ApiError,
+  createWorkspace,
+  pickWorkspaceRoot,
+  removeWorkspace,
+  type WorkspacePickResult,
+} from '../data/api';
+import { dirBasename } from '../data/gitSettings';
 import type { Lang } from '../data/lang';
 import {
   clampNum,
@@ -187,7 +194,50 @@ function AppShellLayout({
     resolve: (ok: boolean) => void;
   } | null>(null);
   const [wsDialog, setWsDialog] = useState(false);
+  const [wsBusy, setWsBusy] = useState(false);
+  const wsBusyRef = useRef(false);
   const [quickOpen, setQuickOpen] = useState(false);
+
+  const handleNewWorkspace = useCallback(async () => {
+    if (wsBusyRef.current) return;
+    wsBusyRef.current = true;
+    setWsBusy(true);
+    try {
+      let pickResult: WorkspacePickResult;
+      try {
+        pickResult = await pickWorkspaceRoot(lang);
+      } catch (err: unknown) {
+        if (err instanceof ApiError && (err.code === 'E_PATH' || err.status === 400)) {
+          onToast(err.message);
+          return;
+        }
+        setWsDialog(true);
+        return;
+      }
+
+      if (pickResult.status === 'cancelled') {
+        return;
+      }
+      if (pickResult.status === 'unsupported') {
+        setWsDialog(true);
+        return;
+      }
+      if (pickResult.status === 'picked') {
+        try {
+          const name = dirBasename(pickResult.path) || pickResult.path;
+          const ws = await createWorkspace({ name, source: 'local', path: pickResult.path }, lang);
+          writeActiveWorkspace(ws.id);
+          onToast(t(lang, 'ws_created', { name: ws.name }));
+          navigate(draftPath(ws.id));
+        } catch (err: unknown) {
+          onToast(err instanceof Error ? err.message : String(err));
+        }
+      }
+    } finally {
+      wsBusyRef.current = false;
+      setWsBusy(false);
+    }
+  }, [lang, onToast]);
   const leftWRef = useRef(leftW);
   leftWRef.current = leftW;
   const rightWRef = useRef(width);
@@ -352,7 +402,8 @@ function AppShellLayout({
         onToast={onToast}
         onConfirm={askConfirm}
         onRemoveWorkspace={onRemoveWorkspace}
-        onNewWorkspace={() => setWsDialog(true)}
+        wsBusy={wsBusy}
+        onNewWorkspace={handleNewWorkspace}
       />
       <div
         className="col-divider"
@@ -376,7 +427,7 @@ function AppShellLayout({
         maximized={maximized}
         lang={lang}
         demo={demo}
-        onNewWorkspace={() => setWsDialog(true)}
+        onNewWorkspace={handleNewWorkspace}
       />
       <div
         className="col-divider"

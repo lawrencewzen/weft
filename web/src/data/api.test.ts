@@ -19,6 +19,7 @@ import {
   openWorkspaceTerminal,
   isConflictError,
   isUnauthenticatedError,
+  pickWorkspaceRoot,
   refreshWorkspaceGit,
   removeWorkspace,
   saveWorkspaceFile,
@@ -280,6 +281,33 @@ describe('api client', () => {
       return true;
     });
   });
+
+  it('pickWorkspaceRoot calls POST /api/v2/workspace-root/pick', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse(200, { status: 'picked', path: '/Users/test/proj' }))
+      .mockResolvedValueOnce(jsonResponse(200, { status: 'cancelled' }))
+      .mockResolvedValueOnce(jsonResponse(200, { status: 'unsupported' }))
+      .mockResolvedValueOnce(jsonResponse(400, { error: 'Path is not allowed', code: 'E_PATH' }, 'Bad Request'));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(pickWorkspaceRoot('en')).resolves.toEqual({ status: 'picked', path: '/Users/test/proj' });
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/v2/workspace-root/pick?lang=en');
+    expect(fetchMock.mock.calls[0][1]).toMatchObject({ method: 'POST' });
+
+    await expect(pickWorkspaceRoot()).resolves.toEqual({ status: 'cancelled' });
+    expect(fetchMock.mock.calls[1][0]).toBe('/api/v2/workspace-root/pick');
+
+    await expect(pickWorkspaceRoot()).resolves.toEqual({ status: 'unsupported' });
+
+    await expect(pickWorkspaceRoot()).rejects.toSatisfy((err: unknown) => {
+      expect(err).toBeInstanceOf(ApiError);
+      expect((err as ApiError).status).toBe(400);
+      expect((err as ApiError).code).toBe('E_PATH');
+      expect((err as ApiError).message).toBe('Path is not allowed');
+      return true;
+    });
+  });
+
 
   it('creates a no-project conversation without a workspace id', async () => {
     const created = {

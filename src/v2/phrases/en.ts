@@ -116,7 +116,6 @@ export const en: Record<string, string> = {
   ws_err_git_timeout: 'Clone timed out. Try again later.',
   ws_err_git_unknown: 'Clone failed.',
   ws_err_path: 'That local path cannot be used',
-  ws_err_path_root: 'That path is outside the allowed root: {root}',
   ws_err_generic: 'Could not create workspace',
   chat_workspace: 'Chat',
   ws_err_conn_auth: 'Authentication failed. The token is invalid or expired. Test the connection again in Settings → Git.',

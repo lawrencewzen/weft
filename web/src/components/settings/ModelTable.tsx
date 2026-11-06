@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { formatNumber } from '../../data/providerFormat';
 import type { Provider } from '../../data/providerTypes';
 import { t, type Lang } from '../../i18n';
+import { BrandIcon } from '../BrandIcon';
 
 type Props = {
   provider: Provider;
@@ -126,7 +127,8 @@ export function ModelTable({
                 className={`mp-c mp-mt-name${m.enabled ? '' : ' mp-mt-off'}`}
                 title={m.id}
               >
-                {m.name}
+                <BrandIcon brand={m.brand} size={14} />
+                <span className="mp-mt-name-text">{m.name}</span>
               </span>
 
               {/* Col 2: Context Window */}
