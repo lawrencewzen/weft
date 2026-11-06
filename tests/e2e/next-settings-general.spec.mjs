@@ -146,3 +146,34 @@ test('about page shows the service version', async ({ page }) => {
   await expect(page.getByTestId('next-about-version')).toHaveText(info.serviceVersion);
   await expect(page.getByTestId('next-settings-about')).not.toContainText('致谢');
 });
+
+test('auto-compact trigger is validated, saved on the server and survives reload', async ({ page }) => {
+  await boot(page);
+  await page.getByTestId('next-open-settings').click();
+  const input = page.getByTestId('next-pref-compact-trigger');
+  await expect(input).toHaveValue('80');
+  const err = page.getByTestId('next-pref-compact-error');
+  for (const bad of ['59', '91', '1.5']) {
+    await input.fill(bad);
+    await input.press('Enter');
+    await expect(err).toBeVisible();
+  }
+  const afterBad = await page.evaluate(async () => (await fetch('/api/v2/settings')).json());
+  expect(afterBad.compaction.triggerPercent).toBe(80);
+
+  for (const good of ['60', '90']) {
+    const saved = page.waitForResponse((res) => (
+      /\/api\/v2\/settings$/.test(new URL(res.url()).pathname)
+      && res.request().method() === 'PUT'
+      && res.ok()
+    ));
+    await input.fill(good);
+    await input.press('Enter');
+    await saved;
+    await expect(err).toHaveCount(0);
+  }
+
+  await page.reload();
+  await expect(page.getByTestId('next-settings-general')).toBeVisible();
+  await expect(page.getByTestId('next-pref-compact-trigger')).toHaveValue('90');
+});

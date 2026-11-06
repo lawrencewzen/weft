@@ -59,6 +59,7 @@ type Props = {
   failed?: boolean;
   error?: components['schemas']['RunState']['error'];
   onContinue?: (requestId?: string) => Promise<unknown>;
+  compaction?: components['schemas']['RunState']['compaction'];
 };
 
 
@@ -206,11 +207,18 @@ export function Thread({
   failed = false,
   error = null,
   onContinue,
+  compaction,
 }: Props) {
   const { providers } = useProviders();
   const scroller = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
   const empty = items.length === 0;
+  const compacting = compaction?.state === 'running';
+  // A blocking compaction failure also lands as the run error with the same sentence: show it once.
+  const compactionError = !compacting && compaction?.state === 'failed' && compaction.error
+    && !(failed && error?.message === compaction.error)
+    ? compaction.error
+    : null;
 
   const continueReq = useRef(createSendRequest());
   const [continueBusy, setContinueBusy] = useState(false);
@@ -245,7 +253,7 @@ export function Thread({
     const padBottom = inner ? parseFloat(getComputedStyle(inner).paddingBottom) || 0 : 0;
     const maxScroll = Math.max(0, el.scrollHeight - el.clientHeight);
     el.scrollTop = maxScroll <= padBottom + 1 ? 0 : maxScroll;
-  }, [items, pending, stickNonce, failed, error?.message]);
+  }, [items, pending, stickNonce, failed, error?.message, compacting, compactionError]);
 
   useLayoutEffect(() => {
     const el = scroller.current;
@@ -334,7 +342,12 @@ export function Thread({
         {!empty && changes.length ? (
           <ChangeSummary changes={changes} lang={lang} />
         ) : null}
-        {pending ? (
+        {compacting ? (
+          <div className="thread-pending" data-testid="next-thread-compacting">
+            <span className="run-spin" aria-hidden="true"><span /></span>
+            <span className="thread-pending-text">{t(lang, 'compacting_context')}</span>
+          </div>
+        ) : pending ? (
           <div className="thread-pending" data-testid="next-thread-pending">
             <span className="run-spin" aria-hidden="true"><span /></span>
             <span className="thread-pending-text">{pendingText || t(lang, 'pending_thinking')}</span>
@@ -362,6 +375,13 @@ export function Thread({
                 {t(lang, 'btn_continue')}
               </button>
             ) : null}
+          </div>
+        ) : null}
+        {compactionError ? (
+          <div className="llm-error" data-testid="next-compaction-error" role="alert">
+            <div className="llm-error-text">
+              <span>{compactionError}</span>
+            </div>
           </div>
         ) : null}
       </div>

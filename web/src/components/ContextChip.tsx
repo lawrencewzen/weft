@@ -11,34 +11,10 @@ type Props = {
   lang: Lang;
   context: ContextUsage;
   selected?: ComposerModelOption | null;
+  onOpen?: () => void;
 };
 
-export function ContextBanner({
-  lang,
-  context,
-  onNewChat,
-}: {
-  lang: Lang;
-  context: ContextUsage;
-  onNewChat: () => void;
-}) {
-  if (!contextIsWarn(context.level)) return null;
-  return (
-    <div className="composer-ctx-banner" data-testid="next-context-banner" data-level={context.level}>
-      <span>{t(lang, 'ctx_banner', { n: context.percent })}</span>
-      <button
-        type="button"
-        className="composer-ctx-new"
-        data-testid="next-context-new"
-        onClick={onNewChat}
-      >
-        {t(lang, 'ctx_banner_new')}
-      </button>
-    </div>
-  );
-}
-
-export function ContextChip({ lang, context, selected }: Props) {
+export function ContextChip({ lang, context, selected, onOpen }: Props) {
   const warn = contextIsWarn(context.level);
   const remain = contextRemainPercent(context);
   const ringRadius = 7.5;
@@ -46,10 +22,13 @@ export function ContextChip({ lang, context, selected }: Props) {
   const windowTokens = context.window || selected?.contextWindow || 0;
 
   return (
-    <span
+    <button
+      type="button"
       className={`context-chip${warn ? ' is-warn' : ''}`}
       data-testid="next-context-chip"
       data-level={context.level}
+      aria-haspopup="true"
+      onClick={onOpen}
       title={t(lang, 'ctx_title', {
         used: formatTokenCount(context.used),
         window: formatTokenCount(windowTokens),
@@ -70,6 +49,6 @@ export function ContextChip({ lang, context, selected }: Props) {
         />
       </svg>
       <span className="context-chip-pct">{t(lang, 'ctx_percent', { n: context.percent })}</span>
-    </span>
+    </button>
   );
 }

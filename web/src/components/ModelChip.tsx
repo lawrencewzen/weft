@@ -36,6 +36,9 @@ type Props = {
   onManage: () => void;
   contextWindow?: number;
   onSetContextWindow?: (window: number | null) => void;
+  /** Bump to open the menu straight on the Context submenu (the context percent chip). */
+  openContextNonce?: number;
+  compact?: { state: 'idle' | 'running' | 'failed'; error?: string | null; onCompact: () => void };
 };
 
 export function ModelChip({
@@ -49,6 +52,8 @@ export function ModelChip({
   onManage,
   contextWindow = 0,
   onSetContextWindow,
+  compact,
+  openContextNonce = 0,
 }: Props) {
   const [open, setOpen] = useState(false);
   const [subMenu, setSubMenu] = useState<'model' | 'thinking' | 'context' | null>(null);
@@ -78,6 +83,24 @@ export function ModelChip({
     setIsInline(needed > cssW || cssW < 640);
   }, []);
 
+  const latest = useRef({ open, subMenu, canSetContext });
+  latest.current = { open, subMenu, canSetContext };
+  useEffect(() => {
+    if (!openContextNonce) return;
+    const cur = latest.current;
+    if (cur.open && cur.subMenu === 'context') {
+      setOpen(false);
+      setSubMenu(null);
+      return;
+    }
+    setRecentRaw(readRecentModels());
+    checkFit();
+    setCtxCustom('');
+    setCtxError(null);
+    setSubMenu(cur.canSetContext ? 'context' : null);
+    setOpen(true);
+  }, [openContextNonce, checkFit]);
+
   const handleOpen = useCallback(() => {
     setRecentRaw(readRecentModels());
     checkFit();
@@ -92,7 +115,9 @@ export function ModelChip({
     checkFit();
     const onResize = () => checkFit();
     const onDown = (ev: MouseEvent) => {
-      if (!wrap.current?.contains(ev.target as Node)) {
+      const target = ev.target as Element;
+      if (target.closest?.('[data-testid="next-context-chip"]')) return;
+      if (!wrap.current?.contains(target)) {
         setOpen(false);
         setSubMenu(null);
       }
@@ -295,6 +320,27 @@ export function ModelChip({
 
   const contextListContent = selected && canSetContext ? (
     <div className="context-menu-list">
+      {compact ? (
+        <>
+          <button
+            type="button"
+            className={`mi${compact.error ? ' is-err' : ''}`}
+            data-testid="next-menu-compact"
+            data-state={compact.state}
+            disabled={compact.state === 'running'}
+            aria-busy={compact.state === 'running'}
+            onClick={compact.onCompact}
+          >
+            <span className="tt"><b>{t(lang, 'ctx_compact')}</b></span>
+            {compact.state === 'running' ? (
+              <span className="run-spin" data-testid="next-compact-spin" aria-hidden="true"><span /></span>
+            ) : compact.error ? (
+              <span className="meta">{compact.error}</span>
+            ) : null}
+          </button>
+          <div className="context-menu-sep" role="separator" />
+        </>
+      ) : null}
       <div className="model-menu-label dmenu-label">
         {t(lang, 'ctx_sub_title', { model: selected.displayName })}
       </div>

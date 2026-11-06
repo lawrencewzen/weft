@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { AgentsStrip } from './AgentsStrip';
 import { StallStrip } from './StallStrip';
-import { patchConversation, putModelContextWindow, type SendMessageFile, type ThinkingLevel } from '../data/api';
+import { compactConversation, patchConversation, putModelContextWindow, type SendMessageFile, type ThinkingLevel } from '../data/api';
 import {
   IMAGE_MAX_COUNT,
   type ComposerHint,
@@ -15,7 +15,6 @@ import { useAtMention } from './composer/useAtMention';
 import { useComposerAttachments } from './composer/useComposerAttachments';
 import {
   clampThinkingLevel,
-  contextIsWarn,
   groupComposerModels,
   hasAvailableModels,
   resolveComposerSelection,
@@ -35,7 +34,7 @@ import { t } from '../i18n';
 import { writeActiveWorkspace } from '../data/layout';
 import { subscribePrefs } from '../data/prefs';
 import { useRightActions } from '../data/rightPaneContext';
-import { ContextBanner, ContextChip } from './ContextChip';
+import { ContextChip } from './ContextChip';
 import { DemoModelBadge } from './DemoModelBadge';
 import { ModelChip } from './ModelChip';
 import { WorkspaceChip } from './WorkspaceChip';
@@ -132,6 +131,9 @@ export function Composer({
   onWithdrawQueue,
 }: Props) {
   const [draft, setDraft] = useState('');
+  const [compactBusy, setCompactBusy] = useState(false);
+  const [ctxOpenNonce, setCtxOpenNonce] = useState(0);
+  const [compactRequestError, setCompactRequestError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hint, setHint] = useState<ComposerHint | null>(null);
@@ -210,7 +212,6 @@ export function Composer({
     att.pastes.length > 0;
   const canSend = hasPayload && !locked && !att.hasUploading && !att.hasUploadError;
   const stopMode = run.canStop && !hasPayload;
-  const showBanner = showModelControls && !noModel && contextIsWarn(context.level);
   const running = run.status === 'running';
   const showNewline = !running && Boolean(draft.trim());
   const placeholder = noModel
@@ -354,16 +355,28 @@ export function Composer({
     openSettings('providers');
   }
 
-  function openNewChat() {
-    if (!workspaceId) return;
-    navigate(draftPath(workspaceId));
+  const compactionState = run.compaction?.state ?? 'idle';
+  const compactRunning = compactBusy || compactionState === 'running';
+  const compactError = compactRequestError
+    || (compactionState === 'failed' ? run.compaction?.error || null : null);
+
+  async function requestCompact() {
+    if (!conversationId || compactRunning) return;
+    setCompactBusy(true);
+    setCompactRequestError(null);
+    try {
+      await compactConversation(conversationId);
+    } catch (err) {
+      setCompactRequestError(errorMessage(err, t(lang, 'send_failed')));
+    } finally {
+      setCompactBusy(false);
+    }
   }
 
   const boxClass = [
     'composer-box',
     focused ? 'is-focused' : '',
     noModel ? 'is-no-model' : '',
-    showBanner ? 'is-ctx-warn' : '',
     att.dragging ? 'is-drop' : '',
     att.hasTagItems || queue.length ? 'is-tagged' : '',
   ].filter(Boolean).join(' ');
@@ -385,7 +398,6 @@ export function Composer({
           onDragLeave={att.onDragLeave}
           onDrop={att.onDrop}
         >
-          {showBanner ? <ContextBanner lang={lang} context={context} onNewChat={openNewChat} /> : null}
           <div className="composer-body">
             {queue.length || att.hasTagItems ? (
               <div className="composer-tags" data-testid="next-composer-tags">
@@ -511,6 +523,12 @@ export function Composer({
                       onManage={openManage}
                       contextWindow={selected?.contextWindow || context.window}
                       onSetContextWindow={(w) => { void setWindow(w); }}
+                      openContextNonce={ctxOpenNonce}
+                      compact={conversationId && !isDraft ? {
+                        state: compactRunning ? 'running' : compactionState,
+                        error: compactError,
+                        onCompact: () => { void requestCompact(); },
+                      } : undefined}
                     />
                   ) : null}
                   <WorkspaceChip
@@ -561,6 +579,7 @@ export function Composer({
                     lang={lang}
                     context={context}
                     selected={selected}
+                    onOpen={() => setCtxOpenNonce((n) => n + 1)}
                   />
                 ) : null}
                 {stopMode ? (

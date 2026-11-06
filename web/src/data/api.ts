@@ -92,6 +92,8 @@ export type {
   ProviderStatus,
   ProviderStatusState,
 };
+export type CompactionSettings = components['schemas']['CompactionSettingsView'];
+export type CompactAccepted = components['schemas']['CompactAccepted'];
 export type SkillWriteRequest = components['schemas']['SkillWriteRequest'];
 export type GitConnection = components['schemas']['GitConnection'];
 export type GitConnectionList = components['schemas']['GitConnectionList'];
@@ -772,5 +774,23 @@ export function deleteSkill(id: string): Promise<OkId> {
   return requestJson<OkId>(`/api/v2/skills/${encodeURIComponent(id)}`, {
     method: 'DELETE',
     body: '{}',
+  });
+}
+
+export function compactConversation(cid: string): Promise<CompactAccepted> {
+  return requestJson<CompactAccepted>(conversationPath(cid, '/compact'), {
+    method: 'POST',
+    body: '{}',
+  });
+}
+
+export function getSettings(): Promise<CompactionSettings> {
+  return requestJson<CompactionSettings>('/api/v2/settings');
+}
+
+export function putCompactionTrigger(triggerPercent: number): Promise<CompactionSettings> {
+  return requestJson<CompactionSettings>('/api/v2/settings', {
+    method: 'PUT',
+    body: JSON.stringify({ compaction: { triggerPercent } }),
   });
 }
