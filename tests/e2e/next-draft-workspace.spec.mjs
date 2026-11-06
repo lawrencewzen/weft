@@ -244,8 +244,7 @@ test('creating a workspace from the chip menu selects it for the draft', async (
     await expect(page.getByTestId('next-ws-dialog')).toBeVisible();
     const gamma = page.getByTestId('next-dir-row').filter({ hasText: 'gamma' });
     await expect(gamma).toBeVisible();
-    await gamma.getByTestId('next-dir-choose').click();
-    await page.getByTestId('next-ws-name').fill('gamma');
+    await gamma.click();
     await page.getByTestId('next-ws-create').click();
     await expect(page.getByTestId('next-ws-dialog')).toHaveCount(0);
     await expect(wsNode(page, 'gamma')).toBeVisible();

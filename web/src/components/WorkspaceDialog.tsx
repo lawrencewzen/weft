@@ -8,7 +8,6 @@ import {
   type GitBranch,
   type GitProject,
   type Workspace,
-  type WorkspaceDirEntry,
   type WorkspaceDirs,
 } from '../data/api';
 import { dirBasename, isGitlabKind } from '../data/gitSettings';
@@ -16,7 +15,10 @@ import type { Lang } from '../data/lang';
 import { draftPath, navigate } from '../data/nav';
 import { writeActiveWorkspace } from '../data/layout';
 import { useExtensions } from '../data/useExtensions';
+import { splitBreadcrumbs } from '../data/workspacePath';
 import { t } from '../i18n';
+
+const GIT_IMPORT_ENABLED = false;
 
 type Props = {
   lang: Lang;
@@ -37,7 +39,8 @@ export function WorkspaceDialog({ lang, onClose, onToast, onCreated }: Props) {
   const [tab, setTab] = useState<Tab>('local');
   const [name, setName] = useState('');
   const [nameTouched, setNameTouched] = useState(false);
-  const [path, setPath] = useState('');
+  const [pathInput, setPathInput] = useState('');
+  const [navigated, setNavigated] = useState(false);
   const [gitUrl, setGitUrl] = useState('');
   const [branch, setBranch] = useState('');
   const [source, setSource] = useState<GitSource>('pick');
@@ -73,6 +76,7 @@ export function WorkspaceDialog({ lang, onClose, onToast, onCreated }: Props) {
     }).then((listed) => {
       if (cancelled || !listed) return;
       setDirs(listed);
+      setPathInput(listed.path);
     }).catch((err) => {
       if (!cancelled) setDirError(failText(err));
     });
@@ -81,7 +85,7 @@ export function WorkspaceDialog({ lang, onClose, onToast, onCreated }: Props) {
 
   const connIdForProjects = conn?.id;
   useEffect(() => {
-    if (!connIdForProjects) {
+    if (!GIT_IMPORT_ENABLED || !connIdForProjects) {
       setProjects([]);
       setProjectsError('');
       return;
@@ -105,7 +109,7 @@ export function WorkspaceDialog({ lang, onClose, onToast, onCreated }: Props) {
   const selectedProjectId = selected?.id;
   const selectedDefaultBranch = selected?.defaultBranch;
   useEffect(() => {
-    if (!connIdForProjects || !selectedProjectId) {
+    if (!GIT_IMPORT_ENABLED || !connIdForProjects || !selectedProjectId) {
       setBranches([]);
       setDefaultBranch('');
       return;
@@ -125,12 +129,12 @@ export function WorkspaceDialog({ lang, onClose, onToast, onCreated }: Props) {
   }, [connIdForProjects, selectedProjectId, selectedDefaultBranch, lang]);
 
   useEffect(() => {
-    if (tab !== 'git' || source !== 'pick' || !selected || nameTouched) return;
+    if (!GIT_IMPORT_ENABLED || tab !== 'git' || source !== 'pick' || !selected || nameTouched) return;
     setName(dirBasename(selected.path));
   }, [tab, source, selected, nameTouched]);
 
   useEffect(() => {
-    if (!defaultBranch) return;
+    if (!GIT_IMPORT_ENABLED || !defaultBranch) return;
     setBranch((current) => {
       if (current && branches.some((item) => item.name === current)) return current;
       return defaultBranch;
@@ -139,27 +143,65 @@ export function WorkspaceDialog({ lang, onClose, onToast, onCreated }: Props) {
 
   async function enterDir(nextPath: string) {
     setDirError('');
+    setError('');
     try {
       const listed = await listWorkspaceDirs(nextPath, lang);
       setDirs(listed);
+      setPathInput(listed.path);
+      setNavigated(true);
     } catch (err) {
       setDirError(failText(err));
     }
   }
 
-  function chooseDir(entry: WorkspaceDirEntry | { path: string; name: string }) {
-    setPath(entry.path);
-    if (!nameTouched) setName(entry.name || dirBasename(entry.path));
+  async function handlePathJump(rawPath: string) {
+    const target = rawPath.trim();
+    if (!target) return;
+    setDirError('');
+    setError('');
+    try {
+      const listed = await listWorkspaceDirs(target, lang);
+      setDirs(listed);
+      setPathInput(listed.path);
+      setNavigated(true);
+    } catch (err) {
+      setDirError(failText(err));
+    }
   }
 
+  const breadcrumbs = useMemo(() => {
+    return splitBreadcrumbs(dirs?.path || root);
+  }, [dirs?.path, root]);
+
+  const canCreate = GIT_IMPORT_ENABLED
+    ? (tab === 'git' || (navigated && Boolean(dirs?.selectable) && !busy))
+    : (navigated && Boolean(dirs?.selectable) && !busy);
+
   async function submit() {
+    if (!GIT_IMPORT_ENABLED || tab === 'local') {
+      if (!dirs || !canCreate) return;
+      const targetPath = dirs.path;
+      const wsName = dirBasename(targetPath) || targetPath;
+      setBusy(true);
+      setError('');
+      try {
+        const ws = await createWorkspace({ name: wsName, source: 'local', path: targetPath }, lang);
+        writeActiveWorkspace(ws.id);
+        onCreated?.(ws);
+        onToast(t(lang, 'ws_created', { name: ws.name }));
+        navigate(draftPath(ws.id));
+        onClose();
+      } catch (err) {
+        setError(failText(err));
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
+
     const wsName = name.trim();
     if (!wsName) {
       setError(t(lang, 'ws_name_required'));
-      return;
-    }
-    if (tab === 'local' && !path.trim()) {
-      setError(t(lang, 'ws_path_required'));
       return;
     }
     if (tab === 'git' && source === 'address' && !gitUrl.trim()) {
@@ -174,9 +216,7 @@ export function WorkspaceDialog({ lang, onClose, onToast, onCreated }: Props) {
     setError('');
     try {
       let ws: Workspace;
-      if (tab === 'local') {
-        ws = await createWorkspace({ name: wsName, source: 'local', path: path.trim() }, lang);
-      } else if (source === 'address') {
+      if (source === 'address') {
         const body: { name: string; source: 'git'; gitUrl: string; branch?: string } = {
           name: wsName,
           source: 'git',
@@ -231,100 +271,88 @@ export function WorkspaceDialog({ lang, onClose, onToast, onCreated }: Props) {
           {t(lang, 'new_workspace')}
           <button type="button" className="confirm-close" onClick={onClose} aria-label={t(lang, 'btn_cancel')}>×</button>
         </h3>
-        <div className="ns-seg">
-          <button
-            type="button"
-            className={tab === 'local' ? 'is-on' : ''}
-            data-testid="next-ws-tab-local"
-            onClick={() => { setTab('local'); setError(''); }}
-          >
-            {t(lang, 'ws_local_tab')}
-          </button>
-          <button
-            type="button"
-            className={tab === 'git' ? 'is-on' : ''}
-            data-testid="next-ws-tab-git"
-            onClick={() => { setTab('git'); setError(''); }}
-          >
-            {t(lang, 'ws_git_tab')}
-          </button>
-        </div>
+        {GIT_IMPORT_ENABLED ? (
+          <div className="ns-seg">
+            <button
+              type="button"
+              className={tab === 'local' ? 'is-on' : ''}
+              data-testid="next-ws-tab-local"
+              onClick={() => { setTab('local'); setError(''); }}
+            >
+              {t(lang, 'ws_local_tab')}
+            </button>
+            <button
+              type="button"
+              className={tab === 'git' ? 'is-on' : ''}
+              data-testid="next-ws-tab-git"
+              onClick={() => { setTab('git'); setError(''); }}
+            >
+              {t(lang, 'ws_git_tab')}
+            </button>
+          </div>
+        ) : null}
         <div className="ns-ws-body">
-          {tab === 'local' ? (
+          {(!GIT_IMPORT_ENABLED || tab === 'local') ? (
             <>
               <div className="ns-field">
-                <label>{t(lang, 'ws_name_label')}</label>
-                <input
-                  className="ns-input"
-                  data-testid="next-ws-name"
-                  value={name}
-                  placeholder={t(lang, 'ws_name_placeholder')}
-                  onChange={(ev) => {
-                    setName(ev.target.value);
-                    setNameTouched(true);
-                  }}
-                />
-              </div>
-              <div className="ns-field">
-                <label>{t(lang, 'ws_path_label')}</label>
                 <input
                   className="ns-input is-mono"
                   data-testid="next-ws-path"
-                  value={path}
-                  readOnly
+                  value={pathInput}
                   placeholder={t(lang, 'ws_path_placeholder')}
+                  onChange={(ev) => setPathInput(ev.target.value)}
+                  onKeyDown={(ev) => {
+                    if (ev.key === 'Enter') {
+                      ev.preventDefault();
+                      void handlePathJump(pathInput);
+                    }
+                  }}
                 />
-                <div className="ns-field-hint">{t(lang, 'ws_path_hint', { root: dirs?.root || root })}</div>
+                {dirError ? <div className="ns-inline-err" data-testid="next-ws-dir-error">{dirError}</div> : null}
               </div>
               <div className="ns-dir-browser">
                 <div className="ns-dir-bar">
-                  <span className="mono ns-dir-now" title={dirs?.path || root}>{dirs?.path || root}</span>
-                  {dirs?.parent ? (
-                    <button
-                      type="button"
-                      className="ns-btn ns-btn-sm"
-                      data-testid="next-dir-up"
-                      onClick={() => { void enterDir(dirs.parent as string); }}
-                    >
-                      {t(lang, 'ws_dir_up')}
-                    </button>
-                  ) : null}
-                  {dirs?.selectable ? (
-                    <button
-                      type="button"
-                      className="ns-btn ns-btn-sm"
-                      data-testid="next-dir-choose-current"
-                      onClick={() => chooseDir({ path: dirs.path, name: dirBasename(dirs.path) })}
-                    >
-                      {t(lang, 'ws_dir_choose_current')}
-                    </button>
-                  ) : null}
+                  <nav className="ns-breadcrumbs" aria-label="Breadcrumb" data-testid="next-breadcrumbs">
+                    {breadcrumbs.map((crumb, idx) => {
+                      const isLast = idx === breadcrumbs.length - 1;
+                      return (
+                        <span key={crumb.path} className="ns-breadcrumb-item-wrap">
+                          {idx > 0 ? <span className="ns-breadcrumb-sep">/</span> : null}
+                          <button
+                            type="button"
+                            className={`ns-breadcrumb-item${isLast ? ' is-current' : ''}`}
+                            data-testid="next-breadcrumb-item"
+                            disabled={isLast || busy}
+                            onClick={() => { void enterDir(crumb.path); }}
+                            title={crumb.path}
+                          >
+                            {crumb.name}
+                          </button>
+                        </span>
+                      );
+                    })}
+                  </nav>
                 </div>
-                {dirError ? <div className="ns-inline-err">{dirError}</div> : null}
                 <div className="ns-dir-list">
                   {(dirs?.entries || []).map((entry) => (
                     <div
                       key={entry.path}
-                      className={`ns-dir-row${path === entry.path ? ' is-on' : ''}`}
+                      className="ns-dir-row"
                       data-testid="next-dir-row"
                       data-path={entry.path}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => { void enterDir(entry.path); }}
+                      onKeyDown={(ev) => {
+                        if (ev.key === 'Enter' || ev.key === ' ') {
+                          ev.preventDefault();
+                          void enterDir(entry.path);
+                        }
+                      }}
                     >
-                      <button
-                        type="button"
-                        className="ns-dir-name"
-                        onClick={() => { void enterDir(entry.path); }}
-                        onDoubleClick={() => chooseDir(entry)}
-                      >
-                        {entry.name}
-                      </button>
-                      <button
-                        type="button"
-                        className="ns-dir-pick"
-                        data-testid="next-dir-choose"
-                        onClick={() => chooseDir(entry)}
-                      >
-                        {t(lang, 'ws_dir_choose')}
-                      </button>
+                      <span className="ns-dir-name">{entry.name}</span>
+                      {entry.git ? <span className="ns-git-badge" data-testid="next-dir-git-badge">Git</span> : null}
+                      <span className="ns-dir-arrow" aria-hidden="true">›</span>
                     </div>
                   ))}
                   {dirs && dirs.entries.length === 0 ? (
@@ -542,7 +570,7 @@ export function WorkspaceDialog({ lang, onClose, onToast, onCreated }: Props) {
             type="button"
             className="btn p"
             data-testid="next-ws-create"
-            disabled={busy}
+            disabled={!canCreate || busy}
             onClick={() => { void submit(); }}
           >
             {busy ? cloningLabel : t(lang, 'btn_create')}

@@ -19,6 +19,7 @@ import { parseSendImages } from '../../../src/v2/views/message-images';
 import { mockProviderName } from './providerNames';
 import { replyInSubThread, stopSubThread, subagentKey } from './subagents';
 import { branchesOf, pluginForLang, tokenFails } from './extensions';
+import { isBlockedPath, showProtoPickModal } from './pickModal';
 import {
   EXTERNAL_TOUCH_MS,
   createRepo,
@@ -604,6 +605,39 @@ function handlePatchProvider(
 type MockDir = { entries: WorkspaceDirEntry[]; git: boolean };
 
 const DIRS: Record<string, MockDir> = {
+  'D:\\': {
+    git: false,
+    entries: [
+      { name: 'work', path: 'D:\\work', git: false },
+      { name: 'Users', path: 'D:\\Users', git: false },
+    ],
+  },
+  'D:\\Users': {
+    git: false,
+    entries: [
+      { name: 'user', path: 'D:\\Users\\user', git: false },
+    ],
+  },
+  'D:\\Users\\user': {
+    git: false,
+    entries: [
+      { name: '.ssh', path: 'D:\\Users\\user\\.ssh', git: false },
+    ],
+  },
+  'D:\\Users\\user\\.ssh': {
+    git: false,
+    entries: [],
+  },
+  '~': {
+    git: false,
+    entries: [
+      { name: '.ssh', path: '~\\.ssh', git: false },
+    ],
+  },
+  '~\\.ssh': {
+    git: false,
+    entries: [],
+  },
   [WORK_ROOT]: {
     git: false,
     entries: [
@@ -637,9 +671,19 @@ function normalizeDir(raw: string): string {
 }
 
 function parentDir(path: string): string | null {
-  if (path.toLowerCase() === WORK_ROOT.toLowerCase()) return null;
-  const at = path.lastIndexOf('\\');
-  return at <= 0 ? null : path.slice(0, at);
+  const norm = path.replaceAll('/', '\\').replace(/\\+$/, '');
+  if (!norm) return null;
+  if (/^[a-zA-Z]:$/.test(norm)) return null;
+  if (norm === '~' || norm === '\\' || norm === '/') return null;
+  const at = norm.lastIndexOf('\\');
+  if (at < 0) return null;
+  if (at === 2 && norm[1] === ':') {
+    return `${norm.slice(0, 2)}\\`;
+  }
+  if (at === 0) {
+    return '\\';
+  }
+  return norm.slice(0, at);
 }
 
 function dirsView(path: string, lang: Lang): MockReply {
@@ -648,11 +692,13 @@ function dirsView(path: string, lang: Lang): MockReply {
   if (!hit) {
     return fail(404, lang === 'en' ? 'Directory not found in the prototype' : '原型里没有这个目录', 'E_PATH');
   }
+  const blocked = isBlockedPath(normalized);
+  const isFsRoot = normalized === 'D:\\' || normalized === '\\' || normalized === '/' || normalized === '~';
   const view: WorkspaceDirs = {
     root: WORK_ROOT,
     path: normalized,
     parent: parentDir(normalized),
-    selectable: normalized.toLowerCase() !== WORK_ROOT.toLowerCase(),
+    selectable: !blocked && !isFsRoot,
     git: hit.git,
     entries: hit.entries.map((entry) => ({ ...entry })),
     truncated: false,
@@ -681,8 +727,8 @@ function createWorkspace(db: MockDb, hub: MockHub, body: Record<string, unknown>
   if (!name) return fail(400, lang === 'en' ? 'name required' : '需要名字', 'E_BAD_REQUEST');
   const source = body.source === 'git' ? 'git' : 'local';
   let wsPath = normalizeDir(str(body.path) || `${WORK_ROOT}\\${name}`);
-  if (!wsPath.toLowerCase().startsWith(WORK_ROOT.toLowerCase())) {
-    return fail(400, lang === 'en' ? 'Path is outside the allowed root' : `目录不在允许的根目录 ${WORK_ROOT} 下`, 'E_PATH');
+  if (isBlockedPath(wsPath)) {
+    return fail(400, lang === 'en' ? 'Path is not allowed' : '目录不允许访问', 'E_PATH');
   }
   if (db.workspaces.some((row) => row.path.toLowerCase() === wsPath.toLowerCase())) {
     return fail(409, lang === 'en' ? 'A workspace already uses this path' : '这个目录已经是工作区了', 'E_WS_EXISTS');
@@ -940,7 +986,12 @@ function persistProtoGlab(glab: GlabSettings): void {
 /* ---------- routing ---------- */
 
 /** Route one mock HTTP call. Unknown `/api` paths answer 404 so the UI can show a message. */
-export function handleMockRequest(db: MockDb, hub: MockHub, rawUrl: string, init?: RequestInit): MockReply {
+export function handleMockRequest(
+  db: MockDb,
+  hub: MockHub,
+  rawUrl: string,
+  init?: RequestInit,
+): MockReply | Promise<MockReply> {
   let url: URL;
   try {
     url = new URL(rawUrl, 'file:///');
@@ -1125,6 +1176,9 @@ export function handleMockRequest(db: MockDb, hub: MockHub, rawUrl: string, init
   }
   if (path === '/api/v2/workspace-root' && method === 'GET') {
     return ok({ root: WORK_ROOT });
+  }
+  if (path === '/api/v2/workspace-root/pick' && method === 'POST') {
+    return showProtoPickModal(lang);
   }
   if (path === '/api/v2/workspace-root/dirs' && method === 'GET') {
     return dirsView(url.searchParams.get('path') || WORK_ROOT, lang);
@@ -1701,8 +1755,8 @@ export function handleMockRequest(db: MockDb, hub: MockHub, rawUrl: string, init
 }
 
 /** Everything the prototype serves, wrapped in a real `Response`. */
-export function mockResponse(db: MockDb, hub: MockHub, rawUrl: string, init?: RequestInit): Response {
-  const reply = handleMockRequest(db, hub, rawUrl, init);
+export async function mockResponse(db: MockDb, hub: MockHub, rawUrl: string, init?: RequestInit): Promise<Response> {
+  const reply = await handleMockRequest(db, hub, rawUrl, init);
   if (reply.status === 204 || reply.status === 304) {
     return new Response(null, {
       status: reply.status,

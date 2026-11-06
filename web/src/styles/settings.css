@@ -619,27 +619,40 @@ html[data-theme$="-dark"] .ns-ws-dialog {
 }
 .ns-dir-bar {
   display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-bottom: 1px solid var(--ns-line2);
-  background: var(--ns-bg);
+  background: var(--ns-bg); min-width: 0;
 }
-.ns-dir-now { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-sm); }
+.ns-breadcrumbs {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 2px 4px; font-size: var(--fs-sm); min-width: 0;
+}
+.ns-breadcrumb-item-wrap { display: inline-flex; align-items: center; gap: 4px; }
+.ns-breadcrumb-item {
+  border: 0; background: transparent; padding: 2px 4px; border-radius: 4px; cursor: pointer;
+  color: var(--ns-mute); font-family: var(--font-mono, monospace); font-size: inherit; line-height: 1.4;
+}
+.ns-breadcrumb-item:hover:not(:disabled) { background: var(--ns-line2); color: var(--ns-ink); }
+.ns-breadcrumb-item.is-current,
+.ns-breadcrumb-item:disabled { color: var(--ns-ink); font-weight: 600; cursor: default; }
+.ns-breadcrumb-sep { color: var(--ns-mute2); user-select: none; font-size: 11px; }
+.ns-git-badge {
+  font-size: 10px; line-height: 1; padding: 2px 5px; border-radius: 3px; border: 1px solid var(--ns-line);
+  color: var(--ns-mute); background: var(--ns-bg); font-family: var(--font-mono, monospace); font-weight: 600;
+  margin-left: auto;
+}
+.ns-dir-arrow { color: var(--ns-mute2); font-size: 14px; margin-left: 6px; line-height: 1; user-select: none; }
 .ns-dir-list { max-height: 220px; overflow: auto; }
 .ns-dir-row {
   width: 100%; text-align: left; border: 0; border-top: 1px solid var(--ns-line2); background: transparent;
-  padding: 6px 10px 6px 12px; display: flex; align-items: center; gap: 8px;
+  padding: 6px 10px 6px 12px; display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;
 }
 .ns-dir-row:first-child { border-top: 0; }
 .ns-dir-row:hover { background: var(--ns-bg); }
+.ns-dir-row:hover .ns-dir-arrow { color: var(--ns-ink); }
 .ns-dir-row.is-on { background: var(--ns-nav-on); }
 .ns-dir-name {
   flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   border: 0; background: transparent; text-align: left; cursor: pointer; color: inherit;
   font: inherit; padding: 2px 0;
 }
-.ns-dir-pick {
-  flex-shrink: 0; height: 24px; padding: 0 8px; border: 1px solid var(--ns-line); border-radius: 6px;
-  background: var(--panel); font-size: var(--fs-sm); color: var(--ns-ink); cursor: pointer;
-}
-.ns-dir-pick:hover { background: var(--ns-bg); }
 .ns-dir-empty { padding: 22px 16px; text-align: center; color: var(--ns-mute2); line-height: 1.6; }
 .ns-pick { position: relative; }
 .ns-pick-btn {
