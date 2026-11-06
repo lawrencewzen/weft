@@ -68,14 +68,19 @@ function positiveInt(value, fallback) {
 /**
  * Harness settings. `WEFT_RETRY_MAX` is the number of attempts including the
  * first; Pi Durable's `maxRetries` counts the attempts after that.
+ *
+ * Backoff is Pi Durable's `retryDelayMs`: `min(baseDelayMs * 2^(attempt-1), maxAgentDelayMs)`
+ * with no jitter. `attempt` is the failed attempt, starting at 1. `maxAgentDelayMs` is left
+ * unset so the merged policy keeps Pi Durable's 60000 cap. The defaults (base 2000, 9 retries)
+ * sleep 2000+4000+8000+16000+32000+60000*4 = 302000 ms.
  */
 export function kernelSettings(env = process.env) {
-  const maxAttempts = positiveInt(env.WEFT_RETRY_MAX, 5);
+  const maxAttempts = positiveInt(env.WEFT_RETRY_MAX, 10);
   return {
     retry: {
       enabled: true,
       maxRetries: Math.max(0, maxAttempts - 1),
-      baseDelayMs: positiveInt(env.WEFT_RETRY_BASE_MS, 200),
+      baseDelayMs: positiveInt(env.WEFT_RETRY_BASE_MS, 2000),
     },
     stream: {
       timeoutMs: positiveInt(env.WEFT_STREAM_TIMEOUT_MS, 120_000),

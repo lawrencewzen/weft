@@ -8,11 +8,13 @@
 
 | 变量 | 默认 | 说明 |
 | --- | --- | --- |
-| `WEFT_RETRY_MAX` | `5` | 一次模型调用的尝试次数，含第一次。Harness 的 `maxRetries` 是这个数减 1 |
-| `WEFT_RETRY_BASE_MS` | `200` | 重试退避的起始毫秒。上限沿用 Pi Durable 的 `maxAgentDelayMs`（60000） |
+| `WEFT_RETRY_MAX` | `10` | 一次模型调用的尝试次数，含第一次。Harness 的 `maxRetries` 是这个数减 1，默认 9。环境变量仍按这个含义覆盖 |
+| `WEFT_RETRY_BASE_MS` | `2000` | 重试退避的起始毫秒。算法见下段。环境变量仍直接覆盖这项，含义不变 |
 | `WEFT_STREAM_TIMEOUT_MS` | `120000` | 传给模型流的 `stream.timeoutMs`。超时后按上面的 retry 重试 |
 | `WEFT_BASH_TIMEOUT_SECONDS` | `600` | bash 工具没拿到 `timeout` 参数时的上限（秒）。模型自己传了就照用；非法值回退默认；超过官方上限（`2147483.647` 秒）按上限算 |
 | `WEFT_BASH_ENV_ALLOW` | 空 | Agent 执行命令时，在内置白名单之外额外放行的服务进程环境变量。逗号分隔，名字可带结尾 `*`（例如 `MY_APP_*,CI`）。Windows 上名字不区分大小写。变量本身不传给命令。`WEFT_*` / `LLM_*` / 各云厂商密钥前缀，以及名字里含 `KEY` / `TOKEN` / `SECRET` / `PASSWORD` 的项即使写在这里也会被挡住并打日志，不能靠它显式放行密钥。详见 [SECURITY.md](../SECURITY.md)「bash sandbox」 |
+
+默认退避交给 Pi Durable 的 `retryDelayMs`（`@earendil-works/pi-ai` 1.5.0；生成重试在 `@earendil-works/pi-durable` 1.5.0 的 generation）：`min(baseDelayMs * 2^(attempt-1), maxAgentDelayMs)`，没有抖动。`attempt` 从 1 起，是刚失败的那一次。`maxAgentDelayMs` 不在这里设置，合并进 Harness 后沿用 Pi Durable 默认 60000，它封顶每一次退避。默认 9 次退避依次是 2000、4000、8000、16000、32000、60000、60000、60000、60000 毫秒，合计 302000 毫秒（约 5 分钟）。第 10 次仍失败则本轮结束，不再睡。流超时仍是 120 秒。
 
 演示模型只在显式设置 `WEFT_LLM=faux`、`LLM_API=faux` 或 `WEFT_FAUX_SCRIPT` 时启用。剧本里一段文字紧跟工具调用时合成一条助手消息；一段文字后面没有工具调用时这一轮结束。`WEFT_FAUX_HOLD=1` 让这次调用等到流超时或被中止。
 
