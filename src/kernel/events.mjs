@@ -391,7 +391,17 @@ export function createViewProjector() {
     run: false,
     retryKey: '',
     queued: false,
+    compactionKey: '',
   };
+}
+
+function compactionKeyOf(live) {
+  const running = Array.isArray(live?.compactions) ? live.compactions : [];
+  const failure = live?.compactionFailure;
+  return JSON.stringify({
+    running: running.map((row) => [row?.taskId, row?.trigger, row?.blocking, row?.attempt]),
+    failure: failure ? [failure.taskId, failure.trigger, failure.error] : null,
+  });
 }
 
 function liveOf(view) {
@@ -426,6 +436,7 @@ export function projectViewUpdate(projector, view, mapCtx) {
   const run = live.run != null;
   const queued = queuedInputs(inboxOf(view));
   const nextText = textOf(live.generation?.message?.content);
+  const compactionKey = compactionKeyOf(live);
 
   if (!snapshot) {
     if (run && !projector.run) {
@@ -433,6 +444,9 @@ export function projectViewUpdate(projector, view, mapCtx) {
     }
     if (queued && !projector.queued) {
       events.push({ event: 'status', data: { status: 'running' } });
+    }
+    if (compactionKey !== projector.compactionKey) {
+      events.push({ event: 'compaction', data: {} });
     }
     const retry = live.generation?.retry;
     if (retry && (retry.at != null || retry.error)) {
@@ -474,8 +488,12 @@ export function projectViewUpdate(projector, view, mapCtx) {
     const key = String(entry.id);
     if (projector.seen.has(key)) continue;
     projector.seen.add(key);
-    // pi.compaction is a head marker. T107-3 draws the notice; it is not a bubble.
-    if (entry.kind === 'pi.compaction') continue;
+    // Not a user or assistant bubble. The summary stays out of message.done.
+    // The thread note is rebuilt from this entry; the event only refreshes SSE.
+    if (entry.kind === 'pi.compaction') {
+      if (!snapshot) events.push({ event: 'compaction', data: { entryId: key } });
+      continue;
+    }
     if (!snapshot && (entry.kind === 'pi.user' || entry.kind === 'pi.assistant')) {
       const done = messageDone(entry);
       if (entry.kind === 'pi.assistant' && mapCtx?.liveId) {
@@ -594,6 +612,7 @@ export function projectViewUpdate(projector, view, mapCtx) {
   projector.text = nextText;
   projector.run = run;
   projector.queued = queued;
+  projector.compactionKey = compactionKey;
   projector.ready = true;
   return { events, refresh: snapshot, runEnded };
 }
@@ -616,8 +635,16 @@ export function messagesFromEntries(entries) {
   const answered = new Set();
   const messages = [];
   for (const entry of entries || []) {
-    // A compaction head is a user message for the model. It is not a chat bubble.
-    if (entry?.kind === 'pi.compaction') continue;
+    // The model sees this entry as a user summary. The thread gets a system note,
+    // not a user or assistant bubble, and the summary text is not copied out.
+    if (entry?.kind === 'pi.compaction') {
+      messages.push({
+        id: String(entry.id),
+        role: 'note',
+        kind: 'compaction',
+      });
+      continue;
+    }
     if (entry?.kind === USER_TO_SUBAGENT_KIND) {
       const data = entry.data && typeof entry.data === 'object' && !Array.isArray(entry.data)
         ? entry.data

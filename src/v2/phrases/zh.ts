@@ -2,6 +2,8 @@
 export const zh: Record<string, string> = {
   pending_thinking: '思考中',
   pending_subagents: '· {n} 个子 Agent',
+  compaction_note: '已压缩较早的上下文',
+  compaction_failed: '压缩失败：{reason}',
   run_err_interrupted: '服务中断，这一轮没有完成。',
   run_err_restart_limit: '这一轮多次中断，已停止。',
   run_err_faulted: '这一轮出现内部错误。',

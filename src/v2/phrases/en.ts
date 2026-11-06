@@ -2,6 +2,8 @@
 export const en: Record<string, string> = {
   pending_thinking: 'Thinking',
   pending_subagents: '· {n} sub-agents',
+  compaction_note: 'Earlier context was compacted',
+  compaction_failed: 'Compaction failed: {reason}',
   run_err_interrupted: 'The service was interrupted before this turn finished.',
   run_err_restart_limit: 'This turn was interrupted repeatedly and stopped.',
   run_err_faulted: 'This turn hit an internal error.',

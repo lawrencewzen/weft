@@ -7,7 +7,7 @@ import { TOOLS as BUILTIN_TOOLS } from './src/core/config.mjs';
 import { resolveInWorkspace } from './src/core/paths.mjs';
 import { listWorkspaceTree } from './src/core/workspace-tree.mjs';
 import { diffStats } from './src/core/diff.mjs';
-import { publicSettings } from './src/core/settings.mjs';
+import { publicSettings, validateCompactionPatch } from './src/core/settings.mjs';
 import { VENDOR_PRESETS } from './src/core/model-sources.mjs';
 import { createCredentialStore, createModelsStore } from './src/core/provider-stores.mjs';
 import { createProviderService } from './src/core/provider-service.mjs';
@@ -214,8 +214,14 @@ const v2Opts = {
   getSettings() {
     return ensureSettings();
   },
-  putSettings(patch) {
-    return store.putSettings(patch);
+  async putSettings(patch) {
+    const saved = await store.putSettings(patch);
+    if (kernelApi?.noteSettings) await kernelApi.noteSettings(saved);
+    return saved;
+  },
+  compactConversation(id, instructions) {
+    if (!kernelApi) return { status: 500, body: { error: 'kernel not ready', code: 'E_INTERNAL' } };
+    return kernelApi.compact(id, instructions);
   },
   extensions: {
     dataDir: DATA_DIR,
@@ -1177,6 +1183,11 @@ async function routeApi(req, res, url) {
   }
   if (p === '/api/settings' && m === 'PUT') {
     const body = await readBody(req) || {};
+    const compactionError = validateCompactionPatch(body);
+    if (compactionError) {
+      sendJson(res, 400, { error: compactionError, code: 'E_BAD_REQUEST' });
+      return;
+    }
     await ensureSettings();
     const patch = { ...body };
     delete patch.sources;
@@ -1191,6 +1202,7 @@ async function routeApi(req, res, url) {
     delete patch.providers;
     delete patch.defaultModel;
     const saved = await store.putSettings(patch);
+    if (kernelApi?.noteSettings) await kernelApi.noteSettings(saved);
     sendJson(res, 200, await settingsResponse(saved));
     return;
   }

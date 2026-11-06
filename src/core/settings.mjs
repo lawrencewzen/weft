@@ -1,6 +1,10 @@
 import { normalizeGitConnections } from './git-connections.mjs';
 import { normalizeProvidersV3 } from './provider-config.mjs';
 
+export const DEFAULT_TRIGGER_PERCENT = 80;
+export const MIN_TRIGGER_PERCENT = 60;
+export const MAX_TRIGGER_PERCENT = 90;
+
 export const DEFAULT_SETTINGS = {
   version: 3,
   providers: [],
@@ -10,6 +14,7 @@ export const DEFAULT_SETTINGS = {
   appearance: 'light',
   plugins: {},
   skills: {},
+  compaction: { triggerPercent: DEFAULT_TRIGGER_PERCENT },
 };
 
 const THEMES = new Set(['white', 'claude', 'codex', 'grok', 'cursor']);
@@ -46,9 +51,53 @@ function normalizeDefaultModel(value) {
   return { providerId, modelId };
 }
 
+/** Stored trigger, or 80 when the field is missing or not an integer 60–90. */
+export function readTriggerPercent(settings) {
+  const raw = settings?.compaction?.triggerPercent;
+  if (typeof raw === 'number' && Number.isInteger(raw)
+    && raw >= MIN_TRIGGER_PERCENT && raw <= MAX_TRIGGER_PERCENT) {
+    return raw;
+  }
+  return DEFAULT_TRIGGER_PERCENT;
+}
+
+/**
+ * `null` when the patch does not touch compaction.
+ * A string when `compaction` / `triggerPercent` is present and illegal (HTTP 400).
+ */
+export function validateCompactionPatch(patch) {
+  if (!patch || typeof patch !== 'object' || Array.isArray(patch)) return null;
+  if (!Object.prototype.hasOwnProperty.call(patch, 'compaction')) return null;
+  const compaction = patch.compaction;
+  if (compaction == null || typeof compaction !== 'object' || Array.isArray(compaction)) {
+    return 'invalid compaction';
+  }
+  if (!Object.prototype.hasOwnProperty.call(compaction, 'triggerPercent')) return null;
+  const n = compaction.triggerPercent;
+  if (typeof n !== 'number' || !Number.isInteger(n)
+    || n < MIN_TRIGGER_PERCENT || n > MAX_TRIGGER_PERCENT) {
+    return 'triggerPercent must be an integer from 60 to 90';
+  }
+  return null;
+}
+
+export function compactionSettingsView(settings) {
+  return { compaction: { triggerPercent: readTriggerPercent(settings) } };
+}
+
+function applyCompaction(out, input) {
+  const hasPatch = input && typeof input === 'object'
+    && Object.prototype.hasOwnProperty.call(input, 'compaction')
+    && input.compaction && typeof input.compaction === 'object'
+    && Object.prototype.hasOwnProperty.call(input.compaction, 'triggerPercent');
+  const candidate = hasPatch ? input.compaction.triggerPercent : out.compaction?.triggerPercent;
+  out.compaction = { triggerPercent: readTriggerPercent({ compaction: { triggerPercent: candidate } }) };
+}
+
 function applyCommon(out, input) {
   out.plugins = normalizeFlagMap(out.plugins);
   out.skills = normalizeFlagMap(out.skills);
+  applyCompaction(out, input);
   if (typeof out.theme === 'string' && out.theme.includes('-')) {
     const [family, mode] = out.theme.split('-');
     if (THEMES.has(family)) out.theme = family;
@@ -112,6 +161,7 @@ export function publicSettings(s) {
     appearance: n.appearance,
     plugins: { ...n.plugins },
     skills: { ...n.skills },
+    compaction: { triggerPercent: readTriggerPercent(n) },
   };
   if (n.version === 3) {
     body.version = 3;
@@ -150,6 +200,12 @@ function applySharedPatch(next, cur, patchObj) {
   }
   if (Object.prototype.hasOwnProperty.call(patchObj, 'gitConnections')) {
     next.gitConnections = patchObj.gitConnections;
+  }
+  if (Object.prototype.hasOwnProperty.call(patchObj, 'compaction')
+    && patchObj.compaction && typeof patchObj.compaction === 'object'
+    && !Array.isArray(patchObj.compaction)
+    && Object.prototype.hasOwnProperty.call(patchObj.compaction, 'triggerPercent')) {
+    next.compaction = { triggerPercent: patchObj.compaction.triggerPercent };
   }
 }
 
