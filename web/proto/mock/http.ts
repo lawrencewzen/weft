@@ -16,6 +16,7 @@ import {
 } from './db';
 import { continueConversation, sendMessage, stopConversation, withdrawMessage } from './run';
 import { parseSendImages } from '../../../src/v2/views/message-images';
+import { inferCustomProviderBrand, inferModelBrand } from './brand';
 import { mockProviderName } from './providerNames';
 import { replyInSubThread, stopSubThread, subagentKey } from './subagents';
 import { branchesOf, pluginForLang, tokenFails } from './extensions';
@@ -476,7 +477,7 @@ function handleCustomProvider(
     {
       id: 'llama3.3:70b',
       name: 'llama3.3:70b',
-      brand: 'Meta',
+      brand: inferModelBrand('llama3.3:70b'),
       enabled: true,
       contextWindow: 131072,
       maxTokens: 8192,
@@ -487,7 +488,7 @@ function handleCustomProvider(
     {
       id: 'qwen3:32b',
       name: 'qwen3:32b',
-      brand: 'Qwen',
+      brand: inferModelBrand('qwen3:32b'),
       enabled: true,
       contextWindow: 40960,
       maxTokens: 8192,
@@ -498,7 +499,7 @@ function handleCustomProvider(
     {
       id: 'nomic-embed-text',
       name: 'nomic-embed-text',
-      brand: null,
+      brand: inferModelBrand('nomic-embed-text'),
       enabled: false,
       contextWindow: null,
       maxTokens: null,
@@ -512,7 +513,7 @@ function handleCustomProvider(
   const provider: Provider = {
     id,
     kind: 'custom',
-    brand: null,
+    brand: inferCustomProviderBrand(customModels),
     name,
     baseUrl,
     api,

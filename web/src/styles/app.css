@@ -2619,6 +2619,10 @@ button.file-tree-row:hover { background: var(--side); }
 .file-tree-row.is-dir { color: var(--ink2); }
 .file-tree-row.is-dir .ws-chev { width: 12px; height: 12px; flex-shrink: 0; transition: transform .15s; }
 .file-tree-row.is-open .ws-chev { transform: rotate(90deg); }
+.file-tree-row.is-ignored,
+.file-tree-row.is-ignored .file-tree-name { color: var(--faint); }
+.file-tree-row.is-ignored.active,
+.file-tree-row.is-ignored.active .file-tree-name { color: var(--ink); }
 .file-tree-name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-family: var(--mono); font-size: var(--fs-sm); }
 .file-tree-row.is-dir .file-tree-name { font-family: var(--font); font-size: var(--fs-sm); }
 .file-tree-mod { font-family: var(--mono); font-size: var(--fs-xs); color: var(--wait-ink); }

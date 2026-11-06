@@ -1,6 +1,7 @@
 export type FileNodeLike = {
   path: string;
   type: 'file' | 'dir';
+  ignored?: boolean;
 };
 
 export type TreeRow = {
@@ -9,6 +10,7 @@ export type TreeRow = {
   type: 'file' | 'dir';
   depth: number;
   expanded?: boolean;
+  ignored?: boolean;
 };
 
 function posix(path: string): string {
@@ -55,6 +57,13 @@ export function toggleDir(expanded: Set<string>, dirPath: string): Set<string> {
 
 export function visibleTreeRows(entries: readonly FileNodeLike[], expanded: Set<string>): TreeRow[] {
   const rows: TreeRow[] = [];
+  const ignoredDirs = new Set<string>();
+  for (const ent of entries) {
+    if (ent.type === 'dir' && ent.ignored) {
+      ignoredDirs.add(posix(ent.path));
+    }
+  }
+
   for (const ent of entries) {
     const path = posix(ent.path);
     if (!path) continue;
@@ -67,12 +76,27 @@ export function visibleTreeRows(entries: readonly FileNodeLike[], expanded: Set<
       }
     }
     if (hidden) continue;
+
+    let isIgnored = Boolean(ent.ignored);
+    if (!isIgnored) {
+      for (let i = 1; i < parts.length; i += 1) {
+        if (ignoredDirs.has(parts.slice(0, i).join('/'))) {
+          isIgnored = true;
+          break;
+        }
+      }
+    }
+    if (ent.type === 'dir' && isIgnored) {
+      ignoredDirs.add(path);
+    }
+
     rows.push({
       path,
       name: nameOf(path),
       type: ent.type,
       depth: parts.length - 1,
       expanded: ent.type === 'dir' ? expanded.has(path) : undefined,
+      ignored: isIgnored ? true : undefined,
     });
   }
   return rows;
