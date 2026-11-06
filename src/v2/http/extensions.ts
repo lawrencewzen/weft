@@ -318,7 +318,7 @@ export async function handleExtensionsApi(opts: {
       sendV2(res, pathname, method, 200, picked);
     } catch (err) {
       const status = Number((err as { status?: number })?.status) || 400;
-      sendV2(res, pathname, method, status, pathErrorView(lang, err as { message?: unknown }, defaultWorkspaceRoot()));
+      sendV2(res, pathname, method, status, pathErrorView(lang, err as { message?: unknown }));
     }
     return true;
   }
