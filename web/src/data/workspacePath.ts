@@ -94,9 +94,19 @@ export type Breadcrumb = {
   path: string;
 };
 
-export function splitBreadcrumbs(raw: string): Breadcrumb[] {
+export type SplitBreadcrumbsOpts = {
+  thisPc?: string;
+  parent?: string | null;
+};
+
+export function splitBreadcrumbs(raw: string, opts: SplitBreadcrumbsOpts = {}): Breadcrumb[] {
   const input = String(raw || '').trim();
-  if (!input) return [];
+  if (!input) {
+    if (opts.thisPc) {
+      return [{ name: opts.thisPc, path: '' }];
+    }
+    return [];
+  }
 
   if (input.startsWith('~')) {
     const isWin = input.includes('\\');
@@ -108,6 +118,9 @@ export function splitBreadcrumbs(raw: string): Breadcrumb[] {
       curr = i === 0 ? parts[i] : `${curr}${sep}${parts[i]}`;
       crumbs.push({ name: parts[i], path: curr });
     }
+    if (opts.thisPc && opts.parent === '') {
+      crumbs.unshift({ name: opts.thisPc, path: '' });
+    }
     return crumbs;
   }
 
@@ -116,7 +129,11 @@ export function splitBreadcrumbs(raw: string): Breadcrumb[] {
     const driveLetter = input.slice(0, 2);
     const rest = input.slice(2).replace(/^[\\/]+/, '').replace(/[\\/]+$/, '');
     const driveRoot = `${driveLetter}\\`;
-    const crumbs: Breadcrumb[] = [{ name: driveRoot, path: driveRoot }];
+    const crumbs: Breadcrumb[] = [];
+    if (opts.thisPc) {
+      crumbs.push({ name: opts.thisPc, path: '' });
+    }
+    crumbs.push({ name: driveRoot, path: driveRoot });
     if (!rest) return crumbs;
     const parts = rest.split(/[\\/]+/).filter(Boolean);
     let curr = driveRoot;
@@ -130,7 +147,11 @@ export function splitBreadcrumbs(raw: string): Breadcrumb[] {
   // POSIX
   const clean = input.replace(/\/+$/, '');
   if (!clean || clean === '/') {
-    return [{ name: '/', path: '/' }];
+    const crumbs: Breadcrumb[] = [{ name: '/', path: '/' }];
+    if (opts.thisPc && opts.parent === '') {
+      crumbs.unshift({ name: opts.thisPc, path: '' });
+    }
+    return crumbs;
   }
   const parts = clean.split('/').filter(Boolean);
   const crumbs: Breadcrumb[] = [{ name: '/', path: '/' }];
@@ -138,6 +159,9 @@ export function splitBreadcrumbs(raw: string): Breadcrumb[] {
   for (const part of parts) {
     curr = `${curr}/${part}`;
     crumbs.push({ name: part, path: curr });
+  }
+  if (opts.thisPc && opts.parent === '') {
+    crumbs.unshift({ name: opts.thisPc, path: '' });
   }
   return crumbs;
 }

@@ -40,6 +40,18 @@ describe('WorkspaceDialog', () => {
     root = createRoot(host);
 
     vi.spyOn(api, 'getWorkspaceRoot').mockResolvedValue({ root: 'D:\\work' });
+    vi.spyOn(api, 'listWorkspaceDrives').mockResolvedValue({
+      root: 'D:\\work',
+      path: '',
+      parent: null,
+      selectable: false,
+      git: false,
+      entries: [
+        { name: 'C:', path: 'C:\\', git: false },
+        { name: 'D:', path: 'D:\\', git: false },
+      ],
+      truncated: false,
+    });
     vi.spyOn(api, 'listWorkspaceDirs').mockImplementation(async (targetPath?: string) => {
       const p = targetPath || 'D:\\work';
       if (p === 'D:\\work') {
@@ -66,6 +78,41 @@ describe('WorkspaceDialog', () => {
           entries: [
             { name: 'playground', path: 'D:\\work\\sandbox\\playground', git: false },
           ],
+          truncated: false,
+        };
+      }
+      if (p === 'C:\\') {
+        return {
+          root: 'D:\\work',
+          path: 'C:\\',
+          parent: '',
+          selectable: false,
+          git: false,
+          entries: [
+            { name: 'Projects', path: 'C:\\Projects', git: false },
+          ],
+          truncated: false,
+        };
+      }
+      if (p === 'C:\\Projects') {
+        return {
+          root: 'D:\\work',
+          path: 'C:\\Projects',
+          parent: 'C:\\',
+          selectable: true,
+          git: false,
+          entries: [],
+          truncated: false,
+        };
+      }
+      if (p === '/Users/alice') {
+        return {
+          root: 'D:\\work',
+          path: '/Users/alice',
+          parent: '/Users',
+          selectable: true,
+          git: false,
+          entries: [],
           truncated: false,
         };
       }
@@ -149,12 +196,13 @@ describe('WorkspaceDialog', () => {
     const pathInput = host?.querySelector<HTMLInputElement>('[data-testid="next-ws-path"]');
     expect(pathInput?.value).toBe('D:\\work\\sandbox');
 
-    // Breadcrumbs show D:\, work, sandbox
+    // Breadcrumbs show 此电脑, D:\, work, sandbox
     const breadcrumbItems = host?.querySelectorAll('[data-testid="next-breadcrumb-item"]');
-    expect(breadcrumbItems?.length).toBe(3);
-    expect(breadcrumbItems?.[0].textContent).toBe('D:\\');
-    expect(breadcrumbItems?.[1].textContent).toBe('work');
-    expect(breadcrumbItems?.[2].textContent).toBe('sandbox');
+    expect(breadcrumbItems?.length).toBe(4);
+    expect(breadcrumbItems?.[0].textContent).toBe('此电脑');
+    expect(breadcrumbItems?.[1].textContent).toBe('D:\\');
+    expect(breadcrumbItems?.[2].textContent).toBe('work');
+    expect(breadcrumbItems?.[3].textContent).toBe('sandbox');
   });
 
   it('breadcrumb click navigates up', async () => {
@@ -170,7 +218,7 @@ describe('WorkspaceDialog', () => {
       sandboxRow?.click();
     });
 
-    const workCrumb = host?.querySelectorAll<HTMLButtonElement>('[data-testid="next-breadcrumb-item"]')[1];
+    const workCrumb = host?.querySelectorAll<HTMLButtonElement>('[data-testid="next-breadcrumb-item"]')[2];
     expect(workCrumb?.textContent).toBe('work');
 
     await act(async () => {
@@ -267,5 +315,134 @@ describe('WorkspaceDialog', () => {
     );
     expect(onToast).toHaveBeenCalled();
     expect(onClose).toHaveBeenCalled();
+  });
+
+  it('breadcrumb "此电脑" click enters drives list view and supports switching drives', async () => {
+    const onClose = vi.fn();
+    const onToast = vi.fn();
+
+    await act(async () => {
+      root?.render(<WorkspaceDialog lang="zh" onClose={onClose} onToast={onToast} />);
+    });
+
+    // Initial breadcrumbs: 此电脑 / D:\ / work
+    const pcCrumb = host?.querySelectorAll<HTMLButtonElement>('[data-testid="next-breadcrumb-item"]')[0];
+    expect(pcCrumb?.textContent).toBe('此电脑');
+
+    await act(async () => {
+      pcCrumb?.click();
+    });
+
+    expect(api.listWorkspaceDrives).toHaveBeenCalledWith('zh');
+
+    // In drives list view:
+    // Path input is empty
+    const pathInput = host?.querySelector<HTMLInputElement>('[data-testid="next-ws-path"]');
+    expect(pathInput?.value).toBe('');
+
+    // Breadcrumbs only has "此电脑"
+    const breadcrumbItems = host?.querySelectorAll('[data-testid="next-breadcrumb-item"]');
+    expect(breadcrumbItems?.length).toBe(1);
+    expect(breadcrumbItems?.[0].textContent).toBe('此电脑');
+
+    // Create button is disabled
+    const createBtn = host?.querySelector<HTMLButtonElement>('[data-testid="next-ws-create"]');
+    expect(createBtn?.disabled).toBe(true);
+
+    // Shows C: and D: rows
+    const rows = host?.querySelectorAll('[data-testid="next-dir-row"]');
+    expect(rows?.length).toBe(2);
+    expect(rows?.[0].textContent).toContain('C:');
+    expect(rows?.[1].textContent).toContain('D:');
+
+    // Click C: enters C:\
+    const cRow = host?.querySelector<HTMLDivElement>('[data-path="C:\\\\"]');
+    await act(async () => {
+      cRow?.click();
+    });
+
+    expect(pathInput?.value).toBe('C:\\');
+    const cBreadcrumbs = host?.querySelectorAll('[data-testid="next-breadcrumb-item"]');
+    expect(cBreadcrumbs?.length).toBe(2);
+    expect(cBreadcrumbs?.[0].textContent).toBe('此电脑');
+    expect(cBreadcrumbs?.[1].textContent).toBe('C:\\');
+
+    // Under C:\, see Projects
+    const projectsRow = host?.querySelector<HTMLDivElement>('[data-path="C:\\\\Projects"]');
+    expect(projectsRow).not.toBeNull();
+
+    // Click Projects to enter C:\Projects
+    await act(async () => {
+      projectsRow?.click();
+    });
+
+    expect(pathInput?.value).toBe('C:\\Projects');
+    expect(createBtn?.disabled).toBe(false);
+
+    // Click create creates workspace with name Projects
+    await act(async () => {
+      createBtn?.click();
+    });
+
+    expect(api.createWorkspace).toHaveBeenCalledWith(
+      { name: 'Projects', source: 'local', path: 'C:\\Projects' },
+      'zh',
+    );
+  });
+
+  it('in drives view, pasting path and pressing Enter jumps to target path', async () => {
+    const onClose = vi.fn();
+    const onToast = vi.fn();
+
+    await act(async () => {
+      root?.render(<WorkspaceDialog lang="zh" onClose={onClose} onToast={onToast} />);
+    });
+
+    // Enter drives view
+    const pcCrumb = host?.querySelectorAll<HTMLButtonElement>('[data-testid="next-breadcrumb-item"]')[0];
+    await act(async () => {
+      pcCrumb?.click();
+    });
+
+    const pathInput = host?.querySelector<HTMLInputElement>('[data-testid="next-ws-path"]');
+    expect(pathInput?.value).toBe('');
+
+    // Paste D:\work\sandbox and press Enter
+    if (pathInput) {
+      await act(async () => {
+        setInputValue(pathInput, 'D:\\work\\sandbox');
+      });
+      await act(async () => {
+        pathInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      });
+    }
+
+    expect(pathInput?.value).toBe('D:\\work\\sandbox');
+    const breadcrumbItems = host?.querySelectorAll('[data-testid="next-breadcrumb-item"]');
+    expect(breadcrumbItems?.[3].textContent).toBe('sandbox');
+  });
+
+  it('non-Windows paths do not show "此电脑" in breadcrumbs', async () => {
+    const onClose = vi.fn();
+    const onToast = vi.fn();
+
+    await act(async () => {
+      root?.render(<WorkspaceDialog lang="zh" onClose={onClose} onToast={onToast} />);
+    });
+
+    const pathInput = host?.querySelector<HTMLInputElement>('[data-testid="next-ws-path"]');
+    if (pathInput) {
+      await act(async () => {
+        setInputValue(pathInput, '/Users/alice');
+      });
+      await act(async () => {
+        pathInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      });
+    }
+
+    const breadcrumbItems = host?.querySelectorAll('[data-testid="next-breadcrumb-item"]');
+    const texts = Array.from(breadcrumbItems || []).map((el) => el.textContent);
+    expect(texts).not.toContain('此电脑');
+    expect(texts).toEqual(['/', 'Users', 'alice']);
   });
 });

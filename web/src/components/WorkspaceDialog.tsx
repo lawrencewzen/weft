@@ -4,6 +4,7 @@ import {
   listGitBranches,
   listGitProjects,
   listWorkspaceDirs,
+  listWorkspaceDrives,
   getWorkspaceRoot,
   type GitBranch,
   type GitProject,
@@ -145,7 +146,9 @@ export function WorkspaceDialog({ lang, onClose, onToast, onCreated }: Props) {
     setDirError('');
     setError('');
     try {
-      const listed = await listWorkspaceDirs(nextPath, lang);
+      const listed = nextPath === ''
+        ? await listWorkspaceDrives(lang)
+        : await listWorkspaceDirs(nextPath, lang);
       setDirs(listed);
       setPathInput(listed.path);
       setNavigated(true);
@@ -170,12 +173,16 @@ export function WorkspaceDialog({ lang, onClose, onToast, onCreated }: Props) {
   }
 
   const breadcrumbs = useMemo(() => {
-    return splitBreadcrumbs(dirs?.path || root);
-  }, [dirs?.path, root]);
+    const currentPath = dirs !== null ? dirs.path : root;
+    return splitBreadcrumbs(currentPath, {
+      thisPc: t(lang, 'ws_this_pc'),
+      parent: dirs?.parent,
+    });
+  }, [dirs, root, lang]);
 
   const canCreate = GIT_IMPORT_ENABLED
-    ? (tab === 'git' || (navigated && Boolean(dirs?.selectable) && !busy))
-    : (navigated && Boolean(dirs?.selectable) && !busy);
+    ? (tab === 'git' || (navigated && Boolean(dirs?.selectable) && Boolean(dirs?.path) && !busy))
+    : (navigated && Boolean(dirs?.selectable) && Boolean(dirs?.path) && !busy);
 
   async function submit() {
     if (!GIT_IMPORT_ENABLED || tab === 'local') {
@@ -316,7 +323,7 @@ export function WorkspaceDialog({ lang, onClose, onToast, onCreated }: Props) {
                     {breadcrumbs.map((crumb, idx) => {
                       const isLast = idx === breadcrumbs.length - 1;
                       return (
-                        <span key={crumb.path} className="ns-breadcrumb-item-wrap">
+                        <span key={crumb.path || crumb.name} className="ns-breadcrumb-item-wrap">
                           {idx > 0 ? <span className="ns-breadcrumb-sep">/</span> : null}
                           <button
                             type="button"
@@ -324,7 +331,7 @@ export function WorkspaceDialog({ lang, onClose, onToast, onCreated }: Props) {
                             data-testid="next-breadcrumb-item"
                             disabled={isLast || busy}
                             onClick={() => { void enterDir(crumb.path); }}
-                            title={crumb.path}
+                            title={crumb.path || crumb.name}
                           >
                             {crumb.name}
                           </button>

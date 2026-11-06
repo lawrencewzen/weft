@@ -128,6 +128,115 @@ test('unsupported pick opens directory browser, supports breadcrumbs, path jumpi
   expectClean(state);
 });
 
+test('T101-4b Acceptance 1: from D:\\work click breadcrumb This PC to see C: and D:, enter C:\\ and continue into Projects, create takes effect on current directory with correct name', async ({ page }) => {
+  const state = await openProto(page);
+
+  await page.getByTestId('next-ws-new').click();
+  await page.getByTestId('proto-pick-unsupported').click();
+  await expect(page.getByTestId('next-ws-dialog')).toBeVisible();
+
+  // Initially at D:\work
+  await expect(page.getByTestId('next-ws-path')).toHaveValue('D:\\work');
+
+  // Breadcrumbs: click "此电脑"
+  const thisPcCrumb = page.getByTestId('next-breadcrumb-item').filter({ hasText: '此电脑' });
+  await expect(thisPcCrumb).toBeVisible();
+  await thisPcCrumb.click();
+
+  // Sees C: and D: drives
+  await expect(page.getByTestId('next-dir-row')).toHaveCount(2);
+  const cRow = page.getByTestId('next-dir-row').filter({ hasText: 'C:' });
+  const dRow = page.getByTestId('next-dir-row').filter({ hasText: 'D:' });
+  await expect(cRow).toBeVisible();
+  await expect(dRow).toBeVisible();
+
+  // Click C: to enter C:\
+  await cRow.click();
+  await expect(page.getByTestId('next-ws-path')).toHaveValue('C:\\');
+  await expect(page.getByTestId('next-ws-create')).toBeDisabled(); // Drive root is not selectable
+
+  // Under C:\, see Projects and Windows
+  const projectsRow = page.getByTestId('next-dir-row').filter({ hasText: 'Projects' });
+  await expect(projectsRow).toBeVisible();
+
+  // Click Projects to continue entering
+  await projectsRow.click();
+  await expect(page.getByTestId('next-ws-path')).toHaveValue('C:\\Projects');
+  await expect(page.getByTestId('next-ws-create')).toBeEnabled();
+
+  // Create takes effect on current directory (C:\Projects), name is "Projects"
+  await page.getByTestId('next-ws-create').click();
+  await expect(page.getByTestId('next-ws-dialog')).toHaveCount(0);
+  await expect(page.getByTestId('next-toast')).toContainText('Projects');
+  await expect(page.getByTestId('next-ws-node')).toHaveCount(3);
+  await expect(page.getByTestId('next-ws-node').filter({ hasText: 'Projects' })).toBeVisible();
+
+  expectClean(state);
+});
+
+test('T101-4b Acceptance 2: in drives view, create is disabled, path input is empty, pasting path and pressing Enter jumps', async ({ page }) => {
+  const state = await openProto(page);
+
+  await page.getByTestId('next-ws-new').click();
+  await page.getByTestId('proto-pick-unsupported').click();
+  await expect(page.getByTestId('next-ws-dialog')).toBeVisible();
+
+  // Click "此电脑" to enter drives view
+  const thisPcCrumb = page.getByTestId('next-breadcrumb-item').filter({ hasText: '此电脑' });
+  await thisPcCrumb.click();
+
+  // Create button is disabled
+  await expect(page.getByTestId('next-ws-create')).toBeDisabled();
+
+  // Path input is empty and editable
+  const pathInput = page.getByTestId('next-ws-path');
+  await expect(pathInput).toHaveValue('');
+  await expect(pathInput).not.toHaveAttribute('readonly', '');
+  await expect(pathInput).toBeEnabled();
+
+  // Breadcrumbs only has "此电脑"
+  await expect(page.getByTestId('next-breadcrumb-item')).toHaveCount(1);
+  await expect(page.getByTestId('next-breadcrumb-item')).toHaveText('此电脑');
+
+  // Paste path and press Enter to jump
+  await pathInput.fill('D:\\work\\sandbox');
+  await pathInput.press('Enter');
+
+  await expect(page.getByTestId('next-ws-path')).toHaveValue('D:\\work\\sandbox');
+  await expect(page.getByTestId('next-breadcrumb-item').filter({ hasText: 'sandbox' })).toBeVisible();
+  await expect(page.getByTestId('next-ws-create')).toBeEnabled();
+
+  expectClean(state);
+});
+
+test('T101-4b Acceptance 3: non-Windows paths do not show "此电脑" in breadcrumbs', async ({ page }) => {
+  const state = await openProto(page);
+
+  await page.getByTestId('next-ws-new').click();
+  await page.getByTestId('proto-pick-unsupported').click();
+  await expect(page.getByTestId('next-ws-dialog')).toBeVisible();
+
+  // Enter home path ~/.ssh
+  const pathInput = page.getByTestId('next-ws-path');
+  await pathInput.fill('~/.ssh');
+  await pathInput.press('Enter');
+
+  await expect(pathInput).toHaveValue('~\\.ssh');
+  // Breadcrumbs do not contain "此电脑"
+  await expect(page.getByTestId('next-breadcrumb-item').filter({ hasText: '此电脑' })).toHaveCount(0);
+  await expect(page.getByTestId('next-breadcrumb-item').filter({ hasText: '~' })).toBeVisible();
+
+  // Enter POSIX path /Users/alice
+  await pathInput.fill('/Users/alice');
+  await pathInput.press('Enter');
+
+  await expect(pathInput).toHaveValue('/Users/alice');
+  await expect(page.getByTestId('next-breadcrumb-item').filter({ hasText: '此电脑' })).toHaveCount(0);
+  await expect(page.getByTestId('next-breadcrumb-item').filter({ hasText: 'alice' })).toBeVisible();
+
+  expectClean(state);
+});
+
 test.skip('git import picks a project and a branch', async ({ page }) => {
   // Git 导入暂时隐藏
   const state = await openProto(page);
