@@ -57,6 +57,9 @@ import { createAntigravityCwdExtension } from './antigravity-cwd.mjs';
 import { createWorkspaceEnv } from './workspace-env.mjs';
 
 const DETAIL_CAP = 1024 * 1024;
+// Official entry-scan page (README: page with `next`, 1000 per call). A snapshot
+// walks these pages until the cursor ends. It is not a second cache.
+const HISTORY_PAGE_SIZE = 1000;
 
 function positiveInt(value, fallback) {
   const n = Number(value);
@@ -124,6 +127,30 @@ function rememberSend(sends, cid, requestId, submissionId, extra = {}, now = Dat
   });
   while (rows.length > SEND_KEEP_ROWS) rows.shift();
   sends.set(cid, rows);
+}
+
+/**
+ * Fork-aware history in entry order, one official `entries()` page at a time.
+ * `load` is `(query, limit, cursor, context) => page`. The cursor is opaque and
+ * only round-trips to the same scan. An empty page or a repeated cursor stops.
+ */
+export async function readConversationEntries(load, context, pageSize = HISTORY_PAGE_SIZE) {
+  if (typeof load !== 'function') throw new Error('entry loader is required');
+  const size = Number.isInteger(pageSize) && pageSize > 0 ? pageSize : HISTORY_PAGE_SIZE;
+  const entries = [];
+  let cursor;
+  const seen = new Set();
+  for (;;) {
+    const page = await load({ order: 'ascending' }, size, cursor, context);
+    const items = Array.isArray(page?.items) ? page.items : [];
+    for (const entry of items) entries.push(entry);
+    const next = page?.next;
+    if (next == null || items.length === 0) return entries;
+    const key = JSON.stringify(next);
+    if (seen.has(key)) return entries;
+    seen.add(key);
+    cursor = next;
+  }
 }
 
 /**
@@ -253,7 +280,7 @@ export async function openConversationKernel({
   async function readView(harnessId) {
     const conversation = await harness.conversation(harnessId, context);
     if (!conversation) return null;
-    // Active transcript, the same slice viewState().entries used to be.
+    // Active transcript the model sees: compaction head plus the entries it keeps.
     return conversation.context(context);
   }
 
@@ -324,10 +351,17 @@ export async function openConversationKernel({
   }
 
   async function readTranscript(harnessId) {
-    const view = await readView(harnessId);
-    if (!view) return { messages: [], usage: null, entries: [] };
-    const mapped = messagesFromEntries(view.entries);
-    return { ...mapped, entries: view.entries || [] };
+    const conversation = await harness.conversation(harnessId, context);
+    if (!conversation) return { messages: [], usage: null, entries: [] };
+    const entries = await readConversationEntries(
+      (query, limit, cursor, ctx) => conversation.entries(query, limit, cursor, ctx),
+      context,
+    );
+    const mapped = messagesFromEntries(entries);
+    // `usage` here is the newest reported call in the stored history. The context
+    // chip must not use it: a call from before the compaction head is not the
+    // context the model sees. present() reads that from readView().
+    return { ...mapped, entries };
   }
 
   async function resolveTitleModel(conv) {
@@ -904,16 +938,14 @@ export async function openConversationKernel({
     async getMessageImage(cid, messageId, index) {
       const conv = await store.getConversation(cid);
       if (!conv?.harnessId) return null;
-      const view = await readView(conv.harnessId);
-      if (!view) return null;
-      return findUserMessageImage(view.entries, messageId, index);
+      const transcript = await readTranscript(conv.harnessId);
+      return findUserMessageImage(transcript.entries, messageId, index);
     },
     async getMessagePaste(cid, messageId, index) {
       const conv = await store.getConversation(cid);
       if (!conv?.harnessId) return null;
-      const view = await readView(conv.harnessId);
-      if (!view) return null;
-      return findUserMessagePaste(view.entries, messageId, index);
+      const transcript = await readTranscript(conv.harnessId);
+      return findUserMessagePaste(transcript.entries, messageId, index);
     },
     async present(conv, { includeMessages = false } = {}) {
       if (!conv?.harnessId) {
@@ -921,18 +953,13 @@ export async function openConversationKernel({
       }
       const view = await submissionView(conv);
       const status = view.status;
-      let usage = null;
       let messages;
+      // Context percent follows the active transcript. The full history still
+      // holds the pre-compaction call, and that number must not raise the chip.
+      const harnessView = await readView(conv.harnessId);
+      const usage = presentContext(latestCallUsage(harnessView?.entries)).usage;
       if (includeMessages) {
-        const transcript = await readTranscript(conv.harnessId);
-        usage = presentContext(transcript.usage).usage;
-        messages = transcript.messages;
-      } else {
-        // Newest assistant that reported tokens, not blindly the last message.
-        // The active transcript is still required: a fixed-size descending scan can miss an
-        // older reported call and would change the old list API.
-        const harnessView = await readView(conv.harnessId);
-        usage = presentContext(latestCallUsage(harnessView?.entries)).usage;
+        messages = (await readTranscript(conv.harnessId)).messages;
       }
       const out = { ...conv, status, usage, sends: await sendsView(conv) };
       if (view.llmError) out.llmError = view.llmError;
