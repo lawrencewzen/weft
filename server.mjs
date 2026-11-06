@@ -227,6 +227,9 @@ const v2Opts = {
     createWorkspace(fields) {
       return store.createWorkspace(fields);
     },
+    findActiveWorkspaceByPath(wsPath) {
+      return store.findActiveWorkspaceByPath(wsPath);
+    },
     restoreWorkspaceByPath(wsPath, name) {
       return store.restoreWorkspaceByPath(wsPath, name);
     },
@@ -888,11 +891,11 @@ async function routeApi(req, res, url) {
     } catch (err) {
       sendJson(res, err.status || 400, {
         error: err.message || 'path is not allowed',
-        allowedRoot: defaultWorkspaceRoot(),
       });
       return;
     }
-    const ws = (await store.restoreWorkspaceByPath(resolved, body.name))
+    const ws = (await store.findActiveWorkspaceByPath(resolved))
+      || (await store.restoreWorkspaceByPath(resolved, body.name))
       || await store.createWorkspace({ name: body.name, path: resolved, source: 'local', rootPath: resolved, worktrees: [] });
     sendJson(res, 201, { id: ws.id, name: ws.name, path: ws.path, source: ws.source, gitUrl: ws.gitUrl, branch: ws.branch, rootPath: ws.rootPath, worktrees: ws.worktrees });
     v2.notifySidebarChanged();

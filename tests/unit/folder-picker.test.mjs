@@ -7,7 +7,6 @@ import { realpathSync } from 'node:fs';
 import { pathErrorView } from '../../src/v2/views/extensions.ts';
 import { phrase } from '../../src/v2/phrases/index.ts';
 import { validateResponse } from '../../src/v2/validate.ts';
-import { defaultWorkspaceRoot } from '../../src/core/workspace-guard.mjs';
 import {
   FOLDER_PICK_TIMEOUT_MS,
   pickFolder,
@@ -345,13 +344,12 @@ describe('folder picker', { concurrency: 1 }, () => {
           assert.equal(err.status, 400);
           assert.equal(err.code, 'E_PATH');
           assert.match(err.message, /forbidden/);
-          const allowedRoot = defaultWorkspaceRoot();
-          const view = pathErrorView('zh', err, allowedRoot);
+          const view = pathErrorView('zh', err);
           assert.deepEqual(view, {
-            error: phrase('zh', 'ws_err_path_root', { root: allowedRoot }),
+            error: phrase('zh', 'ws_err_path'),
             code: 'E_PATH',
-            allowedRoot,
           });
+          assert.equal(Object.hasOwn(view, 'allowedRoot'), false);
           const checked = validateResponse('/api/v2/workspace-root/pick', 'POST', 400, view);
           assert.equal(checked.ok, true, JSON.stringify(checked.errors));
           return true;

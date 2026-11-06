@@ -164,7 +164,7 @@ test.skip('git connection tests, imports a project, and never echoes the token',
   expect(leaked, 'network responses never include the git token').toEqual([]);
 });
 
-test('local folder browser creates a workspace and refuses out-of-range paths', async ({ page }) => {
+test('local folder browser creates a workspace and can leave the start directory', async ({ page }) => {
   test.setTimeout(90_000);
   const prepared = await boot(page);
   fs.writeFileSync(path.join(prepared.dirs[0], 'hello.txt'), 'hello-ws\n');
@@ -173,6 +173,8 @@ test('local folder browser creates a workspace and refuses out-of-range paths', 
   await expect(page.getByTestId('next-ws-dialog')).toBeVisible();
   await expect(page.getByTestId('next-ws-create')).toBeDisabled();
   await expect(page.getByTestId('next-ws-path')).not.toHaveAttribute('readonly', '');
+  const aboveStart = page.locator(`[data-testid="next-breadcrumb-item"][title="${path.dirname(prepared.root)}"]`);
+  await expect(aboveStart).toBeEnabled();
   const alpha = page.getByTestId('next-dir-row').filter({ hasText: 'alpha' });
   await expect(alpha).toBeVisible();
 
@@ -180,8 +182,10 @@ test('local folder browser creates a workspace and refuses out-of-range paths', 
   await expect(page.getByTestId('next-ws-path')).toHaveValue(prepared.dirs[0]);
   await expect(page.getByTestId('next-ws-create')).toBeEnabled();
 
-  const parentCrumb = page.getByTestId('next-breadcrumb-item').filter({ hasText: path.basename(prepared.root) });
-  await parentCrumb.click();
+  const startCrumb = page.locator(`[data-testid="next-breadcrumb-item"][title="${prepared.root}"]`);
+  await startCrumb.click();
+  await expect(page.getByTestId('next-ws-path')).toHaveValue(prepared.root);
+  await expect(aboveStart).toBeEnabled();
   await expect(page.getByTestId('next-dir-row').filter({ hasText: 'alpha' })).toBeVisible();
 
   await page.getByTestId('next-dir-row').filter({ hasText: 'alpha' }).click();
