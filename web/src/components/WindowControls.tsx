@@ -38,15 +38,15 @@ function post(action: ShellAction): void {
 }
 
 const ICONS = {
-  minimize: <path d="M0 5.5h10" />,
-  maximize: <rect x="0.5" y="0.5" width="9" height="9" />,
+  minimize: <path d="M2.5 7h9" />,
+  maximize: <rect x="2.5" y="2.5" width="9" height="9" rx="1.5" />,
   restore: (
     <>
-      <rect x="0.5" y="2.5" width="7" height="7" />
-      <path d="M2.5 2.5V0.5h7v7h-2" />
+      <rect x="2.5" y="4.5" width="7" height="7" rx="1.5" />
+      <path d="M4.5 4.5V4A1.5 1.5 0 0 1 6 2.5h5.5V8a1.5 1.5 0 0 1-1.5 1.5h-.5" />
     </>
   ),
-  close: <path d="M0 0l10 10M10 0L0 10" />,
+  close: <path d="M3 3l8 8M11 3l-8 8" />,
 };
 
 /** Windows-style caption buttons, drawn only when the Weft.exe desktop shell is active. */
@@ -68,13 +68,13 @@ export function WindowControls({ lang }: { lang: Lang }) {
         <button
           key={b.action}
           type="button"
-          className={`wc-btn${b.cls ?? ''}`}
+          className={`icon-btn wc-btn${b.cls ?? ''}`}
           data-testid={`window-${b.action}`}
           title={b.label}
           aria-label={b.label}
           onClick={() => post(b.action)}
         >
-          <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1" aria-hidden="true">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
             {ICONS[b.icon]}
           </svg>
         </button>

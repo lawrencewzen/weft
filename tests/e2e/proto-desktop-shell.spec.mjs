@@ -96,3 +96,57 @@ test('window buttons stay on top of the settings overlay', async ({ page }) => {
   expect(overlaps(await box(page.getByTestId('window-controls')), dialog)).toBe(false);
   expectClean(state);
 });
+
+async function setRight(page, open) {
+  const isOpen = async () => (await page.getByTestId('next-right-collapse').count()) > 0;
+  if ((await isOpen()) !== open) await page.locator('.side-toggle-right').click();
+  await page.waitForTimeout(500);
+}
+
+async function expectAligned(page, open, label) {
+  const barSel = open ? '.right-tabs-bar' : '.next-status';
+  const bar = await box(page.locator(barSel).first());
+  const controls = await box(page.getByTestId('window-controls'));
+  expect(Math.abs(controls.height - bar.height), `${label}: controls height vs bar`).toBeLessThanOrEqual(1);
+  expect(Math.abs(controls.y - bar.y), `${label}: controls top vs bar`).toBeLessThanOrEqual(1);
+  const centerY = (b) => b.y + b.height / 2;
+  const ids = ['window-minimize', 'window-toggle-maximize', 'window-close'];
+  const btns = [];
+  for (const id of ids) btns.push(await box(page.getByTestId(id)));
+  const toggle = await box(page.locator('.side-toggle-right'));
+  const row = [toggle, ...btns];
+  for (const b of btns) {
+    expect(Math.abs(centerY(b) - centerY(toggle)), `${label}: button vs right toggle center`).toBeLessThanOrEqual(1);
+    expect(Math.abs(b.width - toggle.width), `${label}: equal width`).toBeLessThanOrEqual(1);
+  }
+  expect(Math.abs(centerY(toggle) - (bar.y + bar.height / 2)), `${label}: toggle vs bar center`).toBeLessThanOrEqual(1);
+  const gaps = [];
+  for (let i = 1; i < row.length; i++) gaps.push(row[i].x - (row[i - 1].x + row[i - 1].width));
+  for (const g of gaps) expect(Math.abs(g - gaps[0]), `${label}: gaps ${gaps}`).toBeLessThanOrEqual(1);
+  if (open) {
+    for (const el of await page.locator('.right-tabs-bar button').all()) {
+      if (!(await el.isVisible())) continue;
+      const b = await box(el);
+      expect(Math.abs(centerY(b) - centerY(btns[0])), `${label}: tab center`).toBeLessThanOrEqual(1);
+    }
+  } else {
+    const title = await page.getByTestId('next-status').locator('.top-title').boundingBox();
+    if (title) expect(Math.abs(centerY(title) - centerY(btns[0])), `${label}: title center`).toBeLessThanOrEqual(1);
+  }
+}
+
+for (const scheme of ['light', 'dark']) {
+  test(`window buttons align with the top bar (${scheme})`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme: scheme });
+    const state = await openProto(page, '?shell=1');
+    if (scheme === 'dark') await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'white-dark'));
+    for (const open of [true, false]) {
+      await setRight(page, open);
+      await expectAligned(page, open, `${scheme}, right open=${open}`);
+      await page.evaluate(() => document.documentElement.setAttribute('data-window-maximized', '1'));
+      await expectAligned(page, open, `${scheme}, maximized, right open=${open}`);
+      await page.evaluate(() => document.documentElement.removeAttribute('data-window-maximized'));
+    }
+    expectClean(state);
+  });
+}

@@ -2915,35 +2915,31 @@ button.file-search-result-row:hover {
    Nothing here applies in a normal browser. This block is an intentional
    difference from main: `git diff origin/main -- web/src/styles/app.css` is not empty. */
 :root[data-desktop-shell="1"] {
-  /* Standard caption button size in device pixels; divide by the UI zoom. */
-  --wc-w: calc(46px / var(--ui-zoom));
-  --wc-h: calc(32px / var(--ui-zoom));
-  --wc-total: calc(var(--wc-w) * 3);
+  /* Top row height shared by .sb-hd, .next-status and .right-tabs-bar (52px, see above). */
+  --wc-bar: 52px;
+  /* Same hit area and rhythm as .icon-btn / .side-toggle. */
+  --wc-btn: 30px;
+  --wc-gap: 4px;
+  --wc-edge: 12px;
+  /* Room taken by the three buttons plus the gap in front of them. */
+  --wc-total: calc(var(--wc-btn) * 3 + var(--wc-gap) * 3);
 }
 
 .wc-btns {
   position: fixed;
   top: 0;
-  right: 0;
+  right: var(--wc-edge);
   z-index: 1000;
+  height: var(--wc-bar);
   display: flex;
+  align-items: center;
+  gap: var(--wc-gap);
   -webkit-app-region: no-drag;
   app-region: no-drag;
 }
-.wc-btn {
-  width: var(--wc-w);
-  height: var(--wc-h);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  border: none;
-  background: transparent;
-  color: var(--ink);
-  cursor: default;
-}
-.wc-btn:hover { background: var(--hover); }
-.wc-btn.is-close:hover { background: var(--fail); color: var(--term); }
+.wc-btn.icon-btn:hover { background: var(--hover); color: var(--ink); }
+.wc-btn.icon-btn.is-close:hover { background: var(--fail); color: var(--term); }
+.wc-btn svg { stroke-linecap: round; stroke-linejoin: round; }
 
 /* Draggable top row: left header, center status bar, right tab bar. */
 :root[data-desktop-shell="1"] :is(.sb-hd, .next-status, .right-tabs-bar) {
@@ -2959,10 +2955,10 @@ button.file-search-result-row:hover {
 }
 
 /* Keep clear of the window buttons. */
-:root[data-desktop-shell="1"] .side-toggle-right { right: calc(12px + var(--wc-total)); }
+:root[data-desktop-shell="1"] .side-toggle-right { right: calc(var(--wc-edge) + var(--wc-total)); }
 :root[data-desktop-shell="1"] .right-tabs-bar { padding-right: calc(50px + var(--wc-total)); }
-:root[data-desktop-shell="1"] .next-shell.right-closed .next-status { padding-right: calc(12px + var(--wc-total)); }
-:root[data-desktop-shell="1"] .next-settings-ov { padding-top: calc(var(--wc-h) + 8px); }
+:root[data-desktop-shell="1"] .next-shell.right-closed .next-status { padding-right: calc(50px + var(--wc-total)); }
+:root[data-desktop-shell="1"] .next-settings-ov { padding-top: calc(var(--wc-bar) + 8px); }
 
 /* Fixed overlays stay clickable at the top edge instead of dragging the window. */
 :root[data-desktop-shell="1"] :is(.next-settings-ov, .search-palette-overlay, .modal-overlay, .mp-mask, .img-lightbox) {
