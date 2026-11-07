@@ -9,7 +9,6 @@ using System.Threading;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using System.Windows.Forms;
-using Microsoft.Win32;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.WinForms;
 
@@ -58,7 +57,7 @@ namespace Weft.Desktop
         // (https://learn.microsoft.com/microsoft-edge/webview2/release-notes/sdk/1-0-2420-47).
         private static readonly Version MinNonClientRuntime = new Version(123, 0, 2420, 47);
 
-        // Page background used before the page is there: last real page colour (shell.json), else the Windows app theme.
+        // Page background used before the page is there: last real page colour (shell.json), else the default light theme.
         private Color bgColor;
         private bool bgDark;
         private readonly SplashBar splash;
@@ -207,16 +206,9 @@ namespace Weft.Desktop
                 }
             }
             catch { }
-            bool light = true;
-            try
-            {
-                object v = Registry.GetValue(@"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize", "AppsUseLightTheme", 1);
-                if (v is int && (int)v == 0) light = false;
-            }
-            catch { }
-            // Same as --bg of the default "white" theme family.
-            bgColor = light ? Color.FromArgb(0xfc, 0xfc, 0xfc) : Color.FromArgb(0x18, 0x18, 0x18);
-            bgDark = !light;
+            // No record yet: the page's default appearance is light (DEFAULT_APPEARANCE), --bg of the "white" theme.
+            bgColor = Color.FromArgb(0xfc, 0xfc, 0xfc);
+            bgDark = false;
         }
 
         // The page reports its real background (--bg) whenever the theme changes; remember it for the next cold start.
