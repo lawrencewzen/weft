@@ -1,8 +1,14 @@
 // @vitest-environment jsdom
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { applyDocumentPrefs, toggleAppearance, watchSystemAppearance } from '../data/prefs';
 import { WindowControls } from './WindowControls';
+
+const themesCss = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '../styles/themes.css'), 'utf8');
 
 describe('WindowControls', () => {
   let root: Root;
@@ -50,21 +56,75 @@ describe('WindowControls', () => {
     expect(q('window-toggle-maximize').title).toBe('Restore');
   });
 
-  it('reports the page background to the shell and again when the theme changes', async () => {
-    const root_ = document.documentElement;
-    root_.dataset.desktopShell = '1';
-    root_.style.setProperty('--bg', '#181818');
-    await act(async () => root.render(<WindowControls lang="en" />));
-    expect(posted).toEqual([]); // not before the page had a chance to paint
-    await act(async () => { await new Promise((r) => setTimeout(r, 80)); });
-    expect(posted).toEqual(['theme:#181818']);
-    await act(async () => {
-      root_.style.setProperty('--bg', '#fcfcfc');
-      root_.setAttribute('data-theme', 'white-light');
-      await Promise.resolve();
+  describe('theme report (real themes.css, real prefs)', () => {
+    const settle = () => act(async () => { await new Promise((r) => setTimeout(r, 80)); });
+
+    beforeEach(() => {
+      // jsdom does not resolve custom properties from stylesheets: answer --bg from the real themes.css rule
+      // that matches the current data-theme, like a browser would.
+      vi.spyOn(window, 'getComputedStyle').mockImplementation(() => ({
+        getPropertyValue: (name: string) => {
+          const attr = document.documentElement.getAttribute('data-theme');
+          const m = new RegExp(`\\[data-theme="${attr}"\\]\\{[^}]*?--bg:(#[0-9a-fA-F]{6})`).exec(themesCss);
+          return name === '--bg' && m ? ` ${m[1]}` : '';
+        },
+      }) as unknown as CSSStyleDeclaration);
+      document.documentElement.dataset.desktopShell = '1';
+      localStorage.clear();
     });
-    expect(posted).toEqual(['theme:#181818', 'theme:#fcfcfc']);
-    root_.style.removeProperty('--bg');
-    root_.removeAttribute('data-theme');
+
+    afterEach(() => {
+      localStorage.clear();
+      document.documentElement.removeAttribute('data-theme');
+      delete (globalThis as { matchMedia?: unknown }).matchMedia;
+    });
+
+    it('stored dark: the very first report is the dark background', async () => {
+      localStorage.setItem('weft_appearance', 'dark');
+      applyDocumentPrefs();
+      await act(async () => root.render(<WindowControls lang="en" />));
+      await settle();
+      expect(posted).toEqual(['theme:#181818']);
+    });
+
+    it('stored dark with the claude family reports its own dark background', async () => {
+      localStorage.setItem('weft_appearance', 'dark');
+      localStorage.setItem('weft_theme', 'claude');
+      applyDocumentPrefs();
+      await act(async () => root.render(<WindowControls lang="en" />));
+      await settle();
+      expect(posted).toEqual(['theme:#262624']);
+    });
+
+    it('switching the theme reports again, every time', async () => {
+      applyDocumentPrefs(); // default: light
+      await act(async () => root.render(<WindowControls lang="en" />));
+      await settle();
+      expect(posted).toEqual(['theme:#fcfcfc']);
+      await act(async () => { toggleAppearance(); await Promise.resolve(); });
+      expect(posted).toEqual(['theme:#fcfcfc', 'theme:#181818']);
+      await act(async () => { toggleAppearance(); await Promise.resolve(); });
+      expect(posted).toEqual(['theme:#fcfcfc', 'theme:#181818', 'theme:#fcfcfc']);
+    });
+
+    it('system appearance: follows the OS at start and when the OS flips', async () => {
+      let dark = true;
+      let listener: (() => void) | null = null;
+      (globalThis as { matchMedia?: unknown }).matchMedia = () => ({
+        get matches() { return dark; },
+        addEventListener: (_: string, fn: () => void) => { listener = fn; },
+        removeEventListener: () => { listener = null; },
+      });
+      localStorage.setItem('weft_appearance', 'system');
+      applyDocumentPrefs();
+      const stop = watchSystemAppearance();
+      await act(async () => root.render(<WindowControls lang="en" />));
+      await settle();
+      expect(posted).toEqual(['theme:#181818']);
+      dark = false;
+      await act(async () => { listener?.(); await Promise.resolve(); });
+      expect(posted).toEqual(['theme:#181818', 'theme:#fcfcfc']);
+      stop();
+    });
   });
 });
