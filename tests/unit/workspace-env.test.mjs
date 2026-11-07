@@ -69,10 +69,14 @@ test('sandbox: env rejects ../, absolute paths, and NUL', async () => {
   await writeFile(path.join(base, 'secret.txt'), 'secret');
   const env = await createWorkspaceEnv({ cwd: root });
   try {
+    // Reads may leave the workspace (T115); writes may not.
     const parent = await env.readTextFile('../secret.txt', context);
-    assert.equal(parent.ok, false);
-    assert.equal(parent.error.code, 'invalid');
-    assert.equal(String(parent.error.message).includes('E_SANDBOX'), true);
+    assert.equal(parent.ok, true);
+    assert.equal(parent.value, 'secret');
+    const parentWrite = await env.writeFile('../secret.txt', 'pwned', context);
+    assert.equal(parentWrite.ok, false);
+    assert.equal(parentWrite.error.code, 'invalid');
+    assert.equal(String(parentWrite.error.message).includes('E_SANDBOX'), true);
 
     const abs = await env.writeFile(path.join(base, 'secret.txt'), 'pwned', context);
     assert.equal(abs.ok, false);
@@ -101,9 +105,10 @@ test('sandbox: env rejects symlink escape (file and dir)', async () => {
   await symlink(base, path.join(root, 'outdir'));
   const env = await createWorkspaceEnv({ cwd: await realpath(root) });
   try {
-    const file = await env.readTextFile('link.txt', context);
+    const file = await env.writeFile('link.txt', 'pwned', context);
     assert.equal(file.ok, false);
     assert.equal(String(file.error.message).includes('E_SANDBOX'), true);
+    assert.equal((await env.readTextFile('link.txt', context)).value, 'secret');
 
     const dir = await env.writeFile('outdir/new.txt', 'pwned', context);
     assert.equal(dir.ok, false);

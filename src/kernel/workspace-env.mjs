@@ -1,11 +1,13 @@
 // Execution environment for one conversation workspace.
 // Wraps official NodeExecutionEnv and applies resolveInWorkspace to every
-// file path. Command cwd is kept inside that workspace. Agent exec uses the
+// file path: writes stay inside it, reads may leave it except for sensitive
+// locations (read-guard.mjs). Not isolation: bash is unrestricted. Command cwd is kept inside that workspace. Agent exec uses the
 // official inheritEnv: false + env allow-list (see bash-env.mjs). No scheduler.
 import { realpath } from 'node:fs/promises';
 import { NodeExecutionEnv } from '@earendil-works/pi-durable/env/node';
 import { ExecutionError, FileError, err, ok } from '@earendil-works/pi-durable/env';
 import { resolveInWorkspace } from '../core/paths.mjs';
+import { assertReadablePath } from '../core/read-guard.mjs';
 import { bashChildEnv } from './bash-env.mjs';
 
 const UTF8_OUTPUT = 'try { [Console]::OutputEncoding=[System.Text.Encoding]::UTF8 } catch {}';
@@ -34,10 +36,15 @@ async function execPowerShell(inner, command, options, context) {
   return last;
 }
 
+function sensitiveFileError(filePath, error) {
+  return err(new FileError('invalid', error?.message || 'E_SENSITIVE: 敏感位置', filePath, error));
+}
+
 export class WorkspaceExecutionEnv {
-  constructor(inner, root) {
+  constructor(inner, root, { dataDir } = {}) {
     this.inner = inner;
     this.root = root;
+    this.dataDir = dataDir;
     this.id = inner.id;
   }
 
@@ -67,42 +74,60 @@ export class WorkspaceExecutionEnv {
     return resolved;
   }
 
+  /**
+   * Read-only access: any path, inside or outside the workspace, except
+   * sensitive locations. Write-side methods keep using `checked`.
+   */
+  async checkedRead(filePath, context) {
+    if (typeof filePath !== 'string' || filePath.includes('\0')) {
+      return sandboxError(filePath, new Error('invalid path'));
+    }
+    const resolved = await this.inner.absolutePath(filePath, context);
+    if (!resolved.ok) return resolved;
+    try {
+      await assertReadablePath(resolved.value, { dataDir: this.dataDir, root: this.root });
+    } catch (error) {
+      return sensitiveFileError(filePath, error);
+    }
+    return resolved;
+  }
+
   async absolutePath(filePath, context) {
-    return this.checked(filePath, context);
+    return this.checkedRead(filePath, context);
   }
 
   async joinPath(parts, context) {
     const joined = await this.inner.joinPath(parts, context);
     if (!joined.ok) return joined;
-    return this.checked(joined.value, context);
+    return this.checkedRead(joined.value, context);
   }
 
   async readTextFile(filePath, context) {
-    const resolved = await this.checked(filePath, context);
+    const resolved = await this.checkedRead(filePath, context);
     if (!resolved.ok) return resolved;
     return this.inner.readTextFile(resolved.value, context);
   }
 
   async openTextLineReader(filePath, context) {
-    const resolved = await this.checked(filePath, context);
+    const resolved = await this.checkedRead(filePath, context);
     if (!resolved.ok) return resolved;
     return this.inner.openTextLineReader(resolved.value, context);
   }
 
   async readTextLines(filePath, options, context) {
-    const resolved = await this.checked(filePath, context);
+    const resolved = await this.checkedRead(filePath, context);
     if (!resolved.ok) return resolved;
     return this.inner.readTextLines(resolved.value, options, context);
   }
 
   async readBinaryFile(filePath, context) {
-    const resolved = await this.checked(filePath, context);
+    const resolved = await this.checkedRead(filePath, context);
     if (!resolved.ok) return resolved;
     return this.inner.readBinaryFile(resolved.value, context);
   }
 
   async openBinaryReader(filePath, options, context) {
-    const resolved = await this.checked(filePath, context);
+    const resolved = await this.checkedRead(filePath, context);
     if (!resolved.ok) return resolved;
     return this.inner.openBinaryReader(resolved.value, options, context);
   }
@@ -140,19 +165,19 @@ export class WorkspaceExecutionEnv {
   }
 
   async fileInfo(filePath, context) {
-    const resolved = await this.checked(filePath, context);
+    const resolved = await this.checkedRead(filePath, context);
     if (!resolved.ok) return resolved;
     return this.inner.fileInfo(resolved.value, context);
   }
 
   async listDir(filePath, context) {
-    const resolved = await this.checked(filePath, context);
+    const resolved = await this.checkedRead(filePath, context);
     if (!resolved.ok) return resolved;
     return this.inner.listDir(resolved.value, context);
   }
 
   async openDirReader(filePath, context) {
-    const resolved = await this.checked(filePath, context);
+    const resolved = await this.checkedRead(filePath, context);
     if (!resolved.ok) return resolved;
     return this.inner.openDirReader(resolved.value, context);
   }
@@ -168,15 +193,15 @@ export class WorkspaceExecutionEnv {
   }
 
   async canonicalPath(filePath, context) {
-    const resolved = await this.checked(filePath, context);
+    const resolved = await this.checkedRead(filePath, context);
     if (!resolved.ok) return resolved;
     const canonical = await this.inner.canonicalPath(resolved.value, context);
     if (!canonical.ok) return canonical;
-    return this.allow(canonical.value);
+    return this.checkedRead(canonical.value, context);
   }
 
   async exists(filePath, context) {
-    const resolved = await this.checked(filePath, context);
+    const resolved = await this.checkedRead(filePath, context);
     if (!resolved.ok) return resolved;
     return this.inner.exists(resolved.value, context);
   }
@@ -227,12 +252,12 @@ export class WorkspaceExecutionEnv {
 }
 
 /** Build a path-checked environment whose cwd is the conversation workspace. */
-export async function createWorkspaceEnv({ cwd } = {}) {
+export async function createWorkspaceEnv({ cwd, dataDir } = {}) {
   if (!cwd) {
     const error = new Error('E_SANDBOX: conversation cwd is not set');
     error.code = 'E_SANDBOX';
     throw error;
   }
   const root = await realpath(cwd);
-  return new WorkspaceExecutionEnv(new NodeExecutionEnv({ cwd: root }), root);
+  return new WorkspaceExecutionEnv(new NodeExecutionEnv({ cwd: root }), root, { dataDir });
 }
