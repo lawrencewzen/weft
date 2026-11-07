@@ -310,3 +310,11 @@ test('retry wait: absent without a pending retry, outside running, or without a 
   assert.equal(runStateView({ status: 'running', live: retryLive(1, 'fetch failed') }).retry, undefined);
   assert.equal(runStateView({ status: 'running', live: null, retryMaxAttempts: 10 }).retry, undefined);
 });
+
+test('retry wait: a stream idle timeout is a timeout, shown as a sentence', () => {
+  const raw = 'Model stream idle timeout: no data for 120s';
+  const view = runStateView({ status: 'running', live: retryLive(2, raw), retryMaxAttempts: 10 });
+  assert.equal(view.retry.kind, 'timeout');
+  assert.equal(view.pendingText, '模型服务响应超时，正在重试（第 3 次，共 10 次）');
+  assert.equal(view.pendingText.includes('idle'), false);
+});

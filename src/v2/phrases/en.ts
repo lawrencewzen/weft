@@ -13,6 +13,7 @@ export const en: Record<string, string> = {
   run_retry_busy: 'The model service is busy, retrying (attempt {n} of {max})',
   run_retry_server: 'The model service had an error, retrying (attempt {n} of {max})',
   run_retry_other: 'Model request failed, retrying (attempt {n} of {max})',
+  run_err_stream_idle: 'The model service stopped sending data for too long. The request was cut off.',
   run_err_unfinished: 'This turn did not finish.',
   tool_sum_join: ' · ',
   tool_sum_names_join: ', ',

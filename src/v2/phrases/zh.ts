@@ -13,6 +13,7 @@ export const zh: Record<string, string> = {
   run_retry_busy: '模型服务繁忙，正在重试（第 {n} 次，共 {max} 次）',
   run_retry_server: '模型服务暂时出错，正在重试（第 {n} 次，共 {max} 次）',
   run_retry_other: '模型请求失败，正在重试（第 {n} 次，共 {max} 次）',
+  run_err_stream_idle: '模型服务长时间没有返回数据，已中断这次请求。',
   run_err_unfinished: '这一轮没有完成。',
   tool_sum_join: ' · ',
   tool_sum_names_join: '、',
