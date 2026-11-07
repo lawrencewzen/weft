@@ -139,9 +139,18 @@ export function renderAgentsBody(bytes, truncated) {
   return `<project_instructions path="${AGENTS_FILE}">\n${body}</project_instructions>`;
 }
 
+/** A refused path is not a missing file: say so instead of dropping the section silently. */
+function noteRefused(result) {
+  const message = String(result?.error?.message ?? '');
+  if (message.includes('E_SENSITIVE')) console.error(`WEFT_KERNEL_AGENT AGENTS.md not loaded: ${message}`);
+}
+
 async function loadAgentsBytes(env, context) {
   const info = await env.fileInfo(AGENTS_FILE, context);
-  if (!info?.ok) return null;
+  if (!info?.ok) {
+    noteRefused(info);
+    return null;
+  }
   if (info.value.kind === 'directory') return null;
   const size = Number(info.value.size) || 0;
   if (size === 0) return { bytes: Buffer.alloc(0), truncated: false };
@@ -158,7 +167,10 @@ async function loadAgentsBytes(env, context) {
   }
   if (typeof env.readBinaryFile !== 'function') return null;
   const read = await env.readBinaryFile(AGENTS_FILE, context);
-  if (!read?.ok) return null;
+  if (!read?.ok) {
+    noteRefused(read);
+    return null;
+  }
   const bytes = Buffer.from(read.value);
   return { bytes, truncated: bytes.length > AGENTS_BYTE_LIMIT };
 }

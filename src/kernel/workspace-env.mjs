@@ -85,7 +85,7 @@ export class WorkspaceExecutionEnv {
     const resolved = await this.inner.absolutePath(filePath, context);
     if (!resolved.ok) return resolved;
     try {
-      await assertReadablePath(resolved.value, { dataDir: this.dataDir });
+      await assertReadablePath(resolved.value, { dataDir: this.dataDir, root: this.root });
     } catch (error) {
       return sensitiveFileError(filePath, error);
     }

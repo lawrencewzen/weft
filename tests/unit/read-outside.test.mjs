@@ -124,3 +124,37 @@ test('write and edit stay inside the workspace (E_SANDBOX); reads are not affect
   await run('write', { path: 'made.txt', content: 'ok' }, f.api);
   assert.equal(await readFile(path.join(f.ws, 'made.txt'), 'utf8'), 'ok');
 });
+
+test('a workspace inside the data directory reads its own files; the rest of the data directory stays refused', async (t) => {
+  const f = await fixture(t);
+  const proj = path.join(f.dataDir, 'proj');
+  await mkdir(path.join(proj, 'docs'), { recursive: true });
+  await writeFile(path.join(proj, 'AGENTS.md'), 'rules\n');
+  await writeFile(path.join(proj, 'docs', 'a.txt'), 'doc\n');
+  await writeFile(path.join(f.dataDir, 'weft.sqlite'), 'DB');
+  await writeFile(path.join(f.dataDir, 'providers.json'), 'KEYS');
+  const env = await createWorkspaceEnv({ cwd: proj, dataDir: f.dataDir });
+  t.after(() => env.cleanup(BACKGROUND_CONTEXT).catch(() => {}));
+  const api = { ...f.api, env };
+  const info = await env.fileInfo('AGENTS.md', BACKGROUND_CONTEXT);
+  assert.equal(info.ok, true);
+  assert.equal((await env.readBinaryFile('AGENTS.md', BACKGROUND_CONTEXT)).ok, true);
+  assert.match(text(await run('read', { path: 'docs/a.txt' }, api)), /doc/);
+  assert.match(text(await run('ls', { path: '.' }, api)), /AGENTS\.md/);
+  for (const p of ['../weft.sqlite', '../providers.json', path.join(f.dataDir, 'weft.sqlite')]) {
+    await assert.rejects(run('read', { path: p }, api), /E_SENSITIVE/, p);
+  }
+  assert.equal((await env.fileInfo('../weft.sqlite', BACKGROUND_CONTEXT)).ok, false);
+});
+
+test('data directory rule: workspace root inside it is exempt only for its own files', () => {
+  const opt = { platform: 'linux', homes: [], dataDirs: ['/d'], root: '/d/proj' };
+  assert.equal(sensitiveRule('/d/proj/AGENTS.md', opt), '');
+  assert.ok(sensitiveRule('/d/weft.sqlite', opt));
+  assert.ok(sensitiveRule('/d/proj2/x', opt));
+  // the data directory itself, or a parent of it, as workspace gives no exemption
+  assert.ok(sensitiveRule('/d/weft.sqlite', { ...opt, root: '/d' }));
+  assert.ok(sensitiveRule('/d/weft.sqlite', { ...opt, root: '/' }));
+  // home credentials stay refused even inside a home workspace
+  assert.ok(sensitiveRule('/h/.ssh/id', { platform: 'linux', homes: ['/h'], dataDirs: [], root: '/h' }));
+});

@@ -70,12 +70,16 @@ const DATA_DIR_OPEN = ['workspaces', 'chats'];
  * Pure rule check on an already realpath-ed absolute path.
  * Returns the label of the matching rule, or '' when readable.
  */
-export function sensitiveRule(resolved, { homes = [], dataDirs = [], platform = process.platform } = {}) {
+export function sensitiveRule(resolved, { homes = [], dataDirs = [], root = '', platform = process.platform } = {}) {
   const api = pathApi(platform);
   const target = normalize(resolved, platform);
+  const rootN = root ? normalize(root, platform) : '';
   for (const dir of dataDirs) {
     const base = normalize(dir, platform);
     if (!under(base, target, platform)) continue;
+    // A workspace placed inside the data directory keeps its own files readable.
+    // A root that is the data directory itself, or contains it, gives no exemption.
+    if (rootN && rootN !== base && under(base, rootN, platform) && under(rootN, target, platform)) continue;
     if (DATA_DIR_OPEN.some((name) => under(api.join(base, name), target, platform))) continue;
     return 'Weft 数据目录，含 provider 凭据';
   }
@@ -135,7 +139,7 @@ function dataDirList(dataDir) {
  * Throw E_SENSITIVE when `target` (any spelling, symlink or junction included)
  * resolves into a sensitive location. Failures to resolve are treated as blocked.
  */
-export async function assertReadablePath(target, { dataDir } = {}) {
+export async function assertReadablePath(target, { dataDir, root } = {}) {
   let real;
   try {
     real = await realpathLoose(target);
@@ -144,9 +148,10 @@ export async function assertReadablePath(target, { dataDir } = {}) {
   }
   const homes = await candidates([os.homedir(), process.env.USERPROFILE, process.env.HOME]);
   const dataDirs = await candidates(dataDirList(dataDir));
+  const realRoot = root ? await realpathLoose(root).catch(() => root) : '';
   // Check the lexical spelling too, in case a link was replaced between steps.
   for (const spelling of new Set([real, path.resolve(target)])) {
-    const label = sensitiveRule(spelling, { homes, dataDirs });
+    const label = sensitiveRule(spelling, { homes, dataDirs, root: realRoot });
     if (label) throw sensitiveError(spelling, label);
   }
 }
