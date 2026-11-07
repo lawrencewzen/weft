@@ -47,10 +47,9 @@ test('prototype runs from file:// with mock data, no network and no console erro
   await expect(page.getByTestId('next-composer-git')).toBeVisible();
   await expect(page.getByTestId('next-composer-git-branch')).toHaveText('main');
   await page.locator('[data-testid=next-conv-row][data-id="c-docs"]').click();
-  await expect(page.getByTestId('next-context-banner')).toBeVisible();
+  await expect(page.getByTestId('next-context-banner')).toHaveCount(0);
   await expect(page.getByTestId('next-context-chip')).toHaveClass(/is-warn/);
   await expect(page.getByTestId('next-context-chip')).toHaveText('86%');
-  await expect(page.getByTestId('next-context-new')).toBeVisible();
   await expect(page.getByTestId('next-composer-input')).toHaveAttribute('placeholder', '描述任务，@ 引用文件');
   await expect(page.getByTestId('next-composer-newline')).toHaveCount(0);
   await page.getByTestId('next-composer-input').fill('把空对话的输入框固定到底部');

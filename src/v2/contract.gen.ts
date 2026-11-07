@@ -37,6 +37,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 读取压缩触发点
+         * @description 全局一个值，存在现有 settings 里。缺省或旧数据没有该字段时为 80。
+         *     改完不必重启：下一次官方压缩判断读取当时的 settings。
+         */
+        get: operations["getSettings"];
+        /**
+         * 设置压缩触发点
+         * @description `triggerPercent` 必须是 60 到 90 的整数。缺字段不改现有值。非法返回 400。
+         *     写入后下一次判断即用新值，不重启进程。
+         */
+        put: operations["putSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/auth/web-code": {
         parameters: {
             query?: never;
@@ -1077,10 +1103,36 @@ export interface paths {
         put?: never;
         /**
          * 点「继续」
-         * @description 等同于发送 MANUAL_CONTINUE_TEXT（「继续」）。
-         *     `requestId` 缺省时服务端生成；同一个 requestId 重复请求返回同一个 runId。
+         * @description 用 Pi Durable 的 `submit({ type: 'continue' })` 在当前上下文上再跑一轮，不写用户消息。
+         *     只在空闲时接受。对话正忙返回 409，`code` 为 `ConversationBusy`。
+         *     没有工作区同样是 409，`code` 为 `E_NO_WORKSPACE`。
+         *     `requestId` 缺省时服务端生成；同一个 requestId 重复请求返回同一个 runId，不重复提交。
          */
         post: operations["continueConversation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/conversations/{id}/compact": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 手动压缩当前对话
+         * @description 调用 Pi Durable `Conversation.compact(instructions)`。成功受理返回 202 和任务 id。
+         *     官方行为：总会先受理一个压缩任务。没有可压缩前缀时任务完成且没有摘要（不写 compactionFailure，状态回到 idle，不产生 note）。
+         *     对话正在跑时也受理，摘要在下一个回合边界写入。再点一次会再受理一个任务，不在宿主侧加锁；
+         *     多个摘要同时在飞时，切得更远的那次留下，较近的放置可能以 stale 结束。
+         *     `instructions` 可省略。官方 `compact()` 不因忙抛 ConversationBusy；若运行时抛了该错误，这里返回 409。
+         */
+        post: operations["compactConversation"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1281,6 +1333,26 @@ export interface components {
         ContinueRequest: {
             /** @description 幂等键。缺省时服务端生成。同一个 requestId 重复提交返回同一个 runId。 */
             requestId?: string;
+        };
+        /** @description 全局压缩触发点。 */
+        CompactionSettingsView: {
+            compaction: components["schemas"]["CompactionPreference"];
+        };
+        CompactionPreference: {
+            /** @description 自动压缩触发点，占模型上下文窗口的百分比。整数 60–90，缺省 80。全局一个值，不按模型单独设置。 */
+            triggerPercent: number;
+        };
+        /** @description 只改压缩触发点。省略 compaction 表示不改。 */
+        CompactionSettingsPatch: {
+            compaction?: components["schemas"]["CompactionPreference"];
+        };
+        CompactRequest: {
+            /** @description 传给官方 compact 的可选说明。省略则不带。 */
+            instructions?: string;
+        };
+        CompactAccepted: {
+            /** @description Pi Durable 这次手动压缩任务的 id。 */
+            taskId: string;
         };
         RunAccepted: {
             /** @description Pi Durable 这次提交的 id */
@@ -1596,7 +1668,10 @@ export interface components {
             reportKind: "answered" | "failed";
             body: string;
         };
-        /** @description 系统提示。auto_continue 的 text 是服务端出成的句子。 */
+        /**
+         * @description 系统提示。correction 是交接，note 是给子 Agent 插话后的通知。
+         *     compaction 的 text 是服务端按语言出成的句子，对应一条 pi.compaction 条目，放在该条目的时间位置。
+         */
         ThreadItemSystemNote: {
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -1605,7 +1680,7 @@ export interface components {
             kind: "system_note";
             id: string;
             /** @enum {string} */
-            noteKind: "auto_continue" | "correction" | "note";
+            noteKind: "correction" | "note" | "compaction";
             text: string;
         };
         /** @description 对话流里的一项。按 kind 区分。 */
@@ -1630,7 +1705,13 @@ export interface components {
             /** @description status 为 failed 时带上，否则 null */
             error: null | {
                 code: string;
+                /** @description 按 lang 出成的人话。model_error 带脱敏后的原始错误 */
                 message: string;
+                /**
+                 * @description 这一轮还能用继续再跑。reason 为 model_error、interrupted、restart_limit、faulted 时为 true。
+                 *     no_model、aborted、reset、nothing_to_answer、orphaned、E_SUBMISSION_MISSING 等为 false。
+                 */
+                canContinue: boolean;
                 retry?: {
                     attempt: number;
                     delayMs: number;
@@ -1648,6 +1729,23 @@ export interface components {
                 startedAt: number;
                 /** @description 工具标题摘要，例如 bash 命令前 80 个字符 */
                 summary: string;
+            };
+            /**
+             * @description 压缩状态，来自 pi.live.compactions 与 pi.live.compactionFailure。
+             *     有运行中的压缩时为 running（多条时 trigger 取最后一条）；否则若保留着失败记录则为 failed；否则 idle。
+             *     失败的 error 是脱敏后的人话。阻塞压缩失败导致的 model_error 使用同一句人话。
+             *     SSE 上压缩变化会让 conversation 重新 upsert，这个字段跟着更新。
+             */
+            compaction?: {
+                /** @enum {string} */
+                state: "idle" | "running" | "failed";
+                /**
+                 * @description running 或 failed 时有。idle 省略。
+                 * @enum {string}
+                 */
+                trigger?: "manual" | "threshold" | "overflow";
+                /** @description failed 时的人话。中文为「压缩失败：原因」，英文为 Compaction failed 加原因。 */
+                error?: string;
             };
         };
         /** @description 对话当前模型。取对话自己选的或默认模型。 */
@@ -2511,6 +2609,113 @@ export interface operations {
             };
             /** @description 有活着的任务，此时不能退出 */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 客户端错误 */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 服务端错误 */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+        };
+    };
+    getSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 当前压缩设置 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompactionSettingsView"];
+                };
+            };
+            /** @description 未授权 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 客户端错误 */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 服务端错误 */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+        };
+    };
+    putSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CompactionSettingsPatch"];
+            };
+        };
+        responses: {
+            /** @description 写入后的压缩设置 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompactionSettingsView"];
+                };
+            };
+            /** @description triggerPercent 不是 60 到 90 的整数 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 未授权 */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -6157,7 +6362,88 @@ export interface operations {
                     "application/json": components["schemas"]["V2Error"];
                 };
             };
-            /** @description 对话没有工作区 */
+            /** @description 没有工作区（E_NO_WORKSPACE），或对话正忙（ConversationBusy） */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 客户端错误 */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 服务端错误 */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+        };
+    };
+    compactConversation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 对话 id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["CompactRequest"];
+            };
+        };
+        responses: {
+            /** @description 已受理手动压缩 */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompactAccepted"];
+                };
+            };
+            /** @description instructions 不是字符串 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 未授权 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 对话不存在 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 官方拒绝（ConversationBusy） */
             409: {
                 headers: {
                     [name: string]: unknown;

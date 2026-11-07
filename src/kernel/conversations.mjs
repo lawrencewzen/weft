@@ -1,13 +1,13 @@
 // HTTP facade over one Pi Durable Harness.
 // Dialogue state lives in the Harness. This module records the conversation
-// index, maps watchEvents onto the connected SSE clients, and reads diffs
+// index, maps Conversation.watch onto the connected SSE clients, and reads diffs
 // back out of tool-result entries.
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { readFile, stat } from 'node:fs/promises';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { createModels } from '@earendil-works/pi-ai/models';
-import { createRegistry, watchEvents } from '@earendil-works/pi-durable';
+import { ConversationBusy, ConversationTranscript, createRegistry } from '@earendil-works/pi-durable';
 import { liveDiff } from '../core/diff.mjs';
 import { redactAuthText } from '../core/redact.mjs';
 import { resolveInWorkspace } from '../core/paths.mjs';
@@ -19,11 +19,12 @@ import { configureThinkingLevel } from '../core/thinking-level.mjs';
 import { buildAskSubmission } from './ask.mjs';
 import {
   createMapContext,
-  mapHarnessBatch,
+  createViewProjector,
   mergeFileChanges,
   findUserMessageImage,
   findUserMessagePaste,
   messagesFromEntries,
+  projectViewUpdate,
   statusFromSubmission,
   writesFromEntries,
 } from './events.mjs';
@@ -35,7 +36,7 @@ import { installPluginReload } from './plugins.mjs';
 import { createAgentHost, installAgentExtensions } from './agent-config.mjs';
 import { maybeGenerateConversationTitle } from './title.mjs';
 import { createSubagentControl } from './subagent-control.mjs';
-import { createSubagentExtension, createSubagentHost } from './subagents.mjs';
+import { createSubagentExtension, createSubagentHost, readTaskGraph } from './subagents.mjs';
 import { createWorkspaceExtension, workspaceTools } from './tools.mjs';
 import {
   CHANGE_CACHE_MS,
@@ -51,8 +52,9 @@ import {
 } from './workspace-snapshot.mjs';
 import { decodeWorkspaceBytes } from './workspace-text.mjs';
 import { installUsageExtension } from './usage.mjs';
-import { installContinuationExtension } from './continuation.mjs';
 import { createWorkspaceEnv } from './workspace-env.mjs';
+import { createCompactionControl } from './compaction-settings.mjs';
+import { readTriggerPercent } from '../core/settings.mjs';
 
 const DETAIL_CAP = 1024 * 1024;
 
@@ -64,14 +66,19 @@ function positiveInt(value, fallback) {
 /**
  * Harness settings. `WEFT_RETRY_MAX` is the number of attempts including the
  * first; Pi Durable's `maxRetries` counts the attempts after that.
+ *
+ * Backoff is Pi Durable's `retryDelayMs`: `min(baseDelayMs * 2^(attempt-1), maxAgentDelayMs)`
+ * with no jitter. `attempt` is the failed attempt, starting at 1. `maxAgentDelayMs` is left
+ * unset so the merged policy keeps Pi Durable's 60000 cap. The defaults (base 2000, 9 retries)
+ * sleep 2000+4000+8000+16000+32000+60000*4 = 302000 ms.
  */
 export function kernelSettings(env = process.env) {
-  const maxAttempts = positiveInt(env.WEFT_RETRY_MAX, 5);
+  const maxAttempts = positiveInt(env.WEFT_RETRY_MAX, 10);
   return {
     retry: {
       enabled: true,
       maxRetries: Math.max(0, maxAttempts - 1),
-      baseDelayMs: positiveInt(env.WEFT_RETRY_BASE_MS, 200),
+      baseDelayMs: positiveInt(env.WEFT_RETRY_BASE_MS, 2000),
     },
     stream: {
       timeoutMs: positiveInt(env.WEFT_STREAM_TIMEOUT_MS, 120_000),
@@ -155,12 +162,24 @@ export async function openConversationKernel({
     modelsStore: modelCache,
     env,
   });
-  const modelRoutes = createKernelModels({ models, getSettings, env });
+  const compaction = createCompactionControl(models);
+  const modelRoutes = createKernelModels({
+    models,
+    getSettings,
+    env,
+    onSynced(stored) {
+      compaction.setPercent(readTriggerPercent(stored));
+    },
+  });
   const routes = faux ? null : modelRoutes;
   const registry = createRegistry();
   const agentBridge = {};
   const subagentApi = {};
   const watches = new Map();
+  // One official ConversationTranscript per harness conversation. The watch window
+  // merges into it; loadEarlier/fillGap run only for a hole that is still open.
+  const histories = new Map();
+  const historyLocks = new Map();
   const tails = new Map();
   const listeners = new Map();
   const sends = new Map();
@@ -169,7 +188,15 @@ export async function openConversationKernel({
   const changeInflight = new Map();
   const snapshotLocks = new Map();
   const allListeners = new Set();
-  const settings = kernelSettings(env);
+  const baseSettings = kernelSettings(env);
+  if (typeof getSettings === 'function') {
+    try {
+      compaction.setPercent(readTriggerPercent(await getSettings()));
+    } catch {
+      compaction.setPercent(readTriggerPercent(null));
+    }
+  }
+  const settings = () => ({ ...baseSettings, compaction: compaction.current() });
   let agentHost;
 
   async function conversationIdFor(harnessId) {
@@ -182,9 +209,8 @@ export async function openConversationKernel({
   }
 
   registry.install(createWorkspaceExtension());
-  installAgentExtensions(registry, agentBridge);
+  installAgentExtensions(registry, agentBridge, { dataDir });
   installUsageExtension(registry);
-  installContinuationExtension(registry);
   installPluginReload(registry, agentBridge);
   const subagentExtension = createSubagentExtension({
     prepareChild: (parent) => subagentApi.prepareChild(parent),
@@ -245,12 +271,14 @@ export async function openConversationKernel({
   async function readView(harnessId) {
     const conversation = await harness.conversation(harnessId, context);
     if (!conversation) return null;
-    const view = await conversation.viewState(context);
-    try {
-      return view.value;
-    } finally {
-      view.dispose();
-    }
+    // Active transcript the model sees: compaction head plus the entries it keeps.
+    return conversation.context(context);
+  }
+
+  async function watchConversation(harnessId) {
+    const conversation = await harness.conversation(harnessId, context);
+    if (!conversation) return null;
+    return conversation.watch(context);
   }
 
   async function submissionView(conv) {
@@ -313,11 +341,94 @@ export async function openConversationKernel({
     });
   }
 
+  function withHistory(key, fn) {
+    const prev = historyLocks.get(key) || Promise.resolve();
+    const run = prev.then(fn, fn);
+    historyLocks.set(key, run.then(() => {}, () => {}));
+    return run;
+  }
+
+  function historySlot(conversation) {
+    const key = Number(conversation.id);
+    const existing = histories.get(key);
+    if (existing) return existing;
+    // Official loader: one range page and no cursor. ConversationTranscript turns
+    // the previous page's bound into the next maxEntryId or gap.
+    const transcript = new ConversationTranscript((query, limit, ctx) => (
+      conversation.entries(query, limit, undefined, ctx)
+    ));
+    const slot = { key, transcript, view: null };
+    histories.set(key, slot);
+    return slot;
+  }
+
+  function historyEntryList(view) {
+    const entries = [];
+    for (const item of view?.items || []) {
+      if (item?.kind === 'entry') entries.push(item.entry);
+    }
+    return entries;
+  }
+
+  function historyHasHole(view) {
+    return (view?.items || []).some((item) => item?.kind === 'earlier' || item?.kind === 'gap');
+  }
+
+  async function syncHistoryWindow(slot, conversation) {
+    const watch = await conversation.watch(context);
+    try {
+      slot.view = slot.transcript.merge(watch.value);
+    } finally {
+      await watch.stop();
+    }
+  }
+
+  async function advanceHistory(slot) {
+    const items = slot.view?.items || [];
+    const earlier = items.find((item) => item?.kind === 'earlier');
+    if (earlier) {
+      slot.view = await slot.transcript.loadEarlier(context);
+      return;
+    }
+    const gap = items.find((item) => item?.kind === 'gap');
+    if (gap) slot.view = await slot.transcript.fillGap(gap, context);
+  }
+
+  /**
+   * Entries the user can still see. `entryId` stops at the official page that
+   * contains it. Otherwise only an open earlier marker or gap is paged, one
+   * ConversationTranscript page at a time. A transcript that already reaches
+   * that point does not call entries() again. A page that adds nothing throws
+   * instead of dropping the rest of the history.
+   */
+  async function readHistory(harnessId, entryId) {
+    const conversation = await harness.conversation(harnessId, context);
+    if (!conversation) return [];
+    const slot = historySlot(conversation);
+    const want = entryId == null || entryId === '' ? null : String(entryId);
+    return withHistory(slot.key, async () => {
+      await syncHistoryWindow(slot, conversation);
+      let spins = 0;
+      while (slot.view && historyHasHole(slot.view)) {
+        if (want && historyEntryList(slot.view).some((entry) => String(entry.id) === want)) break;
+        const before = slot.view.items;
+        await advanceHistory(slot);
+        if (!slot.view || slot.view.items === before) {
+          throw new Error('transcript page made no progress');
+        }
+        if (++spins > 100000) throw new Error('transcript page did not converge');
+      }
+      return historyEntryList(slot.view);
+    });
+  }
+
   async function readTranscript(harnessId) {
-    const view = await readView(harnessId);
-    if (!view) return { messages: [], usage: null, entries: [] };
-    const mapped = messagesFromEntries(view.entries);
-    return { ...mapped, entries: view.entries || [] };
+    const entries = await readHistory(harnessId);
+    const mapped = messagesFromEntries(entries);
+    // `usage` here is the newest reported call in the stored history. The context
+    // chip must not use it: a call from before the compaction head is not the
+    // context the model sees. present() reads that from readView().
+    return { ...mapped, entries };
   }
 
   async function resolveTitleModel(conv) {
@@ -353,26 +464,41 @@ export async function openConversationKernel({
     return providers.contextWindowFor(conv);
   }
 
-  async function applyBatch(cid, batch, mapCtx) {
+  async function applyView(cid, view, mapCtx, projector) {
     const conv = await store.getConversation(cid);
     mapCtx.contextWindow = await conversationWindow(conv);
-    const mapped = mapHarnessBatch(batch, mapCtx);
+    const mapped = projectViewUpdate(projector, view, mapCtx);
     for (const ev of mapped.events) await deliver(cid, ev);
-    if (mapped.refresh) {
-      const conv = await store.getConversation(cid);
-      const status = (await submissionView(conv)).status;
-      await deliver(cid, { event: 'status', data: { status } });
+    if (mapped.refresh || mapped.runEnded) {
+      const current = await store.getConversation(cid);
+      const status = await submissionView(current);
+      if (mapped.runEnded && status.status === 'failed' && status.llmError) {
+        await deliver(cid, { event: 'error', data: status.llmError });
+      }
+      await deliver(cid, { event: 'status', data: { status: status.status } });
     }
   }
 
   async function attach(row) {
     if (!row?.harnessId || watches.has(row.id)) return;
-    const stream = await watchEvents(harness, row.harnessId, context);
-    const mapCtx = createMapContext({ retry: settings.retry });
-    watches.set(row.id, { stream, mapCtx, harnessId: row.harnessId });
-    stream.start((batch) => enqueue(row.id, async () => {
+    const conversation = await harness.conversation(row.harnessId, context);
+    if (!conversation) return;
+    const slot = historySlot(conversation);
+    const watch = await conversation.watch(context);
+    const mapCtx = createMapContext({ retry: baseSettings.retry });
+    const projector = createViewProjector();
+    watches.set(row.id, { stream: watch, mapCtx, projector, harnessId: row.harnessId });
+    await withHistory(slot.key, () => {
+      slot.view = slot.transcript.merge(watch.value);
+    });
+    await applyView(row.id, watch.value, mapCtx, projector);
+    watch.start((call) => enqueue(row.id, async () => {
+      if (call?.kind !== 'value') return;
       try {
-        await applyBatch(row.id, batch, mapCtx);
+        await withHistory(slot.key, () => {
+          slot.view = slot.transcript.merge(call.value);
+        });
+        await applyView(row.id, call.value, mapCtx, projector);
       } catch (err) {
         console.error(`WEFT_KERNEL_EVENT ${redactAuthText(err instanceof Error ? (err.stack || err.message) : err)}`);
       }
@@ -430,7 +556,7 @@ export async function openConversationKernel({
     context,
     readTranscript,
     emit: (cid, event, data) => deliver(cid, { event, data }),
-    watchEvents,
+    watchConversation,
     cidFor,
   });
   subagentApi.prepareChild = subagents.prepareChild;
@@ -843,12 +969,8 @@ export async function openConversationKernel({
     harness,
     context,
     async hasActiveWork() {
-      const graph = await harness.taskGraph(context);
-      try {
-        return Object.keys(graph.value?.tasks || {}).length > 0;
-      } finally {
-        graph.dispose();
-      }
+      const graph = await readTaskGraph(harness, context);
+      return Object.keys(graph?.tasks || {}).length > 0;
     },
     async close() {
       for (const watch of watches.values()) {
@@ -891,42 +1013,79 @@ export async function openConversationKernel({
     async getMessageImage(cid, messageId, index) {
       const conv = await store.getConversation(cid);
       if (!conv?.harnessId) return null;
-      const view = await readView(conv.harnessId);
-      if (!view) return null;
-      return findUserMessageImage(view.entries, messageId, index);
+      const entries = await readHistory(conv.harnessId, messageId);
+      return findUserMessageImage(entries, messageId, index);
     },
     async getMessagePaste(cid, messageId, index) {
       const conv = await store.getConversation(cid);
       if (!conv?.harnessId) return null;
-      const view = await readView(conv.harnessId);
-      if (!view) return null;
-      return findUserMessagePaste(view.entries, messageId, index);
+      const entries = await readHistory(conv.harnessId, messageId);
+      return findUserMessagePaste(entries, messageId, index);
+    },
+    liveStateFor(cid) {
+      const watch = watches.get(cid);
+      const docs = watch?.stream?.value?.docs;
+      const live = docs && typeof docs === 'object' ? docs['pi.live'] : null;
+      return live && typeof live === 'object' ? live : null;
     },
     async present(conv, { includeMessages = false } = {}) {
       if (!conv?.harnessId) {
-        return { ...conv, status: 'idle', messages: includeMessages ? [] : undefined, sends: [] };
+        return { ...conv, status: 'idle', messages: includeMessages ? [] : undefined, sends: [], live: null };
       }
       const view = await submissionView(conv);
       const status = view.status;
-      let usage = null;
       let messages;
+      // Context percent follows the active transcript. The full history still
+      // holds the pre-compaction call, and that number must not raise the chip.
+      const harnessView = await readView(conv.harnessId);
+      const usage = presentContext(latestCallUsage(harnessView?.entries)).usage;
       if (includeMessages) {
-        const transcript = await readTranscript(conv.harnessId);
-        usage = presentContext(transcript.usage).usage;
-        messages = transcript.messages;
-      } else {
-        // Newest assistant that reported tokens, not blindly the last message.
-        // viewState is still required: a fixed-size descending scan can miss an
-        // older reported call and would change the old list API.
-        const harnessView = await readView(conv.harnessId);
-        usage = presentContext(latestCallUsage(harnessView?.entries)).usage;
+        messages = (await readTranscript(conv.harnessId)).messages;
       }
-      const out = { ...conv, status, usage, sends: await sendsView(conv) };
+      const out = { ...conv, status, usage, sends: await sendsView(conv), live: this.liveStateFor(conv.id) };
       if (view.llmError) out.llmError = view.llmError;
       if (includeMessages) out.messages = messages;
       return out;
     },
+    /**
+     * Official Conversation.compact. It always admits a task and returns its id.
+     * Nothing to compact completes with an empty result (no summary, no failure).
+     * A busy conversation still accepts it; the summary is placed at the next
+     * boundary. A second call admits another task. Official placement keeps the
+     * furthest cut and may settle a nearer summary as stale. This does not add a lock.
+     */
+    async compact(cid, instructions) {
+      const conv = await store.getConversation(cid);
+      if (!conv) return { status: 404, body: { error: 'conversation not found', code: 'E_NOT_FOUND' } };
+      const conversation = await conversationFor(conv);
+      if (!conversation) return { status: 404, body: { error: 'conversation not found', code: 'E_NOT_FOUND' } };
+      try {
+        await modelRoutes.warm();
+      } catch (err) {
+        const message = redactAuthText(err instanceof Error ? err.message : err);
+        return { status: 500, body: { error: message || 'settings refresh failed', code: 'E_INTERNAL' } };
+      }
+      try {
+        const taskId = await conversation.compact(instructions, context);
+        return { status: 202, body: { taskId: String(taskId) } };
+      } catch (err) {
+        if (err?.name === 'ConversationBusy') {
+          return { status: 409, body: { error: 'busy', code: 'E_BUSY' } };
+        }
+        const message = redactAuthText(err instanceof Error ? err.message : err);
+        return { status: 500, body: { error: message || 'compact failed', code: 'E_INTERNAL' } };
+      }
+    },
+    async noteSettings(stored) {
+      compaction.setPercent(readTriggerPercent(stored));
+      await modelRoutes.warm();
+    },
     async postMessage(conv, text, options = {}) {
+      try {
+        await modelRoutes.warm();
+      } catch (err) {
+        console.error(`WEFT_COMPACTION_SETTINGS ${redactAuthText(err instanceof Error ? err.message : err)}`);
+      }
       const conversation = await conversationFor(conv);
       if (!conversation) return { status: 404, body: { error: 'conversation not found' } };
       const prepared = agentHost ? await agentHost.prepareSend(conv, text) : null;
@@ -941,6 +1100,18 @@ export async function openConversationKernel({
       }
       const given = typeof options.requestId === 'string' ? options.requestId.trim() : '';
       const requestId = given || prepared?.requestId || randomUUID();
+      if (options.continue) {
+        try {
+          const submission = await conversation.submit({ type: 'continue', requestId }, context);
+          await store.updateConversation(current.id, { lastSubmissionId: submission.id });
+          return { status: 202, body: { runId: String(submission.id), status: 'running' } };
+        } catch (err) {
+          if (err instanceof ConversationBusy || err?.name === 'ConversationBusy') {
+            return { status: 409, body: { error: 'conversation is busy', code: 'ConversationBusy' } };
+          }
+          throw err;
+        }
+      }
       let content = options.content !== undefined ? options.content : text;
       let entry;
       const mode = sendModeOf(options.mode);

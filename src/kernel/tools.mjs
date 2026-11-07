@@ -2,7 +2,7 @@
 // read/write/edit and bash or powershell are official Pi Durable tools. ls and
 // grep use the conversation ExecutionEnv. Path checks live only in workspace-env.mjs.
 import path from 'node:path';
-import { Type } from '@earendil-works/pi-ai';
+import { obj, opt, str } from '@earendil-works/pi-schema';
 import { defineExtension, defineTool, hook, ToolTask } from '@earendil-works/pi-durable';
 import { FileError, getOrThrow } from '@earendil-works/pi-durable/env';
 import {
@@ -73,6 +73,22 @@ function withReplay(tool, replay) {
 
 const INTENT_DESCRIPTION = '可选。用不超过 15 个字说明这一步要干什么，例如『跑单元测试』『看登录逻辑』。';
 
+/** Optional description on a tool's JSON Schema, without making it required. */
+function withIntentParameters(schema) {
+  const base = schema && typeof schema === 'object' ? schema : obj({});
+  const properties = {
+    ...(base.properties && typeof base.properties === 'object' ? base.properties : {}),
+    description: { type: 'string', description: INTENT_DESCRIPTION },
+  };
+  const required = Array.isArray(base.required)
+    ? base.required.filter((name) => name !== 'description')
+    : [];
+  const next = { ...base, type: 'object', properties };
+  if (required.length) next.required = required;
+  else delete next.required;
+  return next;
+}
+
 function omitIntent(input) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) return input;
   if (!Object.hasOwn(input, 'description')) return input;
@@ -94,15 +110,9 @@ function readIntent(input) {
 export function withIntent(tool) {
   const prepare = tool.prepareArguments;
   const execute = tool.execute;
-  const properties = tool.parameters?.properties && typeof tool.parameters.properties === 'object'
-    ? tool.parameters.properties
-    : {};
   return {
     ...tool,
-    parameters: Type.Object({
-      ...properties,
-      description: Type.Optional(Type.String({ description: INTENT_DESCRIPTION })),
-    }),
+    parameters: withIntentParameters(tool.parameters),
     prepareArguments(input) {
       const description = readIntent(input);
       let next = omitIntent(input);
@@ -208,7 +218,7 @@ function createLsTool() {
   return defineTool({
     name: 'ls',
     description: 'List a directory inside this conversation\'s workspace.',
-    parameters: Type.Object({ path: Type.Optional(Type.String()) }),
+    parameters: obj({ path: opt(str()) }),
     replay: 'safe',
     async execute(args, api, context) {
       const env = requireEnv(api);
@@ -230,10 +240,10 @@ function createGrepTool() {
   return defineTool({
     name: 'grep',
     description: 'Search file contents inside this conversation\'s workspace.',
-    parameters: Type.Object({
-      pattern: Type.String(),
-      path: Type.Optional(Type.String()),
-      glob: Type.Optional(Type.String()),
+    parameters: obj({
+      pattern: str(),
+      path: opt(str()),
+      glob: opt(str()),
     }),
     replay: 'safe',
     async execute(args, api, context) {
@@ -306,6 +316,22 @@ function byteLength(text) {
   return Buffer.byteLength(String(text ?? ''), 'utf8');
 }
 
+const HARNESS_SKIPPED_TOOL = new Set([
+  'tool_unavailable',
+  'invalid_arguments',
+  'blocked',
+  'interrupted',
+  'restart_limit',
+  'aborted',
+  'abandoned',
+]);
+
+/** 1.5 runs afterTool for results the Harness writes itself, before the tool runs. */
+function harnessSkippedTool(result) {
+  const diagnostics = result?.diagnostics;
+  return Array.isArray(diagnostics) && diagnostics.some((item) => HARNESS_SKIPPED_TOOL.has(item?.code));
+}
+
 /** Keep path, before, after, and line stats on the tool result. Over 1 MB, line stats only. */
 export function fileChangeDetails({ path: filePath, before, after }) {
   const oldText = before ?? '';
@@ -335,6 +361,7 @@ export function createWorkspaceExtension() {
     hooks: [
       hook(ToolTask, {
         async afterTool(call, result) {
+          if (harnessSkippedTool(result)) return undefined;
           const details = result?.details;
           const tracked = details
             && !result.isError

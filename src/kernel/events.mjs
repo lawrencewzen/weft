@@ -171,15 +171,25 @@ function usageEvent(entry, ctx) {
   return { event: 'usage', data: presented };
 }
 
+/** Code, reason, and redacted detail only. Sentences are built by the v2 view for `lang`. */
 function errorForSubmission(record) {
-  const detail = typeof record.detail === 'string' ? record.detail : '';
-  if (record.reason === 'no_model' || /\bE_NO_MODEL\b/.test(detail)) {
-    return { code: 'E_NO_MODEL', message: 'err_no_model' };
+  const raw = typeof record.detail === 'string' ? record.detail : '';
+  const detail = raw ? redactAuthText(raw) : '';
+  const reason = typeof record.reason === 'string' ? record.reason : '';
+  if (reason === 'no_model' || /\bE_NO_MODEL\b/.test(detail)) {
+    return { code: 'E_NO_MODEL', reason: 'no_model' };
   }
-  return {
-    code: record.reason === 'model_error' ? 'E_LLM' : (record.reason || 'E_LLM'),
-    message: redactAuthText(detail || record.reason || 'model error'),
+  const effective = reason || 'model_error';
+  const out = {
+    code: effective === 'model_error' ? 'E_LLM' : effective,
+    reason: effective,
   };
+  if (detail) out.detail = detail;
+  return out;
+}
+
+function isRunSubmission(record) {
+  return record?.type === 'input' || record?.type === 'continue';
 }
 
 function unavailableTool(entry) {
@@ -351,11 +361,11 @@ export function mapHarnessBatch(batch, ctx) {
       events.push({ event: 'status', data: { status: 'failed' } });
       continue;
     }
-    if (ev.type === 'submission' && ev.record?.type === 'input' && ev.record.status === 'done') {
+    if (ev.type === 'submission' && isRunSubmission(ev.record) && ev.record.status === 'done') {
       events.push({ event: 'status', data: { status: 'done' } });
       continue;
     }
-    if (ev.type === 'submission' && ev.record?.type === 'input' && ev.record.status === 'unanswered') {
+    if (ev.type === 'submission' && isRunSubmission(ev.record) && ev.record.status === 'unanswered') {
       if (ev.record.reason === 'aborted') {
         events.push({ event: 'status', data: { status: 'stopped' } });
         continue;
@@ -365,6 +375,246 @@ export function mapHarnessBatch(batch, ctx) {
     }
   }
   return { events, refresh };
+}
+
+/**
+ * Baseline for one conversation watch. The first `projectViewUpdate` records the
+ * attached view and emits nothing; later calls emit the SSE names `mapHarnessBatch`
+ * used to derive from `watchEvents`.
+ */
+export function createViewProjector() {
+  return {
+    ready: false,
+    seen: new Set(),
+    text: '',
+    tools: new Map(),
+    run: false,
+    retryKey: '',
+    queued: false,
+    compactionKey: '',
+  };
+}
+
+function compactionKeyOf(live) {
+  const running = Array.isArray(live?.compactions) ? live.compactions : [];
+  const failure = live?.compactionFailure;
+  return JSON.stringify({
+    running: running.map((row) => [row?.taskId, row?.trigger, row?.blocking, row?.attempt]),
+    failure: failure ? [failure.taskId, failure.trigger, failure.error] : null,
+  });
+}
+
+function liveOf(view) {
+  const docs = view?.docs;
+  const live = docs && typeof docs === 'object' ? docs['pi.live'] : undefined;
+  return live && typeof live === 'object' ? live : {};
+}
+
+function inboxOf(view) {
+  const docs = view?.docs;
+  const inbox = docs && typeof docs === 'object' ? docs['pi.inbox'] : undefined;
+  return inbox && typeof inbox === 'object' ? inbox : {};
+}
+
+function rememberTool(projector, callId, input) {
+  if (!callId || projector.tools.has(callId)) return projector.tools.get(callId);
+  const known = { output: '', ended: false, input: input || {} };
+  projector.tools.set(callId, known);
+  return known;
+}
+
+/**
+ * One `Conversation.watch` value, as the SSE names the UI already handles.
+ * The first call is the attached snapshot: no replay, `refresh` so the caller
+ * pushes the current submission status. A run that disappears sets `runEnded`;
+ * the caller reads that submission instead of `pi.live.runFailure`.
+ */
+export function projectViewUpdate(projector, view, mapCtx) {
+  const snapshot = projector.ready !== true;
+  const events = [];
+  const live = liveOf(view);
+  const run = live.run != null;
+  const queued = queuedInputs(inboxOf(view));
+  const nextText = textOf(live.generation?.message?.content);
+  const compactionKey = compactionKeyOf(live);
+
+  if (!snapshot) {
+    if (run && !projector.run) {
+      events.push({ event: 'status', data: { status: 'running' } });
+    }
+    if (queued && !projector.queued) {
+      events.push({ event: 'status', data: { status: 'running' } });
+    }
+    if (compactionKey !== projector.compactionKey) {
+      events.push({ event: 'compaction', data: {} });
+    }
+    const retry = live.generation?.retry;
+    if (retry && (retry.at != null || retry.error)) {
+      const attempt = Number(live.generation?.attempt) || 0;
+      const key = `${attempt}|${retry.at}|${retry.error || ''}`;
+      if (key !== projector.retryKey) {
+        projector.retryKey = key;
+        events.push({
+          event: 'retry',
+          data: {
+            attempt,
+            delayMs: retryDelayMs(mapCtx?.retry || DEFAULT_RETRY_POLICY, attempt),
+            reason: redactAuthText(retry.error || ''),
+          },
+        });
+      }
+    } else {
+      projector.retryKey = '';
+    }
+    if (nextText && (projector.text === '' || nextText.startsWith(projector.text))) {
+      const delta = nextText.slice(projector.text.length);
+      if (delta) {
+        events.push({
+          event: 'message.delta',
+          data: { messageId: ensureLiveId(mapCtx), text: delta },
+        });
+      }
+    } else if (nextText) {
+      if (mapCtx) mapCtx.liveId = null;
+      events.push({
+        event: 'message.delta',
+        data: { messageId: ensureLiveId(mapCtx), text: nextText },
+      });
+    }
+  }
+
+  for (const entry of view?.entries || []) {
+    if (!entry || entry.id == null) continue;
+    const key = String(entry.id);
+    if (projector.seen.has(key)) continue;
+    projector.seen.add(key);
+    // Not a user or assistant bubble. The summary stays out of message.done.
+    // The thread note is rebuilt from this entry; the event only refreshes SSE.
+    if (entry.kind === 'pi.compaction') {
+      if (!snapshot) events.push({ event: 'compaction', data: { entryId: key } });
+      continue;
+    }
+    if (!snapshot && (entry.kind === 'pi.user' || entry.kind === 'pi.assistant')) {
+      const done = messageDone(entry);
+      if (entry.kind === 'pi.assistant' && mapCtx?.liveId) {
+        done.data.liveId = mapCtx.liveId;
+        mapCtx.liveId = null;
+      }
+      events.push(done);
+      const usage = usageEvent(entry, mapCtx);
+      if (usage) events.push(usage);
+    }
+    if (entry.kind === 'pi.assistant') {
+      const content = entry.model?.[0]?.content;
+      if (Array.isArray(content)) {
+        for (const block of content) {
+          if (block?.type !== 'toolCall' || block.id == null) continue;
+          const callId = String(block.id);
+          if (projector.tools.has(callId)) continue;
+          const input = block.arguments && typeof block.arguments === 'object' && !Array.isArray(block.arguments)
+            ? block.arguments
+            : {};
+          mapCtx?.toolInputs?.set(callId, input);
+          rememberTool(projector, callId, input);
+          if (!snapshot) {
+            events.push({
+              event: 'tool.start',
+              data: {
+                tool: toolBody({
+                  id: callId,
+                  name: block.name,
+                  status: 'running',
+                  input,
+                  path: typeof input.path === 'string' ? input.path : undefined,
+                }),
+              },
+            });
+          }
+        }
+      }
+    }
+    if (entry.kind === 'pi.tool-result') {
+      const result = entry.model?.[0];
+      const callId = result?.toolCallId == null ? '' : String(result.toolCallId);
+      const known = callId ? projector.tools.get(callId) : undefined;
+      if (known?.ended) continue;
+      if (callId) projector.tools.set(callId, { output: known?.output || '', ended: true, input: known?.input || {} });
+      if (!snapshot && callId) {
+        events.push(toolEnd({
+          toolCallId: callId,
+          toolName: result?.toolName,
+          entry,
+        }, mapCtx));
+      }
+    }
+  }
+
+  const slots = Array.isArray(live.tools) ? live.tools : [];
+  if (!snapshot) {
+    for (const slot of slots) {
+      if (!slot || slot.callId == null) continue;
+      const callId = String(slot.callId);
+      let known = projector.tools.get(callId);
+      if (!known) {
+        mapCtx?.toolInputs?.set(callId, {});
+        known = rememberTool(projector, callId, {});
+        events.push({
+          event: 'tool.start',
+          data: {
+            tool: toolBody({
+              id: callId,
+              name: slot.name,
+              status: 'running',
+              input: {},
+            }),
+          },
+        });
+      }
+      if (known.ended) continue;
+      const output = typeof slot.output === 'string' ? slot.output : '';
+      if (output && output !== known.output) {
+        if (known.output && output.startsWith(known.output)) {
+          const append = output.slice(known.output.length);
+          if (append) {
+            events.push({
+              event: 'tool.delta',
+              data: { toolId: callId, toolName: slot.name || '', append },
+            });
+          }
+        } else {
+          events.push({
+            event: 'tool.delta',
+            data: { toolId: callId, toolName: slot.name || '', set: output },
+          });
+        }
+        known.output = output;
+      }
+      if (slot.status === 'done' && slot.entry == null) {
+        events.push(toolEnd({ toolCallId: callId, toolName: slot.name }, mapCtx));
+        known.ended = true;
+      }
+    }
+  } else {
+    for (const slot of slots) {
+      if (!slot || slot.callId == null) continue;
+      const callId = String(slot.callId);
+      const known = projector.tools.get(callId) || { output: '', ended: false, input: {} };
+      if (typeof slot.output === 'string') known.output = slot.output;
+      if (slot.status === 'done') known.ended = true;
+      projector.tools.set(callId, known);
+      if (mapCtx?.toolInputs && !mapCtx.toolInputs.has(callId)) mapCtx.toolInputs.set(callId, known.input || {});
+    }
+    const retry = live.generation?.retry;
+    projector.retryKey = retry ? `${live.generation?.attempt}|${retry.at}|${retry.error || ''}` : '';
+  }
+
+  const runEnded = !snapshot && projector.run && !run;
+  projector.text = nextText;
+  projector.run = run;
+  projector.queued = queued;
+  projector.compactionKey = compactionKey;
+  projector.ready = true;
+  return { events, refresh: snapshot, runEnded };
 }
 
 /** Transcript entries to the REST message list, plus the latest reported call usage. */
@@ -385,6 +635,16 @@ export function messagesFromEntries(entries) {
   const answered = new Set();
   const messages = [];
   for (const entry of entries || []) {
+    // The model sees this entry as a user summary. The thread gets a system note,
+    // not a user or assistant bubble, and the summary text is not copied out.
+    if (entry?.kind === 'pi.compaction') {
+      messages.push({
+        id: String(entry.id),
+        role: 'note',
+        kind: 'compaction',
+      });
+      continue;
+    }
     if (entry?.kind === USER_TO_SUBAGENT_KIND) {
       const data = entry.data && typeof entry.data === 'object' && !Array.isArray(entry.data)
         ? entry.data

@@ -48,11 +48,11 @@ function mockHost({
       if (doc === Subagents) return rosters.get(key) ?? { agents: {}, reporters: {} };
       return null;
     },
-    async taskGraph() {
+    async watchTaskGraph() {
       taskGraphCalls += 1;
       return {
         value: { tasks: graphTasks },
-        dispose() { disposeCalls += 1; },
+        async stop() { disposeCalls += 1; },
       };
     },
     async commit(fn) {

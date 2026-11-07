@@ -9,7 +9,7 @@ const protoFile = path.join(root, 'design', 'prototype', 'index.html');
 test.use({ locale: 'zh-CN', viewport: { width: 1440, height: 900 } });
 test.describe.configure({ timeout: 120_000 });
 
-test('prototype context window UI: context in model menu, presets, custom input, warn banner, and non-clickable chip', async ({ page }) => {
+test('prototype context window UI: context in model menu, presets, custom input, warn chip without banner, and clickable chip', async ({ page }) => {
   expect(
     fs.existsSync(protoFile),
     'prototype build missing: run `npm run build:proto` first',
@@ -30,13 +30,11 @@ test('prototype context window UI: context in model menu, presets, custom input,
   await page.goto(pathToFileURL(protoFile).href);
   await expect(page.getByTestId('next-app')).toBeVisible();
 
-  // 1. Context chip is non-clickable display only
+  // 1. Context chip shows the percent (click behavior is covered in proto-compaction)
   const contextChip = page.getByTestId('next-context-chip');
   await expect(contextChip).toBeVisible();
   await expect(contextChip).toHaveText('24%');
-  await contextChip.click();
-  await expect(page.getByTestId('next-context-menu')).toHaveCount(0);
-  await expect(page.getByTestId('next-model-menu')).toBeHidden();
+  await expect(contextChip).toHaveAttribute('title', /已用 24%/);
 
   // 2. Open model menu, hover context row reveals submenu
   const modelChip = page.getByTestId('next-model-chip');
@@ -76,8 +74,7 @@ test('prototype context window UI: context in model menu, presets, custom input,
 
   await expect(contextChip).toHaveText('96%');
   await expect(contextChip).toHaveClass(/is-warn/);
-  await expect(page.getByTestId('next-context-banner')).toBeVisible();
-  await expect(page.getByTestId('next-context-banner')).toContainText('96%');
+  await expect(page.getByTestId('next-context-banner')).toHaveCount(0);
 
   // Re-open model menu, context row shows 50k · 自定义
   await modelChip.click();

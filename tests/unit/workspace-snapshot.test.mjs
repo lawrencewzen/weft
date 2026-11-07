@@ -531,9 +531,8 @@ test('a model-config entry before the first user message still snapshots', { tim
           data: { reason: 'model', model: { provider: 'faux', modelId: 'faux-1' } },
         });
       }, kernel.context);
-      const view = await conversation.viewState(kernel.context);
-      const kinds = (view.value?.entries || []).map((entry) => entry.kind);
-      view.dispose();
+      const view = await conversation.context(kernel.context);
+      const kinds = (view.entries || []).map((entry) => entry.kind);
       assert.ok(kinds.includes('pi.system'), JSON.stringify(kinds));
       assert.equal(kinds.includes('pi.user'), false, JSON.stringify(kinds));
       const posted = await kernel.postMessage(conv, 'go');

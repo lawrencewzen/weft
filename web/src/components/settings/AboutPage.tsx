@@ -3,8 +3,6 @@ import { t } from '../../i18n';
 
 export type AboutService = {
   serviceVersion: string;
-  protocolVersion: string;
-  demo: boolean;
 };
 
 type Props = {
@@ -13,7 +11,6 @@ type Props = {
 };
 
 const REPO_URL = 'https://github.com/lawrencewzen/weft';
-const UPSTREAM_URL = 'https://github.com/xiaomoBoy/pi-durable-assistant';
 
 export function AboutPage({ lang, service }: Props) {
   return (
@@ -36,20 +33,6 @@ export function AboutPage({ lang, service }: Props) {
       </div>
       <div className="ns-pref-row">
         <div className="ns-pref-copy">
-          <b>{t(lang, 'about_protocol')}</b>
-        </div>
-        <span data-testid="next-about-protocol">{service.protocolVersion || '—'}</span>
-      </div>
-      <div className="ns-pref-row">
-        <div className="ns-pref-copy">
-          <b>{t(lang, 'about_demo')}</b>
-        </div>
-        <span data-testid="next-about-demo">
-          {t(lang, service.demo ? 'about_demo_on' : 'about_demo_off')}
-        </span>
-      </div>
-      <div className="ns-pref-row">
-        <div className="ns-pref-copy">
           <b>{t(lang, 'about_repo')}</b>
         </div>
         <a href={REPO_URL} target="_blank" rel="noopener noreferrer">github.com/lawrencewzen/weft</a>
@@ -59,13 +42,6 @@ export function AboutPage({ lang, service }: Props) {
           <b>{t(lang, 'about_license')}</b>
         </div>
         <span>MIT</span>
-      </div>
-      <div className="ns-pref-row">
-        <div className="ns-pref-copy">
-          <b>{t(lang, 'about_thanks')}</b>
-          <span>{t(lang, 'about_upstream')}</span>
-        </div>
-        <a href={UPSTREAM_URL} target="_blank" rel="noopener noreferrer">xiaomoBoy/pi-durable-assistant</a>
       </div>
       <div className="ns-pref-row">
         <div className="ns-pref-copy">

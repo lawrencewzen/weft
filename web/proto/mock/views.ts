@@ -1,7 +1,7 @@
 import type { Entity } from './hub';
 import { pluginForLang } from './extensions';
 import { mockProviderName } from './providerNames';
-import { tr, type ConversationSummary, type EntityValue, type Lang, type MockConv, type MockDb, type MockGroup, type MockItem, type MockTool, type Subagent, type ToolCall } from './types';
+import { tr, type ConversationSummary, type ConversationView, type EntityValue, type Lang, type MockConv, type MockDb, type MockGroup, type MockItem, type MockTool, type Subagent, type ToolCall } from './types';
 
 const LIVE_SUBAGENT_STATUS = new Set<Subagent['status']>(['running', 'stuck', 'waiting']);
 
@@ -76,16 +76,39 @@ export function extensionsEntities(db: MockDb): TopicEntities {
 }
 
 export function conversationValue(conv: MockConv): EntityValue {
-  return (lang: Lang) => ({
-    ...conv.view,
-    run: {
-      ...conv.view.run,
-      pendingText: conv.view.run.status === 'running' && conv.pending ? tr(conv.pending, lang) : null,
-    },
-  });
+  return (lang: Lang) => {
+    const error = conv.error
+      ? {
+          code: conv.error.code,
+          message: tr(conv.error.message, lang),
+          canContinue: conv.error.canContinue,
+        }
+      : conv.view.run.error;
+    const c = conv.compaction;
+    const compaction: NonNullable<ConversationView['run']['compaction']> = !c || c.state === 'idle'
+      ? { state: 'idle' }
+      : {
+          state: c.state,
+          ...(c.trigger ? { trigger: c.trigger } : {}),
+          ...(c.state === 'failed' && c.error ? { error: tr(c.error, lang) } : {}),
+        };
+    return {
+      ...conv.view,
+      run: {
+        ...conv.view.run,
+        compaction,
+        error,
+        pendingText: conv.view.run.status === 'running' && conv.pending ? tr(conv.pending, lang) : null,
+      },
+    };
+  };
 }
 
 export function itemValue(item: MockItem): EntityValue {
+  if (item.kind === 'system_note' && item.i18n) {
+    const { i18n, ...rest } = item;
+    return (lang: Lang) => ({ ...rest, text: tr(i18n, lang) });
+  }
   if (item.kind !== 'tool_group') return item as unknown as object;
   return toolGroupValue(item);
 }

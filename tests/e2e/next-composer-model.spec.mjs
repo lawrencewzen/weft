@@ -199,7 +199,10 @@ test('context menu sets the model window and keeps it after refresh', async ({ p
     await waitRunDone(page);
 
     await page.getByTestId('next-context-chip').click();
-    await expect(page.getByTestId('next-context-menu')).toHaveCount(0);
+    await expect(page.getByTestId('next-model-menu')).toBeVisible();
+    await expect(page.getByTestId('next-sub-context')).toBeVisible();
+    await expect(page.getByTestId('next-menu-compact')).toHaveText('立即压缩');
+    await page.getByTestId('next-context-chip').click();
     await expect(page.getByTestId('next-model-menu')).toBeHidden();
 
     await page.getByTestId('next-model-chip').click();
@@ -264,7 +267,7 @@ test('context menu sets the model window and keeps it after refresh', async ({ p
   }
 });
 
-test('context at 80% shows an orange banner', async ({ page }) => {
+test('context at 80% turns the chip orange without a banner', async ({ page }) => {
   const prepared = await prepareWorkspaces(['warn']);
   const srv = await startServer({
     script: 'usage.json',
@@ -285,9 +288,8 @@ test('context at 80% shows an orange banner', async ({ page }) => {
     await sendNext(page, 'count tokens');
     await expect(page.getByTestId('next-context-chip')).toHaveText('82%', { timeout: 20000 });
     await expect(page.getByTestId('next-context-chip')).toHaveClass(/is-warn/);
-    await expect(page.getByTestId('next-context-banner')).toBeVisible();
-    await expect(page.getByTestId('next-context-banner')).toContainText('82%');
-    await expect(page.getByTestId('next-context-new')).toBeVisible();
+    await expect(page.getByTestId('next-context-banner')).toHaveCount(0);
+    await expect(page.getByTestId('next-context-new')).toHaveCount(0);
   } finally {
     await srv.kill();
   }

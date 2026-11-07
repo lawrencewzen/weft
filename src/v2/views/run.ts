@@ -8,7 +8,13 @@
  */
 
 import { phrase, type Lang } from '../phrases/index.ts';
+import { canContinueReason, runErrorMessage } from '../phrases/run-error.ts';
 import type { components } from '../contract.gen.ts';
+import {
+  compactionFailureMessage,
+  compactionView,
+  isCompactionModelError,
+} from './compaction.ts';
 import { activeToolSummary, toolGroupSummaryView, type ToolLike } from './tools.ts';
 import type { ThreadMessage, ThreadSubagent } from './thread.ts';
 
@@ -73,6 +79,8 @@ export function activeToolView(
 export type LlmErrorLike = {
   code?: unknown;
   message?: unknown;
+  reason?: unknown;
+  detail?: unknown;
   retry?: {
     attempt?: unknown;
     delayMs?: unknown;
@@ -92,6 +100,11 @@ export type RunStateInput = {
   activeTool?: ActiveTool | null;
   now?: number;
   stallAfterMs?: number;
+  /** pi.live, or null when the conversation has no watch yet. */
+  live?: {
+    compactions?: Array<{ trigger?: unknown }> | null;
+    compactionFailure?: { trigger?: unknown; error?: unknown } | null;
+  } | null;
 };
 
 function isRealSubagent(agent: ThreadSubagent | null | undefined): boolean {
@@ -134,11 +147,48 @@ function asStartedAt(value: unknown): number | null {
   return null;
 }
 
-function errorView(llmError: LlmErrorLike | null | undefined): RunState['error'] {
-  if (!llmError) return { code: 'E_LLM', message: '' };
+const MODEL_ERROR_PREFIX = {
+  zh: '模型请求失败：',
+  en: 'Model request failed: ',
+} as const;
+
+function reasonOf(llmError: LlmErrorLike, code: string, message: string): string {
+  if (typeof llmError.reason === 'string' && llmError.reason) return llmError.reason;
+  if (code === 'E_NO_MODEL' || message === 'err_no_model') return 'no_model';
+  if (code === 'E_SUBMISSION_MISSING') return 'E_SUBMISSION_MISSING';
+  if (code === 'E_LLM') return 'model_error';
+  return code;
+}
+
+function modelDetail(llmError: LlmErrorLike, message: string): string {
+  if (typeof llmError.detail === 'string') return llmError.detail;
+  if (message.startsWith(MODEL_ERROR_PREFIX.zh)) return message.slice(MODEL_ERROR_PREFIX.zh.length);
+  if (message.startsWith(MODEL_ERROR_PREFIX.en)) return message.slice(MODEL_ERROR_PREFIX.en.length);
+  return message;
+}
+
+function errorView(llmError: LlmErrorLike | null | undefined, lang: Lang = 'zh'): RunState['error'] {
+  if (!llmError) return { code: 'E_LLM', message: '', canContinue: false };
+  const code = String(llmError.code || 'E_LLM');
+  let message = String(llmError.message || '');
+  const reason = reasonOf(llmError, code, message);
+  const detail = typeof llmError.detail === 'string' ? llmError.detail : modelDetail(llmError, message);
+  if (reason === 'no_model') message = 'err_no_model';
+  else if (reason === 'model_error' && isCompactionModelError(detail || message)) {
+    message = compactionFailureMessage(lang, detail || message);
+  } else if (reason === 'model_error') message = runErrorMessage(lang, reason, detail);
+  else {
+    const human = runErrorMessage(lang, reason, detail);
+    if (human) message = human;
+    else if (message && message !== reason && message !== code) {
+      // A caller already supplied a sentence, such as a missing submission record.
+    } else if (detail && detail !== reason && detail !== code) message = detail;
+    else message = phrase(lang, 'run_err_unfinished');
+  }
   const out: NonNullable<RunState['error']> = {
-    code: String(llmError.code || 'E_LLM'),
-    message: String(llmError.message || ''),
+    code,
+    message,
+    canContinue: canContinueReason(reason),
   };
   const attempt = Number(llmError.retry?.attempt);
   const delayMs = Number(llmError.retry?.delayMs);
@@ -175,6 +225,7 @@ export function runStateView({
   activeTool = null,
   now,
   stallAfterMs,
+  live = null,
 }: RunStateInput = {}): RunState {
   const runStatus = normalizeRunStatus(status);
   const running = runStatus === 'running';
@@ -188,9 +239,10 @@ export function runStateView({
     canSend: Boolean(hasWorkspace),
     canStop: running,
     lockedReason: hasWorkspace ? null : 'no_workspace',
-    error: runStatus === 'failed' ? errorView(llmError) : null,
+    error: runStatus === 'failed' ? errorView(llmError, lang) : null,
     lastActivityAt: last,
     stalledSince: stalledSinceOf(running, last, t, threshold),
     activeTool: running ? activeTool : null,
+    compaction: compactionView(live, lang),
   };
 }

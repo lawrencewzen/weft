@@ -7,7 +7,6 @@ import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { PROTOCOL_VERSION } from '../../src/v2/version.ts';
 import { matchContractPath, validateResponse } from '../../src/v2/validate.ts';
-import { MANUAL_CONTINUE_TEXT } from '../../src/v2/views/continuation.ts';
 import { outputLineCount } from '../../src/v2/views/tools.ts';
 import { ROOT } from './_root.mjs';
 import { readDiscovery, request, startServer, stopServer } from './_server.mjs';
@@ -325,10 +324,57 @@ test('POST /stop ends a running conversation; idle stop is 202', { timeout: 45_0
   }
 });
 
-test('POST /continue sends MANUAL_CONTINUE_TEXT', { timeout: 40_000 }, async () => {
+test('a length stop is truncated and does not insert an auto-continue note', { timeout: 40_000 }, async () => {
+  const dataDir = await mkdtemp(path.join(tmpdir(), 'piw-v2-length-'));
+  const script = path.join(dataDir, 'length.json');
+  await writeFile(script, JSON.stringify({
+    turns: [
+      { text: 'part-one', stopReason: 'length' },
+      { text: 'part-two' },
+    ],
+  }));
   const srv = await startServer({
     token: TOKEN,
-    env: { WEFT_LLM: 'faux', WEFT_FAUX_TEXT: 'continued' },
+    dataDir,
+    env: { WEFT_LLM: 'faux', WEFT_FAUX_SCRIPT: script },
+  });
+  try {
+    const discovery = await readDiscovery(srv.dataDir);
+    const { conv } = await openConversation(srv.base, 'length');
+    const sent = await postV2(srv.base, `/api/v2/conversations/${conv.id}/messages`, discovery.token, {
+      text: 'long',
+    });
+    assert.equal(sent.status, 202, sent.text);
+    const snap = await waitV2(srv.base, conv.id, discovery.token, (body) => (
+      body?.conversation?.run?.status === 'idle'
+      && (body.items || []).some((item) => item.kind === 'assistant')
+    ));
+    assert.deepEqual(userTexts(snap.body), ['long']);
+    assert.equal(snap.body.items.some((item) => item.noteKind === 'auto_continue'), false);
+    const assistants = snap.body.items.filter((item) => item.kind === 'assistant');
+    assert.equal(assistants.length, 1);
+    assert.equal(assistants[0].text, 'part-one');
+    assert.equal(assistants[0].truncated, true);
+    assertChecked(`/api/v2/conversations/${conv.id}`, 'GET', 200, snap.body);
+  } finally {
+    await stopServer(srv);
+  }
+});
+
+test('POST /continue retries the same context after model_error, rejects a busy run, and repeats a requestId', { timeout: 40_000 }, async () => {
+  const dataDir = await mkdtemp(path.join(tmpdir(), 'piw-v2-cont-'));
+  const script = path.join(dataDir, 'fail.json');
+  const record = path.join(dataDir, 'record.jsonl');
+  await writeFile(script, JSON.stringify({ turns: [{ error: 'provider exploded' }] }));
+  const srv = await startServer({
+    token: TOKEN,
+    dataDir,
+    env: {
+      WEFT_LLM: 'faux',
+      WEFT_FAUX_SCRIPT: script,
+      WEFT_FAUX_RECORD: record,
+      WEFT_RETRY_MAX: '1',
+    },
   });
   try {
     const discovery = await readDiscovery(srv.dataDir);
@@ -337,21 +383,77 @@ test('POST /continue sends MANUAL_CONTINUE_TEXT', { timeout: 40_000 }, async () 
       text: 'start',
     });
     assert.equal(first.status, 202, first.text);
-    await waitV2(srv.base, conv.id, discovery.token, (body) => (
-      body?.conversation?.run?.status === 'idle' && userTexts(body).includes('start')
+    const failed = await waitV2(srv.base, conv.id, discovery.token, (body) => (
+      body?.conversation?.run?.status === 'failed'
     ));
+    assert.equal(failed.body.conversation.run.error.canContinue, true);
+    assert.equal(failed.body.conversation.run.error.message, '模型请求失败：provider exploded');
+    assert.deepEqual(userTexts(failed.body), ['start']);
+    const english = await getV2(srv.base, `/api/v2/conversations/${conv.id}?lang=en`, discovery.token);
+    assert.equal(english.body.conversation.run.error.message, 'Model request failed: provider exploded');
+    assert.equal(english.body.conversation.run.error.canContinue, true);
 
-    const cont = await postV2(srv.base, `/api/v2/conversations/${conv.id}/continue`, discovery.token, {});
+    const before = (await readFile(record, 'utf8')).trim().split('\n').filter(Boolean);
+    // The script floor counts the failed assistant still stored in the transcript,
+    // so the success turn has to sit at that index as well as at 0.
+    await writeFile(script, JSON.stringify({
+      turns: [{ text: 'recovered' }, { text: 'recovered' }, { text: 'recovered' }],
+    }));
+    const requestId = 'continue-once';
+    const cont = await postV2(srv.base, `/api/v2/conversations/${conv.id}/continue`, discovery.token, {
+      requestId,
+    });
     assert.equal(cont.status, 202, cont.text);
     assertChecked(`/api/v2/conversations/${conv.id}/continue`, 'POST', 202, cont.body);
-    assert.equal(typeof cont.body.runId, 'string');
-
+    const again = await postV2(srv.base, `/api/v2/conversations/${conv.id}/continue`, discovery.token, {
+      requestId,
+    });
+    assert.equal(again.status, 202, again.text);
+    assert.equal(again.body.runId, cont.body.runId);
     const snap = await waitV2(srv.base, conv.id, discovery.token, (body) => (
       body?.conversation?.run?.status === 'idle'
-      && userTexts(body).includes(MANUAL_CONTINUE_TEXT)
+      && (body.items || []).some((item) => item.kind === 'assistant' && item.text === 'recovered')
     ));
-    assert.deepEqual(userTexts(snap.body), ['start', MANUAL_CONTINUE_TEXT]);
-    assert.equal(MANUAL_CONTINUE_TEXT, '继续');
+    assert.deepEqual(userTexts(snap.body), ['start']);
+    const after = (await readFile(record, 'utf8')).trim().split('\n').filter(Boolean);
+    assert.equal(after.length, before.length + 1);
+    const firstUsers = JSON.parse(before[0]).users;
+    const continuedUsers = JSON.parse(after[after.length - 1]).users;
+    assert.deepEqual(continuedUsers, firstUsers);
+    assert.deepEqual(continuedUsers, ['start']);
+  } finally {
+    await stopServer(srv);
+  }
+});
+
+test('POST /continue returns 409 ConversationBusy while a run is in progress', { timeout: 40_000 }, async () => {
+  const dataDir = await mkdtemp(path.join(tmpdir(), 'piw-v2-busy-'));
+  const script = path.join(dataDir, 'slow.json');
+  await writeFile(script, JSON.stringify({ turns: [{ text: 'later', delayMs: 2500 }] }));
+  const srv = await startServer({
+    token: TOKEN,
+    dataDir,
+    env: { WEFT_LLM: 'faux', WEFT_FAUX_SCRIPT: script },
+  });
+  try {
+    const discovery = await readDiscovery(srv.dataDir);
+    const { conv } = await openConversation(srv.base, 'busy');
+    const sent = await postV2(srv.base, `/api/v2/conversations/${conv.id}/messages`, discovery.token, {
+      text: 'hold',
+    });
+    assert.equal(sent.status, 202, sent.text);
+    await waitV2(srv.base, conv.id, discovery.token, (body) => body?.conversation?.run?.status === 'running');
+    const busy = await postV2(srv.base, `/api/v2/conversations/${conv.id}/continue`, discovery.token, {
+      requestId: 'while-busy',
+    });
+    assert.equal(busy.status, 409, busy.text);
+    assert.equal(busy.body.code, 'ConversationBusy');
+    assertChecked(`/api/v2/conversations/${conv.id}/continue`, 'POST', 409, busy.body);
+    const same = await postV2(srv.base, `/api/v2/conversations/${conv.id}/continue`, discovery.token, {
+      requestId: 'while-busy',
+    });
+    assert.equal(same.status, 409, same.text);
+    assert.equal(same.body.code, 'ConversationBusy');
   } finally {
     await stopServer(srv);
   }

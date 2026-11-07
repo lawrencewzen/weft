@@ -9,9 +9,11 @@ import { parseSSE } from '../../src/core/sse.mjs';
 import {
   baselinesFromEntries,
   createMapContext,
+  createViewProjector,
   findUserMessageImage,
   findUserMessagePaste,
   mapHarnessBatch,
+  projectViewUpdate,
   mergeFileChanges,
   messagesFromEntries,
   rebaseChangePath,
@@ -158,7 +160,7 @@ test('harness batches map onto the contract events', () => {
   assert.equal(events[6].data.delayMs, DEFAULT_RETRY_POLICY.baseDelayMs);
   assert.deepEqual(events[7].data, { code: 'E_LLM', message: 'boom' });
   assert.equal(events[8].data.status, 'failed');
-  assert.deepEqual(events[9].data, { code: 'E_NO_MODEL', message: 'err_no_model' });
+  assert.deepEqual(events[9].data, { code: 'E_NO_MODEL', reason: 'no_model' });
   assert.equal(events[10].data.status, 'failed');
   assert.equal(events[11].data.status, 'done');
   assert.equal(names.includes('usage_changed'), false);
@@ -218,9 +220,118 @@ test('status is the last submission record', () => {
   const failed = statusFromSubmission({ status: 'unanswered', reason: 'model_error', detail: 'provider exploded' });
   assert.equal(failed.status, 'failed');
   assert.equal(failed.llmError.code, 'E_LLM');
-  assert.equal(failed.llmError.message, 'provider exploded');
+  assert.equal(Object.hasOwn(failed.llmError, 'message'), false);
+  assert.equal(failed.llmError.detail, 'provider exploded');
+  assert.equal(failed.llmError.reason, 'model_error');
   assert.equal(statusFromSubmission({ status: 'unanswered', reason: 'no_model' }).llmError.code, 'E_NO_MODEL');
   assert.throws(() => statusFromSubmission(undefined), /Unexpected submission status/);
+});
+
+test('conversation watch values map onto the same contract events', () => {
+  const ctx = createMapContext();
+  const projector = createViewProjector();
+  const user = {
+    id: 1,
+    kind: 'pi.user',
+    model: [{ role: 'user', content: [{ type: 'text', text: 'hi' }] }],
+  };
+  const opened = projectViewUpdate(projector, { entries: [user], docs: {} }, ctx);
+  assert.equal(opened.refresh, true);
+  assert.equal(opened.runEnded, false);
+  assert.deepEqual(opened.events, []);
+
+  const streaming = projectViewUpdate(projector, {
+    entries: [user],
+    docs: {
+      'pi.live': {
+        run: { taskId: 4, inputs: [9], turns: 0 },
+        generation: {
+          attempt: 1,
+          message: { role: 'assistant', content: [{ type: 'text', text: 'he' }] },
+        },
+      },
+    },
+  }, ctx);
+  assert.deepEqual(streaming.events.map((ev) => ev.event), ['status', 'message.delta']);
+  assert.equal(streaming.events[0].data.status, 'running');
+  assert.deepEqual(streaming.events[1].data, { messageId: 'live-1', text: 'he' });
+
+  const more = projectViewUpdate(projector, {
+    entries: [user],
+    docs: {
+      'pi.live': {
+        run: { taskId: 4, inputs: [9], turns: 0 },
+        generation: {
+          attempt: 1,
+          message: { role: 'assistant', content: [{ type: 'text', text: 'hello' }] },
+        },
+      },
+    },
+  }, ctx);
+  assert.deepEqual(more.events, [{ event: 'message.delta', data: { messageId: 'live-1', text: 'llo' } }]);
+
+  const assistant = {
+    id: 2,
+    kind: 'pi.assistant',
+    model: [{
+      role: 'assistant',
+      content: [
+        { type: 'text', text: 'hello' },
+        { type: 'toolCall', id: 'bash-1', name: 'bash', arguments: { command: 'seq' } },
+      ],
+      model: 'faux-1',
+      stopReason: 'toolUse',
+    }],
+  };
+  const started = projectViewUpdate(projector, {
+    entries: [user, assistant],
+    docs: {
+      'pi.live': {
+        run: { taskId: 4, inputs: [9], turns: 1 },
+        tools: [{ callId: 'bash-1', name: 'bash', status: 'running', output: 'one\n' }],
+      },
+    },
+  }, ctx);
+  assert.deepEqual(started.events.map((ev) => ev.event), ['message.done', 'tool.start', 'tool.delta']);
+  assert.equal(started.events[0].data.liveId, 'live-1');
+  assert.equal(started.events[0].data.text, 'hello');
+  assert.equal(started.events[1].data.tool.id, 'bash-1');
+  assert.equal(started.events[1].data.tool.input.command, 'seq');
+  assert.deepEqual(started.events[2].data, { toolId: 'bash-1', toolName: 'bash', set: 'one\n' });
+
+  const appended = projectViewUpdate(projector, {
+    entries: [user, assistant],
+    docs: {
+      'pi.live': {
+        run: { taskId: 4, inputs: [9], turns: 1 },
+        tools: [{ callId: 'bash-1', name: 'bash', status: 'running', output: 'one\ntwo\n' }],
+      },
+    },
+  }, ctx);
+  assert.deepEqual(appended.events, [{
+    event: 'tool.delta',
+    data: { toolId: 'bash-1', toolName: 'bash', append: 'two\n' },
+  }]);
+
+  const result = {
+    id: 3,
+    kind: 'pi.tool-result',
+    model: [{
+      role: 'toolResult',
+      toolCallId: 'bash-1',
+      toolName: 'bash',
+      content: [{ type: 'text', text: 'one\ntwo\n' }],
+      isError: false,
+    }],
+  };
+  const ended = projectViewUpdate(projector, {
+    entries: [user, assistant, result],
+    docs: { 'pi.live': {} },
+  }, ctx);
+  assert.equal(ended.runEnded, true);
+  assert.deepEqual(ended.events.map((ev) => ev.event), ['tool.end']);
+  assert.equal(ended.events[0].data.tool.output, 'one\ntwo\n');
+  assert.equal(ended.events[0].data.tool.status, 'completed');
 });
 
 test('a snapshot asks the client to refetch instead of replaying rows', () => {
@@ -994,7 +1105,8 @@ test('last submission: a faux error stays failed after restart', { timeout: 4000
     const body = await waitForStatus(first.base, convId, (row) => row.status === 'failed' || row.status === 'done');
     assert.equal(body.status, 'failed', first.logs());
     assert.equal(body.llmError?.code, 'E_LLM');
-    assert.match(body.llmError?.message || '', /provider exploded/);
+    assert.equal(body.llmError?.detail, 'provider exploded');
+    assert.equal(Object.hasOwn(body.llmError || {}, 'message'), false);
     pointer = appPointer(dataDir, convId);
     assert.equal(pointer, Number(sent.body.runId));
   } finally {
@@ -1007,7 +1119,8 @@ test('last submission: a faux error stays failed after restart', { timeout: 4000
     const got = await request(second.base, 'GET', `/api/conversations/${convId}`);
     assert.equal(got.body.status, 'failed', second.logs());
     assert.equal(got.body.llmError?.code, 'E_LLM');
-    assert.match(got.body.llmError?.message || '', /provider exploded/);
+    assert.equal(got.body.llmError?.detail, 'provider exploded');
+    assert.equal(Object.hasOwn(got.body.llmError || {}, 'message'), false);
     assert.equal(appPointer(dataDir, convId), pointer);
   } finally {
     await stopServer(second);
