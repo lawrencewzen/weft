@@ -58,8 +58,19 @@ function decodeScript(args) {
   assert.match(script, /\[Environment\]::UserInteractive/);
   assert.match(script, new RegExp(`exit ${WIN_PICK_NONINTERACTIVE_EXIT}`));
   assert.match(script, /System\.Windows\.Forms\.FolderBrowserDialog/);
-  assert.match(script, /TopMost = \$true/);
-  assert.match(script, /ShowDialog\(\$owner\)/);
+  assert.match(script, /\$dialog\.ShowDialog\(\)/);
+  assert.equal(script.includes('$owner'), false);
+  // dialog itself goes topmost: timer in the modal loop, #32770, HWND_TOPMOST
+  assert.match(script, /System\.Windows\.Forms\.Timer|new Timer\(\)/);
+  assert.match(script, /EnumThreadWindows/);
+  assert.match(script, /"#32770"/);
+  assert.match(script, /SetWindowPos\(h, new IntPtr\(-1\), 0, 0, 0, 0, 0x0001 \| 0x0002 \| 0x0040\)/);
+  assert.match(script, /SetForegroundWindow/);
+  // topmost part is isolated: its own try/catch inside the outer try, before ShowDialog
+  const top = script.indexOf('Add-Type -ReferencedAssemblies');
+  assert.ok(script.lastIndexOf('try {', top) > script.indexOf('try {'));
+  assert.ok(script.indexOf('} catch { $weftTop = $null }') > top);
+  assert.ok(script.indexOf('} catch { $weftTop = $null }') < script.indexOf('ShowDialog()'));
   assert.match(script, new RegExp(WIN_PICK_START_ENV));
   assert.match(script, new RegExp(WIN_PICK_CANCEL_MARKER));
   return script;

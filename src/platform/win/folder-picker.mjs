@@ -35,12 +35,61 @@ $OutputEncoding = [Console]::OutputEncoding
 if (-not [Environment]::UserInteractive) { exit ${WIN_PICK_NONINTERACTIVE_EXIT} }
 try {
   Add-Type -AssemblyName System.Windows.Forms
-  $owner = New-Object System.Windows.Forms.Form
-  $owner.ShowInTaskbar = $false
-  $owner.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::None
-  $owner.Opacity = 0
-  $owner.TopMost = $true
-  $owner.Show() | Out-Null
+  # Best effort only: a failure here must never fail the pick itself.
+  # A WinForms Timer on the UI thread keeps firing inside the modal loop of
+  # ShowDialog; it finds this thread's #32770 dialog and makes it topmost.
+  $weftTop = $null
+  try {
+    Add-Type -ReferencedAssemblies System.Windows.Forms -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+using System.Text;
+using System.Windows.Forms;
+public static class WeftDialogTopmost {
+  delegate bool EnumProc(IntPtr h, IntPtr l);
+  [DllImport("user32.dll")] static extern bool EnumThreadWindows(uint t, EnumProc p, IntPtr l);
+  [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr h);
+  [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetClassName(IntPtr h, StringBuilder s, int n);
+  [DllImport("user32.dll")] static extern bool SetWindowPos(IntPtr h, IntPtr a, int x, int y, int cx, int cy, uint f);
+  [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr h);
+  [DllImport("kernel32.dll")] static extern uint GetCurrentThreadId();
+  static Timer timer;
+  static int tries;
+  static IntPtr Find() {
+    IntPtr found = IntPtr.Zero;
+    EnumProc cb = delegate(IntPtr h, IntPtr l) {
+      StringBuilder sb = new StringBuilder(64);
+      GetClassName(h, sb, 64);
+      if (sb.ToString() == "#32770" && IsWindowVisible(h)) { found = h; return false; }
+      return true;
+    };
+    EnumThreadWindows(GetCurrentThreadId(), cb, IntPtr.Zero);
+    return found;
+  }
+  public static void Start() {
+    timer = new Timer();
+    timer.Interval = 80;
+    timer.Tick += delegate(object s, EventArgs e) {
+      try {
+        tries++;
+        IntPtr h = Find();
+        if (h != IntPtr.Zero) {
+          Stop();
+          SetWindowPos(h, new IntPtr(-1), 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0040);
+          SetForegroundWindow(h);
+        } else if (tries > 150) { Stop(); }
+      } catch (Exception) { Stop(); }
+    };
+    timer.Start();
+  }
+  public static void Stop() {
+    if (timer != null) { timer.Stop(); timer.Dispose(); timer = null; }
+  }
+}
+'@
+    [WeftDialogTopmost]::Start()
+    $weftTop = $true
+  } catch { $weftTop = $null }
   $dialog = New-Object System.Windows.Forms.FolderBrowserDialog
   $dialog.ShowNewFolderButton = $true
   $prompt = [Environment]::GetEnvironmentVariable('${WIN_PICK_PROMPT_ENV}')
@@ -50,9 +99,8 @@ try {
     $dialog.RootFolder = [System.Environment+SpecialFolder]::MyComputer
     $dialog.SelectedPath = $start
   }
-  $result = $dialog.ShowDialog($owner)
-  $owner.Close()
-  $owner.Dispose()
+  $result = $dialog.ShowDialog()
+  if ($weftTop) { try { [WeftDialogTopmost]::Stop() } catch { } }
   if ($result -eq [System.Windows.Forms.DialogResult]::OK -and $dialog.SelectedPath) {
     [Console]::Out.WriteLine($dialog.SelectedPath)
     exit 0
