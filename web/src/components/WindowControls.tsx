@@ -31,10 +31,36 @@ function useShellState(): { shell: boolean; maximized: boolean } {
   return state;
 }
 
-function post(action: ShellAction): void {
+function postRaw(msg: string): void {
   // Only exists inside the WebView2 shell; in the prototype the buttons do nothing.
   const webview = (window as unknown as { chrome?: { webview?: { postMessage(msg: string): void } } }).chrome?.webview;
-  webview?.postMessage(action);
+  webview?.postMessage(msg);
+}
+
+function post(action: ShellAction): void {
+  postRaw(action);
+}
+
+/** Tell the shell the page background (`--bg`) so its next cold start can paint the same colour before the page loads. */
+function reportTheme(): void {
+  const bg = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim();
+  if (/^#[0-9a-fA-F]{6}$/.test(bg)) postRaw(`theme:${bg}`);
+}
+
+function useReportTheme(active: boolean): void {
+  useEffect(() => {
+    if (!active) return;
+    // The first report doubles as "the page is drawn": wait two frames so what the shell uncovers is already painted.
+    let raf2 = 0;
+    const raf1 = requestAnimationFrame(() => { raf2 = requestAnimationFrame(reportTheme); });
+    const observer = new MutationObserver(reportTheme);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    return () => {
+      cancelAnimationFrame(raf1);
+      cancelAnimationFrame(raf2);
+      observer.disconnect();
+    };
+  }, [active]);
 }
 
 const ICONS = {
@@ -52,6 +78,7 @@ const ICONS = {
 /** Windows-style caption buttons, drawn only when the Weft.exe desktop shell is active. */
 export function WindowControls({ lang }: { lang: Lang }) {
   const { shell, maximized } = useShellState();
+  useReportTheme(shell);
   if (!shell) return null;
   const buttons: { action: ShellAction; icon: keyof typeof ICONS; label: string; cls?: string }[] = [
     { action: 'minimize', icon: 'minimize', label: t(lang, 'window_minimize') },

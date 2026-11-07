@@ -3,11 +3,13 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
 using System.IO;
+using System.Globalization;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using Microsoft.Win32;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.WinForms;
 
@@ -45,13 +47,26 @@ namespace Weft.Desktop
         private readonly EventWaitHandle activate;
         private string origin;
 
-        // True once WebView2 non-client regions are on: the system title bar is removed
-        // (client area starts at the top) and the page draws its own window buttons.
+        // The system title bar is removed from the very first window message (client area starts at the top)
+        // and the page draws its own window buttons. Decided before the window exists, so nothing flashes.
+        // Only chosen when the installed WebView2 Runtime can do non-client regions; otherwise the system title bar stays.
         private bool customFrame;
+        private bool runtimeMissing;
+
+        // CoreWebView2Settings.IsNonClientRegionSupportEnabled first ships in Release SDK 1.0.2420.47, which
+        // "requires WebView2 Runtime 123.0.2420.47 or later"
+        // (https://learn.microsoft.com/microsoft-edge/webview2/release-notes/sdk/1-0-2420-47).
+        private static readonly Version MinNonClientRuntime = new Version(123, 0, 2420, 47);
+
+        // Page background used before the page is there: last real page colour (shell.json), else the Windows app theme.
+        private Color bgColor;
+        private bool bgDark;
+        private readonly SplashBar splash;
         private bool lastMaximized;
 
         private const int WM_NCCALCSIZE = 0x0083;
         private const int WM_NCLBUTTONDOWN = 0x00A1;
+        private const int HTCAPTION = 2;
         private const int HTTOP = 12, HTTOPLEFT = 13, HTTOPRIGHT = 14;
         private const int TopGripPx = 4; // overlay strip above the web view that takes over top-edge resizing
         private const uint SWP_FRAMECHANGED = 0x0037; // NOMOVE|NOSIZE|NOZORDER|NOACTIVATE|FRAMECHANGED
@@ -162,16 +177,218 @@ namespace Weft.Desktop
         }
         private readonly TopGrip grip;
 
-        private void UseCustomFrame()
+        // Rare: the frame was removed up front but WebView2 refused non-client regions. Give the title bar back.
+        private void DropCustomFrame()
         {
-            customFrame = true;
-            grip.Visible = WindowState == FormWindowState.Normal;
+            customFrame = false;
+            grip.Visible = false;
+            HideSplash();
             SetWindowPos(Handle, IntPtr.Zero, 0, 0, 0, 0, SWP_FRAMECHANGED);
+        }
+
+        private static string ShellFile
+        {
+            get { return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Weft", "shell.json"); }
+        }
+
+        private static bool IsDark(Color c) { return (0.299 * c.R + 0.587 * c.G + 0.114 * c.B) < 128; }
+
+        private void LoadTheme()
+        {
+            try
+            {
+                var m = Regex.Match(File.ReadAllText(ShellFile), "\"bg\"\\s*:\\s*\"#([0-9a-fA-F]{6})\"");
+                if (m.Success)
+                {
+                    int v = int.Parse(m.Groups[1].Value, NumberStyles.HexNumber, CultureInfo.InvariantCulture);
+                    bgColor = Color.FromArgb((v >> 16) & 255, (v >> 8) & 255, v & 255);
+                    bgDark = IsDark(bgColor);
+                    return;
+                }
+            }
+            catch { }
+            bool light = true;
+            try
+            {
+                object v = Registry.GetValue(@"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize", "AppsUseLightTheme", 1);
+                if (v is int && (int)v == 0) light = false;
+            }
+            catch { }
+            // Same as --bg of the default "white" theme family.
+            bgColor = light ? Color.FromArgb(0xfc, 0xfc, 0xfc) : Color.FromArgb(0x18, 0x18, 0x18);
+            bgDark = !light;
+        }
+
+        // The page reports its real background (--bg) whenever the theme changes; remember it for the next cold start.
+        private void SaveTheme(string hex)
+        {
+            int v = int.Parse(hex, NumberStyles.HexNumber, CultureInfo.InvariantCulture);
+            var c = Color.FromArgb((v >> 16) & 255, (v >> 8) & 255, v & 255);
+            if (c.ToArgb() != bgColor.ToArgb())
+            {
+                bgColor = c;
+                bgDark = IsDark(c);
+                BackColor = c;
+                splash.BackColor = c;
+                splash.Invalidate();
+            }
+            // Written even when it equals the fallback: the record, not the fallback, must win from now on.
+            string json = "{\"bg\":\"#" + hex.ToLowerInvariant() + "\"}";
+            try
+            {
+                if (File.Exists(ShellFile) && File.ReadAllText(ShellFile) == json) return;
+                Directory.CreateDirectory(Path.GetDirectoryName(ShellFile));
+                File.WriteAllText(ShellFile, json);
+            }
+            catch { }
+        }
+
+        private int Dpi()
+        {
+            try { return IsHandleCreated ? (int)GetDpiForWindow(Handle) : DeviceDpi; }
+            catch (EntryPointNotFoundException) { return DeviceDpi; }
+        }
+
+        private void LayoutSplash()
+        {
+            if (!customFrame || splash == null) return;
+            splash.Bounds = new Rectangle(0, 0, ClientSize.Width, ClientSize.Height);
+        }
+
+        // Covers the whole client area in the page colour until the page has painted (the web view shows an unstyled
+        // canvas of its own for a moment on a dark system). Its top 52px row still drags the window and has a close button.
+        private sealed class SplashBar : Control
+        {
+            private readonly MainForm owner;
+            private bool hot, pressed;
+            internal SplashBar(MainForm owner)
+            {
+                this.owner = owner;
+                SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
+                Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom;
+                Visible = false;
+            }
+            internal static int Scale(int px, int dpi) { return (int)Math.Round(px * dpi / 96.0); }
+            private Rectangle CloseRect()
+            {
+                int d = owner.Dpi();
+                int btn = Scale(30, d), edge = Scale(12, d);
+                return new Rectangle(Width - edge - btn, (Scale(52, d) - btn) / 2, btn, btn);
+            }
+            protected override void OnPaint(PaintEventArgs e)
+            {
+                var g = e.Graphics;
+                g.Clear(BackColor);
+                var r = CloseRect();
+                int d = owner.Dpi();
+                bool lit = hot;
+                if (lit)
+                {
+                    g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                    // --fail of the page themes (light / dark)
+                    var red = owner.bgDark ? Color.FromArgb(249, 143, 135) : Color.FromArgb(185, 70, 66);
+                    using (var path = RoundRect(r, Scale(7, d)))
+                    using (var br = new SolidBrush(pressed ? ControlPaint.Dark(red, 0.05f) : red))
+                        g.FillPath(br, path);
+                }
+                g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                // --term when lit, --mute otherwise
+                var ink = lit ? (owner.bgDark ? Color.FromArgb(0x11, 0x11, 0x11) : Color.FromArgb(0x1a, 0x1a, 0x1a))
+                              : (owner.bgDark ? Color.FromArgb(0x8f, 0x8f, 0x8f) : Color.FromArgb(0x6e, 0x6e, 0x6e));
+                using (var pen = new Pen(ink, 1.5f * d / 96f) { StartCap = System.Drawing.Drawing2D.LineCap.Round, EndCap = System.Drawing.Drawing2D.LineCap.Round })
+                {
+                    float cx = r.X + r.Width / 2f, cy = r.Y + r.Height / 2f, a = 4f * d / 96f;
+                    g.DrawLine(pen, cx - a, cy - a, cx + a, cy + a);
+                    g.DrawLine(pen, cx + a, cy - a, cx - a, cy + a);
+                }
+            }
+            private static System.Drawing.Drawing2D.GraphicsPath RoundRect(Rectangle r, int radius)
+            {
+                var p = new System.Drawing.Drawing2D.GraphicsPath();
+                int dd = radius * 2;
+                p.AddArc(r.X, r.Y, dd, dd, 180, 90);
+                p.AddArc(r.Right - dd, r.Y, dd, dd, 270, 90);
+                p.AddArc(r.Right - dd, r.Bottom - dd, dd, dd, 0, 90);
+                p.AddArc(r.X, r.Bottom - dd, dd, dd, 90, 90);
+                p.CloseFigure();
+                return p;
+            }
+            protected override void OnMouseMove(MouseEventArgs e)
+            {
+                base.OnMouseMove(e);
+                bool h = CloseRect().Contains(e.Location);
+                if (h != hot) { hot = h; Invalidate(); }
+            }
+            protected override void OnMouseLeave(EventArgs e)
+            {
+                base.OnMouseLeave(e);
+                if (hot || pressed) { hot = false; pressed = false; Invalidate(); }
+            }
+            protected override void OnMouseDown(MouseEventArgs e)
+            {
+                base.OnMouseDown(e);
+                if (e.Button != MouseButtons.Left) return;
+                if (CloseRect().Contains(e.Location)) { pressed = true; Invalidate(); return; }
+                if (e.Y >= Scale(52, owner.Dpi())) return; // below the top row the cover is only a backdrop
+                if (e.Clicks >= 2)
+                {
+                    owner.WindowState = owner.WindowState == FormWindowState.Maximized ? FormWindowState.Normal : FormWindowState.Maximized;
+                    return;
+                }
+                ReleaseCapture();
+                SendMessage(owner.Handle, WM_NCLBUTTONDOWN, (IntPtr)HTCAPTION, IntPtr.Zero);
+            }
+            protected override void OnMouseUp(MouseEventArgs e)
+            {
+                base.OnMouseUp(e);
+                bool click = pressed && CloseRect().Contains(e.Location);
+                pressed = false;
+                Invalidate();
+                if (click) owner.Close();
+            }
+        }
+
+        // Hand the top row over to the page once it is loaded, has switched on its own window buttons and has
+        // drawn them. The page announces that with its first theme message, which is sent after React rendered;
+        // between "navigation completed" and that render the bare page canvas shows, and on a dark system it is
+        // not the page colour. If the message never comes, a timer lets go anyway.
+        private System.Windows.Forms.Timer handOverTimer;
+        private void HideSplash()
+        {
+            if (handOverTimer != null) { handOverTimer.Stop(); handOverTimer.Dispose(); handOverTimer = null; }
+            splash.Visible = false;
+            // The page background stand-in set at document creation is no longer needed.
+            var core = web.CoreWebView2;
+            if (core != null) { try { core.ExecuteScriptAsync("document.documentElement.style.removeProperty('background')"); } catch { } }
+        }
+
+        // The page reports after it painted, but the web view needs a moment to present that frame; uncovering at once shows its old surface.
+        private void HideSplashSoon(int ms)
+        {
+            if (!splash.Visible) return;
+            if (handOverTimer != null) { handOverTimer.Stop(); handOverTimer.Dispose(); }
+            handOverTimer = new System.Windows.Forms.Timer { Interval = ms };
+            handOverTimer.Tick += (o, a) => HideSplash();
+            handOverTimer.Start();
+        }
+
+        private async Task HandOverToPage(CoreWebView2 core)
+        {
+            if (!splash.Visible || handOverTimer != null) return;
+            try
+            {
+                string flag = await core.ExecuteScriptAsync("document.documentElement.dataset.desktopShell||''");
+                if (flag != "\"1\"") return;
+            }
+            catch { return; }
+            if (!splash.Visible || handOverTimer != null) return;
+            HideSplashSoon(5000); // fallback if the page never reports
         }
 
         protected override void OnHandleCreated(EventArgs e)
         {
             base.OnHandleCreated(e);
+            LayoutSplash();
             // Windows 11 rounded corners; Windows 10 rejects the attribute and that is fine.
             try { int round = DWMWCP_ROUND; DwmSetWindowAttribute(Handle, DWMWA_WINDOW_CORNER_PREFERENCE, ref round, sizeof(int)); } catch { }
         }
@@ -179,7 +396,14 @@ namespace Weft.Desktop
         protected override void OnSizeChanged(EventArgs e)
         {
             base.OnSizeChanged(e);
+            LayoutSplash();
             PushMaximized();
+        }
+
+        protected override void OnDpiChanged(DpiChangedEventArgs e)
+        {
+            base.OnDpiChanged(e);
+            LayoutSplash();
         }
 
         private void PushMaximized()
@@ -203,6 +427,12 @@ namespace Weft.Desktop
             if (!SameOrigin(a.Source)) return;
             string msg;
             try { msg = a.TryGetWebMessageAsString(); } catch (ArgumentException) { return; }
+            if (msg.Length == 13 && msg.StartsWith("theme:#", StringComparison.Ordinal) && Regex.IsMatch(msg, "^theme:#[0-9a-fA-F]{6}$"))
+            {
+                SaveTheme(msg.Substring(7));
+                HideSplashSoon(150);
+                return;
+            }
             switch (msg)
             {
                 case "minimize": WindowState = FormWindowState.Minimized; break;
@@ -220,25 +450,35 @@ namespace Weft.Desktop
                 && string.Equals(u.GetLeftPart(UriPartial.Authority), origin, StringComparison.OrdinalIgnoreCase);
         }
 
-        private const string ShellScript =
-            "(function(){var f=function(){document.documentElement.dataset.desktopShell='1'};"
+        // Also paints the page's bare canvas in the splash colour: before the page CSS arrives a dark system shows Chromium's own
+        // dark canvas (#121212) instead, which flashed for half a second between the splash and the first page paint.
+        private string ShellScript()
+        {
+            return "(function(){var f=function(){var e=document.documentElement;e.dataset.desktopShell='1';e.style.background='#"
+                + bgColor.R.ToString("x2") + bgColor.G.ToString("x2") + bgColor.B.ToString("x2") + "'};"
             + "if(document.documentElement)f();else new MutationObserver(function(_,o){if(document.documentElement){o.disconnect();f()}})"
             + ".observe(document,{childList:true})})();";
+        }
 
-        // Needs a runtime with non-client region support. Any failure keeps the system title bar and leaves the page untouched.
+        // The frame is already custom (runtime version checked up front). If WebView2 still refuses, fall back to the system title bar.
         private async Task TryEnableCustomFrame(CoreWebView2 core)
         {
             try
             {
                 core.Settings.IsNonClientRegionSupportEnabled = true;
-                await core.AddScriptToExecuteOnDocumentCreatedAsync(ShellScript);
+                await core.AddScriptToExecuteOnDocumentCreatedAsync(ShellScript());
                 core.WebMessageReceived += (o, a) => OnShellMessage(a);
-                core.NavigationCompleted += (o, a) => { pushForce = true; PushMaximized(); };
-                UseCustomFrame();
+                core.NavigationCompleted += async (o, a) =>
+                {
+                    pushForce = true;
+                    PushMaximized();
+                    if (a.IsSuccess) await HandOverToPage(core);
+                };
             }
             catch (Exception)
             {
                 try { core.Settings.IsNonClientRegionSupportEnabled = false; } catch { }
+                if (customFrame) DropCustomFrame();
             }
         }
 
@@ -246,15 +486,36 @@ namespace Weft.Desktop
         {
             this.activate = activate;
             Text = "Weft";
-            ClientSize = new Size(1280, 800);
+            LoadTheme();
+            BackColor = bgColor;
+            web.BackColor = bgColor;
+            web.DefaultBackgroundColor = bgColor;
+            DecideFrame();
+            if (customFrame)
+            {
+                // No title bar: the 1280x800 client area is the window minus the side and bottom borders.
+                int f = GetSystemMetrics(32) + GetSystemMetrics(92);
+                Size = new Size(1280 + 2 * f, 800 + f);
+            }
+            else ClientSize = new Size(1280, 800);
             MinimumSize = new Size(800, 560);
             StartPosition = FormStartPosition.CenterScreen;
             try { Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath); } catch { }
             grip = new TopGrip(this);
             grip.Bounds = new Rectangle(0, 0, ClientSize.Width, TopGripPx);
+            splash = new SplashBar(this) { BackColor = bgColor };
             Controls.Add(web);
+            Controls.Add(splash);
             Controls.Add(grip);
             grip.BringToFront(); // overlays the top edge of the web view
+            if (customFrame)
+            {
+                splash.Visible = true;
+                splash.BringToFront();
+                splash.Size = ClientSize;
+                grip.Visible = true;
+                grip.BringToFront();
+            }
 
             var waiter = new Thread(() =>
             {
@@ -272,6 +533,19 @@ namespace Weft.Desktop
             Activate();
         }
 
+        private void DecideFrame()
+        {
+            try
+            {
+                string v = CoreWebView2Environment.GetAvailableBrowserVersionString();
+                // e.g. "123.0.2420.47" or "125.0.2535.13 beta"
+                Version ver;
+                customFrame = Version.TryParse(v.Split(' ')[0], out ver) && ver >= MinNonClientRuntime;
+            }
+            catch (WebView2RuntimeNotFoundException) { runtimeMissing = true; }
+            catch (Exception) { }
+        }
+
         protected override async void OnShown(EventArgs e)
         {
             base.OnShown(e);
@@ -285,8 +559,7 @@ namespace Weft.Desktop
             if (url == null) return;
             origin = new Uri(url).GetLeftPart(UriPartial.Authority);
 
-            try { CoreWebView2Environment.GetAvailableBrowserVersionString(); }
-            catch (WebView2RuntimeNotFoundException)
+            if (runtimeMissing)
             {
                 MessageBox.Show(this, "没有找到 WebView2 运行库，将改用默认浏览器打开 Weft。\n如需独立窗口，请先安装 Microsoft Edge WebView2 Runtime。",
                     "Weft", MessageBoxButtons.OK, MessageBoxIcon.Information);

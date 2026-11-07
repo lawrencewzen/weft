@@ -49,4 +49,22 @@ describe('WindowControls', () => {
     });
     expect(q('window-toggle-maximize').title).toBe('Restore');
   });
+
+  it('reports the page background to the shell and again when the theme changes', async () => {
+    const root_ = document.documentElement;
+    root_.dataset.desktopShell = '1';
+    root_.style.setProperty('--bg', '#181818');
+    await act(async () => root.render(<WindowControls lang="en" />));
+    expect(posted).toEqual([]); // not before the page had a chance to paint
+    await act(async () => { await new Promise((r) => setTimeout(r, 80)); });
+    expect(posted).toEqual(['theme:#181818']);
+    await act(async () => {
+      root_.style.setProperty('--bg', '#fcfcfc');
+      root_.setAttribute('data-theme', 'white-light');
+      await Promise.resolve();
+    });
+    expect(posted).toEqual(['theme:#181818', 'theme:#fcfcfc']);
+    root_.style.removeProperty('--bg');
+    root_.removeAttribute('data-theme');
+  });
 });
