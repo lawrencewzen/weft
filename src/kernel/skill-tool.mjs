@@ -1,5 +1,5 @@
 // Read-only skill loader for the main agent. Children never receive this tool.
-import { Type } from '@earendil-works/pi-ai';
+import { obj, str } from '@earendil-works/pi-schema';
 import { defineTool } from '@earendil-works/pi-durable';
 import { unknownSkillError } from '../core/skills.mjs';
 
@@ -16,8 +16,8 @@ export function createSkillTool({ loadSkill } = {}) {
   return defineTool({
     name: 'skill',
     description: SKILL_TOOL_DESCRIPTION,
-    parameters: Type.Object({
-      name: Type.String(),
+    parameters: obj({
+      name: str(),
     }),
     replay: 'safe',
     execute: async (args) => {

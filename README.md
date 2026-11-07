@@ -8,8 +8,6 @@
 
 演示模型只在显式设置 `WEFT_LLM=faux`、`LLM_API=faux` 或 `WEFT_FAUX_SCRIPT` 时使用。没有可用模型时发消息以 `E_NO_MODEL` 失败，不会自动改走演示剧本。
 
-> 本项目 fork 自 [xiaomoBoy/pi-durable-assistant](https://github.com/xiaomoBoy/pi-durable-assistant)（MIT），感谢原作者。
-
 - 方案：[docs/PLAN.md](docs/PLAN.md)
 - 架构：[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 - 界面稿：[design/mockup.html](design/mockup.html)

@@ -23,6 +23,11 @@ export type PresentedConversation = {
   status?: unknown;
   usage?: unknown;
   llmError?: { code?: unknown; message?: unknown } | null;
+  /** pi.live from the conversation watch. Display only. */
+  live?: {
+    compactions?: Array<{ trigger?: unknown }> | null;
+    compactionFailure?: { trigger?: unknown; error?: unknown } | null;
+  } | null;
   messages?: ThreadMessage[] | null;
   modelSourceId?: unknown;
   modelId?: unknown;
@@ -109,6 +114,7 @@ export async function conversationSnapshot({
     subagents: agents,
     lang,
     hasWorkspace: Boolean(presented?.workspaceId),
+    live: presented?.live,
   });
   const thread = await buildThread(messages, {
     lang,

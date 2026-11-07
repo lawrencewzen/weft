@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { getSettings, putCompactionTrigger } from '../../data/api';
 import { getPreferredLang, setPreferredLang, type Lang } from '../../data/lang';
 import {
   APPEARANCES,
@@ -52,11 +53,53 @@ type Props = {
   lang: Lang;
 };
 
+const TRIGGER_MIN = 60;
+const TRIGGER_MAX = 90;
+
+export function parseTriggerPercent(raw: string): number | null {
+  const text = raw.trim();
+  if (!/^\d+$/.test(text)) return null;
+  const n = Number(text);
+  return n >= TRIGGER_MIN && n <= TRIGGER_MAX ? n : null;
+}
+
 export function GeneralPage({ lang }: Props) {
   const [appearance, setAppearance] = useState(readAppearance);
   const [theme, setTheme] = useState(readThemeFamily);
   const [fontSize, setFontSize] = useState(readFontSize);
   const [chatWidth, setChatWidth] = useState(readChatWidth);
+  const [trigger, setTrigger] = useState('');
+  const [saved, setSaved] = useState<number | null>(null);
+  const [triggerError, setTriggerError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    getSettings()
+      .then((view) => {
+        if (!alive) return;
+        setSaved(view.compaction.triggerPercent);
+        setTrigger(String(view.compaction.triggerPercent));
+      })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, []);
+
+  async function commitTrigger() {
+    const n = parseTriggerPercent(trigger);
+    if (n === null) {
+      setTriggerError(t(lang, 'compact_trigger_range'));
+      return;
+    }
+    setTriggerError(null);
+    if (n === saved) return;
+    try {
+      const view = await putCompactionTrigger(n);
+      setSaved(view.compaction.triggerPercent);
+      setTrigger(String(view.compaction.triggerPercent));
+    } catch {
+      setTriggerError(t(lang, 'compact_trigger_save_failed'));
+    }
+  }
 
   useEffect(() => subscribePrefs(() => {
     setAppearance(readAppearance());
@@ -217,6 +260,36 @@ export function GeneralPage({ lang }: Props) {
               {t(lang, CHAT_WIDTH_KEYS[width])}
             </button>
           ))}
+        </div>
+      </div>
+
+      <div className="ns-pref-row">
+        <div className="ns-pref-copy">
+          <b>{t(lang, 'compact_trigger_label')}</b>
+          {triggerError ? (
+            <span className="ns-pref-error" data-testid="next-pref-compact-error" role="alert">{triggerError}</span>
+          ) : null}
+        </div>
+        <div className="ns-pref-input">
+          <input
+            data-testid="next-pref-compact-trigger"
+            inputMode="numeric"
+            value={trigger}
+            aria-invalid={triggerError ? 'true' : undefined}
+            aria-label={t(lang, 'compact_trigger_label')}
+            onChange={(e) => {
+              setTrigger(e.target.value);
+              setTriggerError(null);
+            }}
+            onBlur={() => { void commitTrigger(); }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                void commitTrigger();
+              }
+            }}
+          />
+          <span className="ns-pref-input-unit">%</span>
         </div>
       </div>
     </div>

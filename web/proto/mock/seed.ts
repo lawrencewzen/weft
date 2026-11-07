@@ -60,7 +60,9 @@ function conversation(input: {
   diffs?: Record<string, MockConv['diffs'][string]>;
   subagents?: Subagent[];
   status?: ConversationView['status'];
+  run?: RunState;
   archived?: boolean;
+  error?: MockConv['error'];
 }): MockConv {
   const tools = input.tools || {};
   return {
@@ -76,12 +78,13 @@ function conversation(input: {
       thinkingLevel: input.thinkingLevel !== undefined
         ? input.thinkingLevel
         : (input.model === null ? null : (input.model?.modelId === 'claude-fable-5-1' ? 'medium' : 'high')),
-      run: { ...IDLE_RUN },
+      run: input.run ? { ...input.run } : { ...IDLE_RUN },
       context: context(input.used),
       itemIds: input.items.map((item) => item.id),
       sends: [],
     },
     pending: null,
+    error: input.error || null,
     items: input.items,
     tools,
     changes: input.changes || [],
@@ -106,8 +109,9 @@ function assistant(
   text: string,
   model = 'deepseek-flash',
   pathRefs: { text: string; path: string; line?: number }[] = [],
+  truncated = false,
 ): MockItem {
-  return { kind: 'assistant', id, text, pathRefs, model, streaming: false, truncated: false };
+  return { kind: 'assistant', id, text, pathRefs, model, streaming: false, truncated };
 }
 
 function group(
@@ -582,6 +586,223 @@ function richConversation(now: number, threads: Map<string, MockSubThread>): Moc
     text: '顺便把深色模式也检查一下',
   }];
   return rich;
+}
+
+function failedConversation(now: number): MockConv {
+  return conversation({
+    id: 'c-failed',
+    workspaceId: 'ws-weft',
+    title: '模型调用失败',
+    updatedAt: now - 10 * MINUTE,
+    used: 12_000,
+    status: 'failed',
+    error: {
+      code: 'model_failed',
+      message: hint('模型请求失败：503 Service Unavailable', 'Model request failed: 503 Service Unavailable'),
+      canContinue: true,
+    },
+    run: {
+      ...IDLE_RUN,
+      status: 'failed',
+      error: {
+        code: 'model_failed',
+        message: '模型请求失败：503 Service Unavailable',
+        canContinue: true,
+      },
+    },
+    items: [
+      user('failed-u1', '帮我分析一下系统性能瓶颈并提出优化建议。'),
+    ],
+  });
+}
+
+function interruptedConversation(now: number): MockConv {
+  return conversation({
+    id: 'c-interrupted',
+    workspaceId: 'ws-weft',
+    title: '服务中断',
+    updatedAt: now - 12 * MINUTE,
+    used: 18_000,
+    status: 'failed',
+    error: {
+      code: 'interrupted',
+      message: hint('服务中断，这一轮没有完成。', 'Service interrupted, this turn did not complete.'),
+      canContinue: true,
+    },
+    run: {
+      ...IDLE_RUN,
+      status: 'failed',
+      error: {
+        code: 'interrupted',
+        message: '服务中断，这一轮没有完成。',
+        canContinue: true,
+      },
+    },
+    items: [
+      user('interrupted-u1', '请分析当前路由模块的整体架构，并给出详细的重构方案和代码草稿。'),
+      assistant(
+        'interrupted-a1',
+        [
+          '### 路由模块现状分析',
+          '',
+          '目前路由集中在单一入口文件中，包含以下问题：',
+          '1. **职责过重**：协议校验、路由分发、错误捕获均在同一函数中。',
+          '2. **扩展性差**：新增接口需要改动多处核心映射表。',
+          '3. **测试困难**：无法单独针对单个路由分支进行单测。',
+          '',
+          '### 建议重构方案',
+          '- 将每个子路由拆分为独立的 handler。',
+          '- 统一错误拦截器处理 4xx 和 5xx。',
+          '- 使用中间件链管理鉴权和上下文注入。',
+          '',
+          '### 代码重构示意',
+          '```ts',
+          '// router.ts',
+          'export interface RouteHandler {',
+          '  path: string;',
+          '  method: "GET" | "POST" | "PUT" | "DELETE";',
+          '  handle(req: Request): Promise<Response>;',
+          '}',
+          '',
+          'export class Router {',
+          '  private routes = new Map<string, RouteHandler>();',
+          '',
+          '  register(route: RouteHandler) {',
+          '    this.routes.set(`${route.method}:${route.path}`, route);',
+          '  }',
+          '',
+          '  async dispatch(req: Request): Promise<Response> {',
+          '    const key = `${req.method}:${req.url}`;',
+          '    const handler = this.routes.get(key);',
+          '    if (!handler) {',
+          '      return new Response("Not Found", { status: 404 });',
+          '    }',
+          '    try {',
+          '      return await handler.handle(req);',
+          '    } catch (err) {',
+          '      return this.handleError(err);',
+          '    }',
+          '  }',
+          '',
+          '  private handleError(err: unknown): Response {',
+          '    console.error("Route error:", err);',
+          '    return new Response("Internal Server Error", { status: 500 });',
+          '  }',
+          '}',
+          '```',
+          '',
+          '### 实施步骤',
+          '1. 创建统一错误拦截中间件。',
+          '2. 迁移基础会话路由。',
+          '3. 迁移配置和凭据接口。',
+          '4. 增加集成测试覆盖率。',
+        ].join('\n'),
+      ),
+      user('interrupted-u2', '重构路由模块并添加错误拦截器。'),
+    ],
+  });
+}
+
+function noModelFailedConversation(now: number): MockConv {
+  return conversation({
+    id: 'c-no-model-failed',
+    workspaceId: 'ws-weft',
+    title: '未配置模型',
+    updatedAt: now - 14 * MINUTE,
+    used: 1_000,
+    status: 'failed',
+    model: null,
+    thinkingLevel: null,
+    error: {
+      code: 'no_model',
+      message: hint('未配置可用模型，无法发起调用。', 'No model configured, cannot run.'),
+      canContinue: false,
+    },
+    run: {
+      ...IDLE_RUN,
+      status: 'failed',
+      error: {
+        code: 'no_model',
+        message: '未配置可用模型，无法发起调用。',
+        canContinue: false,
+      },
+    },
+    items: [
+      user('nomodel-u1', '帮我检查代码。'),
+    ],
+  });
+}
+
+function truncatedConversation(now: number): MockConv {
+  return conversation({
+    id: 'c-truncated',
+    workspaceId: 'ws-weft',
+    title: '输出截断示例',
+    updatedAt: now - 16 * MINUTE,
+    used: 64_000,
+    status: 'idle',
+    items: [
+      user('truncated-u1', '请列出所有已废弃的旧版本接口和迁移说明。'),
+      assistant(
+        'truncated-a1',
+        [
+          '以下是已废弃接口的整理（按模块划分）：',
+          '',
+          '1. `/api/legacy/export`：原旧版导出功能，改用 `/api/v2/conversations/{id}` 快照',
+          '2. `/api/legacy/status`：原轮询状态接口，改用 `/api/v2/events` SSE 流',
+          '3. `/api/legacy/tools`：原独立工具列表，合并进对话视图',
+          '4. `/api/legacy/config`：配置项迁移至 `/api/v2/providers`',
+        ].join('\n'),
+        'deepseek-flash',
+        [],
+        true,
+      ),
+    ],
+  });
+}
+
+function compactedConversation(now: number): MockConv {
+  return conversation({
+    id: 'c-compacted',
+    workspaceId: 'ws-weft',
+    title: '压缩过的长对话',
+    updatedAt: now - 14 * MINUTE,
+    used: 36_000,
+    items: [
+      user('compacted-u1', '把 store 里的订阅逻辑拆成独立模块。'),
+      assistant('compacted-a1', '已经拆成 `subscribe.ts`，store 只保留数据读写。'),
+      {
+        kind: 'system_note',
+        id: 'compacted-n1',
+        noteKind: 'compaction',
+        text: '已压缩较早的上下文',
+        i18n: hint('已压缩较早的上下文', 'Earlier context was compacted'),
+      },
+      user('compacted-u2', '再补一组订阅取消的单测。'),
+      assistant('compacted-a2', '补了 3 个用例，覆盖重复取消和取消后不再收到事件。'),
+    ],
+  });
+}
+
+function compactFailedConversation(now: number): MockConv {
+  const conv = conversation({
+    id: 'c-compact-failed',
+    workspaceId: 'ws-weft',
+    title: '压缩失败示例',
+    updatedAt: now - 15 * MINUTE,
+    used: 168_000,
+    items: [
+      user('cfail-u1', '继续梳理剩下的接口迁移清单。'),
+      assistant('cfail-a1', '清单已经整理到第 6 项，剩余部分见下一条。'),
+    ],
+  });
+  conv.compactFails = true;
+  conv.compaction = {
+    state: 'failed',
+    trigger: 'threshold',
+    error: hint('压缩失败：模型请求超时', 'Compaction failed: model request timed out'),
+  };
+  return conv;
 }
 
 function testsConversation(now: number): MockConv {
@@ -1153,6 +1374,12 @@ export function createSeed(now: number): MockDb {
   const subagents = seedSubThreads(now);
   const conversations = [
     richConversation(now, subagents),
+    failedConversation(now),
+    interruptedConversation(now),
+    noModelFailedConversation(now),
+    truncatedConversation(now),
+    compactedConversation(now),
+    compactFailedConversation(now),
     askConversation(now),
     testsConversation(now),
     docsConversation(now, subagents),
@@ -1242,5 +1469,6 @@ export function createSeed(now: number): MockDb {
     messagePastes: new Map(),
     workspaceUploads: new Map(),
     glab: seedGlab(),
+    settings: { compaction: { triggerPercent: 80 } },
   };
 }

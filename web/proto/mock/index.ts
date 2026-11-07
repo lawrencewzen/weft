@@ -204,6 +204,7 @@ declare global {
   interface Window {
     /** Every mocked `/api` call, in order. Read by the prototype e2e tests. */
     __protoRequests?: Array<{ method: string; url: string }>;
+    __protoFailContinue?: boolean;
   }
 }
 

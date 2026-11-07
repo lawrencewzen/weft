@@ -40,7 +40,7 @@ flowchart LR
 ```
 
 ## 关键概念
-- **Agent** = 一条 Harness 对话上的运行（配置 + 检查点），可多个并行。主 Agent 的 `instructions` 为空字符串；工具是全部内置工作区工具、已启用的插件工具、`skill` 和 `delegate` / `subagent`；系统提示词的 skills section 只列启用技能的清单（名字 + 一句简介），正文由主 Agent 按需用 `skill` 工具加载。未知工具名在执行前被拒绝（`E_UNKNOWN_TOOL`），不会发出 `tool.start`。
+- **Agent** = 一条 Harness 对话上的运行（配置 + 检查点），可多个并行。主 Agent 不设 `instructions`：`configure` 传 `null` 清除该字段（Pi Durable 的 `AgentChange` 里 `null` 表示清除），已存的空字符串在下次配置后不再渲染成 `<instructions>`。系统提示词是 Pi Durable section，顺序为 preamble（不带标签）、rules、environment、project_context、skills。preamble 与 rules 是固定短文案。environment 按这次请求写工作目录、平台和 shell：没选项目时不写工作目录，也不写 project_context（无 cwd 时 `input.env` 为空，不把进程目录当工作目录；未选项目的对话目录在数据目录 `chats/` 下，同样不写）。project_context 只放工作区根目录 `AGENTS.md`（不读 `CLAUDE.md`、不读子目录）；没有、为空或读失败则整段省略，超过 32KB 按字节截断且不切断多字节字符。skills section 只列启用技能的清单（名字 + 一句简介），正文由主 Agent 按需用 `skill` 工具加载。工具是全部内置工作区工具、已启用的插件工具、`skill` 和 `delegate` / `subagent`。子 Agent 没有 preamble、rules、skills，有 environment、project_context 和固定的 no-ask `instructions`。未知工具名在执行前被拒绝（`E_UNKNOWN_TOOL`），不会发出 `tool.start`。
 - **多 Agent 协作**：主 Agent 用 `delegate` / `subagent` 派子 Agent，另开 Harness 对话。子 Agent 是自包含派活，不套角色模板。宿主不轮换 Agent。`GET /api/conversations/:cid` 的 `agents[]` 是主 Agent（`name: 'Agent'`）加上子 Agent 实例。演示见 [SUBAGENTS.md](SUBAGENTS.md)。
 - **模型**：对话自己选的 `{ modelSourceId, modelId }`，否则 `settings.models.default`，再否则第一个可用源上的第一个模型。
 - **卡住与重试**：只使用 Pi Durable 的 `stream.timeoutMs` 和 `retry`。不另写看门狗，也不在卡住时自动提交下一句。停止是 `conversation.abort(context, { background: true })`，进行中的运行和后台子 Agent 一起停。
@@ -83,10 +83,10 @@ flowchart LR
 
 ## 鉴权与绑定
 
-- 默认不鉴权。不设置 `WEFT_TOKEN` 时，`/api/*` 和 SSE 不需要 cookie、Bearer 或 ticket。服务不读取、不生成 `$WEFT_DATA_DIR/auth.token`。启动只打印 `WEFT_READY http://127.0.0.1:<port>`。浏览器打开这个地址即可使用。
-- `GET /login` 在未设置 `WEFT_TOKEN` 时一律 302 到 `/`，带不带 `token` 都一样，不种 cookie。
-- 设置 `WEFT_TOKEN` 后恢复可选登录：`/api/*` 必须 `Authorization: Bearer` 或 cookie `weft_token`（HttpOnly, SameSite=Strict）。`GET /login?token=` 校验通过后 Set-Cookie 并 302 `/`，令牌不对返回 401。SSE 优先 cookie；`POST /api/sse-ticket` 签发 60s 一次性 `?ticket=`。不接受长效 token 作为 query。
-- 设置了 `WEFT_ALLOWED_HOSTS` 但没有 `WEFT_TOKEN` 时，启动打印一行警告：服务对这些主机开放且没有鉴权。
+- `/api/v2/*` 始终要登录，没有「默认不鉴权」。未带本机令牌 `Authorization: Bearer`，也没有 `weft_session` cookie 时，返回 401，正文 `{ "error": "unauthorized", "code": "E_UNAUTHORIZED" }`。这与是否设置 `WEFT_TOKEN` 无关。`POST /api/v2/auth/web-code` 只接受 Bearer 本机令牌。
+- 网页登录不走免登录。`npm start` 在 `WEFT_READY` 之后打印一次性 `http://127.0.0.1:<port>/auth?code=…`。校验通过后种 HttpOnly、SameSite=Strict 的 `weft_session`，并 302 到 `/`。旧书签 `/next/login?code=` 302 到 `/auth?code=`。码无效或过期返回 401 纯文本。本机令牌写在发现文件里，每次进程启动轮换。
+- 旧接口（v2 没有接管的 `/api/*`，以及旧 SSE）在未设置 `WEFT_TOKEN` 时不鉴权。服务不读取、不生成 `$WEFT_DATA_DIR/auth.token`。设置 `WEFT_TOKEN` 后，这些路径必须 `Authorization: Bearer` 或 cookie `weft_token`（HttpOnly, SameSite=Strict）。`GET /login?token=` 校验通过后 Set-Cookie 并 302 `/`，令牌不对返回 401。未设置 `WEFT_TOKEN` 时 `GET /login` 一律 302 到 `/`，不种 cookie。旧 SSE 优先 cookie；`POST /api/sse-ticket` 签发 60s 一次性 `?ticket=`。不接受长效 token 作为 query。
+- 设置了 `WEFT_ALLOWED_HOSTS` 但没有 `WEFT_TOKEN` 时，启动仍打印 `WEFT_WARN 服务对这些主机开放且没有鉴权: …`。这句说的是上面的旧接口。`/api/v2` 在这条警告下依然返回 `E_UNAUTHORIZED`。
 - 只监听 `127.0.0.1`。`Host` 必须是 `127.0.0.1:<port>` / `localhost:<port>` / `[::1]:<port>`，可用 `WEFT_ALLOWED_HOSTS` 追加，否则 400。
 - 写方法要求 `Content-Type: application/json`，否则 415；若带 `Origin` 则必须同源，否则 403。这些检查在鉴权之前执行。响应带 CSP、`X-Content-Type-Options`、`Referrer-Policy`、`X-Frame-Options`。
 

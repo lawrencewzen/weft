@@ -88,7 +88,17 @@ export type MockGroup = {
 
 type PlainItem = Exclude<ThreadItem, { kind: 'tool_group' }>;
 
-export type MockItem = PlainItem | MockGroup;
+type SystemNoteItem = Extract<ThreadItem, { kind: 'system_note' }>;
+/** compaction note: the server writes the sentence in the client's language. */
+export type MockNote = SystemNoteItem & { i18n?: Bilingual };
+
+export type MockItem = Exclude<PlainItem, SystemNoteItem> | MockNote | MockGroup;
+
+export type MockCompaction = {
+  state: 'idle' | 'running' | 'failed';
+  trigger?: 'manual' | 'threshold' | 'overflow';
+  error?: Bilingual;
+};
 
 export type Steer = {
   requestId: string;
@@ -116,6 +126,13 @@ export type MockConv = {
   view: ConversationView;
   /** Language-dependent waiting line kept next to the view. */
   pending: Bilingual | null;
+  /** Language-dependent run error. */
+  error?: { code: string; message: Bilingual; canContinue: boolean } | null;
+  /** run.compaction in the view; the failed sentence is language-dependent. */
+  compaction?: MockCompaction;
+  /** Prototype only: the next compaction of this conversation ends in failure. */
+  compactFails?: boolean;
+  compactTimer?: number;
   items: MockItem[];
   tools: Record<string, MockTool>;
   changes: Change[];
@@ -161,6 +178,7 @@ export type MockDb = {
   /** `${wsId}\t${uploadPath}` → upload result. */
   workspaceUploads: Map<string, components['schemas']['UploadResult']>;
   glab: GlabSettings;
+  settings: { compaction: { triggerPercent: number } };
 };
 
 export type EntityValue = object | ((lang: Lang) => object);

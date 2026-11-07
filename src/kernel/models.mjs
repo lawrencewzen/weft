@@ -16,7 +16,8 @@ import { contextWindowFromEnv } from '../core/usage.mjs';
 import { normalizeProvidersV3 } from '../core/provider-config.mjs';
 import { normalizeHttpUrl } from '../core/model-sources.mjs';
 
-export const DEFAULT_MAX_OUTPUT_TOKENS = 32768;
+/** Request default when the API requires a limit and the catalog has none. */
+export const DEFAULT_MAX_OUTPUT_TOKENS = 64000;
 const COST = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
 
 let builtinList = null;
@@ -42,14 +43,9 @@ function explicitMaxOutputTokens(env = process.env) {
   return Number.isInteger(n) && n > 0 ? n : null;
 }
 
-/** Positive integer from `WEFT_MAX_OUTPUT_TOKENS`, otherwise 32768. */
+/** Positive integer from `WEFT_MAX_OUTPUT_TOKENS`, otherwise `DEFAULT_MAX_OUTPUT_TOKENS`. */
 export function maxOutputTokensFromEnv(env = process.env) {
   return explicitMaxOutputTokens(env) ?? DEFAULT_MAX_OUTPUT_TOKENS;
-}
-
-function capMaxTokens(tokens, contextWindow) {
-  if (!Number.isInteger(contextWindow) || contextWindow <= 0) return tokens;
-  return Math.min(tokens, contextWindow);
 }
 
 function namedRuntime(value) {
@@ -207,16 +203,29 @@ export async function fetchCustomProviderModels(context, {
   return parseFetchedChatModels(json, { providerId: id, api, baseUrl: normalizeHttpUrl(baseUrl) });
 }
 
-function catalogMaxTokens(model) {
-  if (Number.isInteger(model?.maxTokens) && model.maxTokens > 0) return model.maxTokens;
+function knownCatalogMaxTokens(model) {
+  return Number.isInteger(model?.maxTokens) && model.maxTokens > 0 ? model.maxTokens : null;
+}
+
+/**
+ * Unknown openai-completions models send no limit. pi-ai omits the field when
+ * maxTokens is 0, and clampMaxTokensToContext keeps 0 when contextWindow > 0.
+ * A zero window would turn 0 into 1, so the caller always sets a positive window
+ * first. Other unknown APIs (anthropic-messages requires the field) use
+ * DEFAULT_MAX_OUTPUT_TOKENS. This does not clamp by the input size; pi-ai does.
+ */
+function defaultMaxTokens(model) {
+  if (model?.api === 'openai-completions') return 0;
   return DEFAULT_MAX_OUTPUT_TOKENS;
 }
 
 /**
- * Request-time window/maxTokens. Display in provider-service still reads the
- * catalog (or user override) and is not capped here.
- * maxTokens: overrides.maxTokens > WEFT_MAX_OUTPUT_TOKENS > min(catalog, 32768),
- * then capMaxTokens against the effective context window.
+ * Request-time window/maxTokens. The settings page reads the catalog (or the
+ * per-model override) through provider-service and is not given a stand-in
+ * here: an unknown catalog value stays 0, which displayWindow shows as null.
+ * maxTokens: per-model override > WEFT_MAX_OUTPUT_TOKENS > catalog value,
+ * or the unknown-model default above. pi-ai clamps each request to the
+ * remaining context window; this function does not.
  * Image input and thinking fields come from `applyCapabilityOverrides`.
  * When context, output cap, and those fields are all unchanged, the original
  * model object is returned.
@@ -233,9 +242,8 @@ function applyModelOverrides(model, overrides, env, providerDefaults) {
   let maxTokens = over?.maxTokens;
   if (!Number.isInteger(maxTokens) || maxTokens <= 0) {
     const explicitMax = explicitMaxOutputTokens(env);
-    maxTokens = explicitMax ?? Math.min(catalogMaxTokens(model), DEFAULT_MAX_OUTPUT_TOKENS);
+    maxTokens = explicitMax ?? knownCatalogMaxTokens(model) ?? defaultMaxTokens(model);
   }
-  maxTokens = capMaxTokens(maxTokens, contextWindow);
 
   const caps = applyCapabilityOverrides(model, over, providerDefaults);
   if (
@@ -430,6 +438,7 @@ export function createKernelModels({
   getSettings,
   env = process.env,
   fetchImpl,
+  onSynced,
 } = {}) {
   if (!models || typeof models.setProvider !== 'function') throw new Error('models is required');
   const fingerprints = new Map();
@@ -468,6 +477,7 @@ export function createKernelModels({
     for (const id of [...fingerprints.keys()]) {
       if (!wanted.has(id)) drop(id);
     }
+    if (typeof onSynced === 'function') onSynced(settings);
   }
 
   return {

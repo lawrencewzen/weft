@@ -191,22 +191,19 @@ test('collapsed sidebar becomes 54px narrow strip, buttons and icons remain stat
   }
 
   // Settle in collapsed state
+  await page.waitForTimeout(100);
+
   // 1. Sidebar is visible as a 54px narrow strip (visual width ~48.6px)
   await expect(sidebar).toBeVisible();
-  await expect.poll(async () => {
-    const collapsedSbBox = await sidebar.boundingBox();
-    return collapsedSbBox ? Math.abs(collapsedSbBox.width - 54 * 0.9) : 999;
-  }).toBeLessThanOrEqual(1.5);
-  await expect.poll(async () => {
-    const cssWidth = await sidebar.evaluate((el) => getComputedStyle(el).width);
-    return Math.round(Number.parseFloat(cssWidth));
-  }).toBe(54);
+  const collapsedSbBox = await sidebar.boundingBox();
+  expect(collapsedSbBox).not.toBeNull();
+  expect(Math.abs(collapsedSbBox.width - 54 * 0.9)).toBeLessThanOrEqual(1.5);
+  const cssWidth = await sidebar.evaluate((el) => getComputedStyle(el).width);
+  expect(Math.round(Number.parseFloat(cssWidth))).toBe(54);
 
   // 2. Buttons and icons remain stationary and centered
-  await expect.poll(async () => {
-    const collapsedLeftBox = await leftBtn.boundingBox();
-    return collapsedLeftBox ? Math.abs(collapsedLeftBox.x - initialLeftBox.x) : 999;
-  }).toBeLessThanOrEqual(1);
+  const collapsedLeftBox = await leftBtn.boundingBox();
+  expect(Math.abs(collapsedLeftBox.x - initialLeftBox.x)).toBeLessThanOrEqual(1);
 
   // 3. Projects toggle button is visible in collapsed strip
   const stripProjects = page.getByTestId('next-strip-projects');
@@ -254,7 +251,9 @@ test('collapsed sidebar becomes 54px narrow strip, buttons and icons remain stat
   }
 
   // Settle in expanded state
-  await expect.poll(async () => (await sidebar.boundingBox())?.width ?? 0).toBeGreaterThan(150);
+  await page.waitForTimeout(100);
+  const expandedSbBox = await sidebar.boundingBox();
+  expect(expandedSbBox.width).toBeGreaterThan(150);
 
   expectClean(state);
 });
@@ -351,10 +350,9 @@ test('narrow strip icon actions: search expands and focuses input, new chat crea
 
   // Collapse sidebar to narrow strip
   await leftBtn.click();
-  await expect.poll(async () => {
-    const sbBox = await sidebar.boundingBox();
-    return sbBox ? Math.abs(sbBox.width - 54 * 0.9) : 999;
-  }).toBeLessThanOrEqual(1.5);
+  await page.waitForTimeout(300);
+  const sbBox = await sidebar.boundingBox();
+  expect(Math.abs(sbBox.width - 54 * 0.9)).toBeLessThanOrEqual(1.5);
 
   // 1. Clicking search in narrow strip expands left bar and focuses search input
   await page.getByTestId('next-search').click();
@@ -373,10 +371,7 @@ test('narrow strip icon actions: search expands and focuses input, new chat crea
 
   // 2. Collapse again and click new chat
   await page.getByTestId('next-left-collapse').click();
-  await expect.poll(async () => {
-    const sbBox = await sidebar.boundingBox();
-    return sbBox ? Math.abs(sbBox.width - 54 * 0.9) : 999;
-  }).toBeLessThanOrEqual(1.5);
+  await page.waitForTimeout(300);
   await page.getByTestId('next-new-chat').click();
   // Navigates to draft/new chat
   await expect(page).toHaveURL(/(\/w\/[^/]+\/new|\/new)$/);
@@ -385,6 +380,7 @@ test('narrow strip icon actions: search expands and focuses input, new chat crea
   const stripProjects = page.getByTestId('next-strip-projects');
   await expect(stripProjects).toBeVisible();
   await stripProjects.click();
+  await page.waitForTimeout(300);
 
   // Sidebar expanded after clicking project icon
   await expect(page.locator('.next-shell')).not.toHaveClass(/left-closed/);
@@ -411,15 +407,15 @@ test('dragging left sidebar width does not move left or right buttons', async ({
   await page.mouse.down();
   await page.mouse.move(divBox.x + divBox.width / 2 + 60, divBox.y + 100, { steps: 5 });
   await page.mouse.up();
+  await page.waitForTimeout(50);
 
-  await expect.poll(async () => {
-    const leftBoxAfter = await leftBtn.boundingBox();
-    return leftBoxAfter ? Math.max(Math.abs(leftBoxAfter.x - leftBoxBefore.x), Math.abs(leftBoxAfter.y - leftBoxBefore.y)) : 999;
-  }).toBeLessThanOrEqual(1);
-  await expect.poll(async () => {
-    const rightBoxAfter = await rightBtn.boundingBox();
-    return rightBoxAfter ? Math.max(Math.abs(rightBoxAfter.x - rightBoxBefore.x), Math.abs(rightBoxAfter.y - rightBoxBefore.y)) : 999;
-  }).toBeLessThanOrEqual(1);
+  const leftBoxAfter = await leftBtn.boundingBox();
+  const rightBoxAfter = await rightBtn.boundingBox();
+
+  expect(Math.abs(leftBoxAfter.x - leftBoxBefore.x)).toBeLessThanOrEqual(1);
+  expect(Math.abs(leftBoxAfter.y - leftBoxBefore.y)).toBeLessThanOrEqual(1);
+  expect(Math.abs(rightBoxAfter.x - rightBoxBefore.x)).toBeLessThanOrEqual(1);
+  expect(Math.abs(rightBoxAfter.y - rightBoxBefore.y)).toBeLessThanOrEqual(1);
 
   expectClean(state);
 });
@@ -428,6 +424,7 @@ test('774px viewport collapses to 54px narrow strip without horizontal scroll', 
   const state = await openProto(page);
 
   await page.setViewportSize({ width: 774, height: 800 });
+  await page.waitForTimeout(100);
 
   const leftBtn = page.locator('.side-toggle-left');
   const rightBtn = page.locator('.side-toggle-right');
@@ -437,10 +434,8 @@ test('774px viewport collapses to 54px narrow strip without horizontal scroll', 
   await expect(sidebar).toBeVisible();
 
   // 1. Auto-collapsed to 54px strip (~48.6 visual px)
-  await expect.poll(async () => {
-    const sbBox = await sidebar.boundingBox();
-    return sbBox ? Math.abs(sbBox.width - 54 * 0.9) : 999;
-  }).toBeLessThanOrEqual(1.5);
+  const sbBox = await sidebar.boundingBox();
+  expect(Math.abs(sbBox.width - 54 * 0.9)).toBeLessThanOrEqual(1.5);
 
   // 2. No horizontal scroll
   const scrollInfo = await page.evaluate(() => ({
@@ -460,7 +455,9 @@ test('774px viewport collapses to 54px narrow strip without horizontal scroll', 
 
   // 4. Open overlay sidebar: expands over CenterPane
   await leftBtn.click();
-  await expect.poll(async () => (await sidebar.boundingBox())?.width ?? 0).toBeGreaterThan(150);
+  await page.waitForTimeout(300);
+  const openBox = await sidebar.boundingBox();
+  expect(openBox.width).toBeGreaterThan(150);
 
   // Still no horizontal scroll with overlay open
   const openScroll = await page.evaluate(() => document.body.scrollWidth <= document.body.clientWidth + 1);
@@ -468,10 +465,9 @@ test('774px viewport collapses to 54px narrow strip without horizontal scroll', 
 
   // Close back to narrow strip
   await leftBtn.click();
-  await expect.poll(async () => {
-    const closedBox = await sidebar.boundingBox();
-    return closedBox ? Math.abs(closedBox.width - 54 * 0.9) : 999;
-  }).toBeLessThanOrEqual(1.5);
+  await page.waitForTimeout(300);
+  const closedBox = await sidebar.boundingBox();
+  expect(Math.abs(closedBox.width - 54 * 0.9)).toBeLessThanOrEqual(1.5);
 
   // Open and close right overlay
   await rightBtn.click();
@@ -493,17 +489,14 @@ test('respects prefers-reduced-motion: reduce without animation lag', async ({ p
 
   const boxBefore = await leftBtn.boundingBox();
   await leftBtn.click();
+  await page.waitForTimeout(30);
 
-  await expect.poll(async () => {
-    const boxAfter = await leftBtn.boundingBox();
-    return boxAfter ? Math.abs(boxAfter.x - boxBefore.x) : 999;
-  }).toBeLessThanOrEqual(1);
+  const boxAfter = await leftBtn.boundingBox();
+  expect(Math.abs(boxAfter.x - boxBefore.x)).toBeLessThanOrEqual(1);
 
   const sidebar = page.getByTestId('next-sidebar');
-  await expect.poll(async () => {
-    const sbBox = await sidebar.boundingBox();
-    return sbBox ? Math.abs(sbBox.width - 54 * 0.9) : 999;
-  }).toBeLessThanOrEqual(1.5);
+  const sbBox = await sidebar.boundingBox();
+  expect(Math.abs(sbBox.width - 54 * 0.9)).toBeLessThanOrEqual(1.5);
 
   // In reduced-motion, project strip button is immediately visible without sliding animation
   const stripProjects = page.getByTestId('next-strip-projects');
@@ -531,36 +524,58 @@ test('project icon slides from first folder to narrow strip during collapse, and
   const stripProjects = page.getByTestId('next-strip-projects');
   const stripIcon = stripProjects.locator('.sb-ic');
 
-  // Collapse
-  const collapseSamples = await page.evaluate(() => {
-    return new Promise((resolve) => {
-      const samples = [];
-      const btn = document.querySelector('.side-toggle-left');
+  // Helper to pause Web Animations API animation and sample at deterministic keyframe points
+  const captureFlipAnimation = async (triggerAction) => {
+    const animPromise = page.evaluate(async () => {
+      const sp = document.querySelector('[data-testid="next-strip-projects"]');
+      const spI = sp ? sp.querySelector('.sb-ic') : null;
       const wsI = document.querySelector('[data-testid="next-ws-toggle"] .sb-ic');
-      const startTime = performance.now();
+      const getAnims = () => (sp ? sp.getAnimations().concat(spI ? spI.getAnimations() : []) : []);
 
-      const sample = () => {
-        const sp = document.querySelector('[data-testid="next-strip-projects"]');
-        const spI = sp ? sp.querySelector('.sb-ic') : null;
-        if (!sp || !spI || getComputedStyle(sp).display === 'none') return;
-        const r = spI.getBoundingClientRect();
-        const wsVis = wsI ? getComputedStyle(wsI).visibility : null;
-        samples.push({ x: r.left, y: r.top, wsVis });
-      };
-
-      btn?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-
-      const step = () => {
-        sample();
-        if (performance.now() - startTime < 280) {
-          requestAnimationFrame(step);
-        } else {
-          resolve(samples);
+      const anim = await new Promise((resolve, reject) => {
+        let attempts = 0;
+        function check() {
+          attempts++;
+          const current = getAnims();
+          if (current.length > 0) {
+            resolve(current[0]);
+          } else if (attempts > 300) {
+            reject(new Error('Animation on strip projects button not found'));
+          } else {
+            requestAnimationFrame(check);
+          }
         }
-      };
-      requestAnimationFrame(step);
+        check();
+      });
+
+      anim.pause();
+      const duration = anim.effect.getTiming().duration;
+      // Sample start (0), intermediate points, and end (0.999 just before fill:none interval boundary)
+      const pcts = [0, 0.25, 0.5, 0.75, 0.999];
+      const samples = pcts.map((pct) => {
+        anim.currentTime = duration * pct;
+        const r = spI ? spI.getBoundingClientRect() : null;
+        const wsVis = wsI ? getComputedStyle(wsI).visibility : null;
+        return {
+          pct,
+          time: anim.currentTime,
+          x: r ? r.left : null,
+          y: r ? r.top : null,
+          wsVis,
+        };
+      });
+
+      anim.finish();
+      return samples;
     });
-  });
+
+    const [samples] = await Promise.all([animPromise, triggerAction()]);
+    return samples;
+  };
+
+  // Collapse
+  const collapseSamples = await captureFlipAnimation(() => page.click('.side-toggle-left'));
+  await page.waitForTimeout(300);
 
   expect(collapseSamples.length).toBeGreaterThanOrEqual(3);
 
@@ -575,46 +590,16 @@ test('project icon slides from first folder to narrow strip during collapse, and
   }
 
   // Final settled position in narrow strip
-  await expect.poll(async () => {
-    const b = await stripIcon.boundingBox();
-    if (!b) return 999;
-    const stripCenterX = b.x + b.width / 2;
-    return Math.abs(stripCenterX - 27 * 0.9);
-  }).toBeLessThanOrEqual(1.5);
   const settledStripBox = await stripIcon.boundingBox();
   expect(settledStripBox).not.toBeNull();
   expect(settledStripBox.y).toBeLessThan(initialFirstBox.y - 30);
+  // x converged to narrow strip center (center ~ 24.3 visual px)
+  const stripCenterX = settledStripBox.x + settledStripBox.width / 2;
+  expect(Math.abs(stripCenterX - 27 * 0.9)).toBeLessThanOrEqual(1.5);
 
   // --- Expand ---
-  const expandSamples = await page.evaluate(() => {
-    return new Promise((resolve) => {
-      const samples = [];
-      const btn = document.querySelector('.side-toggle-left');
-      const wsI = document.querySelector('[data-testid="next-ws-toggle"] .sb-ic');
-      const startTime = performance.now();
-
-      const sample = () => {
-        const sp = document.querySelector('[data-testid="next-strip-projects"]');
-        const spI = sp ? sp.querySelector('.sb-ic') : null;
-        if (!sp || !spI || getComputedStyle(sp).display === 'none') return;
-        const r = spI.getBoundingClientRect();
-        const wsVis = wsI ? getComputedStyle(wsI).visibility : null;
-        samples.push({ x: r.left, y: r.top, wsVis });
-      };
-
-      btn?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-
-      const step = () => {
-        sample();
-        if (performance.now() - startTime < 280) {
-          requestAnimationFrame(step);
-        } else {
-          resolve(samples);
-        }
-      };
-      requestAnimationFrame(step);
-    });
-  });
+  const expandSamples = await captureFlipAnimation(() => page.click('.side-toggle-left'));
+  await page.waitForTimeout(300);
 
   expect(expandSamples.length).toBeGreaterThanOrEqual(3);
   // y is monotonically increasing towards first folder position
@@ -628,10 +613,9 @@ test('project icon slides from first folder to narrow strip during collapse, and
   await expect(stripProjects).toBeHidden();
   // 2. Real first folder icon is visible at original location
   await expect(firstWsIcon).toBeVisible();
-  await expect.poll(async () => {
-    const b = await firstWsIcon.boundingBox();
-    return b ? Math.max(Math.abs(b.x - initialFirstBox.x), Math.abs(b.y - initialFirstBox.y)) : 999;
-  }).toBeLessThanOrEqual(1);
+  const finalWsBox = await firstWsIcon.boundingBox();
+  expect(Math.abs(finalWsBox.x - initialFirstBox.x)).toBeLessThanOrEqual(1);
+  expect(Math.abs(finalWsBox.y - initialFirstBox.y)).toBeLessThanOrEqual(1);
   // Only one folder icon at that position (no ghosting)
   const folderIconsCount = await page.evaluate(() => {
     const wsI = document.querySelector('[data-testid="next-ws-toggle"] .sb-ic');
@@ -657,28 +641,26 @@ test('rapid double-clicking toggle button reverses smoothly without residual sty
   await leftBtn.click();
   await page.waitForTimeout(50);
   await leftBtn.click();
+  await page.waitForTimeout(350);
 
   // Assert no residual style on strip-projects and clean DOM state
-  await expect.poll(async () => {
-    return page.evaluate(() => {
-      const sp = document.querySelector('[data-testid="next-strip-projects"]');
-      const wsI = document.querySelector('[data-testid="next-ws-toggle"] .sb-ic');
-      const hasHideClass = !!document.querySelector('.sb-hide-first-folder');
-      return {
-        spTransform: sp ? sp.style.transform : null,
-        spDisplay: sp ? getComputedStyle(sp).display : null,
-        wsVis: wsI ? getComputedStyle(wsI).visibility : null,
-        hasHideClass,
-        hasIsSliding: sp ? sp.classList.contains('is-sliding') : false,
-      };
-    });
-  }).toEqual({
-    spTransform: '',
-    spDisplay: 'none',
-    wsVis: 'visible',
-    hasHideClass: false,
-    hasIsSliding: false,
+  const cleanState = await page.evaluate(() => {
+    const sp = document.querySelector('[data-testid="next-strip-projects"]');
+    const wsI = document.querySelector('[data-testid="next-ws-toggle"] .sb-ic');
+    const hasHideClass = !!document.querySelector('.sb-hide-first-folder');
+    return {
+      spTransform: sp ? sp.style.transform : null,
+      spDisplay: sp ? getComputedStyle(sp).display : null,
+      wsVis: wsI ? getComputedStyle(wsI).visibility : null,
+      hasHideClass,
+      hasIsSliding: sp ? sp.classList.contains('is-sliding') : false,
+    };
   });
+  expect(cleanState.spTransform).toBe('');
+  expect(cleanState.spDisplay).toBe('none');
+  expect(cleanState.wsVis).toBe('visible');
+  expect(cleanState.hasHideClass).toBe(false);
+  expect(cleanState.hasIsSliding).toBe(false);
 
   expectClean(state);
 });
@@ -691,16 +673,17 @@ test('sidebar collapse and expand without projects does not throw error', async 
 
   const leftBtn = page.locator('.side-toggle-left');
   await leftBtn.click();
+  await page.waitForTimeout(300);
 
   const sidebar = page.getByTestId('next-sidebar');
-  await expect.poll(async () => {
-    const sbBox = await sidebar.boundingBox();
-    return sbBox ? Math.abs(sbBox.width - 54 * 0.9) : 999;
-  }).toBeLessThanOrEqual(1.5);
+  const sbBox = await sidebar.boundingBox();
+  expect(Math.abs(sbBox.width - 54 * 0.9)).toBeLessThanOrEqual(1.5);
 
   // Expand back
   await leftBtn.click();
-  await expect.poll(async () => (await sidebar.boundingBox())?.width ?? 0).toBeGreaterThan(150);
+  await page.waitForTimeout(300);
+  const openBox = await sidebar.boundingBox();
+  expect(openBox.width).toBeGreaterThan(150);
 
   expectClean(state);
 });
@@ -790,13 +773,12 @@ test('midway animation reversal does not jump between adjacent frames and lands 
   expect(frameData.dist).toBeLessThanOrEqual(12);
 
   // 3. Wait for settlement and assert correct final landing position
+  await page.waitForTimeout(300);
   await expect(firstWsIcon).toBeVisible();
-  await expect.poll(async () => {
-    const settledFolderBox = await firstWsIcon.boundingBox();
-    return settledFolderBox
-      ? Math.max(Math.abs(settledFolderBox.x - initialFolderBox.x), Math.abs(settledFolderBox.y - initialFolderBox.y))
-      : 999;
-  }).toBeLessThanOrEqual(1);
+  const settledFolderBox = await firstWsIcon.boundingBox();
+  expect(settledFolderBox).not.toBeNull();
+  expect(Math.abs(settledFolderBox.x - initialFolderBox.x)).toBeLessThanOrEqual(1);
+  expect(Math.abs(settledFolderBox.y - initialFolderBox.y)).toBeLessThanOrEqual(1);
 
   expectClean(state);
 });
