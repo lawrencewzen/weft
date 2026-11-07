@@ -10,6 +10,7 @@ import {
   OPTIONAL_APP_PATHS,
   REQUIRED_APP_PATHS,
   acquireNodeExe,
+  copyShell,
   assertNodeVersion,
   expectedSha256,
   extractZipEntry,
@@ -90,6 +91,10 @@ test('parsePackArgs accepts win-x64 and rejects other platforms', () => {
   assert.throws(() => parsePackArgs(['--platform', 'linux-x64', '--out', 'dist']), /win-x64/);
   assert.throws(() => parsePackArgs(['--out', 'dist']), /win-x64/);
   assert.throws(() => parsePackArgs(['--platform', 'win-x64']), /--out/);
+  assert.equal(defaults.shell, undefined);
+  const withShell = parsePackArgs(['--platform', 'win-x64', '--out', 'dist', '--shell', 'desktop/win/bin/Release/net48']);
+  assert.equal(withShell.shell, 'desktop/win/bin/Release/net48');
+  assert.throws(() => parsePackArgs(['--platform', 'win-x64', '--out', 'dist', '--shell']), /--shell/);
 });
 
 test('expectedSha256 reads official SHASUMS lines', () => {
@@ -122,6 +127,9 @@ test('README covers start, data dir, upgrade, and stop', () => {
   const text = readmeText('0.1.0');
   assert.equal(text.charCodeAt(0), 0xfeff);
   assert.match(text, /启动/);
+  assert.match(text, /双击本目录里的 Weft\.exe/);
+  assert.match(text, /备用：双击 Weft\.cmd/);
+  assert.match(text, /WebView2/);
   assert.match(text, /数据在哪/);
   assert.match(text, /%APPDATA%\\Weft/);
   assert.match(text, /升级/);
@@ -544,5 +552,37 @@ test('WEFT_NODE_SHASUMS_FILE supplies checksums and official sums are not fetche
     await rm(dir, { recursive: true, force: true });
     await rm(outDir, { recursive: true, force: true });
     await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('copyShell puts Weft.exe at the stage root, keeps the native loader, drops pdb', async () => {
+  const tmp = await mkdtemp(path.join(tmpdir(), 'weft-shell-'));
+  try {
+    const shell = path.join(tmp, 'shell out');
+    const native = path.join(shell, 'runtimes', 'win-x64', 'native');
+    await mkdir(native, { recursive: true });
+    await writeFile(path.join(shell, 'Weft.exe'), 'x');
+    await writeFile(path.join(shell, 'Weft.pdb'), 'x');
+    await writeFile(path.join(shell, 'Microsoft.Web.WebView2.Core.dll'), 'x');
+    await writeFile(path.join(native, 'WebView2Loader.dll'), 'x');
+    const stage = path.join(tmp, 'stage');
+    await mkdir(stage);
+    await copyShell(shell, stage);
+    const names = await readdir(stage);
+    assert.deepEqual(names.sort(), ['Microsoft.Web.WebView2.Core.dll', 'Weft.exe', 'runtimes']);
+    await access(path.join(stage, 'runtimes', 'win-x64', 'native', 'WebView2Loader.dll'));
+  } finally {
+    await rm(tmp, { recursive: true, force: true });
+  }
+});
+
+test('copyShell refuses a directory without Weft.exe or the loader', async () => {
+  const tmp = await mkdtemp(path.join(tmpdir(), 'weft-shell-'));
+  try {
+    await assert.rejects(copyShell(tmp, path.join(tmp, 'stage')), /Weft\.exe/);
+    await writeFile(path.join(tmp, 'Weft.exe'), 'x');
+    await assert.rejects(copyShell(tmp, path.join(tmp, 'stage')), /WebView2Loader/);
+  } finally {
+    await rm(tmp, { recursive: true, force: true });
   }
 });

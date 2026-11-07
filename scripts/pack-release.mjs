@@ -49,9 +49,10 @@ const BANNED_PACKAGE_NAMES = new Set([
 const ZIP_LIMIT = 0xffff;
 
 function usageText() {
-  return `用法: node scripts/pack-release.mjs --platform win-x64 [--node-version ${NODE_VERSION}] --out <目录>
+  return `用法: node scripts/pack-release.mjs --platform win-x64 [--node-version ${NODE_VERSION}] [--shell <壳产物目录>] --out <目录>
 
-先构建前端（npm run build:web）。只支持 Windows x64。`;
+先构建前端（npm run build:web）。只支持 Windows x64。
+桌面壳产物目录是 dotnet build desktop/win -c Release 的输出（desktop/win/bin/Release/net48）；不传则跳过，包里没有 Weft.exe。`;
 }
 
 export function assertNodeVersion(version) {
@@ -68,8 +69,15 @@ export function parsePackArgs(argv) {
   let platform;
   let nodeVersion = NODE_VERSION;
   let out;
+  let shell;
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
+    if (arg === '--shell') {
+      shell = argv[i + 1];
+      i += 1;
+      if (!shell || shell.startsWith('--')) throw new Error(`缺少 --shell 的值\n${usageText()}`);
+      continue;
+    }
     if (arg === '--platform') {
       platform = argv[i + 1];
       i += 1;
@@ -96,7 +104,7 @@ export function parsePackArgs(argv) {
   }
   if (!out) throw new Error(`缺少 --out\n${usageText()}`);
   assertNodeVersion(nodeVersion);
-  return { platform, nodeVersion, out };
+  return shell ? { platform, nodeVersion, out, shell } : { platform, nodeVersion, out };
 }
 
 export function sha256Hex(buf) {
@@ -137,11 +145,13 @@ export function readmeText(version) {
     `版本 ${version}`,
     '',
     '一、启动',
-    '双击本目录里的 Weft.cmd。',
+    '双击本目录里的 Weft.exe，会打开独立窗口，不需要浏览器和登录码。',
+    '需要系统里有 Microsoft Edge WebView2 Runtime（Windows 11 和较新的 Windows 10 自带）。',
+    '没有时会提示，并改用默认浏览器打开。',
+    '关闭窗口只关界面，服务继续在后台跑，空闲约 30 分钟后自动退出；再次双击 Weft.exe 会接上。',
+    '备用：双击 Weft.cmd，会在默认浏览器中打开一次性登录链接；启动失败时窗口会停住，方便查看错误信息。',
     '不需要安装 Node.js，也不需要联网安装依赖或现场构建页面。',
-    '脚本会在本机拉起服务，并在浏览器中打开一次性登录链接。',
     '服务只监听 127.0.0.1，供这台电脑自己使用。',
-    '如果启动失败，窗口会停住，方便查看错误信息。',
     '',
     '二、数据在哪',
     '默认数据目录是 %APPDATA%\\Weft',
@@ -155,7 +165,7 @@ export function readmeText(version) {
     '',
     '四、升级',
     '1. 双击 Weft-stop.cmd，确认服务已经停掉。',
-    '2. 用新的压缩包解压，替换整个程序文件夹（Weft.cmd、Weft-stop.cmd、README.txt、node、app 一起换）。',
+    '2. 用新的压缩包解压，替换整个程序文件夹（Weft.exe 和它旁边的 dll、Weft.cmd、Weft-stop.cmd、README.txt、node、app 一起换）。',
     '数据在 %APPDATA%\\Weft，不在程序文件夹里。替换程序不会改动已有数据。',
     '',
     '五、地址和端口',
@@ -695,10 +705,27 @@ async function stripPostinstall(appDir) {
   return pkg;
 }
 
+/** Copy the dotnet build output of desktop/win into the zip root (Weft.exe must sit there). */
+export async function copyShell(shellDir, stage) {
+  const src = path.resolve(shellDir);
+  if (!(await stat(path.join(src, 'Weft.exe')).catch(() => null))) {
+    throw new Error(`壳产物目录里没有 Weft.exe：${src}（先 dotnet build desktop/win -c Release）`);
+  }
+  const loader = path.join(src, 'runtimes', 'win-x64', 'native', 'WebView2Loader.dll');
+  if (!(await stat(loader).catch(() => null)) && !(await stat(path.join(src, 'WebView2Loader.dll')).catch(() => null))) {
+    throw new Error(`壳产物目录里没有 WebView2Loader.dll：${src}`);
+  }
+  await cp(src, stage, {
+    recursive: true,
+    filter: (from) => !/\.(pdb|xml)$/i.test(from) && path.basename(from) !== 'Microsoft.Web.WebView2.Wpf.dll',
+  });
+}
+
 export async function packRelease({
   nodeVersion = NODE_VERSION,
   out,
   root = ROOT,
+  shell,
 } = {}) {
   assertNodeVersion(nodeVersion);
   if (!out) throw new Error('缺少输出目录');
@@ -725,6 +752,12 @@ export async function packRelease({
     await mkdir(path.join(stage, 'node'), { recursive: true });
     await writeFile(path.join(stage, 'node', 'node.exe'), exe);
 
+    if (shell) {
+      await copyShell(shell, stage);
+      console.log(`桌面壳：${path.resolve(shell)}`);
+    } else {
+      console.log('跳过桌面壳：没有传 --shell，包里不含 Weft.exe（用 Weft.cmd 启动）');
+    }
     await writeFile(path.join(stage, 'Weft.cmd'), windowsCmd('open'));
     await writeFile(path.join(stage, 'Weft-stop.cmd'), windowsCmd('stop'));
     await writeFile(path.join(stage, 'README.txt'), readmeText(version));

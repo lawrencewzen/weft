@@ -13,6 +13,7 @@ Web 编码工作台，内核是 Pi Durable（`@earendil-works/pi-durable` 的 Ha
 ## 代码位置
 
 - 入口 `server.mjs`、`bin/weft.mjs`；服务端在 `src/`（`core` / `kernel` / `store` / `v2`，第三方打包代码在 `vendor`）；前端源码在 `web/`，构建到 `public-next/`；插件在 `plugins/`、`examples/plugins/`。
+- 内网版桌面壳 `desktop/win/`（WinForms + WebView2，net48）；`dotnet build desktop/win -c Release`，产物由 `scripts/pack-release.mjs --shell` 打进 zip。
 - 接口契约 `contract/openapi.yaml`，改完 `npm run gen:contract`。
 - 新增 `.mjs` 文件时加进 `package.json` 的 `check` 脚本。
 
