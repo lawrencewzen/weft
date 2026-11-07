@@ -5,7 +5,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createSqliteStore } from '../../src/store/sqlite.mjs';
 import { createCredentialStore } from '../../src/core/provider-stores.mjs';
-import { streamIdleMs, withIdleTimeout, DEFAULT_STREAM_IDLE_MS } from '../../src/kernel/stream-idle.mjs';
+import { streamIdleMs, withIdleTimeout, withStreamIdle, DEFAULT_STREAM_IDLE_MS } from '../../src/kernel/stream-idle.mjs';
 import { runErrorMessage } from '../../src/v2/phrases/run-error.ts';
 import { makeTempDir, removeTempDir } from './_tmp.mjs';
 import { request, startServer, stopServer } from './_server.mjs';
@@ -175,4 +175,46 @@ test('user stop stays stopped and is not retried as an idle stall', { timeout: 3
       assert.equal((await call('GET', `/api/conversations/${cid}`)).body.status, 'stopped');
     });
   } finally { await fake.close(); }
+});
+
+test('skip list: google/vertex/bedrock get no fetch; openai-completions does', async () => {
+  const seen = [];
+  const fake = { stream: (model, ctx, options) => { seen.push([model.api, options]); return null; }, streamSimple() {} };
+  const wrapped = withStreamIdle(fake, { env: {} });
+  for (const api of ['google-generative-ai', 'google-vertex', 'bedrock-converse-stream', 'openai-completions', 'anthropic-messages']) {
+    wrapped.stream({ api }, {}, { apiKey: 'k' });
+  }
+  const has = Object.fromEntries(seen.map(([api, o]) => [api, typeof o.fetch === 'function']));
+  assert.deepEqual(has, {
+    'google-generative-ai': false,
+    'google-vertex': false,
+    'bedrock-converse-stream': false,
+    'openai-completions': true,
+    'anthropic-messages': true,
+  });
+});
+
+test('real Google adapter is not handed a custom fetch', async () => {
+  const { googleGenerativeAIApi } = await import('@earendil-works/pi-ai/api/google-generative-ai.lazy');
+  const model = {
+    id: 'gemini-x', name: 'g', api: 'google-generative-ai', provider: 'google', baseUrl: 'http://127.0.0.1:1',
+    reasoning: false, input: ['text'], cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 1000, maxTokens: 100,
+  };
+  const real = googleGenerativeAIApi();
+  const api = withStreamIdle(real, { env: {} });
+  const message = await api.stream(model, { messages: [{ role: 'user', content: 'hi', timestamp: Date.now() }] }, { apiKey: 'k', maxRetries: 0 }).result();
+  assert.equal(message.stopReason, 'error');
+  assert.doesNotMatch(message.errorMessage, /Custom fetch is not supported/);
+});
+
+test('control: the real Google adapter does reject an injected fetch', async () => {
+  const { googleGenerativeAIApi } = await import('@earendil-works/pi-ai/api/google-generative-ai.lazy');
+  const model = {
+    id: 'gemini-x', name: 'g', api: 'google-generative-ai', provider: 'google', baseUrl: 'http://127.0.0.1:1',
+    reasoning: false, input: ['text'], cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 1000, maxTokens: 100,
+  };
+  const message = await googleGenerativeAIApi().stream(model, { messages: [{ role: 'user', content: 'hi', timestamp: Date.now() }] }, {
+    apiKey: 'k', maxRetries: 0, fetch: withIdleTimeout(undefined, 1000),
+  }).result();
+  assert.match(message.errorMessage, /Custom fetch is not supported/);
 });

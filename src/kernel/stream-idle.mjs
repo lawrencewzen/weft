@@ -78,13 +78,20 @@ export function withIdleTimeout(baseFetch, idleMs) {
   };
 }
 
+// APIs that must not get `options.fetch`: google-generative-ai and google-vertex throw
+// "Custom fetch is not supported"; bedrock-converse-stream uses the AWS SDK and ignores it.
+// They keep pi-ai's own timeouts, with no idle timeout of ours.
+export const STREAM_IDLE_SKIP_APIS = new Set(['google-generative-ai', 'google-vertex', 'bedrock-converse-stream']);
+
 /** Provider whose `stream` / `streamSimple` run with the idle-timeout fetch. */
 export function withStreamIdle(provider, { env = process.env } = {}) {
   if (!provider) return provider;
-  const wrap = (fn, target) => (model, context, options) => fn.call(target, model, context, {
-    ...options,
-    fetch: withIdleTimeout(options?.fetch, streamIdleMs(env)),
-  });
+  const wrap = (fn, target) => (model, context, options) => (STREAM_IDLE_SKIP_APIS.has(model?.api)
+    ? fn.call(target, model, context, options)
+    : fn.call(target, model, context, {
+      ...options,
+      fetch: withIdleTimeout(options?.fetch, streamIdleMs(env)),
+    }));
   return new Proxy(provider, {
     get(target, prop, receiver) {
       const value = Reflect.get(target, prop, receiver);
