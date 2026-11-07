@@ -1731,6 +1731,21 @@ export interface components {
                 summary: string;
             };
             /**
+             * @description 模型请求失败、正在等待重试时有，否则省略。pendingText 同时换成人话（例如「连不上模型服务，正在重试（第 6 次，共 10 次）」）。
+             *     来自 pi.live.generation，刷新页面后仍在；重试成功或最终失败后消失。不带原始英文错误。
+             */
+            retry?: {
+                /** @description 即将进行的第几次尝试（刚失败的次数加 1，最大为 maxAttempts） */
+                attempt: number;
+                /** @description 服务端实际配置的每次模型调用总尝试次数，含第一次（WEFT_RETRY_MAX，默认 10） */
+                maxAttempts: number;
+                /**
+                 * @description 失败原因的粗分类
+                 * @enum {string}
+                 */
+                kind: "network" | "timeout" | "busy" | "server" | "other";
+            };
+            /**
              * @description 压缩状态，来自 pi.live.compactions 与 pi.live.compactionFailure。
              *     有运行中的压缩时为 running（多条时 trigger 取最后一条）；否则若保留着失败记录则为 failed；否则 idle。
              *     失败的 error 是脱敏后的人话。阻塞压缩失败导致的 model_error 使用同一句人话。

@@ -277,6 +277,59 @@ function presentedFixture(over = {}) {
   };
 }
 
+test('in-process: retry wait shows in the run view, survives a re-snapshot, clears on the next event', async () => {
+  const hub = createEventHub({ heartbeatMs: 60_000, protocolVersion: PROTOCOL_VERSION });
+  const listeners = new Set();
+  const retryLive = { generation: { attempt: 5, retry: { at: 5, error: 'fetch failed' } } };
+  const data = {
+    presented: presentedFixture({ status: 'running', live: retryLive, retryMaxAttempts: 10 }),
+    subagents: [],
+    modelTarget: null,
+    window: 128000,
+  };
+  const topic = attachConversationTopic(hub, {
+    loadConversation: async () => data,
+    subscribe: (_cid, fn) => {
+      listeners.add(fn);
+      return () => listeners.delete(fn);
+    },
+    coalesceMs: 20,
+    log() {},
+  });
+  try {
+    const frames = [];
+    const session = hub.connect({ topics: ['conversation:c1'], lang: 'zh', send: (f) => frames.push(f) });
+    await session.ready;
+    const conv = (frame) => (frame.event === 'snapshot'
+      ? frame.data.entities.find((e) => e.entity === 'conversation').value
+      : frame.data.value);
+    // A page opened mid-retry (refresh) already carries the wait.
+    const first = conv(frames[0]);
+    assert.deepEqual(first.run.retry, { attempt: 6, maxAttempts: 10, kind: 'network' });
+    assert.equal(first.run.pendingText, '连不上模型服务，正在重试（第 6 次，共 10 次）');
+    assertPushedEntities(frames);
+
+    const emit = (ev) => { for (const fn of listeners) fn(ev); };
+    emit({ event: 'retry', data: { attempt: 5, delayMs: 60000, reason: 'fetch failed' } });
+    await sleep(60);
+    data.presented = presentedFixture({
+      status: 'running',
+      live: { generation: { attempt: 6 } },
+      retryMaxAttempts: 10,
+    });
+    emit({ event: 'message.delta', data: { messageId: 'live-1', text: 'ab' } });
+    await sleep(60);
+    const upserts = frames.filter((f) => f.event === 'upsert' && f.data.entity === 'conversation');
+    const last = upserts[upserts.length - 1].data.value;
+    assert.equal(last.run.retry, undefined);
+    assert.equal(last.run.pendingText, '思考中');
+    session.close();
+  } finally {
+    topic.dispose();
+    hub.dispose();
+  }
+});
+
 test('in-process: missing conversation snapshot, kernel sub/unsub, live item then formal replace', async () => {
   const hub = createEventHub({ heartbeatMs: 60_000, protocolVersion: PROTOCOL_VERSION });
   const listeners = new Set();
