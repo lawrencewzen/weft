@@ -79,6 +79,7 @@ test('diff, file tree, preview, save and the 409 conflict demo', async ({ page }
   expect([...perPath.values()].every((count) => count === 1)).toBe(true);
 
   // The thread change-summary opens the same file in the right pane without a new fetch.
+  await page.getByTestId('next-change-summary-toggle').click();
   await expect(page.getByTestId('next-change-summary-row')).toHaveCount(5);
   await page.locator('[data-testid=next-change-summary-row][data-path="web/src/data/store.ts"]').click();
   await expect(
