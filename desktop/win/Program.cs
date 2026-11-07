@@ -5,6 +5,7 @@ using System.Drawing;
 using System.IO;
 using System.Text.RegularExpressions;
 using System.Threading;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using Microsoft.Web.WebView2.Core;
@@ -43,6 +44,139 @@ namespace Weft.Desktop
         private readonly WebView2 web = new WebView2 { Dock = DockStyle.Fill };
         private readonly EventWaitHandle activate;
         private string origin;
+
+        // True once WebView2 non-client regions are on: the system title bar is removed
+        // (client area starts at the top) and the page draws its own window buttons.
+        private bool customFrame;
+        private bool lastMaximized;
+
+        private const int WM_NCCALCSIZE = 0x0083;
+        private const int WM_NCHITTEST = 0x0084;
+        private const int HTTOP = 12, HTTOPLEFT = 13, HTTOPRIGHT = 14;
+        private const int TopGripPx = 2; // keep a thin non-client strip so the top edge can still be dragged to resize
+        private const uint SWP_FRAMECHANGED = 0x0037; // NOMOVE|NOSIZE|NOZORDER|NOACTIVATE|FRAMECHANGED
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct RECT { public int Left, Top, Right, Bottom; }
+
+        [DllImport("user32.dll")] private static extern bool GetWindowRect(IntPtr h, out RECT r);
+        [DllImport("user32.dll")] private static extern bool SetWindowPos(IntPtr h, IntPtr after, int x, int y, int cx, int cy, uint flags);
+        [DllImport("user32.dll")] private static extern int GetSystemMetrics(int index);
+        [DllImport("user32.dll")] private static extern int GetSystemMetricsForDpi(int index, uint dpi);
+        [DllImport("user32.dll")] private static extern uint GetDpiForWindow(IntPtr h);
+
+        private int ResizeFrame(bool vertical)
+        {
+            const int SM_CXSIZEFRAME = 32, SM_CYSIZEFRAME = 33, SM_CXPADDEDBORDER = 92;
+            try
+            {
+                uint dpi = GetDpiForWindow(Handle);
+                return GetSystemMetricsForDpi(vertical ? SM_CYSIZEFRAME : SM_CXSIZEFRAME, dpi) + GetSystemMetricsForDpi(SM_CXPADDEDBORDER, dpi);
+            }
+            catch (EntryPointNotFoundException)
+            {
+                return GetSystemMetrics(vertical ? SM_CYSIZEFRAME : SM_CXSIZEFRAME) + GetSystemMetrics(SM_CXPADDEDBORDER);
+            }
+        }
+
+        // Remove only the top title bar. Left, right and bottom keep the system's invisible resize borders and shadow.
+        protected override void WndProc(ref Message m)
+        {
+            if (customFrame && m.Msg == WM_NCCALCSIZE && m.WParam != IntPtr.Zero)
+            {
+                int originalTop = Marshal.ReadInt32(m.LParam, 4);
+                base.WndProc(ref m); // default shrinks left, right, bottom (and top)
+                bool max = WindowState == FormWindowState.Maximized;
+                // Maximized windows overhang the screen by the frame width; push the top down by it so nothing is clipped.
+                Marshal.WriteInt32(m.LParam, 4, originalTop + (max ? ResizeFrame(true) : TopGripPx));
+                m.Result = IntPtr.Zero;
+                return;
+            }
+            if (customFrame && m.Msg == WM_NCHITTEST && WindowState == FormWindowState.Normal)
+            {
+                long l = m.LParam.ToInt64();
+                int x = (short)(l & 0xFFFF), y = (short)((l >> 16) & 0xFFFF);
+                RECT r;
+                if (GetWindowRect(Handle, out r) && y >= r.Top && y < r.Top + TopGripPx && x >= r.Left && x < r.Right)
+                {
+                    int corner = ResizeFrame(false);
+                    m.Result = (IntPtr)(x < r.Left + corner ? HTTOPLEFT : x >= r.Right - corner ? HTTOPRIGHT : HTTOP);
+                    return;
+                }
+            }
+            base.WndProc(ref m);
+        }
+
+        private void UseCustomFrame()
+        {
+            customFrame = true;
+            SetWindowPos(Handle, IntPtr.Zero, 0, 0, 0, 0, SWP_FRAMECHANGED);
+        }
+
+        protected override void OnSizeChanged(EventArgs e)
+        {
+            base.OnSizeChanged(e);
+            PushMaximized();
+        }
+
+        private void PushMaximized()
+        {
+            bool max = WindowState == FormWindowState.Maximized;
+            if (max == lastMaximized && !pushForce) return;
+            lastMaximized = max;
+            pushForce = false;
+            var core = web.CoreWebView2;
+            if (!customFrame || core == null) return;
+            core.ExecuteScriptAsync(max
+                ? "document.documentElement.dataset.windowMaximized='1'"
+                : "delete document.documentElement.dataset.windowMaximized");
+        }
+        private bool pushForce;
+
+        private void OnShellMessage(CoreWebView2WebMessageReceivedEventArgs a)
+        {
+            // Only our own service may drive the window, and only these three actions.
+            if (!SameOrigin(a.Source)) return;
+            string msg;
+            try { msg = a.TryGetWebMessageAsString(); } catch (ArgumentException) { return; }
+            switch (msg)
+            {
+                case "minimize": WindowState = FormWindowState.Minimized; break;
+                case "toggle-maximize":
+                    WindowState = WindowState == FormWindowState.Maximized ? FormWindowState.Normal : FormWindowState.Maximized;
+                    break;
+                case "close": Close(); break; // window only; the service keeps running
+            }
+        }
+
+        private bool SameOrigin(string uri)
+        {
+            Uri u;
+            return origin != null && Uri.TryCreate(uri, UriKind.Absolute, out u)
+                && string.Equals(u.GetLeftPart(UriPartial.Authority), origin, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private const string ShellScript =
+            "(function(){var f=function(){document.documentElement.dataset.desktopShell='1'};"
+            + "if(document.documentElement)f();else new MutationObserver(function(_,o){if(document.documentElement){o.disconnect();f()}})"
+            + ".observe(document,{childList:true})})();";
+
+        // Needs a runtime with non-client region support. Any failure keeps the system title bar and leaves the page untouched.
+        private async Task TryEnableCustomFrame(CoreWebView2 core)
+        {
+            try
+            {
+                core.Settings.IsNonClientRegionSupportEnabled = true;
+                await core.AddScriptToExecuteOnDocumentCreatedAsync(ShellScript);
+                core.WebMessageReceived += (o, a) => OnShellMessage(a);
+                core.NavigationCompleted += (o, a) => { pushForce = true; PushMaximized(); };
+                UseCustomFrame();
+            }
+            catch (Exception)
+            {
+                try { core.Settings.IsNonClientRegionSupportEnabled = false; } catch { }
+            }
+        }
 
         internal MainForm(EventWaitHandle activate)
         {
@@ -114,6 +248,7 @@ namespace Weft.Desktop
                 if (IsExternal(a.Uri)) OpenExternal(a.Uri);
                 else core.Navigate(a.Uri);
             };
+            await TryEnableCustomFrame(core);
             core.Navigate(url);
         }
 

@@ -2909,3 +2909,63 @@ button.file-search-result-row:hover {
   padding: 8px 16px; font-size: var(--fs-sm); color: var(--err-ink); background: var(--err-bg); border-bottom: 1px solid var(--line3);
 }
 .btn-sm { height: 24px; padding: 0 8px; font-size: var(--fs-ui); }
+
+/* ---- Desktop shell (intranet only, T113) ----
+   Weft.exe removes the system title bar and sets <html data-desktop-shell="1">.
+   Nothing here applies in a normal browser. This block is an intentional
+   difference from main: `git diff origin/main -- web/src/styles/app.css` is not empty. */
+:root[data-desktop-shell="1"] {
+  /* Standard caption button size in device pixels; divide by the UI zoom. */
+  --wc-w: calc(46px / var(--ui-zoom));
+  --wc-h: calc(32px / var(--ui-zoom));
+  --wc-total: calc(var(--wc-w) * 3);
+}
+
+.wc-btns {
+  position: fixed;
+  top: 0;
+  right: 0;
+  z-index: 1000;
+  display: flex;
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+.wc-btn {
+  width: var(--wc-w);
+  height: var(--wc-h);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--ink);
+  cursor: default;
+}
+.wc-btn:hover { background: var(--hover); }
+.wc-btn.is-close:hover { background: var(--fail); color: var(--term); }
+
+/* Draggable top row: left header, center status bar, right tab bar. */
+:root[data-desktop-shell="1"] :is(.sb-hd, .next-status, .right-tabs-bar) {
+  -webkit-app-region: drag;
+  app-region: drag;
+  user-select: none;
+}
+:root[data-desktop-shell="1"] :is(.sb-hd, .next-status, .right-tabs-bar)
+  :is(button, input, select, textarea, a, label, [role="button"], [role="tab"], [contenteditable="true"]),
+:root[data-desktop-shell="1"] .side-toggle {
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+
+/* Keep clear of the window buttons. */
+:root[data-desktop-shell="1"] .side-toggle-right { right: calc(12px + var(--wc-total)); }
+:root[data-desktop-shell="1"] .right-tabs-bar { padding-right: calc(50px + var(--wc-total)); }
+:root[data-desktop-shell="1"] .next-shell.right-closed .next-status { padding-right: calc(12px + var(--wc-total)); }
+:root[data-desktop-shell="1"] .next-settings-ov { padding-top: calc(var(--wc-h) + 8px); }
+
+/* Fixed overlays stay clickable at the top edge instead of dragging the window. */
+:root[data-desktop-shell="1"] :is(.next-settings-ov, .search-palette-overlay, .modal-overlay, .mp-mask, .img-lightbox) {
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
