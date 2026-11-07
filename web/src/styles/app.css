@@ -796,8 +796,6 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.6; backgroun
   z-index: 5;
   min-height: 52px; box-sizing: border-box; flex-shrink: 0;
   display: flex; flex-direction: column; justify-content: center; gap: 6px; padding: 0 12px;
-  background: var(--panel-h);
-  border-bottom: 1px solid var(--line);
 }
 .next-status-inner {
   display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; width: 100%;
@@ -808,7 +806,6 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.6; backgroun
 /* Thread */
 .center-thread {
   flex: 1; min-height: 0; overflow: auto; scrollbar-gutter: stable both-edges;
-  margin-top: -56px;
   --thread-sb: 0px;
   /* Two-layer mask: fade the last --thread-fade of the content; keep the
      classic scrollbar strip (right) fully opaque. --thread-sb is measured
@@ -826,11 +823,11 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.6; backgroun
   -webkit-mask-repeat: no-repeat;
   mask-repeat: no-repeat;
 }
-.thread-inner { padding: 76px 0 96px; display: flex; flex-direction: column; gap: 18px; }
+.thread-inner { padding: 20px 0 96px; display: flex; flex-direction: column; gap: 18px; }
 .thread-inner > * { flex-shrink: 0; }
 .thread-inner.is-empty {
   min-height: 100%; box-sizing: border-box;
-  justify-content: center; padding: 56px 0 40px; gap: 0;
+  justify-content: center; padding: 0 0 40px; gap: 0;
 }
 /* 发送后、Agent 还没出内容时的「思考中」，纯文字行，不是气泡 */
 .thread-pending { display: flex; align-items: center; gap: 8px; font-size: var(--fs-ui); color: var(--mute); }
@@ -2334,7 +2331,7 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.6; backgroun
   width: var(--right-w, 440px); flex-shrink: 0; background: var(--panel); display: flex; flex-direction: column;
   min-width: 0; min-height: 0; overflow: hidden; z-index: 30; top: 0; bottom: 0; right: 0;
 }
-.right-tabs-bar { height: 52px; flex-shrink: 0; display: flex; align-items: center; justify-content: flex-start; gap: 2px; padding: 0 50px 0 8px; background: var(--panel-h); border-bottom: 1px solid var(--line); }
+.right-tabs-bar { height: 52px; flex-shrink: 0; display: flex; align-items: center; justify-content: flex-start; gap: 2px; padding: 0 50px 0 8px; border-bottom: 1px solid var(--line3); }
 .tabs-nav { display: flex; align-items: center; gap: 2px; font-size: var(--fs-ui); min-width: 0; overflow: hidden; }
 .tab-btn {
   display: inline-flex; gap: 6px; align-items: center; height: 28px; padding: 0 10px; border-radius: 6px; border: none; background: transparent;
