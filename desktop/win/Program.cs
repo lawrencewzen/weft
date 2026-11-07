@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
+using System.Drawing.Drawing2D;
 using System.IO;
 using System.Globalization;
 using System.Text.RegularExpressions;
@@ -58,8 +59,6 @@ namespace Weft.Desktop
         private static readonly Version MinNonClientRuntime = new Version(123, 0, 2420, 47);
 
         // Page background used before the page is there: last real page colour (shell.json), else the default light theme.
-        private Color bgColor;
-        private bool bgDark;
         private readonly SplashBar splash;
         private bool lastMaximized;
 
@@ -190,42 +189,66 @@ namespace Weft.Desktop
             get { return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Weft", "shell.json"); }
         }
 
-        private static bool IsDark(Color c) { return (0.299 * c.R + 0.587 * c.G + 0.114 * c.B) < 128; }
+        // What the shell needs to draw the page's window buttons before the page is up. The page reports the real
+        // values (--bg, --ink, --mute, --hover, --fail, --term of the current theme, and the html zoom --ui-zoom);
+        // until it has, these are the default light theme and its default zoom (app.css :root --ui-zoom).
+        private Color bgColor = Color.FromArgb(0xfc, 0xfc, 0xfc);
+        private Color inkColor = Color.FromArgb(0x1f, 0x1f, 0x1f);
+        private Color muteColor = Color.FromArgb(0x6e, 0x6e, 0x6e);
+        private Color hoverColor = Color.FromArgb(0xef, 0xef, 0xef);
+        private Color failColor = Color.FromArgb(0xb9, 0x46, 0x42);
+        private Color termColor = Color.FromArgb(0x1a, 0x1a, 0x1a);
+        private double uiZoom = 0.9;
+
+        private static Color ParseHex(string hex)
+        {
+            int v = int.Parse(hex.TrimStart('#'), NumberStyles.HexNumber, CultureInfo.InvariantCulture);
+            return Color.FromArgb((v >> 16) & 255, (v >> 8) & 255, v & 255);
+        }
+
+        private static string Hex(Color c) { return "#" + c.R.ToString("x2") + c.G.ToString("x2") + c.B.ToString("x2"); }
 
         private void LoadTheme()
         {
             try
             {
-                var m = Regex.Match(File.ReadAllText(ShellFile), "\"bg\"\\s*:\\s*\"#([0-9a-fA-F]{6})\"");
-                if (m.Success)
+                string json = File.ReadAllText(ShellFile);
+                Func<string, string> hex = key =>
                 {
-                    int v = int.Parse(m.Groups[1].Value, NumberStyles.HexNumber, CultureInfo.InvariantCulture);
-                    bgColor = Color.FromArgb((v >> 16) & 255, (v >> 8) & 255, v & 255);
-                    bgDark = IsDark(bgColor);
-                    return;
+                    var m = Regex.Match(json, "\"" + key + "\"\\s*:\\s*\"(#[0-9a-fA-F]{6})\"");
+                    return m.Success ? m.Groups[1].Value : null;
+                };
+                string bg = hex("bg"), ink = hex("ink"), mute = hex("mute"), hover = hex("hover"), fail = hex("fail"), term = hex("term");
+                var z = Regex.Match(json, "\"zoom\"\\s*:\\s*([0-9.]+)");
+                double zoom;
+                if (bg != null && ink != null && mute != null && hover != null && fail != null && term != null
+                    && z.Success && double.TryParse(z.Groups[1].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out zoom) && zoom > 0.2 && zoom < 5)
+                {
+                    bgColor = ParseHex(bg); inkColor = ParseHex(ink); muteColor = ParseHex(mute);
+                    hoverColor = ParseHex(hover); failColor = ParseHex(fail); termColor = ParseHex(term);
+                    uiZoom = zoom;
                 }
             }
             catch { }
-            // No record yet: the page's default appearance is light (DEFAULT_APPEARANCE), --bg of the "white" theme.
-            bgColor = Color.FromArgb(0xfc, 0xfc, 0xfc);
-            bgDark = false;
         }
 
-        // The page reports its real background (--bg) whenever the theme changes; remember it for the next cold start.
-        private void SaveTheme(string hex)
+        // The page reports its palette whenever the theme changes; remember it for the next cold start.
+        // Message: "theme:" + six #rrggbb (bg, ink, mute, hover, fail, term) + "," + zoom.
+        private void SaveTheme(string[] f)
         {
-            int v = int.Parse(hex, NumberStyles.HexNumber, CultureInfo.InvariantCulture);
-            var c = Color.FromArgb((v >> 16) & 255, (v >> 8) & 255, v & 255);
-            if (c.ToArgb() != bgColor.ToArgb())
-            {
-                bgColor = c;
-                bgDark = IsDark(c);
-                BackColor = c;
-                splash.BackColor = c;
-                splash.Invalidate();
-            }
+            double zoom = double.Parse(f[6], CultureInfo.InvariantCulture);
+            if (zoom <= 0.2 || zoom >= 5) return;
+            var bg = ParseHex(f[0]);
+            bool bgChanged = bg.ToArgb() != bgColor.ToArgb();
+            bgColor = bg; inkColor = ParseHex(f[1]); muteColor = ParseHex(f[2]);
+            hoverColor = ParseHex(f[3]); failColor = ParseHex(f[4]); termColor = ParseHex(f[5]);
+            uiZoom = zoom;
+            if (bgChanged) { BackColor = bg; splash.BackColor = bg; }
+            splash.Invalidate();
             // Written even when it equals the fallback: the record, not the fallback, must win from now on.
-            string json = "{\"bg\":\"#" + hex.ToLowerInvariant() + "\"}";
+            string json = "{\"bg\":\"" + Hex(bgColor) + "\",\"ink\":\"" + Hex(inkColor) + "\",\"mute\":\"" + Hex(muteColor)
+                + "\",\"hover\":\"" + Hex(hoverColor) + "\",\"fail\":\"" + Hex(failColor) + "\",\"term\":\"" + Hex(termColor)
+                + "\",\"zoom\":" + zoom.ToString("0.###", CultureInfo.InvariantCulture) + "}";
             try
             {
                 if (File.Exists(ShellFile) && File.ReadAllText(ShellFile) == json) return;
@@ -248,11 +271,14 @@ namespace Weft.Desktop
         }
 
         // Covers the whole client area in the page colour until the page has painted (the web view shows an unstyled
-        // canvas of its own for a moment on a dark system). Its top 52px row still drags the window and has a close button.
+        // canvas of its own for a moment on a dark system). Its top row drags the window and carries the same three
+        // window buttons as the page's WindowControls (web/src/styles/app.css, "Desktop shell"): bar 52px, buttons 30x30,
+        // gap 4px, 12px from the right edge, 14px icons with a 1.5 stroke, 7px radius; all multiplied by the page zoom
+        // (html { zoom: var(--ui-zoom) }) and the window DPI.
         private sealed class SplashBar : Control
         {
             private readonly MainForm owner;
-            private bool hot, pressed;
+            private int hot = -1, pressed = -1; // 0 minimize, 1 maximize/restore, 2 close
             internal SplashBar(MainForm owner)
             {
                 this.owner = owner;
@@ -260,68 +286,99 @@ namespace Weft.Desktop
                 Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom;
                 Visible = false;
             }
-            internal static int Scale(int px, int dpi) { return (int)Math.Round(px * dpi / 96.0); }
-            private Rectangle CloseRect()
+            private float K() { return (float)(owner.uiZoom * owner.Dpi() / 96.0); }
+            private float BarHeight() { return 52f * K(); }
+            private RectangleF ButtonRect(int i)
             {
-                int d = owner.Dpi();
-                int btn = Scale(30, d), edge = Scale(12, d);
-                return new Rectangle(Width - edge - btn, (Scale(52, d) - btn) / 2, btn, btn);
+                float k = K();
+                float right = Width - 12f * k;
+                float x = right - (3 - i) * 30f * k - (2 - i) * 4f * k;
+                return new RectangleF(x, (52f - 30f) / 2f * k, 30f * k, 30f * k);
+            }
+            private int HitButton(Point p)
+            {
+                for (int i = 0; i < 3; i++) if (ButtonRect(i).Contains(p)) return i;
+                return -1;
+            }
+            private static GraphicsPath RoundRect(RectangleF r, float radius)
+            {
+                var p = new GraphicsPath();
+                float d = radius * 2;
+                p.AddArc(r.X, r.Y, d, d, 180, 90);
+                p.AddArc(r.Right - d, r.Y, d, d, 270, 90);
+                p.AddArc(r.Right - d, r.Bottom - d, d, d, 0, 90);
+                p.AddArc(r.X, r.Bottom - d, d, d, 90, 90);
+                p.CloseFigure();
+                return p;
+            }
+            // The same shapes as ICONS in WindowControls.tsx, in the 14x14 viewBox.
+            private GraphicsPath Icon(int i)
+            {
+                var p = new GraphicsPath();
+                if (i == 0) { p.AddLine(2.5f, 7f, 11.5f, 7f); return p; }
+                if (i == 2) { p.AddLine(3f, 3f, 11f, 11f); p.StartFigure(); p.AddLine(11f, 3f, 3f, 11f); return p; }
+                if (owner.WindowState != FormWindowState.Maximized) { p.AddPath(RoundRect(new RectangleF(2.5f, 2.5f, 9f, 9f), 1.5f), false); return p; }
+                p.AddPath(RoundRect(new RectangleF(2.5f, 4.5f, 7f, 7f), 1.5f), false);
+                p.StartFigure();
+                p.AddLine(4.5f, 4.5f, 4.5f, 4f);
+                p.AddArc(4.5f, 2.5f, 3f, 3f, 180, 90);
+                p.AddLine(6f, 2.5f, 11.5f, 2.5f);
+                p.AddLine(11.5f, 2.5f, 11.5f, 8f);
+                p.AddArc(8.5f, 6.5f, 3f, 3f, 0, 90);
+                p.AddLine(10f, 9.5f, 9.5f, 9.5f);
+                return p;
             }
             protected override void OnPaint(PaintEventArgs e)
             {
                 var g = e.Graphics;
                 g.Clear(BackColor);
-                var r = CloseRect();
-                int d = owner.Dpi();
-                bool lit = hot;
-                if (lit)
+                g.SmoothingMode = SmoothingMode.AntiAlias;
+                g.PixelOffsetMode = PixelOffsetMode.Half; // pixel centres at +0.5, like Chromium; the default shifts everything half a pixel
+                float k = K();
+                for (int i = 0; i < 3; i++)
                 {
-                    g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-                    // --fail of the page themes (light / dark)
-                    var red = owner.bgDark ? Color.FromArgb(249, 143, 135) : Color.FromArgb(185, 70, 66);
-                    using (var path = RoundRect(r, Scale(7, d)))
-                    using (var br = new SolidBrush(pressed ? ControlPaint.Dark(red, 0.05f) : red))
-                        g.FillPath(br, path);
+                    var raw = ButtonRect(i);
+                    // Chromium snaps box edges and the svg origin to whole device pixels; do the same so the icons land on the same pixels.
+                    float x0 = (float)Math.Round(raw.Left), y0 = (float)Math.Round(raw.Top);
+                    var r = new RectangleF(x0, y0, (float)Math.Round(raw.Right) - x0, (float)Math.Round(raw.Bottom) - y0);
+                    float ix = (float)Math.Round(raw.X + (raw.Width - 14f * k) / 2f), iy = (float)Math.Round(raw.Y + (raw.Height - 14f * k) / 2f);
+                    bool lit = hot == i;
+                    if (lit)
+                    {
+                        using (var path = RoundRect(r, 7f * k))
+                        using (var br = new SolidBrush(i == 2 ? owner.failColor : owner.hoverColor))
+                            g.FillPath(br, path);
+                    }
+                    var ink = lit ? (i == 2 ? owner.termColor : owner.inkColor) : owner.muteColor;
+                    using (var pen = new Pen(ink, 1.5f) { StartCap = LineCap.Round, EndCap = LineCap.Round, LineJoin = LineJoin.Round })
+                    using (var icon = Icon(i))
+                    {
+                        var state = g.Save();
+                        g.TranslateTransform(ix, iy);
+                        g.ScaleTransform(k, k);
+                        g.DrawPath(pen, icon);
+                        g.Restore(state);
+                    }
                 }
-                g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-                // --term when lit, --mute otherwise
-                var ink = lit ? (owner.bgDark ? Color.FromArgb(0x11, 0x11, 0x11) : Color.FromArgb(0x1a, 0x1a, 0x1a))
-                              : (owner.bgDark ? Color.FromArgb(0x8f, 0x8f, 0x8f) : Color.FromArgb(0x6e, 0x6e, 0x6e));
-                using (var pen = new Pen(ink, 1.5f * d / 96f) { StartCap = System.Drawing.Drawing2D.LineCap.Round, EndCap = System.Drawing.Drawing2D.LineCap.Round })
-                {
-                    float cx = r.X + r.Width / 2f, cy = r.Y + r.Height / 2f, a = 4f * d / 96f;
-                    g.DrawLine(pen, cx - a, cy - a, cx + a, cy + a);
-                    g.DrawLine(pen, cx + a, cy - a, cx - a, cy + a);
-                }
-            }
-            private static System.Drawing.Drawing2D.GraphicsPath RoundRect(Rectangle r, int radius)
-            {
-                var p = new System.Drawing.Drawing2D.GraphicsPath();
-                int dd = radius * 2;
-                p.AddArc(r.X, r.Y, dd, dd, 180, 90);
-                p.AddArc(r.Right - dd, r.Y, dd, dd, 270, 90);
-                p.AddArc(r.Right - dd, r.Bottom - dd, dd, dd, 0, 90);
-                p.AddArc(r.X, r.Bottom - dd, dd, dd, 90, 90);
-                p.CloseFigure();
-                return p;
             }
             protected override void OnMouseMove(MouseEventArgs e)
             {
                 base.OnMouseMove(e);
-                bool h = CloseRect().Contains(e.Location);
+                int h = HitButton(e.Location);
                 if (h != hot) { hot = h; Invalidate(); }
             }
             protected override void OnMouseLeave(EventArgs e)
             {
                 base.OnMouseLeave(e);
-                if (hot || pressed) { hot = false; pressed = false; Invalidate(); }
+                if (hot != -1 || pressed != -1) { hot = -1; pressed = -1; Invalidate(); }
             }
             protected override void OnMouseDown(MouseEventArgs e)
             {
                 base.OnMouseDown(e);
                 if (e.Button != MouseButtons.Left) return;
-                if (CloseRect().Contains(e.Location)) { pressed = true; Invalidate(); return; }
-                if (e.Y >= Scale(52, owner.Dpi())) return; // below the top row the cover is only a backdrop
+                int b = HitButton(e.Location);
+                if (b >= 0) { pressed = b; return; }
+                if (e.Y >= BarHeight()) return; // below the top row the cover is only a backdrop
                 if (e.Clicks >= 2)
                 {
                     owner.WindowState = owner.WindowState == FormWindowState.Maximized ? FormWindowState.Normal : FormWindowState.Maximized;
@@ -333,10 +390,12 @@ namespace Weft.Desktop
             protected override void OnMouseUp(MouseEventArgs e)
             {
                 base.OnMouseUp(e);
-                bool click = pressed && CloseRect().Contains(e.Location);
-                pressed = false;
-                Invalidate();
-                if (click) owner.Close();
+                int b = pressed;
+                pressed = -1;
+                if (b < 0 || HitButton(e.Location) != b) return;
+                if (b == 0) owner.WindowState = FormWindowState.Minimized;
+                else if (b == 1) owner.WindowState = owner.WindowState == FormWindowState.Maximized ? FormWindowState.Normal : FormWindowState.Maximized;
+                else owner.Close();
             }
         }
 
@@ -419,9 +478,9 @@ namespace Weft.Desktop
             if (!SameOrigin(a.Source)) return;
             string msg;
             try { msg = a.TryGetWebMessageAsString(); } catch (ArgumentException) { return; }
-            if (msg.Length == 13 && msg.StartsWith("theme:#", StringComparison.Ordinal) && Regex.IsMatch(msg, "^theme:#[0-9a-fA-F]{6}$"))
+            if (Regex.IsMatch(msg, "^theme:#[0-9a-fA-F]{6}(,#[0-9a-fA-F]{6}){5},[0-9]{1,2}(\\.[0-9]{1,3})?$"))
             {
-                SaveTheme(msg.Substring(7));
+                SaveTheme(msg.Substring(6).Split(','));
                 HideSplashSoon(150);
                 return;
             }

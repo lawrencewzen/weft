@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { t } from '../i18n';
+import { cssColorToHex } from '../data/cssColor';
 import type { Lang } from '../data/lang';
+import { readUiZoom } from '../data/uiZoom';
 
 type ShellAction = 'minimize' | 'toggle-maximize' | 'close';
 
@@ -41,10 +43,17 @@ function post(action: ShellAction): void {
   postRaw(action);
 }
 
-/** Tell the shell the page background (`--bg`) so its next cold start can paint the same colour before the page loads. */
+/**
+ * Tell the shell the colours it needs to draw the same window buttons before the page is up, and the page zoom:
+ * `theme:` + --bg, --ink, --mute, --hover, --fail, --term as #rrggbb + the html zoom (--ui-zoom).
+ * Stored by the shell and used on its next cold start.
+ */
 function reportTheme(): void {
-  const bg = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim();
-  if (/^#[0-9a-fA-F]{6}$/.test(bg)) postRaw(`theme:${bg}`);
+  const style = getComputedStyle(document.documentElement);
+  const colors = ['--bg', '--ink', '--mute', '--hover', '--fail', '--term'].map((name) => cssColorToHex(style.getPropertyValue(name)));
+  if (colors.some((c) => c === null)) return;
+  const zoom = Math.round(readUiZoom() * 1000) / 1000;
+  postRaw(`theme:${colors.join(',')},${zoom}`);
 }
 
 function useReportTheme(active: boolean): void {
