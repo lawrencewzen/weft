@@ -91,7 +91,8 @@ export function WorkspaceDialog({ lang, onClose, onToast, onCreated, pickFolder 
     }).then((listed) => {
       if (cancelled || !listed) return;
       setDirs(listed);
-      setPathInput(listed.path);
+      // 初始目录加载完成前用户可能已经输入了路径，不要覆盖。
+      setPathInput((current) => current || listed.path);
     }).catch((err) => {
       if (!cancelled) setDirError(failText(err));
     });
