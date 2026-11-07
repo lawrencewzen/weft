@@ -805,6 +805,40 @@ function compactFailedConversation(now: number): MockConv {
   return conv;
 }
 
+/** 持续处于重试中：模型请求失败，服务端在等下一次重试。pendingText 是服务端出好的人话。 */
+function retryingConversation(now: number): MockConv {
+  const conv = conversation({
+    id: 'c-retrying',
+    workspaceId: 'ws-weft',
+    title: '模型连不上，正在重试',
+    updatedAt: now - 18 * MINUTE,
+    used: 9_000,
+    status: 'running',
+    items: [
+      user('retrying-u1', '把 README 里的安装步骤补全。'),
+    ],
+  });
+  conv.view.run = {
+    status: 'running',
+    startedAt: now - 90_000,
+    pendingText: null,
+    canSend: true,
+    canStop: true,
+    lockedReason: null,
+    error: null,
+    lastActivityAt: now - 30_000,
+    stalledSince: null,
+    activeTool: null,
+    retry: { attempt: 6, maxAttempts: 10, kind: 'network' },
+  };
+  conv.pending = {
+    zh: '连不上模型服务，正在重试（第 6 次，共 10 次）',
+    en: 'Cannot reach the model service, retrying (attempt 6 of 10)',
+  };
+  conv.run = { id: 'run-seed-retrying', cancelled: false, steers: [], followUps: [] };
+  return conv;
+}
+
 function testsConversation(now: number): MockConv {
   const grep = tool({
     id: 'tests-t1',
@@ -1380,6 +1414,7 @@ export function createSeed(now: number): MockDb {
     truncatedConversation(now),
     compactedConversation(now),
     compactFailedConversation(now),
+    retryingConversation(now),
     askConversation(now),
     testsConversation(now),
     docsConversation(now, subagents),

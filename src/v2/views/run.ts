@@ -8,7 +8,7 @@
  */
 
 import { phrase, type Lang } from '../phrases/index.ts';
-import { canContinueReason, runErrorMessage } from '../phrases/run-error.ts';
+import { canContinueReason, retryKind, retryMessage, runErrorMessage } from '../phrases/run-error.ts';
 import type { components } from '../contract.gen.ts';
 import {
   compactionFailureMessage,
@@ -104,7 +104,10 @@ export type RunStateInput = {
   live?: {
     compactions?: Array<{ trigger?: unknown }> | null;
     compactionFailure?: { trigger?: unknown; error?: unknown } | null;
+    generation?: { attempt?: unknown; retry?: { at?: unknown; error?: unknown } | null } | null;
   } | null;
+  /** Attempts the kernel allows per model call, first one included (WEFT_RETRY_MAX). */
+  retryMaxAttempts?: unknown;
 };
 
 function isRealSubagent(agent: ThreadSubagent | null | undefined): boolean {
@@ -223,6 +226,27 @@ function pendingTextFor(
   return text;
 }
 
+/**
+ * Retry wait from pi.live.generation. `attempt` there is the attempt that just failed, so the
+ * try the user is waiting for is attempt + 1. Null when no retry is pending or the cap is unknown.
+ */
+export function retryView(
+  live: RunStateInput['live'],
+  maxAttempts: unknown,
+): NonNullable<RunState['retry']> | null {
+  const gen = live?.generation;
+  const retry = gen?.retry;
+  if (!retry || (retry.at == null && !retry.error)) return null;
+  const failed = Math.trunc(Number(gen?.attempt));
+  const max = Math.trunc(Number(maxAttempts));
+  if (!Number.isFinite(failed) || failed < 1 || !Number.isFinite(max) || max < 2) return null;
+  return {
+    attempt: Math.min(failed + 1, max),
+    maxAttempts: max,
+    kind: retryKind(retry.error),
+  };
+}
+
 export function runStateView({
   status,
   llmError,
@@ -237,16 +261,20 @@ export function runStateView({
   now,
   stallAfterMs,
   live = null,
+  retryMaxAttempts,
 }: RunStateInput = {}): RunState {
   const runStatus = normalizeRunStatus(status);
   const running = runStatus === 'running';
   const last = running ? asStartedAt(lastActivityAt) : null;
   const t = now ?? Date.now();
   const threshold = stallAfterMs ?? resolveStallAfterMs();
-  return {
+  const retry = running ? retryView(live, retryMaxAttempts) : null;
+  const out: RunState = {
     status: runStatus,
     startedAt: asStartedAt(startedAt),
-    pendingText: running ? pendingTextFor(lang, messages, tools, subagents) : null,
+    pendingText: retry
+      ? retryMessage(lang, retry.kind, retry.attempt, retry.maxAttempts)
+      : running ? pendingTextFor(lang, messages, tools, subagents) : null,
     canSend: Boolean(hasWorkspace),
     canStop: running,
     lockedReason: hasWorkspace ? null : 'no_workspace',
@@ -256,4 +284,6 @@ export function runStateView({
     activeTool: running ? activeTool : null,
     compaction: compactionView(live, lang),
   };
+  if (retry) out.retry = retry;
+  return out;
 }

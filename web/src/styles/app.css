@@ -148,11 +148,8 @@ a:hover { text-decoration: underline; }
     transform: rotate(360deg);
   }
 }
-@media (prefers-reduced-motion: reduce) {
-  .status-icon-running {
-    animation: none;
-  }
-}
+/* 表示「正在运行」的转圈在减少动画模式下也继续转（远程桌面会强制 reduce）。
+   面板滑动、条带过渡这类装饰动画仍然关闭，见下面各处的 reduce 规则。 */
 
 /* ArchiveIcon */
 .archive-icon {
@@ -834,6 +831,7 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.6; backgroun
 .thread-pending .run-spin { width: 12px; height: 12px; }
 .thread-pending .run-spin span { display: none; }
 .thread-pending .run-spin::before { border-width: 1.5px; border-color: var(--line); border-top-color: var(--mute); }
+.thread-pending.is-retrying .thread-pending-text { color: var(--faint); }
 .thread-pending-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .msg-group { display: flex; flex-direction: column; gap: 6px; min-width: 0; max-width: 100%; }
 .msg-side-agent { gap: 12px; }
@@ -1272,7 +1270,6 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.6; backgroun
 .tool-group-fail { flex-shrink: 0; color: var(--fail); }
 .tool-group-chevron { width: 11px; height: 11px; flex-shrink: 0; color: var(--faint); transition: transform .15s; }
 .tool-group.is-open .tool-group-chevron { transform: rotate(90deg); }
-@media (prefers-reduced-motion: reduce) { .run-spin span, .run-spin::before, .msg-stream-spin { animation: none; } }
 .tool-group-list { display: none; margin: 4px 0 2px 5px; padding-left: 15px; border-left: 1px solid var(--hover); min-width: 0; }
 .tool-group.is-open .tool-group-list { display: block; }
 .tool-group-older {
