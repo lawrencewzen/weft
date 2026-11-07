@@ -3,47 +3,53 @@ import { expectClean, openProto } from './helpers/proto.mjs';
 
 /**
  * Workspace addition flow:
- * 1. Native pick dialog preferred (simulated modal in prototype).
- *    - Picked: directly enters new workspace without form.
- *    - Cancelled: no change.
- * 2. Directory browser fallback (unsupported / network failure):
- *    - Clickable breadcrumbs to navigate up.
- *    - Editable path input: Enter to jump, inline error on failure.
- *    - Blocked path (e.g. ~/.ssh): create button disabled.
- *    - Newly opened: create button disabled until navigated.
- * 3. Git import tab is hidden for now.
+ * 1. Clicking + always opens the dialog first (local path input focused).
+ * 2. Browse… calls the (simulated) system folder picker:
+ *    - Picked: fills the path, nothing is created until 确定.
+ *    - Cancelled: dialog unchanged.
+ * 3. Directory browser: breadcrumbs, editable path input (Enter to jump, inline
+ *    error on failure), blocked path (~/.ssh) disables create.
+ * 4. Git import tab is hidden for now.
  */
 test.use({ locale: 'zh-CN', viewport: { width: 1440, height: 900 } });
 test.describe.configure({ timeout: 120_000 });
 
-test('system folder pick: picked directly enters new workspace, cancelled does nothing', async ({ page }) => {
+test('+ opens the dialog; Browse picks a folder (cancel keeps state) and only 确定 creates the workspace', async ({ page }) => {
   const state = await openProto(page);
   await expect(page.getByTestId('next-ws-node')).toHaveCount(2);
 
-  // 1. Cancelled -> no changes
   await page.getByTestId('next-ws-new').click();
-  await expect(page.getByTestId('proto-pick-modal')).toBeVisible();
-  await expect(page.getByTestId('proto-pick-modal')).toContainText('系统选文件夹窗口（原型模拟）');
-  await page.getByTestId('proto-pick-cancel').click();
-  await expect(page.getByTestId('proto-pick-modal')).toHaveCount(0);
-  await expect(page.getByTestId('next-ws-dialog')).toHaveCount(0);
+  await expect(page.getByTestId('next-ws-dialog')).toBeVisible();
+  await expect(page.getByTestId('next-ws-path')).toBeFocused();
+  await expect(page.getByTestId('next-ws-create')).toBeDisabled();
+
+  // 1. Picked (first click) -> path filled, nothing created yet
+  const browse = page.getByTestId('next-ws-browse');
+  await browse.click();
+  await expect(browse).toBeDisabled();
+  await expect(page.getByTestId('next-ws-path')).toHaveValue('C:\\Users\\demo\\Projects\\billing-api');
+  await expect(browse).toBeEnabled();
+  await expect(page.getByTestId('next-ws-create')).toBeEnabled();
   await expect(page.getByTestId('next-ws-node')).toHaveCount(2);
 
-  // 2. Picked -> directly enters without form
-  await page.getByTestId('next-ws-new').click();
-  await expect(page.getByTestId('proto-pick-modal')).toBeVisible();
-  await expect(page.getByTestId('proto-pick-path')).toHaveValue('D:\\work\\sandbox\\playground');
-  await page.getByTestId('proto-pick-folder').click();
+  // 2. Cancelled (second click) -> unchanged
+  await browse.click();
+  await expect(browse).toBeDisabled();
+  await expect(browse).toBeEnabled();
+  await expect(page.getByTestId('next-ws-path')).toHaveValue('C:\\Users\\demo\\Projects\\billing-api');
+  await expect(page.getByTestId('next-ws-dialog')).toBeVisible();
+  await expect(page.getByTestId('next-ws-node')).toHaveCount(2);
 
-  await expect(page.getByTestId('proto-pick-modal')).toHaveCount(0);
+  // 3. 确定 creates and enters the workspace
+  await page.getByTestId('next-ws-create').click();
   await expect(page.getByTestId('next-ws-dialog')).toHaveCount(0);
   await expect(page.getByTestId('next-toast')).toContainText('已创建');
   await expect(page.getByTestId('next-ws-node')).toHaveCount(3);
-  await expect(page.getByTestId('next-ws-node').filter({ hasText: 'playground' })).toBeVisible();
+  await expect(page.getByTestId('next-ws-node').filter({ hasText: 'billing-api' })).toBeVisible();
   await expect(page).toHaveURL(/\/w\/ws-\d+\/new/);
-  await expect(page.getByTestId('next-draft-hint')).toContainText('playground');
-  await expect(page.getByTestId('next-draft-hero-ws')).toContainText('playground');
-  await expect(page.locator('.draft-hero-hint')).toContainText('playground');
+  await expect(page.getByTestId('next-draft-hint')).toContainText('billing-api');
+  await expect(page.getByTestId('next-draft-hero-ws')).toContainText('billing-api');
+  await expect(page.locator('.draft-hero-hint')).toContainText('billing-api');
 
   // The new workspace takes conversations.
   await page.getByTestId('next-composer-input').fill('这个工作区里第一条消息');
@@ -52,7 +58,7 @@ test('system folder pick: picked directly enters new workspace, cancelled does n
   await expect(page.getByTestId('next-item-user')).toContainText('这个工作区里第一条消息');
   await expect(page.getByTestId('next-stop')).toHaveCount(0, { timeout: 40_000 });
   await expect(page.getByTestId('next-send')).toBeVisible();
-  const wsId = await page.getByTestId('next-ws-node').filter({ hasText: 'playground' }).getAttribute('data-id');
+  const wsId = await page.getByTestId('next-ws-node').filter({ hasText: 'billing-api' }).getAttribute('data-id');
   await expect(page.locator(`[data-testid=next-conv-row][data-ws-id="${wsId}"]`)).toHaveCount(1);
 
   // The new workspace has its own mock repository in the file tab.
@@ -62,16 +68,11 @@ test('system folder pick: picked directly enters new workspace, cancelled does n
   expectClean(state);
 });
 
-test('unsupported pick opens directory browser, supports breadcrumbs, path jumping, and blocked directories', async ({ page }) => {
+test('directory browser supports breadcrumbs, path jumping, and blocked directories', async ({ page }) => {
   const state = await openProto(page);
   await expect(page.getByTestId('next-ws-node')).toHaveCount(2);
 
-  // Unsupported -> fallback to directory browser
   await page.getByTestId('next-ws-new').click();
-  await expect(page.getByTestId('proto-pick-modal')).toBeVisible();
-  await page.getByTestId('proto-pick-unsupported').click();
-
-  await expect(page.getByTestId('proto-pick-modal')).toHaveCount(0);
   await expect(page.getByTestId('next-ws-dialog')).toBeVisible();
 
   // Acceptance 3: No Git tabs, no "allowed root" copy
@@ -124,6 +125,30 @@ test('unsupported pick opens directory browser, supports breadcrumbs, path jumpi
   await expect(page.getByTestId('next-toast')).toContainText('已创建');
   await expect(page.getByTestId('next-ws-node')).toHaveCount(3);
   await expect(page.getByTestId('next-ws-node').filter({ hasText: 'playground' })).toBeVisible();
+
+  expectClean(state);
+});
+
+test('typed path can be confirmed directly without pressing Enter; invalid path shows an error', async ({ page }) => {
+  const state = await openProto(page);
+  await page.getByTestId('next-ws-new').click();
+  await expect(page.getByTestId('next-ws-create')).toBeDisabled();
+
+  await page.getByTestId('next-ws-path').fill('');
+  await expect(page.getByTestId('next-ws-create')).toBeDisabled();
+
+  await page.getByTestId('next-ws-path').fill('D:\\nonexistent-folder');
+  await expect(page.getByTestId('next-ws-create')).toBeEnabled();
+  await page.getByTestId('next-ws-create').click();
+  await expect(page.getByTestId('next-ws-dir-error')).toBeVisible();
+  await expect(page.getByTestId('next-ws-dialog')).toBeVisible();
+  await expect(page.getByTestId('next-ws-node')).toHaveCount(2);
+
+  await page.getByTestId('next-ws-path').fill('D:\\work\\sandbox\\notes');
+  await page.getByTestId('next-ws-create').click();
+  await expect(page.getByTestId('next-ws-dialog')).toHaveCount(0);
+  await expect(page.getByTestId('next-ws-node')).toHaveCount(3);
+  await expect(page.getByTestId('next-ws-node').filter({ hasText: 'notes' })).toBeVisible();
 
   expectClean(state);
 });
