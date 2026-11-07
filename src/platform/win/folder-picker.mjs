@@ -36,54 +36,56 @@ if (-not [Environment]::UserInteractive) { exit ${WIN_PICK_NONINTERACTIVE_EXIT} 
 try {
   Add-Type -AssemblyName System.Windows.Forms
   # Best effort only: a failure here must never fail the pick itself.
-  # A WinForms Timer on the UI thread keeps firing inside the modal loop of
-  # ShowDialog; it finds this thread's #32770 dialog and makes it topmost.
+  # A background thread polls for this process's visible #32770 dialog and makes
+  # it topmost. No WinForms reference (does not compile on pwsh 7), no UI timer.
   $weftTop = $null
   try {
-    Add-Type -ReferencedAssemblies System.Windows.Forms -TypeDefinition @'
+    Add-Type -TypeDefinition @'
 using System;
 using System.Runtime.InteropServices;
 using System.Text;
-using System.Windows.Forms;
+using System.Threading;
 public static class WeftDialogTopmost {
   delegate bool EnumProc(IntPtr h, IntPtr l);
-  [DllImport("user32.dll")] static extern bool EnumThreadWindows(uint t, EnumProc p, IntPtr l);
+  [DllImport("user32.dll")] static extern bool EnumWindows(EnumProc p, IntPtr l);
+  [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
   [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr h);
   [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetClassName(IntPtr h, StringBuilder s, int n);
   [DllImport("user32.dll")] static extern bool SetWindowPos(IntPtr h, IntPtr a, int x, int y, int cx, int cy, uint f);
   [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr h);
-  [DllImport("kernel32.dll")] static extern uint GetCurrentThreadId();
-  static Timer timer;
-  static int tries;
-  static IntPtr Find() {
+  [DllImport("kernel32.dll")] static extern uint GetCurrentProcessId();
+  static IntPtr Find(uint myPid) {
     IntPtr found = IntPtr.Zero;
     EnumProc cb = delegate(IntPtr h, IntPtr l) {
+      uint pid;
+      GetWindowThreadProcessId(h, out pid);
+      if (pid != myPid || !IsWindowVisible(h)) return true;
       StringBuilder sb = new StringBuilder(64);
       GetClassName(h, sb, 64);
-      if (sb.ToString() == "#32770" && IsWindowVisible(h)) { found = h; return false; }
+      if (sb.ToString() == "#32770") { found = h; return false; }
       return true;
     };
-    EnumThreadWindows(GetCurrentThreadId(), cb, IntPtr.Zero);
+    EnumWindows(cb, IntPtr.Zero);
     return found;
   }
-  public static void Start() {
-    timer = new Timer();
-    timer.Interval = 80;
-    timer.Tick += delegate(object s, EventArgs e) {
-      try {
-        tries++;
-        IntPtr h = Find();
+  static void Run() {
+    try {
+      uint myPid = GetCurrentProcessId();
+      for (int i = 0; i < 150; i++) {
+        IntPtr h = Find(myPid);
         if (h != IntPtr.Zero) {
-          Stop();
           SetWindowPos(h, new IntPtr(-1), 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0040);
           SetForegroundWindow(h);
-        } else if (tries > 150) { Stop(); }
-      } catch (Exception) { Stop(); }
-    };
-    timer.Start();
+          return;
+        }
+        Thread.Sleep(80);
+      }
+    } catch (Exception) { }
   }
-  public static void Stop() {
-    if (timer != null) { timer.Stop(); timer.Dispose(); timer = null; }
+  public static void Start() {
+    Thread t = new Thread(Run);
+    t.IsBackground = true;
+    t.Start();
   }
 }
 '@
@@ -100,7 +102,6 @@ public static class WeftDialogTopmost {
     $dialog.SelectedPath = $start
   }
   $result = $dialog.ShowDialog()
-  if ($weftTop) { try { [WeftDialogTopmost]::Stop() } catch { } }
   if ($result -eq [System.Windows.Forms.DialogResult]::OK -and $dialog.SelectedPath) {
     [Console]::Out.WriteLine($dialog.SelectedPath)
     exit 0

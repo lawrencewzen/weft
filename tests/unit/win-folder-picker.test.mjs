@@ -60,14 +60,20 @@ function decodeScript(args) {
   assert.match(script, /System\.Windows\.Forms\.FolderBrowserDialog/);
   assert.match(script, /\$dialog\.ShowDialog\(\)/);
   assert.equal(script.includes('$owner'), false);
-  // dialog itself goes topmost: timer in the modal loop, #32770, HWND_TOPMOST
-  assert.match(script, /System\.Windows\.Forms\.Timer|new Timer\(\)/);
-  assert.match(script, /EnumThreadWindows/);
+  // dialog itself goes topmost: background thread, EnumWindows + pid filter, #32770
+  assert.match(script, /System\.Threading\.Thread|new Thread\(/);
+  assert.match(script, /IsBackground = true/);
+  assert.match(script, /EnumWindows\(/);
+  assert.equal(script.includes('EnumThreadWindows'), false);
+  assert.match(script, /GetWindowThreadProcessId/);
+  assert.match(script, /pid != myPid/);
   assert.match(script, /"#32770"/);
   assert.match(script, /SetWindowPos\(h, new IntPtr\(-1\), 0, 0, 0, 0, 0x0001 \| 0x0002 \| 0x0040\)/);
   assert.match(script, /SetForegroundWindow/);
+  assert.equal(script.includes('-ReferencedAssemblies'), false);
+  assert.equal(/new Timer\(|System\.Windows\.Forms\.Timer/.test(script.slice(script.indexOf('Add-Type -TypeDefinition'))), false);
   // topmost part is isolated: its own try/catch inside the outer try, before ShowDialog
-  const top = script.indexOf('Add-Type -ReferencedAssemblies');
+  const top = script.indexOf('Add-Type -TypeDefinition');
   assert.ok(script.lastIndexOf('try {', top) > script.indexOf('try {'));
   assert.ok(script.indexOf('} catch { $weftTop = $null }') > top);
   assert.ok(script.indexOf('} catch { $weftTop = $null }') < script.indexOf('ShowDialog()'));
