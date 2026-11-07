@@ -25,6 +25,7 @@ import type {
   MockConv,
   MockDb,
   MockGroup,
+  MockItem,
   MockNote,
   MockTool,
   FollowUp,
@@ -394,6 +395,13 @@ function applyEditChange(db: MockDb, conv: MockConv, hub: MockHub, tool: MockToo
   change.added += diff.added;
   change.removed += diff.removed;
   if (!existing) conv.changes.push(change);
+  if (conv.run) {
+    const turn = conv.run.turnChanges || (conv.run.turnChanges = new Map());
+    const row = turn.get(path) || { ...change, added: 0, removed: 0 };
+    row.added += diff.added;
+    row.removed += diff.removed;
+    turn.set(path, row);
+  }
   conv.diffs[path] = diff;
   tool.diff = { added: diff.added, removed: diff.removed };
   const repo = db.repos.get(conv.view.workspaceId);
@@ -674,9 +682,31 @@ async function streamAssistant(
   return true;
 }
 
+/** 这一轮改过文件才在回复后面放一条 turn_changes；没改就什么都不放。 */
+function emitTurnChanges(db: MockDb, conv: MockConv, hub: MockHub): void {
+  const rows = conv.run?.turnChanges;
+  if (!rows || !rows.size) return;
+  const placeholderId = conv.run?.turnItemId;
+  if (placeholderId) {
+    conv.items = conv.items.filter((row) => row.id !== placeholderId);
+    conv.view.itemIds = conv.view.itemIds.filter((id) => id !== placeholderId);
+    publishRemove(conv, hub, 'item', placeholderId);
+  }
+  const item: MockItem = {
+    kind: 'turn_changes',
+    id: placeholderId || nextId(db, 'tc'),
+    changes: [...rows.values()].map((row) => ({ ...row })),
+  };
+  conv.items.push(item);
+  conv.view.itemIds.push(item.id);
+  publishItem(conv, hub, item);
+  publishConversationView(conv, hub);
+}
+
 function finishRun(db: MockDb, conv: MockConv, hub: MockHub): void {
   const run = conv.run;
   if (!run) return;
+  emitTurnChanges(db, conv, hub);
   const next = run.followUps.shift();
   const rest = run.followUps.slice();
   conv.run = null;
@@ -858,6 +888,12 @@ export function startRun(
     followUps: extraFollowUps.slice(),
   };
   conv.run = run;
+  // 先放一条空的按轮变更：前端看到它就不会在运行中回落到累计，结束时再挪到这一轮末尾。
+  const turnItem: MockItem = { kind: 'turn_changes', id: nextId(db, 'tc'), changes: [] };
+  run.turnItemId = turnItem.id;
+  conv.items.push(turnItem);
+  conv.view.itemIds.push(turnItem.id);
+  publishItem(conv, hub, turnItem);
   conv.view.status = 'running';
   conv.view.run = {
     status: 'running',
@@ -1074,6 +1110,7 @@ export function stopConversation(db: MockDb, conv: MockConv, hub: MockHub): void
     if (changed) refreshGroup(conv, hub, item, false);
     else publishItem(conv, hub, item);
   }
+  emitTurnChanges(db, conv, hub);
   conv.run = null;
   conv.view.status = 'idle';
   conv.view.run = {

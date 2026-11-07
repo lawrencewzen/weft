@@ -18,10 +18,19 @@ export function isChatWorkspace(ws: Pick<Workspace, 'kind'> | null | undefined):
 export function isProjectWorkspace(ws: Pick<Workspace, 'kind'> | null | undefined): boolean {
   return workspaceKind(ws) === 'project';
 }
-export type ThreadItem = components['schemas']['ThreadItem'];
+export type Change = components['schemas']['Change'];
+/**
+ * 某一轮自己改的文件，放在那一轮回复之后。契约里还没有这个 item，
+ * 后端接上之前只有原型的模拟后端会产出；拿不到时前端回落到对话累计。
+ */
+export type TurnChangesItem = {
+  kind: 'turn_changes';
+  id: string;
+  changes: Change[];
+};
+export type ThreadItem = components['schemas']['ThreadItem'] | TurnChangesItem;
 export type ToolCall = components['schemas']['ToolCall'];
 export type Subagent = components['schemas']['Subagent'];
-export type Change = components['schemas']['Change'];
 export type SnapshotEvent = components['schemas']['SnapshotEvent'];
 export type UpsertEvent = components['schemas']['UpsertEvent'];
 export type RemoveEvent = components['schemas']['RemoveEvent'];

@@ -275,6 +275,9 @@ export function Thread({
     stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < STICK_PX;
   }
 
+  // 后端给了按轮的变更就只在各轮后面显示；没给时（旧数据）在末尾显示累计。
+  const hasTurnChanges = items.some((item) => item.kind === 'turn_changes');
+
   const innerClass = [
     'thread-inner',
     empty ? 'is-empty' : '',
@@ -336,9 +339,12 @@ export function Thread({
             if (item.kind === 'system_note') {
               return <SystemNote key={item.id} item={item} />;
             }
+            if (item.kind === 'turn_changes') {
+              return <ChangeSummary key={item.id} changes={item.changes} lang={lang} />;
+            }
             return null;
           })}
-        {!empty && changes.length ? (
+        {!empty && changes.length && !hasTurnChanges ? (
           <ChangeSummary changes={changes} lang={lang} />
         ) : null}
         {compacting ? (

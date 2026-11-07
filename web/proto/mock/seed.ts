@@ -1318,6 +1318,73 @@ const ASK_DEMO: MockTool = tool({
   },
 });
 
+const TURN_PATHS = {
+  load: 'web/src/data/useConversation.ts',
+  thread: 'web/src/components/Thread.tsx',
+  css: 'web/src/styles/app.css',
+};
+
+function turnEdit(id: string, path: string, added: number, removed: number): MockTool {
+  return tool({
+    id,
+    kind: 'edit',
+    title: hint(path, path),
+    path,
+    diff: { added, removed },
+    totalLines: added + removed,
+  });
+}
+
+function turnsConversation(now: number): MockConv {
+  const t1 = turnEdit('turns-t1', TURN_PATHS.load, 14, 5);
+  const t2 = turnEdit('turns-t2', TURN_PATHS.thread, 9, 2);
+  const t3 = turnEdit('turns-t3', TURN_PATHS.css, 31, 7);
+  const turnChange = (path: string, added: number, removed: number): Change => (
+    { path, added, removed, error: null, by: { kind: 'main' }, status: 'modified' }
+  );
+  const diffFor = (path: string, add: string, del: string) => mockDiff(path, [
+    { oldStart: 10, newStart: 10, lines: [
+      { op: 'ctx', text: '// ...' },
+      { op: 'del', text: del },
+      { op: 'add', text: add },
+      { op: 'ctx', text: '// ...' },
+    ] },
+  ]);
+  return conversation({
+    id: 'c-turns',
+    workspaceId: 'ws-weft',
+    title: '变更按轮显示',
+    updatedAt: now - 40 * MINUTE,
+    used: 9_400,
+    tools: { [t1.id]: t1, [t2.id]: t2, [t3.id]: t3 },
+    items: [
+      user('turns-u1', '把对话末尾累计的变更块改成跟着每一轮走。'),
+      group('turns-g1', [t1.id, t2.id], { zh: '编辑了 2 个文件', en: 'edited 2 files' }),
+      assistant('turns-a1', '改好了：变更摘要现在挂在改了文件的那一轮后面，改动在 `useConversation.ts` 和 `Thread.tsx`。'),
+      { kind: 'turn_changes', id: 'turns-c1', changes: [
+        turnChange(TURN_PATHS.load, 14, 5),
+        turnChange(TURN_PATHS.thread, 9, 2),
+      ] },
+      user('turns-u2', '没改文件的这一轮，下面应该什么都不显示吧？'),
+      assistant('turns-a2', '对，这一轮没动任何文件，所以下面不会出现变更摘要。'),
+      user('turns-u3', '那把样式也顺手收紧一下。'),
+      group('turns-g2', [t3.id], { zh: '编辑了 1 个文件', en: 'edited 1 file' }),
+      assistant('turns-a3', '样式收紧了，摘要默认只占一行，点开才看文件列表。'),
+      { kind: 'turn_changes', id: 'turns-c2', changes: [turnChange(TURN_PATHS.css, 31, 7)] },
+    ],
+    changes: [
+      turnChange(TURN_PATHS.load, 14, 5),
+      turnChange(TURN_PATHS.thread, 9, 2),
+      turnChange(TURN_PATHS.css, 31, 7),
+    ],
+    diffs: {
+      [TURN_PATHS.load]: diffFor(TURN_PATHS.load, '  const turnChanges = items.filter(isTurnChanges);', '  const changes = store.changes(id);'),
+      [TURN_PATHS.thread]: diffFor(TURN_PATHS.thread, "  if (item.kind === 'turn_changes') return <ChangeSummary />;", '  {changes.length ? <ChangeSummary /> : null}'),
+      [TURN_PATHS.css]: diffFor(TURN_PATHS.css, '  height: 36px;', '  height: 40px;'),
+    },
+  });
+}
+
 function askConversation(now: number): MockConv {
   return conversation({
     id: 'c-ask',
@@ -1443,6 +1510,7 @@ export function createSeed(now: number): MockDb {
     compactFailedConversation(now),
     retryingConversation(now),
     askConversation(now),
+    turnsConversation(now),
     testsConversation(now),
     docsConversation(now, subagents),
     scriptsConversation(now),
