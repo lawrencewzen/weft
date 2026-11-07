@@ -23,6 +23,7 @@ import {
   shellLine,
 } from '../../src/kernel/system-prompt.mjs';
 import { createSqliteStore } from '../../src/store/sqlite.mjs';
+import { agentShellKind } from '../../src/platform/win/shell.mjs';
 import { ROOT } from './_root.mjs';
 
 const DELEGATE_LEAD = 'Use this for independent tasks that can run on their own. Do simple work yourself.';
@@ -49,11 +50,16 @@ function projectBlock(content) {
   return `<project_instructions path="AGENTS.md">\n${body}</project_instructions>`;
 }
 
+const SHELL_TOOL = agentShellKind();
+const SHELL_LINE = SHELL_TOOL === 'powershell'
+  ? 'Shell: PowerShell (use the powershell tool)'
+  : 'Shell: bash (use the bash tool)';
+
 function environmentBlock({ cwd } = {}) {
   const lines = [];
   if (cwd) lines.push(`Working directory: ${cwd}`);
   lines.push(`Platform: ${platformName()}`);
-  lines.push('Shell: bash (use the bash tool)');
+  lines.push(SHELL_LINE);
   return lines.join('\n');
 }
 
@@ -202,7 +208,7 @@ test('rendered main-agent prompt: sections, workspaces, AGENTS.md, and no projec
     assert.equal(first.prompt, expectedAlpha);
     assert.equal(first.prompt.includes('CLAUDE_SHOULD_NOT_APPEAR'), false);
     assert.equal(first.prompt.includes('NESTED_AGENTS_SHOULD_NOT_APPEAR'), false);
-    assert.match(first.prompt, /Shell: bash \(use the bash tool\)/);
+    assert.ok(first.prompt.includes(SHELL_LINE));
 
     await say(kernel, store, alpha.conv, 'two');
     const second = await rendered(kernel, alpha.conv.harnessId);
@@ -324,7 +330,7 @@ test('rendered main-agent prompt: sections, workspaces, AGENTS.md, and no projec
     assert.equal(chatPrompt.includes(chatDir), false);
     assert.equal(chatPrompt.includes('协作规则（Weft）'), false);
     assert.match(chatPrompt, new RegExp(`Platform: ${platformName()}`));
-    assert.match(chatPrompt, /Shell: bash \(use the bash tool\)/);
+    assert.ok(chatPrompt.includes(SHELL_LINE));
 
     const none = await kernel.createConversation({ title: 'no-cwd' });
     await say(kernel, store, none, 'no cwd');
@@ -334,12 +340,17 @@ test('rendered main-agent prompt: sections, workspaces, AGENTS.md, and no projec
       path.join(ROOT, 'tests/fixtures/pi-durable-1.4.0/system-prompt-no-project.txt'),
       'utf8',
     );
-    assert.equal(nonePrompt.replace(/Platform: .*/, 'Platform: __PLATFORM__'), frozen);
+    assert.equal(
+      nonePrompt
+        .replace(/Platform: .*/, 'Platform: __PLATFORM__')
+        .replace(SHELL_LINE, 'Shell: bash (use the bash tool)'),
+      frozen,
+    );
     assert.equal(nonePrompt.includes('Working directory:'), false);
     assert.equal(nonePrompt.includes('project_context'), false);
     assert.equal(nonePrompt.includes(process.cwd()), false);
     assert.equal(nonePrompt.includes('协作规则（Weft）'), false);
-    assert.match(nonePrompt, /Shell: bash \(use the bash tool\)/);
+    assert.ok(nonePrompt.includes(SHELL_LINE));
     assert.match(skills, new RegExp(`^${SKILL_LIST_INTRO}`));
     assert.match(skills, /^- commit-message: /m);
 
@@ -427,7 +438,7 @@ test('rendered sub-agent prompt has environment and project context only', { tim
     for (const name of ['delegate', 'subagent', 'skill']) {
       assert.equal((childCall.tools || []).includes(name), false, name);
     }
-    assert.equal((childCall.tools || []).includes('bash'), true);
+    assert.equal((childCall.tools || []).includes(SHELL_TOOL), true);
     assert.equal((childCall.tools || []).includes('read'), true);
   } finally {
     if (opened) {
