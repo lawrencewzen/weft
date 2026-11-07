@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import iconv from 'iconv-lite';
 import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
-import { createEditTool, createReadTool } from '@earendil-works/pi-durable/tools';
+import { createEditTool, createReadTool, createWriteTool } from '@earendil-works/pi-durable/tools';
 import { createWorkspaceEnv } from '../../src/kernel/workspace-env.mjs';
 import {
   GBK_BINARY_VIEW_MAX_BYTES,
@@ -461,5 +461,49 @@ test('powershell.exe -File reads a UTF-8 BOM .ps1 as Chinese', async (t) => {
     if (!controlOut.includes('中文自检')) {
       assert.equal(out.includes('中文自检'), true);
     }
+  });
+});
+
+test('official edit tool keeps GBK and CRLF, including a multi-line edit written with LF', async () => {
+  await withDetectEnv(true, async ({ dir, env }) => {
+    const original = gbkBytes('第一行 a = 1\r\n第二行：你好\r\n第三行\r\n第四行\r\n');
+    await writeFile(path.join(dir, 'crlf.txt'), original);
+    const tool = createEditTool();
+    const single = await tool.execute({
+      path: 'crlf.txt',
+      edits: [{ oldText: 'a = 1', newText: 'a = 2' }],
+    }, { env }, context);
+    assert.equal(single?.isError, undefined, JSON.stringify(single));
+    assert.deepEqual(
+      await readFile(path.join(dir, 'crlf.txt')),
+      gbkBytes('第一行 a = 2\r\n第二行：你好\r\n第三行\r\n第四行\r\n'),
+    );
+    // The model sends LF; the file has CRLF. The new lines come out as CRLF.
+    const multi = await tool.execute({
+      path: 'crlf.txt',
+      edits: [{ oldText: '第二行：你好\n第三行', newText: '第二行：世界\n新增行' }],
+    }, { env }, context);
+    assert.equal(multi?.isError, undefined, JSON.stringify(multi));
+    const onDisk = await readFile(path.join(dir, 'crlf.txt'));
+    assert.deepEqual(onDisk, gbkBytes('第一行 a = 2\r\n第二行：世界\r\n新增行\r\n第四行\r\n'));
+    assert.equal(detect(onDisk), 'gbk');
+    assert.equal(onDisk.toString('latin1').replace(/\r\n/g, '').includes('\n'), false);
+  });
+});
+
+test('official write tool over an existing GBK file keeps GBK; line endings are the content as sent', async () => {
+  await withDetectEnv(true, async ({ dir, env }) => {
+    await writeFile(path.join(dir, 'w.txt'), gbkBytes('旧内容\r\n第二行\r\n'));
+    const tool = createWriteTool();
+    const lf = await tool.execute({ path: 'w.txt', content: '新内容\n第二行\n' }, { env }, context);
+    assert.equal(lf?.isError, undefined, JSON.stringify(lf));
+    const afterLf = await readFile(path.join(dir, 'w.txt'));
+    assert.deepEqual(afterLf, gbkBytes('新内容\n第二行\n'));
+    assert.equal(detect(afterLf), 'gbk');
+    // write does not convert LF to CRLF; a model that wants CRLF has to send it.
+    await writeFile(path.join(dir, 'w.txt'), gbkBytes('旧内容\r\n'));
+    const crlf = await tool.execute({ path: 'w.txt', content: '新内容\r\n第二行\r\n' }, { env }, context);
+    assert.equal(crlf?.isError, undefined, JSON.stringify(crlf));
+    assert.deepEqual(await readFile(path.join(dir, 'w.txt')), gbkBytes('新内容\r\n第二行\r\n'));
   });
 });
