@@ -5,7 +5,7 @@ Weft 是基于 Pi Durable（@earendil-works/pi-durable，作为库嵌入）的 W
 ## 内核（硬性规定）
 - 运行时内核必须是 Pi Durable（`@earendil-works/pi-durable` 的 Harness）：对话、任务、检查点、断点续跑、子 Agent、中止、压缩都用它提供的机制，模型调用走 `@earendil-works/pi-ai`。
 - 禁止自写编排器、任务调度或检查点机制来替代 Pi Durable 已有的能力。Pi Durable 做不到、需要绕开或改换内核的，必须先停下来报告，经用户同意后才能动。
-- 现状（2026-10-20，T12-2）：默认运行时已经是 Pi Durable Harness（`src/kernel/`）。对话状态只在 Harness 里，应用库只留最近一次提交的 id。卡住和重试只用它的 `stream.timeoutMs` 和 `retry`。没有 harness id 的旧对话不出现在列表里。
+- 现状（2026-10-20，T12-2）：默认运行时已经是 Pi Durable Harness（`src/kernel/`）。对话状态只在 Harness 里，应用库只留最近一次提交的 id。卡住和重试只用它的 `stream.timeoutMs` 和 `retry`。流中途没数据由 `src/kernel/stream-idle.mjs` 的 fetch 包装判定（`WEFT_STREAM_IDLE_TIMEOUT_MS`，默认 120000，只从响应开始后算），超时只抛错，重试仍走 `retry`。没有 harness id 的旧对话不出现在列表里。
 - 改动架构（内核、存储、模型调用层）属于需用户确认的决定；`docs/ARCHITECTURE.md` 必须如实反映现状，不能为了贴合代码就悄悄改掉原定架构。
 - v2（2026-10-25 定，见 `docs/ARCHITECTURE_V2.md`）只重做服务端对外的一层（协议、视图模型、服务进程、鉴权）和客户端，内核规定一条不变：对话和任务怎么跑全部交给 Pi Durable。v2 里的卡住判定定时器、空闲退出计时、SSE 事件缓存只服务于显示和进程管理，不调度、不存检查点；以后通过 Provider 接外部 agent，也必须用 Pi Durable 的 Task 实现。
 

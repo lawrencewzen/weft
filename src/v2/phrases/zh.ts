@@ -8,6 +8,7 @@ export const zh: Record<string, string> = {
   run_err_restart_limit: '这一轮多次中断，已停止。',
   run_err_faulted: '这一轮出现内部错误。',
   run_err_model: '模型请求失败：{detail}',
+  run_err_stream_idle: '模型服务长时间没有返回数据，已中断这次请求。',
   run_err_unfinished: '这一轮没有完成。',
   tool_sum_join: ' · ',
   tool_sum_names_join: '、',
