@@ -1,14 +1,16 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   createWorkspace,
   listGitBranches,
   listGitProjects,
   listWorkspaceDirs,
   getWorkspaceRoot,
+  pickWorkspaceRoot,
   type GitBranch,
   type GitProject,
   type Workspace,
   type WorkspaceDirs,
+  type WorkspacePickResult,
 } from '../data/api';
 import { dirBasename, isGitlabKind } from '../data/gitSettings';
 import type { Lang } from '../data/lang';
@@ -25,6 +27,8 @@ type Props = {
   onClose: () => void;
   onToast: (message: string) => void;
   onCreated?: (ws: Workspace) => void;
+  /** 「浏览…」的实现，默认走服务端系统选文件夹对话框；桌面壳可替换成自己的对话框。 */
+  pickFolder?: () => Promise<WorkspacePickResult>;
 };
 
 type Tab = 'local' | 'git';
@@ -34,7 +38,7 @@ function failText(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
-export function WorkspaceDialog({ lang, onClose, onToast, onCreated }: Props) {
+export function WorkspaceDialog({ lang, onClose, onToast, onCreated, pickFolder }: Props) {
   const { gitConnections, ready } = useExtensions();
   const [tab, setTab] = useState<Tab>('local');
   const [name, setName] = useState('');
@@ -59,6 +63,17 @@ export function WorkspaceDialog({ lang, onClose, onToast, onCreated }: Props) {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [root, setRoot] = useState('');
+  const [picking, setPicking] = useState(false);
+  const [pickUnsupported, setPickUnsupported] = useState(false);
+  const pathRef = useRef<HTMLInputElement>(null);
+  const pickingRef = useRef(false);
+  const aliveRef = useRef(true);
+
+  useEffect(() => {
+    aliveRef.current = true;
+    pathRef.current?.focus();
+    return () => { aliveRef.current = false; };
+  }, []);
 
   const gitlabConns = useMemo(
     () => gitConnections.filter((item) => isGitlabKind(item.kind)),
@@ -166,6 +181,30 @@ export function WorkspaceDialog({ lang, onClose, onToast, onCreated }: Props) {
       setNavigated(true);
     } catch (err) {
       setDirError(failText(err));
+    }
+  }
+
+  async function handleBrowse() {
+    if (pickingRef.current || busy) return;
+    pickingRef.current = true;
+    setPicking(true);
+    setError('');
+    try {
+      const res = await (pickFolder ? pickFolder() : pickWorkspaceRoot(lang));
+      if (!aliveRef.current) return;
+      if (res.status === 'picked') {
+        setPathInput(res.path);
+        if (!nameTouched) setName(dirBasename(res.path) || res.path);
+        await handlePathJump(res.path);
+      } else if (res.status === 'unsupported') {
+        setPickUnsupported(true);
+        pathRef.current?.focus();
+      }
+    } catch (err) {
+      if (aliveRef.current) setError(failText(err));
+    } finally {
+      pickingRef.current = false;
+      if (aliveRef.current) setPicking(false);
     }
   }
 
@@ -295,19 +334,35 @@ export function WorkspaceDialog({ lang, onClose, onToast, onCreated }: Props) {
           {(!GIT_IMPORT_ENABLED || tab === 'local') ? (
             <>
               <div className="ns-field">
-                <input
-                  className="ns-input is-mono"
-                  data-testid="next-ws-path"
-                  value={pathInput}
-                  placeholder={t(lang, 'ws_path_placeholder')}
-                  onChange={(ev) => setPathInput(ev.target.value)}
-                  onKeyDown={(ev) => {
-                    if (ev.key === 'Enter') {
-                      ev.preventDefault();
-                      void handlePathJump(pathInput);
-                    }
-                  }}
-                />
+                <div className="ns-path-row">
+                  <input
+                    ref={pathRef}
+                    className="ns-input is-mono"
+                    data-testid="next-ws-path"
+                    value={pathInput}
+                    placeholder={t(lang, 'ws_path_placeholder')}
+                    onChange={(ev) => setPathInput(ev.target.value)}
+                    onKeyDown={(ev) => {
+                      if (ev.key === 'Enter') {
+                        ev.preventDefault();
+                        void handlePathJump(pathInput);
+                      }
+                    }}
+                  />
+                  {pickUnsupported ? null : (
+                    <button
+                      type="button"
+                      className="btn ns-browse-btn"
+                      data-testid="next-ws-browse"
+                      aria-busy={picking}
+                      disabled={picking || busy}
+                      onClick={() => { void handleBrowse(); }}
+                    >
+                      {picking ? <span className="sb-spin" aria-hidden="true" /> : null}
+                      {t(lang, 'ws_browse')}
+                    </button>
+                  )}
+                </div>
                 {dirError ? <div className="ns-inline-err" data-testid="next-ws-dir-error">{dirError}</div> : null}
               </div>
               <div className="ns-dir-browser">
