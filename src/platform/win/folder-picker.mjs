@@ -35,12 +35,63 @@ $OutputEncoding = [Console]::OutputEncoding
 if (-not [Environment]::UserInteractive) { exit ${WIN_PICK_NONINTERACTIVE_EXIT} }
 try {
   Add-Type -AssemblyName System.Windows.Forms
-  $owner = New-Object System.Windows.Forms.Form
-  $owner.ShowInTaskbar = $false
-  $owner.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::None
-  $owner.Opacity = 0
-  $owner.TopMost = $true
-  $owner.Show() | Out-Null
+  # Best effort only: a failure here must never fail the pick itself.
+  # A background thread polls for this process's visible #32770 dialog and makes
+  # it topmost. No WinForms reference (does not compile on pwsh 7), no UI timer.
+  $weftTop = $null
+  try {
+    Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+using System.Text;
+using System.Threading;
+public static class WeftDialogTopmost {
+  delegate bool EnumProc(IntPtr h, IntPtr l);
+  [DllImport("user32.dll")] static extern bool EnumWindows(EnumProc p, IntPtr l);
+  [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
+  [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr h);
+  [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetClassName(IntPtr h, StringBuilder s, int n);
+  [DllImport("user32.dll")] static extern bool SetWindowPos(IntPtr h, IntPtr a, int x, int y, int cx, int cy, uint f);
+  [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr h);
+  [DllImport("kernel32.dll")] static extern uint GetCurrentProcessId();
+  static IntPtr Find(uint myPid) {
+    IntPtr found = IntPtr.Zero;
+    EnumProc cb = delegate(IntPtr h, IntPtr l) {
+      uint pid;
+      GetWindowThreadProcessId(h, out pid);
+      if (pid != myPid || !IsWindowVisible(h)) return true;
+      StringBuilder sb = new StringBuilder(64);
+      GetClassName(h, sb, 64);
+      if (sb.ToString() == "#32770") { found = h; return false; }
+      return true;
+    };
+    EnumWindows(cb, IntPtr.Zero);
+    return found;
+  }
+  static void Run() {
+    try {
+      uint myPid = GetCurrentProcessId();
+      for (int i = 0; i < 150; i++) {
+        IntPtr h = Find(myPid);
+        if (h != IntPtr.Zero) {
+          SetWindowPos(h, new IntPtr(-1), 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0040);
+          SetForegroundWindow(h);
+          return;
+        }
+        Thread.Sleep(80);
+      }
+    } catch (Exception) { }
+  }
+  public static void Start() {
+    Thread t = new Thread(Run);
+    t.IsBackground = true;
+    t.Start();
+  }
+}
+'@
+    [WeftDialogTopmost]::Start()
+    $weftTop = $true
+  } catch { $weftTop = $null }
   $dialog = New-Object System.Windows.Forms.FolderBrowserDialog
   $dialog.ShowNewFolderButton = $true
   $prompt = [Environment]::GetEnvironmentVariable('${WIN_PICK_PROMPT_ENV}')
@@ -50,9 +101,7 @@ try {
     $dialog.RootFolder = [System.Environment+SpecialFolder]::MyComputer
     $dialog.SelectedPath = $start
   }
-  $result = $dialog.ShowDialog($owner)
-  $owner.Close()
-  $owner.Dispose()
+  $result = $dialog.ShowDialog()
   if ($result -eq [System.Windows.Forms.DialogResult]::OK -and $dialog.SelectedPath) {
     [Console]::Out.WriteLine($dialog.SelectedPath)
     exit 0
