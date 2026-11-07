@@ -43,6 +43,8 @@ type Props = {
   /** Sent but not yet answered: show the plain 「思考中」row under the last user message. */
   pending?: boolean;
   pendingText?: string | null;
+  /** The model request failed and the kernel is waiting to retry. pendingText then holds the sentence. */
+  retrying?: boolean;
   actions: ConversationActions;
   stickNonce: number;
   conversationId?: string | null;
@@ -191,6 +193,7 @@ export function Thread({
   running,
   pending = false,
   pendingText = null,
+  retrying = false,
   actions,
   stickNonce,
   conversationId,
@@ -348,7 +351,11 @@ export function Thread({
             <span className="thread-pending-text">{t(lang, 'compacting_context')}</span>
           </div>
         ) : pending ? (
-          <div className="thread-pending" data-testid="next-thread-pending">
+          <div
+            className={retrying ? 'thread-pending is-retrying' : 'thread-pending'}
+            data-testid="next-thread-pending"
+            data-retrying={retrying ? 'true' : undefined}
+          >
             <span className="run-spin" aria-hidden="true"><span /></span>
             <span className="thread-pending-text">{pendingText || t(lang, 'pending_thinking')}</span>
           </div>

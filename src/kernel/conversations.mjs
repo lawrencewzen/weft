@@ -193,6 +193,7 @@ export async function openConversationKernel({
   const snapshotLocks = new Map();
   const allListeners = new Set();
   const baseSettings = kernelSettings(env);
+  const retryMaxAttempts = baseSettings.retry.maxRetries + 1;
   if (typeof getSettings === 'function') {
     try {
       compaction.setPercent(readTriggerPercent(await getSettings()));
@@ -1038,7 +1039,7 @@ export async function openConversationKernel({
     },
     async present(conv, { includeMessages = false } = {}) {
       if (!conv?.harnessId) {
-        return { ...conv, status: 'idle', messages: includeMessages ? [] : undefined, sends: [], live: null };
+        return { ...conv, status: 'idle', messages: includeMessages ? [] : undefined, sends: [], live: null, retryMaxAttempts };
       }
       const view = await submissionView(conv);
       const status = view.status;
@@ -1050,7 +1051,7 @@ export async function openConversationKernel({
       if (includeMessages) {
         messages = (await readTranscript(conv.harnessId)).messages;
       }
-      const out = { ...conv, status, usage, sends: await sendsView(conv), live: this.liveStateFor(conv.id) };
+      const out = { ...conv, status, usage, sends: await sendsView(conv), live: this.liveStateFor(conv.id), retryMaxAttempts };
       if (view.llmError) out.llmError = view.llmError;
       if (includeMessages) out.messages = messages;
       return out;

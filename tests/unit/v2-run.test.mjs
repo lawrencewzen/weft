@@ -280,3 +280,33 @@ test('activeTool is kept while running and cleared otherwise', () => {
   assertRun(idle, 'idle-active-tool');
   assert.equal(idle.activeTool, null);
 });
+
+const retryLive = (attempt, error) => ({ generation: { attempt, retry: { at: attempt, error } } });
+
+test('retry wait: pendingText is a sentence, raw error is not shown, cap comes from the caller', () => {
+  const cases = [
+    ['fetch failed', 'network', '连不上模型服务，正在重试（第 6 次，共 10 次）'],
+    ['request timed out', 'timeout', '模型服务响应超时，正在重试（第 6 次，共 10 次）'],
+    ['429 Too Many Requests', 'busy', '模型服务繁忙，正在重试（第 6 次，共 10 次）'],
+    ['503 Service Unavailable', 'server', '模型服务暂时出错，正在重试（第 6 次，共 10 次）'],
+    ['something odd', 'other', '模型请求失败，正在重试（第 6 次，共 10 次）'],
+  ];
+  for (const [raw, kind, text] of cases) {
+    const view = runStateView({ status: 'running', live: retryLive(5, raw), retryMaxAttempts: 10 });
+    assertRun(view, `retry-${kind}`);
+    assert.deepEqual(view.retry, { attempt: 6, maxAttempts: 10, kind });
+    assert.equal(view.pendingText, text);
+    assert.equal(view.pendingText.includes(raw), false);
+  }
+  const en = runStateView({ status: 'running', live: retryLive(1, 'fetch failed'), retryMaxAttempts: 5, lang: 'en' });
+  assert.equal(en.pendingText, 'Cannot reach the model service, retrying (attempt 2 of 5)');
+});
+
+test('retry wait: absent without a pending retry, outside running, or without a known cap', () => {
+  const none = runStateView({ status: 'running', live: { generation: { attempt: 2 } }, retryMaxAttempts: 10 });
+  assert.equal(none.retry, undefined);
+  assert.equal(none.pendingText, phrase('zh', 'pending_thinking'));
+  assert.equal(runStateView({ status: 'idle', live: retryLive(1, 'fetch failed'), retryMaxAttempts: 10 }).retry, undefined);
+  assert.equal(runStateView({ status: 'running', live: retryLive(1, 'fetch failed') }).retry, undefined);
+  assert.equal(runStateView({ status: 'running', live: null, retryMaxAttempts: 10 }).retry, undefined);
+});

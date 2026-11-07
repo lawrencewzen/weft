@@ -32,6 +32,7 @@ open design/prototype/index.html    # macOS；Windows 直接双击
 | 停止 | 运行中把输入框清空，发送按钮变成停止 |
 | 切模型 | 输入框左下角的模型按钮 |
 | 上下文窗口 | 输入框右下角的圆环百分比；选一个上限或填自定义值（`/providers/{id}/models/{id}/context-window`） |
+| 模型请求在重试 | 打开对话 `c-retrying`（「模型连不上，正在重试」）：等待行显示灰字「连不上模型服务，正在重试（第 6 次，共 10 次）」，一直保持；停止后消失 |
 | 上下文快满 | 打开对话 `c-docs`（「把架构文档的图补上」）会看到输入框顶部的橙色提示条 |
 
 ### 右栏
@@ -110,6 +111,7 @@ open design/prototype/index.html    # macOS；Windows 直接双击
 | `web/proto/mock/subagents.ts` | 子 Agent 预置线程、`subagent:<cid>:<aid>` 推送、派活 / 回报 / 发消息 / 停止 |
 | `web/proto/mock/extensions.ts` | 插件、技能、Git 连接和 GitLab 项目 / 分支的预置数据 |
 | `web/proto/mock/views.ts` | 把内存数据转成前端收到的视图，按语言出文案 |
+| `tests/e2e/proto-retry.spec.mjs` | 重试等待文案、停止；减少动画模式下运行转圈仍在转、面板滑动仍关闭 |
 | `tests/e2e/proto-smoke.spec.mjs` | 冒烟：`file://` 打开、切对话、新建并发消息、流式完成、停止、零网络 / 零控制台报错 |
 | `tests/e2e/proto-right-pane.spec.mjs` | 变更 diff（含「一次点击只发一次请求」）、文件树 / 预览 / 保存 / 409、路径标签、运行产生的变更 |
 | `tests/e2e/proto-agents-strip.spec.mjs` | 子 Agent 状态条、展开/收起、行内展开、停止、派发卡片定位、淡出 |

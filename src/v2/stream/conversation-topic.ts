@@ -109,6 +109,8 @@ type TopicState = {
   running: boolean;
   lastActivityAt: number | null;
   activeTools: Map<string, ActiveTool & { id: string }>;
+  /** A retry wait is on screen. The next event of any kind recomputes so the wait text clears. */
+  retrying: boolean;
 };
 
 export type ConversationTopic = {
@@ -296,6 +298,7 @@ export function attachConversationTopic(hub: EventHub, opts: ConversationTopicOp
         running: false,
         lastActivityAt: null,
         activeTools: new Map(),
+        retrying: false,
       };
       states.set(cid, state);
     }
@@ -857,6 +860,14 @@ export function attachConversationTopic(hub: EventHub, opts: ConversationTopicOp
     if (event === 'tool.end') applyToolEnd(cid, asRecord(data.tool));
     const deltaPath = event === 'message.delta' || event === 'tool.delta';
     noteActivity(cid, deltaPath);
+    {
+      const st = stateOf(cid);
+      if (event === 'retry') st.retrying = true;
+      else if (st.retrying) {
+        st.retrying = false;
+        st.pending.push(ev);
+      }
+    }
     if (event === 'message.delta') {
       await flushPending(cid);
       const messageId = typeof data.messageId === 'string' ? data.messageId : '';
