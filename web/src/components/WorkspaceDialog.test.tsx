@@ -269,6 +269,49 @@ describe('WorkspaceDialog', () => {
     expect(onClose).toHaveBeenCalled();
   });
 
+  describe('typed path', () => {
+    const q = (sel: string) => host?.querySelector<HTMLElement>(sel) ?? null;
+    const create = () => q('[data-testid="next-ws-create"]') as HTMLButtonElement;
+    const pathEl = () => q('[data-testid="next-ws-path"]') as HTMLInputElement;
+
+    async function open() {
+      await act(async () => {
+        root?.render(<WorkspaceDialog lang="zh" onClose={vi.fn()} onToast={vi.fn()} />);
+      });
+    }
+
+    it('create is disabled for an empty path and enabled once a path is typed', async () => {
+      await open();
+      await act(async () => { setInputValue(pathEl(), ''); });
+      expect(create().disabled).toBe(true);
+      await act(async () => { setInputValue(pathEl(), 'D:\\work\\sandbox'); });
+      expect(create().disabled).toBe(false);
+    });
+
+    it('typing a path and clicking create validates it then creates with that path', async () => {
+      await open();
+      await act(async () => { setInputValue(pathEl(), 'D:\\work\\sandbox'); });
+      await act(async () => { create().click(); });
+      expect(api.listWorkspaceDirs).toHaveBeenCalledWith('D:\\work\\sandbox', 'zh');
+      expect(api.createWorkspace).toHaveBeenCalledWith(
+        { name: 'sandbox', source: 'local', path: 'D:\\work\\sandbox' },
+        'zh',
+      );
+    });
+
+    it('typing an invalid path and clicking create shows the error and does not create', async () => {
+      const onClose = vi.fn();
+      await act(async () => {
+        root?.render(<WorkspaceDialog lang="zh" onClose={onClose} onToast={vi.fn()} />);
+      });
+      await act(async () => { setInputValue(pathEl(), 'D:\\invalid'); });
+      await act(async () => { create().click(); });
+      expect(q('[data-testid="next-ws-dir-error"]')?.textContent).toContain('Directory not found: D:\\invalid');
+      expect(api.createWorkspace).not.toHaveBeenCalled();
+      expect(onClose).not.toHaveBeenCalled();
+    });
+  });
+
   describe('browse button', () => {
     const q = (sel: string) => host?.querySelector<HTMLElement>(sel) ?? null;
     const browse = () => q('[data-testid="next-ws-browse"]') as HTMLButtonElement | null;

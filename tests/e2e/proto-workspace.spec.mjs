@@ -129,6 +129,30 @@ test('directory browser supports breadcrumbs, path jumping, and blocked director
   expectClean(state);
 });
 
+test('typed path can be confirmed directly without pressing Enter; invalid path shows an error', async ({ page }) => {
+  const state = await openProto(page);
+  await page.getByTestId('next-ws-new').click();
+  await expect(page.getByTestId('next-ws-create')).toBeDisabled();
+
+  await page.getByTestId('next-ws-path').fill('');
+  await expect(page.getByTestId('next-ws-create')).toBeDisabled();
+
+  await page.getByTestId('next-ws-path').fill('D:\\nonexistent-folder');
+  await expect(page.getByTestId('next-ws-create')).toBeEnabled();
+  await page.getByTestId('next-ws-create').click();
+  await expect(page.getByTestId('next-ws-dir-error')).toBeVisible();
+  await expect(page.getByTestId('next-ws-dialog')).toBeVisible();
+  await expect(page.getByTestId('next-ws-node')).toHaveCount(2);
+
+  await page.getByTestId('next-ws-path').fill('D:\\work\\sandbox\\notes');
+  await page.getByTestId('next-ws-create').click();
+  await expect(page.getByTestId('next-ws-dialog')).toHaveCount(0);
+  await expect(page.getByTestId('next-ws-node')).toHaveCount(3);
+  await expect(page.getByTestId('next-ws-node').filter({ hasText: 'notes' })).toBeVisible();
+
+  expectClean(state);
+});
+
 test.skip('git import picks a project and a branch', async ({ page }) => {
   // Git 导入暂时隐藏
   const state = await openProto(page);

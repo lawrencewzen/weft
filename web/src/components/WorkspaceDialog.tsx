@@ -169,9 +169,9 @@ export function WorkspaceDialog({ lang, onClose, onToast, onCreated, pickFolder 
     }
   }
 
-  async function handlePathJump(rawPath: string) {
+  async function handlePathJump(rawPath: string): Promise<WorkspaceDirs | null> {
     const target = rawPath.trim();
-    if (!target) return;
+    if (!target) return null;
     setDirError('');
     setError('');
     try {
@@ -179,8 +179,10 @@ export function WorkspaceDialog({ lang, onClose, onToast, onCreated, pickFolder 
       setDirs(listed);
       setPathInput(listed.path);
       setNavigated(true);
+      return listed;
     } catch (err) {
       setDirError(failText(err));
+      return null;
     }
   }
 
@@ -212,18 +214,26 @@ export function WorkspaceDialog({ lang, onClose, onToast, onCreated, pickFolder 
     return splitBreadcrumbs(dirs?.path || root);
   }, [dirs?.path, root]);
 
+  const typedPath = pathInput.trim();
+  const pathPending = typedPath !== '' && typedPath !== dirs?.path;
+  const localReady = !busy && typedPath !== '' && (pathPending || (navigated && Boolean(dirs?.selectable)));
   const canCreate = GIT_IMPORT_ENABLED
-    ? (tab === 'git' || (navigated && Boolean(dirs?.selectable) && !busy))
-    : (navigated && Boolean(dirs?.selectable) && !busy);
+    ? (tab === 'git' || localReady)
+    : localReady;
 
   async function submit() {
     if (!GIT_IMPORT_ENABLED || tab === 'local') {
-      if (!dirs || !canCreate) return;
-      const targetPath = dirs.path;
-      const wsName = dirBasename(targetPath) || targetPath;
+      if (!canCreate) return;
       setBusy(true);
       setError('');
       try {
+        let target = dirs;
+        if (pathPending || !target) {
+          target = await handlePathJump(typedPath);
+          if (!target || !target.selectable) return;
+        }
+        const targetPath = target.path;
+        const wsName = dirBasename(targetPath) || targetPath;
         const ws = await createWorkspace({ name: wsName, source: 'local', path: targetPath }, lang);
         writeActiveWorkspace(ws.id);
         onCreated?.(ws);
