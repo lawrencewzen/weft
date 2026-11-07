@@ -191,6 +191,14 @@ class Utf8ViewBinaryReader {
 }
 
 /**
+ * The on-disk reader behind a GBK UTF-8 view, or `reader` itself when it is not
+ * a view. For callers that need the real bytes (byte caps by file encoding).
+ */
+export function unwrapUtf8View(reader) {
+  return reader instanceof Utf8ViewBinaryReader ? reader.inner : reader;
+}
+
+/**
  * Official createReadTool decodes via BinaryReader + UTF-8 TextDecoder.
  * Serve a UTF-8 view of small GBK text files so the read tool sees real Chinese.
  * Images, NULs, and files over GBK_BINARY_VIEW_MAX_BYTES stay on-disk bytes.

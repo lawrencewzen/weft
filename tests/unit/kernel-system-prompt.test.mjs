@@ -15,13 +15,18 @@ import {
 import {
   AGENTS_BYTE_LIMIT,
   AGENTS_TRUNCATION_LINE,
+  GBK_NOTE_LINE,
   PREAMBLE_TEXT,
   RULES_TEXT,
   clipUtf8Bytes,
   environmentText,
+  renderAgentsBody,
+  systemPromptSections,
   isChatServiceCwd,
   shellLine,
 } from '../../src/kernel/system-prompt.mjs';
+import iconv from 'iconv-lite';
+import { clipGbkBytes, detectTruncated } from '../../src/platform/win/text-clip.mjs';
 import { createSqliteStore } from '../../src/store/sqlite.mjs';
 import { agentShellKind } from '../../src/platform/win/shell.mjs';
 import { ROOT } from './_root.mjs';
@@ -50,6 +55,11 @@ function projectBlock(content) {
   return `<project_instructions path="AGENTS.md">\n${body}</project_instructions>`;
 }
 
+const GBK_LINE = 'Existing files may be GBK with CRLF line endings.';
+function truncatedBlock(kept) {
+  return `<project_instructions path="AGENTS.md">\n${kept}\n${AGENTS_TRUNCATION_LINE}\n</project_instructions>`;
+}
+
 const SHELL_TOOL = agentShellKind();
 const SHELL_LINE = SHELL_TOOL === 'powershell'
   ? 'Shell: PowerShell (use the powershell tool)'
@@ -59,6 +69,7 @@ function environmentBlock({ cwd } = {}) {
   const lines = [];
   if (cwd) lines.push(`Working directory: ${cwd}`);
   lines.push(`Platform: ${platformName()}`);
+  if (process.platform === 'win32') lines.push(GBK_LINE);
   lines.push(SHELL_LINE);
   return lines.join('\n');
 }
@@ -343,6 +354,7 @@ test('rendered main-agent prompt: sections, workspaces, AGENTS.md, and no projec
     assert.equal(
       nonePrompt
         .replace(/Platform: .*/, 'Platform: __PLATFORM__')
+        .replace(`\n${GBK_LINE}`, '')
         .replace(SHELL_LINE, 'Shell: bash (use the bash tool)'),
       frozen,
     );
@@ -447,4 +459,167 @@ test('rendered sub-agent prompt has environment and project context only', { tim
     }
     await rm(dataDir, { recursive: true, force: true });
   }
+});
+
+async function withDetect(on, use) {
+  const previous = process.env.WEFT_TEXT_ENCODING_DETECT;
+  if (on) process.env.WEFT_TEXT_ENCODING_DETECT = '1';
+  else delete process.env.WEFT_TEXT_ENCODING_DETECT;
+  try {
+    return await use();
+  } finally {
+    if (previous === undefined) delete process.env.WEFT_TEXT_ENCODING_DETECT;
+    else process.env.WEFT_TEXT_ENCODING_DETECT = previous;
+  }
+}
+
+function renderSection(key, input, options) {
+  const found = systemPromptSections(options).find((item) => item.key === key);
+  assert.ok(found, `section ${key}`);
+  return found.render(input, undefined);
+}
+
+test('GBK note: only the Windows environment section carries it, rest is verbatim', async () => {
+  assert.equal(GBK_NOTE_LINE, 'Existing files may be GBK with CRLF line endings.');
+  const input = { agent: { tools: [{ name: 'powershell' }] }, env: { cwd: undefined } };
+  const win = await renderSection('environment', input, { platform: 'win32' });
+  assert.equal(win, [
+    'Platform: Windows',
+    'Existing files may be GBK with CRLF line endings.',
+    'Shell: PowerShell (use the powershell tool)',
+  ].join('\n'));
+  for (const [platform, label] of [['linux', 'Linux'], ['darwin', 'macOS']]) {
+    const text = await renderSection('environment', input, { platform });
+    assert.equal(text, `Platform: ${label}\nShell: PowerShell (use the powershell tool)`);
+    assert.equal(text.includes('GBK'), false);
+  }
+  assert.equal(environmentText(input, { platform: 'win32' }).replace(`\n${GBK_NOTE_LINE}`, ''),
+    environmentText(input, { platform: 'win32' }).split('\n').filter((line) => line !== GBK_NOTE_LINE).join('\n'));
+  // Other sections do not depend on the platform.
+  const main = { agent: { tools: [{ name: 'delegate' }] } };
+  for (const key of ['preamble', 'rules']) {
+    assert.equal(await renderSection(key, main, { platform: 'win32' }), await renderSection(key, main, { platform: 'linux' }));
+  }
+});
+
+function gbk(text) {
+  return iconv.encode(text, 'gbk');
+}
+
+test('rendered prompt: GBK AGENTS.md under the limit decodes with no U+FFFD', { timeout: 120000 }, async () => {
+  await withDetect(true, async () => {
+    const dataDir = await mkdtemp(path.join(tmpdir(), 'piw-prompt-gbk-'));
+    let opened = null;
+    try {
+      opened = await openKernel(dataDir);
+      const { store, kernel } = opened;
+      const gbkProj = await makeProject(store, kernel, dataDir, 'gbk-small');
+      const text = '# 项目约定\r\n- 回答用中文\r\n- 文件可能是 GBK 编码\r\n';
+      await writeFile(path.join(gbkProj.wsPath, 'AGENTS.md'), gbk(text));
+      await say(kernel, store, gbkProj.conv, 'gbk');
+      const prompt = (await rendered(kernel, gbkProj.conv.harnessId)).prompt;
+      assert.equal(prompt, mainPrompt({ cwd: gbkProj.root, project: projectBlock(text), skills: await buildSkillPrompt(SKILL_DIRS, {}) }));
+      assert.equal(prompt.includes('\uFFFD'), false);
+      assert.equal(prompt.includes('回答用中文'), true);
+    } finally {
+      if (opened) {
+        await opened.kernel.close();
+        opened.store.close();
+      }
+      await rm(dataDir, { recursive: true, force: true });
+    }
+  });
+});
+
+test('rendered prompt: GBK AGENTS.md over 32KB is cut on a character boundary', { timeout: 120000 }, async () => {
+  await withDetect(true, async () => {
+    const dataDir = await mkdtemp(path.join(tmpdir(), 'piw-prompt-gbk-big-'));
+    const skills = await buildSkillPrompt(SKILL_DIRS, {});
+    let opened = null;
+    try {
+      opened = await openKernel(dataDir);
+      const { store, kernel } = opened;
+      // 'a' then 2-byte characters: the pair that starts at byte 32767 straddles the cut.
+      // U+4E02 is 0x81 0x40, whose trail byte looks like ASCII '@'.
+      const cases = [
+        ['gbk-straddle', 'a', '\u4E02'],
+        ['gbk-aligned', '', '\u4E02'],
+        ['gbk-mixed', 'a', '中文镕〇'],
+      ];
+      for (const [name, prefix, unit] of cases) {
+        const proj = await makeProject(store, kernel, dataDir, name);
+        let body = prefix;
+        while (gbk(body).length < AGENTS_BYTE_LIMIT + 200) body += unit;
+        body += 'TAIL_AFTER_CUT';
+        const bytes = gbk(body);
+        await writeFile(path.join(proj.wsPath, 'AGENTS.md'), bytes);
+        await say(kernel, store, proj.conv, name);
+        const prompt = (await rendered(kernel, proj.conv.harnessId)).prompt;
+        assert.equal(prompt.includes('\uFFFD'), false, name);
+        assert.equal(prompt.includes('TAIL_AFTER_CUT'), false, name);
+        const m = prompt.match(/<project_instructions path="AGENTS.md">\n([\s\S]*)\n\[AGENTS.md truncated at 32KB\]\n<\/project_instructions>/);
+        assert.ok(m, `${name}: truncation line present`);
+        const kept = m[1];
+        assert.equal(body.startsWith(kept), true, name);
+        const keptBytes = gbk(kept).length;
+        assert.equal(keptBytes <= AGENTS_BYTE_LIMIT, true, `${name}: ${keptBytes}`);
+        assert.equal(keptBytes >= AGENTS_BYTE_LIMIT - 3, true, `${name}: ${keptBytes}`);
+        assert.equal(prompt, mainPrompt({ cwd: proj.root, project: truncatedBlock(kept), skills }), name);
+      }
+    } finally {
+      if (opened) {
+        await opened.kernel.close();
+        opened.store.close();
+      }
+      await rm(dataDir, { recursive: true, force: true });
+    }
+  });
+});
+
+test('rendered prompt: UTF-8 Chinese AGENTS.md over 32KB with a half character is not taken for GBK', { timeout: 120000 }, async () => {
+  for (const on of [true, false]) {
+    await withDetect(on, async () => {
+      const dataDir = await mkdtemp(path.join(tmpdir(), 'piw-prompt-utf8-big-'));
+      const skills = await buildSkillPrompt(SKILL_DIRS, {});
+      let opened = null;
+      try {
+        opened = await openKernel(dataDir);
+        const { store, kernel } = opened;
+        const proj = await makeProject(store, kernel, dataDir, 'utf8-big');
+        // 3-byte characters; the 'a' prefix makes the cut land inside one.
+        const bytes = Buffer.from(`a${'汉字中文'.repeat(9000)}TAIL_AFTER_CUT`, 'utf8');
+        await writeFile(path.join(proj.wsPath, 'AGENTS.md'), bytes);
+        await say(kernel, store, proj.conv, 'utf8 big');
+        const prompt = (await rendered(kernel, proj.conv.harnessId)).prompt;
+        const kept = clipUtf8Bytes(bytes.subarray(0, AGENTS_BYTE_LIMIT + 4), AGENTS_BYTE_LIMIT).toString('utf8');
+        assert.equal(kept.includes('\uFFFD'), false);
+        assert.equal(Buffer.byteLength(kept) <= AGENTS_BYTE_LIMIT, true);
+        assert.equal(prompt, mainPrompt({ cwd: proj.root, project: truncatedBlock(kept), skills }), `detect ${on}`);
+        assert.equal(prompt.includes('\uFFFD'), false);
+      } finally {
+        if (opened) {
+          await opened.kernel.close();
+          opened.store.close();
+        }
+        await rm(dataDir, { recursive: true, force: true });
+      }
+    });
+  }
+});
+
+test('detectTruncated and clipGbkBytes ignore half characters at the cut', async () => {
+  const limit = 100;
+  const head = Buffer.concat([Buffer.from('a'), gbk('\u4E02'.repeat(60))]).subarray(0, limit + 4);
+  assert.equal(detectTruncated(head), 'gbk');
+  const clipped = clipGbkBytes(head, limit);
+  assert.equal(clipped.length, limit - 1);
+  assert.equal(new TextDecoder('gbk').decode(clipped).includes('\uFFFD'), false);
+  // GB18030 four-byte character straddling the cut.
+  const four = Buffer.concat([Buffer.alloc(limit - 2, 0x61), Buffer.from([0x81, 0x30, 0x81, 0x30]), Buffer.from('xyz')]);
+  assert.equal(clipGbkBytes(four, limit).length, limit - 2);
+  const utf8Head = Buffer.from(`a${'汉'.repeat(50)}`, 'utf8').subarray(0, 100);
+  assert.equal(detectTruncated(utf8Head), 'utf8');
+  assert.equal(detectTruncated(Buffer.from('plain ascii')), 'utf8');
+  // Not truncated through renderAgentsBody: empty stays omitted, UTF-8 passes through.
+  assert.equal(renderAgentsBody(Buffer.from(' \n'), false), undefined);
 });

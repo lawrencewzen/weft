@@ -13,7 +13,8 @@
 import path from 'node:path';
 import { realpathSync } from 'node:fs';
 import { section } from '@earendil-works/pi-durable';
-import { decodeWorkspaceBytes } from './workspace-text.mjs';
+import { decode, detect, isTextEncodingDetectEnabled, unwrapUtf8View } from '../platform/win/text-encoding.mjs';
+import { clipGbkBytes, detectTruncated } from '../platform/win/text-clip.mjs';
 
 export const PREAMBLE_TEXT = 'You are a coding assistant running inside Weft. Help users inspect files, run commands, and modify code.';
 export const RULES_TEXT = [
@@ -22,9 +23,10 @@ export const RULES_TEXT = [
 ].join('\n');
 
 export const AGENTS_FILE = 'AGENTS.md';
-/** Prompt cap. The file is cut on a UTF-8 boundary at or below this many bytes. */
+/** Prompt cap. The file is cut on a character boundary (UTF-8 or GBK) at or below this many bytes. */
 export const AGENTS_BYTE_LIMIT = 32 * 1024;
 export const AGENTS_TRUNCATION_LINE = '[AGENTS.md truncated at 32KB]';
+export const GBK_NOTE_LINE = 'Existing files may be GBK with CRLF line endings.';
 
 const PLATFORM_LABEL = {
   darwin: 'macOS',
@@ -93,11 +95,12 @@ export function shellLine(tools) {
   return '';
 }
 
-export function environmentText(input, { dataDir } = {}) {
+export function environmentText(input, { dataDir, platform = process.platform } = {}) {
   const lines = [];
   const cwd = projectCwd(input, { dataDir });
   if (cwd) lines.push(`Working directory: ${cwd}`);
-  lines.push(`Platform: ${platformLabel()}`);
+  lines.push(`Platform: ${platformLabel(platform)}`);
+  if (platform === 'win32') lines.push(GBK_NOTE_LINE);
   const shell = shellLine(input?.agent?.tools);
   if (shell) lines.push(shell);
   return lines.join('\n');
@@ -127,11 +130,27 @@ export function clipUtf8Bytes(bytes, limit = AGENTS_BYTE_LIMIT) {
   return buf.subarray(0, start + need);
 }
 
+/**
+ * AGENTS.md bytes to put in the prompt, and the encoding to decode them with.
+ * `buf` is the whole file, or (truncated) its first AGENTS_BYTE_LIMIT + 4 bytes.
+ * With detection off this stays UTF-8 only. A cut head is detected without its
+ * half-character tail, then clipped on a boundary of the detected encoding.
+ */
+function clipAgentsBytes(buf, truncated) {
+  if (!isTextEncodingDetectEnabled()) {
+    return { bytes: truncated ? clipUtf8Bytes(buf, AGENTS_BYTE_LIMIT) : buf, enc: 'utf8' };
+  }
+  if (!truncated) return { bytes: buf, enc: detect(buf) };
+  const enc = detectTruncated(buf);
+  const bytes = enc === 'gbk' ? clipGbkBytes(buf, AGENTS_BYTE_LIMIT) : clipUtf8Bytes(buf, AGENTS_BYTE_LIMIT);
+  return { bytes, enc };
+}
+
 /** project_context inner text. Empty source omits the section (returns undefined). */
 export function renderAgentsBody(bytes, truncated) {
   const buf = Buffer.isBuffer(bytes) ? bytes : Buffer.from(bytes ?? []);
-  const clipped = truncated ? clipUtf8Bytes(buf, AGENTS_BYTE_LIMIT) : buf;
-  const text = decodeWorkspaceBytes(clipped);
+  const { bytes: clipped, enc } = clipAgentsBytes(buf, truncated);
+  const text = decode(clipped, enc);
   if (!truncated && text.trim() === '') return undefined;
   const body = truncated
     ? `${text.endsWith('\n') ? text : `${text}\n`}${AGENTS_TRUNCATION_LINE}\n`
@@ -149,7 +168,8 @@ async function loadAgentsBytes(env, context) {
     const opened = await env.openBinaryReader(AGENTS_FILE, undefined, context);
     if (!opened?.ok) return null;
     try {
-      const read = await opened.value.read(0, AGENTS_BYTE_LIMIT + 4, context);
+      // A small GBK file is opened as a UTF-8 view; the cap is on the file's own bytes.
+      const read = await unwrapUtf8View(opened.value).read(0, AGENTS_BYTE_LIMIT + 4, context);
       if (!read?.ok) return null;
       return { bytes: Buffer.from(read.value), truncated: true };
     } finally {
@@ -178,11 +198,11 @@ async function projectContext(input, context, options) {
 }
 
 /** preamble, rules, environment, project_context. skills stays last in the extension. */
-export function systemPromptSections({ dataDir } = {}) {
+export function systemPromptSections({ dataDir, platform } = {}) {
   return [
     section('preamble', (input) => (isMainAgent(input?.agent) ? PREAMBLE_TEXT : undefined), { tag: false }),
     section('rules', (input) => (isMainAgent(input?.agent) ? RULES_TEXT : undefined)),
-    section('environment', (input) => environmentText(input, { dataDir })),
+    section('environment', (input) => environmentText(input, { dataDir, platform })),
     section('project_context', (input, context) => projectContext(input, context, { dataDir })),
   ];
 }
