@@ -41,6 +41,7 @@ import {
   summaryOf,
   toolValue,
 } from './views';
+import { mockPathname } from './mockPath';
 import { MOCK_AVAILABLE_PROVIDERS, MOCK_CATALOG_MODELS } from './piCatalog';
 import { sortAvailableProviders } from '../../src/data/providerFormat';
 import { clampThinkingLevel, THINKING_LEVEL_ORDER, type ThinkingLevel } from '../../src/data/composerModel';
@@ -1081,7 +1082,7 @@ export function handleMockRequest(
   } catch {
     return fail(400, 'bad url');
   }
-  const path = url.pathname.replace(/\/+$/, '') || '/';
+  const path = mockPathname(url).replace(/\/+$/, '') || '/';
   const method = String(init?.method || 'GET').toUpperCase();
   const body = readBody(init);
   const lang = langOf(url);

@@ -260,9 +260,10 @@ export function CenterPane({
         onContinue={actions.continueRun}
         pending={waitingForAgent(shownItems, {
           running: conversation.run.status === 'running',
-          pending: optimistic.sending,
+          pending: optimistic.sending || Boolean(conversation.run.retry),
         })}
         pendingText={conversation.run.pendingText}
+        retrying={Boolean(conversation.run.retry)}
         actions={actions}
         stickNonce={stickNonce}
         conversationId={cid}

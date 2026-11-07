@@ -27,7 +27,10 @@ export type PresentedConversation = {
   live?: {
     compactions?: Array<{ trigger?: unknown }> | null;
     compactionFailure?: { trigger?: unknown; error?: unknown } | null;
+    generation?: { attempt?: unknown; retry?: { at?: unknown; error?: unknown } | null } | null;
   } | null;
+  /** Attempts per model call from the kernel retry settings. */
+  retryMaxAttempts?: unknown;
   messages?: ThreadMessage[] | null;
   modelSourceId?: unknown;
   modelId?: unknown;
@@ -115,6 +118,7 @@ export async function conversationSnapshot({
     lang,
     hasWorkspace: Boolean(presented?.workspaceId),
     live: presented?.live,
+    retryMaxAttempts: presented?.retryMaxAttempts,
   });
   const thread = await buildThread(messages, {
     lang,
