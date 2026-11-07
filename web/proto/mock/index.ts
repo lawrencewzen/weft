@@ -1,6 +1,7 @@
 import { createDb } from './db';
 import { createHub, type MockHub } from './hub';
 import { mockResponse } from './http';
+import { mockPathname } from './mockPath';
 import { readTopic } from './topics';
 import type { Lang } from './types';
 
@@ -19,7 +20,7 @@ function installFetch(db: ReturnType<typeof createDb>, hub: MockHub): void {
         : input.url;
     let path = '';
     try {
-      path = new URL(raw, window.location.href).pathname;
+      path = mockPathname(new URL(raw, window.location.href));
     } catch {
       path = '';
     }
