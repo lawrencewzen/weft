@@ -26,7 +26,8 @@ import { createSqliteStore } from '../../src/store/sqlite.mjs';
 import { ROOT } from './_root.mjs';
 
 const DELEGATE_LEAD = 'Use this for independent tasks that can run on their own. Do simple work yourself.';
-const SKILL_DIRS = [path.join(ROOT, 'skills')];
+// Intranet ships no bundled skills, so the prompt test reads fixtures.
+const SKILL_DIRS = [path.join(import.meta.dirname, 'fixtures', 'skills')];
 
 function platformName() {
   if (process.platform === 'darwin') return 'macOS';
