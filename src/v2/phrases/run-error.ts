@@ -20,6 +20,7 @@ export function runErrorMessage(lang: Lang, reason: unknown, detail = ''): strin
   if (key === 'interrupted') return phrase(lang, 'run_err_interrupted');
   if (key === 'restart_limit') return phrase(lang, 'run_err_restart_limit');
   if (key === 'faulted') return phrase(lang, 'run_err_faulted');
+  if (key === 'model_error' && /Model stream idle timeout/i.test(String(detail ?? ''))) return phrase(lang, 'run_err_stream_idle');
   if (key === 'model_error') return phrase(lang, 'run_err_model', { detail: String(detail ?? '') });
   return '';
 }

@@ -15,6 +15,7 @@ import { thinkingLevelMapFromSupportedLevels } from '../core/thinking-level.mjs'
 import { contextWindowFromEnv } from '../core/usage.mjs';
 import { normalizeProvidersV3 } from '../core/provider-config.mjs';
 import { normalizeHttpUrl } from '../core/model-sources.mjs';
+import { withStreamIdle } from './stream-idle.mjs';
 
 /** Request default when the API requires a limit and the catalog has none. */
 export const DEFAULT_MAX_OUTPUT_TOKENS = 64000;
@@ -442,7 +443,7 @@ export function createKernelModels({
       drop(id);
       return;
     }
-    models.setProvider(provider);
+    models.setProvider(withStreamIdle(provider, { env }));
     fingerprints.set(id, fingerprint);
     if (typeof models.refresh === 'function' && entry.kind === 'custom') {
       await models.refresh({ providers: [id], allowNetwork: false });
