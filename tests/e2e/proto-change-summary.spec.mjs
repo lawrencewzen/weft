@@ -10,13 +10,17 @@ test('change summary card: title, sorting, collapse threshold, expand/collapse, 
   const card = page.getByTestId('next-change-summary');
   await expect(card).toBeVisible();
 
-  // 1. Title line with icon, count, totals, and "查看变更 ›"
+  // 0. 默认折叠成一行，没有文件列表。
+  await expect(card.getByTestId('next-change-summary-row')).toHaveCount(0);
+  await card.getByTestId('next-change-summary-toggle').click();
+
+  // 1. Title line with icon, count, totals, and "查看 ›"
   const head = card.getByTestId('next-change-summary-head');
   await expect(head).toBeVisible();
-  await expect(head.locator('.change-summary-head-title')).toHaveText('改了 8 个文件');
+  await expect(head.locator('.change-summary-head-title')).toHaveText('8 个文件已更改');
   await expect(head.locator('.change-summary-head-sum .add')).toHaveText('+73');
   await expect(head.locator('.change-summary-head-sum .del')).toHaveText('−18');
-  await expect(head.locator('.change-summary-head-view')).toHaveText('查看变更 ›');
+  await expect(head.locator('.change-summary-head-view')).toHaveText('查看 ›');
 
   // 2. Rows sorted by change volume descending. 8 files > 6 threshold, so first 5 are shown.
   const rows = card.getByTestId('next-change-summary-row');
@@ -60,7 +64,7 @@ test('change summary card: title, sorting, collapse threshold, expand/collapse, 
   // 8. Click header line opens right pane on changes tab
   await page.getByTestId('next-right-tab-files').click();
   await expect(page.locator('.right-tabs-bar .tab-btn.active')).toContainText('文件');
-  await head.click();
+  await head.getByTestId('next-change-summary-view').click();
   await expect(page.locator('.right-tabs-bar .tab-btn.active')).toContainText('变更');
 
   expectClean(state);
