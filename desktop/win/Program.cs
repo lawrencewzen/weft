@@ -51,10 +51,11 @@ namespace Weft.Desktop
         private bool lastMaximized;
 
         private const int WM_NCCALCSIZE = 0x0083;
-        private const int WM_NCHITTEST = 0x0084;
+        private const int WM_NCLBUTTONDOWN = 0x00A1;
         private const int HTTOP = 12, HTTOPLEFT = 13, HTTOPRIGHT = 14;
-        private const int TopGripPx = 2; // keep a thin non-client strip so the top edge can still be dragged to resize
+        private const int TopGripPx = 4; // overlay strip above the web view that takes over top-edge resizing
         private const uint SWP_FRAMECHANGED = 0x0037; // NOMOVE|NOSIZE|NOZORDER|NOACTIVATE|FRAMECHANGED
+        private const int DWMWA_WINDOW_CORNER_PREFERENCE = 33, DWMWCP_ROUND = 2;
 
         [StructLayout(LayoutKind.Sequential)]
         private struct RECT { public int Left, Top, Right, Bottom; }
@@ -64,6 +65,11 @@ namespace Weft.Desktop
         [DllImport("user32.dll")] private static extern int GetSystemMetrics(int index);
         [DllImport("user32.dll")] private static extern int GetSystemMetricsForDpi(int index, uint dpi);
         [DllImport("user32.dll")] private static extern uint GetDpiForWindow(IntPtr h);
+        [DllImport("user32.dll")] private static extern bool ReleaseCapture();
+        [DllImport("user32.dll")] private static extern bool IsZoomed(IntPtr h);
+        [DllImport("user32.dll")] private static extern IntPtr SendMessage(IntPtr h, int msg, IntPtr w, IntPtr l);
+        [DllImport("user32.dll")] private static extern bool SetLayeredWindowAttributes(IntPtr h, uint key, byte alpha, uint flags);
+        [DllImport("dwmapi.dll")] private static extern int DwmSetWindowAttribute(IntPtr h, int attr, ref int value, int size);
 
         private int ResizeFrame(bool vertical)
         {
@@ -79,38 +85,95 @@ namespace Weft.Desktop
             }
         }
 
-        // Remove only the top title bar. Left, right and bottom keep the system's invisible resize borders and shadow.
+        // Remove only the top title bar: the client area starts at the very top of the window.
+        // Left, right and bottom keep the system's invisible resize borders and shadow.
+        // The top non-client height must be exactly 0; any leftover makes Windows 10 still paint a caption above the page.
         protected override void WndProc(ref Message m)
         {
             if (customFrame && m.Msg == WM_NCCALCSIZE && m.WParam != IntPtr.Zero)
             {
                 int originalTop = Marshal.ReadInt32(m.LParam, 4);
-                base.WndProc(ref m); // default shrinks left, right, bottom (and top)
-                bool max = WindowState == FormWindowState.Maximized;
+                base.WndProc(ref m); // default shrinks all four sides (the top by frame + caption)
+                // Ask Windows, not WindowState: Form only updates WindowState after this message.
                 // Maximized windows overhang the screen by the frame width; push the top down by it so nothing is clipped.
-                Marshal.WriteInt32(m.LParam, 4, originalTop + (max ? ResizeFrame(true) : TopGripPx));
+                Marshal.WriteInt32(m.LParam, 4, originalTop + (IsZoomed(Handle) ? ResizeFrame(true) : 0));
                 m.Result = IntPtr.Zero;
                 return;
             }
-            if (customFrame && m.Msg == WM_NCHITTEST && WindowState == FormWindowState.Normal)
-            {
-                long l = m.LParam.ToInt64();
-                int x = (short)(l & 0xFFFF), y = (short)((l >> 16) & 0xFFFF);
-                RECT r;
-                if (GetWindowRect(Handle, out r) && y >= r.Top && y < r.Top + TopGripPx && x >= r.Left && x < r.Right)
-                {
-                    int corner = ResizeFrame(false);
-                    m.Result = (IntPtr)(x < r.Left + corner ? HTTOPLEFT : x >= r.Right - corner ? HTTOPRIGHT : HTTOP);
-                    return;
-                }
-            }
-            base.WndProc(ref m);
+            inWndProc++;
+            try { base.WndProc(ref m); } finally { inWndProc--; }
+            return;
         }
+
+        // Leaving maximized, Form re-applies a remembered size computed as if the caption existed, so the
+        // window grew by one caption height every time. While handling window messages keep the bounds Windows chose.
+        private int inWndProc;
+        protected override void SetBoundsCore(int x, int y, int w, int h, BoundsSpecified sp)
+        {
+            RECT r;
+            if (customFrame && inWndProc > 0 && sp == BoundsSpecified.All && IsHandleCreated && WindowState == FormWindowState.Normal && GetWindowRect(Handle, out r))
+            {
+                x = r.Left; y = r.Top; w = r.Right - r.Left; h = r.Bottom - r.Top;
+            }
+            base.SetBoundsCore(x, y, w, h, sp);
+        }
+
+        // With no top non-client area the web view covers the top edge, so a thin strip above it takes over resizing.
+        private sealed class TopGrip : Control
+        {
+            private readonly MainForm owner;
+            internal TopGrip(MainForm owner)
+            {
+                this.owner = owner;
+                SetStyle(ControlStyles.Opaque | ControlStyles.UserPaint, true);
+                Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+                Visible = false;
+            }
+            // Layered at ~0% opacity: invisible, but it still receives the mouse, so the page shows through.
+            protected override CreateParams CreateParams
+            {
+                get { var cp = base.CreateParams; cp.ExStyle |= 0x00080000; return cp; } // WS_EX_LAYERED
+            }
+            protected override void OnHandleCreated(EventArgs e)
+            {
+                base.OnHandleCreated(e);
+                SetLayeredWindowAttributes(Handle, 0, 1, 0x2); // LWA_ALPHA
+            }
+            protected override void OnPaintBackground(PaintEventArgs e) { }
+            protected override void OnPaint(PaintEventArgs e) { }
+            private int Hit(int x)
+            {
+                int corner = owner.ResizeFrame(false);
+                return x < corner ? HTTOPLEFT : x >= Width - corner ? HTTOPRIGHT : HTTOP;
+            }
+            protected override void OnMouseMove(MouseEventArgs e)
+            {
+                base.OnMouseMove(e);
+                int h = Hit(e.X);
+                Cursor = h == HTTOP ? Cursors.SizeNS : h == HTTOPLEFT ? Cursors.SizeNWSE : Cursors.SizeNESW;
+            }
+            protected override void OnMouseDown(MouseEventArgs e)
+            {
+                base.OnMouseDown(e);
+                if (e.Button != MouseButtons.Left) return;
+                ReleaseCapture();
+                SendMessage(owner.Handle, WM_NCLBUTTONDOWN, (IntPtr)Hit(e.X), IntPtr.Zero);
+            }
+        }
+        private readonly TopGrip grip;
 
         private void UseCustomFrame()
         {
             customFrame = true;
+            grip.Visible = WindowState == FormWindowState.Normal;
             SetWindowPos(Handle, IntPtr.Zero, 0, 0, 0, 0, SWP_FRAMECHANGED);
+        }
+
+        protected override void OnHandleCreated(EventArgs e)
+        {
+            base.OnHandleCreated(e);
+            // Windows 11 rounded corners; Windows 10 rejects the attribute and that is fine.
+            try { int round = DWMWCP_ROUND; DwmSetWindowAttribute(Handle, DWMWA_WINDOW_CORNER_PREFERENCE, ref round, sizeof(int)); } catch { }
         }
 
         protected override void OnSizeChanged(EventArgs e)
@@ -125,6 +188,7 @@ namespace Weft.Desktop
             if (max == lastMaximized && !pushForce) return;
             lastMaximized = max;
             pushForce = false;
+            grip.Visible = customFrame && !max;
             var core = web.CoreWebView2;
             if (!customFrame || core == null) return;
             core.ExecuteScriptAsync(max
@@ -186,7 +250,11 @@ namespace Weft.Desktop
             MinimumSize = new Size(800, 560);
             StartPosition = FormStartPosition.CenterScreen;
             try { Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath); } catch { }
+            grip = new TopGrip(this);
+            grip.Bounds = new Rectangle(0, 0, ClientSize.Width, TopGripPx);
             Controls.Add(web);
+            Controls.Add(grip);
+            grip.BringToFront(); // overlays the top edge of the web view
 
             var waiter = new Thread(() =>
             {
