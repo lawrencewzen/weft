@@ -16,6 +16,7 @@ import type { components } from '../../../src/v2/contract.gen';
 import { AgentsStrip } from './AgentsStrip';
 import { AskPanel } from './AskPanel';
 import { Composer } from './Composer';
+import { useEscStop } from '../data/escStop';
 import { StallStrip } from './StallStrip';
 import { StatusBar } from './StatusBar';
 import { Thread } from './Thread';
@@ -74,6 +75,8 @@ export function CenterPane({
   const isDraft = isDraftProp || (!cid && Boolean(workspaceId));
   const { store } = useSession();
   const { conversation, items, toolsById, changes, missing, actions } = useConversation(cid);
+  // Esc 停止：只在打开了真实对话（非草稿）且可停止时挂；和输入框停止按钮同一个 actions.stop
+  useEscStop(!isDraft && Boolean(cid) && Boolean(conversation?.run.canStop), actions.stop);
   const [showDelayedLoading, setShowDelayedLoading] = useState(false);
 
   useEffect(() => {
