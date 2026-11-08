@@ -21,3 +21,7 @@ node_modules
 
 # Portable release output (zip and the downloaded node.exe stay out of git)
 /dist/
+
+# .NET build output of the Windows desktop shell
+/desktop/win/bin/
+/desktop/win/obj/

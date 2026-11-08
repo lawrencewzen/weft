@@ -6,6 +6,7 @@ import { SessionProvider } from './data/session';
 import { t } from './i18n';
 import { parseRoute, viewRouteWhileSettings, type AppRoute } from './route';
 import { AppShell } from './components/AppShell';
+import { WindowControls } from './components/WindowControls';
 import type { AboutService } from './components/settings/AboutPage';
 
 function usePathname(): string {
@@ -15,6 +16,17 @@ function usePathname(): string {
 }
 
 export function App() {
+  const [lang, setLang] = useState(getPreferredLang);
+  useEffect(() => subscribePrefs(() => setLang(getPreferredLang())), []);
+  return (
+    <>
+      <AppBody />
+      <WindowControls lang={lang} />
+    </>
+  );
+}
+
+function AppBody() {
   const pathname = usePathname();
   const parsed = parseRoute(pathname);
   const backgroundRef = useRef<AppRoute | null>(parsed.name === 'settings' ? null : parsed);

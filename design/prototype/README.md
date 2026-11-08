@@ -12,6 +12,7 @@ npm run build:proto       # 生成 design/prototype/index.html（单文件，构
 open design/prototype/index.html    # macOS；Windows 直接双击
 ```
 
+- 桌面壳布局预览（内网版）：打开 `index.html?shell=1`，页面按 Weft.exe 无标题栏的样子显示窗口按钮和拖动区；按钮点了没反应。
 - 单文件：JS、CSS、品牌图标全部内联，用 `file://` 打开，不发任何网络请求。
 - 路由用 hash（`index.html#/c/<id>`），因为 `file://` 下不能 pushState 到别的路径。
 - 数据只在内存里：刷新页面或点右下角「重置原型数据」都会回到预置状态。

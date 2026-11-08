@@ -17,6 +17,10 @@ installMockBackend();
 applyDocumentPrefs({ lang: getPreferredLang() });
 
 document.documentElement.setAttribute('data-proto', '1');
+// `?shell=1` previews the desktop-shell layout (window buttons, drag regions). The buttons do nothing here.
+if (new URLSearchParams(window.location.search).get('shell') === '1') {
+  document.documentElement.setAttribute('data-desktop-shell', '1');
+}
 
 const root = document.getElementById('root');
 if (!root) throw new Error('#root missing');
