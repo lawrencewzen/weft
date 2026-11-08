@@ -440,9 +440,40 @@ namespace Weft.Desktop
         {
             base.OnHandleCreated(e);
             LayoutSplash();
+            ApplyWindowIcons();
             // Windows 11 rounded corners; Windows 10 rejects the attribute and that is fine.
             try { int round = DWMWCP_ROUND; DwmSetWindowAttribute(Handle, DWMWA_WINDOW_CORNER_PREFERENCE, ref round, sizeof(int)); } catch { }
         }
+
+        private const int WM_SETICON = 0x0080;
+
+        // Form.Icon carries one size only. Pick the 16/32-class frame for the title bar and taskbar
+        // (ICON_SMALL) and the 48/256-class frame for Alt+Tab and the large taskbar icon (ICON_BIG),
+        // both from the ico embedded in the exe, at the window's DPI.
+        private void ApplyWindowIcons()
+        {
+            try
+            {
+                uint dpi = GetDpiForWindow(Handle);
+                if (dpi == 0) dpi = 96;
+                int small = GetSystemMetricsForDpi(49, dpi); // SM_CXSMICON
+                int big = GetSystemMetricsForDpi(11, dpi);   // SM_CXICON
+                using (var s = typeof(MainForm).Assembly.GetManifestResourceStream("weft.ico"))
+                {
+                    if (s == null) return;
+                    var buf = new byte[s.Length];
+                    int n = 0;
+                    while (n < buf.Length) { int r = s.Read(buf, n, buf.Length - n); if (r <= 0) break; n += r; }
+                    smallIcon = new Icon(new MemoryStream(buf), new Size(small, small));
+                    bigIcon = new Icon(new MemoryStream(buf), new Size(big, big));
+                }
+                SendMessage(Handle, WM_SETICON, (IntPtr)0, smallIcon.Handle);
+                SendMessage(Handle, WM_SETICON, (IntPtr)1, bigIcon.Handle);
+            }
+            catch { }
+        }
+
+        private Icon smallIcon, bigIcon;
 
         protected override void OnSizeChanged(EventArgs e)
         {
@@ -552,6 +583,7 @@ namespace Weft.Desktop
             MinimumSize = new Size(800, 560);
             StartPosition = FormStartPosition.CenterScreen;
             try { Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath); } catch { }
+            // Real icons are applied per size once the handle exists (ApplyWindowIcons).
             grip = new TopGrip(this);
             grip.Bounds = new Rectangle(0, 0, ClientSize.Width, TopGripPx);
             splash = new SplashBar(this) { BackColor = bgColor };
