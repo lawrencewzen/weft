@@ -445,4 +445,142 @@ describe('WorkspaceDialog', () => {
     expect(texts).not.toContain('此电脑');
     expect(texts).toEqual(['/', 'Users', 'alice']);
   });
+
+  describe('typed path', () => {
+    const q = (sel: string) => host?.querySelector<HTMLElement>(sel) ?? null;
+    const create = () => q('[data-testid="next-ws-create"]') as HTMLButtonElement;
+    const pathEl = () => q('[data-testid="next-ws-path"]') as HTMLInputElement;
+
+    async function open() {
+      await act(async () => {
+        root?.render(<WorkspaceDialog lang="zh" onClose={vi.fn()} onToast={vi.fn()} />);
+      });
+    }
+
+    it('create is disabled for an empty path and enabled once a path is typed', async () => {
+      await open();
+      await act(async () => { setInputValue(pathEl(), ''); });
+      expect(create().disabled).toBe(true);
+      await act(async () => { setInputValue(pathEl(), 'D:\\work\\sandbox'); });
+      expect(create().disabled).toBe(false);
+    });
+
+    it('typing a path and clicking create validates it then creates with that path', async () => {
+      await open();
+      await act(async () => { setInputValue(pathEl(), 'D:\\work\\sandbox'); });
+      await act(async () => { create().click(); });
+      expect(api.listWorkspaceDirs).toHaveBeenCalledWith('D:\\work\\sandbox', 'zh');
+      expect(api.createWorkspace).toHaveBeenCalledWith(
+        { name: 'sandbox', source: 'local', path: 'D:\\work\\sandbox' },
+        'zh',
+      );
+    });
+
+    it('typing an invalid path and clicking create shows the error and does not create', async () => {
+      const onClose = vi.fn();
+      await act(async () => {
+        root?.render(<WorkspaceDialog lang="zh" onClose={onClose} onToast={vi.fn()} />);
+      });
+      await act(async () => { setInputValue(pathEl(), 'D:\\invalid'); });
+      await act(async () => { create().click(); });
+      expect(q('[data-testid="next-ws-dir-error"]')?.textContent).toContain('Directory not found: D:\\invalid');
+      expect(api.createWorkspace).not.toHaveBeenCalled();
+      expect(onClose).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('browse button', () => {
+    const q = (sel: string) => host?.querySelector<HTMLElement>(sel) ?? null;
+    const browse = () => q('[data-testid="next-ws-browse"]') as HTMLButtonElement | null;
+    const pathEl = () => q('[data-testid="next-ws-path"]') as HTMLInputElement;
+
+    async function render(pickFolder?: () => Promise<api.WorkspacePickResult>) {
+      await act(async () => {
+        root?.render(
+          <WorkspaceDialog lang="zh" onClose={vi.fn()} onToast={vi.fn()} pickFolder={pickFolder} />,
+        );
+      });
+    }
+
+    it('focuses the path input on open and shows the browse button', async () => {
+      await render();
+      expect(document.activeElement).toBe(pathEl());
+      expect(browse()).not.toBeNull();
+    });
+
+    it('picked fills the path and enables create without creating', async () => {
+      const pick = vi.fn().mockResolvedValue({ status: 'picked', path: 'D:\\work\\sandbox' });
+      await render(pick);
+      await act(async () => { browse()?.click(); });
+      expect(pick).toHaveBeenCalledTimes(1);
+      expect(pathEl().value).toBe('D:\\work\\sandbox');
+      expect((q('[data-testid="next-ws-create"]') as HTMLButtonElement).disabled).toBe(false);
+      expect(api.createWorkspace).not.toHaveBeenCalled();
+      await act(async () => { q('[data-testid="next-ws-create"]')?.click(); });
+      expect(api.createWorkspace).toHaveBeenCalledWith(
+        { name: 'sandbox', source: 'local', path: 'D:\\work\\sandbox' },
+        'zh',
+      );
+    });
+
+    it('default implementation calls pickWorkspaceRoot with lang', async () => {
+      const spy = vi.spyOn(api, 'pickWorkspaceRoot').mockResolvedValue({ status: 'cancelled' });
+      await render();
+      await act(async () => { browse()?.click(); });
+      expect(spy).toHaveBeenCalledWith('zh');
+    });
+
+    it('cancelled leaves the path and create state unchanged', async () => {
+      await render(vi.fn().mockResolvedValue({ status: 'cancelled' }));
+      const before = pathEl().value;
+      await act(async () => { browse()?.click(); });
+      expect(pathEl().value).toBe(before);
+      expect((q('[data-testid="next-ws-create"]') as HTMLButtonElement).disabled).toBe(true);
+      expect(browse()).not.toBeNull();
+      expect(q('[data-testid="next-ws-error"]')).toBeNull();
+    });
+
+    it('unsupported hides the button and refocuses the input', async () => {
+      await render(vi.fn().mockResolvedValue({ status: 'unsupported' }));
+      await act(async () => { browse()?.click(); });
+      expect(browse()).toBeNull();
+      expect(document.activeElement).toBe(pathEl());
+    });
+
+    it('error is shown inside the dialog without closing it', async () => {
+      const onClose = vi.fn();
+      await act(async () => {
+        root?.render(
+          <WorkspaceDialog
+            lang="zh"
+            onClose={onClose}
+            onToast={vi.fn()}
+            pickFolder={vi.fn().mockRejectedValue(new Error('boom'))}
+          />,
+        );
+      });
+      await act(async () => { browse()?.click(); });
+      expect(q('[data-testid="next-ws-error"]')?.textContent).toBe('boom');
+      expect(onClose).not.toHaveBeenCalled();
+      expect(browse()?.disabled).toBe(false);
+    });
+
+    it('is disabled while picking and ignores repeat clicks', async () => {
+      let resolvePick: (v: api.WorkspacePickResult) => void = () => {};
+      const pick = vi.fn().mockReturnValue(new Promise((r) => { resolvePick = r; }));
+      await render(pick);
+      await act(async () => { browse()?.click(); });
+      expect(browse()?.disabled).toBe(true);
+      await act(async () => { browse()?.click(); });
+      expect(pick).toHaveBeenCalledTimes(1);
+      await act(async () => { resolvePick({ status: 'cancelled' }); });
+      expect(browse()?.disabled).toBe(false);
+    });
+
+    it('picked path that is not selectable keeps create disabled', async () => {
+      await render(vi.fn().mockResolvedValue({ status: 'picked', path: '~/.ssh' }));
+      await act(async () => { browse()?.click(); });
+      expect((q('[data-testid="next-ws-create"]') as HTMLButtonElement).disabled).toBe(true);
+    });
+  });
 });

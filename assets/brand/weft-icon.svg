@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="l" gradientUnits="userSpaceOnUse" x1="10" y1="22" x2="54" y2="46"><stop offset="0" stop-color="#34d399"/><stop offset="0.55" stop-color="#06b6d4"/><stop offset="1" stop-color="#8b5cf6"/></linearGradient>
+    <linearGradient id="t" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1d1a2b"/><stop offset="1" stop-color="#110f1a"/></linearGradient>
+    <linearGradient id="e" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff" stop-opacity="0.14"/><stop offset="1" stop-color="#ffffff" stop-opacity="0.02"/></linearGradient>
+    <filter id="g" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="1.8" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>
+  <rect width="64" height="64" rx="15" fill="url(#t)"/>
+  <rect x="0.5" y="0.5" width="63" height="63" rx="14.5" fill="none" stroke="url(#e)" stroke-width="1"/>
+  <path d="M10 22 C12 46, 22 48, 26 34 C29 24, 35 24, 38 34 C42 48, 52 46, 54 22" fill="none" stroke="url(#l)" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" filter="url(#g)"/>
+</svg>

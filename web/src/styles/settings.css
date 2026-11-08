@@ -435,6 +435,9 @@ html[data-theme$="-dark"] .ns-ws-dialog {
   font-size: var(--fs-ui);
   color: var(--ns-ink);
 }
+.ns-path-row { display: flex; gap: 8px; align-items: center; }
+.ns-path-row .ns-input { flex: 1; min-width: 0; }
+.ns-browse-btn { flex: none; display: inline-flex; align-items: center; gap: 6px; height: 34px; }
 .ns-input.is-mono { font-family: var(--mono); }
 .ns-input:focus { outline: none; border-color: var(--ns-ink); }
 .ns-field-hint { font-size: var(--fs-sm); color: var(--ns-mute); line-height: 1.45; }
