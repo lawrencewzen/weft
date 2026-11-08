@@ -34,6 +34,23 @@ test('+ opens the dialog; Browse picks a folder (cancel keeps state) and only �
   await expect(page.getByTestId('next-ws-confirm-git')).toHaveText('Git');
   await expect(page.getByTestId('next-dir-row')).toHaveCount(0);
   await expect(page.getByTestId('next-ws-node')).toHaveCount(2);
+  // 添加是明显的主按钮（深色底），悬停时也不能刷成浅灰底白字
+  const addBtn = page.getByTestId('next-ws-create');
+  const bg = () => addBtn.evaluate((el) => getComputedStyle(el).backgroundColor);
+  const cssColor = (name) => page.evaluate((n) => {
+    const probe = document.createElement('i');
+    probe.style.color = `var(${n})`;
+    document.body.appendChild(probe);
+    const c = getComputedStyle(probe).color;
+    probe.remove();
+    return c;
+  }, name);
+  const accent = await cssColor('--accent');
+  await page.mouse.move(0, 0);
+  expect(await bg()).toBe(accent);
+  await addBtn.hover();
+  expect(await bg()).not.toBe(await cssColor('--bg-hover'));
+  expect(await addBtn.evaluate((el) => getComputedStyle(el).color)).toBe(await cssColor('--on-accent'));
 
   // 2. Cancelled (second click) -> unchanged
   await browse.click();

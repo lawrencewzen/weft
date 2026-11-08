@@ -716,6 +716,8 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.6; backgroun
   color: var(--text-secondary);
 }
 .btn.p { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+/* .btn:hover 的浅灰底写在后面、优先级相同，会把主按钮悬停时刷成「浅灰底白字」，这里压回去。 */
+.btn.p:hover { background: color-mix(in srgb, var(--accent) 86%, var(--on-accent)); border-color: var(--accent); color: var(--on-accent); }
 .btn.danger {
   color: var(--diff-del-text);
   background: var(--diff-del-bg);

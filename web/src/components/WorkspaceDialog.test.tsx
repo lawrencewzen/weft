@@ -391,6 +391,10 @@ describe('WorkspaceDialog', () => {
       expect(pathEl().value).toBe('D:\\work\\sandbox');
       expect(q('[data-testid="next-ws-confirm-name"]')?.textContent).toBe('sandbox');
       expect(q('[data-testid="next-breadcrumbs"]')).toBeNull();
+      const addBtn = q('[data-testid="next-ws-create"]') as HTMLButtonElement;
+      expect(addBtn.disabled).toBe(false);
+      expect(addBtn.classList.contains('btn')).toBe(true);
+      expect(addBtn.classList.contains('p')).toBe(true);
       expect((q('[data-testid="next-ws-create"]') as HTMLButtonElement).disabled).toBe(false);
       expect(api.createWorkspace).not.toHaveBeenCalled();
       await act(async () => { q('[data-testid="next-ws-create"]')?.click(); });
