@@ -20,7 +20,7 @@ import { inferCustomProviderBrand, inferModelBrand } from './brand';
 import { mockProviderName } from './providerNames';
 import { replyInSubThread, stopSubThread, subagentKey } from './subagents';
 import { branchesOf, pluginForLang, tokenFails } from './extensions';
-import { isBlockedPath, showProtoPickModal } from './pickModal';
+import { isBlockedPath, mockPickWorkspaceFolder } from './pickModal';
 import {
   EXTERNAL_TOUCH_MS,
   createRepo,
@@ -644,6 +644,7 @@ const DIRS: Record<string, MockDir> = {
   'C:\\': {
     git: false,
     entries: [
+      { name: 'Users', path: 'C:\\Users', git: false },
       { name: 'Projects', path: 'C:\\Projects', git: false },
       { name: 'Windows', path: 'C:\\Windows', git: false },
     ],
@@ -662,6 +663,23 @@ const DIRS: Record<string, MockDir> = {
     ],
   },
   'C:\\Windows\\System32': { git: false, entries: [] },
+  'C:\\Users': {
+    git: false,
+    entries: [{ name: 'demo', path: 'C:\\Users\\demo', git: false }],
+  },
+  'C:\\Users\\demo': {
+    git: false,
+    entries: [{ name: 'Projects', path: 'C:\\Users\\demo\\Projects', git: false }],
+  },
+  'C:\\Users\\demo\\Projects': {
+    git: false,
+    entries: [
+      { name: 'billing-api', path: 'C:\\Users\\demo\\Projects\\billing-api', git: true },
+      { name: 'docs-site', path: 'C:\\Users\\demo\\Projects\\docs-site', git: false },
+    ],
+  },
+  'C:\\Users\\demo\\Projects\\billing-api': { git: true, entries: [] },
+  'C:\\Users\\demo\\Projects\\docs-site': { git: false, entries: [] },
   'D:\\': {
     git: false,
     entries: [
@@ -1280,7 +1298,7 @@ export function handleMockRequest(
     return ok({ root: WORK_ROOT });
   }
   if (path === '/api/v2/workspace-root/pick' && method === 'POST') {
-    return showProtoPickModal(lang);
+    return mockPickWorkspaceFolder(lang);
   }
   if (path === '/api/v2/workspace-root/dirs' && method === 'GET') {
     if (url.searchParams.get('view') === 'drives') {

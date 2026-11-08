@@ -178,6 +178,30 @@ function withFileChangeDetails(tool) {
   };
 }
 
+/**
+ * write / edit stay inside the workspace. Reads are allowed outside it (see
+ * workspace-env.mjs), so the official tools' own read-before-write steps would
+ * otherwise get past the path check; refuse up front instead.
+ */
+function withWorkspaceOnly(tool) {
+  const execute = tool.execute;
+  return {
+    ...tool,
+    async execute(args, api, context) {
+      const filePath = typeof args?.path === 'string' ? args.path : '';
+      if (api?.env && filePath) {
+        const allowed = await api.env.allow(await resolveAgainstCwd(api.env, filePath));
+        if (!allowed.ok) throw allowed.error;
+      }
+      return execute(args, api, context);
+    },
+  };
+}
+
+function resolveAgainstCwd(env, filePath) {
+  return path.resolve(env.cwd, filePath);
+}
+
 function requireEnv(api) {
   if (!api?.env) throw new FileError('invalid', 'E_SANDBOX: conversation cwd is not set');
   return api.env;
@@ -217,7 +241,7 @@ async function collectFiles(env, start, context, acc) {
 function createLsTool() {
   return defineTool({
     name: 'ls',
-    description: 'List a directory inside this conversation\'s workspace.',
+    description: 'List a directory. Paths outside the workspace are readable except sensitive locations (credentials).',
     parameters: obj({ path: opt(str()) }),
     replay: 'safe',
     async execute(args, api, context) {
@@ -239,7 +263,7 @@ function createLsTool() {
 function createGrepTool() {
   return defineTool({
     name: 'grep',
-    description: 'Search file contents inside this conversation\'s workspace.',
+    description: 'Search file contents. Paths outside the workspace are readable except sensitive locations (credentials).',
     parameters: obj({
       pattern: str(),
       path: opt(str()),
@@ -275,8 +299,8 @@ function createGrepTool() {
 
 const fileWorkspaceTools = [
   withIntent(withReplay(createReadTool(), 'safe')),
-  withIntent(withReplay(withFileChangeDetails(createWriteTool()), 'unsafe')),
-  withIntent(withReplay(withFileChangeDetails(withLegacyEditArgs(createEditTool())), 'unsafe')),
+  withIntent(withReplay(withWorkspaceOnly(withFileChangeDetails(createWriteTool())), 'unsafe')),
+  withIntent(withReplay(withWorkspaceOnly(withFileChangeDetails(withLegacyEditArgs(createEditTool()))), 'unsafe')),
   withIntent(createLsTool()),
   withIntent(createGrepTool()),
 ];

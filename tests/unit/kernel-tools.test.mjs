@@ -383,7 +383,7 @@ test('bash tool writes a filtered env dump and can run node -v', { timeout: 40_0
   }
 });
 
-test('kernel path: path escape is E_SANDBOX and bash stays in the workspace', { timeout: 40_000 }, async () => {
+test('kernel path: write escape is E_SANDBOX, read may leave the workspace, bash stays in the workspace', { timeout: 40_000 }, async () => {
   const dataDir = await mkdtemp(path.join(tmpdir(), 'piw-ksand-'));
   // Sequential on Windows too: a backgrounded `& echo` let the shell exit before
   // `sand.txt` was written, so the read below could miss the file.
@@ -411,7 +411,8 @@ test('kernel path: path escape is E_SANDBOX and bash stays in the workspace', { 
     const done = await waitFinished(srv.base, conv.id);
     assert.equal(done.status, 'done', JSON.stringify(done));
     const tools = done.messages.filter((message) => message.role === 'tool').map((message) => message.text || '');
-    assert.equal(tools.filter((text) => text.includes('E_SANDBOX')).length, 2, JSON.stringify(tools));
+    assert.equal(tools.filter((text) => text.includes('E_SANDBOX')).length, 1, JSON.stringify(tools));
+    assert.equal(tools.some((text) => text.includes('secret')), true, JSON.stringify(tools));
     assert.equal(tools.some((text) => text.includes('bash-ok')), true, JSON.stringify(tools));
     assert.equal(done.messages.some((message) => message.role === 'assistant' && message.text === 'sandbox-done'), true);
     assert.equal(await readFile(outside, 'utf8'), 'secret');
@@ -419,7 +420,9 @@ test('kernel path: path escape is E_SANDBOX and bash stays in the workspace', { 
     const events = await pendingEvents;
     const escape = events.find((ev) => ev.event === 'tool.end' && ev.data?.tool?.id === 'escape-read');
     assert.equal(escape?.data?.tool?.path, '../outside.txt');
-    assert.equal(escape?.data?.tool?.status, 'error');
+    assert.equal(escape?.data?.tool?.status, 'completed');
+    const escapeWrite = events.find((ev) => ev.event === 'tool.end' && ev.data?.tool?.id === 'escape-write');
+    assert.equal(escapeWrite?.data?.tool?.status, 'error');
     const started = events.find((ev) => ev.event === 'tool.start' && ev.data?.tool?.id === 'bash-1');
     assert.equal(started?.data?.tool?.status, 'running');
   } finally {
