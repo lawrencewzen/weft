@@ -242,6 +242,8 @@ test('creating a workspace from the chip menu selects it for the draft', async (
     await page.getByTestId('next-ws-chip').click();
     await page.getByTestId('next-ws-chip-new').click();
     await expect(page.getByTestId('next-ws-dialog')).toBeVisible();
+    // 测试服务端关了系统选文件夹（WEFT_FOLDER_PICKER=off）：点「浏览」后退回页内目录浏览。
+    await page.getByTestId('next-ws-browse').click();
     const gamma = page.getByTestId('next-dir-row').filter({ hasText: 'gamma' });
     await expect(gamma).toBeVisible();
     await gamma.click();

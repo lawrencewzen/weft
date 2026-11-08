@@ -19,6 +19,7 @@ import { writeActiveWorkspace } from '../data/layout';
 import { useExtensions } from '../data/useExtensions';
 import { splitBreadcrumbs } from '../data/workspacePath';
 import { t } from '../i18n';
+import { FOLDER_ICON } from './SidebarIcons';
 
 const GIT_IMPORT_ENABLED = false;
 
@@ -44,7 +45,7 @@ export function WorkspaceDialog({ lang, onClose, onToast, onCreated, pickFolder 
   const [name, setName] = useState('');
   const [nameTouched, setNameTouched] = useState(false);
   const [pathInput, setPathInput] = useState('');
-  const [navigated, setNavigated] = useState(false);
+  const [checked, setChecked] = useState<WorkspaceDirs | null>(null);
   const [gitUrl, setGitUrl] = useState('');
   const [branch, setBranch] = useState('');
   const [source, setSource] = useState<GitSource>('pick');
@@ -82,7 +83,9 @@ export function WorkspaceDialog({ lang, onClose, onToast, onCreated, pickFolder 
   const conn = gitlabConns.find((item) => item.id === connId) || gitlabConns[0] || null;
   const selected = projects.find((item) => String(item.id) === projectId) || null;
 
+  // 页内目录浏览只在系统选文件夹不可用时才需要，到那时再加载起始目录。
   useEffect(() => {
+    if (!pickUnsupported) return;
     let cancelled = false;
     getWorkspaceRoot(lang).then((res) => {
       if (cancelled) return;
@@ -90,14 +93,12 @@ export function WorkspaceDialog({ lang, onClose, onToast, onCreated, pickFolder 
       return listWorkspaceDirs(undefined, lang);
     }).then((listed) => {
       if (cancelled || !listed) return;
-      setDirs(listed);
-      // 初始目录加载完成前用户可能已经输入了路径，不要覆盖。
-      setPathInput((current) => current || listed.path);
+      setDirs((current) => current || listed);
     }).catch((err) => {
       if (!cancelled) setDirError(failText(err));
     });
     return () => { cancelled = true; };
-  }, [lang]);
+  }, [lang, pickUnsupported]);
 
   const connIdForProjects = conn?.id;
   useEffect(() => {
@@ -163,9 +164,10 @@ export function WorkspaceDialog({ lang, onClose, onToast, onCreated, pickFolder 
     try {
       const listed = await listWorkspaceDirs(nextPath, lang);
       setDirs(listed);
+      setChecked(listed);
       setPathInput(listed.path);
-      setNavigated(true);
     } catch (err) {
+      setChecked(null);
       setDirError(failText(err));
     }
   }
@@ -178,10 +180,11 @@ export function WorkspaceDialog({ lang, onClose, onToast, onCreated, pickFolder 
     try {
       const listed = await listWorkspaceDirs(target, lang);
       setDirs(listed);
+      setChecked(listed);
       setPathInput(listed.path);
-      setNavigated(true);
       return listed;
     } catch (err) {
+      setChecked(null);
       setDirError(failText(err));
       return null;
     }
@@ -216,8 +219,11 @@ export function WorkspaceDialog({ lang, onClose, onToast, onCreated, pickFolder 
   }, [dirs?.path, root]);
 
   const typedPath = pathInput.trim();
-  const pathPending = typedPath !== '' && typedPath !== dirs?.path;
-  const localReady = !busy && typedPath !== '' && (pathPending || (navigated && Boolean(dirs?.selectable)));
+  const pathPending = typedPath !== '' && typedPath !== checked?.path;
+  const confirmed = !pathPending && typedPath !== '' && checked?.selectable ? checked : null;
+  const blocked = !pathPending && typedPath !== '' && checked && !checked.selectable;
+  const pathError = dirError || (blocked ? t(lang, 'ws_path_blocked') : '') || error;
+  const localReady = !busy && typedPath !== '' && (pathPending || Boolean(confirmed));
   const canCreate = GIT_IMPORT_ENABLED
     ? (tab === 'git' || localReady)
     : localReady;
@@ -228,7 +234,7 @@ export function WorkspaceDialog({ lang, onClose, onToast, onCreated, pickFolder 
       setBusy(true);
       setError('');
       try {
-        let target = dirs;
+        let target = checked;
         if (pathPending || !target) {
           target = await handlePathJump(typedPath);
           if (!target || !target.selectable) return;
@@ -318,7 +324,7 @@ export function WorkspaceDialog({ lang, onClose, onToast, onCreated, pickFolder 
     >
       <div className={`modal-dialog ns-ws-dialog${busy ? ' is-busy' : ''}`} role="dialog" aria-modal="true">
         <h3>
-          {t(lang, 'new_workspace')}
+          {t(lang, 'add_project')}
           <button type="button" className="confirm-close" onClick={onClose} aria-label={t(lang, 'btn_cancel')}>×</button>
         </h3>
         {GIT_IMPORT_ENABLED ? (
@@ -344,15 +350,17 @@ export function WorkspaceDialog({ lang, onClose, onToast, onCreated, pickFolder 
         <div className="ns-ws-body">
           {(!GIT_IMPORT_ENABLED || tab === 'local') ? (
             <>
-              <div className="ns-field">
-                <div className="ns-path-row">
+              <div className="ns-field ns-path-field">
+                <div className={`ns-path-box${pathError ? ' is-bad' : ''}`}>
                   <input
                     ref={pathRef}
-                    className="ns-input is-mono"
+                    className="ns-path-input"
                     data-testid="next-ws-path"
                     value={pathInput}
                     placeholder={t(lang, 'ws_path_placeholder')}
-                    onChange={(ev) => setPathInput(ev.target.value)}
+                    spellCheck={false}
+                    aria-invalid={pathError ? true : undefined}
+                    onChange={(ev) => { setPathInput(ev.target.value); setDirError(''); setError(''); }}
                     onKeyDown={(ev) => {
                       if (ev.key === 'Enter') {
                         ev.preventDefault();
@@ -369,13 +377,29 @@ export function WorkspaceDialog({ lang, onClose, onToast, onCreated, pickFolder 
                       disabled={picking || busy}
                       onClick={() => { void handleBrowse(); }}
                     >
-                      {picking ? <span className="sb-spin" aria-hidden="true" /> : null}
+                      {picking ? <span className="sb-spin" aria-hidden="true" /> : FOLDER_ICON}
                       {t(lang, 'ws_browse')}
                     </button>
                   )}
                 </div>
-                {dirError ? <div className="ns-inline-err" data-testid="next-ws-dir-error">{dirError}</div> : null}
+                {pathError ? (
+                  <div
+                    className="ns-path-msg is-bad"
+                    data-testid={dirError || blocked ? 'next-ws-dir-error' : 'next-ws-error'}
+                  >
+                    {pathError}
+                  </div>
+                ) : confirmed ? (
+                  <div className="ns-path-msg is-ok" data-testid="next-ws-confirm">
+                    <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M3.5 8.5l3 3 6-7" />
+                    </svg>
+                    <span>{t(lang, 'ws_project_name')} <b data-testid="next-ws-confirm-name">{dirBasename(confirmed.path) || confirmed.path}</b></span>
+                    {confirmed.git ? <span className="ns-git-badge" data-testid="next-ws-confirm-git">Git</span> : null}
+                  </div>
+                ) : null}
               </div>
+              {pickUnsupported ? (
               <div className="ns-dir-browser">
                 <div className="ns-dir-bar">
                   <nav className="ns-breadcrumbs" aria-label="Breadcrumb" data-testid="next-breadcrumbs">
@@ -427,6 +451,7 @@ export function WorkspaceDialog({ lang, onClose, onToast, onCreated, pickFolder 
                 </div>
                 {dirs?.truncated ? <p className="ns-field-hint">{t(lang, 'ws_dir_truncated')}</p> : null}
               </div>
+              ) : null}
             </>
           ) : (
             <>
@@ -621,7 +646,7 @@ export function WorkspaceDialog({ lang, onClose, onToast, onCreated, pickFolder 
             </>
           )}
         </div>
-        {error ? <div className="ns-inline-err" data-testid="next-ws-error">{error}</div> : null}
+        {error && tab === 'git' && GIT_IMPORT_ENABLED ? <div className="ns-inline-err" data-testid="next-ws-error">{error}</div> : null}
         {busy ? (
           <div className="ns-ws-progress">
             <span className="ns-spin" />
@@ -639,7 +664,7 @@ export function WorkspaceDialog({ lang, onClose, onToast, onCreated, pickFolder 
             disabled={!canCreate || busy}
             onClick={() => { void submit(); }}
           >
-            {busy ? cloningLabel : t(lang, 'btn_create')}
+            {busy ? cloningLabel : t(lang, 'ws_btn_add')}
           </button>
         </div>
       </div>
