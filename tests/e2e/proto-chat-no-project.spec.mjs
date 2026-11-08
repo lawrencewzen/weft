@@ -173,8 +173,6 @@ test('with no projects the sidebar shows a visible 添加项目 row', async ({ p
   await expect(add).toBeVisible();
   await expect(add).toContainText('添加项目');
   await add.click();
-  await expect(page.getByTestId('proto-pick-modal')).toBeVisible();
-  await page.getByTestId('proto-pick-unsupported').click();
   await expect(page.getByTestId('next-ws-dialog')).toBeVisible();
   expectClean(state);
 });

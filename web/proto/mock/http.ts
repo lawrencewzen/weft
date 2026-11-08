@@ -20,7 +20,7 @@ import { inferCustomProviderBrand, inferModelBrand } from './brand';
 import { mockProviderName } from './providerNames';
 import { replyInSubThread, stopSubThread, subagentKey } from './subagents';
 import { branchesOf, pluginForLang, tokenFails } from './extensions';
-import { isBlockedPath, showProtoPickModal } from './pickModal';
+import { isBlockedPath, mockPickWorkspaceFolder } from './pickModal';
 import {
   EXTERNAL_TOUCH_MS,
   createRepo,
@@ -618,6 +618,27 @@ function handlePatchProvider(
 type MockDir = { entries: WorkspaceDirEntry[]; git: boolean };
 
 const DIRS: Record<string, MockDir> = {
+  'C:\\': {
+    git: false,
+    entries: [{ name: 'Users', path: 'C:\\Users', git: false }],
+  },
+  'C:\\Users': {
+    git: false,
+    entries: [{ name: 'demo', path: 'C:\\Users\\demo', git: false }],
+  },
+  'C:\\Users\\demo': {
+    git: false,
+    entries: [{ name: 'Projects', path: 'C:\\Users\\demo\\Projects', git: false }],
+  },
+  'C:\\Users\\demo\\Projects': {
+    git: false,
+    entries: [
+      { name: 'billing-api', path: 'C:\\Users\\demo\\Projects\\billing-api', git: true },
+      { name: 'docs-site', path: 'C:\\Users\\demo\\Projects\\docs-site', git: false },
+    ],
+  },
+  'C:\\Users\\demo\\Projects\\billing-api': { git: true, entries: [] },
+  'C:\\Users\\demo\\Projects\\docs-site': { git: false, entries: [] },
   'D:\\': {
     git: false,
     entries: [
@@ -706,7 +727,7 @@ function dirsView(path: string, lang: Lang): MockReply {
     return fail(404, lang === 'en' ? 'Directory not found in the prototype' : '原型里没有这个目录', 'E_PATH');
   }
   const blocked = isBlockedPath(normalized);
-  const isFsRoot = normalized === 'D:\\' || normalized === '\\' || normalized === '/' || normalized === '~';
+  const isFsRoot = normalized === 'D:\\' || normalized === 'C:\\' || normalized === '\\' || normalized === '/' || normalized === '~';
   const view: WorkspaceDirs = {
     root: WORK_ROOT,
     path: normalized,
@@ -1209,7 +1230,7 @@ export function handleMockRequest(
     return ok({ root: WORK_ROOT });
   }
   if (path === '/api/v2/workspace-root/pick' && method === 'POST') {
-    return showProtoPickModal(lang);
+    return mockPickWorkspaceFolder(lang);
   }
   if (path === '/api/v2/workspace-root/dirs' && method === 'GET') {
     return dirsView(url.searchParams.get('path') || WORK_ROOT, lang);
