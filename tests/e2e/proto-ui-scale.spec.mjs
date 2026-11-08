@@ -87,7 +87,7 @@ test('default UI zoom fills the viewport and scales visual size to 0.9', async (
     expect(box.scrollH, `${vp.width}×${vp.height} scrollHeight`).toBeLessThanOrEqual(vp.height + 2);
     expect(box.probeW, `${vp.width}×${vp.height} 100css→visual`).toBeCloseTo(90, 0);
     expect(box.probeH, `${vp.width}×${vp.height} 100css→visual h`).toBeCloseTo(90, 0);
-    expect(box.fontSize, `${vp.width}×${vp.height} body font-size`).toBeCloseTo(14.5, 1);
+    expect(box.fontSize, `${vp.width}×${vp.height} body font-size`).toBeCloseTo(16, 1);
   }
 
   expectClean(state);
