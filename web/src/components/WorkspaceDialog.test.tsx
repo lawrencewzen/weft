@@ -494,7 +494,7 @@ describe('WorkspaceDialog', () => {
     const browse = () => q('[data-testid="next-ws-browse"]') as HTMLButtonElement | null;
     const pathEl = () => q('[data-testid="next-ws-path"]') as HTMLInputElement;
 
-    async function render(pickFolder?: () => Promise<api.WorkspacePickResult>) {
+    async function render(pickFolder?: () => Promise<api.WorkspacePickResult | null>) {
       await act(async () => {
         root?.render(
           <WorkspaceDialog lang="zh" onClose={vi.fn()} onToast={vi.fn()} pickFolder={pickFolder} />,
@@ -537,6 +537,15 @@ describe('WorkspaceDialog', () => {
       expect(pathEl().value).toBe(before);
       expect((q('[data-testid="next-ws-create"]') as HTMLButtonElement).disabled).toBe(true);
       expect(browse()).not.toBeNull();
+      expect(q('[data-testid="next-ws-error"]')).toBeNull();
+    });
+
+    it('null return value leaves path unchanged without error', async () => {
+      await render(vi.fn().mockResolvedValue(null));
+      const before = pathEl().value;
+      await act(async () => { browse()?.click(); });
+      expect(pathEl().value).toBe(before);
+      expect((q('[data-testid="next-ws-create"]') as HTMLButtonElement).disabled).toBe(true);
       expect(q('[data-testid="next-ws-error"]')).toBeNull();
     });
 

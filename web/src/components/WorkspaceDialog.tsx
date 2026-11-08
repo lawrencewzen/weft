@@ -29,7 +29,7 @@ type Props = {
   onToast: (message: string) => void;
   onCreated?: (ws: Workspace) => void;
   /** 「浏览…」的实现，默认走服务端系统选文件夹对话框；桌面壳可替换成自己的对话框。 */
-  pickFolder?: () => Promise<WorkspacePickResult>;
+  pickFolder?: () => Promise<WorkspacePickResult | null>;
 };
 
 type Tab = 'local' | 'git';
@@ -197,7 +197,7 @@ export function WorkspaceDialog({ lang, onClose, onToast, onCreated, pickFolder 
     setError('');
     try {
       const res = await (pickFolder ? pickFolder() : pickWorkspaceRoot(lang));
-      if (!aliveRef.current) return;
+      if (!aliveRef.current || !res) return;
       if (res.status === 'picked') {
         setPathInput(res.path);
         if (!nameTouched) setName(dirBasename(res.path) || res.path);

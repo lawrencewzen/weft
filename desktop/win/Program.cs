@@ -41,6 +41,7 @@ namespace Weft.Desktop
     internal sealed class MainForm : Form
     {
         private static readonly Regex LoginUrl = new Regex(@"http://127\.0\.0\.1:\d+/auth\?code=\S+", RegexOptions.Compiled);
+        private static readonly Regex PickFolderRegex = new Regex(@"^pick-folder:([A-Za-z0-9_-]{1,40})$", RegexOptions.Compiled);
         private static readonly TimeSpan StartTimeout = TimeSpan.FromSeconds(60);
 
         private readonly WebView2 web = new WebView2 { Dock = DockStyle.Fill };
@@ -515,6 +516,12 @@ namespace Weft.Desktop
                 HideSplashSoon(150);
                 return;
             }
+            var mPick = PickFolderRegex.Match(msg);
+            if (mPick.Success)
+            {
+                HandlePickFolder(mPick.Groups[1].Value);
+                return;
+            }
             switch (msg)
             {
                 case "minimize": WindowState = FormWindowState.Minimized; break;
@@ -523,6 +530,160 @@ namespace Weft.Desktop
                     break;
                 case "close": Close(); break; // window only; the service keeps running
             }
+        }
+
+        private bool isPickingFolder;
+
+        private void HandlePickFolder(string requestId)
+        {
+            if (InvokeRequired)
+            {
+                BeginInvoke(new Action(() => HandlePickFolder(requestId)));
+                return;
+            }
+
+            if (isPickingFolder)
+            {
+                // Only one folder picker dialog is allowed at a time.
+                // Concurrent requests are immediately replied to as cancelled.
+                SendPickFolderResult(requestId, "cancelled", null);
+                return;
+            }
+
+            isPickingFolder = true;
+            try
+            {
+                string path = PickFolderModern(Handle);
+                if (!string.IsNullOrEmpty(path))
+                {
+                    SendPickFolderResult(requestId, "picked", path);
+                }
+                else
+                {
+                    SendPickFolderResult(requestId, "cancelled", null);
+                }
+            }
+            finally
+            {
+                isPickingFolder = false;
+            }
+        }
+
+        private void SendPickFolderResult(string requestId, string status, string path)
+        {
+            var core = web.CoreWebView2;
+            if (core == null) return;
+            string json;
+            if (status == "picked" && !string.IsNullOrEmpty(path))
+            {
+                json = "{\"type\":\"pick-folder-result\",\"id\":" + EscapeJsonString(requestId)
+                    + ",\"status\":\"picked\",\"path\":" + EscapeJsonString(path) + "}";
+            }
+            else
+            {
+                json = "{\"type\":\"pick-folder-result\",\"id\":" + EscapeJsonString(requestId)
+                    + ",\"status\":\"cancelled\"}";
+            }
+            try { core.PostWebMessageAsJson(json); } catch { }
+        }
+
+        private static string EscapeJsonString(string s)
+        {
+            if (s == null) return "null";
+            var sb = new System.Text.StringBuilder();
+            sb.Append('"');
+            foreach (char c in s)
+            {
+                switch (c)
+                {
+                    case '\\': sb.Append("\\\\"); break;
+                    case '"': sb.Append("\\\""); break;
+                    case '\n': sb.Append("\\n"); break;
+                    case '\r': sb.Append("\\r"); break;
+                    case '\t': sb.Append("\\t"); break;
+                    case '\b': sb.Append("\\b"); break;
+                    case '\f': sb.Append("\\f"); break;
+                    default:
+                        if (c < 32) sb.AppendFormat(CultureInfo.InvariantCulture, "\\u{0:x4}", (int)c);
+                        else sb.Append(c);
+                        break;
+                }
+            }
+            sb.Append('"');
+            return sb.ToString();
+        }
+
+        private const uint FOS_PICKFOLDERS = 0x00000020;
+        private const uint FOS_FORCEFILESYSTEM = 0x00000040;
+        private const uint SIGDN_FILESYSPATH = 0x80058000;
+        private const uint SIGDN_DESKTOPABSOLUTEPARSING = 0x80028000;
+        private const int ERROR_CANCELLED_HR = unchecked((int)0x800704C7);
+
+        private string PickFolderModern(IntPtr ownerHandle)
+        {
+            try
+            {
+                var dialog = (IFileOpenDialog)new FileOpenDialogRCW();
+                try
+                {
+                    uint options;
+                    dialog.GetOptions(out options);
+                    dialog.SetOptions(options | FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM);
+                    int hr = dialog.Show(ownerHandle);
+                    if (hr == 0)
+                    {
+                        IShellItem item;
+                        dialog.GetResult(out item);
+                        if (item != null)
+                        {
+                            try
+                            {
+                                string path;
+                                try
+                                {
+                                    item.GetDisplayName(SIGDN_FILESYSPATH, out path);
+                                }
+                                catch
+                                {
+                                    item.GetDisplayName(SIGDN_DESKTOPABSOLUTEPARSING, out path);
+                                }
+                                return path;
+                            }
+                            finally
+                            {
+                                Marshal.ReleaseComObject(item);
+                            }
+                        }
+                    }
+                    if (hr == ERROR_CANCELLED_HR)
+                    {
+                        return null;
+                    }
+                }
+                finally
+                {
+                    Marshal.ReleaseComObject(dialog);
+                }
+            }
+            catch
+            {
+                // Modern COM dialog failed, fall back to WinForms FolderBrowserDialog
+            }
+
+            try
+            {
+                using (var fbd = new FolderBrowserDialog())
+                {
+                    fbd.ShowNewFolderButton = true;
+                    if (fbd.ShowDialog(this) == DialogResult.OK)
+                    {
+                        return fbd.SelectedPath;
+                    }
+                }
+            }
+            catch { }
+
+            return null;
         }
 
         private bool SameOrigin(string uri)
@@ -774,5 +935,59 @@ namespace Weft.Desktop
             MessageBox.Show(this, message, "Weft", MessageBoxButtons.OK, MessageBoxIcon.Error);
             Close();
         }
+    }
+
+    [ComImport]
+    [Guid("d57c7288-d4ad-4768-be02-9d969532d960")]
+    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    internal interface IFileOpenDialog
+    {
+        [PreserveSig]
+        int Show([In] IntPtr parent);
+
+        void SetFileTypes([In] uint cFileTypes, [In] IntPtr rgFilterSpec);
+        void SetFileTypeIndex([In] uint iFileType);
+        void GetFileTypeIndex(out uint piFileType);
+        void Advise([In, MarshalAs(UnmanagedType.Interface)] IntPtr pfde, out uint pdwCookie);
+        void Unadvise([In] uint dwCookie);
+        void SetOptions([In] uint fos);
+        void GetOptions(out uint pfos);
+        void SetDefaultFolder([In, MarshalAs(UnmanagedType.Interface)] IShellItem psi);
+        void SetFolder([In, MarshalAs(UnmanagedType.Interface)] IShellItem psi);
+        void GetFolder([MarshalAs(UnmanagedType.Interface)] out IShellItem ppsi);
+        void GetCurrentSelection([MarshalAs(UnmanagedType.Interface)] out IShellItem ppsi);
+        void SetFileName([In, MarshalAs(UnmanagedType.LPWStr)] string pszName);
+        void GetFileName([MarshalAs(UnmanagedType.LPWStr)] out string pszName);
+        void SetTitle([In, MarshalAs(UnmanagedType.LPWStr)] string pszTitle);
+        void SetOkButtonLabel([In, MarshalAs(UnmanagedType.LPWStr)] string pszText);
+        void SetFileNameLabel([In, MarshalAs(UnmanagedType.LPWStr)] string pszLabel);
+        void GetResult([MarshalAs(UnmanagedType.Interface)] out IShellItem ppsi);
+        void AddPlace([In, MarshalAs(UnmanagedType.Interface)] IShellItem psi, int fdap);
+        void SetDefaultExtension([In, MarshalAs(UnmanagedType.LPWStr)] string pszDefaultExtension);
+        void Close([MarshalAs(UnmanagedType.Error)] int hr);
+        void SetClientGuid([In] ref Guid guid);
+        void ClearClientData();
+        void SetFilter([MarshalAs(UnmanagedType.Interface)] IntPtr pFilter);
+
+        void GetResults([MarshalAs(UnmanagedType.Interface)] out IntPtr ppenum);
+        void GetSelectedItems([MarshalAs(UnmanagedType.Interface)] out IntPtr ppsai);
+    }
+
+    [ComImport]
+    [Guid("43826d1e-e718-42ee-bc55-a1e261c37bfe")]
+    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    internal interface IShellItem
+    {
+        void BindToHandler([In, MarshalAs(UnmanagedType.Interface)] IntPtr pbc, [In] ref Guid bhid, [In] ref Guid riid, out IntPtr ppv);
+        void GetParent([MarshalAs(UnmanagedType.Interface)] out IShellItem ppsi);
+        void GetDisplayName([In] uint sigdnName, [MarshalAs(UnmanagedType.LPWStr)] out string ppszName);
+        void GetAttributes([In] uint sfgaoMask, out uint psfgaoAttribs);
+        void Compare([In, MarshalAs(UnmanagedType.Interface)] IShellItem psi, [In] uint hint, out int piOrder);
+    }
+
+    [ComImport]
+    [Guid("DC1C5A9C-E88A-4dde-A5A1-60F82A20AEF7")]
+    internal class FileOpenDialogRCW
+    {
     }
 }
