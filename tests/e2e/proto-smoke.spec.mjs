@@ -126,11 +126,12 @@ test('prototype runs from file:// with mock data, no network and no console erro
   await expect(page.getByTestId('next-draft-hint')).toContainText('weft');
   await expect(page.getByTestId('next-draft-hero-ws')).toContainText('weft');
   await expect(page.getByTestId('next-draft-hero-ws')).toHaveCSS('font-size', '28px');
-  await expect(page.getByTestId('next-draft-hint')).toContainText('要在');
+  await expect(page.getByTestId('next-draft-hint')).toContainText('在');
   await expect(page.locator('.draft-hero-hint')).toContainText('weft');
   await expect(page.getByTestId('next-ws-chip')).toContainText('weft');
 
   // New chat right pane has changes and files tabs; terminal tab is gone.
+  await page.getByTestId('next-right-toggle').click();
   await expect(page.getByTestId('next-right-tab-changes')).toBeVisible();
   await expect(page.getByTestId('next-right-tab-files')).toBeVisible();
   await expect(page.getByTestId('next-right-tab-term')).toHaveCount(0);
@@ -258,6 +259,15 @@ test('sidebar archived section is fixed at bottom above footer, expands, and sho
   await page.goto(pathToFileURL(protoFile).href);
   await expect(page.getByTestId('next-sidebar')).toBeVisible();
 
+  // Default collapsed
+  await expect(page.getByTestId('next-sidebar-archived-section')).toHaveCount(0);
+  await expect(page.getByTestId('next-archived-list')).toHaveCount(0);
+  await expect(page.getByTestId('next-archived-count')).toHaveText('2');
+
+  // Toggle open
+  const toggle = page.getByTestId('next-archived-toggle');
+  await toggle.click();
+
   const archSection = page.getByTestId('next-sidebar-archived-section');
   await expect(archSection).toBeVisible();
 
@@ -269,13 +279,6 @@ test('sidebar archived section is fixed at bottom above footer, expands, and sho
   expect(footBox).toBeTruthy();
   expect(archBox.y + archBox.height).toBeLessThanOrEqual(footBox.y + 2);
 
-  // Default collapsed
-  await expect(page.getByTestId('next-archived-list')).toHaveCount(0);
-  await expect(page.getByTestId('next-archived-count')).toHaveText('2');
-
-  // Toggle open
-  const toggle = page.getByTestId('next-archived-toggle');
-  await toggle.click();
   const list = page.getByTestId('next-archived-list');
   await expect(list).toBeVisible();
   const rows = list.getByTestId('next-conv-row');

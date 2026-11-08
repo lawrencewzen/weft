@@ -193,8 +193,12 @@ export function RightPaneProvider({
   }, []);
 
   const toggleRight = useCallback(() => {
+    if (!open && hasChanges) {
+      setTabState('changes');
+      writeRightTab('changes');
+    }
     setOpen(!open);
-  }, [open, setOpen]);
+  }, [open, hasChanges, setOpen]);
 
   const setTab = useCallback((next: RightTab) => {
     setTabState(next);

@@ -38,6 +38,7 @@ import {
   SUN_ICON,
 } from './SidebarIcons';
 import { buildConversationItems, buildProjectItems } from './SidebarMenus';
+import { ArchiveIcon } from './StatusIcon';
 import { SidebarSearch } from './SidebarSearch';
 
 type MenuState = {
@@ -380,16 +381,16 @@ export function Sidebar({
           ) : null}
         </div>
 
-        <SidebarArchived
-          lang={lang}
-          archived={archived}
-          activeConversationId={activeConversationId}
-          open={archivedOpen}
-          onToggle={() => setArchivedOpen((prev) => !prev)}
-          onOpenConversation={openConversation}
-          onOpenMenu={openMenu}
-          conversationItems={conversationItems}
-        />
+        {archivedOpen ? (
+          <SidebarArchived
+            lang={lang}
+            archived={archived}
+            activeConversationId={activeConversationId}
+            onOpenConversation={openConversation}
+            onOpenMenu={openMenu}
+            conversationItems={conversationItems}
+          />
+        ) : null}
 
         <div className="sb-foot foot left-footer">
           <div className="sb-row row sb-foot-row">
@@ -412,6 +413,22 @@ export function Sidebar({
               aria-label={t(lang, serviceOk ? 'service_ok' : 'service_reconnecting')}
             />
             <span className="sb-end end foot-right">
+              <button
+                type="button"
+                className="sb-act act foot-archived"
+                data-testid="next-archived-toggle"
+                title={archived.length > 0 ? `${t(lang, 'archived_label')} (${archived.length})` : t(lang, 'archived_label')}
+                aria-label={archived.length > 0 ? `${t(lang, 'archived_label')} (${archived.length})` : t(lang, 'archived_label')}
+                aria-expanded={archivedOpen}
+                onClick={() => setArchivedOpen((prev) => !prev)}
+              >
+                <ArchiveIcon size={14} />
+                {archived.length > 0 ? (
+                  <span className="sb-badge sidebar-archived-badge" data-testid="next-archived-count">
+                    {archived.length}
+                  </span>
+                ) : null}
+              </button>
               <button
                 type="button"
                 className="sb-act act foot-appearance"

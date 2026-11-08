@@ -38,7 +38,7 @@ test('lists models by provider and switches the conversation model', async ({ pa
     await openNextChat(page, srv, conv.id);
 
     await expect(page.getByTestId('next-model-chip')).toContainText('Grok 4.6');
-    await expect(page.getByTestId('next-context-chip')).toHaveText('0%');
+    await expect(page.getByTestId('next-context-chip')).toHaveAttribute('title', /0%/);
 
     await openModelMenu(page);
     await expect(page.getByTestId('next-model-menu')).toContainText('只对这个对话生效 · 管理模型');
@@ -138,12 +138,12 @@ test('context chip shows reported usage and stays at 0% without usage', async ({
     const { conv } = await openWorkspaceConversation(usageSrv, 'usage', prepared.dirs[0]);
     await createProviderModels(usageSrv, { contextWindow: 200000 });
     await openNextChat(page, usageSrv, conv.id);
-    await expect(page.getByTestId('next-context-chip')).toHaveText('0%');
+    await expect(page.getByTestId('next-context-chip')).toHaveAttribute('title', /0%/);
     await sendNext(page, 'count tokens');
-    await expect(page.getByTestId('next-context-chip')).toHaveText('8%', { timeout: 20000 });
+    await expect(page.getByTestId('next-context-chip')).toHaveAttribute('title', /8%/, { timeout: 20000 });
     await waitRunDone(page);
     await page.reload();
-    await expect(page.getByTestId('next-context-chip')).toHaveText('8%');
+    await expect(page.getByTestId('next-context-chip')).toHaveAttribute('title', /8%/);
   } finally {
     await usageSrv.kill();
   }
@@ -161,9 +161,9 @@ test('context chip shows reported usage and stays at 0% without usage', async ({
     await openNextChat(page, plain, conv.id);
     await sendNext(page, 'hello');
     await waitRunDone(page);
-    await expect(page.getByTestId('next-context-chip')).toHaveText('0%');
+    await expect(page.getByTestId('next-context-chip')).toHaveAttribute('title', /0%/);
     await page.reload();
-    await expect(page.getByTestId('next-context-chip')).toHaveText('0%');
+    await expect(page.getByTestId('next-context-chip')).toHaveAttribute('title', /0%/);
   } finally {
     await plain.kill();
   }
@@ -192,10 +192,10 @@ test('context menu sets the model window and keeps it after refresh', async ({ p
       }
     });
     await openNextChat(page, srv, conv.id);
-    await expect(page.getByTestId('next-context-chip')).toHaveText('0%');
+    await expect(page.getByTestId('next-context-chip')).toHaveAttribute('title', /0%/);
 
     await sendNext(page, 'count tokens');
-    await expect(page.getByTestId('next-context-chip')).toHaveText('8%', { timeout: 20000 });
+    await expect(page.getByTestId('next-context-chip')).toHaveAttribute('title', /8%/, { timeout: 20000 });
     await waitRunDone(page);
 
     await page.getByTestId('next-context-chip').click();
@@ -224,7 +224,7 @@ test('context menu sets the model window and keeps it after refresh', async ({ p
     await sub.locator('[data-testid=next-context-option][data-tokens="256000"]').click();
     await patchDone;
     await expect(page.getByTestId('next-model-menu')).toBeHidden();
-    await expect(page.getByTestId('next-context-chip')).toHaveText('6%');
+    await expect(page.getByTestId('next-context-chip')).toHaveAttribute('title', /6%/);
     expect(patches).toHaveLength(1);
     expect(patches[0].body).toEqual({
       overrides: {
@@ -246,7 +246,7 @@ test('context menu sets the model window and keeps it after refresh', async ({ p
     await page.getByTestId('next-context-restore').click();
     await restoreDone;
     await expect(page.getByTestId('next-model-menu')).toBeHidden();
-    await expect(page.getByTestId('next-context-chip')).toHaveText('8%');
+    await expect(page.getByTestId('next-context-chip')).toHaveAttribute('title', /8%/);
     expect(patches).toHaveLength(2);
     expect(patches[1].body).toEqual({
       overrides: {
@@ -255,7 +255,7 @@ test('context menu sets the model window and keeps it after refresh', async ({ p
     });
 
     await page.reload();
-    await expect(page.getByTestId('next-context-chip')).toHaveText('8%');
+    await expect(page.getByTestId('next-context-chip')).toHaveAttribute('title', /8%/);
     const listed = await apiV2(srv, 'GET', '/api/v2/providers');
     const saved = (listed.body.providers || []).find((item) => item.id === sourceId);
     const row = (saved?.models || []).find((item) => item.id === 'grok-4.6');

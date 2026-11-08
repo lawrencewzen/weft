@@ -14,7 +14,9 @@ describe('i18n empty home and branding', () => {
     expect(t('zh', 'ws_chip_no_projects')).toBe('还没有项目');
     expect(t('zh', 'ws_chip_add_project')).toBe('添加项目…');
     expect(t('zh', 'chats_label')).toBe('对话');
-    expect(t('zh', 'draft_hero_chat')).toBe('想做什么？');
+    expect(t('zh', 'draft_hero_chat')).toBe('今天想做点什么？');
+    expect(t('zh', 'draft_hero_before')).toBe('在');
+    expect(t('zh', 'draft_hero_after')).toBe('里做点什么？');
   });
 
   it('provides no-project chat texts in en', () => {
@@ -24,7 +26,9 @@ describe('i18n empty home and branding', () => {
     expect(t('en', 'ws_chip_no_projects')).toBe('No projects yet');
     expect(t('en', 'ws_chip_add_project')).toBe('Add project…');
     expect(t('en', 'chats_label')).toBe('Chats');
-    expect(t('en', 'draft_hero_chat')).toBe('What should we do?');
+    expect(t('en', 'draft_hero_chat')).toBe('What would you like to do today?');
+    expect(t('en', 'draft_hero_before')).toBe('What would you like to do in');
+    expect(t('en', 'draft_hero_after')).toBe('?');
   });
 
   it('language option labels are autonyms in both UI languages', () => {

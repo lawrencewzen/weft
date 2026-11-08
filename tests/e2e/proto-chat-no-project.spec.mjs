@@ -36,7 +36,7 @@ test('picking 不选项目 and sending creates a chat, not a project conversatio
   await expect(page).toHaveURL(/#\/new$/);
   await expect(page.getByTestId('next-ws-chip')).toContainText('选择项目');
   await expect(page.getByTestId('next-ws-chip')).toHaveClass(/is-empty/);
-  await expect(page.getByTestId('next-draft-hint')).toHaveText('想做什么？');
+  await expect(page.getByTestId('next-draft-hint')).toHaveText('今天想做点什么？');
   await expect(page.getByTestId('next-draft-hero-ws')).toHaveCount(0);
   await expect(page.locator('.draft-hero-hint')).toHaveCount(0);
   await expect(page.getByTestId('next-composer-git')).toHaveCount(0);
@@ -70,6 +70,7 @@ test('seeded no-project conversation hides git chip and still has a right pane',
   await expect(page.getByTestId('next-ws-chip')).toContainText('选择项目');
   await expect(page.getByTestId('next-composer-git')).toHaveCount(0);
   await expect(page.getByTestId('next-tool-group')).toHaveCount(1);
+  await page.getByTestId('next-right-toggle').click();
   await page.getByTestId('next-right-tab-files').click();
   await expect(page.locator('[data-testid=next-file-node][data-path="README.md"]')).toBeVisible();
   await expect(page.getByTestId('next-right-tab-term')).toHaveCount(0);
@@ -88,7 +89,7 @@ test('clearing projects shows the no-project draft and can send', async ({ page 
   await expect(page.getByTestId('next-home-add')).toHaveCount(0);
   await expect(page.getByTestId('next-ws-node')).toHaveCount(0);
   await expect(page.getByTestId('next-ws-new')).toBeVisible();
-  await expect(page.getByTestId('next-draft-hint')).toHaveText('想做什么？');
+  await expect(page.getByTestId('next-draft-hint')).toHaveText('今天想做点什么？');
   await expect(page.getByTestId('next-draft-hero-ws')).toHaveCount(0);
   await expect(page.locator('.draft-hero-hint')).toHaveCount(0);
   await expect(page.getByTestId('next-ws-chip')).toContainText('选择项目');
@@ -151,12 +152,12 @@ test('hero chip can switch to 不选项目 and the title becomes 想做什么？
   await expect(page).toHaveURL(/#\/w\/ws-weft\/new$/);
   await expect(page.getByTestId('next-draft-hero-ws')).toContainText('weft');
   await expect(page.locator('.draft-hero-hint')).toContainText('weft');
-  await expect(page.getByTestId('next-draft-hint')).toContainText('要在');
+  await expect(page.getByTestId('next-draft-hint')).toContainText('在');
   await page.getByTestId('next-draft-hero-ws').click();
   await expect(page.getByTestId('next-draft-hero-menu')).toBeVisible();
   await page.locator('[data-testid=next-ws-chip-option][data-id="__none__"]').click();
   await expect(page).toHaveURL(/#\/new$/);
-  await expect(page.getByTestId('next-draft-hint')).toHaveText('想做什么？');
+  await expect(page.getByTestId('next-draft-hint')).toHaveText('今天想做点什么？');
   await expect(page.getByTestId('next-draft-hero-ws')).toHaveCount(0);
   await expect(page.locator('.draft-hero-hint')).toHaveCount(0);
   await expect(page.getByTestId('next-ws-chip')).toContainText('选择项目');

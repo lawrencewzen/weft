@@ -51,7 +51,8 @@ test('2. panel compact: running state with spinner and thread line, then the not
   await expect(note).toHaveCount(1);
   await expect(note).toHaveAttribute('data-kind', 'compaction');
   await expect(page.getByTestId('next-compaction-error')).toHaveCount(0);
-  await expect(page.getByTestId('next-context-chip')).toHaveText('12%');
+  await expect(page.getByTestId('next-context-chip')).toHaveAttribute('title', /已用 12%/);
+  await expect(page.getByTestId('next-context-chip').locator('.context-chip-pct')).toHaveCount(0);
   await expect(row).toBeEnabled();
 
   const calls = (await state.requests()).filter((r) => r.method === 'POST' && /\/compact$/.test(r.url));

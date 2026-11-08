@@ -116,4 +116,17 @@ describe('Composer send button title', () => {
     const sendBtnEn = host?.querySelector<HTMLButtonElement>('[data-testid="next-send"]');
     expect(sendBtnEn?.getAttribute('title')).toBe('Send (Ctrl+Enter)');
   });
+
+  it('places workspace chip in where-bar above composer-box, not inside composer-bar bottom row', async () => {
+    await renderComposer('zh');
+    const whereBar = host?.querySelector<HTMLDivElement>('[data-testid="next-composer-where"]');
+    expect(whereBar).not.toBeNull();
+    const wsChip = whereBar?.querySelector('[data-testid="next-ws-chip"]');
+    expect(wsChip).not.toBeNull();
+
+    const composerBox = host?.querySelector<HTMLDivElement>('[data-testid="next-composer"]');
+    expect(composerBox).not.toBeNull();
+    const insideWsChip = composerBox?.querySelector('.composer-bar [data-testid="next-ws-chip"]');
+    expect(insideWsChip).toBeNull();
+  });
 });
