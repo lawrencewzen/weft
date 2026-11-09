@@ -6,6 +6,7 @@ test.describe.configure({ timeout: 120_000 });
 
 test('changes pane: file status letters, deleted strikethrough, rename display, context menu, and diff notes', async ({ page }) => {
   const state = await openProto(page);
+  await page.getByTestId('next-right-toggle').click();
 
   // 1. Changes tab is open by default, verify rows
   const addRow = page.locator('[data-testid=next-change-row][data-path="web/src/data/store.test.ts"]');

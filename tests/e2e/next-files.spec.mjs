@@ -63,6 +63,7 @@ test('FL-1 write shows in the changes diff', async ({ page }) => {
     await sendNext(page, '写 notes/today.md');
     await expect(page.getByTestId('next-item-assistant').filter({ hasText: '写好了。' })).toBeVisible({ timeout: 20000 });
     await waitRunDone(page);
+    await page.getByTestId('next-right-toggle').click();
     await expect(page.getByTestId('next-right')).toBeVisible();
     await page.getByTestId('next-right-tab-changes').click();
     const row = page.locator('[data-testid=next-change-row][data-path="notes/today.md"]');
@@ -86,6 +87,7 @@ test('FL-2 files tab opens the written markdown', async ({ page }) => {
   try {
     await sendNext(page, '写 notes/today.md');
     await waitRunDone(page);
+    await page.getByTestId('next-right-toggle').click();
     await page.getByTestId('next-right-tab-files').click();
     await expect(page.getByTestId('next-file-tree')).toBeVisible();
     await expect(page.locator('[data-testid=next-file-node][data-path="notes"]')).toBeVisible({ timeout: 15000 });
@@ -106,6 +108,7 @@ test('FL-3 markdown edit save survives reload and updates the diff', async ({ pa
   try {
     await sendNext(page, '写 notes/today.md');
     await waitRunDone(page);
+    await page.getByTestId('next-right-toggle').click();
     await page.getByTestId('next-right-tab-files').click();
     await (await revealFile(page, 'notes/today.md')).click();
     await expect(page.getByTestId('next-file-view')).toContainText('QA-FILE-1');
@@ -143,6 +146,7 @@ test('FL-4 tool results refresh the file tree while still running', async ({ pag
     { text: 'bash 写好了。' },
   ]);
   try {
+    await page.getByTestId('next-right-toggle').click();
     await page.getByTestId('next-right-tab-files').click();
     await expect(page.getByTestId('next-file-tree')).toBeVisible();
     await sendNext(page, '写 live/qa-file-live.txt');
@@ -183,6 +187,7 @@ test('FL-5 reverting a new file to the empty baseline drops it from the changes 
   try {
     await sendNext(page, '写 notes/today.md');
     await waitRunDone(page);
+    await page.getByTestId('next-right-toggle').click();
     await page.getByTestId('next-right-tab-changes').click();
     const row = page.locator('[data-testid=next-change-row][data-path="notes/today.md"]');
     await expect(row).toBeVisible({ timeout: 15000 });
@@ -228,6 +233,7 @@ test('FL-6 long filenames truncate with a full-path title in changes and the fil
   try {
     await sendNext(page, `写 ${longName}`);
     await waitRunDone(page);
+    await page.getByTestId('next-right-toggle').click();
     await page.locator('.col-right').evaluate((el) => {
       el.style.width = '240px';
       el.style.setProperty('--panel-w', '240px');
@@ -361,6 +367,7 @@ test('saving an edited file updates the changes tab counts', async ({ page }) =>
   try {
     await sendNext(page, '写 notes/today.md');
     await waitRunDone(page);
+    await page.getByTestId('next-right-toggle').click();
     const stat = page.getByTestId('next-right-tab-changes').locator('.tab-stat');
     await expect(stat.locator('.add')).toBeVisible();
     const beforeAdd = await stat.locator('.add').textContent();
@@ -388,6 +395,7 @@ test('a 409 conflict offers overwrite and reload', async ({ page }) => {
   try {
     await sendNext(page, '写 notes/today.md');
     await waitRunDone(page);
+    await page.getByTestId('next-right-toggle').click();
     await page.getByTestId('next-right-tab-files').click();
     await (await revealFile(page, 'notes/today.md')).click();
     await page.getByTestId('next-file-open-editor').click();
@@ -424,6 +432,7 @@ test('focus inside editor and press Cmd/Ctrl+S saves once via route interception
   try {
     await sendNext(page, 'write cmd-save');
     await waitRunDone(page);
+    await page.getByTestId('next-right-toggle').click();
     await page.getByTestId('next-right-tab-files').click();
     await (await revealFile(page, 'notes/cmd-save.txt')).click();
     const editor = page.getByTestId('next-file-editor').locator('.cm-content');

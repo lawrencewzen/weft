@@ -160,7 +160,10 @@ test('thread and composer width follow 76% of the center pane with 520–1000 cl
     expect(Math.abs(measured.stack - row.chat), `composer-stack at ${row.center}px center`).toBeLessThanOrEqual(1);
   }
 
-  await page.getByTestId('next-right-collapse').click();
+  const collapseBtn = page.getByTestId('next-right-collapse');
+  if (await collapseBtn.isVisible().catch(() => false)) {
+    await collapseBtn.click();
+  }
   await expect(page.locator('.next-shell')).toHaveClass(/right-closed/);
   const live = await page.evaluate(() => {
     const center = document.querySelector('.col-center');
@@ -204,7 +207,10 @@ test('thread and composer width follow 55% of the center pane with 420–760 cla
     expect(Math.abs(measured.stack - row.chat), `composer-stack at ${row.center}px center`).toBeLessThanOrEqual(1);
   }
 
-  await page.getByTestId('next-right-collapse').click();
+  const collapseBtn = page.getByTestId('next-right-collapse');
+  if (await collapseBtn.isVisible().catch(() => false)) {
+    await collapseBtn.click();
+  }
   await expect(page.locator('.next-shell')).toHaveClass(/right-closed/);
   const live = await page.evaluate(() => {
     const center = document.querySelector('.col-center');

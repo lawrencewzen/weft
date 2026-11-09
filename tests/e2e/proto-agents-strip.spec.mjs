@@ -22,6 +22,7 @@ test('status strip appearance, collapsed counts, expand, in-place details, and s
 
   // Right pane has NO subagent tab
   await expect(page.getByTestId('next-right-tab-subagents')).toHaveCount(0);
+  await page.getByTestId('next-right-toggle').click();
   await expect(page.getByTestId('next-right-tab-changes')).toBeVisible();
 
   // Collapsed strip displays summary counts and headline

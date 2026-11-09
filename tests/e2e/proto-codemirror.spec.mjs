@@ -23,6 +23,7 @@ async function getTokenColors(page) {
 test('syntax highlighting in .mjs and package.json: keyword, string, comment, and variable are pairwise distinct in light and dark modes, and JSON keys and values are distinct', async ({ page }) => {
   const state = await openProto(page);
 
+  await page.getByTestId('next-right-toggle').click();
   await page.getByTestId('next-right-tab-files').click();
 
   // --- 1. Light Mode: .mjs tokens check ---
@@ -109,6 +110,7 @@ test('focus inside editor and press Cmd/Ctrl+S once: save request fires exactly 
   const state = await openProto(page);
   const modKey = process.platform === 'darwin' ? 'Meta' : 'Control';
 
+  await page.getByTestId('next-right-toggle').click();
   await page.getByTestId('next-right-tab-files').click();
   await page.locator('[data-testid=next-file-node][data-path="web/src/data/store.ts"]').click();
   await expect(page.getByTestId('next-file-editor')).toBeVisible();
@@ -146,6 +148,7 @@ test('CodeMirror 6 acceptance: md preview/edit toggle, conflict flow, target lin
   const modKey = process.platform === 'darwin' ? 'Meta' : 'Control';
 
   // 1. Zoom 0.9 click positioning
+  await page.getByTestId('next-right-toggle').click();
   await page.getByTestId('next-right-tab-files').click();
   await page.locator('[data-testid=next-file-node][data-path="web/src/data/store.ts"]').click();
   await expect(page.getByTestId('next-file-editor')).toBeVisible();

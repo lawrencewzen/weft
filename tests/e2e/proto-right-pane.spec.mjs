@@ -12,6 +12,8 @@ test.describe.configure({ timeout: 120_000 });
 test('diff, file tree, preview, save and the 409 conflict demo', async ({ page }) => {
   const state = await openProto(page);
 
+  await page.getByTestId('next-right-toggle').click();
+
   // Seeded changes (main Agent and sub-agent), sorted by path.
   await expect(page.getByTestId('next-change-row')).toHaveCount(8);
   await expect(page.getByTestId('next-change-row').first()).toHaveAttribute(
@@ -167,6 +169,8 @@ test('a simulated edit lands in the changes list with its diff', async ({ page }
   await expect(page.getByTestId('next-stop')).toHaveCount(0, { timeout: 40_000 });
   await expect(page.getByTestId('next-send')).toBeVisible();
 
+  await page.getByTestId('next-right-toggle').click();
+
   await expect(page.getByTestId('next-change-row')).toHaveCount(1);
   await expect(page.getByTestId('next-change-row').first()).toHaveAttribute('data-path', 'web/src/data/store.ts');
   await expect(page.getByTestId('next-change-row').first().getByTestId('next-change-by')).toHaveText('主 Agent');
@@ -184,6 +188,9 @@ test('a simulated edit lands in the changes list with its diff', async ({ page }
 
 test('diff long line wraps in default narrow pane and unwraps when widened', async ({ page }) => {
   const state = await openProto(page);
+
+  await page.getByTestId('next-right-toggle').click();
+  await expect(page.getByTestId('next-right')).toHaveCSS('width', '440px');
 
   const testRow = page.locator('[data-testid=next-change-row][data-path="web/src/data/store.test.ts"]');
   await expect(testRow).toBeVisible();

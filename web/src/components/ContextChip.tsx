@@ -66,7 +66,7 @@ export function ContextChip({ lang, context, selected, compact }: Props) {
     <button
       ref={chipRef}
       type="button"
-      className={`context-chip${warn ? ' is-warn' : ''}`}
+      className={`context-chip${warn ? ' is-warn' : ''}${context.percent >= 70 ? ' has-num' : ''}`}
       data-testid="next-context-chip"
       data-level={context.level}
       aria-haspopup="dialog"
@@ -92,7 +92,9 @@ export function ContextChip({ lang, context, selected, compact }: Props) {
           strokeDasharray={`${(Math.min(100, context.percent) / 100) * circumference} ${circumference}`}
         />
       </svg>
-      <span className="context-chip-pct">{t(lang, 'ctx_percent', { n: context.percent })}</span>
+      {context.percent >= 70 ? (
+        <span className="context-chip-pct">{t(lang, 'ctx_percent', { n: context.percent })}</span>
+      ) : null}
     </button>
     {open ? (
       <div

@@ -290,17 +290,13 @@ export function Thread({
     >
       <div className={innerClass}>
         {empty ? (
-          isDraft ? (
-            <DraftHero
-              lang={lang}
-              workspaceId={draftWorkspaceId}
-              workspaceName={draftWorkspaceName}
-              onPickWorkspace={onPickWorkspace}
-              onNewWorkspace={onNewWorkspace}
-            />
-          ) : (
-            <div className="thread-empty">{t(lang, 'empty_chat_hint')}</div>
-          )
+          <DraftHero
+            lang={lang}
+            workspaceId={draftWorkspaceId}
+            workspaceName={draftWorkspaceName}
+            onPickWorkspace={onPickWorkspace}
+            onNewWorkspace={onNewWorkspace}
+          />
         ) : items.map((item) => {
             if (item.kind === 'user') return <UserMessage key={item.id} item={item} lang={lang} conversationId={conversationId} />;
             if (item.kind === 'assistant') {

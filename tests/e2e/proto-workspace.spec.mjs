@@ -82,6 +82,7 @@ test('+ opens the dialog; Browse picks a folder (cancel keeps state) and only ç¡
   await expect(page.locator(`[data-testid=next-conv-row][data-ws-id="${wsId}"]`)).toHaveCount(1);
 
   // The new workspace has its own mock repository in the file tab.
+  await page.getByTestId('next-right-toggle').click();
   await page.getByTestId('next-right-tab-files').click();
   await expect(page.locator('[data-testid=next-file-node][data-path="README.md"]')).toBeVisible();
 

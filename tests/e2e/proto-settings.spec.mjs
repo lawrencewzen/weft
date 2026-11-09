@@ -61,8 +61,8 @@ test('general: language, appearance, theme and font size apply immediately', asy
 test('general: chat width options standard, wide, wider, full strictly increase width and persist across reload', async ({ page }) => {
   const state = await openProto(page);
   expect(page.viewportSize()).toEqual({ width: 1440, height: 900 });
-  await expect(page.locator('.next-shell')).not.toHaveClass(/right-closed/);
-  await expect(page.getByTestId('next-right')).toBeVisible();
+  await expect(page.locator('.next-shell')).toHaveClass(/right-closed/);
+  await expect(page.getByTestId('next-right')).toBeHidden();
 
   await page.getByTestId('next-open-settings').click();
   await expect(page.getByTestId('next-settings-general')).toBeVisible();
