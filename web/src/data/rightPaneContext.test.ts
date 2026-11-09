@@ -300,4 +300,53 @@ describe('RightPaneProvider context split', () => {
     expect(layoutRenders).toBe(layoutAfterMount);
     expect(actionsRenders).toBe(actionsAfterMount);
   });
+
+  it('toggleRight switches to changes tab when opening with changes', async () => {
+    let layoutVal: ReturnType<typeof useRightLayout> | null = null;
+    let changesVal: ReturnType<typeof useRightChanges> | null = null;
+    function ProbeAll() {
+      layoutVal = useRightLayout();
+      changesVal = useRightChanges();
+      return null;
+    }
+
+    const store = fakeStore(CHANGES);
+    hoisted.session = { store };
+
+    await act(async () => {
+      root = createRoot(container);
+      root.render(createElement(RightPaneProvider, {
+        conversationId: 'c1',
+        workspaceId: 'ws-weft',
+        lang: 'zh',
+        onToast: () => {},
+        children: createElement(ProbeAll),
+      }));
+    });
+
+    expect(layoutVal).not.toBeNull();
+    expect(changesVal).not.toBeNull();
+    expect(changesVal!.hasChanges).toBe(true);
+    expect(layoutVal!.open).toBe(false);
+
+    // Explicitly set tab to 'files' while closed
+    await act(async () => {
+      layoutVal!.setTab('files');
+    });
+    expect(layoutVal!.open).toBe(true);
+    expect(layoutVal!.tab).toBe('files');
+
+    // Close panel
+    await act(async () => {
+      layoutVal!.toggleRight();
+    });
+    expect(layoutVal!.open).toBe(false);
+
+    // Now open panel via toggleRight: should default to 'changes' because hasChanges is true
+    await act(async () => {
+      layoutVal!.toggleRight();
+    });
+    expect(layoutVal!.open).toBe(true);
+    expect(layoutVal!.tab).toBe('changes');
+  });
 });

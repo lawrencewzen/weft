@@ -103,7 +103,7 @@ export function writeRightWidth(width: number): void {
 
 export function defaultRightOpen(viewportWidth: number): boolean {
   if (isRightOverlayWidth(viewportWidth)) return false;
-  return readPref(LS_RIGHT_OPEN, true);
+  return readPref(LS_RIGHT_OPEN, false);
 }
 
 export function persistRightOpen(open: boolean, viewportWidth: number): void {

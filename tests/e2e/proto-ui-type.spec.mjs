@@ -16,9 +16,10 @@ const ICON_EXCLUDE = [
   '.dr .chev',
   '.mp-add-ck',
   '.msg-body h1',
+  '.sidebar-archived-badge',
 ].join(', ');
 
-const MD_ALLOWED = [11.5, 12.5, 13.5, 14, 14.5, 15, 17, 28, 14.5 * 0.86];
+const MD_ALLOWED = [12, 13.5, 15.5, 16, 17, 18, 19, 28, 16 * 0.86];
 
 function near(px, targets, eps = 0.06) {
   return targets.some((t) => Math.abs(px - t) < eps);
@@ -111,11 +112,11 @@ test('font-size roles follow sm/md/lg across chrome, settings, draft title and b
   await expect(convRow).toBeVisible();
   await expect(page.locator('html')).toHaveAttribute('data-font-size', 'md');
 
-  expect(await fontSizeOf(convTitle)).toBeCloseTo(13.5, 1);
-  expect(await fontSizeOf(convTime)).toBeCloseTo(12.5, 1);
-  expect(await fontSizeOf(groupLabel)).toBeCloseTo(11.5, 1);
-  expect(await fontSizeOf(msgBody)).toBeCloseTo(14.5, 1);
-  expect(await measureMenuItem(page)).toBeCloseTo(13.5, 1);
+  expect(await fontSizeOf(convTitle)).toBeCloseTo(15.5, 1);
+  expect(await fontSizeOf(convTime)).toBeCloseTo(13.5, 1);
+  expect(await fontSizeOf(groupLabel)).toBeCloseTo(12, 1);
+  expect(await fontSizeOf(msgBody)).toBeCloseTo(16, 1);
+  expect(await measureMenuItem(page)).toBeCloseTo(15.5, 1);
 
   await page.getByTestId('next-open-settings').click();
   await expect(page.getByTestId('next-settings')).toBeVisible();
@@ -123,32 +124,32 @@ test('font-size roles follow sm/md/lg across chrome, settings, draft title and b
   const navItem = page.getByTestId('next-settings-nav-general');
   const segBtn = page.locator('[data-testid=next-pref-font] button').first();
   await expect(settingsTitle).toBeVisible();
-  expect(await fontSizeOf(settingsTitle)).toBeCloseTo(17, 1);
-  expect(await fontSizeOf(navItem)).toBeCloseTo(13.5, 1);
-  expect(await fontSizeOf(segBtn)).toBeCloseTo(13.5, 1);
-  expect(await measureFormInput(page)).toBeCloseTo(13.5, 1);
+  expect(await fontSizeOf(settingsTitle)).toBeCloseTo(18, 1);
+  expect(await fontSizeOf(navItem)).toBeCloseTo(15.5, 1);
+  expect(await fontSizeOf(segBtn)).toBeCloseTo(15.5, 1);
+  expect(await measureFormInput(page)).toBeCloseTo(15.5, 1);
 
   await setFontSize(page, 'lg');
-  expect(await fontSizeOf(convTitle)).toBeCloseTo(14.5, 1);
-  expect(await fontSizeOf(convTime)).toBeCloseTo(13.5, 1);
-  expect(await fontSizeOf(groupLabel)).toBeCloseTo(12.5, 1);
-  expect(await fontSizeOf(settingsTitle)).toBeCloseTo(18, 1);
-  expect(await fontSizeOf(navItem)).toBeCloseTo(14.5, 1);
-  expect(await fontSizeOf(segBtn)).toBeCloseTo(14.5, 1);
-  expect(await fontSizeOf(msgBody)).toBeCloseTo(15.5, 1);
-  expect(await measureFormInput(page)).toBeCloseTo(14.5, 1);
-  expect(await measureMenuItem(page)).toBeCloseTo(14.5, 1);
+  expect(await fontSizeOf(convTitle)).toBeCloseTo(16.5, 1);
+  expect(await fontSizeOf(convTime)).toBeCloseTo(14.5, 1);
+  expect(await fontSizeOf(groupLabel)).toBeCloseTo(13, 1);
+  expect(await fontSizeOf(settingsTitle)).toBeCloseTo(19, 1);
+  expect(await fontSizeOf(navItem)).toBeCloseTo(16.5, 1);
+  expect(await fontSizeOf(segBtn)).toBeCloseTo(16.5, 1);
+  expect(await fontSizeOf(msgBody)).toBeCloseTo(17, 1);
+  expect(await measureFormInput(page)).toBeCloseTo(16.5, 1);
+  expect(await measureMenuItem(page)).toBeCloseTo(16.5, 1);
 
   await setFontSize(page, 'sm');
-  expect(await fontSizeOf(convTitle)).toBeCloseTo(12.5, 1);
-  expect(await fontSizeOf(convTime)).toBeCloseTo(11.5, 1);
-  expect(await fontSizeOf(groupLabel)).toBeCloseTo(10.5, 1);
-  expect(await fontSizeOf(settingsTitle)).toBeCloseTo(16, 1);
-  expect(await fontSizeOf(navItem)).toBeCloseTo(12.5, 1);
-  expect(await fontSizeOf(segBtn)).toBeCloseTo(12.5, 1);
-  expect(await fontSizeOf(msgBody)).toBeCloseTo(13.5, 1);
-  expect(await measureFormInput(page)).toBeCloseTo(12.5, 1);
-  expect(await measureMenuItem(page)).toBeCloseTo(12.5, 1);
+  expect(await fontSizeOf(convTitle)).toBeCloseTo(14.5, 1);
+  expect(await fontSizeOf(convTime)).toBeCloseTo(12.5, 1);
+  expect(await fontSizeOf(groupLabel)).toBeCloseTo(11, 1);
+  expect(await fontSizeOf(settingsTitle)).toBeCloseTo(17, 1);
+  expect(await fontSizeOf(navItem)).toBeCloseTo(14.5, 1);
+  expect(await fontSizeOf(segBtn)).toBeCloseTo(14.5, 1);
+  expect(await fontSizeOf(msgBody)).toBeCloseTo(15, 1);
+  expect(await measureFormInput(page)).toBeCloseTo(14.5, 1);
+  expect(await measureMenuItem(page)).toBeCloseTo(14.5, 1);
 
   await setFontSize(page, 'md');
   await closeSettings(page);

@@ -7,7 +7,7 @@ import { expectClean, openProto } from './helpers/proto.mjs';
  * 2. Browse… calls the (simulated) system folder picker:
  *    - Picked: fills the path, nothing is created until 确定.
  *    - Cancelled: dialog unchanged.
- * 3. Directory browser: breadcrumbs, editable path input (Enter to jump, inline
+ * 3. In-page directory browser (only when Browse is unsupported, `?pick=unsupported`): breadcrumbs, editable path input (Enter to jump, inline
  *    error on failure), blocked path (~/.ssh) disables create.
  * 4. Git import tab is hidden for now.
  */
@@ -30,7 +30,27 @@ test('+ opens the dialog; Browse picks a folder (cancel keeps state) and only �
   await expect(page.getByTestId('next-ws-path')).toHaveValue('C:\\Users\\demo\\Projects\\billing-api');
   await expect(browse).toBeEnabled();
   await expect(page.getByTestId('next-ws-create')).toBeEnabled();
+  await expect(page.getByTestId('next-ws-confirm-name')).toHaveText('billing-api');
+  await expect(page.getByTestId('next-ws-confirm-git')).toHaveText('Git');
+  await expect(page.getByTestId('next-dir-row')).toHaveCount(0);
   await expect(page.getByTestId('next-ws-node')).toHaveCount(2);
+  // 添加是明显的主按钮（深色底），悬停时也不能刷成浅灰底白字
+  const addBtn = page.getByTestId('next-ws-create');
+  const bg = () => addBtn.evaluate((el) => getComputedStyle(el).backgroundColor);
+  const cssColor = (name) => page.evaluate((n) => {
+    const probe = document.createElement('i');
+    probe.style.color = `var(${n})`;
+    document.body.appendChild(probe);
+    const c = getComputedStyle(probe).color;
+    probe.remove();
+    return c;
+  }, name);
+  const accent = await cssColor('--accent');
+  await page.mouse.move(0, 0);
+  expect(await bg()).toBe(accent);
+  await addBtn.hover();
+  expect(await bg()).not.toBe(await cssColor('--bg-hover'));
+  expect(await addBtn.evaluate((el) => getComputedStyle(el).color)).toBe(await cssColor('--on-accent'));
 
   // 2. Cancelled (second click) -> unchanged
   await browse.click();
@@ -62,6 +82,7 @@ test('+ opens the dialog; Browse picks a folder (cancel keeps state) and only �
   await expect(page.locator(`[data-testid=next-conv-row][data-ws-id="${wsId}"]`)).toHaveCount(1);
 
   // The new workspace has its own mock repository in the file tab.
+  await page.getByTestId('next-right-toggle').click();
   await page.getByTestId('next-right-tab-files').click();
   await expect(page.locator('[data-testid=next-file-node][data-path="README.md"]')).toBeVisible();
 
@@ -69,11 +90,16 @@ test('+ opens the dialog; Browse picks a folder (cancel keeps state) and only �
 });
 
 test('directory browser supports breadcrumbs, path jumping, and blocked directories', async ({ page }) => {
-  const state = await openProto(page);
+  const state = await openProto(page, 'pick=unsupported');
   await expect(page.getByTestId('next-ws-node')).toHaveCount(2);
 
   await page.getByTestId('next-ws-new').click();
   await expect(page.getByTestId('next-ws-dialog')).toBeVisible();
+  // The in-page browser is hidden until Browse reports unsupported.
+  await expect(page.getByTestId('next-dir-row')).toHaveCount(0);
+  await expect(page.getByTestId('next-ws-browse')).toBeVisible();
+  await page.getByTestId('next-ws-browse').click();
+  await expect(page.getByTestId('next-ws-browse')).toHaveCount(0);
 
   // Acceptance 3: No Git tabs, no "allowed root" copy
   await expect(page.getByTestId('next-ws-tab-git')).toHaveCount(0);
@@ -96,6 +122,7 @@ test('directory browser supports breadcrumbs, path jumping, and blocked director
   await expect(page.getByTestId('next-dir-row')).toHaveCount(2);
   await expect(page.getByTestId('next-ws-path')).toHaveValue('D:\\work\\sandbox');
   await expect(page.getByTestId('next-ws-create')).toBeEnabled();
+  await expect(page.getByTestId('next-ws-confirm-name')).toHaveText('sandbox');
 
   // Breadcrumbs: click "work" to navigate up
   const workCrumb = page.getByTestId('next-breadcrumb-item').filter({ hasText: 'work' });
@@ -103,6 +130,13 @@ test('directory browser supports breadcrumbs, path jumping, and blocked director
   await workCrumb.click();
   await expect(page.getByTestId('next-dir-row')).toHaveCount(4);
   await expect(page.getByTestId('next-ws-path')).toHaveValue('D:\\work');
+
+  // Typed path matching a listed folder validates (any drive/letter case), with the Git tag for repos
+  await page.getByTestId('next-ws-path').fill('d:\\work\\weft');
+  await page.getByTestId('next-ws-path').press('Enter');
+  await expect(page.getByTestId('next-ws-confirm-name')).toHaveText('weft');
+  await expect(page.getByTestId('next-ws-confirm-git')).toHaveText('Git');
+  await expect(page.getByTestId('next-ws-dir-error')).toHaveCount(0);
 
   // Path input Enter with invalid path -> inline error
   await page.getByTestId('next-ws-path').fill('D:\\nonexistent-folder');
@@ -130,13 +164,15 @@ test('directory browser supports breadcrumbs, path jumping, and blocked director
 });
 
 test('T101-4b Acceptance 1: from D:\\work click breadcrumb This PC to see C: and D:, enter C:\\ and continue into Projects, create takes effect on current directory with correct name', async ({ page }) => {
-  const state = await openProto(page);
+  const state = await openProto(page, 'pick=unsupported');
 
   await page.getByTestId('next-ws-new').click();
   await expect(page.getByTestId('next-ws-dialog')).toBeVisible();
+  await page.getByTestId('next-ws-browse').click();
+  await expect(page.getByTestId('next-ws-browse')).toHaveCount(0);
 
-  // Initially at D:\work
-  await expect(page.getByTestId('next-ws-path')).toHaveValue('D:\\work');
+  // Initially path input is empty
+  await expect(page.getByTestId('next-ws-path')).toHaveValue('');
 
   // Breadcrumbs: click "此电脑"
   const thisPcCrumb = page.getByTestId('next-breadcrumb-item').filter({ hasText: '此电脑' });
@@ -175,10 +211,12 @@ test('T101-4b Acceptance 1: from D:\\work click breadcrumb This PC to see C: and
 });
 
 test('T101-4b Acceptance 2: in drives view, create is disabled, path input is empty, pasting path and pressing Enter jumps', async ({ page }) => {
-  const state = await openProto(page);
+  const state = await openProto(page, 'pick=unsupported');
 
   await page.getByTestId('next-ws-new').click();
   await expect(page.getByTestId('next-ws-dialog')).toBeVisible();
+  await page.getByTestId('next-ws-browse').click();
+  await expect(page.getByTestId('next-ws-browse')).toHaveCount(0);
 
   // Click "此电脑" to enter drives view
   const thisPcCrumb = page.getByTestId('next-breadcrumb-item').filter({ hasText: '此电脑' });
@@ -209,15 +247,14 @@ test('T101-4b Acceptance 2: in drives view, create is disabled, path input is em
 });
 
 test('T101-4b Acceptance 3: non-Windows paths do not show "此电脑" in breadcrumbs', async ({ page }) => {
-  const state = await openProto(page);
+  const state = await openProto(page, 'pick=unsupported');
 
   await page.getByTestId('next-ws-new').click();
   await expect(page.getByTestId('next-ws-dialog')).toBeVisible();
+  await page.getByTestId('next-ws-browse').click();
+  await expect(page.getByTestId('next-ws-browse')).toHaveCount(0);
 
-  // The dialog fills the path from the first directory listing. Wait for that
-  // write to finish; typing earlier is replaced by the default D:\work.
   const pathInput = page.getByTestId('next-ws-path');
-  await expect(pathInput).toHaveValue('D:\\work');
   await pathInput.fill('~/.ssh');
   await pathInput.press('Enter');
 

@@ -92,7 +92,8 @@ test('panels slide transition and monotonicity for left and right panels', async
     // 结束后 next-left-collapse 可见
     await expect(page.getByTestId('next-left-collapse')).toBeVisible();
 
-    // 3. Right panel collapse & expand
+    // 3. Right panel starts collapsed; expand it first
+    await page.getByTestId('next-right-toggle').click();
     await expect(page.getByTestId('next-right-collapse')).toBeVisible();
     const collapseRightPromise = page.getByTestId('next-right-collapse').click();
     const collapseRightSamples = await samplePositions(

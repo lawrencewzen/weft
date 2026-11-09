@@ -767,6 +767,15 @@ function normalizeDir(raw: string): string {
   return win.replace(/\\+$/, '') || WORK_ROOT;
 }
 
+/** 目录表按小写键查，盘符大小写、末尾分隔符不影响命中；返回表里的规范写法。 */
+const DIR_KEYS = new Map(Object.keys(DIRS).map((key) => [key.toLowerCase(), key]));
+
+function canonicalDir(raw: string): string | null {
+  let text = normalizeDir(raw);
+  if (/^[a-zA-Z]:$/.test(text)) text += '\\';
+  return DIR_KEYS.get(text.toLowerCase()) ?? null;
+}
+
 function parentDir(path: string): string | null {
   const norm = normalizeDir(path);
   if (!norm) return null;
@@ -789,9 +798,9 @@ function parentDir(path: string): string | null {
 }
 
 function dirsView(path: string, lang: Lang): MockReply {
-  const normalized = normalizeDir(path);
-  const hit = DIRS[normalized];
-  if (!hit) {
+  const normalized = canonicalDir(path);
+  const hit = normalized ? DIRS[normalized] : null;
+  if (!normalized || !hit) {
     return fail(404, lang === 'en' ? 'Directory not found in the prototype' : '原型里没有这个目录', 'E_PATH');
   }
   const blocked = isBlockedPath(normalized);

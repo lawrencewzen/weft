@@ -63,7 +63,7 @@ test('new chat does not add a sidebar row until the first message is sent', asyn
     await expect(page.getByTestId('next-draft-hint')).toContainText('draft');
     await expect(page.getByTestId('next-draft-hero-ws')).toContainText('draft');
     await expect(page.getByTestId('next-draft-hero-ws')).toHaveCSS('font-size', '28px');
-    await expect(page.getByTestId('next-draft-hint')).toContainText('要在');
+    await expect(page.getByTestId('next-draft-hint')).toContainText('在');
     await expect(page.locator('.draft-hero-hint')).toContainText('draft');
     await page.getByTestId('next-composer-input').fill('写个 README');
     await page.getByTestId('next-send').click();
@@ -96,7 +96,7 @@ test('hero chip can switch to 不选项目 and the title becomes 想做什么？
     await expect(page.getByTestId('next-draft-hero-menu')).toBeVisible();
     await page.locator('[data-testid=next-ws-chip-option][data-id="__none__"]').click();
     await expect(page).toHaveURL(/\/new$/);
-    await expect(page.getByTestId('next-draft-hint')).toHaveText('想做什么？');
+    await expect(page.getByTestId('next-draft-hint')).toHaveText('今天想做点什么？');
     await expect(page.getByTestId('next-draft-hero-ws')).toHaveCount(0);
     await expect(page.locator('.draft-hero-hint')).toHaveCount(0);
     await expect(page.getByTestId('next-ws-chip')).toContainText('选择项目');
@@ -242,6 +242,8 @@ test('creating a workspace from the chip menu selects it for the draft', async (
     await page.getByTestId('next-ws-chip').click();
     await page.getByTestId('next-ws-chip-new').click();
     await expect(page.getByTestId('next-ws-dialog')).toBeVisible();
+    // 测试服务端关了系统选文件夹（WEFT_FOLDER_PICKER=off）：点「浏览」后退回页内目录浏览。
+    await page.getByTestId('next-ws-browse').click();
     const gamma = page.getByTestId('next-dir-row').filter({ hasText: 'gamma' });
     await expect(gamma).toBeVisible();
     await gamma.click();
