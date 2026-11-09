@@ -536,12 +536,6 @@ namespace Weft.Desktop
 
         private void HandlePickFolder(string requestId)
         {
-            if (InvokeRequired)
-            {
-                BeginInvoke(new Action(() => HandlePickFolder(requestId)));
-                return;
-            }
-
             if (isPickingFolder)
             {
                 // Only one folder picker dialog is allowed at a time.
@@ -553,17 +547,27 @@ namespace Weft.Desktop
             isPickingFolder = true;
             try
             {
-                string path = PickFolderModern(Handle);
-                if (!string.IsNullOrEmpty(path))
+                BeginInvoke(new Action(() =>
                 {
-                    SendPickFolderResult(requestId, "picked", path);
-                }
-                else
-                {
-                    SendPickFolderResult(requestId, "cancelled", null);
-                }
+                    try
+                    {
+                        string path = PickFolderModern(Handle);
+                        if (!string.IsNullOrEmpty(path))
+                        {
+                            SendPickFolderResult(requestId, "picked", path);
+                        }
+                        else
+                        {
+                            SendPickFolderResult(requestId, "cancelled", null);
+                        }
+                    }
+                    finally
+                    {
+                        isPickingFolder = false;
+                    }
+                }));
             }
-            finally
+            catch
             {
                 isPickingFolder = false;
             }
@@ -948,7 +952,7 @@ namespace Weft.Desktop
         void SetFileTypes([In] uint cFileTypes, [In] IntPtr rgFilterSpec);
         void SetFileTypeIndex([In] uint iFileType);
         void GetFileTypeIndex(out uint piFileType);
-        void Advise([In, MarshalAs(UnmanagedType.Interface)] IntPtr pfde, out uint pdwCookie);
+        void Advise([In] IntPtr pfde, out uint pdwCookie);
         void Unadvise([In] uint dwCookie);
         void SetOptions([In] uint fos);
         void GetOptions(out uint pfos);
@@ -967,10 +971,10 @@ namespace Weft.Desktop
         void Close([MarshalAs(UnmanagedType.Error)] int hr);
         void SetClientGuid([In] ref Guid guid);
         void ClearClientData();
-        void SetFilter([MarshalAs(UnmanagedType.Interface)] IntPtr pFilter);
+        void SetFilter(IntPtr pFilter);
 
-        void GetResults([MarshalAs(UnmanagedType.Interface)] out IntPtr ppenum);
-        void GetSelectedItems([MarshalAs(UnmanagedType.Interface)] out IntPtr ppsai);
+        void GetResults(out IntPtr ppenum);
+        void GetSelectedItems(out IntPtr ppsai);
     }
 
     [ComImport]

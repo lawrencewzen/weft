@@ -196,7 +196,9 @@ export function WorkspaceDialog({ lang, onClose, onToast, onCreated, pickFolder 
     setPicking(true);
     setError('');
     try {
-      const res = await (pickFolder ? pickFolder() : pickWorkspaceRoot(lang));
+      const picked = pickFolder ? await pickFolder() : null;
+      if (!aliveRef.current) return;
+      const res = picked ?? await pickWorkspaceRoot(lang);
       if (!aliveRef.current || !res) return;
       if (res.status === 'picked') {
         setPathInput(res.path);
