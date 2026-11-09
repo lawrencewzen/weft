@@ -2935,7 +2935,7 @@ button.file-search-result-row:hover {
   align-items: center;
   gap: 6px;
   margin-bottom: 8px;
-  padding: 0 4px;
+  padding: 0;
   min-width: 0;
   flex-wrap: wrap;
 }
