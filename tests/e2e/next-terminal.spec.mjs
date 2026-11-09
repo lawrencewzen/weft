@@ -13,6 +13,7 @@ test('streaming bash output appears in thread tool row without terminal tab', as
     await openNextChat(page, srv, conv.id);
 
     // Right pane has changes and files tabs, no terminal tab
+    await page.getByTestId('next-right-toggle').click();
     await expect(page.getByTestId('next-right-tab-changes')).toBeVisible();
     await expect(page.getByTestId('next-right-tab-files')).toBeVisible();
     await expect(page.getByTestId('next-right-tab-term')).toHaveCount(0);

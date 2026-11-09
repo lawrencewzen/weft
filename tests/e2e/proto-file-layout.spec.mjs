@@ -9,6 +9,7 @@ test('1. Right pane pulled to 700px: side-by-side layout, full height, draggable
   const state = await openProto(page);
   await page.evaluate(() => {
     localStorage.setItem('weft_next_right_w', '700');
+    localStorage.setItem('weft_next_right_open', 'true');
     localStorage.removeItem('weft_next_file_tree_w');
   });
   await page.reload();
@@ -72,6 +73,7 @@ test('2. Narrow right pane: file tree collapsed, toggle button opens drawer, sel
   // Set right pane width < 420px (cannot fit tree min 140 + preview 280)
   await page.evaluate(() => {
     localStorage.setItem('weft_next_right_w', '360');
+    localStorage.setItem('weft_next_right_open', 'true');
   });
   await page.reload();
   await page.getByTestId('next-right-tab-files').click();
@@ -136,6 +138,7 @@ test('3. Maximize: left edge equals middle column, chat hidden, draft preserved,
   expect(centerBoxBefore).not.toBeNull();
 
   // Switch to files tab
+  await page.getByTestId('next-right-toggle').click();
   await page.getByTestId('next-right-tab-files').click();
   const maxBtn = page.getByTestId('next-file-maximize');
   await expect(maxBtn).toBeVisible();
@@ -276,6 +279,7 @@ test('5. Divider dragging accuracy under zoom 0.9: mouse position matches divide
   // Set wide pane at 700px
   await page.evaluate(() => {
     localStorage.setItem('weft_next_right_w', '700');
+    localStorage.setItem('weft_next_right_open', 'true');
     localStorage.removeItem('weft_next_file_tree_w');
   });
   await page.reload();

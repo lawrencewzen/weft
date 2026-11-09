@@ -18,6 +18,7 @@ test('prototype: three entries open the system-terminal action and refuse traver
   await clickOpenTerminal(page);
   await expect(page.getByTestId('next-toast')).toContainText('已在系统终端中打开（原型不会真的打开）');
 
+  await page.getByTestId('next-right-toggle').click();
   await page.getByTestId('next-right-tab-files').click();
   const dir = page.locator('[data-testid=next-file-node][data-path="docs"]');
   await expect(dir).toBeVisible();

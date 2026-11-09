@@ -16,6 +16,7 @@ const ICON_EXCLUDE = [
   '.dr .chev',
   '.mp-add-ck',
   '.msg-body h1',
+  '.sidebar-archived-badge',
 ].join(', ');
 
 const MD_ALLOWED = [11.5, 12.5, 13.5, 14, 14.5, 15, 17, 28, 14.5 * 0.86];
