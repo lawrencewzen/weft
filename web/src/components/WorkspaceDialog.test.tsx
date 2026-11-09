@@ -494,7 +494,7 @@ describe('WorkspaceDialog', () => {
     const browse = () => q('[data-testid="next-ws-browse"]') as HTMLButtonElement | null;
     const pathEl = () => q('[data-testid="next-ws-path"]') as HTMLInputElement;
 
-    async function render(pickFolder?: () => Promise<api.WorkspacePickResult>) {
+    async function render(pickFolder?: () => Promise<api.WorkspacePickResult | null>) {
       await act(async () => {
         root?.render(
           <WorkspaceDialog lang="zh" onClose={vi.fn()} onToast={vi.fn()} pickFolder={pickFolder} />,
@@ -537,6 +537,34 @@ describe('WorkspaceDialog', () => {
       expect(pathEl().value).toBe(before);
       expect((q('[data-testid="next-ws-create"]') as HTMLButtonElement).disabled).toBe(true);
       expect(browse()).not.toBeNull();
+      expect(q('[data-testid="next-ws-error"]')).toBeNull();
+    });
+
+    it('falls back to pickWorkspaceRoot when pickFolder returns null', async () => {
+      const pickSpy = vi.fn().mockResolvedValue(null);
+      const fallbackSpy = vi.spyOn(api, 'pickWorkspaceRoot').mockResolvedValue({
+        status: 'picked',
+        path: 'D:\\work\\sandbox',
+      });
+      await render(pickSpy);
+      await act(async () => { browse()?.click(); });
+      expect(pickSpy).toHaveBeenCalledTimes(1);
+      expect(fallbackSpy).toHaveBeenCalledWith('zh');
+      expect(pathEl().value).toBe('D:\\work\\sandbox');
+      expect((q('[data-testid="next-ws-create"]') as HTMLButtonElement).disabled).toBe(false);
+      expect(q('[data-testid="next-ws-error"]')).toBeNull();
+    });
+
+    it('falls back to pickWorkspaceRoot when pickFolder returns null (cancelled)', async () => {
+      const pickSpy = vi.fn().mockResolvedValue(null);
+      const fallbackSpy = vi.spyOn(api, 'pickWorkspaceRoot').mockResolvedValue({ status: 'cancelled' });
+      await render(pickSpy);
+      const before = pathEl().value;
+      await act(async () => { browse()?.click(); });
+      expect(pickSpy).toHaveBeenCalledTimes(1);
+      expect(fallbackSpy).toHaveBeenCalledWith('zh');
+      expect(pathEl().value).toBe(before);
+      expect((q('[data-testid="next-ws-create"]') as HTMLButtonElement).disabled).toBe(true);
       expect(q('[data-testid="next-ws-error"]')).toBeNull();
     });
 

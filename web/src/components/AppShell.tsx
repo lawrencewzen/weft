@@ -43,6 +43,7 @@ import { Sidebar } from './Sidebar';
 import { SideToggles } from './RightToggle';
 import { WorkspaceDialog } from './WorkspaceDialog';
 import { QuickOpenModal } from './QuickOpenModal';
+import { isDesktopShellAvailable, shellPickFolder } from '../data/shellPickFolder';
 
 type Props = {
   route: AppRoute;
@@ -417,6 +418,7 @@ function AppShellLayout({
           lang={lang}
           onClose={() => setWsDialog(false)}
           onToast={onToast}
+          pickFolder={isDesktopShellAvailable() ? shellPickFolder : undefined}
         />
       ) : null}
       {quickOpen ? (
