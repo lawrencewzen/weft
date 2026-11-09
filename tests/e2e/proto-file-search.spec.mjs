@@ -8,6 +8,7 @@ test('tree search: input shows results, clicking opens file, Esc restores tree w
   const state = await openProto(page);
 
   // Switch to File tab in right pane
+  await page.getByTestId('next-right-toggle').click();
   await page.getByTestId('next-right-tab-files').click();
   const fileBrowser = page.locator('.file-browser');
   await expect(fileBrowser).toBeVisible();
@@ -66,10 +67,11 @@ test('Cmd+P opens quick open modal, keyboard navigation and Enter opens file, sw
 
   await expect(page.getByTestId('next-composer-input')).toBeVisible();
 
-  // Collapse right pane
+  // Right pane starts collapsed by default; ensure toggle is visible
   const collapseBtn = page.getByTestId('next-right-collapse');
-  await expect(collapseBtn).toBeVisible();
-  await collapseBtn.click();
+  if (await collapseBtn.isVisible().catch(() => false)) {
+    await collapseBtn.click();
+  }
   await expect(page.getByTestId('next-right-toggle')).toBeVisible();
 
   // Press Cmd+P / Ctrl+P

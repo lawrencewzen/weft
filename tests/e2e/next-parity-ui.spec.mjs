@@ -193,12 +193,12 @@ test('context chip shows reported usage over the configured window', async ({ pa
   try {
     const { conv } = await openWorkspaceConversation(srv, 'usage', prepared.dirs[0]);
     await openNextChat(page, srv, conv.id);
-    await expect(page.getByTestId('next-context-chip')).toHaveText(CHIP_ZERO_200);
+    await expect(page.getByTestId('next-context-chip')).toHaveAttribute('title', /0%/);
     await sendNext(page, 'count tokens');
-    await expect(page.getByTestId('next-context-chip')).toHaveText(CHIP_USED_200, { timeout: 20000 });
+    await expect(page.getByTestId('next-context-chip')).toHaveAttribute('title', /8%/, { timeout: 20000 });
     await waitRunDone(page);
     await page.reload();
-    await expect(page.getByTestId('next-context-chip')).toHaveText(CHIP_USED_200, { timeout: 20000 });
+    await expect(page.getByTestId('next-context-chip')).toHaveAttribute('title', /8%/, { timeout: 20000 });
   } finally {
     await srv.kill();
   }
@@ -218,9 +218,9 @@ test('context chip stays at 0% when the model reports no usage', async ({ page }
     await openNextChat(page, srv, conv.id);
     await sendNext(page, 'hello');
     await waitRunDone(page);
-    await expect(page.getByTestId('next-context-chip')).toHaveText(CHIP_ZERO_200);
+    await expect(page.getByTestId('next-context-chip')).toHaveAttribute('title', /0%/);
     await page.reload();
-    await expect(page.getByTestId('next-context-chip')).toHaveText(CHIP_ZERO_200, { timeout: 20000 });
+    await expect(page.getByTestId('next-context-chip')).toHaveAttribute('title', /0%/, { timeout: 20000 });
   } finally {
     await srv.kill();
   }

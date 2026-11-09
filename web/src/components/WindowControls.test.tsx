@@ -8,8 +8,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { applyDocumentPrefs, toggleAppearance, watchSystemAppearance } from '../data/prefs';
 import { WindowControls } from './WindowControls';
 
-const LIGHT = 'theme:#fcfcfc,#1f1f1f,#6e6e6e,#efefef,#b94642,#1a1a1a,0.9';
-const DARK = 'theme:#181818,#e4e4e4,#8f8f8f,#222222,#b94642,#111111,0.9';
+const LIGHT = 'theme:#fcfcfc,#1f1f1f,#6e6e6e,#f3f3f3,#b94642,#1a1a1a,0.9';
+const DARK = 'theme:#181818,#e4e4e4,#8f8f8f,#232323,#b94642,#111111,0.9';
 
 const themesCss = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '../styles/themes.css'), 'utf8');
 
@@ -100,7 +100,7 @@ describe('WindowControls', () => {
       applyDocumentPrefs();
       await act(async () => root.render(<WindowControls lang="en" />));
       await settle();
-      expect(posted).toEqual(['theme:#262624,#ebe8e1,#99948a,#2f2e2b,#b94642,#1a1917,0.9']);
+      expect(posted).toEqual(['theme:#262624,#ebe8e1,#99948a,#32312d,#b94642,#1a1917,0.9']);
     });
 
     it('switching the theme reports again, every time', async () => {

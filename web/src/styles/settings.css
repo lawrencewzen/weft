@@ -435,9 +435,27 @@ html[data-theme$="-dark"] .ns-ws-dialog {
   font-size: var(--fs-ui);
   color: var(--ns-ink);
 }
-.ns-path-row { display: flex; gap: 8px; align-items: center; }
-.ns-path-row .ns-input { flex: 1; min-width: 0; }
-.ns-browse-btn { flex: none; display: inline-flex; align-items: center; gap: 6px; height: 34px; }
+/* 添加项目：路径框 + 框内右端的浏览按钮 */
+.ns-path-field { margin-bottom: 0; gap: 8px; }
+.ns-path-box {
+  display: flex; align-items: center; gap: 6px; height: 40px; padding: 0 5px 0 12px;
+  border: 1px solid var(--ns-line); border-radius: 9px; background: var(--panel);
+}
+.ns-path-box:focus-within { border-color: var(--ns-ink); }
+.ns-path-box.is-bad, .ns-path-box.is-bad:focus-within { border-color: var(--ns-bad); }
+.ns-path-input {
+  flex: 1; min-width: 0; height: 100%; border: 0; outline: none; background: transparent; padding: 0;
+  font-family: var(--mono); font-size: var(--fs-ui); color: var(--ns-ink);
+}
+.ns-browse-btn { flex: none; display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 10px; font-size: var(--fs-sm); }
+.ns-browse-btn svg { width: 14px; height: 14px; }
+.ns-path-msg { display: flex; align-items: center; gap: 6px; font-size: var(--fs-sm); line-height: 1.4; min-width: 0; }
+.ns-path-msg span:not(.ns-git-badge) { min-width: 0; overflow-wrap: anywhere; }
+.ns-path-msg.is-bad { color: var(--err-ink); }
+.ns-path-msg.is-ok { color: var(--ns-ink); }
+.ns-path-msg.is-ok svg { flex: none; color: var(--ns-ok); }
+.ns-path-msg.is-ok b { font-weight: 600; }
+.ns-path-msg .ns-git-badge { margin-left: 0; }
 .ns-input.is-mono { font-family: var(--mono); }
 .ns-input:focus { outline: none; border-color: var(--ns-ink); }
 .ns-field-hint { font-size: var(--fs-sm); color: var(--ns-mute); line-height: 1.45; }

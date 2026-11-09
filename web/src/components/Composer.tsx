@@ -389,6 +389,28 @@ export function Composer({
         {conversationId ? (
           <AgentsStrip cid={conversationId} lang={lang} />
         ) : null}
+        <div className="composer-where-bar" data-testid="next-composer-where">
+          <WorkspaceChip
+            lang={lang}
+            selectedId={workspaceId}
+            canSwitch={isDraft}
+            onPick={(id) => {
+              if (id) {
+                writeActiveWorkspace(id);
+                navigate(draftPath(id), { replace: true });
+              } else {
+                writeActiveWorkspace(NO_PROJECT_ID);
+                navigate(newChatPath(), { replace: true });
+              }
+            }}
+            onNew={() => onNewWorkspace?.()}
+            onOpenTerminal={workspaceId
+              ? () => { void openInTerminal(undefined, workspaceId); }
+              : undefined}
+            onCopyPath={copyPath}
+          />
+          <GitChip lang={lang} workspaceId={workspaceId} />
+        </div>
         <div
           className={boxClass}
           data-testid="next-composer"
@@ -524,26 +546,6 @@ export function Composer({
                       onSetContextWindow={(w) => { void setWindow(w); }}
                     />
                   ) : null}
-                  <WorkspaceChip
-                    lang={lang}
-                    selectedId={workspaceId}
-                    canSwitch={isDraft}
-                    onPick={(id) => {
-                      if (id) {
-                        writeActiveWorkspace(id);
-                        navigate(draftPath(id), { replace: true });
-                      } else {
-                        writeActiveWorkspace(NO_PROJECT_ID);
-                        navigate(newChatPath(), { replace: true });
-                      }
-                    }}
-                    onNew={() => onNewWorkspace?.()}
-                    onOpenTerminal={workspaceId
-                      ? () => { void openInTerminal(undefined, workspaceId); }
-                      : undefined}
-                    onCopyPath={copyPath}
-                  />
-                  <GitChip lang={lang} workspaceId={workspaceId} />
                   {demo ? <DemoModelBadge lang={lang} testId="next-demo-model-chip" /> : null}
                 </div>
               )}

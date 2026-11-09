@@ -30,10 +30,10 @@ test('prototype context window UI: context in model menu, presets, custom input,
   await page.goto(pathToFileURL(protoFile).href);
   await expect(page.getByTestId('next-app')).toBeVisible();
 
-  // 1. Context chip shows the percent (click behavior is covered in proto-compaction)
+  // 1. Context chip shows ring only when < 70% (click behavior is covered in proto-compaction)
   const contextChip = page.getByTestId('next-context-chip');
   await expect(contextChip).toBeVisible();
-  await expect(contextChip).toHaveText('24%');
+  await expect(contextChip.locator('.context-chip-pct')).toHaveCount(0);
   await expect(contextChip).toHaveAttribute('title', /已用 24%/);
 
   // 2. Open model menu, hover context row reveals submenu
@@ -87,7 +87,8 @@ test('prototype context window UI: context in model menu, presets, custom input,
   await page.getByTestId('next-context-restore').click();
   await expect(menu).toBeHidden();
 
-  await expect(contextChip).toHaveText('5%');
+  await expect(contextChip.locator('.context-chip-pct')).toHaveCount(0);
+  await expect(contextChip).toHaveAttribute('title', /已用 5%/);
   await expect(contextChip).not.toHaveClass(/is-warn/);
   await expect(page.getByTestId('next-context-banner')).toHaveCount(0);
 

@@ -413,9 +413,17 @@ test('clicking the right collapse button slides the panel away and the expand bu
     await loginNext(page, srv);
     await waitSidebar(page);
     await waitPanelReady(page);
-    await expect(page.getByTestId('next-right')).toBeVisible();
-    await expect(page.getByTestId('next-right-toggle')).toBeHidden();
+    await expect(page.getByTestId('next-right')).toBeHidden();
+    await expect(page.getByTestId('next-right-toggle')).toBeVisible();
+    await expect(page.getByTestId('next-right-divider')).toBeHidden();
+    await expect(page.getByTestId('next-right')).toHaveAttribute('inert');
+    await expect(page.getByTestId('next-right')).toHaveAttribute('aria-hidden', 'true');
     expect(await panelTransitionSeconds(page, 'next-right')).toBeGreaterThan(0);
+
+    await page.getByTestId('next-right-toggle').click();
+    await expect(page.getByTestId('next-right')).toBeVisible();
+    await expect(page.getByTestId('next-right-collapse')).toBeVisible();
+    await expect(page.getByTestId('next-right')).not.toHaveAttribute('inert');
 
     await page.getByTestId('next-right-collapse').click();
     await expect(page.getByTestId('next-right')).toBeHidden();
@@ -423,11 +431,6 @@ test('clicking the right collapse button slides the panel away and the expand bu
     await expect(page.getByTestId('next-right-divider')).toBeHidden();
     await expect(page.getByTestId('next-right')).toHaveAttribute('inert');
     await expect(page.getByTestId('next-right')).toHaveAttribute('aria-hidden', 'true');
-
-    await page.getByTestId('next-right-toggle').click();
-    await expect(page.getByTestId('next-right')).toBeVisible();
-    await expect(page.getByTestId('next-right-collapse')).toBeVisible();
-    await expect(page.getByTestId('next-right')).not.toHaveAttribute('inert');
   } finally {
     await srv.kill();
   }
@@ -482,6 +485,15 @@ test('archived conversations section is fixed at bottom above footer, collapsed 
     await loginNext(page, srv);
     await waitSidebar(page);
 
+    const toggle = page.getByTestId('next-archived-toggle');
+    await expect(toggle).toBeVisible();
+
+    // Collapsed by default
+    await expect(page.getByTestId('next-sidebar-archived-section')).toHaveCount(0);
+    await expect(page.getByTestId('next-archived-list')).toHaveCount(0);
+
+    // Toggle expands
+    await toggle.click();
     const archSection = page.getByTestId('next-sidebar-archived-section');
     await expect(archSection).toBeVisible();
 
@@ -493,16 +505,9 @@ test('archived conversations section is fixed at bottom above footer, collapsed 
     expect(footBox).toBeTruthy();
     expect(archBox.y + archBox.height).toBeLessThanOrEqual(footBox.y + 2);
 
-    // Collapsed by default
-    await expect(page.getByTestId('next-archived-list')).toHaveCount(0);
-
-    // Toggle expands
-    const toggle = page.getByTestId('next-archived-toggle');
-    await toggle.click();
-    // In our live test with SQLite, archived array reflects archived conversations (if any)
     // Clicking again toggles collapsed
     await toggle.click();
-    await expect(page.getByTestId('next-archived-list')).toHaveCount(0);
+    await expect(page.getByTestId('next-sidebar-archived-section')).toHaveCount(0);
   } finally {
     await srv.kill();
   }

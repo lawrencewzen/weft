@@ -10,6 +10,7 @@ test('clicking command tool row expands full output in place without opening rig
   // 1. Terminal tab and pane are completely gone from right pane
   await expect(page.getByTestId('next-right-tab-term')).toHaveCount(0);
   await expect(page.getByTestId('next-term-pane')).toHaveCount(0);
+  await page.getByTestId('next-right-toggle').click();
   await expect(page.getByTestId('next-right-tab-changes')).toBeVisible();
   await expect(page.getByTestId('next-right-tab-files')).toBeVisible();
 

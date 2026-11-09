@@ -43,6 +43,10 @@ test('sidebar top actions: new chat row, search row, shortcuts, and zero subagen
 test('⌘K search modal filters all conversations across projects, navigates with arrows, and Enter opens selection', async ({ page }) => {
   const state = await openProto(page);
 
+  // Open right pane so its tab is present underneath
+  await page.getByTestId('next-right-toggle').click();
+  await expect(page.getByTestId('next-right')).toBeVisible();
+
   // Open search modal via search row click
   await page.getByTestId('next-search').click();
   const modal = page.getByTestId('next-search-modal');
@@ -247,6 +251,7 @@ test('right pane changes tab has no oversized svg icons (regression guard agains
   await expect(page).toHaveURL(/#\/c\/c-rich$/);
 
   // Ensure right pane changes tab is active
+  await page.getByTestId('next-right-toggle').click();
   const changesTab = page.getByTestId('next-right-tab-changes');
   await expect(changesTab).toBeVisible();
   await changesTab.click();

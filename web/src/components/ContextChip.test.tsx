@@ -38,26 +38,34 @@ describe('ContextChip component', () => {
     await cleanup();
   });
 
-  it('renders a focusable button that keeps its title and toggles the panel', async () => {
-    const context: ContextUsage = {
-      used: 48_200,
-      window: 64_000,
-      percent: 75,
+  it('renders only the ring below 70% with percent in title tooltip, and shows number at 70% and above', async () => {
+    const lowContext: ContextUsage = {
+      used: 12_000,
+      window: 100_000,
+      percent: 12,
       level: 'ok',
     };
-    await render(<ContextChip lang="zh" context={context} />);
+    await render(<ContextChip lang="zh" context={lowContext} />);
+    const chipLow = host?.querySelector('[data-testid="next-context-chip"]') as HTMLButtonElement;
+    expect(chipLow).not.toBeNull();
+    expect(chipLow.querySelector('.context-chip-pct')).toBeNull();
+    expect(chipLow.classList.contains('has-num')).toBe(false);
+    expect(chipLow.getAttribute('title')).toContain('已用 12%');
 
-    const chip = host?.querySelector('[data-testid="next-context-chip"]') as HTMLButtonElement;
-    expect(chip).not.toBeNull();
-    expect(chip.tagName.toLowerCase()).toBe('button');
-    expect(chip.type).toBe('button');
-    expect(chip.textContent).toContain('75%');
-    expect(chip.getAttribute('title')).toContain('48.2k / 64k');
-    expect(chip.getAttribute('title')).toContain('已用 75%');
-    expect(chip.getAttribute('title')).toContain('剩余 25%');
+    await cleanup();
 
-    expect(chip.getAttribute('aria-expanded')).toBe('false');
-    expect(host?.querySelector('[data-testid="next-context-pop"]')).toBeNull();
+    const threshContext: ContextUsage = {
+      used: 70_000,
+      window: 100_000,
+      percent: 70,
+      level: 'warn',
+    };
+    await render(<ContextChip lang="zh" context={threshContext} />);
+    const chipThresh = host?.querySelector('[data-testid="next-context-chip"]') as HTMLButtonElement;
+    expect(chipThresh).not.toBeNull();
+    expect(chipThresh.querySelector('.context-chip-pct')).not.toBeNull();
+    expect(chipThresh.textContent).toContain('70%');
+    expect(chipThresh.classList.contains('has-num')).toBe(true);
   });
 
   async function openPanel(compact?: Parameters<typeof ContextChip>[0]['compact']) {

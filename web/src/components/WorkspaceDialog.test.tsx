@@ -33,6 +33,23 @@ function setInputValue(input: HTMLInputElement, value: string) {
 let root: Root | null = null;
 let host: HTMLDivElement | null = null;
 
+/** 打开对话框，点「浏览」得到 unsupported，露出页内目录浏览。 */
+async function openWithInPageBrowser(onClose = vi.fn(), onToast = vi.fn()) {
+  await act(async () => {
+    root?.render(
+      <WorkspaceDialog
+        lang="zh"
+        onClose={onClose}
+        onToast={onToast}
+        pickFolder={vi.fn().mockResolvedValue({ status: 'unsupported' })}
+      />,
+    );
+  });
+  await act(async () => {
+    host?.querySelector<HTMLButtonElement>('[data-testid="next-ws-browse"]')?.click();
+  });
+}
+
 describe('WorkspaceDialog', () => {
   beforeEach(() => {
     host = document.createElement('div');
@@ -155,33 +172,30 @@ describe('WorkspaceDialog', () => {
     vi.restoreAllMocks();
   });
 
-  it('initially opens with create disabled, no git tab, no name input', async () => {
-    const onClose = vi.fn();
-    const onToast = vi.fn();
-
+  it('initially opens as 添加项目 with add disabled, no git tab, no in-page browser', async () => {
     await act(async () => {
-      root?.render(<WorkspaceDialog lang="zh" onClose={onClose} onToast={onToast} />);
+      root?.render(<WorkspaceDialog lang="zh" onClose={vi.fn()} onToast={vi.fn()} />);
     });
 
+    expect(host?.querySelector('h3')?.textContent).toContain('添加项目');
     const createBtn = host?.querySelector<HTMLButtonElement>('[data-testid="next-ws-create"]');
-    expect(createBtn).not.toBeNull();
+    expect(createBtn?.textContent).toBe('添加');
     expect(createBtn?.disabled).toBe(true);
 
     expect(host?.querySelector('[data-testid="next-ws-tab-git"]')).toBeNull();
     expect(host?.querySelector('[data-testid="next-ws-name"]')).toBeNull();
-
-    const gitBadge = host?.querySelector('[data-testid="next-dir-git-badge"]');
-    expect(gitBadge).not.toBeNull();
-    expect(gitBadge?.textContent).toBe('Git');
+    expect(host?.querySelector('[data-testid="next-breadcrumbs"]')).toBeNull();
+    expect(host?.querySelector('[data-testid="next-dir-row"]')).toBeNull();
+    expect(host?.querySelector('[data-testid="next-ws-confirm"]')).toBeNull();
+    expect(host?.querySelector<HTMLInputElement>('[data-testid="next-ws-path"]')?.value).toBe('');
+    expect(host?.querySelector('[data-testid="next-ws-browse"]')?.textContent).toBe('浏览');
   });
 
   it('clicking a folder enters it and enables the create button', async () => {
     const onClose = vi.fn();
     const onToast = vi.fn();
 
-    await act(async () => {
-      root?.render(<WorkspaceDialog lang="zh" onClose={onClose} onToast={onToast} />);
-    });
+    await openWithInPageBrowser(onClose, onToast);
 
     const sandboxRow = host?.querySelector<HTMLDivElement>('[data-path="D:\\\\work\\\\sandbox"]');
     expect(sandboxRow).not.toBeNull();
@@ -192,6 +206,7 @@ describe('WorkspaceDialog', () => {
 
     const createBtn = host?.querySelector<HTMLButtonElement>('[data-testid="next-ws-create"]');
     expect(createBtn?.disabled).toBe(false);
+    expect(host?.querySelector('[data-testid="next-ws-confirm-name"]')?.textContent).toBe('sandbox');
 
     const pathInput = host?.querySelector<HTMLInputElement>('[data-testid="next-ws-path"]');
     expect(pathInput?.value).toBe('D:\\work\\sandbox');
@@ -205,13 +220,22 @@ describe('WorkspaceDialog', () => {
     expect(breadcrumbItems?.[3].textContent).toBe('sandbox');
   });
 
+  it('unsupported pick shows the in-page browser with Git badge and hides the browse button', async () => {
+    await openWithInPageBrowser();
+    expect(host?.querySelector('[data-testid="next-ws-browse"]')).toBeNull();
+    expect(host?.querySelector('[data-testid="next-breadcrumbs"]')).not.toBeNull();
+    expect(host?.querySelectorAll('[data-testid="next-dir-row"]').length).toBe(2);
+    expect(host?.querySelector('[data-testid="next-dir-git-badge"]')?.textContent).toBe('Git');
+    // 起始目录只用于浏览，不会回填路径。
+    expect(host?.querySelector<HTMLInputElement>('[data-testid="next-ws-path"]')?.value).toBe('');
+    expect((host?.querySelector('[data-testid="next-ws-create"]') as HTMLButtonElement).disabled).toBe(true);
+  });
+
   it('breadcrumb click navigates up', async () => {
     const onClose = vi.fn();
     const onToast = vi.fn();
 
-    await act(async () => {
-      root?.render(<WorkspaceDialog lang="zh" onClose={onClose} onToast={onToast} />);
-    });
+    await openWithInPageBrowser(onClose, onToast);
 
     const sandboxRow = host?.querySelector<HTMLDivElement>('[data-path="D:\\\\work\\\\sandbox"]');
     await act(async () => {
@@ -253,6 +277,9 @@ describe('WorkspaceDialog', () => {
     const err = host?.querySelector('[data-testid="next-ws-dir-error"]');
     expect(err).not.toBeNull();
     expect(err?.textContent).toContain('Directory not found: D:\\invalid');
+    // 红框 + 一行红字，不是整块横条
+    expect(host?.querySelector('.ns-path-box')?.classList.contains('is-bad')).toBe(true);
+    expect(host?.querySelector('.ns-inline-err')).toBeNull();
 
     // Enter valid path
     if (pathInput) {
@@ -265,8 +292,33 @@ describe('WorkspaceDialog', () => {
     }
 
     expect(host?.querySelector('[data-testid="next-ws-dir-error"]')).toBeNull();
+    expect(host?.querySelector('.ns-path-box')?.classList.contains('is-bad')).toBe(false);
+    expect(host?.querySelector('[data-testid="next-ws-confirm-name"]')?.textContent).toBe('sandbox');
+    expect(host?.querySelector('[data-testid="next-ws-confirm-git"]')).toBeNull();
     const createBtn = host?.querySelector<HTMLButtonElement>('[data-testid="next-ws-create"]');
     expect(createBtn?.disabled).toBe(false);
+  });
+
+  it('a validated Git repository shows the Git tag in the confirm row', async () => {
+    await act(async () => {
+      root?.render(<WorkspaceDialog lang="zh" onClose={vi.fn()} onToast={vi.fn()} />);
+    });
+    vi.mocked(api.listWorkspaceDirs).mockResolvedValueOnce({
+      root: 'D:\\work',
+      path: 'D:\\work\\weft',
+      parent: 'D:\\work',
+      selectable: true,
+      git: true,
+      entries: [],
+      truncated: false,
+    });
+    const pathInput = host?.querySelector<HTMLInputElement>('[data-testid="next-ws-path"]') as HTMLInputElement;
+    await act(async () => { setInputValue(pathInput, 'D:\\work\\weft'); });
+    await act(async () => {
+      pathInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    });
+    expect(host?.querySelector('[data-testid="next-ws-confirm-name"]')?.textContent).toBe('weft');
+    expect(host?.querySelector('[data-testid="next-ws-confirm-git"]')?.textContent).toBe('Git');
   });
 
   it('blocked directory disables create button', async () => {
@@ -289,15 +341,15 @@ describe('WorkspaceDialog', () => {
 
     const createBtn = host?.querySelector<HTMLButtonElement>('[data-testid="next-ws-create"]');
     expect(createBtn?.disabled).toBe(true);
+    expect(host?.querySelector('[data-testid="next-ws-dir-error"]')?.textContent).toBe('这个文件夹不能添加');
+    expect(host?.querySelector('[data-testid="next-ws-confirm"]')).toBeNull();
   });
 
   it('clicking create calls createWorkspace with dirBasename and toasts', async () => {
     const onClose = vi.fn();
     const onToast = vi.fn();
 
-    await act(async () => {
-      root?.render(<WorkspaceDialog lang="zh" onClose={onClose} onToast={onToast} />);
-    });
+    await openWithInPageBrowser(onClose, onToast);
 
     const sandboxRow = host?.querySelector<HTMLDivElement>('[data-path="D:\\\\work\\\\sandbox"]');
     await act(async () => {
@@ -321,9 +373,7 @@ describe('WorkspaceDialog', () => {
     const onClose = vi.fn();
     const onToast = vi.fn();
 
-    await act(async () => {
-      root?.render(<WorkspaceDialog lang="zh" onClose={onClose} onToast={onToast} />);
-    });
+    await openWithInPageBrowser(onClose, onToast);
 
     // Initial breadcrumbs: 此电脑 / D:\ / work
     const pcCrumb = host?.querySelectorAll<HTMLButtonElement>('[data-testid="next-breadcrumb-item"]')[0];
@@ -394,9 +444,7 @@ describe('WorkspaceDialog', () => {
     const onClose = vi.fn();
     const onToast = vi.fn();
 
-    await act(async () => {
-      root?.render(<WorkspaceDialog lang="zh" onClose={onClose} onToast={onToast} />);
-    });
+    await openWithInPageBrowser(onClose, onToast);
 
     // Enter drives view
     const pcCrumb = host?.querySelectorAll<HTMLButtonElement>('[data-testid="next-breadcrumb-item"]')[0];
@@ -426,9 +474,7 @@ describe('WorkspaceDialog', () => {
     const onClose = vi.fn();
     const onToast = vi.fn();
 
-    await act(async () => {
-      root?.render(<WorkspaceDialog lang="zh" onClose={onClose} onToast={onToast} />);
-    });
+    await openWithInPageBrowser(onClose, onToast);
 
     const pathInput = host?.querySelector<HTMLInputElement>('[data-testid="next-ws-path"]');
     if (pathInput) {
@@ -514,6 +560,12 @@ describe('WorkspaceDialog', () => {
       await act(async () => { browse()?.click(); });
       expect(pick).toHaveBeenCalledTimes(1);
       expect(pathEl().value).toBe('D:\\work\\sandbox');
+      expect(q('[data-testid="next-ws-confirm-name"]')?.textContent).toBe('sandbox');
+      expect(q('[data-testid="next-breadcrumbs"]')).toBeNull();
+      const addBtn = q('[data-testid="next-ws-create"]') as HTMLButtonElement;
+      expect(addBtn.disabled).toBe(false);
+      expect(addBtn.classList.contains('btn')).toBe(true);
+      expect(addBtn.classList.contains('p')).toBe(true);
       expect((q('[data-testid="next-ws-create"]') as HTMLButtonElement).disabled).toBe(false);
       expect(api.createWorkspace).not.toHaveBeenCalled();
       await act(async () => { q('[data-testid="next-ws-create"]')?.click(); });
@@ -551,6 +603,7 @@ describe('WorkspaceDialog', () => {
       expect(pickSpy).toHaveBeenCalledTimes(1);
       expect(fallbackSpy).toHaveBeenCalledWith('zh');
       expect(pathEl().value).toBe('D:\\work\\sandbox');
+      expect(q('[data-testid="next-ws-confirm-name"]')?.textContent).toBe('sandbox');
       expect((q('[data-testid="next-ws-create"]') as HTMLButtonElement).disabled).toBe(false);
       expect(q('[data-testid="next-ws-error"]')).toBeNull();
     });
@@ -568,10 +621,12 @@ describe('WorkspaceDialog', () => {
       expect(q('[data-testid="next-ws-error"]')).toBeNull();
     });
 
-    it('unsupported hides the button and refocuses the input', async () => {
+    it('unsupported hides the button, shows the in-page browser and refocuses the input', async () => {
       await render(vi.fn().mockResolvedValue({ status: 'unsupported' }));
+      expect(q('[data-testid="next-breadcrumbs"]')).toBeNull();
       await act(async () => { browse()?.click(); });
       expect(browse()).toBeNull();
+      expect(q('[data-testid="next-breadcrumbs"]')).not.toBeNull();
       expect(document.activeElement).toBe(pathEl());
     });
 
@@ -589,6 +644,7 @@ describe('WorkspaceDialog', () => {
       });
       await act(async () => { browse()?.click(); });
       expect(q('[data-testid="next-ws-error"]')?.textContent).toBe('boom');
+      expect(q('.ns-path-box')?.classList.contains('is-bad')).toBe(true);
       expect(onClose).not.toHaveBeenCalled();
       expect(browse()?.disabled).toBe(false);
     });

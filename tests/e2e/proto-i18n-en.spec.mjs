@@ -157,7 +157,7 @@ test('english UI chrome has no Chinese on the main surfaces', async ({ page }) =
   await expect(page.getByTestId('next-ws-chip-new')).toContainText('Add project…');
   await assertNoChineseChrome(page, 'project chip menu');
   await noneOpt.click();
-  await expect(page.getByTestId('next-draft-hint')).toHaveText('What should we do?');
+  await expect(page.getByTestId('next-draft-hint')).toHaveText('What would you like to do today?');
   await expect(page.getByTestId('next-draft-hero-ws')).toHaveCount(0);
   await expect(page.locator('.draft-hero-hint')).toHaveCount(0);
   await expect(page.getByTestId('next-ws-chip')).toContainText('Choose project');
@@ -187,6 +187,7 @@ test('english UI chrome has no Chinese on the main surfaces', async ({ page }) =
   await page.keyboard.press('Escape');
 
   // Right pane tabs
+  await page.getByTestId('next-right-toggle').click();
   await page.getByTestId('next-right-tab-changes').click();
   await assertNoChineseChrome(page, 'right tab changes');
   await page.getByTestId('next-right-tab-files').click();
@@ -218,7 +219,7 @@ test('english UI chrome has no Chinese on the main surfaces', async ({ page }) =
   await expect(page.getByTestId('next-ws-empty-add')).toContainText('Add project');
   await expect(page.getByTestId('next-chats-section')).toHaveText('Chats');
   await expect(page.getByTestId('next-ws-chip')).toContainText('Choose project');
-  await expect(page.getByTestId('next-draft-hint')).toHaveText('What should we do?');
+  await expect(page.getByTestId('next-draft-hint')).toHaveText('What would you like to do today?');
   await expect(page.getByTestId('next-draft-hero-ws')).toHaveCount(0);
   await expect(page.locator('.draft-hero-hint')).toHaveCount(0);
   await page.getByTestId('next-ws-chip').click();

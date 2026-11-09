@@ -24,8 +24,14 @@ let pickCalls = 0;
  * Simulates the server-side system folder picker behind the dialog's Browse button.
  * Replies after ~600ms. Odd calls (1st, 3rd, ...) pick the next path from PICK_PATHS;
  * even calls (2nd, 4th, ...) are cancelled, so both outcomes can be tried by clicking twice.
+ * With `?pick=unsupported` it replies `unsupported` at once.
  */
 export function mockPickWorkspaceFolder(_lang: Lang): Promise<MockReply> {
+  // `?pick=unsupported` 模拟远程访问：系统选文件夹不可用，对话框退回页内目录浏览。
+  const search = typeof window !== 'undefined' ? window.location.search : '';
+  if (new URLSearchParams(search).get('pick') === 'unsupported') {
+    return Promise.resolve({ status: 200, body: { status: 'unsupported' }, headers: {} });
+  }
   pickCalls += 1;
   const call = pickCalls;
   return new Promise<MockReply>((resolve) => {

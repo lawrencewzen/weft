@@ -53,6 +53,7 @@ test('three UI entries POST open-terminal; files do not get the item; traversal 
     expect(posts[0].url).toContain(`/api/v2/workspaces/${encodeURIComponent(ws.id)}/open-terminal`);
     expect(posts[0].body.path == null || posts[0].body.path === '').toBe(true);
 
+    await page.getByTestId('next-right-toggle').click();
     await page.getByTestId('next-right-tab-files').click();
     const dir = page.locator('[data-testid=next-file-node][data-path="src"]');
     await expect(dir).toBeVisible({ timeout: 15000 });

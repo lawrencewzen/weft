@@ -41,12 +41,12 @@ test('general: language, appearance, theme and font size apply immediately', asy
   const msgBody = page.locator('[data-testid=next-item-assistant] .msg-body').first();
   const inlineCode = page.locator('.msg-body code:not(pre code)').first();
   await expect(page.locator('html')).toHaveAttribute('data-font-size', 'md');
-  await expect(msgBody).toHaveCSS('font-size', '14.5px');
+  await expect(msgBody).toHaveCSS('font-size', '16px');
   await expect(inlineCode).toHaveCSS('border-top-width', '0px');
 
   await page.locator('[data-testid=next-pref-font] button[data-size="lg"]').click();
   await expect(page.locator('html')).toHaveAttribute('data-font-size', 'lg');
-  await expect(msgBody).toHaveCSS('font-size', '15.5px');
+  await expect(msgBody).toHaveCSS('font-size', '17px');
 
   await page.locator('[data-testid=next-pref-lang] button[data-lang="en"]').click();
   await expect(page.getByTestId('next-settings-nav-general')).toHaveText('General');
@@ -61,8 +61,8 @@ test('general: language, appearance, theme and font size apply immediately', asy
 test('general: chat width options standard, wide, wider, full strictly increase width and persist across reload', async ({ page }) => {
   const state = await openProto(page);
   expect(page.viewportSize()).toEqual({ width: 1440, height: 900 });
-  await expect(page.locator('.next-shell')).not.toHaveClass(/right-closed/);
-  await expect(page.getByTestId('next-right')).toBeVisible();
+  await expect(page.locator('.next-shell')).toHaveClass(/right-closed/);
+  await expect(page.getByTestId('next-right')).toBeHidden();
 
   await page.getByTestId('next-open-settings').click();
   await expect(page.getByTestId('next-settings-general')).toBeVisible();

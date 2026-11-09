@@ -93,7 +93,8 @@ open design/prototype/index.html    # macOS；Windows 直接双击
 ### 新建工作区
 
 侧栏「项目」右边的 `+`，或右键菜单 / 空状态里的入口：
-- **本地目录**：模拟目录树根是 `D:\work`（`weft`、`website`、`sandbox/playground`、`sandbox/notes`、`archive/old-site`）。进目录、点「选择」，或在行上双击；创建后侧栏出现新工作区，可以直接在里面新建对话。
+- **添加项目**：对话框只有一个路径框，「浏览」在框内右端（模拟系统选文件夹：第 1 次选中 `C:\Users\demo\Projects\billing-api`，第 2 次取消，交替）。选中或输入路径回车后，框下一行显示「项目名 xxx」，Git 仓库带「Git」标签；路径不存在或不允许时框变红、下面一行红字。「添加」在路径为空时禁用，手输有效路径可直接点「添加」。模拟目录树根是 `D:\work`（`weft`、`website`、`sandbox/playground`、`sandbox/notes`、`archive/old-site`），盘符大小写不敏感。
+- **页内目录浏览**：只在「浏览」不可用时出现（模拟远程访问，用 `index.html?pick=unsupported` 打开，点「浏览」后「浏览」按钮消失、下面出现面包屑 + 子目录列表）。
 - **Git 导入**：默认用预置的「内网 GitLab」连接，项目列表两个（可搜索），选项目后能选分支（默认分支 + 两个候选），再创建。行内还有「仓库地址」方式，手填 URL 和分支。
 
 ## 代码在哪

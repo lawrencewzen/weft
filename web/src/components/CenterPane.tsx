@@ -272,6 +272,8 @@ export function CenterPane({
         conversationId={cid}
         conversationModel={conversation.model}
         changes={changes}
+        draftWorkspaceId={conversation.workspaceId || workspaceId}
+        draftWorkspaceName={workspace && !isChatWorkspace(workspace) ? workspace.name : null}
       />
       {activePendingAsk ? (
         <footer className="center-composer">

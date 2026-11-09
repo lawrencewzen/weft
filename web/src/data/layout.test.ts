@@ -23,6 +23,7 @@ import {
   writeOpenWorkspaces,
   writeRightTab,
   writeRightWidth,
+  persistRightOpen,
   writeWorkspaceOpen,
 } from './layout';
 
@@ -81,11 +82,22 @@ describe('layout prefs', () => {
     expect(clampNum(Number.NaN, 200, 420)).toBe(200);
   });
 
-  it('treats widths below 1180px as a right overlay and default-collapsed', () => {
+  it('treats widths below 1180px as a right overlay and defaults right pane to collapsed', () => {
     expect(isRightOverlayWidth(1179)).toBe(true);
     expect(isRightOverlayWidth(1180)).toBe(false);
     expect(defaultRightOpen(1179)).toBe(false);
+    expect(defaultRightOpen(1440)).toBe(false);
+  });
+
+  it('respects remembered right pane open preference when stored', () => {
+    const mem = new MemoryStorage();
+    // @ts-expect-error test stub
+    globalThis.localStorage = mem;
+    expect(defaultRightOpen(1440)).toBe(false);
+    persistRightOpen(true, 1440);
     expect(defaultRightOpen(1440)).toBe(true);
+    persistRightOpen(false, 1440);
+    expect(defaultRightOpen(1440)).toBe(false);
   });
 
   it('clamps right width to 320–900 and persists tab under weft_next_ keys', () => {

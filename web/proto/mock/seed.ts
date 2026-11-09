@@ -1381,6 +1381,17 @@ function regexConversation(now: number): MockConv {
   });
 }
 
+function emptyConversation(now: number): MockConv {
+  return conversation({
+    id: 'c-empty',
+    workspaceId: 'ws-weft',
+    title: '新对话',
+    updatedAt: now - 5 * MINUTE,
+    used: 0,
+    items: [],
+  });
+}
+
 function seedGlab(): GlabSettings {
   const defaults: GlabSettings = {
     enabled: false,
@@ -1426,6 +1437,7 @@ export function createSeed(now: number): MockDb {
     archivedTwo(now),
     consultConversation(now),
     regexConversation(now),
+    emptyConversation(now),
   ];
   const workspaces: Workspace[] = [
     workspace({
