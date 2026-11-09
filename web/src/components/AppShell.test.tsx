@@ -91,7 +91,7 @@ describe('AppShell - WorkspaceDialog pickFolder prop', () => {
           route={{ name: 'home' }}
           lang="zh"
           demo
-          service={{ serviceVersion: '0.1.1' }}
+          service={{ serviceVersion: '0.1.2' }}
         />,
       );
     });
@@ -119,7 +119,7 @@ describe('AppShell - WorkspaceDialog pickFolder prop', () => {
           route={{ name: 'home' }}
           lang="zh"
           demo
-          service={{ serviceVersion: '0.1.1' }}
+          service={{ serviceVersion: '0.1.2' }}
         />,
       );
     });

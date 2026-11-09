@@ -1,6 +1,6 @@
 {
   "name": "weft",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "description": "网页版个人 Agent。对话运行时是 Pi Durable Harness；应用数据在 SQLite。断点恢复、主 Agent 派子 Agent 协作。",
   "type": "module",
