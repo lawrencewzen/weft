@@ -136,6 +136,23 @@ export function isImageFile(file: Pick<File, 'type' | 'name'>): boolean {
   return /\.(png|jpe?g|gif|webp)$/.test(name);
 }
 
+export function fileDedupeKey(file: Pick<File, 'name' | 'size' | 'type'> & { lastModified?: number }): string {
+  return `${file.name}:${file.size}:${file.type}:${file.lastModified ?? 0}`;
+}
+
+export function dedupeFiles<T extends File>(files: readonly T[]): T[] {
+  const seen = new Set<string>();
+  const result: T[] = [];
+  for (const file of files) {
+    const key = fileDedupeKey(file);
+    if (!seen.has(key)) {
+      seen.add(key);
+      result.push(file);
+    }
+  }
+  return result;
+}
+
 export function mediaTypeOfFile(file: Pick<File, 'type' | 'name'>): MessageImage['mediaType'] | null {
   const fromType = normalizeMediaType(file.type);
   if (fromType) return fromType;
