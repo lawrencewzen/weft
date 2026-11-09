@@ -173,6 +173,9 @@ test('local folder browser creates a workspace and can leave the start directory
   await expect(page.getByTestId('next-ws-dialog')).toBeVisible();
   await expect(page.getByTestId('next-ws-create')).toBeDisabled();
   await expect(page.getByTestId('next-ws-path')).not.toHaveAttribute('readonly', '');
+  // 测试服务端关了系统选文件夹（WEFT_FOLDER_PICKER=off）：点「浏览」后退回页内目录浏览。
+  await expect(page.getByTestId('next-dir-row')).toHaveCount(0);
+  await page.getByTestId('next-ws-browse').click();
   const aboveStart = page.locator(`[data-testid="next-breadcrumb-item"][title="${path.dirname(prepared.root)}"]`);
   await expect(aboveStart).toBeEnabled();
   const alpha = page.getByTestId('next-dir-row').filter({ hasText: 'alpha' });
