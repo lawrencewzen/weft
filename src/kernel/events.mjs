@@ -663,7 +663,11 @@ export function messagesFromEntries(entries) {
       const parts = entry.kind === 'pi.user' ? parseUserMessageParts(content) : null;
       const text = parts ? parts.text : textOf(content);
       if (entry.kind === 'pi.assistant' && !text) continue;
-      const msg = { id: String(entry.id), role: entry.kind === 'pi.user' ? 'user' : 'assistant' };
+      const msg = {
+        id: String(entry.id),
+        entryId: String(entry.id),
+        role: entry.kind === 'pi.user' ? 'user' : 'assistant',
+      };
       if (text) msg.text = text;
       if (entry.kind === 'pi.user') {
         const kind = kindOfUserText(text);

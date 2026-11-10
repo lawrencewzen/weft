@@ -402,7 +402,8 @@ export function forkConversation(
   requestId?: string,
 ): Promise<ForkConversationResponse> {
   const reqId = requestId ?? randomId();
-  return requestJson<ForkConversationResponse>(conversationPath(cid, '/fork'), {
+  const params = new URLSearchParams({ lang: getPreferredLang() });
+  return requestJson<ForkConversationResponse>(`${conversationPath(cid, '/fork')}?${params.toString()}`, {
     method: 'POST',
     body: JSON.stringify({ entryId, requestId: reqId }),
   });
