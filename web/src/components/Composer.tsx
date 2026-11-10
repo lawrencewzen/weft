@@ -1,7 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { AgentsStrip } from './AgentsStrip';
 import { StallStrip } from './StallStrip';
-import { compactConversation, patchConversation, putModelContextWindow, type SendMessageFile, type ThinkingLevel } from '../data/api';
+import {
+  compactConversation,
+  handoffConversation,
+  patchConversation,
+  putModelContextWindow,
+  type SendMessageFile,
+  type ThinkingLevel,
+} from '../data/api';
 import {
   IMAGE_MAX_COUNT,
   type ComposerHint,
@@ -133,6 +140,8 @@ export function Composer({
   const [draft, setDraft] = useState('');
   const [compactBusy, setCompactBusy] = useState(false);
   const [compactRequestError, setCompactRequestError] = useState<string | null>(null);
+  const [handoffBusy, setHandoffBusy] = useState(false);
+  const [handoffRequestError, setHandoffRequestError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hint, setHint] = useState<ComposerHint | null>(null);
@@ -372,6 +381,22 @@ export function Composer({
     }
   }
 
+  const handoffState = run.handoff?.state ?? 'idle';
+  const handoffRunning = handoffBusy || handoffState === 'running';
+
+  async function requestHandoff() {
+    if (!conversationId || handoffRunning) return;
+    setHandoffBusy(true);
+    setHandoffRequestError(null);
+    try {
+      await handoffConversation(conversationId);
+    } catch (err) {
+      setHandoffRequestError(errorMessage(err, t(lang, 'send_failed')));
+    } finally {
+      setHandoffBusy(false);
+    }
+  }
+
   const boxClass = [
     'composer-box',
     focused ? 'is-focused' : '',
@@ -578,6 +603,11 @@ export function Composer({
                       state: compactRunning ? 'running' : compactionState,
                       error: compactError,
                       onCompact: () => { void requestCompact(); },
+                    } : undefined}
+                    handoff={conversationId && !isDraft ? {
+                      state: handoffRunning ? 'running' : 'idle',
+                      error: handoffRequestError,
+                      onHandoff: () => { void requestHandoff(); },
                     } : undefined}
                   />
                 ) : null}

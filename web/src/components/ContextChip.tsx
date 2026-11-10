@@ -14,9 +14,11 @@ type Props = {
   selected?: ComposerModelOption | null;
   /** Manual compaction; omitted (e.g. a draft) renders the action disabled. */
   compact?: { state: 'idle' | 'running' | 'failed'; error?: string | null; onCompact: () => void };
+  /** Handoff to new context; omitted (e.g. a draft) renders the action disabled. */
+  handoff?: { state: 'idle' | 'running'; error?: string | null; onHandoff: () => void };
 };
 
-export function ContextChip({ lang, context, selected, compact }: Props) {
+export function ContextChip({ lang, context, selected, compact, handoff }: Props) {
   const [open, setOpen] = useState(false);
   const wrap = useRef<HTMLDivElement>(null);
   const chipRef = useRef<HTMLButtonElement>(null);
@@ -53,6 +55,7 @@ export function ContextChip({ lang, context, selected, compact }: Props) {
   }, [open]);
 
   const running = compact?.state === 'running';
+  const handoffRunning = handoff?.state === 'running';
   const usageText = `${formatTokenCount(context.used)} / ${formatTokenCount(windowTokens)}`;
 
   return (
@@ -120,6 +123,22 @@ export function ContextChip({ lang, context, selected, compact }: Props) {
             <span className="run-spin" data-testid="next-compact-spin" aria-hidden="true"><span /></span>
           ) : compact?.error ? (
             <span className="context-pop-err">{compact.error}</span>
+          ) : null}
+        </button>
+        <button
+          type="button"
+          className={`context-pop-act${handoff?.error ? ' is-err' : ''}`}
+          data-testid="next-menu-handoff"
+          data-state={handoff?.state ?? 'unavailable'}
+          disabled={!handoff || handoffRunning}
+          aria-busy={handoffRunning}
+          onClick={handoff?.onHandoff}
+        >
+          <span>{t(lang, 'ctx_handoff')}</span>
+          {handoffRunning ? (
+            <span className="run-spin" data-testid="next-handoff-spin" aria-hidden="true"><span /></span>
+          ) : handoff?.error ? (
+            <span className="context-pop-err">{handoff.error}</span>
           ) : null}
         </button>
       </div>

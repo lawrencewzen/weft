@@ -68,9 +68,12 @@ describe('ContextChip component', () => {
     expect(chipThresh.classList.contains('has-num')).toBe(true);
   });
 
-  async function openPanel(compact?: Parameters<typeof ContextChip>[0]['compact']) {
+  async function openPanel(
+    compact?: Parameters<typeof ContextChip>[0]['compact'],
+    handoff?: Parameters<typeof ContextChip>[0]['handoff'],
+  ) {
     const context: ContextUsage = { used: 12_000, window: 500_000, percent: 2, level: 'ok' };
-    await render(<ContextChip lang="zh" context={context} compact={compact} />);
+    await render(<ContextChip lang="zh" context={context} compact={compact} handoff={handoff} />);
     const chip = host?.querySelector('[data-testid="next-context-chip"]') as HTMLButtonElement;
     await act(async () => { chip.click(); });
     return chip;
@@ -89,6 +92,36 @@ describe('ContextChip component', () => {
     expect(document.activeElement).toBe(act1);
     await act(async () => { act1.click(); });
     expect(onCompact).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders handoff action and calls onHandoff on click', async () => {
+    const onHandoff = vi.fn();
+    await openPanel(undefined, { state: 'idle', onHandoff });
+    const handoffBtn = host?.querySelector('[data-testid="next-menu-handoff"]') as HTMLButtonElement;
+    expect(handoffBtn).not.toBeNull();
+    expect(handoffBtn.textContent).toBe('交接到新上下文');
+    expect(handoffBtn.disabled).toBe(false);
+    await act(async () => { handoffBtn.click(); });
+    expect(onHandoff).toHaveBeenCalledTimes(1);
+  });
+
+  it('disables handoff while running and shows spinner, and disables when unavailable', async () => {
+    await openPanel(undefined, { state: 'running', onHandoff: vi.fn() });
+    const btn = host?.querySelector('[data-testid="next-menu-handoff"]') as HTMLButtonElement;
+    expect(btn.disabled).toBe(true);
+    expect(btn.getAttribute('aria-busy')).toBe('true');
+    expect(host?.querySelector('[data-testid="next-handoff-spin"]')).not.toBeNull();
+
+    await cleanup();
+    await openPanel(undefined, undefined);
+    const none = host?.querySelector('[data-testid="next-menu-handoff"]') as HTMLButtonElement;
+    expect(none.disabled).toBe(true);
+    expect(none.getAttribute('data-state')).toBe('unavailable');
+  });
+
+  it('shows error on handoff action when provided', async () => {
+    await openPanel(undefined, { state: 'idle', error: '交接失败', onHandoff: vi.fn() });
+    expect(host?.querySelector('[data-testid="next-menu-handoff"]')?.textContent).toContain('交接失败');
   });
 
   it('disables compact while running and when unavailable', async () => {
