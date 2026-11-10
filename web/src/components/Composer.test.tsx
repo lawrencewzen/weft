@@ -236,4 +236,105 @@ describe('Composer send button title', () => {
       expect(composerCard?.firstElementChild).toBe(composerBox);
     });
   });
+
+  describe('composer-card focus highlight', () => {
+    it('highlights card when text input is focused, and does not highlight card when status strip button is focused', async () => {
+      const stalledRun: Parameters<typeof Composer>[0]['run'] = {
+        status: 'running',
+        startedAt: Date.now() - 600_000,
+        pendingText: null,
+        canSend: true,
+        canStop: true,
+        lockedReason: null,
+        error: null,
+        lastActivityAt: Date.now() - 300_000,
+        stalledSince: Date.now() - 300_000,
+        activeTool: { name: 'bash', startedAt: Date.now() - 360_000, summary: 'npm test' },
+      };
+      await renderComposer('zh', stalledRun);
+
+      const composerCard = host?.querySelector<HTMLDivElement>('[data-testid="next-composer-card"]');
+      const textarea = host?.querySelector<HTMLTextAreaElement>('[data-testid="next-composer-input"]');
+      const stallStop = host?.querySelector<HTMLButtonElement>('[data-testid="next-stall-stop"]');
+
+      expect(composerCard).not.toBeNull();
+      expect(textarea).not.toBeNull();
+      expect(stallStop).not.toBeNull();
+
+      // Initially not focused
+      expect(composerCard?.classList.contains('is-focused')).toBe(false);
+
+      // Focus text input: card is highlighted (.is-focused)
+      await act(async () => {
+        textarea?.focus();
+      });
+      expect(composerCard?.classList.contains('is-focused')).toBe(true);
+
+      // Focus stall stop button: card is not highlighted
+      await act(async () => {
+        textarea?.blur();
+        stallStop?.focus();
+      });
+      expect(composerCard?.classList.contains('is-focused')).toBe(false);
+    });
+
+    it('does not highlight card when subagent strip button is focused', async () => {
+      const store = createEntityStore();
+      const convTop = conversationTopic('c1');
+      store.applySnapshot({
+        protocolVersion: '2.0.0',
+        topics: [convTop],
+        entities: [{
+          topic: convTop,
+          entity: 'subagent',
+          id: 'sa-1',
+          value: {
+            id: 'c1:sub:sa-1',
+            parentConversationId: 'c1',
+            title: 'Subagent 1',
+            name: 'sa-1',
+            mode: 'background',
+            status: 'running',
+            startedAt: Date.now() - 60_000,
+            lastActivityAt: Date.now() - 10_000,
+            endedAt: null,
+            currentAction: 'Running task',
+            progress: null,
+            toolCallId: null,
+          },
+        }],
+      });
+      await renderComposer('zh', idleRun, store);
+
+      const composerCard = host?.querySelector<HTMLDivElement>('[data-testid="next-composer-card"]');
+      const textarea = host?.querySelector<HTMLTextAreaElement>('[data-testid="next-composer-input"]');
+      const agentsStrip = host?.querySelector<HTMLDivElement>('[data-testid="next-agents-strip"]');
+      const agentsToggle = host?.querySelector<HTMLDivElement>('[data-testid="next-agents-strip-toggle"]');
+
+      expect(composerCard).not.toBeNull();
+      expect(textarea).not.toBeNull();
+      expect(agentsStrip).not.toBeNull();
+
+      // Expand subagent strip to reveal stop button
+      await act(async () => {
+        agentsToggle?.click();
+      });
+
+      const agentsStop = host?.querySelector<HTMLButtonElement>('[data-testid="next-agents-strip-stop"]');
+      expect(agentsStop).not.toBeNull();
+
+      // Focus text input: card is highlighted
+      await act(async () => {
+        textarea?.focus();
+      });
+      expect(composerCard?.classList.contains('is-focused')).toBe(true);
+
+      // Focus subagent stop button: card is NOT highlighted
+      await act(async () => {
+        textarea?.blur();
+        agentsStop?.focus();
+      });
+      expect(composerCard?.classList.contains('is-focused')).toBe(false);
+    });
+  });
 });

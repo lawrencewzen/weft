@@ -1505,8 +1505,8 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.65; backgrou
   box-sizing: border-box;
   transition: box-shadow .15s, border-color .15s;
 }
-.composer-card:focus-within,
-.composer-card.is-focused {
+.composer-card.is-focused,
+.composer-card:has(.composer-box:focus-within) {
   border-color: var(--bd3);
   box-shadow: var(--shadow-composer-focus);
 }
@@ -2460,6 +2460,10 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.65; backgrou
   border: 1px solid var(--line); background: var(--panel); color: var(--ink); font: inherit; font-size: var(--fs-ui);
 }
 .stall-strip-stop:hover { background: var(--hover); }
+.stall-strip-stop:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
 .stall-strip-stop:disabled { color: var(--faint); cursor: default; background: transparent; }
 .stall-strip + .agents-strip { border-radius: 0; }
 
@@ -2587,6 +2591,10 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.65; backgrou
 .agents-strip-stop:hover {
   background: var(--sel);
   color: var(--ink);
+}
+.agents-strip-stop:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
 .agents-strip-detail {
   padding: 2px 12px 10px 34px;

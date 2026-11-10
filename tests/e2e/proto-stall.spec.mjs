@@ -208,3 +208,49 @@ test('composer card and status strips align perfectly as one card across c-rich,
 
   await expectClean(state);
 });
+
+test('composer card highlights only when text input is focused, not when status strip buttons are focused', async ({ page }) => {
+  const state = await openProto(page);
+
+  // Visit c-site-1: has stall strip with stop button and subagents strip
+  const websiteNode = page.locator('[data-testid=next-ws-node][data-id="ws-website"]');
+  if (await websiteNode.locator('.sb-conv-list').isHidden()) {
+    await websiteNode.getByTestId('next-ws-toggle').click();
+  }
+  await page.locator('[data-testid=next-conv-row][data-id="c-site-1"]').click();
+  await expect(page).toHaveURL(/#\/c\/c-site-1$/);
+
+  const card = page.getByTestId('next-composer-card');
+  const input = page.getByTestId('next-composer-input');
+  const stallStop = page.getByTestId('next-stall-stop');
+
+  await expect(card).toBeVisible();
+  await expect(input).toBeVisible();
+  await expect(stallStop).toBeVisible();
+
+  // Initially card is not focused
+  await expect(card).not.toHaveClass(/is-focused/);
+
+  // 1. Focus text input: card is highlighted (has .is-focused)
+  await input.focus();
+  await expect(card).toHaveClass(/is-focused/);
+
+  // 2. Focus stall stop button: card is NOT highlighted
+  await stallStop.focus();
+  await expect(card).not.toHaveClass(/is-focused/);
+  const isStopFocused = await stallStop.evaluate((el) => document.activeElement === el);
+  expect(isStopFocused).toBe(true);
+
+  // 3. Expand agents strip and focus subagent stop button: card is NOT highlighted
+  const agentsToggle = page.getByTestId('next-agents-strip-toggle');
+  await agentsToggle.click();
+  const agentsStop = page.getByTestId('next-agents-strip-stop').first();
+  await expect(agentsStop).toBeVisible();
+
+  await agentsStop.focus();
+  await expect(card).not.toHaveClass(/is-focused/);
+  const isAgentsStopFocused = await agentsStop.evaluate((el) => document.activeElement === el);
+  expect(isAgentsStopFocused).toBe(true);
+
+  await expectClean(state);
+});
