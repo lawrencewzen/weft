@@ -44,8 +44,6 @@
 | --- | --- | --- |
 | `WEFT_PORT` | `3300`（仅 `weft open`） | `weft open` 拉起服务时优先读这个端口。未设则看 `PORT`，都没有用 `3300`。`0` 表示随机端口（旧行为，给测试用）。已有服务在跑时复用，不看这个值。目标端口被占用时 `weft open` 报错退出，不换端口。`npm start` / `server.mjs` 不读 `WEFT_PORT`。 |
 | `PORT` | `weft open`：次于 `WEFT_PORT`，默认 `3300`；`npm start`：默认 `3000` | 服务进程实际监听的端口。`weft open` 会把解析后的值写进子进程的 `PORT`。直接 `npm start` 只看 `PORT`，未设则 `3000`，与 `weft open` 的默认 `3300` 不同。`0` 表示随机端口。 |
-| `WEFT_LAUNCHED_BY` | 空 / `weft-open` | 启动器拉起服务时设为 `weft-open`，这时才启用空闲退出。手动 `npm start` 不要设。 |
-| `WEFT_IDLE_EXIT_MINUTES` | `30` | 空闲多久后自行退出。可以是小数方便测试；`0` 表示不退出。只在 `WEFT_LAUNCHED_BY=weft-open` 时生效。 |
 | `WEFT_STDIN_EXIT` | `0` | **只给测试用。** 设为 `1` 时 stdin 关闭会走和 SIGTERM 相同的 `shutdown()`（Windows 收不到 SIGTERM）。 |
 | `WEFT_V2_WEB_CODE_TTL_MS` | `60000` | **只给测试用。** `weft open` 申请的网页端一次性登录码有效期（毫秒）。不影响启动时打印的那枚码。 |
 | `WEFT_V2_STARTUP_CODE_TTL_MS` | `600000` | **只给测试用。** `npm start` 在 `WEFT_READY` 之后打印的那枚登录码有效期（毫秒）。默认 10 分钟，只能用一次。 |
