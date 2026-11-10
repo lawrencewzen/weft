@@ -231,4 +231,10 @@ describe('waitingForAgent', () => {
     expect(waitingForAgent([user('1', '你好'), assistant('2', '开始')], { running: true, pending: false })).toBe(false);
     expect(waitingForAgent([user('1', '你好')], { running: false, pending: false })).toBe(false);
   });
+
+  it('skips trailing turn_changes when checking the last item', () => {
+    const tc: ThreadItem = { kind: 'turn_changes', id: 'tc1', changes: [] };
+    expect(waitingForAgent([user('1', '你好'), assistant('2', '开始'), tc], { running: true, pending: false })).toBe(false);
+    expect(waitingForAgent([user('1', '你好'), assistant('2', '开始'), tc, user('3', '下一问')], { running: true, pending: false })).toBe(true);
+  });
 });

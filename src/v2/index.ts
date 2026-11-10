@@ -14,7 +14,6 @@ import {
 } from './auth.ts';
 import type { components } from './contract.gen.ts';
 import { removeDiscoverySync, writeDiscoverySync } from './daemon/discovery.ts';
-import { createIdleWatcher, type IdleWatcher } from './daemon/idle.ts';
 import {
   createEventHub,
   normalizeLang,
@@ -91,6 +90,7 @@ type ConversationSnapshot = components['schemas']['ConversationSnapshot'];
 type RunAccepted = components['schemas']['RunAccepted'];
 type CompactionSettingsView = components['schemas']['CompactionSettingsView'];
 type CompactAccepted = components['schemas']['CompactAccepted'];
+type ForkConversationResponse = components['schemas']['ForkConversationResponse'];
 type StopAccepted = components['schemas']['StopAccepted'];
 type ToolOutput = components['schemas']['ToolOutput'];
 type WorkspacesSnapshot = components['schemas']['WorkspacesSnapshot'];
@@ -136,6 +136,7 @@ type V2JsonBody =
   | RunAccepted
   | CompactionSettingsView
   | CompactAccepted
+  | ForkConversationResponse
   | StopAccepted
   | ToolOutput
   | WorkspacesSnapshot
@@ -253,6 +254,18 @@ export type PatchConversationFn = (
   id: string,
   body: Record<string, unknown>,
 ) => Promise<{ status: number; body?: { errors?: unknown; error?: unknown } }>;
+export type ForkConversationFn = (
+  id: string,
+  body: { entryId?: string; requestId?: string; lang?: 'zh' | 'en' },
+) => Promise<{
+  status: number;
+  body?: {
+    conversationId?: unknown;
+    prefill?: { text?: unknown } | null;
+    error?: unknown;
+    code?: unknown;
+  };
+}>;
 
 export type { LoadConversation, LoadSubagent, KernelEvent, KernelChange };
 
@@ -264,9 +277,6 @@ export type V2Runtime = {
   issueStartupLoginUrl: (port: number) => string;
   writeDiscoveryFile: (port: number) => void;
   removeDiscoveryFile: () => void;
-  touch: IdleWatcher['touch'];
-  trackConnection: IdleWatcher['trackConnection'];
-  startIdleExit: IdleWatcher['start'];
   notifySidebarChanged: () => void;
   notifyProvidersChanged: () => void;
   notifyConversation: NotifyConversationFn;
@@ -607,7 +617,6 @@ export function createV2Handler(opts: {
   pid?: number;
   hasActiveWork?: () => boolean | Promise<boolean>;
   onRestart?: () => void;
-  trackConnection: IdleWatcher['trackConnection'];
   loadConversation?: LoadConversation;
   getConversation?: GetConversation;
   getMessageImage?: GetMessageImage;
@@ -642,6 +651,7 @@ export function createV2Handler(opts: {
     id: string,
     instructions?: string,
   ) => Promise<{ status: number; body?: { taskId?: unknown; error?: unknown; code?: unknown } }>;
+  forkConversation?: ForkConversationFn;
 }): V2Handler {
   const { serviceVersion, startedAt, auth, hub } = opts;
   const pid = opts.pid ?? process.pid;
@@ -1656,6 +1666,85 @@ export function createV2Handler(opts: {
       return true;
     }
 
+    const forkMatch = /^\/api\/v2\/conversations\/([^/]+)\/fork$/.exec(pathname);
+    if (method === 'POST' && forkMatch) {
+      const id = decodeURIComponent(forkMatch[1]);
+      const body = await readObjectBody(req, res, pathname, method);
+      if (!body) return true;
+      if (!Object.prototype.hasOwnProperty.call(body, 'entryId') || typeof body.entryId !== 'string') {
+        sendV2(res, pathname, method, 400, { error: 'entryId is required', code: 'E_BAD_REQUEST' } satisfies V2Error);
+        return true;
+      }
+      const entryId = body.entryId.trim();
+      if (!entryId) {
+        sendV2(res, pathname, method, 400, { error: 'entryId is required', code: 'E_BAD_REQUEST' } satisfies V2Error);
+        return true;
+      }
+      const parsedId = requestIdFrom(body);
+      if (!parsedId.ok) {
+        sendV2(res, pathname, method, 400, { error: 'invalid requestId', code: 'E_BAD_REQUEST' } satisfies V2Error);
+        return true;
+      }
+      if (!opts.forkConversation) {
+        sendV2(res, pathname, method, 500, { error: 'kernel not ready', code: 'E_INTERNAL' } satisfies V2Error);
+        return true;
+      }
+      let lang: 'zh' | 'en' = normalizeLang(url.searchParams.get('lang')) === 'en' ? 'en' : 'zh';
+      if (!url.searchParams.has('lang') && opts.getSettings) {
+        try {
+          const stored = await opts.getSettings();
+          if (stored && typeof stored === 'object' && (stored as { language?: unknown }).language === 'en') lang = 'en';
+        } catch { /* keep zh */ }
+      }
+      try {
+        const forked = await opts.forkConversation(id, {
+          entryId,
+          requestId: parsedId.value,
+          lang,
+        });
+        if (forked.status === 404) {
+          sendV2(res, pathname, method, 404, { error: 'not found' } satisfies V2Error);
+          return true;
+        }
+        if (forked.status === 400) {
+          const code = typeof forked.body?.code === 'string' && forked.body.code
+            ? forked.body.code
+            : 'E_BAD_REQUEST';
+          const error = typeof forked.body?.error === 'string' && forked.body.error
+            ? forked.body.error
+            : 'bad request';
+          sendV2(res, pathname, method, 400, { error, code } satisfies V2Error);
+          return true;
+        }
+        const conversationId = forked.body?.conversationId == null ? '' : String(forked.body.conversationId);
+        const prefill = forked.body?.prefill == null
+          ? null
+          : { text: forked.body.prefill.text == null ? '' : String(forked.body.prefill.text) };
+        if (forked.status !== 201 || !conversationId) {
+          const message = typeof forked.body?.error === 'string' && forked.body.error
+            ? forked.body.error
+            : 'fork failed';
+          const code = typeof forked.body?.code === 'string' && forked.body.code
+            ? forked.body.code
+            : 'E_INTERNAL';
+          sendV2(res, pathname, method, forked.status >= 400 ? forked.status : 500, {
+            error: message,
+            code,
+          } satisfies V2Error);
+          return true;
+        }
+        opts.onSidebarChanged?.();
+        sendV2(res, pathname, method, 201, {
+          conversationId,
+          prefill,
+        } satisfies ForkConversationResponse);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'fork failed';
+        sendV2(res, pathname, method, 500, { error: message, code: 'E_INTERNAL' } satisfies V2Error);
+      }
+      return true;
+    }
+
     const compactMatch = /^\/api\/v2\/conversations\/([^/]+)\/compact$/.exec(pathname);
     if (method === 'POST' && compactMatch) {
       const id = decodeURIComponent(compactMatch[1]);
@@ -1876,7 +1965,6 @@ export function createV2Handler(opts: {
       const lastEventId = headerOrQueryLastEventId(req, url);
       res.writeHead(200, sseHeaders());
       if (typeof res.flushHeaders === 'function') res.flushHeaders();
-      opts.trackConnection(req);
       const session = hub.connect({
         topics,
         lang,
@@ -1910,7 +1998,6 @@ export function createV2Runtime(opts: {
   webCodeTtlMs?: number;
   env?: NodeJS.ProcessEnv;
   hasActiveWork?: () => boolean | Promise<boolean>;
-  onIdleExit?: () => void;
   onRestart?: () => void;
   loadConversation?: LoadConversation;
   getConversation?: GetConversation;
@@ -1944,6 +2031,7 @@ export function createV2Runtime(opts: {
     id: string,
     instructions?: string,
   ) => Promise<{ status: number; body?: { taskId?: unknown; error?: unknown; code?: unknown } }>;
+  forkConversation?: ForkConversationFn;
 }): V2Runtime {
   const pid = opts.pid ?? process.pid;
   const auth = createV2Auth({
@@ -2023,12 +2111,6 @@ export function createV2Runtime(opts: {
   const extensionsTopic = attachExtensionsTopic(hub, {
     load: opts.extensions ? () => loadExtensionsSnapshot(opts.extensions as ExtensionsHost) : undefined,
   });
-  const idle = createIdleWatcher({
-    hasActiveWork: opts.hasActiveWork ?? (() => false),
-    shutdown: () => opts.onIdleExit?.(),
-    env: opts.env,
-    now: opts.now,
-  });
   const handleApi = createV2Handler({
     serviceVersion: opts.serviceVersion,
     startedAt: opts.startedAt,
@@ -2037,7 +2119,6 @@ export function createV2Runtime(opts: {
     pid,
     hasActiveWork: opts.hasActiveWork,
     onRestart: opts.onRestart,
-    trackConnection: idle.trackConnection,
     loadConversation: opts.loadConversation,
     getConversation: opts.getConversation,
     getMessageImage: opts.getMessageImage,
@@ -2074,6 +2155,7 @@ export function createV2Runtime(opts: {
     getSettings: opts.getSettings,
     putSettings: opts.putSettings,
     compactConversation: opts.compactConversation,
+    forkConversation: opts.forkConversation,
   });
 
   return {
@@ -2098,9 +2180,6 @@ export function createV2Runtime(opts: {
     removeDiscoveryFile() {
       removeDiscoverySync(opts.dataDir, pid);
     },
-    touch: idle.touch,
-    trackConnection: idle.trackConnection,
-    startIdleExit: idle.start,
     notifySidebarChanged() {
       workspacesTopic.notify();
     },
@@ -2120,7 +2199,6 @@ export function createV2Runtime(opts: {
       stuck.dispose();
       stall.dispose();
       hub.dispose();
-      idle.dispose();
       auth.dispose();
     },
   };

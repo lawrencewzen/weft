@@ -390,9 +390,9 @@ function AppShellLayout({
           maximized={maximized}
           lang={lang}
           demo={demo}
+          onNewWorkspace={handleNewWorkspace}
           onConfirm={askConfirm}
           onToast={onToast}
-          onNewWorkspace={handleNewWorkspace}
         />
       )}
       <div

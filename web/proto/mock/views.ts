@@ -23,6 +23,7 @@ export function summaryOf(conv: MockConv): ConversationSummary {
     runningAgents: (view.status === 'running' ? 1 : 0) + live,
     subagents: conv.subagents.length ? { total: conv.subagents.length, live } : null,
     archived: Boolean(conv.archived),
+    forkedFrom: view.forkedFrom ?? null,
   };
 }
 

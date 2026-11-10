@@ -403,6 +403,21 @@ export function patchConversationThinkingLevel(
   return patchConversation(cid, { thinkingLevel });
 }
 
+export type ForkConversationResponse = components['schemas']['ForkConversationResponse'];
+
+export function forkConversation(
+  cid: string,
+  entryId: string,
+  requestId?: string,
+): Promise<ForkConversationResponse> {
+  const reqId = requestId ?? randomId();
+  const params = new URLSearchParams({ lang: getPreferredLang() });
+  return requestJson<ForkConversationResponse>(`${conversationPath(cid, '/fork')}?${params.toString()}`, {
+    method: 'POST',
+    body: JSON.stringify({ entryId, requestId: reqId }),
+  });
+}
+
 export function createConversation(
   workspaceId?: string | null,
   title?: string,

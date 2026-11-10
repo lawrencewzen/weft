@@ -18,10 +18,10 @@ export function isChatWorkspace(ws: Pick<Workspace, 'kind'> | null | undefined):
 export function isProjectWorkspace(ws: Pick<Workspace, 'kind'> | null | undefined): boolean {
   return workspaceKind(ws) === 'project';
 }
+export type Change = components['schemas']['Change'];
 export type ThreadItem = components['schemas']['ThreadItem'];
 export type ToolCall = components['schemas']['ToolCall'];
 export type Subagent = components['schemas']['Subagent'];
-export type Change = components['schemas']['Change'];
 export type SnapshotEvent = components['schemas']['SnapshotEvent'];
 export type UpsertEvent = components['schemas']['UpsertEvent'];
 export type RemoveEvent = components['schemas']['RemoveEvent'];

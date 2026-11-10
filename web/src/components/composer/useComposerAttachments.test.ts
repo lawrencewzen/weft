@@ -31,8 +31,8 @@ let latest: UseComposerAttachmentsResult | null = null;
 let latestDraft = '';
 let latestHint: ComposerHint | null = null;
 
-function pngFile(name = 'shot.png') {
-  return new File([new Uint8Array([137, 80, 78, 71])], name, { type: 'image/png' });
+function pngFile(name = 'shot.png', lastModified = 1_700_000_000_000) {
+  return new File([new Uint8Array([137, 80, 78, 71])], name, { type: 'image/png', lastModified });
 }
 
 function pasteEvent(text: string): ClipboardEvent<HTMLTextAreaElement> {
@@ -307,8 +307,9 @@ describe('useComposerAttachments', () => {
 
   it('deduplicates files in dropFiles when identical files are passed', async () => {
     await renderHost();
-    const f1 = pngFile('dropped.png');
-    const f2 = pngFile('dropped.png');
+    const stamp = 1_700_000_000_000;
+    const f1 = pngFile('dropped.png', stamp);
+    const f2 = pngFile('dropped.png', stamp);
     await act(async () => {
       await latest!.dropFiles([f1, f2]);
     });

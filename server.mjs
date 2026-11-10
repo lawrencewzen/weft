@@ -77,7 +77,6 @@ const v2Opts = {
   dataDir: DATA_DIR,
   demo: envRequestsFaux(),
   hasActiveWork: () => kernelApi?.hasActiveWork?.() ?? false,
-  onIdleExit: () => shutdown(),
   onRestart: () => shutdown(),
   async loadConversation(id) {
     if (!kernelApi) return null;
@@ -86,6 +85,13 @@ const v2Opts = {
     const presented = await kernelApi.present(conv, { includeMessages: true });
     const subagents = await kernelApi.listSubagents(presented);
     const target = providerService ? await providerService.resolveTarget(presented) : null;
+    let turnChanges = [];
+    try {
+      turnChanges = kernelApi.turnChanges ? await kernelApi.turnChanges(id) : [];
+    } catch (err) {
+      console.error(`WEFT_TURN_CHANGES ${err instanceof Error ? err.message : err}`);
+      turnChanges = [];
+    }
     return {
       presented: {
         ...presented,
@@ -96,6 +102,7 @@ const v2Opts = {
       subagents,
       modelTarget: target ? { source: { id: target.providerId }, model: target.modelId } : null,
       window: providerService ? await providerService.contextWindowFor(presented) : null,
+      turnChanges,
     };
   },
   async getConversation(id) {
@@ -222,6 +229,12 @@ const v2Opts = {
   compactConversation(id, instructions) {
     if (!kernelApi) return { status: 500, body: { error: 'kernel not ready', code: 'E_INTERNAL' } };
     return kernelApi.compact(id, instructions);
+  },
+  forkConversation(id, body) {
+    if (!kernelApi?.forkConversation) {
+      return { status: 500, body: { error: 'kernel not ready', code: 'E_INTERNAL' } };
+    }
+    return kernelApi.forkConversation(id, body);
   },
   extensions: {
     dataDir: DATA_DIR,
@@ -353,6 +366,8 @@ function publicConversation(conv) {
   delete out.harnessId;
   delete out.titleSource;
   delete out.titleGeneratedAt;
+  delete out.forkRequestId;
+  delete out.forkPrefillJson;
   delete out.lastSubmissionId;
   delete out.autoContinues;
   delete out.retries;
@@ -554,7 +569,6 @@ try {
 
 const server = createServer(async (req, res) => {
   try {
-    v2.touch();
     const port = boundPort();
     if (!hostAllowed(req.headers.host, port)) {
       sendJson(res, 400, { error: 'invalid host' });
@@ -1168,7 +1182,6 @@ async function routeApi(req, res, url) {
     const cid = decodeURIComponent(match[1]);
     const conv = await store.getConversation(cid);
     if (!conv) { sendJson(res, 404, { error: 'conversation not found' }); return; }
-    v2.trackConnection(req);
     await kernelApi.streamEvents(req, res, cid, { headers: SECURITY_HEADERS });
     return;
   }
@@ -1355,7 +1368,6 @@ server.listen(PORT, '127.0.0.1', () => {
     console.error(`WEFT_ERROR discovery write failed: ${err instanceof Error ? err.message : err}`);
     process.exit(1);
   }
-  v2.startIdleExit();
   const hostWarning = unauthenticatedHostsWarning();
   if (hostWarning) console.warn(hostWarning);
   const loginUrl = v2.issueStartupLoginUrl(port);
