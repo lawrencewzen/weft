@@ -9,6 +9,7 @@ import { diffChangeRows, pickTurnAnchor, turnChangesItemId } from '../../src/ker
 import { compileSchema, validateResponse } from '../../src/v2/validate.ts';
 import { buildThread } from '../../src/v2/views/thread.ts';
 import { conversationSnapshot } from '../../src/v2/views/conversation.ts';
+import { agentShellKind } from '../../src/platform/win/shell.mjs';
 import { ROOT } from './_root.mjs';
 import { readDiscovery, request, startServer, stopServer } from './_server.mjs';
 
@@ -133,7 +134,7 @@ async function initRepo(repo) {
   await git(repo, ['commit', '-m', 'init']);
 }
 
-const BASH = 'node -e "require(\'fs\').writeFileSync(\'c.txt\', \'c1\\nc2\\nc3\\n\')"';
+const BASH = 'node -e "require(\'fs\').writeFileSync(\'c.txt\',\'c1\\nc2\\nc3\\n\')"';
 
 function scriptTurns() {
   return {
@@ -146,7 +147,7 @@ function scriptTurns() {
       },
       { text: 'wrote two' },
       { text: 'nothing' },
-      { tool: 'bash', args: { command: BASH } },
+      { tool: agentShellKind(), args: { command: BASH } },
       { text: 'bash wrote' },
       { tool: 'delegate', args: { task: 'Write child.txt with CHILD_FILE', title: '写文件' } },
       { text: 'child wrote' },
