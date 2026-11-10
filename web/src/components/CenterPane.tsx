@@ -74,7 +74,7 @@ export function CenterPane({
 }: Props) {
   const isDraft = isDraftProp || (!cid && Boolean(workspaceId));
   const { store } = useSession();
-  const { conversation, items, toolsById, changes, missing, actions } = useConversation(cid);
+  const { conversation, items, toolsById, missing, actions } = useConversation(cid);
   // Esc 停止：只在打开了真实对话（非草稿）且可停止时挂；和输入框停止按钮同一个 actions.stop
   useEscStop(!isDraft && Boolean(cid) && Boolean(conversation?.run.canStop), actions.stop);
   const [showDelayedLoading, setShowDelayedLoading] = useState(false);
@@ -271,7 +271,6 @@ export function CenterPane({
         stickNonce={stickNonce}
         conversationId={cid}
         conversationModel={conversation.model}
-        changes={changes}
         draftWorkspaceId={conversation.workspaceId || workspaceId}
         draftWorkspaceName={workspace && !isChatWorkspace(workspace) ? workspace.name : null}
       />

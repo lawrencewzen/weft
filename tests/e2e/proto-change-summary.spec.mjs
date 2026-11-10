@@ -67,5 +67,9 @@ test('change summary card: title, sorting, collapse threshold, expand/collapse, 
   await head.getByTestId('next-change-summary-view').click();
   await expect(page.locator('.right-tabs-bar .tab-btn.active')).toContainText('变更');
 
+  // 9. Card is in historical turn 1, not at the end of the thread (running turn 2 follows)
+  const isLastChild = await card.evaluate((el) => el.parentElement?.lastElementChild === el);
+  expect(isLastChild).toBe(false);
+
   expectClean(state);
 });

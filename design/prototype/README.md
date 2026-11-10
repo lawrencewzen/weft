@@ -58,8 +58,8 @@ open design/prototype/index.html    # macOS；Windows 直接双击
 
 - 演示对话 `c-turns`（路由 `#/c/c-turns`，「变更按轮显示」，侧栏 weft 工作区）：第 1 轮改 2 个文件、第 2 轮只问问题、第 3 轮改 1 个文件，所以只有第 1、3 轮回复后面有摘要。
 - 数据形式：消息流里的一种 item `{ kind: 'turn_changes', id, changes: Change[] }`，跟在那一轮回复之后，`changes` 只含这一轮的增删。契约里还没有，前端类型 `TurnChangesItem`（`web/src/data/store.ts`）是可选的联合成员，只有模拟后端产出。
-- 模拟运行：开始时放一条空的 `turn_changes`，结束（或停止）时有改动就把它挪到这一轮末尾并填上；没改文件就保持为空，不显示。
-- 拿不到 `turn_changes`（真后端、旧数据，如 `c-rich`）时回落到对话末尾显示累计，同样默认一行。
+- 模拟运行：结束（或停止）时有改动才在那一轮末尾放一条 `turn_changes`；没改文件就什么都不放。
+- 没有 `turn_changes` 数据的对话，对话流里不显示任何变更摘要（累计只在右栏「变更」和输入框上方 Git 状态里看）。
 
 ### 子 Agent
 

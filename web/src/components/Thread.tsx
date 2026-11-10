@@ -6,7 +6,7 @@ import type { Lang } from '../data/lang';
 import { useSession } from '../data/session';
 import type { ConversationActions } from '../data/useConversation';
 import { useProviders } from '../data/useProviders';
-import { subagentTopic, type Change, type ThreadItem, type ToolCall } from '../data/store';
+import { subagentTopic, type ThreadItem, type ToolCall } from '../data/store';
 import { useStoreTopics } from '../data/useStoreTopic';
 import { t } from '../i18n';
 import { AssistantMessage } from './AssistantMessage';
@@ -49,7 +49,6 @@ type Props = {
   stickNonce: number;
   conversationId?: string | null;
   conversationModel?: ConversationModel | null;
-  changes?: Change[];
   isDraft?: boolean;
   draftWorkspaceId?: string | null;
   draftWorkspaceName?: string | null;
@@ -198,7 +197,6 @@ export function Thread({
   stickNonce,
   conversationId,
   conversationModel = null,
-  changes = [],
   isDraft = false,
   draftWorkspaceId = null,
   draftWorkspaceName = null,
@@ -275,9 +273,6 @@ export function Thread({
     stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < STICK_PX;
   }
 
-  // 后端给了按轮的变更就只在各轮后面显示；没给时（旧数据）在末尾显示累计。
-  const hasTurnChanges = items.some((item) => item.kind === 'turn_changes');
-
   const innerClass = [
     'thread-inner',
     empty ? 'is-empty' : '',
@@ -344,9 +339,6 @@ export function Thread({
             }
             return null;
           })}
-        {!empty && changes.length && !hasTurnChanges ? (
-          <ChangeSummary changes={changes} lang={lang} />
-        ) : null}
         {compacting ? (
           <div className="thread-pending" data-testid="next-thread-compacting">
             <span className="run-spin" aria-hidden="true"><span /></span>

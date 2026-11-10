@@ -686,15 +686,9 @@ async function streamAssistant(
 function emitTurnChanges(db: MockDb, conv: MockConv, hub: MockHub): void {
   const rows = conv.run?.turnChanges;
   if (!rows || !rows.size) return;
-  const placeholderId = conv.run?.turnItemId;
-  if (placeholderId) {
-    conv.items = conv.items.filter((row) => row.id !== placeholderId);
-    conv.view.itemIds = conv.view.itemIds.filter((id) => id !== placeholderId);
-    publishRemove(conv, hub, 'item', placeholderId);
-  }
   const item: MockItem = {
     kind: 'turn_changes',
-    id: placeholderId || nextId(db, 'tc'),
+    id: nextId(db, 'tc'),
     changes: [...rows.values()].map((row) => ({ ...row })),
   };
   conv.items.push(item);
@@ -888,12 +882,6 @@ export function startRun(
     followUps: extraFollowUps.slice(),
   };
   conv.run = run;
-  // 先放一条空的按轮变更：前端看到它就不会在运行中回落到累计，结束时再挪到这一轮末尾。
-  const turnItem: MockItem = { kind: 'turn_changes', id: nextId(db, 'tc'), changes: [] };
-  run.turnItemId = turnItem.id;
-  conv.items.push(turnItem);
-  conv.view.itemIds.push(turnItem.id);
-  publishItem(conv, hub, turnItem);
   conv.view.status = 'running';
   conv.view.run = {
     status: 'running',

@@ -128,7 +128,6 @@ export type RunHandle = {
   followUps: FollowUp[];
   /** 这一轮自己改的文件（路径 → 只含这一轮的增删），结束时变成 turn_changes。 */
   turnChanges?: Map<string, Change>;
-  turnItemId?: string;
 };
 
 export type MockConv = {

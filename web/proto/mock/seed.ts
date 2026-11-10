@@ -341,6 +341,16 @@ function richConversation(now: number, threads: Map<string, MockSubThread>): Moc
     [EDIT_TEST_RUN.id]: EDIT_TEST_RUN,
     ...spawnTools,
   };
+  const richChanges: Change[] = [
+    { path: 'web/src/data/store.ts', added: 8, removed: 3, error: null, by: { kind: 'main' }, status: 'modified' },
+    { path: 'web/src/data/store.test.ts', added: 12, removed: 0, error: null, by: { kind: 'subagent', agentId: 'c-rich:sub:sa-2', name: 'sub-delta-test' }, status: 'added' },
+    { path: 'web/src/data/diffView.ts', added: 16, removed: 4, error: null, by: { kind: 'main' } },
+    { path: 'web/src/components/ChangesPane.tsx', added: 24, removed: 6, error: null, by: { kind: 'subagent', agentId: 'c-rich:sub:sa-1', name: 'sub-load-order' } },
+    { path: 'web/src/components/Thread.tsx', added: 6, removed: 2, error: null, by: { kind: 'main' } },
+    { path: 'web/src/styles/app.css', added: 0, removed: 0, error: null, by: { kind: 'main' }, status: 'renamed', oldPath: 'web/src/styles/base.css' },
+    { path: 'web/src/data/pendingSend.ts', added: 0, removed: 3, error: null, by: null, status: 'deleted' },
+    { path: '/Users/lawrence/.config/weft/notes.md', added: 7, removed: 0, error: null, by: { kind: 'main' } },
+  ];
   const rich = conversation({
     id: 'c-rich',
     workspaceId: 'ws-weft',
@@ -409,17 +419,14 @@ function richConversation(now: number, threads: Map<string, MockSubThread>): Moc
         { zh: `调用了 ${spawnIds.length} 次工具`, en: `called a tool ${spawnIds.length} times` },
       )] : []),
       ...seedSubagentReports(),
+      {
+        kind: 'turn_changes',
+        id: 'rich-tc1',
+        changes: richChanges.map((c) => ({ ...c })),
+      },
+      user('rich-u2', '你好'),
     ],
-    changes: [
-      { path: 'web/src/data/store.ts', added: 8, removed: 3, error: null, by: { kind: 'main' }, status: 'modified' },
-      { path: 'web/src/data/store.test.ts', added: 12, removed: 0, error: null, by: { kind: 'subagent', agentId: 'c-rich:sub:sa-2', name: 'sub-delta-test' }, status: 'added' },
-      { path: 'web/src/data/diffView.ts', added: 16, removed: 4, error: null, by: { kind: 'main' } },
-      { path: 'web/src/components/ChangesPane.tsx', added: 24, removed: 6, error: null, by: { kind: 'subagent', agentId: 'c-rich:sub:sa-1', name: 'sub-load-order' } },
-      { path: 'web/src/components/Thread.tsx', added: 6, removed: 2, error: null, by: { kind: 'main' } },
-      { path: 'web/src/styles/app.css', added: 0, removed: 0, error: null, by: { kind: 'main' }, status: 'renamed', oldPath: 'web/src/styles/base.css' },
-      { path: 'web/src/data/pendingSend.ts', added: 0, removed: 3, error: null, by: null, status: 'deleted' },
-      { path: '/Users/lawrence/.config/weft/notes.md', added: 7, removed: 0, error: null, by: { kind: 'main' } },
-    ],
+    changes: richChanges,
     diffs: {
       'web/src/data/store.ts': mockDiff('web/src/data/store.ts', [
         {
@@ -879,6 +886,23 @@ function testsConversation(now: number): MockConv {
 function docsConversation(now: number, threads: Map<string, MockSubThread>): MockConv {
   const spawnTools = dispatchToolsOf(threads, 'c-docs');
   const spawnIds = Object.keys(spawnTools);
+  const docsEdit = tool({
+    id: 'docs-t1',
+    kind: 'edit',
+    title: hint('docs/ARCHITECTURE_V2.md', 'docs/ARCHITECTURE_V2.md'),
+    path: 'docs/ARCHITECTURE_V2.md',
+    diff: { added: 18, removed: 0 },
+  });
+  const docsChanges: Change[] = [
+    {
+      path: 'docs/ARCHITECTURE_V2.md',
+      added: 18,
+      removed: 0,
+      error: null,
+      by: { kind: 'main' },
+      status: 'modified',
+    },
+  ];
   return conversation({
     id: 'c-docs',
     workspaceId: 'ws-weft',
@@ -886,7 +910,10 @@ function docsConversation(now: number, threads: Map<string, MockSubThread>): Moc
     updatedAt: now - 3 * HOUR,
     used: 172_000,
     model: { sourceId: 'deepseek', modelId: 'deepseek-v4-pro', label: 'DeepSeek V4 Pro' },
-    tools: spawnTools,
+    tools: {
+      ...spawnTools,
+      [docsEdit.id]: docsEdit,
+    },
     subagents: [...threads.values()]
       .filter((thread) => thread.view.parentConversationId === 'c-docs')
       .map((thread) => thread.view),
@@ -910,7 +937,46 @@ function docsConversation(now: number, threads: Map<string, MockSubThread>): Moc
         ].join('\n'),
         'deepseek-v4-pro',
       ),
+      user('docs-u2', '画吧，直接加到架构文档末尾。'),
+      group(
+        'docs-g1',
+        [docsEdit.id],
+        { zh: '编辑了 1 个文件', en: 'edited 1 file' },
+      ),
+      assistant(
+        'docs-a2',
+        '已经把关系图补在 `docs/ARCHITECTURE_V2.md` 末尾。',
+        'deepseek-v4-pro',
+        [{ text: 'docs/ARCHITECTURE_V2.md', path: 'docs/ARCHITECTURE_V2.md' }],
+      ),
+      {
+        kind: 'turn_changes',
+        id: 'docs-tc1',
+        changes: docsChanges.map((c) => ({ ...c })),
+      },
     ],
+    changes: docsChanges,
+    diffs: {
+      'docs/ARCHITECTURE_V2.md': mockDiff('docs/ARCHITECTURE_V2.md', [
+        {
+          oldStart: 120,
+          newStart: 120,
+          lines: [
+            { op: 'add', text: '```mermaid' },
+            { op: 'add', text: 'flowchart TD' },
+            { op: 'add', text: '  subgraph 主题' },
+            { op: 'add', text: '    W[workspaces] --> C[conversation:id]' },
+            { op: 'add', text: '    P[providers] --> C' },
+            { op: 'add', text: '  end' },
+            { op: 'add', text: '  subgraph 事件' },
+            { op: 'add', text: '    S[snapshot] --> U[upsert]' },
+            { op: 'add', text: '    U --> D[text.delta]' },
+            { op: 'add', text: '  end' },
+            { op: 'add', text: '```' },
+          ],
+        },
+      ]),
+    },
   });
 }
 
