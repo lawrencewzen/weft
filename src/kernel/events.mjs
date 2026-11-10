@@ -494,10 +494,10 @@ export function projectViewUpdate(projector, view, mapCtx) {
       if (!snapshot) events.push({ event: 'compaction', data: { entryId: key } });
       continue;
     }
-    // A reset is the handoff divider, not a user bubble. The note is rebuilt
-    // from the entry; this event only refreshes the conversation snapshot.
+    // A reset starts a new context and is not a chat bubble. The event only
+    // refreshes the conversation entity, so the chip does not wait for a reply.
     if (entry.kind === 'pi.reset') {
-      if (!snapshot) events.push({ event: 'handoff', data: { entryId: key } });
+      if (!snapshot) events.push({ event: 'reset', data: { entryId: key } });
       continue;
     }
     if (!snapshot && (entry.kind === 'pi.user' || entry.kind === 'pi.assistant')) {

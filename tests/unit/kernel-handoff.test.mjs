@@ -141,7 +141,7 @@ test('pi.reset maps to a stable handoff divider and the request stays hidden', a
   const ctx = createMapContext();
   projectViewUpdate(projector, { entries: entries.slice(0, 5), docs: {} }, ctx);
   const next = projectViewUpdate(projector, { entries, docs: {} }, ctx);
-  assert.equal(next.events.some((event) => event.event === 'handoff' && event.data.entryId === '9'), true);
+  assert.equal(next.events.some((event) => event.event === 'reset' && event.data.entryId === '9'), true);
   assert.equal(next.events.some((event) => (
     event.event === 'message.done' && String(event.data?.text || '').includes(note)
   )), false);
