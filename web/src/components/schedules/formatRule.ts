@@ -1,6 +1,7 @@
 import type { Schedule } from '../../data/api';
 import type { Lang } from '../../data/lang';
 import type { ScheduleRule, ScheduleTarget } from '../../data/store';
+import type { ScheduleFormData } from './scheduleValidation';
 
 export function formatTarget(target: ScheduleTarget, lang: Lang): string {
   if (target.kind === 'conversation') {
@@ -113,4 +114,71 @@ export function formatConversationScheduleStripText(
     return `已定时：${timeLabel} 发送「${preview}」等 ${count} 条`;
   }
   return `已定时：${timeLabel} 发送「${preview}」`;
+}
+
+export function formatNextRunSummary(timestamp: number | null, lang: Lang, now = Date.now()): string {
+  if (!timestamp) return '-';
+  const timeStr = formatScheduleTimeToast(timestamp, lang, now);
+  return lang === 'en' ? `Next: ${timeStr}` : `下次 ${timeStr}`;
+}
+
+export function computeNextRunPreview(
+  data: ScheduleFormData,
+  lang: Lang,
+  now = Date.now(),
+): string {
+  if (data.ruleKind === 'once') {
+    if (!data.onceAt || isNaN(data.onceAt)) return '';
+    const timeStr = formatScheduleTimeToast(data.onceAt, lang, now);
+    return lang === 'en' ? `Next run: ${timeStr}` : `下次运行：${timeStr}`;
+  }
+
+  if (data.ruleKind === 'daily') {
+    if (!data.dailyTime || !/^\d{2}:\d{2}$/.test(data.dailyTime)) return '';
+    const [hh, mm] = data.dailyTime.split(':').map(Number);
+    const d = new Date(now);
+    d.setHours(hh, mm, 0, 0);
+    const targetTs = d.getTime() > now ? d.getTime() : d.getTime() + 86400000;
+    const timeStr = formatScheduleTimeToast(targetTs, lang, now);
+    return lang === 'en' ? `Next run: ${timeStr}` : `下次运行：${timeStr}`;
+  }
+
+  if (data.ruleKind === 'weekly') {
+    if (!data.weeklyDays?.length || !data.weeklyTime || !/^\d{2}:\d{2}$/.test(data.weeklyTime)) return '';
+    const [hh, mm] = data.weeklyTime.split(':').map(Number);
+    for (let offset = 0; offset <= 7; offset++) {
+      const d = new Date(now + offset * 86400000);
+      d.setHours(hh, mm, 0, 0);
+      const day = d.getDay() === 0 ? 7 : d.getDay();
+      if (data.weeklyDays.includes(day) && d.getTime() > now) {
+        const timeStr = formatScheduleTimeToast(d.getTime(), lang, now);
+        const dayNamesZh = ['', '周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+        const dayNamesEn = ['', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+        const dayName = lang === 'en' ? dayNamesEn[day] : dayNamesZh[day];
+        return lang === 'en'
+          ? `Next run: ${timeStr} (${dayName})`
+          : `下次运行：${timeStr} (${dayName})`;
+      }
+    }
+    return '';
+  }
+
+  if (data.ruleKind === 'interval') {
+    const totalMinutes = data.intervalUnit === 'hours' ? data.intervalValue * 60 : data.intervalValue;
+    if (isNaN(totalMinutes) || totalMinutes < 5) return '';
+    const targetTs = now + totalMinutes * 60000;
+    const d = new Date(targetTs);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const clock = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    if (lang === 'en') {
+      const unitStr = data.intervalUnit === 'hours'
+        ? `${data.intervalValue} hour${data.intervalValue > 1 ? 's' : ''}`
+        : `${data.intervalValue} minutes`;
+      return `Next run: in ${unitStr} (${clock})`;
+    }
+    const unitStr = data.intervalUnit === 'hours' ? `${data.intervalValue} 小时后` : `${data.intervalValue} 分钟后`;
+    return `下次运行：${unitStr} (${clock})`;
+  }
+
+  return '';
 }

@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import type { Schedule } from '../../data/api';
 import {
+  computeNextRunPreview,
   formatConversationScheduleStripText,
+  formatNextRunSummary,
   formatRule,
   formatScheduleTimeToast,
   formatTarget,
 } from './formatRule';
+import type { ScheduleFormData } from './scheduleValidation';
 
 describe('formatTarget', () => {
   it('formats conversation target in zh and en', () => {
@@ -135,5 +138,68 @@ describe('formatConversationScheduleStripText', () => {
     };
     expect(formatConversationScheduleStripText([s1, s2], 'zh', base)).toBe('已定时：明天 09:00 发送「请检查构建」等 2 条');
     expect(formatConversationScheduleStripText([s1, s2], 'en', base)).toBe('Scheduled: tomorrow at 09:00 send "请检查构建" and 1 more');
+  });
+});
+
+describe('formatNextRunSummary', () => {
+  it('formats next run summary in zh and en', () => {
+    const base = new Date(2026, 10, 10, 10, 0, 0).getTime();
+    const tomorrow = new Date(2026, 10, 11, 9, 0, 0).getTime();
+    expect(formatNextRunSummary(null, 'zh', base)).toBe('-');
+    expect(formatNextRunSummary(tomorrow, 'zh', base)).toBe('下次 明天 09:00');
+    expect(formatNextRunSummary(tomorrow, 'en', base)).toBe('Next: tomorrow at 09:00');
+  });
+});
+
+describe('computeNextRunPreview', () => {
+  const base = new Date(2026, 10, 10, 10, 0, 0).getTime(); // Tuesday Nov 10 2026 10:00
+
+  const mockData: ScheduleFormData = {
+    name: 'Test',
+    message: 'Hello',
+    targetKind: 'conversation',
+    conversationId: 'c1',
+    conversationTitle: 'Title',
+    workspaceId: 'w1',
+    workspaceName: 'weft',
+    model: null,
+    ruleKind: 'daily',
+    onceAt: base + 86400000,
+    dailyTime: '09:00',
+    weeklyDays: [1, 2, 3, 4, 5],
+    weeklyTime: '09:00',
+    intervalValue: 30,
+    intervalUnit: 'minutes',
+  };
+
+  it('computes daily next run preview', () => {
+    const resZh = computeNextRunPreview({ ...mockData, ruleKind: 'daily', dailyTime: '09:00' }, 'zh', base);
+    expect(resZh).toBe('下次运行：明天 09:00');
+    const resEn = computeNextRunPreview({ ...mockData, ruleKind: 'daily', dailyTime: '09:00' }, 'en', base);
+    expect(resEn).toBe('Next run: tomorrow at 09:00');
+  });
+
+  it('computes weekly next run preview', () => {
+    const resZh = computeNextRunPreview({ ...mockData, ruleKind: 'weekly', weeklyDays: [1, 2, 3, 4, 5], weeklyTime: '09:00' }, 'zh', base);
+    expect(resZh).toBe('下次运行：明天 09:00 (周三)');
+    const resEn = computeNextRunPreview({ ...mockData, ruleKind: 'weekly', weeklyDays: [1, 2, 3, 4, 5], weeklyTime: '09:00' }, 'en', base);
+    expect(resEn).toBe('Next run: tomorrow at 09:00 (Wed)');
+  });
+
+  it('computes interval next run preview', () => {
+    const resZh = computeNextRunPreview({ ...mockData, ruleKind: 'interval', intervalValue: 30, intervalUnit: 'minutes' }, 'zh', base);
+    expect(resZh).toBe('下次运行：30 分钟后 (10:30)');
+    const resEn = computeNextRunPreview({ ...mockData, ruleKind: 'interval', intervalValue: 2, intervalUnit: 'hours' }, 'en', base);
+    expect(resEn).toBe('Next run: in 2 hours (12:00)');
+  });
+
+  it('computes once next run preview', () => {
+    const target = new Date(2026, 10, 11, 14, 0, 0).getTime();
+    const resZh = computeNextRunPreview({ ...mockData, ruleKind: 'once', onceAt: target }, 'zh', base);
+    expect(resZh).toBe('下次运行：明天 14:00');
+  });
+
+  it('returns empty string when rule is invalid', () => {
+    expect(computeNextRunPreview({ ...mockData, ruleKind: 'interval', intervalValue: 2, intervalUnit: 'minutes' }, 'zh', base)).toBe('');
   });
 });

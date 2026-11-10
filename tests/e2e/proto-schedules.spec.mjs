@@ -28,11 +28,44 @@ test('scheduled tasks: sidebar navigation, badge count, and empty footer note', 
   const pane = page.getByTestId('next-schedules-pane');
   await expect(pane).toBeVisible();
   await expect(page.getByTestId('next-schedules-title')).toHaveText('定时任务');
-  await expect(page.getByTestId('next-schedules-new')).toBeVisible();
+
+  const newBtn = page.getByTestId('next-schedules-new');
+  await expect(newBtn).toBeVisible();
+
+  // Assert "+ 新建" button and top-right toggle (.side-toggle-right) do not overlap
+  const rightToggle = page.getByTestId('next-right-toggle');
+  await expect(rightToggle).toBeVisible();
+  const newBox = await newBtn.boundingBox();
+  const toggleBox = await rightToggle.boundingBox();
+  expect(newBox).not.toBeNull();
+  expect(toggleBox).not.toBeNull();
+  const overlaps =
+    newBox.x < toggleBox.x + toggleBox.width &&
+    newBox.x + newBox.width > toggleBox.x &&
+    newBox.y < toggleBox.y + toggleBox.height &&
+    newBox.y + newBox.height > toggleBox.y;
+  expect(overlaps).toBe(false);
 
   // 4. Seeded schedule rows: 4 items in total
   const rows = page.getByTestId('next-schedule-row');
   await expect(rows).toHaveCount(4);
+
+  // Assert multi-column grid: at 1440 viewport width, first two cards share the same y position
+  const box0 = await rows.nth(0).boundingBox();
+  const box1 = await rows.nth(1).boundingBox();
+  expect(box0).not.toBeNull();
+  expect(box1).not.toBeNull();
+  expect(Math.round(box0.y)).toBe(Math.round(box1.y));
+
+  // Assert paused toggle switch is visible with dimensions > 0 and opacity > 0
+  const pausedRow = page.locator('[data-testid="next-schedule-row"][data-id="sched-4"]');
+  const pausedToggle = pausedRow.getByTestId('next-schedule-toggle');
+  await expect(pausedToggle).toBeVisible();
+  const pausedBox = await pausedToggle.boundingBox();
+  expect(pausedBox.width).toBeGreaterThan(0);
+  expect(pausedBox.height).toBeGreaterThan(0);
+  const pausedOpacity = await pausedToggle.evaluate((el) => window.getComputedStyle(el).opacity);
+  expect(parseFloat(pausedOpacity)).toBeGreaterThan(0);
 
   // 5. Agent-created badge on sched-2
   const agentRow = page.locator('[data-testid="next-schedule-row"][data-id="sched-2"]');
@@ -101,6 +134,23 @@ test('scheduled tasks: interval rule validation blocks < 5 minutes', async ({ pa
   await expect(err).toHaveCount(0);
   await expect(submitBtn).toBeEnabled();
 
+  // Assert switching rules updates "下次运行" hint in real-time
+  const hintEl = page.getByTestId('next-schedule-next-run-hint');
+  await expect(hintEl).toBeVisible();
+  const intervalHint = await hintEl.textContent();
+
+  await page.getByTestId('next-schedule-rule-daily').click();
+  const dailyHint = await hintEl.textContent();
+  expect(dailyHint).not.toBe(intervalHint);
+
+  await page.getByTestId('next-schedule-rule-weekly').click();
+  const weeklyHint = await hintEl.textContent();
+  expect(weeklyHint).not.toBe(dailyHint);
+
+  await page.getByTestId('next-schedule-rule-once').click();
+  const onceHint = await hintEl.textContent();
+  expect(onceHint).not.toBe(weeklyHint);
+
   // Cancel closes modal without saving
   await page.getByTestId('next-schedule-cancel').click();
   await expect(dialog).toHaveCount(0);
@@ -139,13 +189,17 @@ test('scheduled tasks: create, immediate run, expand runs, and delete with confi
   await runMenuBtn.click();
 
   // Run triggered, toast shown, last run status badge becomes ok
-  await expect(newRow.locator('.schedule-meta-last')).toContainText('成功');
+  const dot = newRow.getByTestId('next-schedule-last-run-dot');
+  await expect(dot).toHaveAttribute('data-status', 'ok');
+  await expect(dot).toHaveAttribute('title', /成功/);
 
-  // 3. Expand recent runs drawer by clicking the row
+  // 3. Whole card click opens edit dialog
   await newRow.click();
-  const runsDrawer = newRow.getByTestId('next-schedule-runs');
-  await expect(runsDrawer).toBeVisible();
-  await expect(runsDrawer.getByTestId('next-schedule-run-item')).toHaveCount(1);
+  const editDialog = page.getByTestId('next-schedule-dialog');
+  await expect(editDialog).toBeVisible();
+  await expect(page.getByTestId('next-schedule-name-input')).toHaveValue('每周安全审计');
+  await page.getByTestId('next-schedule-cancel').click();
+  await expect(editDialog).toHaveCount(0);
 
   // 4. Delete with confirm: cancel keeps the row, confirm removes it
   await newRow.getByTestId('next-schedule-more').click();

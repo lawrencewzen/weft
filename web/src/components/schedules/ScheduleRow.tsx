@@ -1,12 +1,11 @@
-import { useEffect, useRef, useState, type MouseEvent } from 'react';
+import { useEffect, useRef, type MouseEvent } from 'react';
 import type { Schedule } from '../../data/api';
 import type { Lang } from '../../data/lang';
 import { conversationPath, navigate } from '../../data/nav';
 import { t } from '../../i18n';
 import type { CtxMenuItem } from '../CtxMenu';
 import { MORE_ICON } from '../SidebarIcons';
-import { formatRule, formatTarget } from './formatRule';
-import { ScheduleRunsList } from './ScheduleRunsList';
+import { formatNextRunSummary, formatRule } from './formatRule';
 
 type Props = {
   schedule: Schedule;
@@ -19,22 +18,6 @@ type Props = {
   onOpenMenu: (ev: MouseEvent, items: CtxMenuItem[], title: string) => void;
 };
 
-function formatNextRunTime(timestamp: number | null, enabled: boolean, lang: Lang): string {
-  if (!enabled) return t(lang, 'schedules_status_paused');
-  if (!timestamp) return '-';
-  const d = new Date(timestamp);
-  const pad = (n: number) => String(n).padStart(2, '0');
-  const month = d.getMonth() + 1;
-  const date = d.getDate();
-  const hours = pad(d.getHours());
-  const minutes = pad(d.getMinutes());
-  if (lang === 'en') {
-    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    return `${monthNames[d.getMonth()]} ${date}, ${hours}:${minutes}`;
-  }
-  return `${month}月${date}日 ${hours}:${minutes}`;
-}
-
 export function ScheduleRow({
   schedule,
   lang,
@@ -45,7 +28,6 @@ export function ScheduleRow({
   onDelete,
   onOpenMenu,
 }: Props) {
-  const [expanded, setExpanded] = useState(false);
   const rowRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -53,12 +35,6 @@ export function ScheduleRow({
       rowRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
   }, [highlighted]);
-
-  function handleRowClick(ev: MouseEvent) {
-    const target = ev.target as HTMLElement;
-    if (target.closest?.('button, a, input, select, textarea, .ns-switch')) return;
-    setExpanded((prev) => !prev);
-  }
 
   function handleMoreClick(ev: MouseEvent) {
     ev.stopPropagation();
@@ -84,54 +60,50 @@ export function ScheduleRow({
     onOpenMenu(ev, items, schedule.name);
   }
 
-  const lastRun = schedule.lastRun;
-  let lastRunNode: React.ReactNode = null;
-  if (!lastRun) {
-    lastRunNode = <span className="schedule-status-badge is-never">{t(lang, 'schedules_status_never')}</span>;
-  } else if (lastRun.status === 'ok' || lastRun.status === 'missed_caught_up') {
-    const label = lastRun.status === 'ok'
-      ? t(lang, 'schedules_status_ok')
-      : t(lang, 'schedules_status_missed');
-    lastRunNode = lastRun.conversationId ? (
-      <button
-        type="button"
-        className={`schedule-status-link is-${lastRun.status}`}
-        title={t(lang, 'schedules_run_col_conv')}
-        onClick={(e) => {
-          e.stopPropagation();
-          if (lastRun.conversationId) navigate(conversationPath(lastRun.conversationId));
-        }}
-      >
-        {label}
-      </button>
-    ) : (
-      <span className={`schedule-status-badge is-${lastRun.status}`}>{label}</span>
-    );
-  } else {
-    lastRunNode = (
-      <span
-        className="schedule-status-badge is-failed"
-        title={lastRun.error || t(lang, 'schedules_status_failed')}
-      >
-        {t(lang, 'schedules_status_failed')}
-      </span>
-    );
+  // Determine last run status & hover title
+  let lastRunStatus = 'never';
+  let lastRunTitle = lang === 'en' ? 'Never run' : '从未运行';
+  if (schedule.lastRun) {
+    lastRunStatus = schedule.lastRun.status;
+    if (schedule.lastRun.status === 'ok') {
+      lastRunTitle = lang === 'en' ? 'Last run: Success' : '上次运行：成功';
+    } else if (schedule.lastRun.status === 'missed_caught_up') {
+      lastRunTitle = lang === 'en' ? 'Last run: Caught up' : '上次运行：补跑完成';
+    } else if (schedule.lastRun.status === 'failed') {
+      const err = schedule.lastRun.error ? ` (${schedule.lastRun.error})` : '';
+      lastRunTitle = (lang === 'en' ? 'Last run: Failed' : '上次运行：失败') + err;
+    }
   }
+
+  // Target label & icon
+  const targetLabel = schedule.target.kind === 'conversation'
+    ? schedule.target.title || schedule.target.conversationId
+    : `${schedule.target.workspaceName} · ${lang === 'en' ? 'New chat each time' : '每次新开对话'}`;
 
   return (
     <div
       ref={rowRef}
-      className={`schedule-card${expanded ? ' is-expanded' : ''}${highlighted ? ' is-highlighted' : ''}`}
+      className={`schedule-card${schedule.enabled ? ' is-enabled' : ' is-paused'}${highlighted ? ' is-highlighted' : ''}`}
       data-testid="next-schedule-row"
       data-id={schedule.id}
       data-highlighted={highlighted ? 'true' : undefined}
-      onClick={handleRowClick}
+      onClick={() => onEdit(schedule)}
     >
-      <div className="schedule-card-summary">
-        {/* Toggle Switch */}
+      {/* 1. Header Row: Name + Badge + Switch */}
+      <div className="schedule-card-top">
+        <div className="schedule-card-name-wrap">
+          <span className="schedule-card-name" data-testid="next-schedule-name" title={schedule.name}>
+            {schedule.name}
+          </span>
+          {schedule.createdBy === 'agent' ? (
+            <span className="schedule-agent-badge" data-testid="next-schedule-agent-badge">
+              {t(lang, 'schedules_created_by_agent')}
+            </span>
+          ) : null}
+        </div>
         <button
           type="button"
-          className={`ns-switch schedule-toggle${schedule.enabled ? ' is-on' : ''}`}
+          className={`schedule-toggle ns-switch${schedule.enabled ? ' is-on' : ''}`}
           data-testid="next-schedule-toggle"
           aria-pressed={schedule.enabled}
           title={schedule.enabled ? t(lang, 'schedules_status_ok') : t(lang, 'schedules_status_paused')}
@@ -140,61 +112,64 @@ export function ScheduleRow({
             onToggle(schedule);
           }}
         />
+      </div>
 
-        {/* Content Info */}
-        <div className="schedule-card-info">
-          <div className="schedule-card-title-row">
-            <span className="schedule-card-name" data-testid="next-schedule-name">
-              {schedule.name}
-            </span>
-            {schedule.createdBy === 'agent' ? (
-              <span className="schedule-agent-badge" data-testid="next-schedule-agent-badge">
-                {t(lang, 'schedules_created_by_agent')}
-              </span>
-            ) : null}
-          </div>
+      {/* 2. Main Rule Summary (Large font) */}
+      <div className="schedule-card-rule" data-testid="next-schedule-rule">
+        {formatRule(schedule.rule, lang)}
+      </div>
 
-          <div className="schedule-card-meta-row">
-            <span className="schedule-meta-item schedule-meta-rule">
-              {formatRule(schedule.rule, lang)}
-            </span>
-            <span className="schedule-meta-dot" aria-hidden="true">·</span>
-            <span className="schedule-meta-item schedule-meta-target">
-              {formatTarget(schedule.target, lang)}
-            </span>
-            <span className="schedule-meta-dot" aria-hidden="true">·</span>
-            <span className="schedule-meta-item schedule-meta-next">
-              {t(lang, 'schedule_next_run_label')}：{formatNextRunTime(schedule.nextRunAt, schedule.enabled, lang)}
-            </span>
-            <span className="schedule-meta-dot" aria-hidden="true">·</span>
-            <span className="schedule-meta-item schedule-meta-last">
-              {t(lang, 'schedule_last_run_label')}：{lastRunNode}
-            </span>
-          </div>
+      {/* 3. Message Preview (Faint color, max 2 lines) */}
+      <div className="schedule-card-message" data-testid="next-schedule-message" title={schedule.message}>
+        {schedule.message}
+      </div>
+
+      {/* 4. Footer Row: Divider + Target + Status/NextRun + LastRun Dot + More */}
+      <div className="schedule-card-footer">
+        <div className="schedule-card-target" title={targetLabel}>
+          {schedule.target.kind === 'conversation' ? (
+            <svg className="icon schedule-target-icon" viewBox="0 0 16 16" width="13" height="13" fill="currentColor" aria-hidden="true">
+              <path d="M2 3a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5.414L2.707 14.707A1 1 0 0 1 1 14V3a2 2 0 0 1 1-1z" />
+            </svg>
+          ) : (
+            <svg className="icon schedule-target-icon" viewBox="0 0 16 16" width="13" height="13" fill="currentColor" aria-hidden="true">
+              <path d="M1 3.5A1.5 1.5 0 0 1 2.5 2h3.879a1.5 1.5 0 0 1 1.06.44l1.122 1.12A.5.5 0 0 0 8.914 4H13.5A1.5 1.5 0 0 1 15 5.5v7a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 1 12.5v-9z" />
+            </svg>
+          )}
+          <span className="schedule-card-target-text">{targetLabel}</span>
         </div>
 
-        {/* Actions Button */}
-        <div className="schedule-card-actions">
+        <div className="schedule-card-footer-right">
+          <span className="schedule-card-status" data-testid="next-schedule-status-text">
+            {!schedule.enabled
+              ? t(lang, 'schedules_status_paused')
+              : formatNextRunSummary(schedule.nextRunAt, lang)}
+          </span>
+
+          <span
+            className={`schedule-last-run-dot is-${lastRunStatus}`}
+            data-testid="next-schedule-last-run-dot"
+            data-status={lastRunStatus}
+            title={lastRunTitle}
+            onClick={(e) => {
+              if (schedule.lastRun?.conversationId) {
+                e.stopPropagation();
+                navigate(conversationPath(schedule.lastRun.conversationId));
+              }
+            }}
+          />
+
           <button
             type="button"
-            className="btn-icon-xs schedule-more-btn"
+            className="schedule-more-btn"
             data-testid="next-schedule-more"
-            title={t(lang, 'more_actions')}
-            aria-label={t(lang, 'more_actions')}
+            aria-label={t(lang, 'schedules_more_actions')}
             onClick={handleMoreClick}
           >
             {MORE_ICON}
           </button>
         </div>
       </div>
-
-      {/* Expanded runs drawer */}
-      {expanded ? (
-        <div className="schedule-runs-drawer" data-testid="next-schedule-runs">
-          <div className="schedule-runs-header">{t(lang, 'schedules_runs_title')}</div>
-          <ScheduleRunsList scheduleId={schedule.id} lang={lang} />
-        </div>
-      ) : null}
     </div>
   );
 }

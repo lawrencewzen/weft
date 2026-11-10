@@ -1,9 +1,10 @@
-import { useState, useId } from 'react';
+import { useState, useId, useRef, useEffect, type FormEvent } from 'react';
 import { createSchedule, patchSchedule, type Schedule } from '../../data/api';
 import type { Lang } from '../../data/lang';
 import { useProviders } from '../../data/useProviders';
 import { useWorkspaces } from '../../data/useWorkspaces';
 import { t } from '../../i18n';
+import { computeNextRunPreview } from './formatRule';
 import {
   formDataToPayload,
   validateScheduleForm,
@@ -18,28 +19,38 @@ type Props = {
   onToast: (msg: string) => void;
 };
 
-function formatIsoForDateTimeLocal(timestamp: number): string {
-  const d = new Date(timestamp);
+function parseTimestampToDateAndTime(ts: number): { date: string; time: string } {
+  const d = new Date(ts);
   const pad = (n: number) => String(n).padStart(2, '0');
   const YYYY = d.getFullYear();
   const MM = pad(d.getMonth() + 1);
   const DD = pad(d.getDate());
   const hh = pad(d.getHours());
   const mm = pad(d.getMinutes());
-  return `${YYYY}-${MM}-${DD}T${hh}:${mm}`;
+  return { date: `${YYYY}-${MM}-${DD}`, time: `${hh}:${mm}` };
+}
+
+function combineDateAndTime(dateStr: string, timeStr: string): number {
+  if (!dateStr || !timeStr) return NaN;
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const [hh, mm] = timeStr.split(':').map(Number);
+  const dt = new Date(y, (m || 1) - 1, d || 1, hh || 0, mm || 0, 0, 0);
+  return dt.getTime();
 }
 
 export function ScheduleDialog({ lang, schedule, onClose, onToast }: Props) {
   const { workspaces, conversations } = useWorkspaces();
   const { providers } = useProviders();
   const titleId = useId();
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const isEditing = Boolean(schedule);
 
-  // Initialize initial form state
+  // Name & Message
   const [name, setName] = useState(schedule?.name || '');
   const [message, setMessage] = useState(schedule?.message || '');
 
+  // Target: 'conversation' vs 'new'
   const [targetKind, setTargetKind] = useState<'conversation' | 'new'>(
     schedule?.target.kind || 'new',
   );
@@ -59,19 +70,25 @@ export function ScheduleDialog({ lang, schedule, onClose, onToast }: Props) {
     : 'default';
   const [modelChoice, setModelChoice] = useState(initialModelStr);
 
+  // Rule: 'once' | 'daily' | 'weekly' | 'interval'
   const [ruleKind, setRuleKind] = useState<'once' | 'daily' | 'weekly' | 'interval'>(
     schedule?.rule.kind || 'weekly',
   );
 
+  // Once Date & Time
   const defaultOnceAt = schedule?.rule.kind === 'once'
     ? schedule.rule.at
     : Date.now() + 86400000;
-  const [onceIso, setOnceIso] = useState(formatIsoForDateTimeLocal(defaultOnceAt));
+  const initialOnce = parseTimestampToDateAndTime(defaultOnceAt);
+  const [onceDate, setOnceDate] = useState(initialOnce.date);
+  const [onceTime, setOnceTime] = useState(initialOnce.time);
 
+  // Daily Time
   const [dailyTime, setDailyTime] = useState(
     schedule?.rule.kind === 'daily' ? schedule.rule.time : '09:00',
   );
 
+  // Weekly Days & Time
   const [weeklyDays, setWeeklyDays] = useState<number[]>(
     schedule?.rule.kind === 'weekly' ? schedule.rule.days : [1, 2, 3, 4, 5],
   );
@@ -79,6 +96,7 @@ export function ScheduleDialog({ lang, schedule, onClose, onToast }: Props) {
     schedule?.rule.kind === 'weekly' ? schedule.rule.time : '09:00',
   );
 
+  // Interval
   const defaultIntervalMinutes = schedule?.rule.kind === 'interval'
     ? schedule.rule.everyMinutes
     : 30;
@@ -94,6 +112,27 @@ export function ScheduleDialog({ lang, schedule, onClose, onToast }: Props) {
   const [busy, setBusy] = useState(false);
   const [serverError, setServerError] = useState('');
 
+  // Close on Escape
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        onClose();
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
+  // Textarea auto-grow (3 to 8 lines)
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    const nextH = Math.min(Math.max(el.scrollHeight, 72), 180);
+    el.style.height = `${nextH}px`;
+  }, [message]);
+
   const targetConv = conversations.find((c) => c.id === conversationId);
   const targetWs = workspaces.find((w) => w.id === workspaceId);
 
@@ -101,6 +140,8 @@ export function ScheduleDialog({ lang, schedule, onClose, onToast }: Props) {
     const [pId, mId] = modelChoice.split(':');
     return pId && mId ? { providerId: pId, modelId: mId } : null;
   })();
+
+  const currentOnceAt = combineDateAndTime(onceDate, onceTime);
 
   const currentFormData: ScheduleFormData = {
     name,
@@ -112,13 +153,15 @@ export function ScheduleDialog({ lang, schedule, onClose, onToast }: Props) {
     workspaceName: targetWs?.name || '',
     model: resolvedModel,
     ruleKind,
-    onceAt: new Date(onceIso).getTime(),
+    onceAt: currentOnceAt,
     dailyTime,
     weeklyDays,
     weeklyTime,
     intervalValue: intervalVal,
     intervalUnit,
   };
+
+  const validation = validateScheduleForm(currentFormData, lang);
 
   function toggleWeeklyDay(day: number) {
     setWeeklyDays((prev) => {
@@ -143,7 +186,7 @@ export function ScheduleDialog({ lang, schedule, onClose, onToast }: Props) {
     }
   }
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     const val = validateScheduleForm(currentFormData, lang);
     if (!val.valid) {
@@ -168,303 +211,345 @@ export function ScheduleDialog({ lang, schedule, onClose, onToast }: Props) {
     }
   }
 
+  // Determine current rule error or preview
+  let currentRuleError: string | undefined;
+  if (ruleKind === 'once') currentRuleError = errors.onceAt;
+  else if (ruleKind === 'daily') currentRuleError = errors.dailyTime;
+  else if (ruleKind === 'weekly') currentRuleError = errors.weeklyDays || errors.weeklyTime;
+  else if (ruleKind === 'interval') currentRuleError = errors.interval;
+
+  const nextRunPreview = computeNextRunPreview(currentFormData, lang);
+
   const zhDays = ['一', '二', '三', '四', '五', '六', '日'];
   const enDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
   return (
-    <div className="modal-overlay" data-testid="next-schedule-dialog-overlay">
+    <div className="modal-overlay" data-testid="next-schedule-dialog-overlay" onClick={onClose}>
       <div
         className="modal-dialog schedule-dialog"
         role="dialog"
         aria-labelledby={titleId}
         aria-modal="true"
         data-testid="next-schedule-dialog"
+        onClick={(e) => e.stopPropagation()}
       >
-        <h3 id={titleId}>
-          {isEditing ? t(lang, 'schedule_dialog_title_edit') : t(lang, 'schedule_dialog_title_new')}
+        {/* Header */}
+        <div className="schedule-dialog-header">
+          <h3 id={titleId} className="schedule-dialog-title">
+            {isEditing ? t(lang, 'schedule_dialog_title_edit') : t(lang, 'schedule_dialog_title_new')}
+          </h3>
           <button
             type="button"
-            className="confirm-close"
+            className="schedule-dialog-close"
             onClick={onClose}
             aria-label={t(lang, 'btn_cancel')}
           >
             ×
           </button>
-        </h3>
+        </div>
 
+        {/* Scrollable Form Body */}
         <form onSubmit={handleSubmit} className="schedule-dialog-form">
-          {/* Name */}
-          <div className="schedule-form-group">
-            <label className="schedule-form-label" htmlFor="sched-input-name">
-              {t(lang, 'schedule_name_label')}
-            </label>
-            <input
-              id="sched-input-name"
-              className={`ns-input${errors.name ? ' is-error' : ''}`}
-              data-testid="next-schedule-name-input"
-              value={name}
-              placeholder={t(lang, 'schedule_name_placeholder')}
-              onChange={(e) => {
-                setName(e.target.value);
-                if (errors.name) setErrors((errs) => ({ ...errs, name: undefined }));
-              }}
-            />
-            {errors.name ? (
-              <div className="schedule-field-err" data-testid="next-schedule-err-name">
-                {errors.name}
-              </div>
-            ) : null}
-          </div>
-
-          {/* Message */}
-          <div className="schedule-form-group">
-            <label className="schedule-form-label" htmlFor="sched-input-message">
-              {t(lang, 'schedule_message_label')}
-            </label>
-            <textarea
-              id="sched-input-message"
-              className={`ns-input schedule-textarea${errors.message ? ' is-error' : ''}`}
-              data-testid="next-schedule-message-input"
-              rows={3}
-              value={message}
-              placeholder={t(lang, 'schedule_message_placeholder')}
-              onChange={(e) => {
-                setMessage(e.target.value);
-                if (errors.message) setErrors((errs) => ({ ...errs, message: undefined }));
-              }}
-            />
-            {errors.message ? (
-              <div className="schedule-field-err" data-testid="next-schedule-err-message">
-                {errors.message}
-              </div>
-            ) : null}
-          </div>
-
-          {/* Target */}
-          <div className="schedule-form-group">
-            <label className="schedule-form-label">{t(lang, 'schedule_target_label')}</label>
-            <div className="schedule-segmented-controls" role="radiogroup">
-              <button
-                type="button"
-                className={`schedule-seg-btn${targetKind === 'conversation' ? ' is-active' : ''}`}
-                data-testid="next-schedule-target-conv"
-                onClick={() => setTargetKind('conversation')}
-              >
-                {t(lang, 'schedule_target_conv')}
-              </button>
-              <button
-                type="button"
-                className={`schedule-seg-btn${targetKind === 'new' ? ' is-active' : ''}`}
-                data-testid="next-schedule-target-new"
-                onClick={() => setTargetKind('new')}
-              >
-                {t(lang, 'schedule_target_new')}
-              </button>
+          <div className="schedule-dialog-body">
+            {/* 1. Name */}
+            <div className="schedule-form-group">
+              <label className="schedule-form-label" htmlFor="sched-input-name">
+                {t(lang, 'schedule_name_label')}
+              </label>
+              <input
+                id="sched-input-name"
+                className={`schedule-input${errors.name ? ' is-error' : ''}`}
+                data-testid="next-schedule-name-input"
+                value={name}
+                placeholder={t(lang, 'schedule_name_placeholder')}
+                onChange={(e) => {
+                  setName(e.target.value);
+                  if (errors.name) setErrors((errs) => ({ ...errs, name: undefined }));
+                }}
+              />
+              {errors.name ? (
+                <div className="schedule-field-err" data-testid="next-schedule-err-name">
+                  {errors.name}
+                </div>
+              ) : null}
             </div>
 
-            {targetKind === 'conversation' ? (
-              <div className="schedule-target-subrow">
-                <select
-                  className="ns-input"
-                  data-testid="next-schedule-conv-select"
-                  value={conversationId}
-                  onChange={(e) => {
-                    setConversationId(e.target.value);
-                    if (errors.conversationId) {
-                      setErrors((errs) => ({ ...errs, conversationId: undefined }));
-                    }
-                  }}
+            {/* 2. Message */}
+            <div className="schedule-form-group">
+              <label className="schedule-form-label" htmlFor="sched-input-message">
+                {t(lang, 'schedule_message_label')}
+              </label>
+              <textarea
+                ref={textareaRef}
+                id="sched-input-message"
+                className={`schedule-textarea${errors.message ? ' is-error' : ''}`}
+                data-testid="next-schedule-message-input"
+                rows={3}
+                value={message}
+                placeholder={t(lang, 'schedule_message_placeholder')}
+                onChange={(e) => {
+                  setMessage(e.target.value);
+                  if (errors.message) setErrors((errs) => ({ ...errs, message: undefined }));
+                }}
+              />
+              {errors.message ? (
+                <div className="schedule-field-err" data-testid="next-schedule-err-message">
+                  {errors.message}
+                </div>
+              ) : null}
+            </div>
+
+            {/* 3. Target */}
+            <div className="schedule-form-group">
+              <label className="schedule-form-label">{t(lang, 'schedule_target_label')}</label>
+              <div className="schedule-segmented-controls" role="radiogroup">
+                <button
+                  type="button"
+                  className={`schedule-seg-btn${targetKind === 'conversation' ? ' is-active' : ''}`}
+                  data-testid="next-schedule-target-conv"
+                  onClick={() => setTargetKind('conversation')}
                 >
-                  {conversations.length === 0 ? (
-                    <option value="">{t(lang, 'schedule_target_select_conv')}</option>
-                  ) : null}
-                  {conversations.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.title}
-                    </option>
-                  ))}
-                </select>
-                {errors.conversationId ? (
-                  <div className="schedule-field-err">{errors.conversationId}</div>
-                ) : null}
+                  {t(lang, 'schedule_target_conv')}
+                </button>
+                <button
+                  type="button"
+                  className={`schedule-seg-btn${targetKind === 'new' ? ' is-active' : ''}`}
+                  data-testid="next-schedule-target-new"
+                  onClick={() => setTargetKind('new')}
+                >
+                  {t(lang, 'schedule_target_new')}
+                </button>
               </div>
-            ) : (
-              <div className="schedule-target-subrow schedule-new-grid">
-                <div>
-                  <label className="schedule-sublabel" htmlFor="sched-select-ws">
-                    {t(lang, 'schedule_target_select_ws')}
-                  </label>
+
+              {targetKind === 'conversation' ? (
+                <div className="schedule-target-subrow">
                   <select
-                    id="sched-select-ws"
-                    className="ns-input"
-                    data-testid="next-schedule-ws-select"
-                    value={workspaceId}
+                    className="schedule-input"
+                    data-testid="next-schedule-conv-select"
+                    value={conversationId}
                     onChange={(e) => {
-                      setWorkspaceId(e.target.value);
-                      if (errors.workspaceId) {
-                        setErrors((errs) => ({ ...errs, workspaceId: undefined }));
+                      setConversationId(e.target.value);
+                      if (errors.conversationId) {
+                        setErrors((errs) => ({ ...errs, conversationId: undefined }));
                       }
                     }}
                   >
-                    {workspaces.map((w) => (
-                      <option key={w.id} value={w.id}>
-                        {w.name}
+                    {conversations.length === 0 ? (
+                      <option value="">{t(lang, 'schedule_target_select_conv')}</option>
+                    ) : null}
+                    {conversations.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.title}
                       </option>
                     ))}
                   </select>
+                  {errors.conversationId ? (
+                    <div className="schedule-field-err">{errors.conversationId}</div>
+                  ) : null}
                 </div>
-                <div>
-                  <label className="schedule-sublabel" htmlFor="sched-select-model">
-                    {t(lang, 'schedule_target_model_label')}
-                  </label>
-                  <select
-                    id="sched-select-model"
-                    className="ns-input"
-                    data-testid="next-schedule-model-select"
-                    value={modelChoice}
-                    onChange={(e) => setModelChoice(e.target.value)}
-                  >
-                    <option value="default">{t(lang, 'schedule_target_model_default')}</option>
-                    {providers.flatMap((p) =>
-                      p.models.map((m) => (
-                        <option key={`${p.id}:${m.id}`} value={`${p.id}:${m.id}`}>
-                          {p.name} · {m.name || m.id}
+              ) : (
+                <div className="schedule-target-grid">
+                  <div>
+                    <label className="schedule-sublabel" htmlFor="sched-select-ws">
+                      {t(lang, 'schedule_target_select_ws')}
+                    </label>
+                    <select
+                      id="sched-select-ws"
+                      className="schedule-input"
+                      data-testid="next-schedule-ws-select"
+                      value={workspaceId}
+                      onChange={(e) => {
+                        setWorkspaceId(e.target.value);
+                        if (errors.workspaceId) {
+                          setErrors((errs) => ({ ...errs, workspaceId: undefined }));
+                        }
+                      }}
+                    >
+                      {workspaces.map((w) => (
+                        <option key={w.id} value={w.id}>
+                          {w.name}
                         </option>
-                      )),
-                    )}
-                  </select>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="schedule-sublabel" htmlFor="sched-select-model">
+                      {t(lang, 'schedule_target_model_label')}
+                    </label>
+                    <select
+                      id="sched-select-model"
+                      className="schedule-input"
+                      data-testid="next-schedule-model-select"
+                      value={modelChoice}
+                      onChange={(e) => setModelChoice(e.target.value)}
+                    >
+                      <option value="default">{t(lang, 'schedule_target_model_default')}</option>
+                      {providers.flatMap((p) =>
+                        p.models.map((m) => (
+                          <option key={`${p.id}:${m.id}`} value={`${p.id}:${m.id}`}>
+                            {p.name} · {m.name || m.id}
+                          </option>
+                        )),
+                      )}
+                    </select>
+                  </div>
                 </div>
-              </div>
-            )}
-          </div>
-
-          {/* Time Rule */}
-          <div className="schedule-form-group">
-            <label className="schedule-form-label">{t(lang, 'schedule_rule_label')}</label>
-            <div className="schedule-segmented-controls" role="radiogroup">
-              <button
-                type="button"
-                className={`schedule-seg-btn${ruleKind === 'once' ? ' is-active' : ''}`}
-                data-testid="next-schedule-rule-once"
-                onClick={() => setRuleKind('once')}
-              >
-                {t(lang, 'schedule_rule_once')}
-              </button>
-              <button
-                type="button"
-                className={`schedule-seg-btn${ruleKind === 'daily' ? ' is-active' : ''}`}
-                data-testid="next-schedule-rule-daily"
-                onClick={() => setRuleKind('daily')}
-              >
-                {t(lang, 'schedule_rule_daily')}
-              </button>
-              <button
-                type="button"
-                className={`schedule-seg-btn${ruleKind === 'weekly' ? ' is-active' : ''}`}
-                data-testid="next-schedule-rule-weekly"
-                onClick={() => setRuleKind('weekly')}
-              >
-                {t(lang, 'schedule_rule_weekly')}
-              </button>
-              <button
-                type="button"
-                className={`schedule-seg-btn${ruleKind === 'interval' ? ' is-active' : ''}`}
-                data-testid="next-schedule-rule-interval"
-                onClick={() => setRuleKind('interval')}
-              >
-                {t(lang, 'schedule_rule_interval')}
-              </button>
+              )}
             </div>
 
-            {ruleKind === 'once' ? (
-              <div className="schedule-rule-subrow">
-                <input
-                  type="datetime-local"
-                  className="ns-input"
-                  data-testid="next-schedule-once-input"
-                  value={onceIso}
-                  onChange={(e) => {
-                    setOnceIso(e.target.value);
-                    if (errors.onceAt) setErrors((errs) => ({ ...errs, onceAt: undefined }));
-                  }}
-                />
-                {errors.onceAt ? <div className="schedule-field-err">{errors.onceAt}</div> : null}
+            {/* 4. When / Frequency */}
+            <div className="schedule-form-group">
+              <label className="schedule-form-label">{t(lang, 'schedule_rule_label')}</label>
+              <div className="schedule-segmented-controls" role="radiogroup">
+                <button
+                  type="button"
+                  className={`schedule-seg-btn${ruleKind === 'once' ? ' is-active' : ''}`}
+                  data-testid="next-schedule-rule-once"
+                  onClick={() => setRuleKind('once')}
+                >
+                  {t(lang, 'schedule_rule_once')}
+                </button>
+                <button
+                  type="button"
+                  className={`schedule-seg-btn${ruleKind === 'daily' ? ' is-active' : ''}`}
+                  data-testid="next-schedule-rule-daily"
+                  onClick={() => setRuleKind('daily')}
+                >
+                  {t(lang, 'schedule_rule_daily')}
+                </button>
+                <button
+                  type="button"
+                  className={`schedule-seg-btn${ruleKind === 'weekly' ? ' is-active' : ''}`}
+                  data-testid="next-schedule-rule-weekly"
+                  onClick={() => setRuleKind('weekly')}
+                >
+                  {t(lang, 'schedule_rule_weekly')}
+                </button>
+                <button
+                  type="button"
+                  className={`schedule-seg-btn${ruleKind === 'interval' ? ' is-active' : ''}`}
+                  data-testid="next-schedule-rule-interval"
+                  onClick={() => setRuleKind('interval')}
+                >
+                  {t(lang, 'schedule_rule_interval')}
+                </button>
               </div>
-            ) : null}
 
-            {ruleKind === 'daily' ? (
-              <div className="schedule-rule-subrow">
-                <input
-                  type="time"
-                  className="ns-input"
-                  data-testid="next-schedule-daily-time"
-                  value={dailyTime}
-                  onChange={(e) => {
-                    setDailyTime(e.target.value);
-                    if (errors.dailyTime) setErrors((errs) => ({ ...errs, dailyTime: undefined }));
-                  }}
-                />
-                {errors.dailyTime ? (
-                  <div className="schedule-field-err">{errors.dailyTime}</div>
-                ) : null}
-              </div>
-            ) : null}
-
-            {ruleKind === 'weekly' ? (
-              <div className="schedule-rule-subrow">
-                <div className="schedule-days-picker" data-testid="next-schedule-weekly-days">
-                  {[1, 2, 3, 4, 5, 6, 7].map((d) => {
-                    const active = weeklyDays.includes(d);
-                    const label = lang === 'en' ? enDays[d - 1] : zhDays[d - 1];
-                    return (
-                      <button
-                        key={d}
-                        type="button"
-                        className={`schedule-day-chip${active ? ' is-active' : ''}`}
-                        data-day={d}
-                        onClick={() => toggleWeeklyDay(d)}
-                      >
-                        {label}
-                      </button>
-                    );
-                  })}
+              {/* Once: Date + Time */}
+              {ruleKind === 'once' ? (
+                <div className="schedule-once-grid">
+                  <div>
+                    <label className="schedule-sublabel" htmlFor="sched-once-date">
+                      {lang === 'en' ? 'Date' : '日期'}
+                    </label>
+                    <input
+                      id="sched-once-date"
+                      type="date"
+                      className="schedule-input"
+                      data-testid="next-schedule-once-date"
+                      value={onceDate}
+                      onChange={(e) => {
+                        setOnceDate(e.target.value);
+                        if (errors.onceAt) setErrors((errs) => ({ ...errs, onceAt: undefined }));
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label className="schedule-sublabel" htmlFor="sched-once-time">
+                      {lang === 'en' ? 'Time' : '时间'}
+                    </label>
+                    <input
+                      id="sched-once-time"
+                      type="time"
+                      className="schedule-input"
+                      data-testid="next-schedule-once-time"
+                      value={onceTime}
+                      onChange={(e) => {
+                        setOnceTime(e.target.value);
+                        if (errors.onceAt) setErrors((errs) => ({ ...errs, onceAt: undefined }));
+                      }}
+                    />
+                  </div>
                 </div>
-                <div className="schedule-time-row">
-                  <span className="schedule-sublabel">{t(lang, 'schedule_rule_time_label')}</span>
+              ) : null}
+
+              {/* Daily: Time */}
+              {ruleKind === 'daily' ? (
+                <div className="schedule-rule-subrow">
+                  <label className="schedule-sublabel" htmlFor="sched-daily-time">
+                    {lang === 'en' ? 'Time' : '时间'}
+                  </label>
                   <input
+                    id="sched-daily-time"
                     type="time"
-                    className="ns-input"
-                    data-testid="next-schedule-weekly-time"
-                    value={weeklyTime}
+                    className="schedule-input"
+                    data-testid="next-schedule-daily-time"
+                    value={dailyTime}
                     onChange={(e) => {
-                      setWeeklyTime(e.target.value);
-                      if (errors.weeklyTime) {
-                        setErrors((errs) => ({ ...errs, weeklyTime: undefined }));
-                      }
+                      setDailyTime(e.target.value);
+                      if (errors.dailyTime) setErrors((errs) => ({ ...errs, dailyTime: undefined }));
                     }}
                   />
                 </div>
-                {errors.weeklyDays ? (
-                  <div className="schedule-field-err">{errors.weeklyDays}</div>
-                ) : null}
-              </div>
-            ) : null}
+              ) : null}
 
-            {ruleKind === 'interval' ? (
-              <div className="schedule-rule-subrow">
-                <div className="schedule-interval-row">
+              {/* Weekly: Chips + Time */}
+              {ruleKind === 'weekly' ? (
+                <div className="schedule-rule-subrow">
+                  <div className="schedule-days-picker" data-testid="next-schedule-weekly-days">
+                    {[1, 2, 3, 4, 5, 6, 7].map((d) => {
+                      const active = weeklyDays.includes(d);
+                      const label = lang === 'en' ? enDays[d - 1] : zhDays[d - 1];
+                      return (
+                        <button
+                          key={d}
+                          type="button"
+                          className={`schedule-day-chip${active ? ' is-active' : ''}`}
+                          data-day={d}
+                          aria-pressed={active}
+                          onClick={() => toggleWeeklyDay(d)}
+                        >
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div style={{ marginTop: '8px' }}>
+                    <label className="schedule-sublabel" htmlFor="sched-weekly-time">
+                      {lang === 'en' ? 'Time' : '时间'}
+                    </label>
+                    <input
+                      id="sched-weekly-time"
+                      type="time"
+                      className="schedule-input"
+                      data-testid="next-schedule-weekly-time"
+                      value={weeklyTime}
+                      onChange={(e) => {
+                        setWeeklyTime(e.target.value);
+                        if (errors.weeklyTime) {
+                          setErrors((errs) => ({ ...errs, weeklyTime: undefined }));
+                        }
+                      }}
+                    />
+                  </div>
+                </div>
+              ) : null}
+
+              {/* Interval: Number + Unit */}
+              {ruleKind === 'interval' ? (
+                <div className="schedule-interval-grid">
                   <input
                     type="number"
                     min="1"
-                    className={`ns-input is-number${errors.interval ? ' is-error' : ''}`}
+                    className={`schedule-input is-number${errors.interval ? ' is-error' : ''}`}
                     data-testid="next-schedule-interval-input"
-                    value={intervalVal}
+                    value={intervalVal || ''}
                     onChange={(e) =>
                       handleIntervalChange(parseInt(e.target.value, 10) || 0, intervalUnit)
                     }
                   />
                   <select
-                    className="ns-input"
+                    className="schedule-input"
                     data-testid="next-schedule-interval-unit"
                     value={intervalUnit}
                     onChange={(e) =>
@@ -475,22 +560,32 @@ export function ScheduleDialog({ lang, schedule, onClose, onToast }: Props) {
                     <option value="hours">{t(lang, 'schedule_rule_interval_unit_hour')}</option>
                   </select>
                 </div>
-                {errors.interval ? (
-                  <div className="schedule-field-err" data-testid="next-schedule-err-interval">
-                    {errors.interval}
-                  </div>
-                ) : null}
+              ) : null}
+
+              {/* Next run preview / Error hint */}
+              {currentRuleError ? (
+                <div
+                  className="schedule-rule-hint is-error"
+                  data-testid={ruleKind === 'interval' ? 'next-schedule-err-interval' : 'next-schedule-rule-err'}
+                >
+                  {currentRuleError}
+                </div>
+              ) : nextRunPreview ? (
+                <div className="schedule-rule-hint" data-testid="next-schedule-next-run-hint">
+                  {nextRunPreview}
+                </div>
+              ) : null}
+            </div>
+
+            {serverError ? (
+              <div className="ns-inline-err" data-testid="next-schedule-server-err">
+                {serverError}
               </div>
             ) : null}
           </div>
 
-          {serverError ? (
-            <div className="ns-inline-err" data-testid="next-schedule-server-err">
-              {serverError}
-            </div>
-          ) : null}
-
-          <div className="modal-actions">
+          {/* Fixed Footer */}
+          <div className="schedule-dialog-footer">
             <button
               type="button"
               className="btn"
@@ -503,9 +598,9 @@ export function ScheduleDialog({ lang, schedule, onClose, onToast }: Props) {
               type="submit"
               className="btn p"
               data-testid="next-schedule-submit"
-              disabled={busy || Boolean(errors.interval)}
+              disabled={busy || !validation.valid}
             >
-              {t(lang, 'btn_confirm')}
+              {isEditing ? t(lang, 'btn_save') : t(lang, 'btn_create')}
             </button>
           </div>
         </form>

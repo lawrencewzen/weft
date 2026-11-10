@@ -93,48 +93,58 @@ export function SchedulesPane({ lang, highlightId, onToast, onConfirm }: Props) 
             setDialogOpen(true);
           }}
         >
-          {t(lang, 'schedules_new_btn')}
+          <svg className="icon schedules-new-icon" viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+            <line x1="8" y1="3" x2="8" y2="13" />
+            <line x1="3" y1="8" x2="13" y2="8" />
+          </svg>
+          <span>{t(lang, 'schedules_new_btn')}</span>
         </button>
       </header>
 
       <div className="schedules-body">
-        {!ready ? (
-          <div className="schedules-loading">{t(lang, 'loading')}</div>
-        ) : schedules.length === 0 ? (
-          <div className="schedules-empty" data-testid="next-schedules-empty">
-            <p className="schedules-empty-text">{t(lang, 'schedules_empty')}</p>
-            <button
-              type="button"
-              className="btn p"
-              data-testid="next-schedules-empty-new"
-              onClick={() => {
-                setEditingSchedule(null);
-                setDialogOpen(true);
-              }}
-            >
-              {t(lang, 'schedules_empty_btn')}
-            </button>
-          </div>
-        ) : (
-          <div className="schedules-list" data-testid="next-schedules-list">
-            {schedules.map((schedule) => (
-              <ScheduleRow
-                key={schedule.id}
-                schedule={schedule}
-                lang={lang}
-                highlighted={schedule.id === highlightId}
-                onToggle={handleToggle}
-                onEdit={handleEdit}
-                onRun={handleRun}
-                onDelete={handleDelete}
-                onOpenMenu={handleOpenMenu}
-              />
-            ))}
-          </div>
-        )}
+        <div className="schedules-content">
+          {!ready ? (
+            <div className="schedules-loading">{t(lang, 'loading')}</div>
+          ) : schedules.length === 0 ? (
+            <div className="schedules-empty" data-testid="next-schedules-empty">
+              <p className="schedules-empty-text">{t(lang, 'schedules_empty')}</p>
+              <button
+                type="button"
+                className="btn p schedules-new-btn"
+                data-testid="next-schedules-empty-new"
+                onClick={() => {
+                  setEditingSchedule(null);
+                  setDialogOpen(true);
+                }}
+              >
+                <svg className="icon schedules-new-icon" viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+                  <line x1="8" y1="3" x2="8" y2="13" />
+                  <line x1="3" y1="8" x2="13" y2="8" />
+                </svg>
+                <span>{t(lang, 'schedules_empty_btn')}</span>
+              </button>
+            </div>
+          ) : (
+            <div className="schedules-list" data-testid="next-schedules-list">
+              {schedules.map((schedule) => (
+                <ScheduleRow
+                  key={schedule.id}
+                  schedule={schedule}
+                  lang={lang}
+                  highlighted={schedule.id === highlightId}
+                  onToggle={handleToggle}
+                  onEdit={handleEdit}
+                  onRun={handleRun}
+                  onDelete={handleDelete}
+                  onOpenMenu={handleOpenMenu}
+                />
+              ))}
+            </div>
+          )}
 
-        <div className="schedules-footer-note" data-testid="next-schedules-footer-note">
-          {t(lang, 'schedules_footer_note')}
+          <div className="schedules-footer-note" data-testid="next-schedules-footer-note">
+            {t(lang, 'schedules_footer_note')}
+          </div>
         </div>
       </div>
 
