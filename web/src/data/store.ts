@@ -19,16 +19,7 @@ export function isProjectWorkspace(ws: Pick<Workspace, 'kind'> | null | undefine
   return workspaceKind(ws) === 'project';
 }
 export type Change = components['schemas']['Change'];
-/**
- * 某一轮自己改的文件，放在那一轮回复之后。契约里还没有这个 item，
- * 后端接上之前只有原型的模拟后端会产出；拿不到时不显示摘要（累计在右栏查看）。
- */
-export type TurnChangesItem = {
-  kind: 'turn_changes';
-  id: string;
-  changes: Change[];
-};
-export type ThreadItem = components['schemas']['ThreadItem'] | TurnChangesItem;
+export type ThreadItem = components['schemas']['ThreadItem'];
 export type ToolCall = components['schemas']['ToolCall'];
 export type Subagent = components['schemas']['Subagent'];
 export type SnapshotEvent = components['schemas']['SnapshotEvent'];

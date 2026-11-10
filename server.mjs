@@ -86,6 +86,13 @@ const v2Opts = {
     const presented = await kernelApi.present(conv, { includeMessages: true });
     const subagents = await kernelApi.listSubagents(presented);
     const target = providerService ? await providerService.resolveTarget(presented) : null;
+    let turnChanges = [];
+    try {
+      turnChanges = kernelApi.turnChanges ? await kernelApi.turnChanges(id) : [];
+    } catch (err) {
+      console.error(`WEFT_TURN_CHANGES ${err instanceof Error ? err.message : err}`);
+      turnChanges = [];
+    }
     return {
       presented: {
         ...presented,
@@ -96,6 +103,7 @@ const v2Opts = {
       subagents,
       modelTarget: target ? { source: { id: target.providerId }, model: target.modelId } : null,
       window: providerService ? await providerService.contextWindowFor(presented) : null,
+      turnChanges,
     };
   },
   async getConversation(id) {

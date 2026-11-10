@@ -86,10 +86,7 @@ export type MockGroup = {
   running: boolean;
 };
 
-/**
- * 一轮自己改的文件，跟在这一轮回复后面。契约里还没有，前端类型里是可选的
- * （web/src/data/store.ts 的 TurnChangesItem），接真后端前只有原型会产出。
- */
+/** 一轮自己改的文件，跟在这一轮回复后面。形状与契约 ThreadItemTurnChanges 相同。 */
 export type MockTurnChanges = { kind: 'turn_changes'; id: string; changes: Change[] };
 
 type PlainItem = Exclude<ThreadItem, { kind: 'tool_group' }>;
