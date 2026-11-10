@@ -9,6 +9,7 @@ import {
   compactionOverrides,
   createCompactionControl,
   effectiveTriggers,
+  selectableModelKeys,
 } from '../../src/kernel/compaction-settings.mjs';
 import { messagesFromEntries } from '../../src/kernel/events.mjs';
 import { buildThread } from '../../src/v2/views/thread.ts';
@@ -256,4 +257,21 @@ test('effective lists only models that start earlier than p, from the same budge
       assert.ok(item.percent < p);
     }
   }
+});
+
+test('effective lists only models of enabled providers that the picker shows', () => {
+  const models = {
+    getAllModels: () => [
+      { provider: 'on', id: 'm1', name: 'M1', contextWindow: 128_000 },
+      { provider: 'on', id: 'hidden', name: 'Hidden', contextWindow: 128_000 },
+      { provider: 'off', id: 'm2', name: 'M2', contextWindow: 128_000 },
+    ],
+  };
+  const providers = [
+    { id: 'on', models: [{ id: 'm1', enabled: true }, { id: 'hidden', enabled: false }] },
+    { id: 'off', models: [{ id: 'm2', enabled: false }] },
+  ];
+  const list = effectiveTriggers(models, 80, selectableModelKeys(providers));
+  assert.deepEqual(list.map((m) => `${m.providerId}/${m.modelId}`), ['on/m1']);
+  assert.equal(effectiveTriggers(models, 80).length, 3);
 });

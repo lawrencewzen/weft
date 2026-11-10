@@ -66,7 +66,7 @@ import {
 import { activeContextUsage, installUsageExtension } from './usage.mjs';
 import { createAntigravityCwdExtension } from './antigravity-cwd.mjs';
 import { createWorkspaceEnv } from './workspace-env.mjs';
-import { createCompactionControl, effectiveTriggers } from './compaction-settings.mjs';
+import { createCompactionControl, effectiveTriggers, selectableModelKeys } from './compaction-settings.mjs';
 import { readTriggerPercent } from '../core/settings.mjs';
 import {
   describeForkPoint,
@@ -1537,7 +1537,14 @@ export async function openConversationKernel({
       } catch (err) {
         console.error(`WEFT_COMPACTION_SETTINGS ${redactAuthText(err instanceof Error ? err.message : err)}`);
       }
-      return effectiveTriggers(models, percent);
+      let selectable;
+      try {
+        selectable = selectableModelKeys(await providers.listProviders());
+      } catch (err) {
+        console.error(`WEFT_COMPACTION_SETTINGS ${redactAuthText(err instanceof Error ? err.message : err)}`);
+        return [];
+      }
+      return effectiveTriggers(models, percent, selectable);
     },
     async noteSettings(stored) {
       compaction.setPercent(readTriggerPercent(stored));

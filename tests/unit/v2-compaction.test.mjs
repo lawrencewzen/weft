@@ -33,7 +33,13 @@ async function v2(base, method, apiPath, token, body) {
 test('settings trigger percent persists, rejects illegal values, and compact is admitted', { timeout: 40_000 }, async () => {
   const dataDir = await makeTempDir('weft-compact-http-');
   const seed = createSqliteStore(dataDir);
-  await seed.putSettingsRaw('app', { version: 3, language: 'zh', providers: [] });
+  await seed.putSettingsRaw('app', { version: 3, language: 'zh', providers: [
+      { id: 'custom-abcdef01', kind: 'custom', name: 'C', baseUrl: 'http://127.0.0.1:9/v1', api: 'openai-completions', enabled: ['m128'] },
+      { id: 'custom-abcdef02', kind: 'custom', name: 'D', baseUrl: 'http://127.0.0.1:9/v1', api: 'openai-completions', enabled: [] },
+    ] });
+  const cached = (id) => ({ models: [{ id, name: id.toUpperCase(), contextWindow: 128000, maxTokens: 4096, input: ['text'], reasoning: false }] });
+  seed.putProviderModels('custom-abcdef01', cached('m128'));
+  seed.putProviderModels('custom-abcdef02', cached('off128'));
   seed.close();
   const srv = await startServer({
     dataDir,
@@ -48,7 +54,7 @@ test('settings trigger percent persists, rejects illegal values, and compact is 
 
     const initial = await v2(srv.base, 'GET', '/api/v2/settings', discovery.token);
     assert.equal(initial.status, 200, initial.text);
-    const fauxEarly = { providerId: 'faux', modelId: 'faux-1', name: 'Faux Model', percent: 70 };
+    const fauxEarly = { providerId: 'custom-abcdef01', modelId: 'm128', name: 'm128', percent: 70 };
     assert.deepEqual(initial.body, { compaction: { triggerPercent: 80, effective: [fauxEarly] } });
     assert.equal(validateResponse('/api/v2/settings', 'GET', 200, initial.body).ok, true);
 

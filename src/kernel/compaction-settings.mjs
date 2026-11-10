@@ -84,9 +84,11 @@ export function compactionOverrides(models, percent = DEFAULT_TRIGGER_PERCENT) {
  * window. Same registered models and same compactionBudget as
  * compactionOverrides; start = blocking line - backgroundTokens (the blocking
  * line itself when background compaction is off). percent is rounded to an
- * integer; a model is listed only when that integer is below p.
+ * integer; a model is listed only when that integer is below p. `selectable`
+ * (a Set of "provider/modelId", see selectableModelKeys) limits the list to
+ * models the user can pick; without it every registered model is considered.
  */
-export function effectiveTriggers(models, percent = DEFAULT_TRIGGER_PERCENT) {
+export function effectiveTriggers(models, percent = DEFAULT_TRIGGER_PERCENT, selectable = null) {
   const p = Math.floor(Number(percent));
   const out = [];
   const list = typeof models?.getAllModels === 'function' ? models.getAllModels() : [];
@@ -95,6 +97,7 @@ export function effectiveTriggers(models, percent = DEFAULT_TRIGGER_PERCENT) {
     const provider = typeof model?.provider === 'string' ? model.provider : '';
     const id = typeof model?.id === 'string' ? model.id : '';
     if (!provider || !id || !Number.isInteger(window) || window <= 0) continue;
+    if (selectable && !selectable.has(`${provider}/${id}`)) continue;
     const budget = compactionBudget(window, p);
     const start = window - budget.reserveTokens - budget.backgroundTokens;
     const startPercent = Math.round((start * 100) / window);
@@ -103,6 +106,22 @@ export function effectiveTriggers(models, percent = DEFAULT_TRIGGER_PERCENT) {
     out.push({ providerId: provider, modelId: id, name, percent: startPercent });
   }
   return out;
+}
+
+/**
+ * "provider/modelId" of every model the composer's model picker lists: the
+ * enabled models of the configured providers (providerService.listProviders()).
+ */
+export function selectableModelKeys(providers) {
+  const keys = new Set();
+  for (const provider of Array.isArray(providers) ? providers : []) {
+    for (const model of Array.isArray(provider?.models) ? provider.models : []) {
+      if (model?.enabled === true && typeof model.id === 'string' && model.id.trim()) {
+        keys.add(`${provider.id}/${model.id}`);
+      }
+    }
+  }
+  return keys;
 }
 
 /** Synchronous snapshot. settings() runs on the Session line, so it must not scan providers. */
