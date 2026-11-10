@@ -84,13 +84,63 @@ function validateQuestion(raw, index) {
   };
 }
 
-/** Strict check of a model tool call. Invalid input is an error the model can retry. */
+/** Parse a JSON string that should hold an array or object. Anything else stays as is. */
+function parseJsonContainer(value) {
+  if (typeof value !== 'string') return value;
+  const text = value.trim();
+  if (!text.startsWith('[') && !text.startsWith('{')) return value;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return value;
+  }
+}
+
+function describeShape(value) {
+  if (Array.isArray(value)) return `array of ${value.length}`;
+  if (value === null) return 'null';
+  if (typeof value === 'string') {
+    const text = value.trim();
+    const looksJson = text.startsWith('[') || text.startsWith('{');
+    return looksJson ? 'string (not valid JSON)' : 'string';
+  }
+  return typeof value;
+}
+
+/**
+ * Tidy common model mistakes before the strict check: a whole-args JSON string,
+ * questions as a JSON string, one question object not wrapped in an array, and
+ * options as a JSON string. The rules themselves are not relaxed.
+ */
+function normalizeAskArgs(args) {
+  let body = parseJsonContainer(args);
+  if (Array.isArray(body)) body = { questions: body };
+  body = asObject(body);
+  if (!body) return null;
+  let questions = body.questions;
+  if (questions === undefined && typeof body.question === 'string') questions = body;
+  questions = parseJsonContainer(questions);
+  if (asObject(questions) && typeof questions.question === 'string') questions = [questions];
+  if (!Array.isArray(questions)) return questions;
+  return questions.map((raw) => {
+    const item = parseJsonContainer(raw);
+    const q = asObject(item);
+    if (!q || typeof q.options !== 'string') return item;
+    return { ...q, options: parseJsonContainer(q.options) };
+  });
+}
+
+/** Check of a model tool call. Invalid input is an error the model can retry. */
 export function validateAskArgs(args) {
-  const body = asObject(args);
-  if (!body) return fail('ask_user_question: questions is required');
-  const questions = body.questions;
+  if (typeof args !== 'string' && !asObject(args) && !Array.isArray(args)) {
+    return fail('ask_user_question: questions is required');
+  }
+  const questions = normalizeAskArgs(args);
+  if (questions === null) return fail('ask_user_question: questions is required');
   if (!Array.isArray(questions) || questions.length < QUESTIONS_MIN || questions.length > QUESTIONS_MAX) {
-    return fail(`ask_user_question: questions must contain ${QUESTIONS_MIN} to ${QUESTIONS_MAX} items`);
+    return fail(
+      `ask_user_question: questions must be an array of ${QUESTIONS_MIN} to ${QUESTIONS_MAX} items; got ${describeShape(questions)}`,
+    );
   }
   const normalized = [];
   for (let i = 0; i < questions.length; i += 1) {
