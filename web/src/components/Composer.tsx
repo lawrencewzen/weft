@@ -51,6 +51,9 @@ import { ModelChip } from './ModelChip';
 import { WorkspaceChip } from './WorkspaceChip';
 import { CLOCK_ICON } from './SidebarIcons';
 import { formatScheduleTimeToast } from './schedules/formatRule';
+import { DatePicker } from './pickers/DatePicker';
+import { TimePicker } from './pickers/TimePicker';
+import { formatDate, getTodayDateString } from './pickers/pickerUtils';
 import type { ConfirmOpts } from './ConfirmDialog';
 import { createSendRequest, errorMessage } from './sendRequest';
 
@@ -130,17 +133,6 @@ function tomorrowNineAm(): number {
   return d.getTime();
 }
 
-function formatIsoForDateTime(timestamp: number): string {
-  const d = new Date(timestamp);
-  const pad = (n: number) => String(n).padStart(2, '0');
-  const YYYY = d.getFullYear();
-  const MM = pad(d.getMonth() + 1);
-  const DD = pad(d.getDate());
-  const hh = pad(d.getHours());
-  const mm = pad(d.getMinutes());
-  return `${YYYY}-${MM}-${DD}T${hh}:${mm}`;
-}
-
 export function Composer({
   lang,
   run,
@@ -180,7 +172,8 @@ export function Composer({
   const { store } = useSession();
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [customMode, setCustomMode] = useState(false);
-  const [customDateTime, setCustomDateTime] = useState('');
+  const [customDate, setCustomDate] = useState('');
+  const [customTime, setCustomTime] = useState('09:00');
   const scheduleWrapRef = useRef<HTMLDivElement>(null);
   const groups = useMemo(() => groupComposerModels(providers, defaultModel), [providers, defaultModel]);
   const available = hasAvailableModels(providers);
@@ -271,6 +264,8 @@ export function Composer({
   useEffect(() => {
     if (!scheduleOpen) return;
     function onMouseDown(ev: globalThis.MouseEvent) {
+      const target = ev.target as Element | null;
+      if (target?.closest?.('.picker-popup')) return;
       if (scheduleWrapRef.current && !scheduleWrapRef.current.contains(ev.target as Node)) {
         setScheduleOpen(false);
         setCustomMode(false);
@@ -278,6 +273,7 @@ export function Composer({
     }
     function onKeyDownEv(ev: globalThis.KeyboardEvent) {
       if (ev.key === 'Escape') {
+        if (ev.defaultPrevented) return; // a picker popup consumed this Esc
         setScheduleOpen(false);
         setCustomMode(false);
       }
@@ -718,7 +714,9 @@ export function Composer({
                     onClick={() => {
                       setScheduleOpen((open) => !open);
                       setCustomMode(false);
-                      setCustomDateTime(formatIsoForDateTime(tomorrowNineAm()));
+                      const tomorrow = new Date(tomorrowNineAm());
+                      setCustomDate(formatDate(tomorrow.getFullYear(), tomorrow.getMonth() + 1, tomorrow.getDate()));
+                      setCustomTime('09:00');
                     }}
                   >
                     {CLOCK_ICON}
@@ -762,13 +760,21 @@ export function Composer({
                         </div>
                       ) : (
                         <div className="composer-schedule-custom" data-testid="next-schedule-custom-view">
-                          <input
-                            type="datetime-local"
-                            className="ns-input is-compact"
-                            data-testid="next-schedule-custom-datetime"
-                            value={customDateTime}
-                            onChange={(e) => setCustomDateTime(e.target.value)}
-                          />
+                          <div className="composer-schedule-custom-pickers">
+                            <DatePicker
+                              value={customDate}
+                              min={getTodayDateString()}
+                              lang={lang}
+                              testId="next-schedule-custom-date"
+                              onChange={setCustomDate}
+                            />
+                            <TimePicker
+                              value={customTime}
+                              lang={lang}
+                              testId="next-schedule-custom-time"
+                              onChange={setCustomTime}
+                            />
+                          </div>
                           <div className="composer-schedule-custom-actions">
                             <button
                               type="button"
@@ -781,9 +787,9 @@ export function Composer({
                               type="button"
                               className="btn btn-xs p"
                               data-testid="next-schedule-custom-confirm"
-                              disabled={!customDateTime}
+                              disabled={!customDate || !customTime}
                               onClick={() => {
-                                const at = new Date(customDateTime).getTime();
+                                const at = new Date(`${customDate}T${customTime}`).getTime();
                                 if (Number.isFinite(at)) {
                                   void handleScheduleSend(at);
                                 }

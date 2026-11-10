@@ -5,6 +5,9 @@ import { useProviders } from '../../data/useProviders';
 import { useWorkspaces } from '../../data/useWorkspaces';
 import { t } from '../../i18n';
 import { computeNextRunPreview } from './formatRule';
+import { DatePicker } from '../pickers/DatePicker';
+import { TimePicker } from '../pickers/TimePicker';
+import { getTodayDateString } from '../pickers/pickerUtils';
 import {
   formDataToPayload,
   validateScheduleForm,
@@ -116,6 +119,7 @@ export function ScheduleDialog({ lang, schedule, onClose, onToast }: Props) {
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if (e.key === 'Escape') {
+        if (e.defaultPrevented) return; // a picker popup consumed this Esc
         e.stopPropagation();
         onClose();
       }
@@ -442,14 +446,15 @@ export function ScheduleDialog({ lang, schedule, onClose, onToast }: Props) {
                     <label className="schedule-sublabel" htmlFor="sched-once-date">
                       {lang === 'en' ? 'Date' : '日期'}
                     </label>
-                    <input
+                    <DatePicker
                       id="sched-once-date"
-                      type="date"
-                      className="schedule-input"
-                      data-testid="next-schedule-once-date"
+                      testId="next-schedule-once-date"
                       value={onceDate}
-                      onChange={(e) => {
-                        setOnceDate(e.target.value);
+                      min={getTodayDateString()}
+                      lang={lang}
+                      isError={Boolean(errors.onceAt)}
+                      onChange={(val) => {
+                        setOnceDate(val);
                         if (errors.onceAt) setErrors((errs) => ({ ...errs, onceAt: undefined }));
                       }}
                     />
@@ -458,14 +463,14 @@ export function ScheduleDialog({ lang, schedule, onClose, onToast }: Props) {
                     <label className="schedule-sublabel" htmlFor="sched-once-time">
                       {lang === 'en' ? 'Time' : '时间'}
                     </label>
-                    <input
+                    <TimePicker
                       id="sched-once-time"
-                      type="time"
-                      className="schedule-input"
-                      data-testid="next-schedule-once-time"
+                      testId="next-schedule-once-time"
                       value={onceTime}
-                      onChange={(e) => {
-                        setOnceTime(e.target.value);
+                      lang={lang}
+                      isError={Boolean(errors.onceAt)}
+                      onChange={(val) => {
+                        setOnceTime(val);
                         if (errors.onceAt) setErrors((errs) => ({ ...errs, onceAt: undefined }));
                       }}
                     />
@@ -479,14 +484,14 @@ export function ScheduleDialog({ lang, schedule, onClose, onToast }: Props) {
                   <label className="schedule-sublabel" htmlFor="sched-daily-time">
                     {lang === 'en' ? 'Time' : '时间'}
                   </label>
-                  <input
+                  <TimePicker
                     id="sched-daily-time"
-                    type="time"
-                    className="schedule-input"
-                    data-testid="next-schedule-daily-time"
+                    testId="next-schedule-daily-time"
                     value={dailyTime}
-                    onChange={(e) => {
-                      setDailyTime(e.target.value);
+                    lang={lang}
+                    isError={Boolean(errors.dailyTime)}
+                    onChange={(val) => {
+                      setDailyTime(val);
                       if (errors.dailyTime) setErrors((errs) => ({ ...errs, dailyTime: undefined }));
                     }}
                   />
@@ -518,14 +523,14 @@ export function ScheduleDialog({ lang, schedule, onClose, onToast }: Props) {
                     <label className="schedule-sublabel" htmlFor="sched-weekly-time">
                       {lang === 'en' ? 'Time' : '时间'}
                     </label>
-                    <input
+                    <TimePicker
                       id="sched-weekly-time"
-                      type="time"
-                      className="schedule-input"
-                      data-testid="next-schedule-weekly-time"
+                      testId="next-schedule-weekly-time"
                       value={weeklyTime}
-                      onChange={(e) => {
-                        setWeeklyTime(e.target.value);
+                      lang={lang}
+                      isError={Boolean(errors.weeklyTime)}
+                      onChange={(val) => {
+                        setWeeklyTime(val);
                         if (errors.weeklyTime) {
                           setErrors((errs) => ({ ...errs, weeklyTime: undefined }));
                         }

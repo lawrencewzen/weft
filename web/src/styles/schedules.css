@@ -1,3 +1,5 @@
+@import './pickers.css';
+
 /* Schedules pane and list */
 .schedules-pane {
   background: var(--bg);
@@ -340,6 +342,9 @@
   color: var(--faint);
   text-align: center;
   padding: 16px 0;
+  white-space: normal;
+  line-height: 1.5;
+  word-break: break-word;
 }
 
 /* Schedule Dialog */

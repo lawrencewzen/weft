@@ -73,8 +73,11 @@ test('scheduled tasks: sidebar navigation, badge count, and empty footer note', 
 
   // 6. Footer note visible
   await expect(page.getByTestId('next-schedules-footer-note')).toContainText(
-    'Weft 退出后定时任务不会执行，下次启动时补跑一次。',
+    '退出 Weft 后不会执行，错过的会在下次启动时补跑一次。',
   );
+
+  // Assert no native date/time pickers exist anywhere on page
+  await expect(page.locator('input[type="time"], input[type="date"], input[type="datetime-local"]')).toHaveCount(0);
 
   expectClean(state);
 });
@@ -150,6 +153,18 @@ test('scheduled tasks: interval rule validation blocks < 5 minutes', async ({ pa
   await page.getByTestId('next-schedule-rule-once').click();
   const onceHint = await hintEl.textContent();
   expect(onceHint).not.toBe(weeklyHint);
+
+  // Custom TimePicker in dialog replaces the native control
+  await expect(page.locator('input[type="time"], input[type="date"], input[type="datetime-local"]')).toHaveCount(0);
+  const onceTimeInput = page.getByTestId('next-schedule-once-time');
+  await onceTimeInput.click();
+  const timePopup = page.getByTestId('next-schedule-once-time-popup');
+  await expect(timePopup).toBeVisible();
+  await page.getByTestId('next-schedule-once-time-hour-14').click();
+  await expect(timePopup).toBeVisible();
+  await page.getByTestId('next-schedule-once-time-min-30').click();
+  await expect(timePopup).toHaveCount(0);
+  await expect(onceTimeInput).toHaveValue('14:30');
 
   // Cancel closes modal without saving
   await page.getByTestId('next-schedule-cancel').click();
@@ -342,6 +357,40 @@ test('schedule tool row in conversation navigates to schedules and highlights sc
   const row = page.locator('[data-testid="next-schedule-row"][data-id="sched-2"]');
   await expect(row).toBeVisible();
   await expect(row).toHaveAttribute('data-highlighted', 'true');
+
+  expectClean(state);
+});
+
+test('composer clock custom: DatePicker + TimePicker create once task and show strip', async ({ page }) => {
+  const state = await openProto(page);
+
+  await page.locator('[data-testid="next-conv-row"][data-id="c-tests"]').click();
+  await expect(page.getByTestId('next-conversation-schedule-strip')).toHaveCount(0);
+
+  const input = page.locator('[data-testid="next-composer"] textarea');
+  await input.fill('按计划在明天下午两点半执行回归测试');
+  await page.getByTestId('next-composer-schedule').click();
+  await page.getByTestId('next-schedule-opt-custom').click();
+  await expect(page.getByTestId('next-schedule-custom-view')).toBeVisible();
+
+  await expect(page.locator('input[type="time"], input[type="date"], input[type="datetime-local"]')).toHaveCount(0);
+
+  const customTime = page.getByTestId('next-schedule-custom-time');
+  await customTime.click();
+  const timePopup = page.getByTestId('next-schedule-custom-time-popup');
+  await expect(timePopup).toBeVisible();
+  await page.getByTestId('next-schedule-custom-time-hour-14').click();
+  await page.getByTestId('next-schedule-custom-time-min-30').click();
+  await expect(timePopup).toHaveCount(0);
+  await expect(customTime).toHaveValue('14:30');
+
+  await page.getByTestId('next-schedule-custom-confirm').click();
+  await expect(input).toHaveValue('');
+  await expect(page.getByTestId('next-toast')).toContainText('已定时：');
+
+  const strip = page.getByTestId('next-conversation-schedule-strip');
+  await expect(strip).toBeVisible();
+  await expect(strip.getByTestId('next-schedule-strip-text')).toContainText('按计划在明天下午两点半执行回归测试');
 
   expectClean(state);
 });
