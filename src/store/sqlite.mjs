@@ -4,7 +4,10 @@ import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { DEFAULT_SETTINGS, mergeSettings, normalizeSettings } from '../core/settings.mjs';
 
-const SCHEMA_VERSION = 11;
+const SCHEMA_VERSION = 12;
+/** Execution records kept per schedule. */
+export const SCHEDULE_RUNS_KEPT = 50;
+const SCHEDULE_REQUESTS_KEPT = 500;
 const MESSAGE_META_KEYS = ['kind', 'fromAgent', 'toAgent', 'agentId'];
 export const APP_DB_FILE = 'weft.sqlite';
 export const LEGACY_APP_DB_FILE = 'pi-work.sqlite';
@@ -216,6 +219,36 @@ export function createSqliteStore(dir, { log = console } = {}) {
       json TEXT NOT NULL,
       updated_at INTEGER NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS schedules (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      message TEXT NOT NULL,
+      target_json TEXT NOT NULL,
+      rule_json TEXT NOT NULL,
+      enabled INTEGER NOT NULL DEFAULT 1,
+      created_by TEXT NOT NULL DEFAULT 'user',
+      task_id TEXT,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS schedule_runs (
+      id TEXT PRIMARY KEY,
+      schedule_id TEXT NOT NULL,
+      at INTEGER NOT NULL,
+      status TEXT NOT NULL,
+      conversation_id TEXT,
+      error TEXT,
+      seq INTEGER NOT NULL DEFAULT 0
+    );
+    CREATE INDEX IF NOT EXISTS schedule_runs_by_schedule ON schedule_runs (schedule_id, at DESC);
+    CREATE TABLE IF NOT EXISTS schedule_requests (
+      request_id TEXT NOT NULL,
+      scope TEXT NOT NULL,
+      status INTEGER NOT NULL,
+      body_json TEXT NOT NULL,
+      at INTEGER NOT NULL,
+      PRIMARY KEY (scope, request_id)
+    );
     CREATE TABLE IF NOT EXISTS schema_version (
       version INTEGER NOT NULL
     );
@@ -332,6 +365,25 @@ export function createSqliteStore(dir, { log = console } = {}) {
     putProvModels: db.prepare(`INSERT INTO provider_models (provider_id, json, updated_at) VALUES (?, ?, ?)
       ON CONFLICT(provider_id) DO UPDATE SET json = excluded.json, updated_at = excluded.updated_at`),
     delProvModels: db.prepare('DELETE FROM provider_models WHERE provider_id = ?'),
+    insSched: db.prepare(`INSERT INTO schedules (
+      id, name, message, target_json, rule_json, enabled, created_by, task_id, created_at, updated_at
+    ) VALUES (?,?,?,?,?,?,?,?,?,?)`),
+    getSched: db.prepare('SELECT * FROM schedules WHERE id = ?'),
+    listSched: db.prepare('SELECT * FROM schedules ORDER BY created_at ASC, rowid ASC'),
+    updSched: db.prepare(`UPDATE schedules SET
+      name=?, message=?, target_json=?, rule_json=?, enabled=?, task_id=?, updated_at=? WHERE id=?`),
+    delSched: db.prepare('DELETE FROM schedules WHERE id = ?'),
+    insSchedRun: db.prepare(`INSERT OR IGNORE INTO schedule_runs (id, schedule_id, at, status, conversation_id, error, seq)
+      VALUES (?,?,?,?,?,?, COALESCE((SELECT MAX(seq) FROM schedule_runs WHERE schedule_id = ?), 0) + 1)`),
+    getSchedRun: db.prepare('SELECT * FROM schedule_runs WHERE id = ?'),
+    listSchedRuns: db.prepare('SELECT * FROM schedule_runs WHERE schedule_id = ? ORDER BY seq DESC LIMIT ?'),
+    pruneSchedRuns: db.prepare(`DELETE FROM schedule_runs WHERE schedule_id = ? AND id NOT IN (
+      SELECT id FROM schedule_runs WHERE schedule_id = ? ORDER BY seq DESC LIMIT ?)`),
+    delSchedRuns: db.prepare('DELETE FROM schedule_runs WHERE schedule_id = ?'),
+    getSchedReq: db.prepare('SELECT status, body_json FROM schedule_requests WHERE scope = ? AND request_id = ?'),
+    putSchedReq: db.prepare('INSERT OR IGNORE INTO schedule_requests (request_id, scope, status, body_json, at) VALUES (?,?,?,?,?)'),
+    pruneSchedReq: db.prepare(`DELETE FROM schedule_requests WHERE rowid NOT IN (
+      SELECT rowid FROM schedule_requests ORDER BY rowid DESC LIMIT ?)`),
   };
 
   chmodSecret(dbPath);
@@ -361,6 +413,34 @@ export function createSqliteStore(dir, { log = console } = {}) {
       removed: row.removed ?? undefined,
       beforeHash: row.before_hash ?? undefined,
       afterHash: row.after_hash ?? undefined,
+    };
+  }
+
+  function scheduleFromRow(row) {
+    if (!row) return undefined;
+    return {
+      id: row.id,
+      name: row.name,
+      message: row.message,
+      target: p(row.target_json),
+      rule: p(row.rule_json),
+      enabled: Boolean(row.enabled),
+      createdBy: row.created_by === 'agent' ? 'agent' : 'user',
+      taskId: row.task_id == null || row.task_id === '' ? null : String(row.task_id),
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
+  }
+
+  function scheduleRunFromRow(row) {
+    if (!row) return undefined;
+    return {
+      id: row.id,
+      scheduleId: row.schedule_id,
+      at: Number(row.at),
+      status: row.status,
+      conversationId: row.conversation_id == null || row.conversation_id === '' ? null : String(row.conversation_id),
+      error: row.error == null || row.error === '' ? null : String(row.error),
     };
   }
 
@@ -611,6 +691,73 @@ export function createSqliteStore(dir, { log = console } = {}) {
         if (mapped) q.updConvModel.run(mapped, row.model_id, row.id);
         else q.updConvModel.run(null, null, row.id);
       }
+    },
+    /** Schedule configuration. What runs when is the Durable task's job; `taskId` only points at it. */
+    async createSchedule({ id, name, message, target, rule, enabled, createdBy, taskId, now } = {}) {
+      const at = now ?? Date.now();
+      const row = {
+        id: id || randomUUID(),
+        name,
+        message,
+        target,
+        rule,
+        enabled: enabled !== false,
+        createdBy: createdBy === 'agent' ? 'agent' : 'user',
+        taskId: taskId ?? null,
+        createdAt: at,
+        updatedAt: at,
+      };
+      q.insSched.run(
+        row.id, row.name, row.message, j(row.target), j(row.rule),
+        row.enabled ? 1 : 0, row.createdBy, row.taskId, at, at,
+      );
+      return row;
+    },
+    async getSchedule(id) {
+      return scheduleFromRow(q.getSched.get(id));
+    },
+    async listSchedules() {
+      return q.listSched.all().map(scheduleFromRow);
+    },
+    async updateSchedule(id, patch = {}, { now } = {}) {
+      const cur = scheduleFromRow(q.getSched.get(id));
+      if (!cur) return undefined;
+      const next = { ...cur };
+      for (const key of ['name', 'message', 'target', 'rule', 'enabled', 'taskId']) {
+        if (patch[key] !== undefined) next[key] = patch[key];
+      }
+      next.updatedAt = now ?? Date.now();
+      q.updSched.run(
+        next.name, next.message, j(next.target), j(next.rule),
+        next.enabled ? 1 : 0, next.taskId ?? null, next.updatedAt, id,
+      );
+      return next;
+    },
+    async deleteSchedule(id) {
+      q.delSchedRuns.run(id);
+      return q.delSched.run(id).changes > 0;
+    },
+    /** One record per run id; a repeated id is ignored. Keeps the newest SCHEDULE_RUNS_KEPT. */
+    async addScheduleRun(scheduleId, { id, at, status, conversationId, error }) {
+      const runId = id || randomUUID();
+      q.insSchedRun.run(runId, scheduleId, at, status, conversationId ?? null, error ?? null, scheduleId);
+      q.pruneSchedRuns.run(scheduleId, scheduleId, SCHEDULE_RUNS_KEPT);
+      return scheduleRunFromRow(q.getSchedRun.get(runId));
+    },
+    async getScheduleRun(id) {
+      return scheduleRunFromRow(q.getSchedRun.get(id));
+    },
+    async listScheduleRuns(scheduleId, limit = SCHEDULE_RUNS_KEPT) {
+      return q.listSchedRuns.all(scheduleId, limit).map(scheduleRunFromRow);
+    },
+    /** Replay of a write that carried a requestId: the stored status and body, or undefined. */
+    async getScheduleRequest(scope, requestId) {
+      const row = q.getSchedReq.get(scope, requestId);
+      return row ? { status: Number(row.status), body: p(row.body_json) } : undefined;
+    },
+    async putScheduleRequest(scope, requestId, status, body, { now } = {}) {
+      q.putSchedReq.run(requestId, scope, status, j(body), now ?? Date.now());
+      q.pruneSchedReq.run(SCHEDULE_REQUESTS_KEPT);
     },
     async withTransaction(fn) {
       db.exec('BEGIN IMMEDIATE');

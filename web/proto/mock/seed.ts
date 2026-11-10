@@ -14,6 +14,8 @@ import type {
   Subagent,
   MockSubThread,
   Workspace,
+  Schedule,
+  ScheduleRun,
 } from './types';
 import { MOCK_CATALOG_MODELS } from './piCatalog';
 import { seedWebsiteRepo, seedWeftRepo, mockDiff, createRepo } from './repo';
@@ -994,6 +996,35 @@ function testsConversation(now: number): MockConv {
   });
 }
 
+function scheduleConversation(now: number): MockConv {
+  const schedTool = tool({
+    id: 'ci-t1',
+    kind: 'schedule',
+    scheduleId: 'sched-2',
+    title: hint('新建「每天看 CI」', 'Create "Check CI Daily"'),
+    hint: hint('已创建', 'created'),
+    status: 'done',
+  });
+  return conversation({
+    id: 'c-ci-schedule',
+    workspaceId: 'ws-weft',
+    title: '每天早上帮我看 CI',
+    updatedAt: now - 15 * MINUTE,
+    used: 16_000,
+    status: 'idle',
+    tools: { [schedTool.id]: schedTool },
+    items: [
+      user('ci-u1', '每天早上帮我看 CI'),
+      group('ci-g1', [schedTool.id], { zh: '定时任务', en: 'Scheduled Task' }),
+      assistant(
+        'ci-a1',
+        '好的，已为你创建定时任务「每天看 CI」，每个工作日 09:00 会自动在此汇报 CI 状态。',
+        'deepseek-flash',
+      ),
+    ],
+  });
+}
+
 function docsConversation(now: number, threads: Map<string, MockSubThread>): MockConv {
   const spawnTools = dispatchToolsOf(threads, 'c-docs');
   const spawnIds = Object.keys(spawnTools);
@@ -1676,10 +1707,171 @@ function seedGlab(): GlabSettings {
   return defaults;
 }
 
+function tomorrowAt(now: number, hours: number, minutes: number): number {
+  const d = new Date(now + 86400000);
+  d.setHours(hours, minutes, 0, 0);
+  return d.getTime();
+}
+
+function nextWeekdayAt(now: number, hours: number, minutes: number, days = [1, 2, 3, 4, 5]): number {
+  for (let offset = 0; offset <= 7; offset++) {
+    const d = new Date(now + offset * 86400000);
+    d.setHours(hours, minutes, 0, 0);
+    const dayOfWeek = d.getDay() === 0 ? 7 : d.getDay();
+    if (days.includes(dayOfWeek) && d.getTime() > now) {
+      return d.getTime();
+    }
+  }
+  return now + 86400000;
+}
+
+export function seedSchedules(now: number): {
+  schedules: Map<string, Schedule>;
+  scheduleRuns: Map<string, ScheduleRun[]>;
+} {
+  const sched1Runs: ScheduleRun[] = [
+    {
+      id: 'run-1-1',
+      at: now - 86400000,
+      status: 'ok',
+      conversationId: 'c-tests',
+      error: null,
+    },
+    {
+      id: 'run-1-2',
+      at: now - 172800000,
+      status: 'ok',
+      conversationId: 'c-tests',
+      error: null,
+    },
+  ];
+
+  const sched2Runs: ScheduleRun[] = [
+    {
+      id: 'run-2-1',
+      at: now - 5 * 60 * 1000,
+      status: 'failed',
+      conversationId: 'c-ci-schedule',
+      error: '构建任务超时（120s 无响应）',
+    },
+    {
+      id: 'run-2-2',
+      at: now - 35 * 60 * 1000,
+      status: 'ok',
+      conversationId: 'c-ci-schedule',
+      error: null,
+    },
+  ];
+
+  const sched3Runs: ScheduleRun[] = [];
+
+  const sched4Runs: ScheduleRun[] = [
+    {
+      id: 'run-4-1',
+      at: now - 3600000,
+      status: 'missed_caught_up',
+      conversationId: 'c-scripts',
+      error: null,
+    },
+  ];
+
+  const schedules: Schedule[] = [
+    {
+      id: 'sched-1',
+      name: '检查 CI',
+      message: '运行 CI 自检并报告失败的用例',
+      target: {
+        kind: 'new',
+        workspaceId: 'ws-weft',
+        workspaceName: 'weft',
+        model: null,
+      },
+      rule: {
+        kind: 'weekly',
+        days: [1, 2, 3, 4, 5],
+        time: '09:00',
+      },
+      enabled: true,
+      createdBy: 'user',
+      nextRunAt: nextWeekdayAt(now, 9, 0, [1, 2, 3, 4, 5]),
+      lastRun: sched1Runs[0],
+    },
+    {
+      id: 'sched-2',
+      name: '每天看 CI',
+      message: '检查最新 CI 构建状态并汇报',
+      target: {
+        kind: 'conversation',
+        conversationId: 'c-ci-schedule',
+        title: '每天早上帮我看 CI',
+      },
+      rule: {
+        kind: 'weekly',
+        days: [1, 2, 3, 4, 5],
+        time: '09:00',
+      },
+      enabled: true,
+      createdBy: 'agent',
+      nextRunAt: nextWeekdayAt(now, 9, 0, [1, 2, 3, 4, 5]),
+      lastRun: sched2Runs[0],
+    },
+    {
+      id: 'sched-3',
+      name: '发布前检查',
+      message: '确认所有待办事项已完成并准备发布说明',
+      target: {
+        kind: 'new',
+        workspaceId: 'ws-website',
+        workspaceName: 'website',
+        model: null,
+      },
+      rule: {
+        kind: 'once',
+        at: tomorrowAt(now, 14, 0),
+      },
+      enabled: true,
+      createdBy: 'user',
+      nextRunAt: tomorrowAt(now, 14, 0),
+      lastRun: null,
+    },
+    {
+      id: 'sched-4',
+      name: '周报草稿汇总',
+      message: '整理本周提交与变更，生成周报草稿',
+      target: {
+        kind: 'new',
+        workspaceId: 'ws-weft',
+        workspaceName: 'weft',
+        model: null,
+      },
+      rule: {
+        kind: 'weekly',
+        days: [5],
+        time: '17:00',
+      },
+      enabled: false,
+      createdBy: 'user',
+      nextRunAt: null,
+      lastRun: sched4Runs[0],
+    },
+  ];
+
+  return {
+    schedules: new Map(schedules.map((s) => [s.id, s])),
+    scheduleRuns: new Map([
+      ['sched-1', sched1Runs],
+      ['sched-2', sched2Runs],
+      ['sched-3', sched3Runs],
+      ['sched-4', sched4Runs],
+    ]),
+  };
+}
+
 export function createSeed(now: number): MockDb {
   const subagents = seedSubThreads(now);
   const conversations = [
     richConversation(now, subagents),
+    scheduleConversation(now),
     failedConversation(now),
     interruptedConversation(now),
     noModelFailedConversation(now),
@@ -1780,5 +1972,6 @@ export function createSeed(now: number): MockDb {
     workspaceUploads: new Map(),
     glab: seedGlab(),
     settings: { compaction: { triggerPercent: 80 } },
+    ...seedSchedules(now),
   };
 }

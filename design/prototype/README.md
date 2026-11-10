@@ -107,6 +107,21 @@ open design/prototype/index.html    # macOS；Windows 直接双击
 - **页内目录浏览**：只在「浏览」不可用时出现（模拟远程访问，用 `index.html?pick=unsupported` 打开，点「浏览」后「浏览」按钮消失、下面出现面包屑 + 子目录列表）。
 - **Git 导入**：默认用预置的「内网 GitLab」连接，项目列表两个（可搜索），选项目后能选分支（默认分支 + 两个候选），再创建。行内还有「仓库地址」方式，手填 URL 和分支。
 
+### 定时任务（T124-1）
+
+侧栏搜索下方新增「定时任务」入口（带时钟图标），右侧显示启用中任务的小徽标。
+
+| 功能 | 操作 |
+| --- | --- |
+| 进入定时任务页 | 点侧栏「定时任务」或直接访问 `#/schedules` |
+| 查看任务列表 | 列表展示开关、名称、规则摘要、目标摘要、下次执行时间、上次结果、Agent 标签、操作菜单 |
+| 启用 / 暂停 | 点击行内开关切换状态，侧栏小徽标实时更新 |
+| 查看执行记录 | 点击任务行展开最近执行记录（时间、状态、跳转对话、失败原因） |
+| 新建任务 | 点右上角「新建」按钮打开弹窗，填写名称、消息、目标（现有对话或新开对话）、执行规则（一次性 / 每天 / 每周 / 间隔，间隔最少 5 分钟），校验通过后保存 |
+| 立即执行一次 | 点击行尾「…」菜单里的「立即执行」，触发一次执行并更新上次结果与执行记录 |
+| 编辑任务 | 点击行尾「…」菜单里的「编辑」，修改后保存 |
+| 删除任务 | 点击行尾「…」菜单里的「删除」，在二次确认弹窗中确认后删除 |
+
 ## 代码在哪
 
 | 位置 | 作用 |
@@ -114,12 +129,12 @@ open design/prototype/index.html    # macOS；Windows 直接双击
 | `web/proto/main.tsx` | 原型入口：先装模拟后端和 hash 路由，再渲染 `<App />` |
 | `web/vite.proto.config.ts` | 原型打包：入口换成 `web/proto/index.html`，把 JS/CSS 内联成一个 HTML |
 | `web/proto/brand-icons.ts` | 把 `brandIconUrl()` 指向的少数品牌图标换成 data URI（属性和 `setAttribute` 两条路径都要拦） |
-| `web/proto/mock/seed.ts` | 预置数据：2 个工作区、7 个对话、Provider、变更 / diff、子 Agent、插件 / 技能 / Git 连接 |
+| `web/proto/mock/seed.ts` | 预置数据：2 个工作区、7 个对话、Provider、变更 / diff、子 Agent、插件 / 技能 / Git 连接、4 个定时任务 |
 | `web/proto/mock/repo.ts` | 模拟仓库：文件树、文件内容、保存 / 版本、409 冲突、外部修改、行级 diff 统计 |
-| `web/proto/mock/db.ts` | 内存状态和发布辅助（会话 / 侧栏 / Provider / 扩展 / 变更） |
-| `web/proto/mock/http.ts` | `/api/v2/*` 路由，返回 `src/v2/contract.gen.ts` 里的形状；目录树、工作区、Provider、Git、插件、技能的写操作都在这里 |
+| `web/proto/mock/db.ts` | 内存状态和发布辅助（会话 / 侧栏 / Provider / 扩展 / 变更 / 定时任务） |
+| `web/proto/mock/http.ts` | `/api/v2/*` 路由，返回 `src/v2/contract.gen.ts` 里的形状；目录树、工作区、Provider、Git、插件、技能、定时任务的读写都在这里 |
 | `web/proto/mock/hub.ts` | 事件推送：`snapshot` → `upsert` / `remove` / `text.delta` / `heartbeat` |
-| `web/proto/mock/topics.ts` | 主题读取：`workspaces` / `providers` / `extensions` / `conversation:<id>` / `subagent:<cid>:<aid>` |
+| `web/proto/mock/topics.ts` | 主题读取：`workspaces` / `providers` / `extensions` / `schedules` / `conversation:<id>` / `subagent:<cid>:<aid>` |
 | `web/proto/mock/run.ts` | 一次运行的模拟：工具记录 → 变更实体 → 流式文字 → 完成 / 停止 / 插话排队 / 派子 Agent |
 | `web/proto/mock/subagents.ts` | 子 Agent 预置线程、`subagent:<cid>:<aid>` 推送、派活 / 回报 / 发消息 / 停止 |
 | `web/proto/mock/extensions.ts` | 插件、技能、Git 连接和 GitLab 项目 / 分支的预置数据 |
@@ -131,6 +146,7 @@ open design/prototype/index.html    # macOS；Windows 直接双击
 | `tests/e2e/proto-agents-strip.spec.mjs` | 子 Agent 状态条、展开/收起、行内展开、停止、派发卡片定位、淡出 |
 | `tests/e2e/proto-settings.spec.mjs` | 通用偏好、Provider 向导成功 / 失败 / Grok 登录 / 默认 / 上下文、删光 Provider 的「没有模型」、Git、插件、技能、关于 |
 | `tests/e2e/proto-workspace.spec.mjs` | 本地目录浏览 + 创建 + 在里面发消息、Git 导入选项目和分支 |
+| `tests/e2e/proto-schedules.spec.mjs` | 定时任务：入口徽标、路由导航、新建/编辑/删除确认、间隔校验、立即执行与展开执行记录 |
 | `tests/e2e/proto-handoff.spec.mjs` | 交接到新上下文：c-handoff 预置交接条目展开说明、手动点击交接模拟流程与百分比下降 |
 | `tests/e2e/helpers/proto.mjs` | 上面几个 spec 共用的 `file://` 打开 / 零报错 / 零网络断言 |
 
@@ -145,7 +161,7 @@ open design/prototype/index.html    # macOS；Windows 直接双击
 
 ```bash
 npx playwright test -c tests/playwright.config.mjs \
-  proto-smoke proto-right-pane proto-agents-strip proto-settings proto-workspace
+  proto-smoke proto-right-pane proto-agents-strip proto-settings proto-workspace proto-schedules
 ```
 
 ## 改界面的流程

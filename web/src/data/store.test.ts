@@ -4,6 +4,7 @@ import {
   createEntityStore,
   EXTENSIONS_TOPIC,
   PROVIDERS_TOPIC,
+  SCHEDULES_TOPIC,
   sessionTopics,
   subagentTopic,
   WORKSPACES_TOPIC,
@@ -441,21 +442,21 @@ function sumRef(id: string, workspaceId: string, extra?: Partial<ConversationSum
 
 describe('workspace selectors', () => {
   it('builds session topics with workspaces first', () => {
-    expect(sessionTopics(null)).toEqual([WORKSPACES_TOPIC, PROVIDERS_TOPIC, EXTENSIONS_TOPIC]);
+    expect(sessionTopics(null)).toEqual([WORKSPACES_TOPIC, PROVIDERS_TOPIC, EXTENSIONS_TOPIC, SCHEDULES_TOPIC]);
     expect(sessionTopics('c1')).toEqual([
-      WORKSPACES_TOPIC, PROVIDERS_TOPIC, EXTENSIONS_TOPIC, conversationTopic('c1'),
+      WORKSPACES_TOPIC, PROVIDERS_TOPIC, EXTENSIONS_TOPIC, SCHEDULES_TOPIC, conversationTopic('c1'),
     ]);
   });
 
   it('adds extra conversation topics when expanding another chat and drops them when collapsing', () => {
     expect(sessionTopics({ conversationId: 'a' })).toEqual([
-      WORKSPACES_TOPIC, PROVIDERS_TOPIC, EXTENSIONS_TOPIC, conversationTopic('a'),
+      WORKSPACES_TOPIC, PROVIDERS_TOPIC, EXTENSIONS_TOPIC, SCHEDULES_TOPIC, conversationTopic('a'),
     ]);
     expect(sessionTopics({
       conversationId: 'a',
       extraConversationIds: ['b'],
     })).toEqual([
-      WORKSPACES_TOPIC, PROVIDERS_TOPIC, EXTENSIONS_TOPIC, conversationTopic('a'), conversationTopic('b'),
+      WORKSPACES_TOPIC, PROVIDERS_TOPIC, EXTENSIONS_TOPIC, SCHEDULES_TOPIC, conversationTopic('a'), conversationTopic('b'),
     ]);
     expect(sessionTopics({
       conversationId: 'a',
@@ -464,6 +465,7 @@ describe('workspace selectors', () => {
       WORKSPACES_TOPIC,
       PROVIDERS_TOPIC,
       EXTENSIONS_TOPIC,
+      SCHEDULES_TOPIC,
       conversationTopic('a'),
       conversationTopic('b'),
       conversationTopic('c'),
@@ -471,7 +473,7 @@ describe('workspace selectors', () => {
     expect(sessionTopics({
       conversationId: 'a',
       extraConversationIds: [],
-    })).toEqual([WORKSPACES_TOPIC, PROVIDERS_TOPIC, EXTENSIONS_TOPIC, conversationTopic('a')]);
+    })).toEqual([WORKSPACES_TOPIC, PROVIDERS_TOPIC, EXTENSIONS_TOPIC, SCHEDULES_TOPIC, conversationTopic('a')]);
     expect(sessionTopics({
       conversationId: 'a',
       extraConversationIds: ['b'],
@@ -480,6 +482,7 @@ describe('workspace selectors', () => {
       WORKSPACES_TOPIC,
       PROVIDERS_TOPIC,
       EXTENSIONS_TOPIC,
+      SCHEDULES_TOPIC,
       conversationTopic('a'),
       conversationTopic('b'),
       subagentTopic('a', 'a:sub:1'),
@@ -488,17 +491,17 @@ describe('workspace selectors', () => {
 
   it('puts extra topics after providers and before conversation topics', () => {
     expect(sessionTopics({ extraTopics: [EXTENSIONS_TOPIC] })).toEqual([
-      WORKSPACES_TOPIC, PROVIDERS_TOPIC, EXTENSIONS_TOPIC,
+      WORKSPACES_TOPIC, PROVIDERS_TOPIC, EXTENSIONS_TOPIC, SCHEDULES_TOPIC,
     ]);
     expect(sessionTopics({ extraTopics: ['other'] })).toEqual([
-      WORKSPACES_TOPIC, PROVIDERS_TOPIC, EXTENSIONS_TOPIC, 'other',
+      WORKSPACES_TOPIC, PROVIDERS_TOPIC, EXTENSIONS_TOPIC, SCHEDULES_TOPIC, 'other',
     ]);
     expect(sessionTopics({
       conversationId: 'a',
       extraTopics: [EXTENSIONS_TOPIC, WORKSPACES_TOPIC],
       extraConversationIds: ['b'],
     })).toEqual([
-      WORKSPACES_TOPIC, PROVIDERS_TOPIC, EXTENSIONS_TOPIC, conversationTopic('a'), conversationTopic('b'),
+      WORKSPACES_TOPIC, PROVIDERS_TOPIC, EXTENSIONS_TOPIC, SCHEDULES_TOPIC, conversationTopic('a'), conversationTopic('b'),
     ]);
   });
 
@@ -689,6 +692,37 @@ describe('workspace selectors', () => {
     expect(store.gitConnections().map((item) => item.id)).toEqual(['g1']);
     store.applyRemove({ topic: EXTENSIONS_TOPIC, entity: 'git_connection', id: 'g1' });
     expect(store.gitConnections()).toEqual([]);
+  });
+
+  it('reads schedules from the schedules topic', () => {
+    const store = createEntityStore();
+    store.applySnapshot({
+      protocolVersion: '2.0.0',
+      topics: [SCHEDULES_TOPIC],
+      entities: [
+        {
+          topic: SCHEDULES_TOPIC,
+          entity: 'schedule',
+          id: 'sc1',
+          value: {
+            id: 'sc1',
+            name: '检查 CI',
+            message: 'test',
+            target: { kind: 'new', workspaceId: 'w1', workspaceName: 'weft', model: null },
+            rule: { kind: 'weekly', days: [1, 2, 3, 4, 5], time: '09:00' },
+            enabled: true,
+            createdBy: 'user',
+            nextRunAt: 12345,
+            lastRun: null,
+          } as EntityRef['value'],
+        },
+      ],
+    });
+    expect(store.schedules().map((item) => item.id)).toEqual(['sc1']);
+    expect(store.schedule('sc1')?.name).toBe('检查 CI');
+    store.applyRemove({ topic: SCHEDULES_TOPIC, entity: 'schedule', id: 'sc1' });
+    expect(store.schedules()).toEqual([]);
+    expect(store.schedule('sc1')).toBeUndefined();
   });
 
   describe('retained topic cache (LRU)', () => {

@@ -6,12 +6,15 @@ export const SUBAGENTS_DOC_KIND = `${KIND_PREFIX}subagents`;
 export const SUBAGENT_ANCHOR_KIND = `${KIND_PREFIX}subagent-anchor`;
 export const SUBAGENT_REPORTER_KIND = `${KIND_PREFIX}subagent-reporter`;
 export const USER_TO_SUBAGENT_KIND = `${KIND_PREFIX}user-to-subagent`;
+/** One live task per enabled schedule: sleeps until the next run, runs it, sleeps again. */
+export const SCHEDULE_TASK_KIND = `${KIND_PREFIX}schedule`;
 /** Session-start worktree tree id. Latest-only conversation document. */
 export const WORKSPACE_SNAPSHOT_DOC_KIND = `${KIND_PREFIX}workspace-snapshot`;
 /** Per-turn file changes. Latest-only conversation document. */
 export const TURN_CHANGES_DOC_KIND = `${KIND_PREFIX}turn-changes`;
 
 export const EXT_SUBAGENTS = `${BRAND}-subagents`;
+export const EXT_SCHEDULES = `${BRAND}-schedules`;
 export const EXT_SKILLS = `${BRAND}-skills`;
 export const EXT_BUILTIN_TOOLS = `${BRAND}-builtin-tools`;
 export const EXT_PLUGIN_TOOLS = `${BRAND}-plugin-tools`;
@@ -26,12 +29,14 @@ export const KIND_NAMES = Object.freeze([
   SUBAGENT_ANCHOR_KIND,
   SUBAGENT_REPORTER_KIND,
   USER_TO_SUBAGENT_KIND,
+  SCHEDULE_TASK_KIND,
   WORKSPACE_SNAPSHOT_DOC_KIND,
   TURN_CHANGES_DOC_KIND,
 ]);
 
 export const EXTENSION_NAMES = Object.freeze([
   EXT_SUBAGENTS,
+  EXT_SCHEDULES,
   EXT_SKILLS,
   EXT_BUILTIN_TOOLS,
   EXT_PLUGIN_TOOLS,

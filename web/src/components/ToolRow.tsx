@@ -1,5 +1,6 @@
 import { useContext, useState, type MouseEvent } from 'react';
 import type { Lang } from '../data/lang';
+import { navigate, schedulesPath } from '../data/nav';
 import { useRightActions } from '../data/rightPaneContext';
 import { SessionContext } from '../data/session';
 import type { ToolCall } from '../data/store';
@@ -67,6 +68,14 @@ function KindIcon({ kind }: { kind: ToolCall['kind'] }) {
         <circle cx="12" cy="12" r="10" />
         <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
         <line x1="12" y1="17" x2="12.01" y2="17" />
+      </svg>
+    );
+  }
+  if (kind === 'schedule') {
+    return (
+      <svg className="tool-kind-icon icon" viewBox="0 0 24 24" aria-hidden="true">
+        <circle cx="12" cy="12" r="10" />
+        <polyline points="12 6 12 12 16 14" />
       </svg>
     );
   }
@@ -215,6 +224,10 @@ export function ToolRow({ tool, lang, onLoadOutput }: Props) {
   const displayTitle = isHandoff ? '' : tool.heading.title;
 
   async function toggle() {
+    if (tool.kind === 'schedule') {
+      navigate(schedulesPath(tool.scheduleId));
+      return;
+    }
     if (changeKind) {
       if (tool.path) openChangeDiff(tool.path);
       return;

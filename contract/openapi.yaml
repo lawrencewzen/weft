@@ -239,6 +239,11 @@ paths:
 
         快照是 GET /api/v2/plugins、GET /api/v2/skills、GET /api/v2/git/connections 同一套数据拆成上述实体。插件、技能、Git 连接增删改（含旧接口）后 upsert；实体删除时 remove。失败原因、Git 测试结果按订阅的 `lang` 出成句。
 
+        主题 `schedules` 注册为精确主题。实体：
+        - `schedule`：id 为定时任务 id，值为 Schedule
+
+        快照是 GET /api/v2/schedules 同一套数据拆成上述实体。定时任务增删改、启用/暂停或运行状态变化时 upsert；实体删除时 remove。值没变不推送。
+
         主题 `conversation:<id>`（`<id>` 为对话 id）按前缀动态注册。实体：
         - `conversation`：id 为对话 id，值为 ConversationView
         - `item`：id 为 ThreadItem.id，值为 ThreadItem
@@ -306,6 +311,278 @@ paths:
                 $ref: "#/components/schemas/V2Error"
         "401":
           description: 未授权
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        4XX:
+          description: 客户端错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        5XX:
+          description: 服务端错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+  /api/v2/schedules:
+    get:
+      operationId: listSchedules
+      summary: 定时任务列表
+      security:
+        - bearerAuth: []
+        - sessionCookie: []
+      responses:
+        "200":
+          description: 定时任务列表
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScheduleList"
+        "401":
+          description: 未授权
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        4XX:
+          description: 客户端错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        5XX:
+          description: 服务端错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+    post:
+      operationId: createSchedule
+      summary: 新建定时任务
+      description: 写请求带 requestId。校验错误 400 带字段名。成功后 schedules 主题推送 upsert。
+      security:
+        - bearerAuth: []
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ScheduleWrite"
+      responses:
+        "201":
+          description: 已创建
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Schedule"
+        "400":
+          description: 字段校验失败
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScheduleInvalid"
+        "401":
+          description: 未授权
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        4XX:
+          description: 客户端错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        5XX:
+          description: 服务端错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+  /api/v2/schedules/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    patch:
+      operationId: updateSchedule
+      summary: 更新定时任务
+      description: 写请求带 requestId。校验错误 400 带字段名。成功后 schedules 主题推送 upsert。
+      security:
+        - bearerAuth: []
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SchedulePatch"
+      responses:
+        "200":
+          description: 更新后的定时任务
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Schedule"
+        "400":
+          description: 字段校验失败
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScheduleInvalid"
+        "401":
+          description: 未授权
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        "404":
+          description: 定时任务不存在
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        4XX:
+          description: 客户端错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        5XX:
+          description: 服务端错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+    delete:
+      operationId: deleteSchedule
+      summary: 删除定时任务
+      description: 写请求带 requestId。成功后 schedules 主题推送 remove。
+      security:
+        - bearerAuth: []
+        - sessionCookie: []
+      parameters:
+        - name: requestId
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: 已删除
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkId"
+        "401":
+          description: 未授权
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        "404":
+          description: 定时任务不存在
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        4XX:
+          description: 客户端错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        5XX:
+          description: 服务端错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+  /api/v2/schedules/{id}/run:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      operationId: runSchedule
+      summary: 立即执行一次定时任务
+      description: 立即触发执行一次并记录结果。写请求带 requestId。
+      security:
+        - bearerAuth: []
+        - sessionCookie: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ScheduleRunRequest"
+      responses:
+        "200":
+          description: 本次执行结果
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScheduleRun"
+        "401":
+          description: 未授权
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        "404":
+          description: 定时任务不存在
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        4XX:
+          description: 客户端错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        5XX:
+          description: 服务端错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+  /api/v2/schedules/{id}/runs:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: listScheduleRuns
+      summary: 获取定时任务最近 20 次执行记录
+      security:
+        - bearerAuth: []
+        - sessionCookie: []
+      responses:
+        "200":
+          description: 执行记录列表（最多 20 条，按时间倒序）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScheduleRunList"
+        "401":
+          description: 未授权
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        "404":
+          description: 定时任务不存在
           content:
             application/json:
               schema:
@@ -4620,6 +4897,7 @@ components:
             - grep
             - bash
             - ask
+            - schedule
             - handoff
             - other
         status:
@@ -4703,6 +4981,9 @@ components:
             text:
               type: string
               description: Harness 保留的输出窗口（尾部）。运行中的 bash 或预览被截断时带上；省略则预览即全文
+        scheduleId:
+          type: string
+          description: kind 为 schedule 时对应的定时任务 id
         ask:
           $ref: "#/components/schemas/AskCall"
           description: |
@@ -6964,3 +7245,271 @@ components:
         id:
           type: string
       description: 删除成功。
+    ScheduleTargetConversation:
+      type: object
+      additionalProperties: false
+      required:
+        - kind
+        - conversationId
+        - title
+      properties:
+        kind:
+          type: string
+          enum:
+            - conversation
+        conversationId:
+          type: string
+        title:
+          type: string
+    ScheduleTargetNew:
+      type: object
+      additionalProperties: false
+      required:
+        - kind
+        - workspaceId
+        - workspaceName
+        - model
+      properties:
+        kind:
+          type: string
+          enum:
+            - new
+        workspaceId:
+          type: string
+        workspaceName:
+          type: string
+        model:
+          oneOf:
+            - type: "null"
+            - $ref: "#/components/schemas/ResolvedModel"
+    ScheduleTarget:
+      oneOf:
+        - $ref: "#/components/schemas/ScheduleTargetConversation"
+        - $ref: "#/components/schemas/ScheduleTargetNew"
+    ScheduleRuleOnce:
+      type: object
+      additionalProperties: false
+      required:
+        - kind
+        - at
+      properties:
+        kind:
+          type: string
+          enum:
+            - once
+        at:
+          type: integer
+          description: 毫秒时间戳
+    ScheduleRuleDaily:
+      type: object
+      additionalProperties: false
+      required:
+        - kind
+        - time
+      properties:
+        kind:
+          type: string
+          enum:
+            - daily
+        time:
+          type: string
+          description: "HH:MM"
+    ScheduleRuleWeekly:
+      type: object
+      additionalProperties: false
+      required:
+        - kind
+        - days
+        - time
+      properties:
+        kind:
+          type: string
+          enum:
+            - weekly
+        days:
+          type: array
+          items:
+            type: integer
+          description: "1=周一…7=周日"
+        time:
+          type: string
+          description: "HH:MM"
+    ScheduleRuleInterval:
+      type: object
+      additionalProperties: false
+      required:
+        - kind
+        - everyMinutes
+      properties:
+        kind:
+          type: string
+          enum:
+            - interval
+        everyMinutes:
+          type: integer
+          minimum: 5
+          description: 最少 5 分钟
+    ScheduleRule:
+      oneOf:
+        - $ref: "#/components/schemas/ScheduleRuleOnce"
+        - $ref: "#/components/schemas/ScheduleRuleDaily"
+        - $ref: "#/components/schemas/ScheduleRuleWeekly"
+        - $ref: "#/components/schemas/ScheduleRuleInterval"
+    ScheduleRun:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - at
+        - status
+        - conversationId
+        - error
+      properties:
+        id:
+          type: string
+        at:
+          type: integer
+          description: 执行时间（毫秒时间戳）
+        status:
+          type: string
+          enum:
+            - ok
+            - failed
+            - missed_caught_up
+        conversationId:
+          oneOf:
+            - type: "null"
+            - type: string
+          description: 执行所在或新建的对话 id
+        error:
+          oneOf:
+            - type: "null"
+            - type: string
+          description: 失败原因
+    Schedule:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - name
+        - message
+        - target
+        - rule
+        - enabled
+        - createdBy
+        - nextRunAt
+        - lastRun
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        message:
+          type: string
+        target:
+          $ref: "#/components/schemas/ScheduleTarget"
+        rule:
+          $ref: "#/components/schemas/ScheduleRule"
+        enabled:
+          type: boolean
+        createdBy:
+          type: string
+          enum:
+            - user
+            - agent
+        nextRunAt:
+          oneOf:
+            - type: "null"
+            - type: integer
+          description: 下次执行时间（毫秒时间戳）
+        lastRun:
+          oneOf:
+            - type: "null"
+            - $ref: "#/components/schemas/ScheduleRun"
+    ScheduleList:
+      type: object
+      additionalProperties: false
+      required:
+        - schedules
+      properties:
+        schedules:
+          type: array
+          items:
+            $ref: "#/components/schemas/Schedule"
+    ScheduleRunList:
+      type: object
+      additionalProperties: false
+      required:
+        - runs
+      properties:
+        runs:
+          type: array
+          items:
+            $ref: "#/components/schemas/ScheduleRun"
+    ScheduleWrite:
+      type: object
+      additionalProperties: false
+      required:
+        - name
+        - message
+        - target
+        - rule
+      properties:
+        name:
+          type: string
+        message:
+          type: string
+        target:
+          $ref: "#/components/schemas/ScheduleTarget"
+        rule:
+          $ref: "#/components/schemas/ScheduleRule"
+        enabled:
+          type: boolean
+          default: true
+        requestId:
+          type: string
+    SchedulePatch:
+      type: object
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+        message:
+          type: string
+        target:
+          $ref: "#/components/schemas/ScheduleTarget"
+        rule:
+          $ref: "#/components/schemas/ScheduleRule"
+        enabled:
+          type: boolean
+        requestId:
+          type: string
+    ScheduleRunRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        requestId:
+          type: string
+    ScheduleInvalid:
+      type: object
+      additionalProperties: false
+      required:
+        - error
+        - fields
+      properties:
+        error:
+          type: string
+          description: 校验错误文案
+        code:
+          type: string
+          default: "E_INVALID_SCHEDULE"
+        fields:
+          type: array
+          items:
+            type: string
+          description: 出错的字段名列表
+        errors:
+          type: array
+          items:
+            type: string
+          description: 详细错误说明列表

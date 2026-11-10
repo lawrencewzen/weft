@@ -39,6 +39,15 @@ export type GitConnection = components['schemas']['GitConnection'];
 export type GitProject = components['schemas']['GitProject'];
 export type GitBranch = components['schemas']['GitBranch'];
 export type GitTestResult = components['schemas']['GitTestResult'];
+export type Schedule = components['schemas']['Schedule'];
+export type ScheduleRun = components['schemas']['ScheduleRun'];
+export type ScheduleTarget = components['schemas']['ScheduleTarget'];
+export type ScheduleRule = components['schemas']['ScheduleRule'];
+export type ScheduleWrite = components['schemas']['ScheduleWrite'];
+export type SchedulePatch = components['schemas']['SchedulePatch'];
+export type ScheduleList = components['schemas']['ScheduleList'];
+export type ScheduleRunList = components['schemas']['ScheduleRunList'];
+export type ScheduleInvalid = components['schemas']['ScheduleInvalid'];
 import type { GlabBinaryInfo, GlabBinarySource, GlabSettings } from '../../src/data/api';
 export type { GlabBinaryInfo, GlabBinarySource, GlabSettings };
 
@@ -49,6 +58,7 @@ export type MockTool = {
   kind: ToolCall['kind'];
   status: ToolCall['status'];
   path?: string;
+  scheduleId?: string;
   title: Bilingual;
   detail?: Bilingual;
   fromIntent: boolean;
@@ -186,6 +196,8 @@ export type MockDb = {
   workspaceUploads: Map<string, components['schemas']['UploadResult']>;
   glab: GlabSettings;
   settings: { compaction: { triggerPercent: number } };
+  schedules: Map<string, Schedule>;
+  scheduleRuns: Map<string, ScheduleRun[]>;
 };
 
 export type EntityValue = object | ((lang: Lang) => object);

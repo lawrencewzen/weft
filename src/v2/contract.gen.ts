@@ -115,6 +115,11 @@ export interface paths {
          *
          *     快照是 GET /api/v2/plugins、GET /api/v2/skills、GET /api/v2/git/connections 同一套数据拆成上述实体。插件、技能、Git 连接增删改（含旧接口）后 upsert；实体删除时 remove。失败原因、Git 测试结果按订阅的 `lang` 出成句。
          *
+         *     主题 `schedules` 注册为精确主题。实体：
+         *     - `schedule`：id 为定时任务 id，值为 Schedule
+         *
+         *     快照是 GET /api/v2/schedules 同一套数据拆成上述实体。定时任务增删改、启用/暂停或运行状态变化时 upsert；实体删除时 remove。值没变不推送。
+         *
          *     主题 `conversation:<id>`（`<id>` 为对话 id）按前缀动态注册。实体：
          *     - `conversation`：id 为对话 id，值为 ConversationView
          *     - `item`：id 为 ThreadItem.id，值为 ThreadItem
@@ -142,6 +147,94 @@ export interface paths {
          *     - `heartbeat` → HeartbeatEvent
          */
         get: operations["getEvents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/schedules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 定时任务列表 */
+        get: operations["listSchedules"];
+        put?: never;
+        /**
+         * 新建定时任务
+         * @description 写请求带 requestId。校验错误 400 带字段名。成功后 schedules 主题推送 upsert。
+         */
+        post: operations["createSchedule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/schedules/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * 删除定时任务
+         * @description 写请求带 requestId。成功后 schedules 主题推送 remove。
+         */
+        delete: operations["deleteSchedule"];
+        options?: never;
+        head?: never;
+        /**
+         * 更新定时任务
+         * @description 写请求带 requestId。校验错误 400 带字段名。成功后 schedules 主题推送 upsert。
+         */
+        patch: operations["updateSchedule"];
+        trace?: never;
+    };
+    "/api/v2/schedules/{id}/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 立即执行一次定时任务
+         * @description 立即触发执行一次并记录结果。写请求带 requestId。
+         */
+        post: operations["runSchedule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/schedules/{id}/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        /** 获取定时任务最近 20 次执行记录 */
+        get: operations["listScheduleRuns"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1608,7 +1701,7 @@ export interface components {
             /** @description 所属工具组 id，由组内第一条调用算出 */
             groupId: string;
             /** @enum {string} */
-            kind: "read" | "write" | "edit" | "ls" | "grep" | "bash" | "ask" | "handoff" | "other";
+            kind: "read" | "write" | "edit" | "ls" | "grep" | "bash" | "ask" | "schedule" | "handoff" | "other";
             /** @enum {string} */
             status: "running" | "failed" | "interrupted" | "done";
             heading: {
@@ -1640,6 +1733,8 @@ export interface components {
                 /** @description Harness 保留的输出窗口（尾部）。运行中的 bash 或预览被截断时带上；省略则预览即全文 */
                 text?: string;
             };
+            /** @description kind 为 schedule 时对应的定时任务 id */
+            scheduleId?: string;
             /**
              * @description 仅 ask_user_question，且参数通过插件校验时出现。kind 为 ask。
              *     questions 来自工具结果 details（插件校验后的题目）。
@@ -2623,6 +2718,107 @@ export interface components {
             ok: true;
             id: string;
         };
+        ScheduleTargetConversation: {
+            /** @enum {string} */
+            kind: "conversation";
+            conversationId: string;
+            title: string;
+        };
+        ScheduleTargetNew: {
+            /** @enum {string} */
+            kind: "new";
+            workspaceId: string;
+            workspaceName: string;
+            model: null | components["schemas"]["ResolvedModel"];
+        };
+        ScheduleTarget: components["schemas"]["ScheduleTargetConversation"] | components["schemas"]["ScheduleTargetNew"];
+        ScheduleRuleOnce: {
+            /** @enum {string} */
+            kind: "once";
+            /** @description 毫秒时间戳 */
+            at: number;
+        };
+        ScheduleRuleDaily: {
+            /** @enum {string} */
+            kind: "daily";
+            /** @description HH:MM */
+            time: string;
+        };
+        ScheduleRuleWeekly: {
+            /** @enum {string} */
+            kind: "weekly";
+            /** @description 1=周一…7=周日 */
+            days: number[];
+            /** @description HH:MM */
+            time: string;
+        };
+        ScheduleRuleInterval: {
+            /** @enum {string} */
+            kind: "interval";
+            /** @description 最少 5 分钟 */
+            everyMinutes: number;
+        };
+        ScheduleRule: components["schemas"]["ScheduleRuleOnce"] | components["schemas"]["ScheduleRuleDaily"] | components["schemas"]["ScheduleRuleWeekly"] | components["schemas"]["ScheduleRuleInterval"];
+        ScheduleRun: {
+            id: string;
+            /** @description 执行时间（毫秒时间戳） */
+            at: number;
+            /** @enum {string} */
+            status: "ok" | "failed" | "missed_caught_up";
+            /** @description 执行所在或新建的对话 id */
+            conversationId: null | string;
+            /** @description 失败原因 */
+            error: null | string;
+        };
+        Schedule: {
+            id: string;
+            name: string;
+            message: string;
+            target: components["schemas"]["ScheduleTarget"];
+            rule: components["schemas"]["ScheduleRule"];
+            enabled: boolean;
+            /** @enum {string} */
+            createdBy: "user" | "agent";
+            /** @description 下次执行时间（毫秒时间戳） */
+            nextRunAt: null | number;
+            lastRun: null | components["schemas"]["ScheduleRun"];
+        };
+        ScheduleList: {
+            schedules: components["schemas"]["Schedule"][];
+        };
+        ScheduleRunList: {
+            runs: components["schemas"]["ScheduleRun"][];
+        };
+        ScheduleWrite: {
+            name: string;
+            message: string;
+            target: components["schemas"]["ScheduleTarget"];
+            rule: components["schemas"]["ScheduleRule"];
+            /** @default true */
+            enabled: boolean;
+            requestId?: string;
+        };
+        SchedulePatch: {
+            name?: string;
+            message?: string;
+            target?: components["schemas"]["ScheduleTarget"];
+            rule?: components["schemas"]["ScheduleRule"];
+            enabled?: boolean;
+            requestId?: string;
+        };
+        ScheduleRunRequest: {
+            requestId?: string;
+        };
+        ScheduleInvalid: {
+            /** @description 校验错误文案 */
+            error: string;
+            /** @default E_INVALID_SCHEDULE */
+            code: string;
+            /** @description 出错的字段名列表 */
+            fields: string[];
+            /** @description 详细错误说明列表 */
+            errors?: string[];
+        };
     };
     responses: never;
     parameters: never;
@@ -2950,6 +3146,364 @@ export interface operations {
             };
             /** @description 未授权 */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 客户端错误 */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 服务端错误 */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+        };
+    };
+    listSchedules: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 定时任务列表 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduleList"];
+                };
+            };
+            /** @description 未授权 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 客户端错误 */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 服务端错误 */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+        };
+    };
+    createSchedule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScheduleWrite"];
+            };
+        };
+        responses: {
+            /** @description 已创建 */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Schedule"];
+                };
+            };
+            /** @description 字段校验失败 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduleInvalid"];
+                };
+            };
+            /** @description 未授权 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 客户端错误 */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 服务端错误 */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+        };
+    };
+    deleteSchedule: {
+        parameters: {
+            query?: {
+                requestId?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 已删除 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OkId"];
+                };
+            };
+            /** @description 未授权 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 定时任务不存在 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 客户端错误 */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 服务端错误 */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+        };
+    };
+    updateSchedule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SchedulePatch"];
+            };
+        };
+        responses: {
+            /** @description 更新后的定时任务 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Schedule"];
+                };
+            };
+            /** @description 字段校验失败 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduleInvalid"];
+                };
+            };
+            /** @description 未授权 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 定时任务不存在 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 客户端错误 */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 服务端错误 */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+        };
+    };
+    runSchedule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ScheduleRunRequest"];
+            };
+        };
+        responses: {
+            /** @description 本次执行结果 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduleRun"];
+                };
+            };
+            /** @description 未授权 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 定时任务不存在 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 客户端错误 */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 服务端错误 */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+        };
+    };
+    listScheduleRuns: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 执行记录列表（最多 20 条，按时间倒序） */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduleRunList"];
+                };
+            };
+            /** @description 未授权 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 定时任务不存在 */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

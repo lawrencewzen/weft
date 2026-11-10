@@ -1,5 +1,5 @@
 import type { Entity, TopicReader } from './hub';
-import { conversationEntities, extensionsEntities, providersEntities, workspacesEntities } from './views';
+import { conversationEntities, extensionsEntities, providersEntities, schedulesEntities, workspacesEntities } from './views';
 import { subagentEntities, subagentKey } from './subagents';
 import type { Lang, MockDb } from './types';
 
@@ -22,6 +22,7 @@ export function readTopic(db: MockDb): TopicReader {
     if (topic === 'workspaces') return workspacesEntities(db);
     if (topic === 'providers') return providersEntities(db);
     if (topic === 'extensions') return extensionsEntities(db);
+    if (topic === 'schedules') return schedulesEntities(db);
     if (topic.startsWith(CONVERSATION_PREFIX)) {
       const cid = topic.slice(CONVERSATION_PREFIX.length);
       const conv = db.conversations.get(cid);

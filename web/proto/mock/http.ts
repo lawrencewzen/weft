@@ -70,6 +70,10 @@ import type {
   Plugin,
   Provider,
   ResolvedModel,
+  Schedule,
+  ScheduleRun,
+  ScheduleTarget,
+  ScheduleRule,
   Skill,
   ThreadItem,
   MockSubThread,
@@ -1197,6 +1201,228 @@ function persistProtoGlab(glab: GlabSettings): void {
   }
 }
 
+function computeNextRun(rule: ScheduleRule, from = Date.now()): number | null {
+  if (rule.kind === 'once') {
+    return rule.at > from ? rule.at : null;
+  }
+  if (rule.kind === 'interval') {
+    return from + rule.everyMinutes * 60 * 1000;
+  }
+  if (rule.kind === 'daily') {
+    const parts = rule.time.split(':').map(Number);
+    const h = parts[0] || 0;
+    const m = parts[1] || 0;
+    const target = new Date(from);
+    target.setHours(h, m, 0, 0);
+    if (target.getTime() <= from) {
+      target.setDate(target.getDate() + 1);
+    }
+    return target.getTime();
+  }
+  if (rule.kind === 'weekly') {
+    const parts = rule.time.split(':').map(Number);
+    const h = parts[0] || 0;
+    const m = parts[1] || 0;
+    const days = rule.days || [];
+    for (let offset = 0; offset <= 7; offset++) {
+      const d = new Date(from + offset * 86400000);
+      d.setHours(h, m, 0, 0);
+      const dayOfWeek = d.getDay() === 0 ? 7 : d.getDay();
+      if (days.includes(dayOfWeek) && d.getTime() > from) {
+        return d.getTime();
+      }
+    }
+    return from + 86400000;
+  }
+  return null;
+}
+
+function validateScheduleInput(
+  input: {
+    name?: unknown;
+    message?: unknown;
+    target?: unknown;
+    rule?: unknown;
+  },
+  isPatch = false,
+  lang: Lang = 'zh',
+): { valid: boolean; fields: string[]; error: string } {
+  const fields: string[] = [];
+  const errors: string[] = [];
+
+  if (!isPatch || input.name !== undefined) {
+    if (typeof input.name !== 'string' || !input.name.trim()) {
+      fields.push('name');
+      errors.push(lang === 'en' ? 'Name is required' : '任务名称不能为空');
+    }
+  }
+
+  if (!isPatch || input.message !== undefined) {
+    if (typeof input.message !== 'string' || !input.message.trim()) {
+      fields.push('message');
+      errors.push(lang === 'en' ? 'Message is required' : '消息内容不能为空');
+    }
+  }
+
+  if (!isPatch || input.target !== undefined) {
+    const target = input.target as Record<string, unknown> | undefined;
+    if (!target || typeof target !== 'object') {
+      fields.push('target');
+      errors.push(lang === 'en' ? 'Target is required' : '目标不能为空');
+    } else if (target.kind === 'conversation') {
+      if (typeof target.conversationId !== 'string' || !target.conversationId) {
+        fields.push('target.conversationId');
+        errors.push(lang === 'en' ? 'Conversation is required' : '请选择目标对话');
+      }
+    } else if (target.kind === 'new') {
+      if (typeof target.workspaceId !== 'string' || !target.workspaceId) {
+        fields.push('target.workspaceId');
+        errors.push(lang === 'en' ? 'Workspace is required' : '请选择工作区');
+      }
+    } else {
+      fields.push('target.kind');
+      errors.push(lang === 'en' ? 'Invalid target kind' : '无效的目标类型');
+    }
+  }
+
+  if (!isPatch || input.rule !== undefined) {
+    const rule = input.rule as Record<string, unknown> | undefined;
+    if (!rule || typeof rule !== 'object') {
+      fields.push('rule');
+      errors.push(lang === 'en' ? 'Rule is required' : '时间规则不能为空');
+    } else if (rule.kind === 'interval') {
+      const minutes = Number(rule.everyMinutes);
+      if (isNaN(minutes) || minutes < 5) {
+        fields.push('rule.everyMinutes');
+        errors.push(lang === 'en' ? 'Interval must be at least 5 minutes' : '间隔不能少于 5 分钟');
+      }
+    } else if (rule.kind === 'weekly') {
+      if (!Array.isArray(rule.days) || rule.days.length === 0) {
+        fields.push('rule.days');
+        errors.push(lang === 'en' ? 'Please select at least one day' : '每周请至少选择一天');
+      }
+      if (typeof rule.time !== 'string' || !/^\d{2}:\d{2}$/.test(rule.time)) {
+        fields.push('rule.time');
+        errors.push(lang === 'en' ? 'Time is required' : '时间格式无效');
+      }
+    } else if (rule.kind === 'daily') {
+      if (typeof rule.time !== 'string' || !/^\d{2}:\d{2}$/.test(rule.time)) {
+        fields.push('rule.time');
+        errors.push(lang === 'en' ? 'Time is required' : '时间格式无效');
+      }
+    } else if (rule.kind === 'once') {
+      const at = Number(rule.at);
+      if (isNaN(at) || at <= 0) {
+        fields.push('rule.at');
+        errors.push(lang === 'en' ? 'Invalid timestamp' : '时间戳无效');
+      }
+    } else {
+      fields.push('rule.kind');
+      errors.push(lang === 'en' ? 'Invalid rule kind' : '无效的时间规则类型');
+    }
+  }
+
+  return {
+    valid: fields.length === 0,
+    fields,
+    error: errors.join('; ') || (lang === 'en' ? 'Invalid schedule fields' : '字段校验失败'),
+  };
+}
+
+function executeSchedule(
+  db: MockDb,
+  hub: MockHub,
+  schedule: Schedule,
+  lang: Lang,
+): ScheduleRun {
+  const runId = `run-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+  const run: ScheduleRun = {
+    id: runId,
+    at: Date.now(),
+    status: 'ok',
+    conversationId: null,
+    error: null,
+  };
+
+  const target = schedule.target;
+  if (target.kind === 'conversation') {
+    const conv = db.conversations.get(target.conversationId);
+    if (conv) {
+      run.conversationId = conv.view.id;
+      sendMessage(db, conv, hub, schedule.message, `req-sched-${Date.now()}`);
+    } else {
+      run.status = 'failed';
+      run.error = lang === 'en' ? 'Target conversation not found' : '目标对话不存在';
+    }
+  } else if (target.kind === 'new') {
+    const ws = db.workspaces.find((w) => w.id === target.workspaceId) || db.workspaces[0];
+    const wsId = ws ? ws.id : 'ws-weft';
+    const now = new Date();
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    const dd = String(now.getDate()).padStart(2, '0');
+    const hh = String(now.getHours()).padStart(2, '0');
+    const min = String(now.getMinutes()).padStart(2, '0');
+    const title = `${schedule.name} · ${mm}/${dd} ${hh}:${min}`;
+    const newCid = `c-sched-${Date.now()}`;
+
+    const model = target.model || db.defaultModel;
+    const provider = db.providers.find((row) => row.id === model?.providerId);
+    const found = provider?.models.find((row) => row.id === model?.modelId);
+    const window = found?.contextWindow || 200_000;
+
+    const conv: MockConv = {
+      view: {
+        id: newCid,
+        workspaceId: wsId,
+        title,
+        updatedAt: Date.now(),
+        status: 'idle',
+        model: model && found
+          ? { sourceId: model.providerId, modelId: model.modelId, label: modelLabel(db, model) }
+          : null,
+        thinkingLevel: found ? (found.defaultThinkingLevel ?? null) : null,
+        run: {
+          status: 'idle',
+          startedAt: null,
+          pendingText: null,
+          canSend: true,
+          canStop: false,
+          lockedReason: null,
+          error: null,
+          lastActivityAt: null,
+          stalledSince: null,
+          activeTool: null,
+        },
+        context: { used: 0, window, percent: 0, level: 'ok' },
+        itemIds: [],
+        sends: [],
+      },
+      pending: null,
+      items: [],
+      tools: {},
+      changes: [],
+      diffs: {},
+      subagents: [],
+      run: null,
+      requestRuns: new Map(),
+    };
+
+    db.conversations.set(newCid, conv);
+    publishSummary(db, hub, newCid);
+    run.conversationId = newCid;
+    sendMessage(db, conv, hub, schedule.message, `req-sched-${Date.now()}`);
+  }
+
+  schedule.lastRun = run;
+  const runs = db.scheduleRuns.get(schedule.id) || [];
+  runs.unshift(run);
+  if (runs.length > 20) runs.length = 20;
+  db.scheduleRuns.set(schedule.id, runs);
+  hub.publish('schedules', { event: 'upsert', entity: 'schedule', id: schedule.id, value: schedule });
+
+  return run;
+}
+
 /* ---------- routing ---------- */
 
 /** Route one mock HTTP call. Unknown `/api` paths answer 404 so the UI can show a message. */
@@ -1396,6 +1622,85 @@ export function handleMockRequest(
       }
       publishProviders(db, hub);
       return noContent();
+    }
+  }
+
+  /* ---- schedules ---- */
+  if (path === '/api/v2/schedules' && method === 'GET') {
+    return ok({ schedules: [...db.schedules.values()] });
+  }
+
+  if (path === '/api/v2/schedules' && method === 'POST') {
+    const val = validateScheduleInput(body, false, lang);
+    if (!val.valid) {
+      return fail(400, val.error, 'E_INVALID_SCHEDULE', { fields: val.fields });
+    }
+    const id = `sched-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    const enabled = body.enabled !== false;
+    const rule = body.rule as ScheduleRule;
+    const target = body.target as ScheduleTarget;
+    const schedule: Schedule = {
+      id,
+      name: String(body.name).trim(),
+      message: String(body.message).trim(),
+      target,
+      rule,
+      enabled,
+      createdBy: 'user',
+      nextRunAt: enabled ? computeNextRun(rule) : null,
+      lastRun: null,
+    };
+    db.schedules.set(id, schedule);
+    db.scheduleRuns.set(id, []);
+    hub.publish('schedules', { event: 'upsert', entity: 'schedule', id, value: schedule });
+    return created(schedule);
+  }
+
+  const schedRunsMatch = /^\/api\/v2\/schedules\/([^/]+)\/runs$/.exec(path);
+  if (schedRunsMatch && method === 'GET') {
+    const id = decodeURIComponent(schedRunsMatch[1]);
+    const schedule = db.schedules.get(id);
+    if (!schedule) return fail(404, lang === 'en' ? 'Schedule not found' : '定时任务不存在');
+    const runs = db.scheduleRuns.get(id) || [];
+    return ok({ runs });
+  }
+
+  const schedRunMatch = /^\/api\/v2\/schedules\/([^/]+)\/run$/.exec(path);
+  if (schedRunMatch && method === 'POST') {
+    const id = decodeURIComponent(schedRunMatch[1]);
+    const schedule = db.schedules.get(id);
+    if (!schedule) return fail(404, lang === 'en' ? 'Schedule not found' : '定时任务不存在');
+    const run = executeSchedule(db, hub, schedule, lang);
+    return ok(run);
+  }
+
+  const schedMatch = /^\/api\/v2\/schedules\/([^/]+)$/.exec(path);
+  if (schedMatch) {
+    const id = decodeURIComponent(schedMatch[1]);
+    const schedule = db.schedules.get(id);
+    if (!schedule) return fail(404, lang === 'en' ? 'Schedule not found' : '定时任务不存在');
+
+    if (method === 'PATCH') {
+      const val = validateScheduleInput(body, true, lang);
+      if (!val.valid) {
+        return fail(400, val.error, 'E_INVALID_SCHEDULE', { fields: val.fields });
+      }
+      if (body.name !== undefined) schedule.name = String(body.name).trim();
+      if (body.message !== undefined) schedule.message = String(body.message).trim();
+      if (body.target !== undefined) schedule.target = body.target as ScheduleTarget;
+      if (body.rule !== undefined) schedule.rule = body.rule as ScheduleRule;
+      if (body.enabled !== undefined) schedule.enabled = Boolean(body.enabled);
+      schedule.nextRunAt = schedule.enabled ? computeNextRun(schedule.rule) : null;
+
+      hub.publish('schedules', { event: 'upsert', entity: 'schedule', id: schedule.id, value: schedule });
+      return ok(schedule);
+    }
+
+    if (method === 'DELETE') {
+      db.schedules.delete(id);
+      db.scheduleRuns.delete(id);
+      hub.publish('schedules', { event: 'remove', entity: 'schedule', id });
+      return ok({ ok: true, id });
     }
   }
 
