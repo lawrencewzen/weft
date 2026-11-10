@@ -174,6 +174,39 @@ test('plugin bridge passes details and terminate and keeps old results', async (
   assert.equal(result.isError, false);
 });
 
+test('ask_user_question tolerates the argument shapes openai-completions models send', () => {
+  const q = question();
+  const want = validateAskArgs({ questions: [q] });
+  assert.equal(want.ok, true);
+  const shapes = {
+    'questions as JSON string': { questions: JSON.stringify([q]) },
+    'whole args as JSON string': JSON.stringify({ questions: [q] }),
+    'whole args as JSON string with string questions': JSON.stringify({ questions: JSON.stringify([q]) }),
+    'single question object': { questions: q },
+    'single question object as JSON string': { questions: JSON.stringify(q) },
+    'bare array': [q],
+    'bare question object': q,
+    'options as JSON string': { questions: [{ ...q, options: JSON.stringify(q.options) }] },
+    'question items as JSON strings': { questions: [JSON.stringify(q)] },
+  };
+  for (const [name, args] of Object.entries(shapes)) {
+    assert.deepEqual(validateAskArgs(args), want, name);
+  }
+});
+
+test('ask_user_question errors say what shape was received', () => {
+  assert.match(validateAskArgs({ questions: 'not json' }).error, /array of 1 to 4 items; got string$/);
+  assert.match(validateAskArgs({ questions: '[{bad' }).error, /got string \(not valid JSON\)$/);
+  const six = Array.from({ length: 6 }, () => question());
+  assert.match(validateAskArgs({ questions: six }).error, /got array of 6$/);
+  assert.match(validateAskArgs({ questions: [] }).error, /got array of 0$/);
+  assert.match(validateAskArgs({ questions: { foo: 1 } }).error, /got object$/);
+  assert.match(validateAskArgs({ questions: 3 }).error, /got number$/);
+  assert.match(validateAskArgs({}).error, /got undefined$/);
+  assert.match(validateAskArgs(null).error, /questions is required/);
+  assert.match(validateAskArgs({ questions: [question({ options: 'oops' })] }).error, /options must contain 2 to 4/);
+});
+
 test('ask_user_question checks question count, option count, and header length', async () => {
   const ok = validateAskArgs({ questions: [question(), { ...question(), header: '一二三四五六七八九十十二', multiSelect: true, options: [option('甲'), option('乙'), option('丙'), option('丁')] }] });
   assert.equal(ok.ok, true);

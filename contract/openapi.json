@@ -6909,7 +6909,7 @@
         ],
         "properties": {
           "compaction": {
-            "$ref": "#/components/schemas/CompactionPreference"
+            "$ref": "#/components/schemas/CompactionPreferenceView"
           },
           "closeAction": {
             "type": "string",
@@ -6922,7 +6922,55 @@
             "description": "Windows 桌面壳点击关闭按钮时的行为：ask 询问 / tray 缩到托盘 / quit 退出 Weft。缺省为 ask。\n"
           }
         },
-        "description": "全局设置（压缩触发点与 Windows 桌面壳关闭行为）。"
+        "description": "全局设置（压缩触发点及实际起点比它更早的模型，以及 Windows 桌面壳关闭行为）。"
+      },
+      "CompactionPreferenceView": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "triggerPercent",
+          "effective"
+        ],
+        "properties": {
+          "triggerPercent": {
+            "type": "integer",
+            "minimum": 60,
+            "maximum": 90,
+            "description": "自动压缩触发点，占模型上下文窗口的百分比。整数 60–90，缺省 80。"
+          },
+          "effective": {
+            "type": "array",
+            "description": "只读。实际起点低于 triggerPercent 的模型（窗口较小的模型要给摘要留出空间，会更早开始后台压缩）。来源是已注册且 contextWindow 大于 0 的模型，按当前 triggerPercent 计算。",
+            "items": {
+              "$ref": "#/components/schemas/CompactionEffectiveModel"
+            }
+          }
+        }
+      },
+      "CompactionEffectiveModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "providerId",
+          "modelId",
+          "name",
+          "percent"
+        ],
+        "properties": {
+          "providerId": {
+            "type": "string"
+          },
+          "modelId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "percent": {
+            "type": "integer",
+            "description": "实际开始后台压缩的位置，占该模型上下文窗口的百分比，四舍五入取整。"
+          }
+        }
       },
       "CompactionPreference": {
         "type": "object",

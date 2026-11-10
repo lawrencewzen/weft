@@ -494,3 +494,63 @@ test('schedule dialog: popup flips above the trigger when there is no room below
   expect(Math.abs(p.x - t.x)).toBeLessThanOrEqual(2);
   expectClean(state);
 });
+
+function parseRgb(css) {
+  const m = css.match(/rgba?\(([^)]+)\)/);
+  if (!m) throw new Error(`unparsable color: ${css}`);
+  return m[1].split(/[,\s/]+/).filter(Boolean).slice(0, 3).map(Number);
+}
+function luminance([r, g, b]) {
+  const f = (v) => {
+    const c = v / 255;
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  };
+  return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+}
+async function contrastOf(locator) {
+  // Computed colors may be serialised as oklch()/color-mix(); normalise to sRGB through a canvas.
+  const [fg, bg] = await locator.evaluate((el) => {
+    const toRgb = (c) => {
+      const ctx = document.createElement('canvas').getContext('2d', { willReadFrequently: true });
+      ctx.canvas.width = ctx.canvas.height = 1;
+      ctx.fillStyle = c;
+      ctx.fillRect(0, 0, 1, 1);
+      const d = ctx.getImageData(0, 0, 1, 1).data;
+      return `rgb(${d[0]}, ${d[1]}, ${d[2]})`;
+    };
+    const cs = getComputedStyle(el);
+    return [toRgb(cs.color), toRgb(cs.backgroundColor)];
+  });
+  const [l1, l2] = [luminance(parseRgb(fg)), luminance(parseRgb(bg))].sort((a, b) => b - a);
+  return (l1 + 0.05) / (l2 + 0.05);
+}
+
+// claude-light is excluded: its own --accent/--on-accent pair is 4.1:1 (theme palette, affects every primary button).
+for (const theme of ['white-light', 'white-dark', 'claude-dark']) {
+  test(`schedule dialog: selected weekday chip and selected date keep contrast >= 4.5 (${theme})`, async ({ page }) => {
+    const state = await openProto(page);
+    await page.evaluate((t) => document.documentElement.setAttribute('data-theme', t), theme);
+    await page.getByTestId('next-schedules').click();
+    await page.getByTestId('next-schedules-new').click();
+    await expect(page.getByTestId('next-schedule-dialog')).toBeVisible();
+
+    await page.getByTestId('next-schedule-rule-weekly').click();
+    const chip = page.locator('.schedule-day-chip.is-active').first();
+    await expect(chip).toBeVisible();
+    expect(await contrastOf(chip)).toBeGreaterThanOrEqual(4.5);
+
+    // Hover keeps contrast and stays distinct from an unselected chip.
+    await chip.hover();
+    expect(await contrastOf(chip)).toBeGreaterThanOrEqual(4.5);
+    const bgOf = (l) => l.evaluate((el) => getComputedStyle(el).backgroundColor);
+    expect(await bgOf(chip)).not.toBe(await bgOf(page.locator('.schedule-day-chip:not(.is-active)').first()));
+
+    await page.getByTestId('next-schedule-rule-once').click();
+    await page.getByTestId('next-schedule-once-date').click();
+    const selected = page.getByTestId('next-schedule-once-date-popup').locator('.date-picker-cell.is-selected');
+    await expect(selected).toBeVisible();
+    expect(await contrastOf(selected)).toBeGreaterThanOrEqual(4.5);
+
+    expectClean(state);
+  });
+}

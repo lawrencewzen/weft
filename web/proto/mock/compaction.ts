@@ -34,3 +34,27 @@ export function compactionNote(id: string, before: number): MockNote {
     detailI18n: { zh: detailZh, en: detailEn },
   };
 }
+
+export type MockEffectiveModel = { providerId: string; modelId: string; name: string; percent: number };
+
+/** Same formula as src/kernel/compaction-settings.mjs (reserve, 5% margin, background start). */
+export function mockEffectiveTriggers(
+  providers: Array<{ id: string; models: Array<{ id: string; name: string; enabled: boolean; contextWindow: number | null }> }>,
+  percent: number,
+): MockEffectiveModel[] {
+  const out: MockEffectiveModel[] = [];
+  for (const provider of providers) {
+    for (const model of provider.models) {
+      const w = model.contextWindow;
+      if (!model.enabled || !w || !Number.isInteger(w) || w <= 0) continue;
+      const reserve = Math.max(Math.floor(w * 0.1), Math.min(32000, Math.floor(w * 0.25)));
+      const blocking = w - reserve;
+      const margin = Math.floor(w * 0.05);
+      const background = blocking - margin > 0 ? Math.max(margin, blocking - Math.floor((w * percent) / 100)) : 0;
+      const startPercent = Math.round(((blocking - background) * 100) / w);
+      if (startPercent >= percent) continue;
+      out.push({ providerId: provider.id, modelId: model.id, name: model.name, percent: startPercent });
+    }
+  }
+  return out;
+}
