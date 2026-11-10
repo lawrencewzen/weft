@@ -162,6 +162,17 @@ test('clicking close pops up dialog with tray/quit buttons, checkbox, and remind
   await expect(page.getByTestId('window-close-remember')).toBeVisible();
   await expect(page.getByTestId('window-close-note')).toHaveText('退出后定时任务不会执行。');
 
+  // Note is located above the bottom actions row
+  const noteBox = await box(page.getByTestId('window-close-note'));
+  const actionsBox = await box(page.locator('.window-close-actions'));
+  expect(noteBox.y + noteBox.height).toBeLessThanOrEqual(actionsBox.y);
+
+  // In normal close mode: secondary on left (退出 Weft), primary on right (缩到托盘)
+  const btns = dialog.locator('.window-close-btns button');
+  expect(await btns.nth(0).getAttribute('data-testid')).toBe('window-close-quit');
+  expect(await btns.nth(1).getAttribute('data-testid')).toBe('window-close-tray');
+  await expect(btns.nth(1)).toHaveClass(/p/);
+
   // Cancel via Esc
   await page.keyboard.press('Escape');
   await expect(dialog).toHaveCount(0);
@@ -266,6 +277,12 @@ test('confirm-quit simulated via window.__protoShell opens dialog with quit focu
   await expect(dialog).toBeVisible();
   await expect(page.getByTestId('window-close-remember')).toHaveCount(0);
   await expect(page.getByTestId('window-close-note')).toHaveText('退出后定时任务不会执行。');
+
+  // In confirm-quit mode: secondary on left (缩到托盘), primary on right (退出 Weft)
+  const btns = dialog.locator('.window-close-btns button');
+  expect(await btns.nth(0).getAttribute('data-testid')).toBe('window-close-tray');
+  expect(await btns.nth(1).getAttribute('data-testid')).toBe('window-close-quit');
+  await expect(btns.nth(1)).toHaveClass(/p/);
 
   // Focused element is the quit button
   const isQuitFocused = await page.evaluate(() => {

@@ -6,7 +6,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { applyDocumentPrefs, toggleAppearance, watchSystemAppearance } from '../data/prefs';
-import { resetCloseActionForTesting, setCachedCloseAction } from '../data/shellExit';
+import { resetCloseActionForTesting } from '../data/shellExit';
 import { WindowControls } from './WindowControls';
 
 const LIGHT = 'theme:#fcfcfc,#1f1f1f,#6e6e6e,#f3f3f3,#b94642,#1a1a1a,0.9';
@@ -18,6 +18,7 @@ describe('WindowControls', () => {
   let root: Root;
   let host: HTMLDivElement;
   const posted: string[] = [];
+  const webviewListeners = new Set<(ev: { data: unknown }) => void>();
 
   beforeEach(() => {
     (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -25,7 +26,18 @@ describe('WindowControls', () => {
     document.body.appendChild(host);
     root = createRoot(host);
     posted.length = 0;
-    (window as unknown as { chrome?: unknown }).chrome = { webview: { postMessage: (m: string) => posted.push(m) } };
+    webviewListeners.clear();
+    (window as unknown as { chrome?: unknown }).chrome = {
+      webview: {
+        postMessage: (m: string) => posted.push(m),
+        addEventListener: (type: string, fn: (ev: { data: unknown }) => void) => {
+          if (type === 'message') webviewListeners.add(fn);
+        },
+        removeEventListener: (type: string, fn: (ev: { data: unknown }) => void) => {
+          if (type === 'message') webviewListeners.delete(fn);
+        },
+      },
+    };
     resetCloseActionForTesting('ask');
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: true,
@@ -41,8 +53,6 @@ describe('WindowControls', () => {
     delete document.documentElement.dataset.desktopShell;
     delete document.documentElement.dataset.windowMaximized;
     delete (window as unknown as { chrome?: unknown }).chrome;
-    delete (window as unknown as { __protoShell?: unknown }).__protoShell;
-    delete (window as unknown as { __protoShellMessages?: unknown }).__protoShellMessages;
     resetCloseActionForTesting('ask');
     vi.restoreAllMocks();
   });
@@ -84,6 +94,12 @@ describe('WindowControls', () => {
     expect(host.querySelector('[data-testid=window-close-quit]')).not.toBeNull();
     expect(host.querySelector('[data-testid=window-close-remember]')).not.toBeNull();
     expect(host.querySelector('[data-testid=window-close-note]')?.textContent).toContain('退出后定时任务不会执行。');
+
+    // Button order in normal mode: quit on left (secondary), tray on right (primary & focused)
+    const btns = dialog?.querySelectorAll('.window-close-btns button');
+    expect(btns?.[0].getAttribute('data-testid')).toBe('window-close-quit');
+    expect(btns?.[1].getAttribute('data-testid')).toBe('window-close-tray');
+    expect(btns?.[1].classList.contains('p')).toBe(true);
 
     // Click cancel button
     const cancelBtn = host.querySelector<HTMLButtonElement>('[data-testid=window-close-cancel]')!;
@@ -148,22 +164,25 @@ describe('WindowControls', () => {
     expect(host.querySelector('[data-testid=window-close-dialog]')).toBeNull();
   });
 
-  it('simulating confirm-quit opens dialog with quit focused and hides remember checkbox', async () => {
+  it('receiving confirm-quit via webview opens dialog with quit focused, on right as primary, and hides remember checkbox', async () => {
     document.documentElement.dataset.desktopShell = '1';
     await act(async () => root.render(<WindowControls lang="zh" />));
 
-    const protoShell = (window as unknown as { __protoShell?: (action: string) => void }).__protoShell;
-    expect(typeof protoShell).toBe('function');
-
     await act(async () => {
-      protoShell!('confirm-quit');
+      webviewListeners.forEach((l) => l({ data: 'confirm-quit' }));
     });
 
     const dialog = host.querySelector('[data-testid=window-close-dialog]');
     expect(dialog).not.toBeNull();
     // Remember checkbox is NOT shown
     expect(host.querySelector('[data-testid=window-close-remember]')).toBeNull();
-    // Default focus is on quit button
+
+    // Button order in confirm-quit mode: tray on left, quit on right (primary & focused)
+    const btns = dialog?.querySelectorAll('.window-close-btns button');
+    expect(btns?.[0].getAttribute('data-testid')).toBe('window-close-tray');
+    expect(btns?.[1].getAttribute('data-testid')).toBe('window-close-quit');
+    expect(btns?.[1].classList.contains('p')).toBe(true);
+
     const quitBtn = host.querySelector<HTMLButtonElement>('[data-testid=window-close-quit]')!;
     expect(document.activeElement).toBe(quitBtn);
 
@@ -172,21 +191,6 @@ describe('WindowControls', () => {
       quitBtn.click();
     });
     expect(posted).toEqual(['quit']);
-  });
-
-  it('records posted messages to window.__protoShellMessages', async () => {
-    document.documentElement.dataset.desktopShell = '1';
-    await act(async () => root.render(<WindowControls lang="en" />));
-    setCachedCloseAction('quit');
-
-    await act(async () => {
-      host.querySelector<HTMLButtonElement>('[data-testid=window-minimize]')!.click();
-      host.querySelector<HTMLButtonElement>('[data-testid=window-close]')!.click();
-    });
-
-    const msgs = (window as unknown as { __protoShellMessages?: string[] }).__protoShellMessages;
-    expect(msgs).toContain('minimize');
-    expect(msgs).toContain('quit');
   });
 
   describe('theme report (real themes.css, real prefs)', () => {

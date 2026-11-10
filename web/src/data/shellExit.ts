@@ -1,23 +1,13 @@
 import { getSettings, putCloseAction, type CloseAction } from './api';
 
 let cachedCloseAction: CloseAction = 'ask';
-const subscribers = new Set<(action: CloseAction) => void>();
 
 export function getCachedCloseAction(): CloseAction {
   return cachedCloseAction;
 }
 
 export function setCachedCloseAction(action: CloseAction): void {
-  if (cachedCloseAction === action) return;
   cachedCloseAction = action;
-  subscribers.forEach((fn) => fn(action));
-}
-
-export function subscribeCloseAction(fn: (action: CloseAction) => void): () => void {
-  subscribers.add(fn);
-  return () => {
-    subscribers.delete(fn);
-  };
 }
 
 export async function fetchCloseAction(): Promise<CloseAction> {

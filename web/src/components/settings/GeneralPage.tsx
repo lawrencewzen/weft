@@ -3,7 +3,6 @@ import { getSettings, putCompactionTrigger, type CloseAction } from '../../data/
 import {
   getCachedCloseAction,
   setCachedCloseAction,
-  subscribeCloseAction,
   updateCloseAction,
 } from '../../data/shellExit';
 import { getPreferredLang, setPreferredLang, type Lang } from '../../data/lang';
@@ -93,12 +92,8 @@ export function GeneralPage({ lang }: Props) {
         }
       })
       .catch(() => {});
-    const unsub = subscribeCloseAction((action) => {
-      if (alive) setCloseAction(action);
-    });
     return () => {
       alive = false;
-      unsub();
     };
   }, []);
 

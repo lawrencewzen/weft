@@ -47,7 +47,7 @@ export function WindowCloseDialog({ lang, isConfirmQuit, onCancel, onAction }: P
       onClick={handleOverlayClick}
     >
       <div
-        className="modal-dialog window-close-dialog"
+        className="modal-dialog confirm-dialog window-close-dialog"
         role="dialog"
         aria-modal="true"
         aria-labelledby="window-close-title"
@@ -67,41 +67,66 @@ export function WindowCloseDialog({ lang, isConfirmQuit, onCancel, onAction }: P
           </button>
         </h3>
 
-        {!isConfirmQuit ? (
-          <label className="ns-chk window-close-remember">
-            <input
-              type="checkbox"
-              data-testid="window-close-remember"
-              checked={remember}
-              onChange={(e) => setRemember(e.target.checked)}
-            />
-            <span>{t(lang, 'window_close_remember')}</span>
-          </label>
-        ) : null}
-
-        <div className="modal-actions">
-          <button
-            type="button"
-            ref={trayBtnRef}
-            className={`btn${isConfirmQuit ? '' : ' p'}`}
-            data-testid="window-close-tray"
-            onClick={() => onAction('tray', remember)}
-          >
-            {t(lang, 'window_close_tray')}
-          </button>
-          <button
-            type="button"
-            ref={quitBtnRef}
-            className={`btn${isConfirmQuit ? ' p' : ''}`}
-            data-testid="window-close-quit"
-            onClick={() => onAction('quit', remember)}
-          >
-            {t(lang, 'window_close_quit')}
-          </button>
-        </div>
-
-        <div className="window-close-note" data-testid="window-close-note">
+        <p className="confirm-message window-close-note" data-testid="window-close-note">
           {t(lang, 'window_close_quit_note')}
+        </p>
+
+        <div className="modal-actions window-close-actions">
+          {!isConfirmQuit ? (
+            <label className="ns-chk window-close-remember">
+              <input
+                type="checkbox"
+                data-testid="window-close-remember"
+                checked={remember}
+                onChange={(e) => setRemember(e.target.checked)}
+              />
+              <span>{t(lang, 'window_close_remember')}</span>
+            </label>
+          ) : null}
+
+          <div className="window-close-btns">
+            {isConfirmQuit ? (
+              <>
+                <button
+                  type="button"
+                  className="btn"
+                  data-testid="window-close-tray"
+                  onClick={() => onAction('tray', remember)}
+                >
+                  {t(lang, 'window_close_tray')}
+                </button>
+                <button
+                  type="button"
+                  ref={quitBtnRef}
+                  className="btn p"
+                  data-testid="window-close-quit"
+                  onClick={() => onAction('quit', remember)}
+                >
+                  {t(lang, 'window_close_quit')}
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  className="btn"
+                  data-testid="window-close-quit"
+                  onClick={() => onAction('quit', remember)}
+                >
+                  {t(lang, 'window_close_quit')}
+                </button>
+                <button
+                  type="button"
+                  ref={trayBtnRef}
+                  className="btn p"
+                  data-testid="window-close-tray"
+                  onClick={() => onAction('tray', remember)}
+                >
+                  {t(lang, 'window_close_tray')}
+                </button>
+              </>
+            )}
+          </div>
         </div>
       </div>
     </div>

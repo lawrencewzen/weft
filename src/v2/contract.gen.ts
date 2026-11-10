@@ -45,15 +45,18 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * 读取压缩触发点
-         * @description 全局一个值，存在现有 settings 里。缺省或旧数据没有该字段时为 80。
-         *     改完不必重启：下一次官方压缩判断读取当时的 settings。
+         * 读取全局设置
+         * @description 读取全局设置，包含自动压缩触发点（compaction.triggerPercent，缺省或旧数据为 80）与 Windows 桌面壳关闭窗口行为（closeAction: ask / tray / quit，缺省为 ask）。
+         *     改完不必重启：下一次官方压缩判断与窗口关闭读取当时的 settings。
          */
         get: operations["getSettings"];
         /**
-         * 设置压缩触发点
-         * @description `triggerPercent` 必须是 60 到 90 的整数。缺字段不改现有值。非法返回 400。
-         *     写入后下一次判断即用新值，不重启进程。
+         * 修改全局设置
+         * @description 修改全局设置。可按需提供 compaction 或 closeAction。
+         *     `compaction.triggerPercent` 必须是 60 到 90 的整数。
+         *     `closeAction` 为 ask（询问）、tray（缩到托盘）或 quit（退出 Weft）。
+         *     缺字段不改现有值。非法返回 400。
+         *     写入后即刻生效，不重启进程。
          */
         put: operations["putSettings"];
         post?: never;

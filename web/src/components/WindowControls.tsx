@@ -6,7 +6,6 @@ import { readUiZoom } from '../data/uiZoom';
 import {
   fetchCloseAction,
   getCachedCloseAction,
-  subscribeCloseAction,
   updateCloseAction,
 } from '../data/shellExit';
 import { WindowCloseDialog } from './WindowCloseDialog';
@@ -56,25 +55,21 @@ function useShellState(): { shell: boolean; maximized: boolean } {
   return state;
 }
 
-if (typeof window !== 'undefined') {
-  const protoWin = window as unknown as { __protoShellMessages?: string[] };
-  if (!Array.isArray(protoWin.__protoShellMessages)) {
-    protoWin.__protoShellMessages = [];
-  }
+interface ChromeWebView {
+  postMessage(msg: string): void;
+  addEventListener(type: string, listener: (ev: { data: unknown }) => void): void;
+  removeEventListener?(type: string, listener: (ev: { data: unknown }) => void): void;
+}
+
+function getWebView(): ChromeWebView | null {
+  if (typeof window === 'undefined') return null;
+  const webview = (window as unknown as { chrome?: { webview?: ChromeWebView } })?.chrome?.webview;
+  return webview ?? null;
 }
 
 export function postRaw(msg: string): void {
-  if (typeof window !== 'undefined') {
-    const protoWin = window as unknown as {
-      __protoShellMessages?: string[];
-      chrome?: { webview?: { postMessage(msg: string): void } };
-    };
-    if (!Array.isArray(protoWin.__protoShellMessages)) {
-      protoWin.__protoShellMessages = [];
-    }
-    protoWin.__protoShellMessages.push(msg);
-    protoWin.chrome?.webview?.postMessage(msg);
-  }
+  const webview = getWebView();
+  webview?.postMessage(msg);
 }
 
 /**
@@ -128,48 +123,23 @@ export function WindowControls({ lang }: { lang: Lang }) {
   useEffect(() => {
     if (!shell) return;
     void fetchCloseAction();
-    return subscribeCloseAction(() => {});
   }, [shell]);
 
   useEffect(() => {
     if (!shell) return;
 
-    const triggerConfirmQuit = () => {
-      setDialogMode('confirm-quit');
-    };
+    const webview = getWebView();
+    if (!webview) return;
 
-    // Prototype simulation hook: window.__protoShell('confirm-quit')
-    (window as unknown as { __protoShell?: (action: string) => void }).__protoShell = (action: string) => {
-      if (action === 'confirm-quit') {
-        triggerConfirmQuit();
+    const onMessage = (event: { data: unknown }) => {
+      if (event.data === 'confirm-quit') {
+        setDialogMode('confirm-quit');
       }
     };
 
-    const handleMsg = (event: MessageEvent | { data: unknown }) => {
-      const data = (event as { data: unknown })?.data;
-      if (
-        data === 'confirm-quit' ||
-        (typeof data === 'object' && data !== null && (data as { type?: unknown }).type === 'confirm-quit')
-      ) {
-        triggerConfirmQuit();
-      }
-    };
-
-    const webview = (window as unknown as {
-      chrome?: {
-        webview?: {
-          addEventListener(type: string, listener: typeof handleMsg): void;
-          removeEventListener?(type: string, listener: typeof handleMsg): void;
-        };
-      };
-    }).chrome?.webview;
-
-    webview?.addEventListener?.('message', handleMsg);
-    window.addEventListener('message', handleMsg);
-
+    webview.addEventListener('message', onMessage);
     return () => {
-      webview?.removeEventListener?.('message', handleMsg);
-      window.removeEventListener('message', handleMsg);
+      webview.removeEventListener?.('message', onMessage);
     };
   }, [shell]);
 

@@ -725,21 +725,39 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.65; backgrou
   color: var(--text-secondary);
 }
 .window-close-dialog {
-  width: 400px;
+  width: 440px;
   max-width: 92vw;
   color: var(--text-primary);
 }
-.window-close-remember {
-  user-select: none;
-  cursor: pointer;
-  margin: 2px 0 4px;
-  font-size: var(--fs-ui);
-}
 .window-close-note {
-  font-size: var(--fs-caption);
   color: var(--text-muted);
-  line-height: 1.45;
-  margin-top: 4px;
+}
+.window-close-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0;
+}
+.window-close-remember {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fs-ui);
+  color: var(--text-secondary);
+  cursor: pointer;
+  user-select: none;
+  margin: 0;
+  white-space: nowrap;
+}
+.window-close-remember input {
+  margin: 0;
+}
+.window-close-btns {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
 }
 .btn.p { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
 /* .btn:hover 的浅灰底写在后面、优先级相同，会把主按钮悬停时刷成「浅灰底白字」，这里压回去。 */
