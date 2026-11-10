@@ -21,6 +21,10 @@ export function homePath(): string {
   return '/';
 }
 
+export function schedulesPath(): string {
+  return '/schedules';
+}
+
 export function settingsPath(page: SettingsPage = 'general'): string {
   return `/settings/${page}`;
 }

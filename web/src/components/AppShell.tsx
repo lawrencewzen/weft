@@ -37,6 +37,7 @@ import type { AppRoute } from '../route';
 import { CenterPane } from './CenterPane';
 import { ConfirmDialog, type ConfirmOpts } from './ConfirmDialog';
 import { RightPane } from './RightPane';
+import { SchedulesPane } from './schedules/SchedulesPane';
 import { SettingsOverlay } from './settings/SettingsOverlay';
 import type { AboutService } from './settings/AboutPage';
 import { Sidebar } from './Sidebar';
@@ -353,6 +354,7 @@ function AppShellLayout({
         activeConversationId={activeConversationId}
         activeAgentId={activeAgentId}
         draftWorkspaceId={draftWorkspaceId}
+        isSchedulesActive={route.name === 'schedules'}
         onToast={onToast}
         onConfirm={askConfirm}
         onRemoveWorkspace={onRemoveWorkspace}
@@ -369,19 +371,23 @@ function AppShellLayout({
           writeLeftWidth(LEFT_W_DEFAULT);
         }}
       />
-      <CenterPane
-        // 草稿页和对话页用不同的 key：从对话页切回草稿页时重新挂载，
-        // 草稿里记住的“已创建对话”（useDraftSend）只在这一次草稿访问内有效。
-        key={isDraftRoute ? 'draft' : 'conversation'}
-        cid={activeConversationId}
-        workspaceId={draftWorkspaceId}
-        workspace={workspace || null}
-        isDraft={isDraftRoute}
-        maximized={maximized}
-        lang={lang}
-        demo={demo}
-        onNewWorkspace={handleNewWorkspace}
-      />
+      {route.name === 'schedules' ? (
+        <SchedulesPane lang={lang} onToast={onToast} onConfirm={askConfirm} />
+      ) : (
+        <CenterPane
+          // 草稿页和对话页用不同的 key：从对话页切回草稿页时重新挂载，
+          // 草稿里记住的“已创建对话”（useDraftSend）只在这一次草稿访问内有效。
+          key={isDraftRoute ? 'draft' : 'conversation'}
+          cid={activeConversationId}
+          workspaceId={draftWorkspaceId}
+          workspace={workspace || null}
+          isDraft={isDraftRoute}
+          maximized={maximized}
+          lang={lang}
+          demo={demo}
+          onNewWorkspace={handleNewWorkspace}
+        />
+      )}
       <div
         className="col-divider"
         data-testid="next-right-divider"

@@ -3,9 +3,10 @@ import { ApiError } from '../data/api';
 import { copyText } from '../data/copyText';
 import type { Lang } from '../data/lang';
 import { readActiveWorkspace, readWorkspaceOpen, writeActiveWorkspace, writeWorkspaceOpen } from '../data/layout';
-import { conversationPath, draftPath, navigate, newChatPath, openSettings } from '../data/nav';
+import { conversationPath, draftPath, navigate, newChatPath, openSettings, schedulesPath } from '../data/nav';
 import { effectiveAppearance, subscribePrefs, toggleAppearance } from '../data/prefs';
 import { useSession } from '../data/session';
+import { useSchedules } from '../data/useSchedules';
 import {
   deleteOpenRecord,
   NO_PROJECT_ID,
@@ -29,6 +30,7 @@ import type { ConfirmOpts } from './ConfirmDialog';
 import { SidebarArchived } from './SidebarArchived';
 import { SidebarConvRow, SidebarGroup } from './SidebarGroup';
 import {
+  CLOCK_ICON,
   EDIT_ICON,
   FOLDER_ICON,
   GEAR_ICON,
@@ -58,6 +60,7 @@ type Props = {
   onRemoveWorkspace: (workspaceId: string) => Promise<void>;
   onNewWorkspace: () => void;
   wsBusy?: boolean;
+  isSchedulesActive?: boolean;
 };
 
 export function Sidebar({
@@ -69,8 +72,10 @@ export function Sidebar({
   onRemoveWorkspace,
   onNewWorkspace,
   wsBusy = false,
+  isSchedulesActive = false,
 }: Props) {
   const { workspaces, groups, chats, archived } = useWorkspaces();
+  const { enabledCount } = useSchedules();
   const { status } = useSession();
   const { showFiles, openInTerminal } = useRightActions();
   const { leftOpen, setLeftOpen } = useLeftPanel();
@@ -289,6 +294,29 @@ export function Sidebar({
           <span className="sb-ic ic" aria-hidden="true">{SEARCH_ICON}</span>
           <span className="sb-row-text">{t(lang, 'search')}</span>
           <span className="sb-kbd kbd" aria-hidden="true">{modKey}K</span>
+        </button>
+
+        <button
+          type="button"
+          className={`sb-row row sb-top-row${isSchedulesActive ? ' sel' : ''}`}
+          data-testid="next-schedules"
+          title={t(lang, 'schedules_nav')}
+          aria-label={t(lang, 'schedules_nav')}
+          onClick={() => {
+            if (collapsed) setLeftOpen(true);
+            navigate(schedulesPath());
+          }}
+        >
+          <span className="sb-ic ic" aria-hidden="true">{CLOCK_ICON}</span>
+          <span className="sb-row-text">{t(lang, 'schedules_nav')}</span>
+          {enabledCount > 0 ? (
+            <span
+              className="sb-count-badge next-schedules-badge"
+              data-testid="next-schedules-count"
+            >
+              {enabledCount}
+            </span>
+          ) : null}
         </button>
 
         <button

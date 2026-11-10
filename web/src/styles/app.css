@@ -329,14 +329,15 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.65; backgrou
   transition: opacity var(--panel-slide-ms) var(--panel-slide-ease);
 }
 .next-shell.left-closed .sb-row-text,
-.next-shell.left-closed .sb-kbd {
+.next-shell.left-closed .sb-kbd,
+.next-shell.left-closed .sb-count-badge {
   opacity: 0;
   pointer-events: none;
 }
 .sb-strip-projects {
   display: none;
   position: absolute;
-  top: 124px;
+  top: 158px;
   left: 8px;
   right: 8px;
   height: 32px;
@@ -357,6 +358,23 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.65; backgrou
 .sb-ic svg, .ic svg { width: 16px; height: 16px; display: block; }
 .sb-kbd, .kbd { margin-left: auto; font-size: var(--fs-xs); color: var(--faint); opacity: 0; transition: opacity .12s; }
 .sb-row:hover .sb-kbd, .sb-row:hover .kbd, .row:hover .kbd, .row:hover .sb-kbd { opacity: 1; }
+.sb-count-badge {
+  margin-left: auto;
+  font-size: var(--fs-xs);
+  line-height: 1;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: var(--hover-a, rgba(128, 128, 128, 0.15));
+  color: var(--mute);
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  min-width: 16px;
+  text-align: center;
+  flex-shrink: 0;
+  transition: opacity var(--panel-slide-ms) var(--panel-slide-ease);
+}
+.sb-row:hover .sb-count-badge { color: var(--ink); }
+.sb-row.sel .sb-count-badge { background: var(--line2); color: var(--ink); }
 
 .sb-add-project { width: 100%; border: none; background: transparent; font: inherit; text-align: left; color: var(--mute); }
 .sb-add-project:hover { color: var(--ink); }

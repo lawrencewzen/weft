@@ -6,6 +6,7 @@ export type AppRoute =
   | { name: 'subagent'; conversationId: string; agentId: string }
   | { name: 'draft'; workspaceId: string }
   | { name: 'new' }
+  | { name: 'schedules' }
   | { name: 'settings'; page: SettingsPage };
 
 function decodePart(raw: string): string {
@@ -42,6 +43,9 @@ export function parseRoute(pathname: string): AppRoute {
   }
   if (trimmed === '/new') {
     return { name: 'new' };
+  }
+  if (trimmed === '/schedules') {
+    return { name: 'schedules' };
   }
   return { name: 'home' };
 }

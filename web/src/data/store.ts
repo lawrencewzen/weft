@@ -35,6 +35,10 @@ export type ResolvedModel = components['schemas']['ResolvedModel'];
 export type Plugin = components['schemas']['Plugin'];
 export type Skill = components['schemas']['Skill'];
 export type GitConnection = components['schemas']['GitConnection'];
+export type Schedule = components['schemas']['Schedule'];
+export type ScheduleRun = components['schemas']['ScheduleRun'];
+export type ScheduleTarget = components['schemas']['ScheduleTarget'];
+export type ScheduleRule = components['schemas']['ScheduleRule'];
 
 type StoredEntity = {
   topic: string;
@@ -110,6 +114,7 @@ export function subagentTopic(cid: string, agentId: string): string {
 export const WORKSPACES_TOPIC = 'workspaces';
 export const PROVIDERS_TOPIC = 'providers';
 export const EXTENSIONS_TOPIC = 'extensions';
+export const SCHEDULES_TOPIC = 'schedules';
 export const PROVIDERS_DEFAULTS_ID = 'self';
 
 export type SessionTopicOpts = {
@@ -127,12 +132,13 @@ export function sessionTopics(
   const opts: SessionTopicOpts = cidOrOpts != null && typeof cidOrOpts === 'object'
     ? cidOrOpts
     : { conversationId: cidOrOpts, ...extra };
-  const topics = [WORKSPACES_TOPIC, PROVIDERS_TOPIC, EXTENSIONS_TOPIC];
+  const topics = [WORKSPACES_TOPIC, PROVIDERS_TOPIC, EXTENSIONS_TOPIC, SCHEDULES_TOPIC];
   const extraTopics = [...new Set((opts.extraTopics || []).filter((topic) => (
     topic
     && topic !== WORKSPACES_TOPIC
     && topic !== PROVIDERS_TOPIC
     && topic !== EXTENSIONS_TOPIC
+    && topic !== SCHEDULES_TOPIC
   )))].sort((a, b) => a.localeCompare(b));
   for (const topic of extraTopics) topics.push(topic);
   const current = opts.conversationId || '';
@@ -170,6 +176,8 @@ export type EntityStore = {
   skill(id: string): Skill | undefined;
   gitConnections(): GitConnection[];
   gitConnection(id: string): GitConnection | undefined;
+  schedules(): Schedule[];
+  schedule(id: string): Schedule | undefined;
   subagents(cid: string): Subagent[];
   subagent(cid: string, agentId: string): Subagent | undefined;
   topicItems(topic: string): ThreadItem[];
@@ -245,6 +253,7 @@ export function createEntityStore(options?: StoreOptions): EntityStore {
     plugins: null as Plugin[] | null,
     skills: null as Skill[] | null,
     gitConnections: null as GitConnection[] | null,
+    schedules: null as Schedule[] | null,
     topicItems: new Map<string, ThreadItem[]>(),
     toolsByTopic: new Map<string, Record<string, ToolCall>>(),
   };
@@ -335,6 +344,8 @@ export function createEntityStore(options?: StoreOptions): EntityStore {
       queryCache.skills = null;
     } else if (rec.entity === 'git_connection') {
       queryCache.gitConnections = null;
+    } else if (rec.entity === 'schedule') {
+      queryCache.schedules = null;
     } else if (rec.entity === 'conversation') {
       queryCache.items.delete(conversationTopic(rec.id));
     }
@@ -749,6 +760,24 @@ export function createEntityStore(options?: StoreOptions): EntityStore {
       const rec = get(EXTENSIONS_TOPIC, 'git_connection', id)
         ?? byEntityId.get(entityIdKey('git_connection', id));
       return rec?.value as GitConnection | undefined;
+    },
+
+    schedules() {
+      if (queryCache.schedules) return queryCache.schedules;
+      const out: Schedule[] = [];
+      for (const rec of entities.values()) {
+        if (rec.topic === SCHEDULES_TOPIC && rec.entity === 'schedule') {
+          out.push(rec.value as unknown as Schedule);
+        }
+      }
+      queryCache.schedules = out;
+      return out;
+    },
+
+    schedule(id) {
+      const rec = get(SCHEDULES_TOPIC, 'schedule', id)
+        ?? byEntityId.get(entityIdKey('schedule', id));
+      return rec?.value as Schedule | undefined;
     },
 
     subagents(cid) {

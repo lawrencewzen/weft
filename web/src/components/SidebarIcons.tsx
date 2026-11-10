@@ -65,3 +65,10 @@ export const SUN_ICON = (
     <path d="M8 1.6v1.6M8 12.8v1.6M1.6 8h1.6M12.8 8h1.6M3.5 3.5l1.1 1.1M11.4 11.4l1.1 1.1M3.5 12.5l1.1-1.1M11.4 4.6l1.1-1.1" />
   </svg>
 );
+
+export const CLOCK_ICON = (
+  <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <circle cx="8" cy="8" r="6" />
+    <path d="M8 4.5v3.8l2.5 1.5" />
+  </svg>
+);

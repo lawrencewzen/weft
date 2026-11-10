@@ -193,3 +193,11 @@ export function conversationEntities(conv: MockConv): TopicEntities {
 export function conversationGroupId(conv: MockConv, toolId: string): string {
   return groupIdOf(conv, toolId);
 }
+
+export function schedulesEntities(db: MockDb): TopicEntities {
+  const out: TopicEntities = [];
+  for (const schedule of db.schedules.values()) {
+    out.push({ entity: 'schedule', id: schedule.id, value: schedule });
+  }
+  return out;
+}
