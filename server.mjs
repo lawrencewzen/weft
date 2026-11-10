@@ -230,6 +230,10 @@ const v2Opts = {
     if (!kernelApi) return { status: 500, body: { error: 'kernel not ready', code: 'E_INTERNAL' } };
     return kernelApi.compact(id, instructions);
   },
+  handoffConversation(id, body) {
+    if (!kernelApi) return { status: 500, body: { error: 'kernel not ready', code: 'E_INTERNAL' } };
+    return kernelApi.handoff(id, body || {});
+  },
   forkConversation(id, body) {
     if (!kernelApi?.forkConversation) {
       return { status: 500, body: { error: 'kernel not ready', code: 'E_INTERNAL' } };

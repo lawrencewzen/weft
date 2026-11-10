@@ -3,7 +3,7 @@
 import { phrase, type Lang } from '../phrases/index.ts';
 import type { components } from '../contract.gen.ts';
 
-export type ToolKind = 'read' | 'write' | 'edit' | 'ls' | 'grep' | 'bash' | 'other';
+export type ToolKind = 'read' | 'write' | 'edit' | 'ls' | 'grep' | 'bash' | 'handoff' | 'other';
 export type ToolStatusBucket = 'running' | 'failed' | 'interrupted' | 'done';
 export type ToolFailureKind = 'none' | 'probe' | 'real';
 
@@ -31,7 +31,7 @@ type ToolGroupSummary = components['schemas']['ToolGroupSummary'];
 type Translate = (key: string, params?: Record<string, unknown>) => string;
 type JsonObject = Record<string, unknown>;
 
-const KINDS = new Set<string>(['read', 'write', 'edit', 'ls', 'grep', 'bash']);
+const KINDS = new Set<string>(['read', 'write', 'edit', 'ls', 'grep', 'bash', 'handoff']);
 const COUNT_KINDS = new Set<string>(['read', 'ls', 'grep', 'other']);
 const CHANGE_KINDS = new Set<string>(['write', 'edit']);
 const PROBE_KINDS = new Set<string>(['read', 'ls', 'grep']);
@@ -41,7 +41,7 @@ const OUTPUT_PREVIEW_LINES = 20;
 export const TOOL_GROUP_PREVIEW = 8;
 export const TOOL_ERROR_PREVIEW_LINES = 8;
 export const TOOL_COMMAND_PREVIEW_LINES = 5;
-export const TOOL_KINDS = ['read', 'write', 'edit', 'ls', 'grep', 'bash'] as const;
+export const TOOL_KINDS = ['read', 'write', 'edit', 'ls', 'grep', 'bash', 'handoff'] as const;
 
 function translator(lang: Lang): Translate {
   return (key, params) => phrase(lang, key, params);

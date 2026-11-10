@@ -651,6 +651,10 @@ export function createV2Handler(opts: {
     id: string,
     instructions?: string,
   ) => Promise<{ status: number; body?: { taskId?: unknown; error?: unknown; code?: unknown } }>;
+  handoffConversation?: (
+    id: string,
+    body: { requestId?: unknown; instructions?: unknown },
+  ) => Promise<{ status: number; body?: { ok?: unknown; error?: unknown; code?: unknown } }>;
   forkConversation?: ForkConversationFn;
 }): V2Handler {
   const { serviceVersion, startedAt, auth, hub } = opts;
@@ -1796,6 +1800,72 @@ export function createV2Handler(opts: {
       return true;
     }
 
+    const handoffMatch = /^\/api\/v2\/conversations\/([^/]+)\/handoff$/.exec(pathname);
+    if (method === 'POST' && handoffMatch) {
+      const id = decodeURIComponent(handoffMatch[1]);
+      const body = await readObjectBody(req, res, pathname, method);
+      if (!body) return true;
+      if (typeof body.requestId !== 'string' || !body.requestId.trim()) {
+        sendV2(res, pathname, method, 400, { error: 'requestId required', code: 'E_BAD_REQUEST' } satisfies V2Error);
+        return true;
+      }
+      if (Object.prototype.hasOwnProperty.call(body, 'instructions') && body.instructions != null) {
+        if (typeof body.instructions !== 'string') {
+          sendV2(res, pathname, method, 400, { error: 'invalid instructions', code: 'E_BAD_REQUEST' } satisfies V2Error);
+          return true;
+        }
+        if (body.instructions.length > 4000) {
+          sendV2(res, pathname, method, 400, { error: 'instructions too long', code: 'E_BAD_REQUEST' } satisfies V2Error);
+          return true;
+        }
+      }
+      if (!opts.handoffConversation) {
+        sendV2(res, pathname, method, 500, { error: 'kernel not ready', code: 'E_INTERNAL' } satisfies V2Error);
+        return true;
+      }
+      const requestId = body.requestId.trim();
+      const instructions = typeof body.instructions === 'string' && body.instructions.trim()
+        ? body.instructions.trim()
+        : undefined;
+      try {
+        const handed = await opts.handoffConversation(id, { requestId, instructions });
+        if (handed.status === 404) {
+          sendV2(res, pathname, method, 404, { error: 'not found', code: 'E_NOT_FOUND' } satisfies V2Error);
+          return true;
+        }
+        if (handed.status === 409) {
+          sendV2(res, pathname, method, 409, { error: 'busy', code: 'E_BUSY' } satisfies V2Error);
+          return true;
+        }
+        if (handed.status === 400) {
+          const message = typeof handed.body?.error === 'string' && handed.body.error
+            ? handed.body.error
+            : 'bad request';
+          sendV2(res, pathname, method, 400, { error: message, code: 'E_BAD_REQUEST' } satisfies V2Error);
+          return true;
+        }
+        if (handed.status !== 202) {
+          const message = typeof handed.body?.error === 'string' && handed.body.error
+            ? handed.body.error
+            : 'handoff failed';
+          const code = typeof handed.body?.code === 'string' && handed.body.code
+            ? handed.body.code
+            : 'E_INTERNAL';
+          sendV2(res, pathname, method, handed.status >= 400 ? handed.status : 500, {
+            error: message,
+            code,
+          } satisfies V2Error);
+          return true;
+        }
+        opts.notifyConversation?.(id);
+        sendV2(res, pathname, method, 202, { ok: true } satisfies components['schemas']['HandoffAccepted']);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'handoff failed';
+        sendV2(res, pathname, method, 500, { error: message, code: 'E_INTERNAL' } satisfies V2Error);
+      }
+      return true;
+    }
+
     const toolOutMatch = /^\/api\/v2\/conversations\/([^/]+)\/tools\/([^/]+)\/output$/.exec(pathname);
     if (method === 'GET' && toolOutMatch) {
       const id = decodeURIComponent(toolOutMatch[1]);
@@ -2031,6 +2101,10 @@ export function createV2Runtime(opts: {
     id: string,
     instructions?: string,
   ) => Promise<{ status: number; body?: { taskId?: unknown; error?: unknown; code?: unknown } }>;
+  handoffConversation?: (
+    id: string,
+    body: { requestId?: unknown; instructions?: unknown },
+  ) => Promise<{ status: number; body?: { ok?: unknown; error?: unknown; code?: unknown } }>;
   forkConversation?: ForkConversationFn;
 }): V2Runtime {
   const pid = opts.pid ?? process.pid;
@@ -2155,6 +2229,7 @@ export function createV2Runtime(opts: {
     getSettings: opts.getSettings,
     putSettings: opts.putSettings,
     compactConversation: opts.compactConversation,
+    handoffConversation: opts.handoffConversation,
     forkConversation: opts.forkConversation,
   });
 

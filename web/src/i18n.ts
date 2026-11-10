@@ -168,6 +168,11 @@ const zh = {
   ctx_percent: '{n}%',
   ctx_compact: '立即压缩',
   compacting_context: '正在压缩上下文',
+  ctx_handoff: '交接到新上下文',
+  pending_handoff: '正在交接到新上下文',
+  handoff_new_context: '新上下文',
+  handoff_details: '交接说明',
+  earlier_context_count: '之前的上下文 · {n} 条',
   compact_trigger_label: '自动压缩触发点',
   compact_trigger_range: '请输入 60 到 90 的整数',
   compact_trigger_save_failed: '保存失败',
@@ -207,6 +212,7 @@ const zh = {
   tool_act_ls: '列出',
   tool_act_grep: '搜索',
   tool_act_bash: '执行',
+  tool_act_handoff: '交接到新上下文',
   tool_act_other: '调用',
   tool_status_failed: '失败',
   tool_status_interrupted: '已中断',
@@ -748,6 +754,11 @@ const en: Record<keyof typeof zh, string> = {
   ctx_percent: '{n}%',
   ctx_compact: 'Compact now',
   compacting_context: 'Compacting context',
+  ctx_handoff: 'Handoff to new context',
+  pending_handoff: 'Handoff to new context in progress...',
+  handoff_new_context: 'New context',
+  handoff_details: 'Handoff notes',
+  earlier_context_count: 'Previous context · {n} items',
   compact_trigger_label: 'Auto-compact at',
   compact_trigger_range: 'Enter a whole number from 60 to 90',
   compact_trigger_save_failed: 'Could not save',
@@ -787,6 +798,7 @@ const en: Record<keyof typeof zh, string> = {
   tool_act_ls: 'List',
   tool_act_grep: 'Search',
   tool_act_bash: 'Run',
+  tool_act_handoff: 'Handoff to new context',
   tool_act_other: 'Call',
   tool_status_failed: 'Failed',
   tool_status_interrupted: 'Interrupted',
@@ -1188,6 +1200,7 @@ export function toolActionLabel(lang: Lang, kind: string): string {
   if (kind === 'ls') return t(lang, 'tool_act_ls');
   if (kind === 'grep') return t(lang, 'tool_act_grep');
   if (kind === 'bash') return t(lang, 'tool_act_bash');
+  if (kind === 'handoff') return t(lang, 'tool_act_handoff');
   return t(lang, 'tool_act_other');
 }
 

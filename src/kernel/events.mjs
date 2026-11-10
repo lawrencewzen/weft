@@ -651,6 +651,19 @@ export function messagesFromEntries(entries) {
       });
       continue;
     }
+    // pi.reset starts the new context. The model sees its user text; the thread
+    // shows a handoff divider at this entry, and the text is the note detail.
+    if (entry?.kind === 'pi.reset') {
+      const detail = textOf(entry.model?.[0]?.content).trim();
+      const note = {
+        id: String(entry.id),
+        role: 'note',
+        kind: 'handoff',
+      };
+      if (detail) note.text = detail;
+      messages.push(note);
+      continue;
+    }
     if (entry?.kind === USER_TO_SUBAGENT_KIND) {
       const data = entry.data && typeof entry.data === 'object' && !Array.isArray(entry.data)
         ? entry.data
