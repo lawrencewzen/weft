@@ -1131,6 +1131,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/conversations/{id}/fork": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 从指定 entry 处分叉新对话
+         * @description 调用 Pi Durable 的 conversation.fork(entryId) 从某条记录处分出一个新对话。
+         *     新对话带着到那里为止的历史，在同一工作区，沿用原对话的模型。
+         *     在助手消息上分叉时 prefill 为 null；在用户消息上分叉时新对话包含该消息之前的内容，prefill 为该消息的文字。
+         */
+        post: operations["forkConversation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/conversations/{id}/tools/{toolId}/output": {
         parameters: {
             query?: never;
@@ -1360,6 +1382,32 @@ export interface components {
              * @constant
              */
             ok: true;
+        };
+        /** @description POST /api/v2/conversations/{id}/fork 的请求体。 */
+        ForkConversationRequest: {
+            /** @description 从哪条记录处分叉 */
+            entryId: string;
+            /** @description 幂等键。缺省时服务端生成。 */
+            requestId?: string;
+        };
+        /** @description 用户消息分叉时填回输入框的内容。 */
+        ForkPrefill: {
+            /** @description 填回输入框的文本 */
+            text: string;
+        };
+        /** @description POST /api/v2/conversations/{id}/fork 成功。 */
+        ForkConversationResponse: {
+            /** @description 新对话 id */
+            conversationId: string;
+            /** @description 填回输入框的内容。助手消息分叉时为 null，用户消息分叉时为 { text }。 */
+            prefill: null | components["schemas"]["ForkPrefill"];
+        };
+        /** @description 分叉来源。 */
+        ForkedFrom: {
+            /** @description 原对话 id */
+            conversationId: string;
+            /** @description 原对话标题 */
+            title: string;
         };
         SubagentMessageAccepted: {
             /** @description 始终为 true。 */
@@ -1612,6 +1660,8 @@ export interface components {
             pastes?: components["schemas"]["ThreadUserPaste"][];
             /** @description 附上的文件。没有则省略。path 相对工作区。 */
             files?: components["schemas"]["ThreadUserFile"][];
+            /** @description 这条消息在 Harness 中的 entry id。不能从这里分叉时为 null。 */
+            entryId?: null | string;
         };
         /** @description 助手回复。空文字的助手消息不进入对话流。 */
         ThreadItemAssistant: {
@@ -1629,6 +1679,8 @@ export interface components {
             streaming: boolean;
             /** @description 最后一条可见回复且 stopReason 为 length 时为 true，客户端显示继续 */
             truncated: boolean;
+            /** @description 这条消息在 Harness 中的 entry id。不能从这里分叉时为 null（例如还在流式输出）。 */
+            entryId?: null | string;
         };
         /** @description 连续工具调用合成的一组。 */
         ThreadItemToolGroup: {
@@ -2037,6 +2089,8 @@ export interface components {
             /** @description 没有子 Agent 时为 null */
             subagents: null | components["schemas"]["SubagentCounts"];
             archived: boolean;
+            /** @description 分叉来源。不是分叉对话时为 null。 */
+            forkedFrom?: null | components["schemas"]["ForkedFrom"];
         };
         /** @description GET /api/v2/workspaces 的响应。 */
         WorkspacesSnapshot: {
@@ -2103,6 +2157,8 @@ export interface components {
              *     只在写入它们的服务进程内存在。
              */
             sends?: components["schemas"]["ConversationSend"][];
+            /** @description 分叉来源。不是分叉对话时为 null。 */
+            forkedFrom?: null | components["schemas"]["ForkedFrom"];
         };
         /** @description 一次发送在对话里的落点，供前端按 requestId 收回乐观上屏的消息。 */
         ConversationSend: {
@@ -6420,6 +6476,78 @@ export interface operations {
             };
             /** @description 官方拒绝（ConversationBusy） */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 客户端错误 */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 服务端错误 */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+        };
+    };
+    forkConversation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 对话 id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ForkConversationRequest"];
+            };
+        };
+        responses: {
+            /** @description 分叉成功 */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ForkConversationResponse"];
+                };
+            };
+            /** @description 请求体无效或 entryId 不存在 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 未授权 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 对话不存在 */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

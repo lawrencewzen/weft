@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent }
 import { AgentsStrip } from './AgentsStrip';
 import { StallStrip } from './StallStrip';
 import { compactConversation, patchConversation, putModelContextWindow, type SendMessageFile, type ThinkingLevel } from '../data/api';
+import { consumeConversationPrefill } from '../data/composerPrefill';
 import {
   IMAGE_MAX_COUNT,
   type ComposerHint,
@@ -71,6 +72,7 @@ type Props = {
   onSent?: () => void;
   queue?: QueueChip[];
   onWithdrawQueue?: (requestId: string) => Promise<unknown>;
+  initialDraft?: string;
 };
 
 const FALLBACK_CONTEXT: ContextUsage = { used: 0, window: 128000, percent: 0, level: 'ok' };
@@ -129,8 +131,12 @@ export function Composer({
   onSent,
   queue = [],
   onWithdrawQueue,
+  initialDraft,
 }: Props) {
-  const [draft, setDraft] = useState('');
+  const [draft, setDraft] = useState(() => {
+    if (initialDraft != null) return initialDraft;
+    return consumeConversationPrefill(conversationId) || '';
+  });
   const [compactBusy, setCompactBusy] = useState(false);
   const [compactRequestError, setCompactRequestError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -222,6 +228,13 @@ export function Composer({
   useEffect(() => {
     resize();
   }, [draft]);
+
+  useEffect(() => {
+    const prefill = consumeConversationPrefill(conversationId);
+    if (prefill != null) {
+      setDraft(prefill);
+    }
+  }, [conversationId]);
 
   useEffect(() => subscribePrefs(() => {
     requestAnimationFrame(resize);

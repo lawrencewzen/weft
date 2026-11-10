@@ -100,8 +100,9 @@ function user(
   id: string,
   text: string,
   pathRefs: { text: string; path: string; line?: number }[] = [],
+  entryId?: string | null,
 ): MockItem {
-  return { kind: 'user', id, text, pathRefs };
+  return { kind: 'user', id, text, pathRefs, entryId: entryId === undefined ? id : entryId };
 }
 
 function assistant(
@@ -110,8 +111,9 @@ function assistant(
   model = 'deepseek-flash',
   pathRefs: { text: string; path: string; line?: number }[] = [],
   truncated = false,
+  entryId?: string | null,
 ): MockItem {
-  return { kind: 'assistant', id, text, pathRefs, model, streaming: false, truncated };
+  return { kind: 'assistant', id, text, pathRefs, model, streaming: false, truncated, entryId: entryId === undefined ? id : entryId };
 }
 
 function group(
