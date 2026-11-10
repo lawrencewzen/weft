@@ -937,13 +937,18 @@ export interface paths {
         get: operations["getConversation"];
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * 删除对话
+         * @description 删除会删掉对话记录和历史，不能恢复，不动工作区文件。
+         *     对话正在运行时返回 409，错误码 E_CONVERSATION_RUNNING。不存在时返回 404。成功返回 204。
+         */
+        delete: operations["deleteConversation"];
         options?: never;
         head?: never;
         /**
-         * 切换对话模型或思考档位
+         * 切换对话模型或思考档位、归档状态
          * @description `model` 为 `{ providerId, modelId }` 时绑定该模型，规则同旧 resolveConversationModelPatch。
-         *     `model` 为 null 时回到默认。`thinkingLevel` 为档位名时写入对话；对当前模型不支持的档位按 clampThinkingLevel 就近处理，响应里的 thinkingLevel 是实际生效值。`thinkingLevel` 为 null 时清除，恢复模型默认。至少要有 model 或 thinkingLevel。运行中也能改，下次提交生效。成功后推送该对话主题的 ConversationView（含 model、thinkingLevel 和 context）。
+         *     `model` 为 null 时回到默认。`thinkingLevel` 为档位名时写入对话；对当前模型不支持的档位按 clampThinkingLevel 就近处理，响应里的 thinkingLevel 是实际生效值。`thinkingLevel` 为 null 时清除，恢复模型默认。`archived` 为布尔值时设置归档状态。至少要有 model、thinkingLevel 或 archived。运行中也能改，下次提交生效。成功后推送该对话主题的 ConversationView（含 model、thinkingLevel 和 context）。
          */
         patch: operations["patchConversation"];
         trace?: never;
@@ -1965,7 +1970,7 @@ export interface components {
         LoginAnswerRequest: {
             value: string;
         };
-        /** @description PATCH /api/v2/conversations/{id} 的请求体。至少包含 model 或 thinkingLevel。 */
+        /** @description PATCH /api/v2/conversations/{id} 的请求体。至少包含 model、thinkingLevel 或 archived。 */
         PatchConversationModelRequest: {
             /** @description 绑定的模型；null 回到默认。可与 thinkingLevel 同时传。 */
             model?: null | components["schemas"]["ResolvedModel"];
@@ -1974,6 +1979,8 @@ export interface components {
              *     当前模型不支持的档位按 clampThinkingLevel 就近处理，响应返回实际生效值。null 清除，恢复模型默认。
              */
             thinkingLevel?: null | components["schemas"]["ThinkingLevel"];
+            /** @description 是否归档。 */
+            archived?: boolean;
         };
         /** @description 侧栏工作区。kind 为 project（项目）或 chat（不选项目的对话目录）。 */
         Workspace: {
@@ -5756,6 +5763,72 @@ export interface operations {
             };
             /** @description 对话不存在 */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 客户端错误 */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 服务端错误 */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+        };
+    };
+    deleteConversation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 对话 id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 已删除 */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 未授权 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 对话不存在 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 对话正在运行（E_CONVERSATION_RUNNING） */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

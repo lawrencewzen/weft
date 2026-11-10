@@ -1,12 +1,14 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   ApiError,
+  archiveConversation,
   ConflictError,
   connectProvider,
   continueRun,
   createConversation,
   createGitConnection,
   createWorkspace,
+  deleteConversation,
   patchConversationModel,
   patchConversationThinkingLevel,
   patchGitConnection,
@@ -506,5 +508,36 @@ describe('api client', () => {
     });
     expect(JSON.parse(String(fetchMock.mock.calls[1][1].body)).token).toBe('glpat-secret');
     expect(JSON.parse(String(fetchMock.mock.calls[2][1].body))).toEqual({ name: 'Home' });
+  });
+
+  it('archives, unarchives, and deletes conversations', async () => {
+    const view = { id: 'c1', title: 'Test chat' };
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse(200, view))
+      .mockResolvedValueOnce(jsonResponse(200, view))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }))
+      .mockResolvedValueOnce(jsonResponse(409, { error: '对话正在运行', code: 'E_CONVERSATION_RUNNING' }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(archiveConversation('c1', true)).resolves.toMatchObject({ id: 'c1' });
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/v2/conversations/c1');
+    expect(fetchMock.mock.calls[0][1].method).toBe('PATCH');
+    expect(JSON.parse(String(fetchMock.mock.calls[0][1].body))).toEqual({ archived: true });
+
+    await expect(archiveConversation('c1', false)).resolves.toMatchObject({ id: 'c1' });
+    expect(fetchMock.mock.calls[1][0]).toBe('/api/v2/conversations/c1');
+    expect(fetchMock.mock.calls[1][1].method).toBe('PATCH');
+    expect(JSON.parse(String(fetchMock.mock.calls[1][1].body))).toEqual({ archived: false });
+
+    await expect(deleteConversation('c1')).resolves.toBeUndefined();
+    expect(fetchMock.mock.calls[2][0]).toBe('/api/v2/conversations/c1');
+    expect(fetchMock.mock.calls[2][1].method).toBe('DELETE');
+
+    await expect(deleteConversation('c1')).rejects.toSatisfy((err: unknown) => {
+      expect(err).toBeInstanceOf(ApiError);
+      expect((err as ApiError).code).toBe('E_CONVERSATION_RUNNING');
+      expect((err as ApiError).status).toBe(409);
+      return true;
+    });
   });
 });

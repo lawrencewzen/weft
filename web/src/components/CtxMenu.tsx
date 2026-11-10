@@ -7,6 +7,7 @@ export type CtxMenuItem =
       sep?: false;
       label: string;
       action: string;
+      title?: string;
       danger?: boolean;
       disabled?: boolean;
       run: () => void;
@@ -66,6 +67,7 @@ export function CtxMenu({ x, y, title, items, onClose }: Props) {
             data-action={item.action}
             role="menuitem"
             disabled={item.disabled}
+            title={item.title}
             onClick={() => {
               if (item.disabled) return;
               onClose();

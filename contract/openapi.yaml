@@ -2832,10 +2832,10 @@ paths:
                 $ref: "#/components/schemas/V2Error"
     patch:
       operationId: patchConversation
-      summary: 切换对话模型或思考档位
+      summary: 切换对话模型或思考档位、归档状态
       description: |
         `model` 为 `{ providerId, modelId }` 时绑定该模型，规则同旧 resolveConversationModelPatch。
-        `model` 为 null 时回到默认。`thinkingLevel` 为档位名时写入对话；对当前模型不支持的档位按 clampThinkingLevel 就近处理，响应里的 thinkingLevel 是实际生效值。`thinkingLevel` 为 null 时清除，恢复模型默认。至少要有 model 或 thinkingLevel。运行中也能改，下次提交生效。成功后推送该对话主题的 ConversationView（含 model、thinkingLevel 和 context）。
+        `model` 为 null 时回到默认。`thinkingLevel` 为档位名时写入对话；对当前模型不支持的档位按 clampThinkingLevel 就近处理，响应里的 thinkingLevel 是实际生效值。`thinkingLevel` 为 null 时清除，恢复模型默认。`archived` 为布尔值时设置归档状态。至少要有 model、thinkingLevel 或 archived。运行中也能改，下次提交生效。成功后推送该对话主题的 ConversationView（含 model、thinkingLevel 和 context）。
       security:
         - bearerAuth: []
         - sessionCookie: []
@@ -2878,6 +2878,55 @@ paths:
                 $ref: "#/components/schemas/V2Error"
         "404":
           description: 对话不存在
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        4XX:
+          description: 客户端错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        5XX:
+          description: 服务端错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+    delete:
+      operationId: deleteConversation
+      summary: 删除对话
+      description: |
+        删除会删掉对话记录和历史，不能恢复，不动工作区文件。
+        对话正在运行时返回 409，错误码 E_CONVERSATION_RUNNING。不存在时返回 404。成功返回 204。
+      security:
+        - bearerAuth: []
+        - sessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: 对话 id
+      responses:
+        "204":
+          description: 已删除
+        "401":
+          description: 未授权
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        "404":
+          description: 对话不存在
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        "409":
+          description: 对话正在运行（E_CONVERSATION_RUNNING）
           content:
             application/json:
               schema:
@@ -5396,8 +5445,11 @@ components:
           oneOf:
             - type: "null"
             - $ref: "#/components/schemas/ThinkingLevel"
+        archived:
+          type: boolean
+          description: 是否归档。
       description: |
-        PATCH /api/v2/conversations/{id} 的请求体。至少包含 model 或 thinkingLevel。
+        PATCH /api/v2/conversations/{id} 的请求体。至少包含 model、thinkingLevel 或 archived。
     Workspace:
       type: object
       additionalProperties: false
