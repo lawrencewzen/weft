@@ -28,7 +28,6 @@ import {
   statusFromSubmission,
   writesFromEntries,
 } from './events.mjs';
-import { latestCallUsage } from './usage.mjs';
 import { createScriptFloorExtension, installDemo } from './faux-script.mjs';
 import { FAUX_MODEL, openKernel } from './index.mjs';
 import { createKernelModels, explicitDemo } from './models.mjs';
@@ -61,11 +60,18 @@ import {
   plainChanges,
   turnChangesItemId,
 } from './turn-changes.mjs';
-import { installUsageExtension } from './usage.mjs';
+import { activeContextUsage, installUsageExtension } from './usage.mjs';
 import { createAntigravityCwdExtension } from './antigravity-cwd.mjs';
 import { createWorkspaceEnv } from './workspace-env.mjs';
 import { createCompactionControl } from './compaction-settings.mjs';
 import { readTriggerPercent } from '../core/settings.mjs';
+import {
+  describeForkPoint,
+  forkError,
+  forkPrefillJson,
+  forkTitle,
+  prefillFromStored,
+} from './fork.mjs';
 
 const DETAIL_CAP = 1024 * 1024;
 
@@ -197,6 +203,7 @@ export async function openConversationKernel({
   const tails = new Map();
   const listeners = new Map();
   const sends = new Map();
+  const forkInflight = new Map();
   const changeCache = new Map();
   const changeGen = new Map();
   const changeInflight = new Map();
@@ -1150,6 +1157,83 @@ export async function openConversationKernel({
     return next;
   }
 
+  async function adoptConversation(fields) {
+    const conv = await store.createConversation(fields);
+    if (agentHost) await agentHost.afterCreate(conv);
+    await attach(conv);
+    return conv;
+  }
+
+  function forkResponse(row, prefill) {
+    const stored = prefill !== undefined ? prefill : prefillFromStored(row?.forkPrefillJson);
+    return {
+      status: 201,
+      body: {
+        conversationId: String(row?.id ?? ''),
+        prefill: stored,
+      },
+    };
+  }
+
+  /**
+   * Fork one Weft conversation at a harness entry. Assistant cuts include that
+   * entry. User cuts stop before it and return its text as prefill; the first
+   * message becomes an empty conversation in the same workspace. Pi Durable
+   * Conversation.fork copies history and the agent as of that entry. No fork
+   * tool is registered for the model.
+   */
+  async function forkConversation(cid, { entryId, requestId, lang } = {}) {
+    const id = typeof cid === 'string' ? cid.trim() : '';
+    const given = typeof requestId === 'string' ? requestId.trim() : '';
+    const key = given ? `${id}\0${given}` : '';
+    if (key) {
+      const pending = forkInflight.get(key);
+      if (pending) return pending;
+    }
+    const run = forkConversationOnce(id, { entryId, requestId: given, lang });
+    if (!key) return run;
+    forkInflight.set(key, run);
+    run.finally(() => {
+      if (forkInflight.get(key) === run) forkInflight.delete(key);
+    });
+    return run;
+  }
+
+  async function forkConversationOnce(id, { entryId, requestId, lang } = {}) {
+    const conv = id ? await store.getConversation(id) : null;
+    if (!conv?.harnessId) return { status: 404, body: { error: 'not found' } };
+    const language = lang === 'en' ? 'en' : 'zh';
+    if (requestId && typeof store.findFork === 'function') {
+      const prior = await store.findFork(conv.id, requestId);
+      if (prior) return forkResponse(prior);
+    }
+    const point = describeForkPoint((await readTranscript(conv.harnessId)).entries, entryId);
+    if (!point.ok) return forkError(point.code, language);
+    const shared = {
+      workspaceId: conv.workspaceId,
+      workspacePath: conv.workspacePath,
+      title: forkTitle(conv.title, language),
+      titleSource: 'user',
+      modelSourceId: conv.modelSourceId,
+      modelId: conv.modelId,
+      thinkingLevel: conv.thinkingLevel,
+      forkedFromId: conv.id,
+      forkedFromTitle: conv.title == null ? '' : String(conv.title),
+      forkRequestId: requestId || null,
+      forkPrefillJson: forkPrefillJson(point.prefill),
+    };
+    let created;
+    if (point.empty) {
+      created = await createConversation(shared);
+    } else {
+      const conversation = await conversationFor(conv);
+      if (!conversation) return { status: 404, body: { error: 'not found' } };
+      const forked = await conversation.fork(point.at, { ownership: { kind: 'ownerless' } }, context);
+      created = await adoptConversation({ ...shared, harnessId: forked.id });
+    }
+    return forkResponse(created, point.prefill);
+  }
+
   return {
     harness,
     context,
@@ -1169,6 +1253,7 @@ export async function openConversationKernel({
       if (agentHost?.reloadPlugins) await agentHost.reloadPlugins();
     },
     createConversation,
+    forkConversation,
     listSubagents(conv) {
       return subagents.listSubagents(conv).then((agents) => agents.map((agent) => {
         const { harnessId, ...rest } = agent;
@@ -1231,10 +1316,11 @@ export async function openConversationKernel({
       const view = await submissionView(conv);
       const status = view.status;
       let messages;
-      // Context percent follows the active transcript. The full history still
-      // holds the pre-compaction call, and that number must not raise the chip.
+      // Context percent follows the active transcript. A call from before the
+      // compaction or reset head measured the prefix that head replaced.
+      // With no later call, estimate the messages the model will see.
       const harnessView = await readView(conv.harnessId);
-      const usage = presentContext(latestCallUsage(harnessView?.entries)).usage;
+      const usage = presentContext(activeContextUsage(harnessView)).usage;
       if (includeMessages) {
         messages = (await readTranscript(conv.harnessId)).messages;
       }

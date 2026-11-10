@@ -63,6 +63,7 @@ function conversation(input: {
   run?: RunState;
   archived?: boolean;
   error?: MockConv['error'];
+  forkFails?: boolean | Bilingual;
 }): MockConv {
   const tools = input.tools || {};
   return {
@@ -91,6 +92,7 @@ function conversation(input: {
     diffs: input.diffs || {},
     subagents: input.subagents || [],
     archived: input.archived ?? false,
+    forkFails: input.forkFails,
     run: null,
     requestRuns: new Map(),
   };
@@ -100,8 +102,9 @@ function user(
   id: string,
   text: string,
   pathRefs: { text: string; path: string; line?: number }[] = [],
+  entryId?: string | null,
 ): MockItem {
-  return { kind: 'user', id, text, pathRefs };
+  return { kind: 'user', id, text, pathRefs, entryId: entryId === undefined ? id : entryId };
 }
 
 function assistant(
@@ -110,8 +113,9 @@ function assistant(
   model = 'deepseek-flash',
   pathRefs: { text: string; path: string; line?: number }[] = [],
   truncated = false,
+  entryId?: string | null,
 ): MockItem {
-  return { kind: 'assistant', id, text, pathRefs, model, streaming: false, truncated };
+  return { kind: 'assistant', id, text, pathRefs, model, streaming: false, truncated, entryId: entryId === undefined ? id : entryId };
 }
 
 function group(
@@ -998,6 +1002,7 @@ function scriptsConversation(now: number): MockConv {
     updatedAt: now - 6 * HOUR,
     used: 9_100,
     status: 'failed',
+    forkFails: { zh: '对话历史已损坏', en: 'Conversation history corrupted' },
     tools: { [bash.id]: bash },
     items: [
       user('scripts-u1', '内网那台 Windows 机器装的是 Node 22，启动脚本要检查一下。'),

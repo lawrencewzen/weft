@@ -6,6 +6,7 @@ import { contextWindowFromEnv } from '../../core/usage.mjs';
 import { changeViews, type KernelChange } from './changes.ts';
 import { contextUsageView } from './context.ts';
 import { conversationStatus, runStateView } from './run.ts';
+import { forkedFromView } from './sidebar.ts';
 import { buildThread, type BuildThreadOptions, type ThreadMessage, type ThreadSubagent, type TurnChangeRecord } from './thread.ts';
 import { outputLineCount, toolOutputText, type ToolLike } from './tools.ts';
 
@@ -39,6 +40,8 @@ export type PresentedConversation = {
   thinkingLevel?: unknown;
   /** Where the conversation's recent sends landed; see `sendsView`. */
   sends?: unknown;
+  /** Stored fork source. Null when this conversation was not forked. */
+  forkedFrom?: unknown;
 };
 
 /** Result of resolveConversationTarget in src/core/model-sources.mjs. */
@@ -164,6 +167,7 @@ export async function conversationSnapshot({
     }),
     itemIds: thread.items.map((item) => item.id),
     sends: sendsView(presented?.sends),
+    forkedFrom: forkedFromView(presented?.forkedFrom),
   };
   return { conversation, items: thread.items, tools: thread.tools };
 }

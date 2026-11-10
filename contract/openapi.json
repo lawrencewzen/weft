@@ -5446,6 +5446,104 @@
         }
       }
     },
+    "/api/v2/conversations/{id}/fork": {
+      "post": {
+        "operationId": "forkConversation",
+        "summary": "从指定 entry 处分叉新对话",
+        "description": "调用 Pi Durable 的 conversation.fork(entryId) 从某条记录处分出一个新对话。\n新对话带着到那里为止的历史，在同一工作区，沿用原对话的模型。\n在助手消息上分叉时 prefill 为 null；在用户消息上分叉时新对话包含该消息之前的内容，prefill 为该消息的文字。\n",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "对话 id"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ForkConversationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "分叉成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForkConversationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "请求体无效或 entryId 不存在",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "未授权",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "对话不存在",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "客户端错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "服务端错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v2/conversations/{id}/tools/{toolId}/output": {
       "get": {
         "operationId": "getToolOutput",
@@ -6243,6 +6341,83 @@
           }
         }
       },
+      "ForkConversationRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "entryId"
+        ],
+        "properties": {
+          "entryId": {
+            "type": "string",
+            "description": "从哪条记录处分叉"
+          },
+          "requestId": {
+            "type": "string",
+            "description": "幂等键。缺省时服务端生成。"
+          }
+        },
+        "description": "POST /api/v2/conversations/{id}/fork 的请求体。"
+      },
+      "ForkPrefill": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "text"
+        ],
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "填回输入框的文本"
+          }
+        },
+        "description": "用户消息分叉时填回输入框的内容。"
+      },
+      "ForkConversationResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "conversationId",
+          "prefill"
+        ],
+        "properties": {
+          "conversationId": {
+            "type": "string",
+            "description": "新对话 id"
+          },
+          "prefill": {
+            "description": "填回输入框的内容。助手消息分叉时为 null，用户消息分叉时为 { text }。",
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ForkPrefill"
+              }
+            ]
+          }
+        },
+        "description": "POST /api/v2/conversations/{id}/fork 成功。"
+      },
+      "ForkedFrom": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "conversationId",
+          "title"
+        ],
+        "properties": {
+          "conversationId": {
+            "type": "string",
+            "description": "原对话 id"
+          },
+          "title": {
+            "type": "string",
+            "description": "原对话标题"
+          }
+        },
+        "description": "分叉来源。"
+      },
       "SubagentMessageAccepted": {
         "type": "object",
         "additionalProperties": false,
@@ -7012,6 +7187,17 @@
             "items": {
               "$ref": "#/components/schemas/ThreadUserFile"
             }
+          },
+          "entryId": {
+            "description": "这条消息在 Harness 中的 entry id。不能从这里分叉时为 null。",
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "string"
+              }
+            ]
           }
         },
         "description": "用户消息。text 只含用户正文，不含粘贴块和附件说明。"
@@ -7055,6 +7241,17 @@
           "truncated": {
             "type": "boolean",
             "description": "最后一条可见回复且 stopReason 为 length 时为 true，客户端显示继续"
+          },
+          "entryId": {
+            "description": "这条消息在 Harness 中的 entry id。不能从这里分叉时为 null（例如还在流式输出）。",
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "string"
+              }
+            ]
           }
         },
         "description": "助手回复。空文字的助手消息不进入对话流。"
@@ -8506,6 +8703,17 @@
           },
           "archived": {
             "type": "boolean"
+          },
+          "forkedFrom": {
+            "description": "分叉来源。不是分叉对话时为 null。",
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ForkedFrom"
+              }
+            ]
           }
         },
         "description": "侧栏对话摘要。"
@@ -8692,6 +8900,17 @@
               "$ref": "#/components/schemas/ConversationSend"
             },
             "description": "本进程内经 POST .../messages 与 .../continue 发出的提交，按先后顺序，最多保留最近 20 条。\n前端用 requestId 找到自己那条乐观上屏的消息落在哪个 entry 上，据此收回。\n还没写进对话的条目带 mode 和 text，供输入框显示排队小条、对话里显示「已插话」。\n只在写入它们的服务进程内存在。\n"
+          },
+          "forkedFrom": {
+            "description": "分叉来源。不是分叉对话时为 null。",
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ForkedFrom"
+              }
+            ]
           }
         },
         "description": "一个对话的视图。摘要字段加上模型、运行状态、上下文和对话流顺序。"

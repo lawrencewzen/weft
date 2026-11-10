@@ -502,6 +502,7 @@ function drainSteers(db: MockDb, conv: MockConv, hub: MockHub, run: RunHandle): 
       id,
       text: steer.text,
       pathRefs: [],
+      entryId: id,
       ...(images ? { images } : {}),
     };
     conv.items.push(item);
@@ -647,6 +648,7 @@ async function streamAssistant(
     model: conv.view.model?.modelId || 'grok-4.6',
     streaming: true,
     truncated: false,
+    entryId: null,
   };
   conv.items.push(live);
   conv.view.itemIds.push(liveId);
@@ -666,14 +668,16 @@ async function streamAssistant(
   conv.items = conv.items.filter((item) => item.id !== liveId);
   conv.view.itemIds = conv.view.itemIds.filter((id) => id !== liveId);
   publishRemove(conv, hub, 'item', liveId);
+  const finalId = nextId(db, 'a');
   const final: ThreadItem = {
     kind: 'assistant',
-    id: nextId(db, 'a'),
+    id: finalId,
     text,
     pathRefs: refsIn(text),
     model: conv.view.model?.modelId || 'grok-4.6',
     streaming: false,
     truncated: false,
+    entryId: finalId,
   };
   conv.items.push(final);
   conv.view.itemIds.push(final.id);
@@ -728,6 +732,7 @@ function finishRun(db: MockDb, conv: MockConv, hub: MockHub): void {
       id,
       text: next.text,
       pathRefs: [],
+      entryId: id,
       ...(images ? { images } : {}),
       ...(files?.length ? { files } : {}),
       ...(pastes?.length ? { pastes } : {}),
@@ -997,6 +1002,7 @@ export function sendMessage(
     id,
     text,
     pathRefs: [],
+    entryId: id,
     ...(threadImages ? { images: threadImages } : {}),
     ...(threadFiles?.length ? { files: threadFiles } : {}),
     ...(threadPastes?.length ? { pastes: threadPastes } : {}),
@@ -1068,14 +1074,16 @@ export function stopConversation(db: MockDb, conv: MockConv, hub: MockHub): void
     conv.view.itemIds = conv.view.itemIds.filter((id) => id !== live.id);
     publishRemove(conv, hub, 'item', live.id);
     if (live.text.trim()) {
+      const finalId = nextId(db, 'a');
       const final: ThreadItem = {
         kind: 'assistant',
-        id: nextId(db, 'a'),
+        id: finalId,
         text: live.text,
         pathRefs: refsIn(live.text),
         model: live.model || conv.view.model?.modelId || 'grok-4.6',
         streaming: false,
         truncated: false,
+        entryId: finalId,
       };
       conv.items.push(final);
       conv.view.itemIds.push(final.id);

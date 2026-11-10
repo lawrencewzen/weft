@@ -54,15 +54,37 @@ export function useStreamingThrottle(text: string, streaming: boolean, intervalM
   return streaming ? throttledText : text;
 }
 
+const FORK_ICON = (
+  <svg
+    width="14"
+    height="14"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.8"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
+    <circle cx="12" cy="18" r="3" />
+    <circle cx="6" cy="6" r="3" />
+    <circle cx="18" cy="6" r="3" />
+    <path d="M18 9v2c0 .6-.4 1-1 1H7c-.6 0-1-.4-1-1V9" />
+    <path d="M12 12v3" />
+  </svg>
+);
+
 type Props = {
   item: Item;
   lang: Lang;
   running?: boolean;
   attribution?: { brand: string | null; displayName: string } | null;
+  onFork?: (entryId: string) => void;
 };
 
-export function AssistantMessage({ item, lang, running = false, attribution = null }: Props) {
+export function AssistantMessage({ item, lang, running = false, attribution = null, onFork }: Props) {
   const markdownText = useStreamingThrottle(item.text, Boolean(item.streaming), 100);
+  const canFork = Boolean(item.entryId) && !item.streaming;
 
   return (
     <div
@@ -92,6 +114,20 @@ export function AssistantMessage({ item, lang, running = false, attribution = nu
       {item.truncated && !running ? (
         <div className="msg-truncated" data-testid="next-truncated">
           <span>{t(lang, 'output_truncated')}</span>
+        </div>
+      ) : null}
+      {canFork ? (
+        <div className="msg-fork-wrap msg-fork-agent">
+          <button
+            type="button"
+            className="msg-fork-btn"
+            data-testid="next-msg-fork"
+            title={t(lang, 'fork_from_here')}
+            aria-label={t(lang, 'fork_from_here')}
+            onClick={() => onFork?.(item.entryId!)}
+          >
+            {FORK_ICON}
+          </button>
         </div>
       ) : null}
     </div>
