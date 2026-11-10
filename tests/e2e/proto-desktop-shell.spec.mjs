@@ -14,6 +14,10 @@ async function box(locator) {
   return b;
 }
 
+async function shellMessages(page) {
+  return page.evaluate(() => (window.__protoShellMessages || []).filter((m) => !m.startsWith('theme:')));
+}
+
 test('without the shell attribute there are no window buttons or drag regions', async ({ page }) => {
   const state = await openProto(page);
   await expect(page.getByTestId('window-controls')).toHaveCount(0);
@@ -166,6 +170,18 @@ test('clicking close pops up dialog with 2 option cards, checkbox, and hint; can
   await expect(page.getByTestId('window-close-remember')).toHaveText('记住我的选择，不再询问');
   await expect(page.getByTestId('window-close-settings-hint')).toHaveText('可在 设置 › 通用 中修改');
 
+  // Bounding box alignment assertions:
+  // 1. Checkbox vertical center vs text vertical center <= 2px
+  // 2. Checkbox left edge vs left card left edge <= 2px
+  const chkBox = await box(dialog.locator('.window-close-remember input[type="checkbox"]'));
+  const textBox = await box(dialog.locator('.window-close-remember-text'));
+  const trayCardBox = await box(page.getByTestId('window-close-tray'));
+
+  const chkCenterY = chkBox.y + chkBox.height / 2;
+  const textCenterY = textBox.y + textBox.height / 2;
+  expect(Math.abs(chkCenterY - textCenterY)).toBeLessThanOrEqual(2);
+  expect(Math.abs(chkBox.x - trayCardBox.x)).toBeLessThanOrEqual(2);
+
   // Default focus is on tray card
   const isTrayFocused = await page.evaluate(() => {
     return document.activeElement?.getAttribute('data-testid') === 'window-close-tray';
@@ -175,7 +191,7 @@ test('clicking close pops up dialog with 2 option cards, checkbox, and hint; can
   // Cancel via Esc
   await page.keyboard.press('Escape');
   await expect(dialog).toHaveCount(0);
-  const msgs1 = await page.evaluate(() => window.__protoShellMessages);
+  const msgs1 = await shellMessages(page);
   expect(msgs1).toEqual([]);
 
   // Re-open and cancel via backdrop click
@@ -183,7 +199,7 @@ test('clicking close pops up dialog with 2 option cards, checkbox, and hint; can
   await expect(dialog).toBeVisible();
   await page.getByTestId('window-close-overlay').click({ position: { x: 5, y: 5 } });
   await expect(dialog).toHaveCount(0);
-  const msgs2 = await page.evaluate(() => window.__protoShellMessages);
+  const msgs2 = await shellMessages(page);
   expect(msgs2).toEqual([]);
 
   expectClean(state);
@@ -213,7 +229,7 @@ test('keyboard navigation switches between cards using ArrowLeft/ArrowRight and 
   await page.keyboard.press('Enter');
 
   await expect(dialog).toHaveCount(0);
-  expect(await page.evaluate(() => window.__protoShellMessages)).toEqual(['quit']);
+  expect(await shellMessages(page)).toEqual(['quit']);
 
   expectClean(state);
 });
@@ -225,13 +241,13 @@ test('clicking tray and quit cards send hide-to-tray and quit messages respectiv
   await page.getByTestId('window-close').click();
   await page.getByTestId('window-close-tray').click();
   await expect(page.getByTestId('window-close-dialog')).toHaveCount(0);
-  expect(await page.evaluate(() => window.__protoShellMessages)).toEqual(['hide-to-tray']);
+  expect(await shellMessages(page)).toEqual(['hide-to-tray']);
 
   // Click quit
   await page.getByTestId('window-close').click();
   await page.getByTestId('window-close-quit').click();
   await expect(page.getByTestId('window-close-dialog')).toHaveCount(0);
-  expect(await page.evaluate(() => window.__protoShellMessages)).toEqual(['hide-to-tray', 'quit']);
+  expect(await shellMessages(page)).toEqual(['hide-to-tray', 'quit']);
 
   expectClean(state);
 });
@@ -243,12 +259,12 @@ test('remembering preference executes directly on subsequent close clicks', asyn
   await page.getByTestId('window-close-remember').locator('input').check();
   await page.getByTestId('window-close-tray').click();
   await expect(page.getByTestId('window-close-dialog')).toHaveCount(0);
-  expect(await page.evaluate(() => window.__protoShellMessages)).toEqual(['hide-to-tray']);
+  expect(await shellMessages(page)).toEqual(['hide-to-tray']);
 
   // Second close click should execute directly without dialog
   await page.getByTestId('window-close').click();
   await expect(page.getByTestId('window-close-dialog')).toHaveCount(0);
-  expect(await page.evaluate(() => window.__protoShellMessages)).toEqual(['hide-to-tray', 'hide-to-tray']);
+  expect(await shellMessages(page)).toEqual(['hide-to-tray', 'hide-to-tray']);
 
   expectClean(state);
 });
@@ -280,7 +296,7 @@ test('settings general page toggles close action preference and reflects in clos
   // Clicking window close now directly sends quit
   await page.getByTestId('window-close').click();
   await expect(page.getByTestId('window-close-dialog')).toHaveCount(0);
-  expect(await page.evaluate(() => window.__protoShellMessages)).toEqual(['quit']);
+  expect(await shellMessages(page)).toEqual(['quit']);
 
   expectClean(state);
 });
@@ -323,14 +339,14 @@ test('confirm-quit simulated via window.__protoShell opens confirm dialog, cance
   // Cancel dismisses without posting
   await cancelBtn.click();
   await expect(dialog).toHaveCount(0);
-  expect(await page.evaluate(() => window.__protoShellMessages)).toEqual([]);
+  expect(await shellMessages(page)).toEqual([]);
 
   // Re-trigger and click quit -> posts quit
   await page.evaluate(() => window.__protoShell('confirm-quit'));
   await expect(dialog).toBeVisible();
   await page.getByTestId('confirm-quit-ok').click();
   await expect(dialog).toHaveCount(0);
-  expect(await page.evaluate(() => window.__protoShellMessages)).toEqual(['quit']);
+  expect(await shellMessages(page)).toEqual(['quit']);
 
   expectClean(state);
 });

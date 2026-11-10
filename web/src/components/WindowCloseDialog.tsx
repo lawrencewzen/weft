@@ -167,14 +167,14 @@ export function WindowCloseDialog({ lang, isConfirmQuit, onCancel, onAction }: P
         </div>
 
         <div className="window-close-footer">
-          <label className="ns-chk window-close-remember">
+          <label className="window-close-remember" data-testid="window-close-remember">
             <input
               type="checkbox"
-              data-testid="window-close-remember"
+              data-testid="window-close-remember-check"
               checked={remember}
               onChange={(e) => setRemember(e.target.checked)}
             />
-            <span>{t(lang, 'window_close_remember')}</span>
+            <span className="window-close-remember-text">{t(lang, 'window_close_remember')}</span>
           </label>
           <span className="window-close-settings-hint" data-testid="window-close-settings-hint">
             {t(lang, 'window_close_settings_hint')}

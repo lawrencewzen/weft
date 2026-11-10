@@ -733,7 +733,7 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.65; backgrou
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
-  margin: 4px 0 2px;
+  margin: 0;
 }
 .window-close-card {
   display: flex;
@@ -792,26 +792,40 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.65; backgrou
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  margin-top: 4px;
+  margin: 0;
 }
 .window-close-remember {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   font-size: var(--fs-sm);
   color: var(--ink);
   cursor: pointer;
   user-select: none;
   margin: 0;
-  white-space: nowrap;
+  padding: 0;
+  line-height: 1;
 }
 .window-close-remember input {
+  width: 14px;
+  height: 14px;
   margin: 0;
+  padding: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+  flex-shrink: 0;
+  display: block;
+}
+.window-close-remember-text {
+  font-size: var(--fs-sm);
+  line-height: 1.4;
+  white-space: nowrap;
 }
 .window-close-settings-hint {
-  font-size: var(--fs-xs, 12px);
+  font-size: var(--fs-sm);
   color: var(--mute);
   white-space: nowrap;
+  line-height: 1.4;
 }
 .btn.p { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
 /* .btn:hover 的浅灰底写在后面、优先级相同，会把主按钮悬停时刷成「浅灰底白字」，这里压回去。 */

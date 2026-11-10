@@ -68,7 +68,7 @@ describe('WindowCloseDialog', () => {
       );
     });
 
-    const chk = host.querySelector<HTMLInputElement>('[data-testid=window-close-remember]');
+    const chk = host.querySelector<HTMLInputElement>('.window-close-remember input');
     expect(chk).not.toBeNull();
     await act(async () => {
       chk?.click();

@@ -184,7 +184,7 @@ describe('WindowControls', () => {
       host.querySelector<HTMLButtonElement>('[data-testid=window-close]')!.click();
     });
 
-    const chk = host.querySelector<HTMLInputElement>('[data-testid=window-close-remember]')!;
+    const chk = host.querySelector<HTMLInputElement>('.window-close-remember input')!;
     await act(async () => {
       chk.click();
     });
