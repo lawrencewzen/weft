@@ -6,7 +6,7 @@ import { Markdown } from './Markdown';
 
 type Item = components['schemas']['ThreadItemSystemNote'];
 
-export function SystemNote({ item, lang = 'zh' }: { item: Item; lang?: Lang }) {
+export function SystemNote({ item, lang }: { item: Item; lang: Lang }) {
   const [expanded, setExpanded] = useState(false);
 
   if (item.noteKind === 'handoff') {

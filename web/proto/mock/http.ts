@@ -1821,7 +1821,10 @@ export function handleMockRequest(
     const conv = getConv(db, decodeURIComponent(handoffMatch[1]));
     if (!conv) return fail(404, lang === 'en' ? 'Conversation not found' : '对话不存在');
     const requestId = typeof body.requestId === 'string' ? body.requestId : '';
-    const result = handoffConversation(db, conv, hub, requestId, lang);
+    const instructions = typeof body.instructions === 'string' && body.instructions.trim()
+      ? body.instructions.trim()
+      : undefined;
+    const result = handoffConversation(db, conv, hub, requestId, lang, instructions);
     if (!result.ok) return fail(result.status, result.error, result.code);
     return accepted({ ok: true });
   }

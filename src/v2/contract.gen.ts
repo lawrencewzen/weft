@@ -1370,6 +1370,8 @@ export interface components {
         HandoffRequest: {
             /** @description 请求幂等 id */
             requestId: string;
+            /** @description 用户希望交接说明侧重什么，由模型据此写交接说明；省略则由模型自己判断。 */
+            instructions?: string;
         };
         HandoffAccepted: {
             /**
@@ -1553,7 +1555,7 @@ export interface components {
             /** @description 所属工具组 id，由组内第一条调用算出 */
             groupId: string;
             /** @enum {string} */
-            kind: "read" | "write" | "edit" | "ls" | "grep" | "bash" | "ask" | "other";
+            kind: "read" | "write" | "edit" | "ls" | "grep" | "bash" | "ask" | "handoff" | "other";
             /** @enum {string} */
             status: "running" | "failed" | "interrupted" | "done";
             heading: {

@@ -1021,6 +1021,36 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.65; backgrou
 .handoff-note[data-kind="correction"] span { display: block; overflow-wrap: anywhere; }
 .handoff-note[data-kind="note"] { align-self: flex-start; }
 
+.thread-earlier-toggle {
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--line2);
+  background: var(--line3);
+  color: var(--mute);
+  font-size: var(--fs-xs);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  margin: 4px 0 8px;
+}
+.thread-earlier-toggle:hover {
+  background: var(--hover);
+  color: var(--ink);
+  border-color: var(--line);
+}
+.thread-earlier-toggle .earlier-chevron {
+  width: 12px;
+  height: 12px;
+  color: var(--faint);
+  transition: transform 0.15s;
+}
+.thread-earlier-toggle .earlier-chevron.is-open {
+  transform: rotate(180deg);
+}
+
 .handoff-divider-container {
   align-self: stretch;
   width: 100%;

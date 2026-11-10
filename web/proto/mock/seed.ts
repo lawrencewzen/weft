@@ -808,7 +808,7 @@ function compactFailedConversation(now: number): MockConv {
 function handoffConversation(now: number): MockConv {
   const tHandoff = tool({
     id: 'handoff-tool-1',
-    kind: 'handoff' as MockTool['kind'],
+    kind: 'handoff',
     status: 'done',
     title: hint('交接到新上下文', 'Handoff to new context'),
   });

@@ -70,7 +70,7 @@ function KindIcon({ kind }: { kind: ToolCall['kind'] }) {
       </svg>
     );
   }
-  if (kind === 'handoff' as ToolCall['kind']) {
+  if (kind === 'handoff') {
     return (
       <svg className="tool-kind-icon icon" viewBox="0 0 24 24" aria-hidden="true">
         <polyline points="17 1 21 5 17 9" />
@@ -210,10 +210,9 @@ export function ToolRow({ tool, lang, onLoadOutput }: Props) {
   const body = fullText ?? (live && live !== '' ? live : tool.output.preview);
   const truncated = fullText == null && tool.output.truncated;
 
-  const isHandoff = tool.kind === ('handoff' as ToolCall['kind']) || tool.heading.title === 'handoff' || tool.heading.title === '交接到新上下文';
-  const toolKind = isHandoff ? ('handoff' as ToolCall['kind']) : tool.kind;
-  const actionLabel = isHandoff ? t(lang, 'tool_act_handoff') : toolActionLabel(lang, tool.kind);
-  const displayTitle = isHandoff && (tool.heading.title === 'handoff' || tool.heading.title === '交接到新上下文') ? '' : tool.heading.title;
+  const isHandoff = tool.kind === 'handoff';
+  const actionLabel = toolActionLabel(lang, tool.kind);
+  const displayTitle = isHandoff ? '' : tool.heading.title;
 
   async function toggle() {
     if (changeKind) {
@@ -240,13 +239,13 @@ export function ToolRow({ tool, lang, onLoadOutput }: Props) {
       <div
         className={rowClass}
         data-testid="next-tool-row"
-        data-tool={toolKind}
+        data-tool={tool.kind}
         data-path={tool.path || ''}
         data-tool-id={tool.id}
         onClick={() => { void toggle(); }}
       >
         <div className="tool-main">
-          <KindIcon kind={toolKind} />
+          <KindIcon kind={tool.kind} />
           <span className="tool-action">{actionLabel}</span>
           {displayTitle ? (
             <span className={pathClass} data-testid="next-tool-row-path">{displayTitle}</span>

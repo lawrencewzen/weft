@@ -786,11 +786,11 @@ export function compactConversation(cid: string): Promise<CompactAccepted> {
   });
 }
 
-export function handoffConversation(cid: string, requestId?: string): Promise<HandoffAccepted> {
+export function handoffConversation(cid: string, requestId?: string, instructions?: string): Promise<HandoffAccepted> {
   const id = requestId ?? randomId();
   return requestJson<HandoffAccepted>(conversationPath(cid, '/handoff'), {
     method: 'POST',
-    body: JSON.stringify({ requestId: id }),
+    body: JSON.stringify({ requestId: id, ...(instructions ? { instructions } : {}) }),
   });
 }
 

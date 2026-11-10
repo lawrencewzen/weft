@@ -275,6 +275,62 @@ export function Thread({
     stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < STICK_PX;
   }
 
+  const [expandedEarlier, setExpandedEarlier] = useState(false);
+  useEffect(() => {
+    setExpandedEarlier(false);
+  }, [conversationId]);
+
+  let lastHandoffIndex = -1;
+  for (let i = items.length - 1; i >= 0; i--) {
+    const item = items[i];
+    if (item.kind === 'system_note' && item.noteKind === 'handoff') {
+      lastHandoffIndex = i;
+      break;
+    }
+  }
+
+  function renderItem(item: ThreadItem) {
+    if (item.kind === 'user') return <UserMessage key={item.id} item={item} lang={lang} conversationId={conversationId} />;
+    if (item.kind === 'assistant') {
+      return (
+        <AssistantMessage
+          key={item.id}
+          item={item}
+          lang={lang}
+          running={running}
+          attribution={modelAttribution(item.model, providers, conversationModel)}
+        />
+      );
+    }
+    if (item.kind === 'tool_group') {
+      return (
+        <ToolGroupItem
+          key={item.id}
+          item={item}
+          toolsById={toolsById}
+          lang={lang}
+          conversationId={conversationId}
+          onLoadOutput={actions.loadToolOutput}
+          onRender={onToolGroupRender}
+        />
+      );
+    }
+    if (item.kind === 'subagent_report') {
+      return (
+        <SubagentReport
+          key={item.id}
+          item={item}
+          lang={lang}
+          conversationId={conversationId}
+        />
+      );
+    }
+    if (item.kind === 'system_note') {
+      return <SystemNote key={item.id} item={item} lang={lang} />;
+    }
+    return null;
+  }
+
   const innerClass = [
     'thread-inner',
     empty ? 'is-empty' : '',
@@ -297,47 +353,30 @@ export function Thread({
             onPickWorkspace={onPickWorkspace}
             onNewWorkspace={onNewWorkspace}
           />
-        ) : items.map((item) => {
-            if (item.kind === 'user') return <UserMessage key={item.id} item={item} lang={lang} conversationId={conversationId} />;
-            if (item.kind === 'assistant') {
-              return (
-                <AssistantMessage
-                  key={item.id}
-                  item={item}
-                  lang={lang}
-                  running={running}
-                  attribution={modelAttribution(item.model, providers, conversationModel)}
-                />
-              );
-            }
-            if (item.kind === 'tool_group') {
-              return (
-                <ToolGroupItem
-                  key={item.id}
-                  item={item}
-                  toolsById={toolsById}
-                  lang={lang}
-                  conversationId={conversationId}
-                  onLoadOutput={actions.loadToolOutput}
-                  onRender={onToolGroupRender}
-                />
-              );
-            }
-            if (item.kind === 'subagent_report') {
-              return (
-                <SubagentReport
-                  key={item.id}
-                  item={item}
-                  lang={lang}
-                  conversationId={conversationId}
-                />
-              );
-            }
-            if (item.kind === 'system_note') {
-              return <SystemNote key={item.id} item={item} lang={lang} />;
-            }
-            return null;
-          })}
+        ) : (
+          <>
+            {lastHandoffIndex > 0 ? (
+              <button
+                type="button"
+                className={`thread-earlier-toggle${expandedEarlier ? ' is-expanded' : ''}`}
+                data-testid="next-thread-earlier-toggle"
+                aria-expanded={expandedEarlier}
+                onClick={() => setExpandedEarlier((v) => !v)}
+              >
+                <svg className={`icon earlier-chevron${expandedEarlier ? ' is-open' : ''}`} viewBox="0 0 24 24" aria-hidden="true">
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+                <span>{t(lang, 'earlier_context_count', { n: lastHandoffIndex })}</span>
+              </button>
+            ) : null}
+            {lastHandoffIndex > 0 && expandedEarlier
+              ? items.slice(0, lastHandoffIndex).map(renderItem)
+              : null}
+            {lastHandoffIndex > 0
+              ? items.slice(lastHandoffIndex).map(renderItem)
+              : items.map(renderItem)}
+          </>
+        )}
         {!empty && changes.length ? (
           <ChangeSummary changes={changes} lang={lang} />
         ) : null}
