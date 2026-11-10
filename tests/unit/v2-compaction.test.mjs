@@ -48,7 +48,7 @@ test('settings trigger percent persists, rejects illegal values, and compact is 
 
     const initial = await v2(srv.base, 'GET', '/api/v2/settings', discovery.token);
     assert.equal(initial.status, 200, initial.text);
-    assert.deepEqual(initial.body, { compaction: { triggerPercent: 80 } });
+    assert.deepEqual(initial.body, { compaction: { triggerPercent: 80 }, closeAction: 'ask' });
     assert.equal(validateResponse('/api/v2/settings', 'GET', 200, initial.body).ok, true);
 
     for (const triggerPercent of [59, 91, 80.5, '80', true]) {
@@ -65,7 +65,7 @@ test('settings trigger percent persists, rejects illegal values, and compact is 
       compaction: { triggerPercent: 70 },
     });
     assert.equal(saved.status, 200, saved.text);
-    assert.deepEqual(saved.body, { compaction: { triggerPercent: 70 } });
+    assert.deepEqual(saved.body, { compaction: { triggerPercent: 70 }, closeAction: 'ask' });
     const legacy = await request(srv.base, 'GET', '/api/settings', undefined, TOKEN);
     assert.equal(legacy.status, 200);
     assert.equal(legacy.body.compaction.triggerPercent, 70);
@@ -84,6 +84,64 @@ test('settings trigger percent persists, rejects illegal values, and compact is 
     const unchanged = await v2(srv.base, 'PUT', '/api/v2/settings', discovery.token, {});
     assert.equal(unchanged.status, 200);
     assert.equal(unchanged.body.compaction.triggerPercent, 61);
+    assert.equal(unchanged.body.closeAction, 'ask');
+    assert.equal(validateResponse('/api/v2/settings', 'PUT', 200, unchanged.body).ok, true);
+
+    for (const closeAction of ['tray', 'quit', 'ask']) {
+      const put = await v2(srv.base, 'PUT', '/api/v2/settings', discovery.token, { closeAction });
+      assert.equal(put.status, 200, put.text);
+      assert.equal(put.body.closeAction, closeAction);
+      assert.equal(put.body.compaction.triggerPercent, 61);
+      assert.equal(validateResponse('/api/v2/settings', 'PUT', 200, put.body).ok, true);
+      const got = await v2(srv.base, 'GET', '/api/v2/settings', discovery.token);
+      assert.equal(got.status, 200, got.text);
+      assert.equal(got.body.closeAction, closeAction);
+      assert.equal(got.body.compaction.triggerPercent, 61);
+      assert.equal(validateResponse('/api/v2/settings', 'GET', 200, got.body).ok, true);
+    }
+
+    for (const closeAction of ['minimize', '', null, 1, true, 'ASK', 'tray ']) {
+      const rejected = await v2(srv.base, 'PUT', '/api/v2/settings', discovery.token, { closeAction });
+      assert.equal(rejected.status, 400, JSON.stringify(closeAction));
+      assert.equal(rejected.body.code, 'E_BAD_REQUEST');
+    }
+    const afterReject = await v2(srv.base, 'GET', '/api/v2/settings', discovery.token);
+    assert.equal(afterReject.body.closeAction, 'ask');
+    assert.equal(afterReject.body.compaction.triggerPercent, 61);
+
+    const extra = await v2(srv.base, 'PUT', '/api/v2/settings', discovery.token, {
+      closeAction: 'quit',
+      theme: 'white',
+    });
+    assert.equal(extra.status, 400);
+    assert.equal(extra.body.code, 'E_BAD_REQUEST');
+    const afterExtra = await v2(srv.base, 'GET', '/api/v2/settings', discovery.token);
+    assert.equal(afterExtra.body.closeAction, 'ask');
+
+    const both = await v2(srv.base, 'PUT', '/api/v2/settings', discovery.token, {
+      closeAction: 'tray',
+      compaction: { triggerPercent: 75 },
+    });
+    assert.equal(both.status, 200, both.text);
+    assert.deepEqual(both.body, { compaction: { triggerPercent: 75 }, closeAction: 'tray' });
+    const onlyPercent = await v2(srv.base, 'PUT', '/api/v2/settings', discovery.token, {
+      compaction: { triggerPercent: 61 },
+    });
+    assert.equal(onlyPercent.status, 200, onlyPercent.text);
+    assert.deepEqual(onlyPercent.body, { compaction: { triggerPercent: 61 }, closeAction: 'tray' });
+
+    const legacyClose = await request(srv.base, 'GET', '/api/settings', undefined, TOKEN);
+    assert.equal(legacyClose.status, 200);
+    assert.equal(legacyClose.body.closeAction, 'tray');
+    const legacyPutClose = await request(srv.base, 'PUT', '/api/settings', { closeAction: 'quit' }, TOKEN);
+    assert.equal(legacyPutClose.status, 200, JSON.stringify(legacyPutClose.body));
+    assert.equal(legacyPutClose.body.closeAction, 'quit');
+    assert.equal(legacyPutClose.body.compaction.triggerPercent, 61);
+    const legacyBadClose = await request(srv.base, 'PUT', '/api/settings', { closeAction: 'minimize' }, TOKEN);
+    assert.equal(legacyBadClose.status, 400);
+    const stillQuit = await v2(srv.base, 'GET', '/api/v2/settings', discovery.token);
+    assert.equal(stillQuit.body.closeAction, 'quit');
+    assert.equal(stillQuit.body.compaction.triggerPercent, 61);
 
     const ws = await request(srv.base, 'POST', '/api/workspaces', { name: 'compact' }, TOKEN);
     assert.equal(ws.status, 201, JSON.stringify(ws.body));

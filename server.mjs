@@ -7,7 +7,7 @@ import { reservedBuiltinToolNames } from './src/core/config.mjs';
 import { resolveInWorkspace } from './src/core/paths.mjs';
 import { listWorkspaceTree } from './src/core/workspace-tree.mjs';
 import { diffStats } from './src/core/diff.mjs';
-import { publicSettings, validateCompactionPatch } from './src/core/settings.mjs';
+import { publicSettings, validateCloseActionPatch, validateCompactionPatch } from './src/core/settings.mjs';
 import { VENDOR_PRESETS } from './src/core/model-sources.mjs';
 import { createCredentialStore, createModelsStore } from './src/core/provider-stores.mjs';
 import { createProviderService } from './src/core/provider-service.mjs';
@@ -1173,7 +1173,7 @@ async function routeApi(req, res, url) {
   }
   if (p === '/api/settings' && m === 'PUT') {
     const body = await readBody(req) || {};
-    const compactionError = validateCompactionPatch(body);
+    const compactionError = validateCompactionPatch(body) || validateCloseActionPatch(body);
     if (compactionError) {
       sendJson(res, 400, { error: compactionError, code: 'E_BAD_REQUEST' });
       return;

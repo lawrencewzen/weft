@@ -68,6 +68,48 @@ test('stored settings default to 80 and reject illegal trigger percents', () => 
   assert.equal(settings.compactionSettingsView(kept).compaction.triggerPercent, 70);
 });
 
+test('closeAction defaults to ask and only stores ask, tray or quit', () => {
+  const missing = settings.normalizeSettings({ version: 3, providers: [], language: 'zh' });
+  assert.equal(missing.closeAction, 'ask');
+  assert.equal(settings.readCloseAction({}), 'ask');
+  assert.equal(settings.readCloseAction({ closeAction: 'nope' }), 'ask');
+  assert.equal(settings.publicSettings(missing).closeAction, 'ask');
+  assert.deepEqual(settings.compactionSettingsView(missing), {
+    compaction: { triggerPercent: 80 },
+    closeAction: 'ask',
+  });
+
+  assert.equal(settings.validateCloseActionPatch({}), null);
+  assert.equal(settings.validateCloseActionPatch({ language: 'en' }), null);
+  assert.equal(settings.validateCloseActionPatch({ compaction: { triggerPercent: 80 } }), null);
+  for (const closeAction of ['ask', 'tray', 'quit']) {
+    assert.equal(settings.validateCloseActionPatch({ closeAction }), null, closeAction);
+  }
+  for (const closeAction of ['minimize', '', 'ASK', 'tray ', null, 1, true, false]) {
+    const error = settings.validateCloseActionPatch({ closeAction });
+    assert.equal(typeof error, 'string', JSON.stringify(closeAction));
+    assert.match(error, /closeAction/);
+  }
+
+  const saved = settings.mergeSettings(missing, { closeAction: 'tray' });
+  assert.equal(saved.closeAction, 'tray');
+  assert.equal(saved.compaction.triggerPercent, 80);
+  const kept = settings.mergeSettings(saved, { compaction: { triggerPercent: 70 } });
+  assert.equal(kept.closeAction, 'tray');
+  assert.equal(kept.compaction.triggerPercent, 70);
+  const quit = settings.mergeSettings(kept, { closeAction: 'quit' });
+  assert.equal(quit.closeAction, 'quit');
+  assert.equal(quit.compaction.triggerPercent, 70);
+  assert.equal(settings.compactionSettingsView(quit).closeAction, 'quit');
+  const still = settings.mergeSettings(quit, { closeAction: 'nope' });
+  assert.equal(still.closeAction, 'quit');
+  const corrupt = settings.normalizeSettings({ version: 3, providers: [], closeAction: 'minimize' });
+  assert.equal(corrupt.closeAction, 'ask');
+  const ask = settings.mergeSettings(still, { closeAction: 'ask' });
+  assert.equal(ask.closeAction, 'ask');
+  assert.equal(ask.compaction.triggerPercent, 70);
+});
+
 test('user window override is the window the budget uses, and a later sync applies without a new control', async () => {
   const models = createModels();
   const faux = fauxProvider({
