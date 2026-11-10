@@ -257,10 +257,10 @@ test('manual compact drops the context percent before the next reply and reset d
   await withHarnessLock(async () => {
     const dataDir = await mkdtemp(path.join(tmpdir(), 'weft-ctx-manual-'));
     const script = await writeScript(dataDir, [
-      { text: 'EARLY_REPLY', usage: usage(70000) },
-      { text: 'SECOND_REPLY', usage: usage(70000) },
-      { text: 'PAD_REPLY', usage: usage(70000) },
-      { text: 'KEPT_REPLY', usage: usage(70000) },
+      { text: 'EARLY_REPLY', usage: usage(60000) },
+      { text: 'SECOND_REPLY', usage: usage(60000) },
+      { text: 'PAD_REPLY', usage: usage(60000) },
+      { text: 'KEPT_REPLY', usage: usage(60000) },
       ...repeated({ text: 'AFTER_REPLY', when: 'AFTER_UNIQUE', usage: usage(8000) }, 8),
     ]);
     let opened = null;
@@ -276,8 +276,8 @@ test('manual compact drops the context percent before the next reply and reset d
       await say(kernel, store, conv, `PAD_UNIQUE\n${'p'.repeat(80_000)}`);
       await say(kernel, store, conv, 'KEPT_UNIQUE');
       const before = await contextOf(kernel, store, conv);
-      assert.equal(before.used, 70000, JSON.stringify(before));
-      assert.equal(before.percent, 55);
+      assert.equal(before.used, 60000, JSON.stringify(before));
+      assert.equal(before.percent, 47);
 
       topic = watchTopic(kernel, store, conv);
       await topic.ready;
