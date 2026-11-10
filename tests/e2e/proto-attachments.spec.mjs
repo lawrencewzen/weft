@@ -25,11 +25,13 @@ test('prototype paste, send, and over-limit stay on file://', async ({ page }) =
   await page.getByTestId('next-new-chat').click();
   await expect(page.getByTestId('next-composer-input')).toBeVisible();
   await pasteImage(page);
+  await expect(page.getByTestId('next-attach-image')).toHaveCount(1);
   await expect(page.getByTestId('next-attach-image')).toContainText('screenshot.png');
   await page.getByTestId('next-send').click();
   await expect(page.getByTestId('next-user-image')).toBeVisible();
 
   await pasteImage(page, 'second.png');
+  await expect(page.getByTestId('next-attach-image')).toHaveCount(1);
   await expect(page.getByTestId('next-attach-image')).toContainText('second.png');
   await page.getByTestId('next-attach-remove').click();
   await expect(page.getByTestId('next-attach-image')).toHaveCount(0);

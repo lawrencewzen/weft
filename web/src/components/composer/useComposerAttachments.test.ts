@@ -47,6 +47,22 @@ function pasteEvent(text: string): ClipboardEvent<HTMLTextAreaElement> {
   return event as unknown as ClipboardEvent<HTMLTextAreaElement>;
 }
 
+function filePasteEvent(options: {
+  files?: File[];
+  items?: Array<{ kind: string; type?: string; getAsFile: () => File | null }>;
+  text?: string;
+}): ClipboardEvent<HTMLTextAreaElement> {
+  const event = new Event('paste', { bubbles: true, cancelable: true });
+  Object.defineProperty(event, 'clipboardData', {
+    value: {
+      files: options.files ?? [],
+      items: options.items ?? [],
+      getData: (type: string) => (type === 'text/plain' ? (options.text ?? '') : ''),
+    },
+  });
+  return event as unknown as ClipboardEvent<HTMLTextAreaElement>;
+}
+
 function nLines(n: number): string {
   return Array.from({ length: n }, (_, i) => `line-${i + 1}`).join('\n');
 }
@@ -240,5 +256,63 @@ describe('useComposerAttachments', () => {
     expect(latest!.pastePeekId).toBeNull();
     expect(latest!.dragging).toBe(false);
     expect(URL.revokeObjectURL).toHaveBeenCalled();
+  });
+
+  it('adds only one image when onPaste has both files and items pointing to the same image', async () => {
+    await renderHost();
+    const file1 = pngFile('photo.png');
+    // Browser returns a different File object reference for items.getAsFile()
+    const file2 = pngFile('photo.png');
+    const evt = filePasteEvent({
+      files: [file1],
+      items: [{ kind: 'file', type: 'image/png', getAsFile: () => file2 }],
+    });
+    await act(async () => {
+      await latest!.onPaste(evt);
+    });
+    expect(evt.defaultPrevented).toBe(true);
+    expect(latest!.images).toHaveLength(1);
+    expect(latest!.images[0].name).toBe('photo.png');
+  });
+
+  it('adds image when only items is provided in clipboardData', async () => {
+    await renderHost();
+    const file = pngFile('from-items.png');
+    const evt = filePasteEvent({
+      files: [],
+      items: [{ kind: 'file', type: 'image/png', getAsFile: () => file }],
+    });
+    await act(async () => {
+      await latest!.onPaste(evt);
+    });
+    expect(evt.defaultPrevented).toBe(true);
+    expect(latest!.images).toHaveLength(1);
+    expect(latest!.images[0].name).toBe('from-items.png');
+  });
+
+  it('adds both images when two different images are pasted', async () => {
+    await renderHost();
+    const imgA = pngFile('image-a.png');
+    const imgB = pngFile('image-b.png');
+    const evt = filePasteEvent({
+      files: [imgA, imgB],
+    });
+    await act(async () => {
+      await latest!.onPaste(evt);
+    });
+    expect(evt.defaultPrevented).toBe(true);
+    expect(latest!.images).toHaveLength(2);
+    expect(latest!.images.map((i) => i.name)).toEqual(['image-a.png', 'image-b.png']);
+  });
+
+  it('deduplicates files in dropFiles when identical files are passed', async () => {
+    await renderHost();
+    const f1 = pngFile('dropped.png');
+    const f2 = pngFile('dropped.png');
+    await act(async () => {
+      await latest!.dropFiles([f1, f2]);
+    });
+    expect(latest!.images).toHaveLength(1);
+    expect(latest!.images[0].name).toBe('dropped.png');
   });
 });

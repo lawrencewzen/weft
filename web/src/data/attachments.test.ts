@@ -10,6 +10,8 @@ import {
   applyAtSelection,
   clearLocalPastes,
   createPasteAttachment,
+  dedupeFiles,
+  fileDedupeKey,
   fileToImageAttachment,
   filterAtFiles,
   formatFileSize,
@@ -325,5 +327,29 @@ describe('upload and paste constraints', () => {
     const b64 = await readAsBase64(blob);
     expect(b64).toBe(btoa('hello world'));
     expect(b64.includes('data:')).toBe(false);
+  });
+});
+
+describe('dedupeFiles and fileDedupeKey', () => {
+  it('generates consistent dedupe keys', () => {
+    const f1 = new File(['abc'], 'test.png', { type: 'image/png', lastModified: 1000 });
+    expect(fileDedupeKey(f1)).toBe('test.png:3:image/png:1000');
+  });
+
+  it('deduplicates files by name, size, type, and lastModified', () => {
+    const f1 = new File(['abc'], 'test.png', { type: 'image/png', lastModified: 1000 });
+    const f2 = new File(['abc'], 'test.png', { type: 'image/png', lastModified: 1000 });
+    const f3 = new File(['def'], 'other.png', { type: 'image/png', lastModified: 2000 });
+    const deduped = dedupeFiles([f1, f2, f3]);
+    expect(deduped).toHaveLength(2);
+    expect(deduped[0]).toBe(f1);
+    expect(deduped[1]).toBe(f3);
+  });
+
+  it('keeps files with different size or lastModified even if names match', () => {
+    const f1 = new File(['a'], 'same.png', { type: 'image/png', lastModified: 1000 });
+    const f2 = new File(['longer content'], 'same.png', { type: 'image/png', lastModified: 1000 });
+    const deduped = dedupeFiles([f1, f2]);
+    expect(deduped).toHaveLength(2);
   });
 });
