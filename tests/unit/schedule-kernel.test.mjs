@@ -336,7 +336,7 @@ test('pause, resume, edit and delete stop the old task instance', { timeout: 60_
     await until(() => isAborted(one, t2), { label: 'edited task aborted' });
     const t3 = (await rowOf(one, id)).taskId;
     assert.notEqual(t3, t2);
-    assert.equal(edited.body.nextRunAt, (await asleep(one, id)).state.until);
+    assert.ok(Math.abs(edited.body.nextRunAt - (await asleep(one, id)).state.until) < 1000, 'the preview is the task\'s sleep, to within clock drift');
 
     const removed = await one.svc.remove(id);
     assert.equal(removed.status, 200);
