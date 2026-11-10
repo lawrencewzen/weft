@@ -77,7 +77,6 @@ const v2Opts = {
   dataDir: DATA_DIR,
   demo: envRequestsFaux(),
   hasActiveWork: () => kernelApi?.hasActiveWork?.() ?? false,
-  onIdleExit: () => shutdown(),
   onRestart: () => shutdown(),
   async loadConversation(id) {
     if (!kernelApi) return null;
@@ -558,7 +557,6 @@ try {
 
 const server = createServer(async (req, res) => {
   try {
-    v2.touch();
     const port = boundPort();
     if (!hostAllowed(req.headers.host, port)) {
       sendJson(res, 400, { error: 'invalid host' });
@@ -1172,7 +1170,6 @@ async function routeApi(req, res, url) {
     const cid = decodeURIComponent(match[1]);
     const conv = await store.getConversation(cid);
     if (!conv) { sendJson(res, 404, { error: 'conversation not found' }); return; }
-    v2.trackConnection(req);
     await kernelApi.streamEvents(req, res, cid, { headers: SECURITY_HEADERS });
     return;
   }
@@ -1359,7 +1356,6 @@ server.listen(PORT, '127.0.0.1', () => {
     console.error(`WEFT_ERROR discovery write failed: ${err instanceof Error ? err.message : err}`);
     process.exit(1);
   }
-  v2.startIdleExit();
   const hostWarning = unauthenticatedHostsWarning();
   if (hostWarning) console.warn(hostWarning);
   const loginUrl = v2.issueStartupLoginUrl(port);

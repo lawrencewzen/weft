@@ -56,8 +56,6 @@ export async function startServer({ script = 'basic.json', dataDir, port = 0, ex
     // T101-2: never open a real folder dialog from e2e. extraEnv cannot turn it back on.
     WEFT_FOLDER_PICKER: 'off',
   };
-  if (!Object.prototype.hasOwnProperty.call(extraEnv, 'WEFT_LAUNCHED_BY')) delete env.WEFT_LAUNCHED_BY;
-  if (!Object.prototype.hasOwnProperty.call(extraEnv, 'WEFT_IDLE_EXIT_MINUTES')) delete env.WEFT_IDLE_EXIT_MINUTES;
   if (!Object.prototype.hasOwnProperty.call(extraEnv, 'WEFT_TOKEN')) delete env.WEFT_TOKEN;
   if (!Object.prototype.hasOwnProperty.call(extraEnv, 'WEFT_TERMINAL_APP')) delete env.WEFT_TERMINAL_APP;
   const proc = spawn(process.execPath, ['server.mjs'], {
