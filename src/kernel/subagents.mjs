@@ -38,8 +38,8 @@ export const SUBAGENT_INSTRUCTIONS = [
 ].join(' ');
 export const SUBAGENT_DESCRIPTION = `${DELEGATE_DESCRIPTION} On spawn, pass that text as message. \`name\` is used later with send, wait, and stop. Also pass title on spawn.`;
 const DISPATCH_TOOLS = new Set(['delegate', 'subagent', 'skill']);
-/** Dispatch tools, ask, and handoff: a child cannot question the user or reset the parent's context. */
-export const CHILD_HIDDEN_TOOLS = new Set([...DISPATCH_TOOLS, ASK_TOOL_NAME, HANDOFF_TOOL_NAME]);
+/** Dispatch tools, ask, handoff, and schedule (only the main agent sets schedules): a child cannot question the user or reset the parent's context. */
+export const CHILD_HIDDEN_TOOLS = new Set([...DISPATCH_TOOLS, ASK_TOOL_NAME, HANDOFF_TOOL_NAME, 'schedule']);
 const NAME_CAP = 30;
 
 // Example 23: the main conversation maps background names to child conversations.
@@ -202,9 +202,10 @@ function parentTextFromChild(name, text) {
 export function createSubagentExtension({
   prepareChild,
   onChild,
+  /** Extensions a child must not select. This one is added to the list; the caller may add more later. */
+  blocked = [],
 } = {}) {
   if (typeof prepareChild !== 'function') throw new Error('prepareChild is required');
-  const blocked = [];
 
   const delegate = defineTool({
     name: 'delegate',

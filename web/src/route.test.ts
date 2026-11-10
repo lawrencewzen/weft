@@ -36,6 +36,12 @@ describe('parseRoute', () => {
     expect(parseRoute('/new/')).toEqual({ name: 'new' });
   });
 
+  it('reads /schedules with optional highlight query param', () => {
+    expect(parseRoute('/schedules')).toEqual({ name: 'schedules', highlightId: undefined });
+    expect(parseRoute('/schedules/')).toEqual({ name: 'schedules', highlightId: undefined });
+    expect(parseRoute('/schedules?highlight=sched-1')).toEqual({ name: 'schedules', highlightId: 'sched-1' });
+  });
+
   it('reads /settings/<page>', () => {
     expect(parseRoute('/settings')).toEqual({ name: 'settings', page: 'general' });
     expect(parseRoute('/settings/')).toEqual({ name: 'settings', page: 'general' });

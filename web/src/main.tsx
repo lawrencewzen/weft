@@ -6,6 +6,7 @@ import { applyDocumentPrefs } from './data/prefs';
 import './styles/themes.css';
 import './styles/app.css';
 import './styles/settings.css';
+import './styles/schedules.css';
 
 applyDocumentPrefs({ lang: getPreferredLang() });
 

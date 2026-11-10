@@ -36,6 +36,8 @@ import { createAgentHost, installAgentExtensions } from './agent-config.mjs';
 import { maybeGenerateConversationTitle } from './title.mjs';
 import { createSubagentControl } from './subagent-control.mjs';
 import { createSubagentExtension, createSubagentHost, readTaskGraph } from './subagents.mjs';
+import { createScheduleExtension, createScheduleService } from './schedules.mjs';
+import { SCHEDULE_TASK_KIND } from './ids.mjs';
 import { HANDOFF_REQUEST_KIND, handoffRequestText } from './handoff.mjs';
 import { createWorkspaceExtension, workspaceTools } from './tools.mjs';
 import {
@@ -166,6 +168,8 @@ export async function openConversationKernel({
   providerService,
   extraProviders = [],
   onConversationMeta,
+  onSchedulesChanged,
+  clock,
   env = process.env,
 } = {}) {
   if (!dataDir) throw new Error('dataDir is required');
@@ -239,15 +243,22 @@ export async function openConversationKernel({
   installAgentExtensions(registry, agentBridge, { dataDir });
   installUsageExtension(registry);
   installPluginReload(registry, agentBridge);
+  const childBlocked = [];
   const subagentExtension = createSubagentExtension({
     prepareChild: (parent) => subagentApi.prepareChild(parent),
     onChild: (parentId, childId) => subagentApi.onChild?.(parentId, childId),
+    blocked: childBlocked,
   });
+  const scheduleBridge = {};
+  const scheduleExtension = createScheduleExtension(scheduleBridge);
   agentBridge.extraTools = () => [
     ...(agentBridge.skillTool ? [agentBridge.skillTool] : []),
     ...(subagentExtension.tools || []),
+    ...(scheduleExtension.tools || []),
   ];
   registry.install(subagentExtension);
+  registry.install(scheduleExtension);
+  childBlocked.push(scheduleExtension);
   if (String(env.WEFT_FAUX_SCRIPT || '').trim()) registry.install(createScriptFloorExtension());
   const antigravityCwd = { harness: null, context: null };
   registry.install(createAntigravityCwdExtension(antigravityCwd));
@@ -256,6 +267,8 @@ export async function openConversationKernel({
     models,
     registry,
     settings,
+    ...(clock?.now ? { now: clock.now } : {}),
+    ...(clock?.setTimer ? { setTimer: clock.setTimer } : {}),
     env: async ({ cwd }) => (cwd ? createWorkspaceEnv({ cwd, dataDir }) : undefined), // main Agent and sub-agents; bash env allow-list lives here
   });
   const { harness, context } = kernel;
@@ -612,7 +625,19 @@ export async function openConversationKernel({
   await subagents.seed(stored);
   for (const row of stored) await attach(row);
   await modelRoutes.warm();
-  harness.resume();
+  const schedules = createScheduleService({
+    store,
+    harness,
+    context,
+    bridge: scheduleBridge,
+    now: clock?.now,
+    notify: () => onSchedulesChanged?.(),
+    postMessage: (conv, text, options) => kernelApi.postMessage(conv, text, options),
+    createConversation: (fields) => createConversation(fields),
+    conversationIdFor,
+    onConversationCreated: (cid) => onConversationMeta?.(cid),
+  });
+  scheduleBridge.service = schedules;
 
   async function conversationFor(conv) {
     if (!conv?.harnessId) return null;
@@ -1218,6 +1243,11 @@ export async function openConversationKernel({
     tails.delete(cid);
     listeners.delete(cid);
     await store.deleteConversation(cid);
+    try {
+      await schedules.targetDeleted(cid);
+    } catch (err) {
+      console.error(`WEFT_SCHEDULE_TARGET_DELETED ${redactAuthText(err instanceof Error ? err.message : err)}`);
+    }
     return { status: 204 };
   }
 
@@ -1296,14 +1326,17 @@ export async function openConversationKernel({
     return forkResponse(created, point.prefill);
   }
 
-  return {
+  const kernelApi = {
     harness,
     context,
     async hasActiveWork() {
       const graph = await readTaskGraph(harness, context);
-      return Object.keys(graph?.tasks || {}).length > 0;
+      // A schedule's task sleeps until its next run. That is not work in progress.
+      return Object.values(graph?.tasks || {}).some((node) => node.kind !== SCHEDULE_TASK_KIND);
     },
+    schedules,
     async close() {
+      schedules.close();
       for (const watch of watches.values()) {
         try { await watch.stream.stop(); } catch { /* already stopped */ }
       }
@@ -1667,4 +1700,13 @@ export async function openConversationKernel({
       return conv;
     },
   };
+
+  // Continue unfinished work and sleeping schedules, then check the schedules against the live tasks.
+  harness.resume();
+  try {
+    await schedules.reconcile();
+  } catch (err) {
+    console.error(`WEFT_SCHEDULE_RECONCILE ${redactAuthText(err instanceof Error ? err.message : err)}`);
+  }
+  return kernelApi;
 }

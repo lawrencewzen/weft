@@ -432,6 +432,7 @@ function runningLine(tool: MockTool): Bilingual {
     write: { zh: '正在写入', en: 'Writing' },
     ls: { zh: '正在列出', en: 'Listing' },
     ask: { zh: '正在提问', en: 'Asking' },
+    schedule: { zh: '正在配置定时任务', en: 'Configuring schedule' },
     handoff: { zh: '正在交接', en: 'Handing off' },
     other: { zh: '正在调用', en: 'Calling' },
   }[tool.kind];

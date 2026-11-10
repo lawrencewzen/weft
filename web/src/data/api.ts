@@ -37,6 +37,15 @@ export type PatchPluginRequest = components['schemas']['PatchPluginRequest'];
 export type Skill = components['schemas']['Skill'];
 export type SkillList = components['schemas']['SkillList'];
 export type ResolvedModel = components['schemas']['ResolvedModel'];
+export type Schedule = components['schemas']['Schedule'];
+export type ScheduleRun = components['schemas']['ScheduleRun'];
+export type ScheduleTarget = components['schemas']['ScheduleTarget'];
+export type ScheduleRule = components['schemas']['ScheduleRule'];
+export type ScheduleWrite = components['schemas']['ScheduleWrite'];
+export type SchedulePatch = components['schemas']['SchedulePatch'];
+export type ScheduleList = components['schemas']['ScheduleList'];
+export type ScheduleRunList = components['schemas']['ScheduleRunList'];
+export type ScheduleInvalid = components['schemas']['ScheduleInvalid'];
 
 export type AskOption = components['schemas']['AskOption'];
 export type AskQuestion = components['schemas']['AskQuestion'];
@@ -831,4 +840,44 @@ export function putCompactionTrigger(triggerPercent: number): Promise<Compaction
     method: 'PUT',
     body: JSON.stringify({ compaction: { triggerPercent } }),
   });
+}
+
+export function listSchedules(lang?: string): Promise<ScheduleList> {
+  return requestJson<ScheduleList>(withLang('/api/v2/schedules', lang));
+}
+
+export function createSchedule(body: ScheduleWrite, lang?: string): Promise<Schedule> {
+  const reqId = body.requestId || randomId();
+  return requestJson<Schedule>(withLang('/api/v2/schedules', lang), {
+    method: 'POST',
+    body: JSON.stringify({ ...body, requestId: reqId }),
+  });
+}
+
+export function patchSchedule(id: string, body: SchedulePatch, lang?: string): Promise<Schedule> {
+  const reqId = body.requestId || randomId();
+  return requestJson<Schedule>(withLang(`/api/v2/schedules/${encodeURIComponent(id)}`, lang), {
+    method: 'PATCH',
+    body: JSON.stringify({ ...body, requestId: reqId }),
+  });
+}
+
+export function deleteSchedule(id: string, requestId?: string, lang?: string): Promise<{ ok: boolean; id: string }> {
+  const reqId = requestId || randomId();
+  return requestJson<{ ok: boolean; id: string }>(
+    withLang(`/api/v2/schedules/${encodeURIComponent(id)}?requestId=${encodeURIComponent(reqId)}`, lang),
+    { method: 'DELETE' },
+  );
+}
+
+export function runSchedule(id: string, requestId?: string, lang?: string): Promise<ScheduleRun> {
+  const reqId = requestId || randomId();
+  return requestJson<ScheduleRun>(withLang(`/api/v2/schedules/${encodeURIComponent(id)}/run`, lang), {
+    method: 'POST',
+    body: JSON.stringify({ requestId: reqId }),
+  });
+}
+
+export function listScheduleRuns(id: string, lang?: string): Promise<ScheduleRunList> {
+  return requestJson<ScheduleRunList>(withLang(`/api/v2/schedules/${encodeURIComponent(id)}/runs`, lang));
 }

@@ -10,7 +10,8 @@
 // - thresholdCompaction (dist/harness/generation.js): no automatic compaction
 //   when contextWindow <= 0. Blocking starts above contextWindow - reserveTokens.
 //   Background starts backgroundTokens below that, and only when backgroundTokens > 0.
-//   backgroundTokens 0 means no background compaction (the p=90 case).
+//   backgroundTokens 0 means no background compaction; Weft only uses it for
+//   windows too small to fit a 5% margin below the blocking line.
 // - The context window is the model object's contextWindow at that prepare,
 //   which Weft's provider overlay has already replaced with the user override
 //   when one is set (src/kernel/models.mjs applyModelOverrides).
@@ -36,18 +37,25 @@ export function compactionReserve(window) {
 /**
  * reserve / background / keepRecent for one effective window W and trigger p.
  * Blocking compaction starts at W - reserve. Background compaction starts at
- * W * p%, so backgroundTokens is the distance from there up to the blocking
- * threshold. When p is above the blocking threshold, background compaction is
- * off (backgroundTokens 0, the official "no background compaction") and the
- * blocking threshold is the effective trigger.
+ * W * p%, but never later than 5% of W before the blocking line, so a high p
+ * (or a window whose blocking line is below p) still compacts in the
+ * background instead of stalling the next reply. backgroundTokens is the
+ * distance from the background start up to the blocking line; it is 0 (the
+ * official "no background compaction") only when the window is too small for
+ * a 5% margin to fit below the blocking line.
  */
 export function compactionBudget(window, percent = DEFAULT_TRIGGER_PERCENT) {
   const w = Math.floor(Number(window));
   const p = Math.floor(Number(percent));
   const reserveTokens = compactionReserve(w);
+  const blocking = w - reserveTokens;
+  const margin = Math.floor(w * 0.05);
+  const backgroundTokens = blocking - margin > 0
+    ? Math.max(margin, blocking - Math.floor((w * p) / 100))
+    : 0;
   return {
     reserveTokens,
-    backgroundTokens: Math.max(0, w - reserveTokens - Math.floor((w * p) / 100)),
+    backgroundTokens,
     keepRecentTokens: Math.min(20000, Math.floor((w * 20) / 100)),
   };
 }
