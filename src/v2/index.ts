@@ -14,7 +14,6 @@ import {
 } from './auth.ts';
 import type { components } from './contract.gen.ts';
 import { removeDiscoverySync, writeDiscoverySync } from './daemon/discovery.ts';
-import { createIdleWatcher, type IdleWatcher } from './daemon/idle.ts';
 import {
   createEventHub,
   normalizeLang,
@@ -278,9 +277,6 @@ export type V2Runtime = {
   issueStartupLoginUrl: (port: number) => string;
   writeDiscoveryFile: (port: number) => void;
   removeDiscoveryFile: () => void;
-  touch: IdleWatcher['touch'];
-  trackConnection: IdleWatcher['trackConnection'];
-  startIdleExit: IdleWatcher['start'];
   notifySidebarChanged: () => void;
   notifyProvidersChanged: () => void;
   notifyConversation: NotifyConversationFn;
@@ -621,7 +617,6 @@ export function createV2Handler(opts: {
   pid?: number;
   hasActiveWork?: () => boolean | Promise<boolean>;
   onRestart?: () => void;
-  trackConnection: IdleWatcher['trackConnection'];
   loadConversation?: LoadConversation;
   getConversation?: GetConversation;
   getMessageImage?: GetMessageImage;
@@ -1970,7 +1965,6 @@ export function createV2Handler(opts: {
       const lastEventId = headerOrQueryLastEventId(req, url);
       res.writeHead(200, sseHeaders());
       if (typeof res.flushHeaders === 'function') res.flushHeaders();
-      opts.trackConnection(req);
       const session = hub.connect({
         topics,
         lang,
@@ -2004,7 +1998,6 @@ export function createV2Runtime(opts: {
   webCodeTtlMs?: number;
   env?: NodeJS.ProcessEnv;
   hasActiveWork?: () => boolean | Promise<boolean>;
-  onIdleExit?: () => void;
   onRestart?: () => void;
   loadConversation?: LoadConversation;
   getConversation?: GetConversation;
@@ -2118,12 +2111,6 @@ export function createV2Runtime(opts: {
   const extensionsTopic = attachExtensionsTopic(hub, {
     load: opts.extensions ? () => loadExtensionsSnapshot(opts.extensions as ExtensionsHost) : undefined,
   });
-  const idle = createIdleWatcher({
-    hasActiveWork: opts.hasActiveWork ?? (() => false),
-    shutdown: () => opts.onIdleExit?.(),
-    env: opts.env,
-    now: opts.now,
-  });
   const handleApi = createV2Handler({
     serviceVersion: opts.serviceVersion,
     startedAt: opts.startedAt,
@@ -2132,7 +2119,6 @@ export function createV2Runtime(opts: {
     pid,
     hasActiveWork: opts.hasActiveWork,
     onRestart: opts.onRestart,
-    trackConnection: idle.trackConnection,
     loadConversation: opts.loadConversation,
     getConversation: opts.getConversation,
     getMessageImage: opts.getMessageImage,
@@ -2194,9 +2180,6 @@ export function createV2Runtime(opts: {
     removeDiscoveryFile() {
       removeDiscoverySync(opts.dataDir, pid);
     },
-    touch: idle.touch,
-    trackConnection: idle.trackConnection,
-    startIdleExit: idle.start,
     notifySidebarChanged() {
       workspacesTopic.notify();
     },
@@ -2216,7 +2199,6 @@ export function createV2Runtime(opts: {
       stuck.dispose();
       stall.dispose();
       hub.dispose();
-      idle.dispose();
       auth.dispose();
     },
   };
