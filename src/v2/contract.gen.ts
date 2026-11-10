@@ -1334,17 +1334,28 @@ export interface components {
             /** @description 幂等键。缺省时服务端生成。同一个 requestId 重复提交返回同一个 runId。 */
             requestId?: string;
         };
-        /** @description 全局压缩触发点。 */
+        /** @description 全局设置（压缩触发点与 Windows 桌面壳关闭行为）。 */
         CompactionSettingsView: {
             compaction: components["schemas"]["CompactionPreference"];
+            /**
+             * @description Windows 桌面壳点击关闭按钮时的行为：ask 询问 / tray 缩到托盘 / quit 退出 Weft。缺省为 ask。
+             * @default ask
+             * @enum {string}
+             */
+            closeAction: "ask" | "tray" | "quit";
         };
         CompactionPreference: {
             /** @description 自动压缩触发点，占模型上下文窗口的百分比。整数 60–90，缺省 80。全局一个值，不按模型单独设置。 */
             triggerPercent: number;
         };
-        /** @description 只改压缩触发点。省略 compaction 表示不改。 */
+        /** @description 修改全局设置。省略字段表示不改。 */
         CompactionSettingsPatch: {
             compaction?: components["schemas"]["CompactionPreference"];
+            /**
+             * @description 修改 Windows 桌面壳点击关闭按钮时的行为。省略表示不改。
+             * @enum {string}
+             */
+            closeAction?: "ask" | "tray" | "quit";
         };
         CompactRequest: {
             /** @description 传给官方 compact 的可选说明。省略则不带。 */

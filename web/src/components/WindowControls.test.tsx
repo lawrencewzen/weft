@@ -6,6 +6,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { applyDocumentPrefs, toggleAppearance, watchSystemAppearance } from '../data/prefs';
+import { resetCloseActionForTesting, setCachedCloseAction } from '../data/shellExit';
 import { WindowControls } from './WindowControls';
 
 const LIGHT = 'theme:#fcfcfc,#1f1f1f,#6e6e6e,#f3f3f3,#b94642,#1a1a1a,0.9';
@@ -25,6 +26,13 @@ describe('WindowControls', () => {
     root = createRoot(host);
     posted.length = 0;
     (window as unknown as { chrome?: unknown }).chrome = { webview: { postMessage: (m: string) => posted.push(m) } };
+    resetCloseActionForTesting('ask');
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify({ compaction: { triggerPercent: 80 }, closeAction: 'ask' }),
+      json: async () => ({ compaction: { triggerPercent: 80 }, closeAction: 'ask' }),
+    }));
   });
 
   afterEach(async () => {
@@ -33,6 +41,9 @@ describe('WindowControls', () => {
     delete document.documentElement.dataset.desktopShell;
     delete document.documentElement.dataset.windowMaximized;
     delete (window as unknown as { chrome?: unknown }).chrome;
+    delete (window as unknown as { __protoShell?: unknown }).__protoShell;
+    delete (window as unknown as { __protoShellMessages?: unknown }).__protoShellMessages;
+    resetCloseActionForTesting('ask');
     vi.restoreAllMocks();
   });
 
@@ -41,7 +52,7 @@ describe('WindowControls', () => {
     expect(host.querySelector('[data-testid=window-controls]')).toBeNull();
   });
 
-  it('posts the three actions and follows the maximized flag', async () => {
+  it('posts minimize and toggle-maximize and follows the maximized flag', async () => {
     document.documentElement.dataset.desktopShell = '1';
     await act(async () => root.render(<WindowControls lang="en" />));
     const q = (id: string) => host.querySelector<HTMLButtonElement>(`[data-testid=${id}]`)!;
@@ -49,14 +60,133 @@ describe('WindowControls', () => {
     await act(async () => {
       q('window-minimize').click();
       q('window-toggle-maximize').click();
-      q('window-close').click();
     });
-    expect(posted).toEqual(['minimize', 'toggle-maximize', 'close']);
+    expect(posted).toEqual(['minimize', 'toggle-maximize']);
     await act(async () => {
       document.documentElement.dataset.windowMaximized = '1';
       await Promise.resolve();
     });
     expect(q('window-toggle-maximize').title).toBe('Restore');
+  });
+
+  it('clicking close pops up dialog, cancel dismisses it without posting messages', async () => {
+    document.documentElement.dataset.desktopShell = '1';
+    await act(async () => root.render(<WindowControls lang="zh" />));
+    const closeBtn = host.querySelector<HTMLButtonElement>('[data-testid=window-close]')!;
+
+    await act(async () => {
+      closeBtn.click();
+    });
+
+    const dialog = host.querySelector('[data-testid=window-close-dialog]');
+    expect(dialog).not.toBeNull();
+    expect(host.querySelector('[data-testid=window-close-tray]')).not.toBeNull();
+    expect(host.querySelector('[data-testid=window-close-quit]')).not.toBeNull();
+    expect(host.querySelector('[data-testid=window-close-remember]')).not.toBeNull();
+    expect(host.querySelector('[data-testid=window-close-note]')?.textContent).toContain('退出后定时任务不会执行。');
+
+    // Click cancel button
+    const cancelBtn = host.querySelector<HTMLButtonElement>('[data-testid=window-close-cancel]')!;
+    await act(async () => {
+      cancelBtn.click();
+    });
+    expect(host.querySelector('[data-testid=window-close-dialog]')).toBeNull();
+    expect(posted).toEqual([]);
+  });
+
+  it('clicking tray button in dialog sends hide-to-tray', async () => {
+    document.documentElement.dataset.desktopShell = '1';
+    await act(async () => root.render(<WindowControls lang="zh" />));
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>('[data-testid=window-close]')!.click();
+    });
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>('[data-testid=window-close-tray]')!.click();
+    });
+    expect(posted).toEqual(['hide-to-tray']);
+    expect(host.querySelector('[data-testid=window-close-dialog]')).toBeNull();
+  });
+
+  it('clicking quit button in dialog sends quit', async () => {
+    document.documentElement.dataset.desktopShell = '1';
+    await act(async () => root.render(<WindowControls lang="zh" />));
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>('[data-testid=window-close]')!.click();
+    });
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>('[data-testid=window-close-quit]')!.click();
+    });
+    expect(posted).toEqual(['quit']);
+    expect(host.querySelector('[data-testid=window-close-dialog]')).toBeNull();
+  });
+
+  it('checking remember saves preference and subsequent close skips dialog', async () => {
+    document.documentElement.dataset.desktopShell = '1';
+    await act(async () => root.render(<WindowControls lang="zh" />));
+
+    // First click: opens dialog
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>('[data-testid=window-close]')!.click();
+    });
+
+    const chk = host.querySelector<HTMLInputElement>('[data-testid=window-close-remember]')!;
+    await act(async () => {
+      chk.click();
+    });
+    expect(chk.checked).toBe(true);
+
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>('[data-testid=window-close-tray]')!.click();
+    });
+    expect(posted).toEqual(['hide-to-tray']);
+
+    // Second click: directly sends hide-to-tray without opening dialog
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>('[data-testid=window-close]')!.click();
+    });
+    expect(posted).toEqual(['hide-to-tray', 'hide-to-tray']);
+    expect(host.querySelector('[data-testid=window-close-dialog]')).toBeNull();
+  });
+
+  it('simulating confirm-quit opens dialog with quit focused and hides remember checkbox', async () => {
+    document.documentElement.dataset.desktopShell = '1';
+    await act(async () => root.render(<WindowControls lang="zh" />));
+
+    const protoShell = (window as unknown as { __protoShell?: (action: string) => void }).__protoShell;
+    expect(typeof protoShell).toBe('function');
+
+    await act(async () => {
+      protoShell!('confirm-quit');
+    });
+
+    const dialog = host.querySelector('[data-testid=window-close-dialog]');
+    expect(dialog).not.toBeNull();
+    // Remember checkbox is NOT shown
+    expect(host.querySelector('[data-testid=window-close-remember]')).toBeNull();
+    // Default focus is on quit button
+    const quitBtn = host.querySelector<HTMLButtonElement>('[data-testid=window-close-quit]')!;
+    expect(document.activeElement).toBe(quitBtn);
+
+    // Clicking quit button posts quit
+    await act(async () => {
+      quitBtn.click();
+    });
+    expect(posted).toEqual(['quit']);
+  });
+
+  it('records posted messages to window.__protoShellMessages', async () => {
+    document.documentElement.dataset.desktopShell = '1';
+    await act(async () => root.render(<WindowControls lang="en" />));
+    setCachedCloseAction('quit');
+
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>('[data-testid=window-minimize]')!.click();
+      host.querySelector<HTMLButtonElement>('[data-testid=window-close]')!.click();
+    });
+
+    const msgs = (window as unknown as { __protoShellMessages?: string[] }).__protoShellMessages;
+    expect(msgs).toContain('minimize');
+    expect(msgs).toContain('quit');
   });
 
   describe('theme report (real themes.css, real prefs)', () => {

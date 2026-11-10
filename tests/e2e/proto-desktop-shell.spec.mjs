@@ -150,3 +150,134 @@ for (const scheme of ['light', 'dark']) {
     expectClean(state);
   });
 }
+
+test('clicking close pops up dialog with tray/quit buttons, checkbox, and reminder note; cancel dismisses it', async ({ page }) => {
+  const state = await openProto(page, '?shell=1');
+  await page.getByTestId('window-close').click();
+
+  const dialog = page.getByTestId('window-close-dialog');
+  await expect(dialog).toBeVisible();
+  await expect(page.getByTestId('window-close-tray')).toHaveText('缩到托盘');
+  await expect(page.getByTestId('window-close-quit')).toHaveText('退出 Weft');
+  await expect(page.getByTestId('window-close-remember')).toBeVisible();
+  await expect(page.getByTestId('window-close-note')).toHaveText('退出后定时任务不会执行。');
+
+  // Cancel via Esc
+  await page.keyboard.press('Escape');
+  await expect(dialog).toHaveCount(0);
+  const msgs1 = await page.evaluate(() => window.__protoShellMessages);
+  expect(msgs1).toEqual([]);
+
+  // Re-open and cancel via backdrop click
+  await page.getByTestId('window-close').click();
+  await expect(dialog).toBeVisible();
+  await page.getByTestId('window-close-overlay').click({ position: { x: 5, y: 5 } });
+  await expect(dialog).toHaveCount(0);
+  const msgs2 = await page.evaluate(() => window.__protoShellMessages);
+  expect(msgs2).toEqual([]);
+
+  expectClean(state);
+});
+
+test('clicking tray and quit buttons send hide-to-tray and quit messages respectively', async ({ page }) => {
+  const state = await openProto(page, '?shell=1');
+
+  // Click tray
+  await page.getByTestId('window-close').click();
+  await page.getByTestId('window-close-tray').click();
+  await expect(page.getByTestId('window-close-dialog')).toHaveCount(0);
+  expect(await page.evaluate(() => window.__protoShellMessages)).toEqual(['hide-to-tray']);
+
+  // Click quit
+  await page.getByTestId('window-close').click();
+  await page.getByTestId('window-close-quit').click();
+  await expect(page.getByTestId('window-close-dialog')).toHaveCount(0);
+  expect(await page.evaluate(() => window.__protoShellMessages)).toEqual(['hide-to-tray', 'quit']);
+
+  expectClean(state);
+});
+
+test('remembering preference executes directly on subsequent close clicks', async ({ page }) => {
+  const state = await openProto(page, '?shell=1');
+
+  await page.getByTestId('window-close').click();
+  await page.getByTestId('window-close-remember').locator('input').check();
+  await page.getByTestId('window-close-tray').click();
+  await expect(page.getByTestId('window-close-dialog')).toHaveCount(0);
+  expect(await page.evaluate(() => window.__protoShellMessages)).toEqual(['hide-to-tray']);
+
+  // Second close click should execute directly without dialog
+  await page.getByTestId('window-close').click();
+  await expect(page.getByTestId('window-close-dialog')).toHaveCount(0);
+  expect(await page.evaluate(() => window.__protoShellMessages)).toEqual(['hide-to-tray', 'hide-to-tray']);
+
+  expectClean(state);
+});
+
+test('settings general page toggles close action preference and reflects in close behavior', async ({ page }) => {
+  const state = await openProto(page, '?shell=1');
+
+  await page.keyboard.press('Control+,');
+  const overlay = page.locator('.next-settings-ov');
+  if (await overlay.count() === 0) {
+    await page.goto(page.url().replace(/#.*$/, '') + '#/settings');
+  }
+  await expect(page.locator('.next-settings-ov')).toBeVisible();
+
+  const prefSeg = page.getByTestId('next-pref-close-action');
+  await expect(prefSeg).toBeVisible();
+  await expect(page.getByTestId('next-pref-close-action-note')).toHaveCount(0);
+
+  // Switch to quit
+  await prefSeg.locator('button[data-action="quit"]').click();
+  await expect(prefSeg.locator('button[data-action="quit"]')).toHaveClass(/is-on/);
+  await expect(page.getByTestId('next-pref-close-action-note')).toBeVisible();
+  await expect(page.getByTestId('next-pref-close-action-note')).toHaveText('退出后定时任务不会执行。');
+
+  // Close settings
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.next-settings-ov')).toHaveCount(0);
+
+  // Clicking window close now directly sends quit
+  await page.getByTestId('window-close').click();
+  await expect(page.getByTestId('window-close-dialog')).toHaveCount(0);
+  expect(await page.evaluate(() => window.__protoShellMessages)).toEqual(['quit']);
+
+  expectClean(state);
+});
+
+test('without shell attribute, settings general page does not show close action setting', async ({ page }) => {
+  const state = await openProto(page);
+  await page.keyboard.press('Control+,');
+  const overlay = page.locator('.next-settings-ov');
+  if (await overlay.count() === 0) {
+    await page.goto(page.url().replace(/#.*$/, '') + '#/settings');
+  }
+  await expect(page.locator('.next-settings-ov')).toBeVisible();
+  await expect(page.getByTestId('next-pref-close-action')).toHaveCount(0);
+  expectClean(state);
+});
+
+test('confirm-quit simulated via window.__protoShell opens dialog with quit focused and hides remember checkbox', async ({ page }) => {
+  const state = await openProto(page, '?shell=1');
+
+  await page.evaluate(() => window.__protoShell('confirm-quit'));
+  const dialog = page.getByTestId('window-close-dialog');
+  await expect(dialog).toBeVisible();
+  await expect(page.getByTestId('window-close-remember')).toHaveCount(0);
+  await expect(page.getByTestId('window-close-note')).toHaveText('退出后定时任务不会执行。');
+
+  // Focused element is the quit button
+  const isQuitFocused = await page.evaluate(() => {
+    return document.activeElement?.getAttribute('data-testid') === 'window-close-quit';
+  });
+  expect(isQuitFocused).toBe(true);
+
+  // Clicking quit sends quit message
+  await page.getByTestId('window-close-quit').click();
+  await expect(dialog).toHaveCount(0);
+  expect(await page.evaluate(() => window.__protoShellMessages)).toEqual(['quit']);
+
+  expectClean(state);
+});
+

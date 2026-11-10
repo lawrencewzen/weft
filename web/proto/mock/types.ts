@@ -178,7 +178,7 @@ export type MockDb = {
   /** `${wsId}\t${uploadPath}` → upload result. */
   workspaceUploads: Map<string, components['schemas']['UploadResult']>;
   glab: GlabSettings;
-  settings: { compaction: { triggerPercent: number } };
+  settings: { compaction: { triggerPercent: number }; closeAction: 'ask' | 'tray' | 'quit' };
 };
 
 export type EntityValue = object | ((lang: Lang) => object);

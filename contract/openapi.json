@@ -6159,9 +6159,19 @@
         "properties": {
           "compaction": {
             "$ref": "#/components/schemas/CompactionPreference"
+          },
+          "closeAction": {
+            "type": "string",
+            "enum": [
+              "ask",
+              "tray",
+              "quit"
+            ],
+            "default": "ask",
+            "description": "Windows 桌面壳点击关闭按钮时的行为：ask 询问 / tray 缩到托盘 / quit 退出 Weft。缺省为 ask。\n"
           }
         },
-        "description": "全局压缩触发点。"
+        "description": "全局设置（压缩触发点与 Windows 桌面壳关闭行为）。"
       },
       "CompactionPreference": {
         "type": "object",
@@ -6184,9 +6194,18 @@
         "properties": {
           "compaction": {
             "$ref": "#/components/schemas/CompactionPreference"
+          },
+          "closeAction": {
+            "type": "string",
+            "enum": [
+              "ask",
+              "tray",
+              "quit"
+            ],
+            "description": "修改 Windows 桌面壳点击关闭按钮时的行为。省略表示不改。\n"
           }
         },
-        "description": "只改压缩触发点。省略 compaction 表示不改。"
+        "description": "修改全局设置。省略字段表示不改。"
       },
       "CompactRequest": {
         "type": "object",

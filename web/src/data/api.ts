@@ -791,6 +791,8 @@ export function compactConversation(cid: string): Promise<CompactAccepted> {
   });
 }
 
+export type CloseAction = 'ask' | 'tray' | 'quit';
+
 export function getSettings(): Promise<CompactionSettings> {
   return requestJson<CompactionSettings>('/api/v2/settings');
 }
@@ -799,5 +801,12 @@ export function putCompactionTrigger(triggerPercent: number): Promise<Compaction
   return requestJson<CompactionSettings>('/api/v2/settings', {
     method: 'PUT',
     body: JSON.stringify({ compaction: { triggerPercent } }),
+  });
+}
+
+export function putCloseAction(closeAction: CloseAction): Promise<CompactionSettings> {
+  return requestJson<CompactionSettings>('/api/v2/settings', {
+    method: 'PUT',
+    body: JSON.stringify({ closeAction }),
   });
 }
