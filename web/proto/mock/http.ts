@@ -14,7 +14,14 @@ import {
   recomputeContext,
   touch,
 } from './db';
-import { compactConversation, continueConversation, sendMessage, stopConversation, withdrawMessage } from './run';
+import {
+  compactConversation,
+  continueConversation,
+  handoffConversation,
+  sendMessage,
+  stopConversation,
+  withdrawMessage,
+} from './run';
 import { parseSendImages } from '../../../src/v2/views/message-images';
 import { inferCustomProviderBrand, inferModelBrand } from './brand';
 import { mockProviderName } from './providerNames';
@@ -229,6 +236,35 @@ function removeWorkspace(db: MockDb, hub: MockHub, workspaceId: string): MockRep
   return ok({ removed: true });
 }
 
+function deleteConversation(db: MockDb, hub: MockHub, conv: MockConv, lang: Lang): MockReply {
+  if (conv.view.status === 'running') {
+    return fail(409, lang === 'en' ? 'Conversation is running' : '对话正在运行', 'E_CONVERSATION_RUNNING');
+  }
+  const cid = conv.view.id;
+  const workspaceId = conv.view.workspaceId;
+  db.conversations.delete(cid);
+  publishRemove(conv, hub, 'conversation', cid);
+  hub.publish('workspaces', {
+    event: 'remove',
+    entity: 'conversation_summary',
+    id: cid,
+  });
+  const ws = db.workspaces.find((row) => row.id === workspaceId);
+  if (ws) {
+    hub.publish('workspaces', {
+      event: 'upsert',
+      entity: 'workspace',
+      id: ws.id,
+      value: {
+        ...ws,
+        conversationCount: [...db.conversations.values()].filter((row) => row.view.workspaceId === ws.id && !row.archived).length,
+        runningCount: [...db.conversations.values()].filter((row) => row.view.workspaceId === ws.id && !row.archived && row.view.status === 'running').length,
+      },
+    });
+  }
+  return noContent();
+}
+
 function createChatWorkspace(db: MockDb, convId: string, title: string): Workspace {
   const name = title || '对话';
   const ws: Workspace = {
@@ -431,8 +467,17 @@ function patchConversation(
 ): MockReply {
   const hasModel = Object.prototype.hasOwnProperty.call(body, 'model');
   const hasThinking = Object.prototype.hasOwnProperty.call(body, 'thinkingLevel');
-  if (!hasModel && !hasThinking) {
-    return fail(400, 'model or thinkingLevel required', 'E_BAD_REQUEST');
+  const hasArchived = Object.prototype.hasOwnProperty.call(body, 'archived');
+  if (!hasModel && !hasThinking && !hasArchived) {
+    return fail(400, 'model, thinkingLevel or archived required', 'E_BAD_REQUEST');
+  }
+
+  if (hasArchived) {
+    if (typeof body.archived !== 'boolean') {
+      return fail(400, 'archived must be a boolean', 'E_BAD_REQUEST');
+    }
+    conv.archived = body.archived;
+    publishSummary(db, hub, conv.view.id);
   }
 
   if (hasModel) {
@@ -2074,9 +2119,10 @@ export function handleMockRequest(
   if (convMatch) {
     const cid = decodeURIComponent(convMatch[1]);
     const conv = getConv(db, cid);
-    if (!conv) return fail(404, '对话不存在');
+    if (!conv) return fail(404, lang === 'en' ? 'Conversation not found' : '对话不存在');
     if (method === 'GET') return ok(conversationSnapshot(conv, lang));
     if (method === 'PATCH') return patchConversation(db, hub, conv, body);
+    if (method === 'DELETE') return deleteConversation(db, hub, conv, lang);
   }
 
   const imageMatch = /^\/api\/v2\/conversations\/([^/]+)\/messages\/([^/]+)\/images\/([^/]+)$/.exec(path);
@@ -2197,6 +2243,10 @@ export function handleMockRequest(
       ? 'steer'
       : null;
     if (mode == null) return fail(400, 'invalid mode', 'E_BAD_REQUEST');
+    if (conv.archived) {
+      conv.archived = false;
+      publishSummary(db, hub, conv.view.id);
+    }
     const result = sendMessage(db, conv, hub, text, requestId, parsedImages.images, mode, files, pastes);
     if (!result.ok) return fail(result.status, result.error);
     return accepted({ runId: result.runId });
@@ -2239,6 +2289,18 @@ export function handleMockRequest(
     const result = compactConversation(db, conv, hub);
     if (!result.ok) return fail(result.status, result.error, result.code);
     return accepted({ taskId: result.taskId });
+  }
+  const handoffMatch = /^\/api\/v2\/conversations\/([^/]+)\/handoff$/.exec(path);
+  if (handoffMatch && method === 'POST') {
+    const conv = getConv(db, decodeURIComponent(handoffMatch[1]));
+    if (!conv) return fail(404, lang === 'en' ? 'Conversation not found' : '对话不存在');
+    const requestId = typeof body.requestId === 'string' ? body.requestId : '';
+    const instructions = typeof body.instructions === 'string' && body.instructions.trim()
+      ? body.instructions.trim()
+      : undefined;
+    const result = handoffConversation(db, conv, hub, requestId, lang, instructions);
+    if (!result.ok) return fail(result.status, result.error, result.code);
+    return accepted({ ok: true });
   }
   const forkMatch = /^\/api\/v2\/conversations\/([^/]+)\/fork$/.exec(path);
   if (forkMatch && method === 'POST') {

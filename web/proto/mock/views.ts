@@ -105,9 +105,13 @@ export function conversationValue(conv: MockConv): EntityValue {
 }
 
 export function itemValue(item: MockItem): EntityValue {
-  if (item.kind === 'system_note' && item.i18n) {
-    const { i18n, ...rest } = item;
-    return (lang: Lang) => ({ ...rest, text: tr(i18n, lang) });
+  if (item.kind === 'system_note' && (item.i18n || item.detailI18n)) {
+    const { i18n, detailI18n, ...rest } = item;
+    return (lang: Lang) => ({
+      ...rest,
+      text: i18n ? tr(i18n, lang) : rest.text,
+      detail: detailI18n ? tr(detailI18n, lang) : rest.detail,
+    });
   }
   if (item.kind !== 'tool_group') return item as unknown as object;
   return toolGroupValue(item);

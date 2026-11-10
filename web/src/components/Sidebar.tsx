@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
-import { ApiError } from '../data/api';
+import { ApiError, archiveConversation, deleteConversation } from '../data/api';
 import { copyText } from '../data/copyText';
 import type { Lang } from '../data/lang';
 import { readActiveWorkspace, readWorkspaceOpen, writeActiveWorkspace, writeWorkspaceOpen } from '../data/layout';
@@ -19,12 +19,13 @@ import {
 } from '../data/sidebarModel';
 import { isMac, type SearchItem } from '../data/sidebarSearchModel';
 import { readLastOpenedMap, writeLastOpened } from '../data/sidebarUnread';
-import type { ConversationSummary, Workspace } from '../data/store';
+import { isChatWorkspace, type ConversationSummary, type Workspace } from '../data/store';
 import { useLeftPanel } from '../data/leftPanelContext';
 import { useStripProjectsFlip } from '../data/stripProjectsMotion';
 import { useRightActions } from '../data/rightPaneContext';
 import { useWorkspaces } from '../data/useWorkspaces';
 import { t } from '../i18n';
+import type { ToastInput } from '../data/toast';
 import { CtxMenu, type CtxMenuItem } from './CtxMenu';
 import type { ConfirmOpts } from './ConfirmDialog';
 import { SidebarArchived } from './SidebarArchived';
@@ -55,7 +56,7 @@ type Props = {
   activeConversationId: string | null;
   activeAgentId: string | null;
   draftWorkspaceId: string | null;
-  onToast: (message: string) => void;
+  onToast: (toast: ToastInput) => void;
   onConfirm: (opts: ConfirmOpts) => Promise<boolean>;
   onRemoveWorkspace: (workspaceId: string) => Promise<void>;
   onNewWorkspace: () => void;
@@ -224,9 +225,66 @@ export function Sidebar({
     removeWorkspace,
   }), [copy, handleShowFiles, lang, onNewWorkspace, openInTerminal, removeWorkspace, startDraft]);
 
+  const handleArchive = useCallback(async (conv: ConversationSummary, archived: boolean) => {
+    try {
+      await archiveConversation(conv.id, archived);
+      if (archived) {
+        onToast({
+          message: t(lang, 'conversation_archived', { title: conv.title || t(lang, 'default_conversation_title') }),
+          action: {
+            label: t(lang, 'toast_undo'),
+            run: () => {
+              void handleArchive(conv, false);
+            },
+          },
+        });
+      }
+    } catch (err) {
+      onToast(err instanceof Error ? err.message : t(lang, 'err_request_failed'));
+    }
+  }, [lang, onToast]);
+
+  const handleDelete = useCallback(async (conv: ConversationSummary) => {
+    const title = conv.title || t(lang, 'default_conversation_title');
+    const ok = await onConfirm({
+      title: t(lang, 'delete_conversation_title'),
+      message: t(lang, 'delete_conversation_message', { title }),
+      confirmLabel: t(lang, 'delete_conversation'),
+      danger: true,
+    });
+    if (!ok) return;
+    try {
+      await deleteConversation(conv.id);
+      if (activeConversationId === conv.id) {
+        const ws = workspaces.find((item) => item.id === conv.workspaceId);
+        if (ws && !isChatWorkspace(ws)) {
+          startDraft(ws.id);
+        } else {
+          writeActiveWorkspace(NO_PROJECT_ID);
+          navigate(newChatPath());
+        }
+      }
+      onToast(t(lang, 'conversation_deleted', { title }));
+    } catch (err) {
+      if (err instanceof ApiError && (err.status === 409 || err.code === 'E_CONVERSATION_RUNNING')) {
+        onToast(err.message || t(lang, 'stop_conversation_first'));
+        return;
+      }
+      onToast(err instanceof Error ? err.message : t(lang, 'err_request_failed'));
+    }
+  }, [activeConversationId, lang, onConfirm, onToast, startDraft, workspaces]);
+
   const conversationItems = useCallback((wsId: string, conv: ConversationSummary): CtxMenuItem[] => (
-    buildConversationItems({ lang, wsId, conv, openConversation, copy })
-  ), [copy, lang, openConversation]);
+    buildConversationItems({
+      lang,
+      wsId,
+      conv,
+      openConversation,
+      copy,
+      onArchive: handleArchive,
+      onDelete: handleDelete,
+    })
+  ), [copy, handleArchive, handleDelete, lang, openConversation]);
 
   const chatSearchItems: SearchItem[] = useMemo(() => {
     const byId = new Map(workspaces.map((ws) => [ws.id, ws]));

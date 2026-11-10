@@ -269,6 +269,10 @@ export type ForkConversationFn = (
   };
 }>;
 
+export type DeleteConversationFn = (
+  id: string,
+) => Promise<{ status: number; body?: { error?: unknown; code?: unknown } }>;
+
 export type { LoadConversation, LoadSubagent, KernelEvent, KernelChange };
 
 export type V2Handler = (req: IncomingMessage, res: ServerResponse, url: URL) => Promise<boolean>;
@@ -656,7 +660,12 @@ export function createV2Handler(opts: {
     id: string,
     instructions?: string,
   ) => Promise<{ status: number; body?: { taskId?: unknown; error?: unknown; code?: unknown } }>;
+  handoffConversation?: (
+    id: string,
+    body: { requestId?: unknown; instructions?: unknown },
+  ) => Promise<{ status: number; body?: { ok?: unknown; error?: unknown; code?: unknown } }>;
   forkConversation?: ForkConversationFn;
+  deleteConversation?: DeleteConversationFn;
 }): V2Handler {
   const { serviceVersion, startedAt, auth, hub } = opts;
   const pid = opts.pid ?? process.pid;
@@ -1239,8 +1248,13 @@ export function createV2Handler(opts: {
       if (!body) return true;
       const hasModel = Object.prototype.hasOwnProperty.call(body, 'model');
       const hasThinking = Object.prototype.hasOwnProperty.call(body, 'thinkingLevel');
-      if (!hasModel && !hasThinking) {
-        sendV2(res, pathname, method, 400, { error: 'model or thinkingLevel required', code: 'E_BAD_REQUEST' } satisfies V2Error);
+      const hasArchived = Object.prototype.hasOwnProperty.call(body, 'archived');
+      if (!hasModel && !hasThinking && !hasArchived) {
+        sendV2(res, pathname, method, 400, { error: 'model, thinkingLevel or archived required', code: 'E_BAD_REQUEST' } satisfies V2Error);
+        return true;
+      }
+      if (hasArchived && typeof body.archived !== 'boolean') {
+        sendV2(res, pathname, method, 400, { error: 'archived must be a boolean', code: 'E_BAD_REQUEST' } satisfies V2Error);
         return true;
       }
       const kernelBody: Record<string, unknown> = {};
@@ -1258,6 +1272,7 @@ export function createV2Handler(opts: {
         }
       }
       if (hasThinking) kernelBody.thinkingLevel = body.thinkingLevel;
+      if (hasArchived) kernelBody.archived = body.archived;
       if (!opts.patchConversation) {
         sendV2(res, pathname, method, 500, { error: 'kernel not ready', code: 'E_INTERNAL' } satisfies V2Error);
         return true;
@@ -1266,6 +1281,13 @@ export function createV2Handler(opts: {
         const patched = await opts.patchConversation(id, kernelBody);
         if (patched.status === 404) {
           sendV2(res, pathname, method, 404, { error: 'not found' } satisfies V2Error);
+          return true;
+        }
+        if (patched.status === 409) {
+          sendV2(res, pathname, method, 409, {
+            error: String(patched.body?.error || 'conversation is running'),
+            code: 'E_CONVERSATION_RUNNING',
+          } satisfies V2Error);
           return true;
         }
         if (patched.status === 400) {
@@ -1294,6 +1316,43 @@ export function createV2Handler(opts: {
         sendV2(res, pathname, method, 200, snapshot.conversation);
       } catch (err) {
         const message = err instanceof Error ? err.message : 'patch failed';
+        sendV2(res, pathname, method, 500, { error: message, code: 'E_INTERNAL' } satisfies V2Error);
+      }
+      return true;
+    }
+
+    if (method === 'DELETE' && convMatch) {
+      const id = decodeURIComponent(convMatch[1]);
+      if (!opts.deleteConversation) {
+        sendV2(res, pathname, method, 500, { error: 'kernel not ready', code: 'E_INTERNAL' } satisfies V2Error);
+        return true;
+      }
+      try {
+        const removed = await opts.deleteConversation(id);
+        if (removed.status === 404) {
+          sendV2(res, pathname, method, 404, { error: 'not found' } satisfies V2Error);
+          return true;
+        }
+        if (removed.status === 409) {
+          sendV2(res, pathname, method, 409, {
+            error: String(removed.body?.error || 'conversation is running'),
+            code: 'E_CONVERSATION_RUNNING',
+          } satisfies V2Error);
+          return true;
+        }
+        if (removed.status !== 204) {
+          sendV2(res, pathname, method, removed.status >= 400 ? removed.status : 500, {
+            error: String(removed.body?.error || 'delete failed'),
+            code: 'E_INTERNAL',
+          } satisfies V2Error);
+          return true;
+        }
+        // The conversation topic recomputes against a missing conversation and removes every entity.
+        opts.notifyConversation?.(id);
+        opts.onSidebarChanged?.();
+        sendV2(res, pathname, method, 204, null);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'delete failed';
         sendV2(res, pathname, method, 500, { error: message, code: 'E_INTERNAL' } satisfies V2Error);
       }
       return true;
@@ -1599,6 +1658,7 @@ export function createV2Handler(opts: {
           return true;
         }
         opts.notifyConversation?.(id);
+        if (conv.archived) opts.onSidebarChanged?.();
         sendV2(res, pathname, method, 202, { runId: String(runId) } satisfies RunAccepted);
       } catch (err) {
         const message = err instanceof Error ? err.message : 'send failed';
@@ -1796,6 +1856,72 @@ export function createV2Handler(opts: {
         sendV2(res, pathname, method, 202, { taskId } satisfies components['schemas']['CompactAccepted']);
       } catch (err) {
         const message = err instanceof Error ? err.message : 'compact failed';
+        sendV2(res, pathname, method, 500, { error: message, code: 'E_INTERNAL' } satisfies V2Error);
+      }
+      return true;
+    }
+
+    const handoffMatch = /^\/api\/v2\/conversations\/([^/]+)\/handoff$/.exec(pathname);
+    if (method === 'POST' && handoffMatch) {
+      const id = decodeURIComponent(handoffMatch[1]);
+      const body = await readObjectBody(req, res, pathname, method);
+      if (!body) return true;
+      if (typeof body.requestId !== 'string' || !body.requestId.trim()) {
+        sendV2(res, pathname, method, 400, { error: 'requestId required', code: 'E_BAD_REQUEST' } satisfies V2Error);
+        return true;
+      }
+      if (Object.prototype.hasOwnProperty.call(body, 'instructions') && body.instructions != null) {
+        if (typeof body.instructions !== 'string') {
+          sendV2(res, pathname, method, 400, { error: 'invalid instructions', code: 'E_BAD_REQUEST' } satisfies V2Error);
+          return true;
+        }
+        if (body.instructions.length > 4000) {
+          sendV2(res, pathname, method, 400, { error: 'instructions too long', code: 'E_BAD_REQUEST' } satisfies V2Error);
+          return true;
+        }
+      }
+      if (!opts.handoffConversation) {
+        sendV2(res, pathname, method, 500, { error: 'kernel not ready', code: 'E_INTERNAL' } satisfies V2Error);
+        return true;
+      }
+      const requestId = body.requestId.trim();
+      const instructions = typeof body.instructions === 'string' && body.instructions.trim()
+        ? body.instructions.trim()
+        : undefined;
+      try {
+        const handed = await opts.handoffConversation(id, { requestId, instructions });
+        if (handed.status === 404) {
+          sendV2(res, pathname, method, 404, { error: 'not found', code: 'E_NOT_FOUND' } satisfies V2Error);
+          return true;
+        }
+        if (handed.status === 409) {
+          sendV2(res, pathname, method, 409, { error: 'busy', code: 'E_BUSY' } satisfies V2Error);
+          return true;
+        }
+        if (handed.status === 400) {
+          const message = typeof handed.body?.error === 'string' && handed.body.error
+            ? handed.body.error
+            : 'bad request';
+          sendV2(res, pathname, method, 400, { error: message, code: 'E_BAD_REQUEST' } satisfies V2Error);
+          return true;
+        }
+        if (handed.status !== 202) {
+          const message = typeof handed.body?.error === 'string' && handed.body.error
+            ? handed.body.error
+            : 'handoff failed';
+          const code = typeof handed.body?.code === 'string' && handed.body.code
+            ? handed.body.code
+            : 'E_INTERNAL';
+          sendV2(res, pathname, method, handed.status >= 400 ? handed.status : 500, {
+            error: message,
+            code,
+          } satisfies V2Error);
+          return true;
+        }
+        opts.notifyConversation?.(id);
+        sendV2(res, pathname, method, 202, { ok: true } satisfies components['schemas']['HandoffAccepted']);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'handoff failed';
         sendV2(res, pathname, method, 500, { error: message, code: 'E_INTERNAL' } satisfies V2Error);
       }
       return true;
@@ -2050,8 +2176,13 @@ export function createV2Runtime(opts: {
     id: string,
     instructions?: string,
   ) => Promise<{ status: number; body?: { taskId?: unknown; error?: unknown; code?: unknown } }>;
+  handoffConversation?: (
+    id: string,
+    body: { requestId?: unknown; instructions?: unknown },
+  ) => Promise<{ status: number; body?: { ok?: unknown; error?: unknown; code?: unknown } }>;
   forkConversation?: ForkConversationFn;
   schedules?: SchedulesHost;
+  deleteConversation?: DeleteConversationFn;
 }): V2Runtime {
   const pid = opts.pid ?? process.pid;
   const auth = createV2Auth({
@@ -2179,7 +2310,9 @@ export function createV2Runtime(opts: {
     getSettings: opts.getSettings,
     putSettings: opts.putSettings,
     compactConversation: opts.compactConversation,
+    handoffConversation: opts.handoffConversation,
     forkConversation: opts.forkConversation,
+    deleteConversation: opts.deleteConversation,
   });
 
   return {

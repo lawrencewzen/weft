@@ -694,3 +694,40 @@ test('a sleeping schedule task is not active work, so it does not block a servic
     assert.equal(await one.kernel.hasActiveWork(), false);
   });
 });
+
+test('deleting a conversation pauses the schedules that send to it right away', { timeout: 60_000 }, async () => {
+  await withEnv(async ({ open }) => {
+    let announced = 0;
+    const one = await open({ onSchedulesChanged: () => { announced += 1; } });
+    const { conv, ws } = await seed(one);
+    const other = await one.kernel.createConversation({ workspaceId: ws.id, workspacePath: ws.path, title: 'other' });
+    const hit = (await one.svc.create({ name: 'Hit', message: 'm', target: convTarget(conv), rule: daily })).body.id;
+    const hit2 = (await one.svc.create({ name: 'Hit2', message: 'm', target: convTarget(conv), rule: { kind: 'interval', everyMinutes: 30 } })).body.id;
+    const miss = (await one.svc.create({ name: 'Miss', message: 'm', target: convTarget(other), rule: daily })).body.id;
+    const fresh = (await one.svc.create({ name: 'Fresh', message: 'm', target: { kind: 'new', workspaceId: ws.id }, rule: daily })).body.id;
+    for (const id of [hit, hit2, miss, fresh]) await asleep(one, id);
+    const tasks = Object.fromEntries(await Promise.all([hit, hit2, miss].map(async (id) => [id, (await rowOf(one, id)).taskId])));
+    const seen = announced;
+
+    const deleted = await one.kernel.deleteConversation(conv.id);
+    assert.equal(deleted.status, 204);
+
+    for (const id of [hit, hit2]) {
+      const view = await one.svc.get(id);
+      assert.equal(view.enabled, false);
+      assert.equal(view.nextRunAt, null);
+      assert.equal(view.lastRun.status, 'failed');
+      assert.equal(view.lastRun.error, 'Target conversation was deleted');
+      await until(() => isAborted(one, tasks[id]), { label: 'task aborted' });
+    }
+    assert.equal((await one.svc.get(miss)).enabled, true);
+    assert.equal((await one.svc.get(fresh)).enabled, true);
+    assert.equal(await isAborted(one, tasks[miss]), false);
+    assert.ok(announced > seen, 'the schedules topic is told');
+
+    // Switching one back on is refused while its target is gone.
+    const back = await one.svc.update(hit, { enabled: true });
+    assert.equal(back.status, 400);
+    assert.deepEqual(back.body.fields, ['target.conversationId']);
+  });
+});

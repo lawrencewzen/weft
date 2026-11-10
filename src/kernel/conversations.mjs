@@ -38,6 +38,7 @@ import { createSubagentControl } from './subagent-control.mjs';
 import { createSubagentExtension, createSubagentHost, readTaskGraph } from './subagents.mjs';
 import { createScheduleExtension, createScheduleService } from './schedules.mjs';
 import { SCHEDULE_TASK_KIND } from './ids.mjs';
+import { HANDOFF_REQUEST_KIND, handoffRequestText } from './handoff.mjs';
 import { createWorkspaceExtension, workspaceTools } from './tools.mjs';
 import {
   CHANGE_CACHE_MS,
@@ -207,6 +208,9 @@ export async function openConversationKernel({
   const tails = new Map();
   const listeners = new Map();
   const sends = new Map();
+  // Submission ids admitted by handoff(). The entry kind is the durable mark;
+  // this set covers the moment before that entry is visible to present().
+  const handoffSubmissions = new Set();
   const forkInflight = new Map();
   const changeCache = new Map();
   const changeGen = new Map();
@@ -1166,6 +1170,19 @@ export async function openConversationKernel({
     return legacyDiff(await workspacePathFor(cid), baseline);
   }
 
+  async function isHandoffRunning(conv, status) {
+    if (status !== 'running' && status !== 'recovering' && status !== 'resuming') return false;
+    const sid = conv?.lastSubmissionId == null ? '' : String(conv.lastSubmissionId);
+    if (sid && handoffSubmissions.has(sid)) return true;
+    if (!sid || !conv?.harnessId) return false;
+    const handle = await harness.submission(conv.lastSubmissionId, context);
+    if (!handle) return false;
+    const record = await handle.status(context);
+    if (record?.entry == null || record.entry === '') return false;
+    const entry = await harness.commit((tx) => tx.entry(record.entry), context);
+    return entry?.kind === HANDOFF_REQUEST_KIND;
+  }
+
   async function createConversation(fields) {
     const conv = await store.createConversation({ ...fields });
     const created = await harness.createConversation({
@@ -1187,6 +1204,56 @@ export async function openConversationKernel({
     if (agentHost) await agentHost.afterCreate(conv);
     await attach(conv);
     return conv;
+  }
+
+  /**
+   * Pi Durable has no call that deletes a conversation or its history. So this
+   * aborts what is left of the work (background subagents), stops Weft's watches,
+   * and removes Weft's own record. The harness data stays in Pi's storage with
+   * nothing pointing at it. The workspace is never touched.
+   */
+  async function deleteConversation(cid) {
+    const conv = await store.getConversation(cid);
+    if (!conv) return { status: 404, body: { error: 'conversation not found' } };
+    if ((await statusOf(conv)) === 'running') {
+      return { status: 409, body: { error: 'conversation is running', code: 'E_CONVERSATION_RUNNING' } };
+    }
+    if (conv.harnessId != null) {
+      const conversation = await harness.conversation(conv.harnessId, context);
+      if (conversation) await conversation.abort(context, { background: true });
+    }
+    await subagents.forget(conv);
+    const watch = watches.get(cid);
+    watches.delete(cid);
+    if (watch) {
+      try { await watch.stream.stop(); } catch { /* already stopped */ }
+    }
+    // Let events already queued for this conversation finish before the row goes.
+    await (tails.get(cid) || Promise.resolve());
+    if (conv.harnessId != null) {
+      histories.delete(Number(conv.harnessId));
+      historyLocks.delete(Number(conv.harnessId));
+    }
+    agentHost.forget(conv);
+    sends.delete(cid);
+    changeCache.delete(cid);
+    changeGen.delete(cid);
+    changeInflight.delete(cid);
+    snapshotLocks.delete(cid);
+    tails.delete(cid);
+    listeners.delete(cid);
+    await store.deleteConversation(cid);
+    try {
+      await schedules.targetDeleted(cid);
+    } catch (err) {
+      console.error(`WEFT_SCHEDULE_TARGET_DELETED ${redactAuthText(err instanceof Error ? err.message : err)}`);
+    }
+    return { status: 204 };
+  }
+
+  async function unarchiveOnSend(conv) {
+    if (!conv?.archived) return;
+    await store.updateConversation(conv.id, { archived: false });
   }
 
   function forkResponse(row, prefill) {
@@ -1282,6 +1349,7 @@ export async function openConversationKernel({
     },
     createConversation,
     forkConversation,
+    deleteConversation,
     listSubagents(conv) {
       return subagents.listSubagents(conv).then((agents) => agents.map((agent) => {
         const { harnessId, ...rest } = agent;
@@ -1349,10 +1417,19 @@ export async function openConversationKernel({
       // With no later call, estimate the messages the model will see.
       const harnessView = await readView(conv.harnessId);
       const usage = presentContext(activeContextUsage(harnessView)).usage;
+      const handoffRunning = await isHandoffRunning(conv, status);
       if (includeMessages) {
         messages = (await readTranscript(conv.harnessId)).messages;
       }
-      const out = { ...conv, status, usage, sends: await sendsView(conv), live: this.liveStateFor(conv.id), retryMaxAttempts };
+      const out = {
+        ...conv,
+        status,
+        usage,
+        sends: await sendsView(conv),
+        live: this.liveStateFor(conv.id),
+        retryMaxAttempts,
+        handoffRunning,
+      };
       if (view.llmError) out.llmError = view.llmError;
       if (includeMessages) out.messages = messages;
       return out;
@@ -1386,6 +1463,74 @@ export async function openConversationKernel({
         return { status: 500, body: { error: message || 'compact failed', code: 'E_INTERNAL' } };
       }
     },
+    /**
+     * Ask the model to write a handoff note and call the handoff tool.
+     * The input is a weft.handoff-request entry, so the thread does not show it.
+     * A known requestId returns the earlier admission and does not submit again.
+     * A busy conversation, including one already handing off, is 409.
+     */
+    async handoff(cid, { requestId, instructions } = {}) {
+      const conv = await store.getConversation(cid);
+      if (!conv) return { status: 404, body: { error: 'conversation not found', code: 'E_NOT_FOUND' } };
+      const rid = typeof requestId === 'string' ? requestId.trim() : '';
+      if (!rid) return { status: 400, body: { error: 'requestId required', code: 'E_BAD_REQUEST' } };
+      if (instructions != null && typeof instructions !== 'string') {
+        return { status: 400, body: { error: 'invalid instructions', code: 'E_BAD_REQUEST' } };
+      }
+      if (typeof instructions === 'string' && instructions.length > 4000) {
+        return { status: 400, body: { error: 'instructions too long', code: 'E_BAD_REQUEST' } };
+      }
+      const focus = typeof instructions === 'string' ? instructions.trim() : '';
+      const conversation = await conversationFor(conv);
+      if (!conversation) return { status: 404, body: { error: 'conversation not found', code: 'E_NOT_FOUND' } };
+      const existing = await harness.commit(
+        (tx) => tx.submissionByRequest(conv.harnessId, rid),
+        context,
+      );
+      if (existing) return { status: 202, body: { ok: true } };
+      const view = await submissionView(conv);
+      if (view.status === 'running' || view.status === 'recovering' || view.status === 'resuming') {
+        return { status: 409, body: { error: 'busy', code: 'E_BUSY' } };
+      }
+      try {
+        await modelRoutes.warm();
+      } catch (err) {
+        const message = redactAuthText(err instanceof Error ? err.message : err);
+        return { status: 500, body: { error: message || 'settings refresh failed', code: 'E_INTERNAL' } };
+      }
+      let current = conv;
+      if (agentHost) {
+        const prepared = await agentHost.prepareSend(conv, '');
+        current = prepared?.conversation || conv;
+      }
+      if (routes) await applyModel(conversation, current);
+      try {
+        await ensureWorkspaceSnapshot(current);
+      } catch (err) {
+        console.error(`WEFT_CHANGE_SNAPSHOT ${redactAuthText(err instanceof Error ? err.message : err)}`);
+      }
+      try {
+        const submission = await conversation.submit({
+          type: 'input',
+          content: handoffRequestText(focus),
+          requestId: rid,
+          whenBusy: 'reject',
+          entry: {
+            kind: HANDOFF_REQUEST_KIND,
+            ...(focus ? { data: { instructions: focus } } : {}),
+          },
+        }, context);
+        handoffSubmissions.add(String(submission.id));
+        await store.updateConversation(current.id, { lastSubmissionId: submission.id });
+        return { status: 202, body: { ok: true } };
+      } catch (err) {
+        if (err instanceof ConversationBusy || err?.name === 'ConversationBusy') {
+          return { status: 409, body: { error: 'busy', code: 'E_BUSY' } };
+        }
+        const message = redactAuthText(err instanceof Error ? err.message : err);
+        return { status: 500, body: { error: message || 'handoff failed', code: 'E_INTERNAL' } };
+      }
+    },
     async noteSettings(stored) {
       compaction.setPercent(readTriggerPercent(stored));
       await modelRoutes.warm();
@@ -1414,6 +1559,7 @@ export async function openConversationKernel({
         try {
           const submission = await conversation.submit({ type: 'continue', requestId }, context);
           await store.updateConversation(current.id, { lastSubmissionId: submission.id });
+          await unarchiveOnSend(current);
           return { status: 202, body: { runId: String(submission.id), status: 'running' } };
         } catch (err) {
           if (err instanceof ConversationBusy || err?.name === 'ConversationBusy') {
@@ -1456,6 +1602,7 @@ export async function openConversationKernel({
         entryId,
       });
       await store.updateConversation(current.id, { lastSubmissionId: submission.id });
+      await unarchiveOnSend(current);
       return { status: 202, body: { runId: String(submission.id), status: 'running' } };
     },
     async withdrawMessage(cid, requestId) {

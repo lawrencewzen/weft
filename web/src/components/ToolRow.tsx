@@ -79,6 +79,16 @@ function KindIcon({ kind }: { kind: ToolCall['kind'] }) {
       </svg>
     );
   }
+  if (kind === 'handoff') {
+    return (
+      <svg className="tool-kind-icon icon" viewBox="0 0 24 24" aria-hidden="true">
+        <polyline points="17 1 21 5 17 9" />
+        <path d="M3 11V9a4 4 0 0 1 4-4h14" />
+        <polyline points="7 23 3 19 7 15" />
+        <path d="M21 13v2a4 4 0 0 1-4 4H3" />
+      </svg>
+    );
+  }
   return (
     <svg className="tool-kind-icon icon" viewBox="0 0 24 24" aria-hidden="true">
       <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
@@ -209,6 +219,10 @@ export function ToolRow({ tool, lang, onLoadOutput }: Props) {
   const body = fullText ?? (live && live !== '' ? live : tool.output.preview);
   const truncated = fullText == null && tool.output.truncated;
 
+  const isHandoff = tool.kind === 'handoff';
+  const actionLabel = toolActionLabel(lang, tool.kind);
+  const displayTitle = isHandoff ? '' : tool.heading.title;
+
   async function toggle() {
     if (tool.kind === 'schedule') {
       navigate(schedulesPath(tool.scheduleId));
@@ -245,9 +259,11 @@ export function ToolRow({ tool, lang, onLoadOutput }: Props) {
       >
         <div className="tool-main">
           <KindIcon kind={tool.kind} />
-          <span className="tool-action">{toolActionLabel(lang, tool.kind)}</span>
-          <span className={pathClass} data-testid="next-tool-row-path">{tool.heading.title}</span>
-          {tool.heading.detail ? (
+          <span className="tool-action">{actionLabel}</span>
+          {displayTitle ? (
+            <span className={pathClass} data-testid="next-tool-row-path">{displayTitle}</span>
+          ) : null}
+          {tool.heading.detail && !isHandoff ? (
             <span className="tool-path-orig" data-testid="next-tool-row-orig">{tool.heading.detail}</span>
           ) : null}
           {tool.hint.text ? (

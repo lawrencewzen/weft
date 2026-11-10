@@ -1,8 +1,10 @@
 /** 服务端视图文案（中文）。 */
 export const zh: Record<string, string> = {
   pending_thinking: '思考中',
+  pending_handoff: '正在交接到新上下文',
   pending_subagents: '· {n} 个子 Agent',
   compaction_note: '已压缩较早的上下文',
+  handoff_new_context: '新上下文',
   compaction_failed: '压缩失败：{reason}',
   run_err_interrupted: '服务中断，这一轮没有完成。',
   run_err_restart_limit: '这一轮多次中断，已停止。',
@@ -98,6 +100,12 @@ export const zh: Record<string, string> = {
   tool_act_ls: '列出',
   tool_act_grep: '搜索',
   tool_act_bash: '执行',
+  tool_act_handoff: '交接到新上下文',
+  tool_one_handoff: '交接到新上下文',
+  tool_run_handoff: '正在交接到新上下文',
+  tool_run_handoff_bare: '正在交接到新上下文',
+  tool_sum_handoff: '交接了 {n} 次',
+  tool_sum_handoff_one: '交接到新上下文',
   src_why_unsigned: '未登录',
   src_why_no_key: '缺 Key',
   src_why_no_url: '缺少地址',

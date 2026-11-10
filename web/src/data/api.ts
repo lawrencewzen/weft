@@ -103,6 +103,8 @@ export type {
 };
 export type CompactionSettings = components['schemas']['CompactionSettingsView'];
 export type CompactAccepted = components['schemas']['CompactAccepted'];
+export type HandoffAccepted = components['schemas']['HandoffAccepted'];
+export type HandoffRequest = components['schemas']['HandoffRequest'];
 export type SkillWriteRequest = components['schemas']['SkillWriteRequest'];
 export type GitConnection = components['schemas']['GitConnection'];
 export type GitConnectionList = components['schemas']['GitConnectionList'];
@@ -401,6 +403,19 @@ export function patchConversationThinkingLevel(
   thinkingLevel: ThinkingLevel | null,
 ): Promise<ConversationView> {
   return patchConversation(cid, { thinkingLevel });
+}
+
+export function archiveConversation(
+  cid: string,
+  archived: boolean,
+): Promise<ConversationView> {
+  return patchConversation(cid, { archived });
+}
+
+export function deleteConversation(cid: string): Promise<void> {
+  return requestJson<void>(conversationPath(cid), {
+    method: 'DELETE',
+  });
 }
 
 export type ForkConversationResponse = components['schemas']['ForkConversationResponse'];
@@ -805,6 +820,14 @@ export function compactConversation(cid: string): Promise<CompactAccepted> {
   return requestJson<CompactAccepted>(conversationPath(cid, '/compact'), {
     method: 'POST',
     body: '{}',
+  });
+}
+
+export function handoffConversation(cid: string, requestId?: string, instructions?: string): Promise<HandoffAccepted> {
+  const id = requestId ?? randomId();
+  return requestJson<HandoffAccepted>(conversationPath(cid, '/handoff'), {
+    method: 'POST',
+    body: JSON.stringify({ requestId: id, ...(instructions ? { instructions } : {}) }),
   });
 }
 

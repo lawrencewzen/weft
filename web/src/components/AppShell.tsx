@@ -44,6 +44,7 @@ import { Sidebar } from './Sidebar';
 import { SideToggles } from './RightToggle';
 import { WorkspaceDialog } from './WorkspaceDialog';
 import { QuickOpenModal } from './QuickOpenModal';
+import { normalizeToast, type ToastInput, type ToastState } from '../data/toast';
 
 type Props = {
   route: AppRoute;
@@ -61,7 +62,7 @@ function overlayKeepOpen(target: HTMLElement): boolean {
 
 export function AppShell({ route, lang, demo = false, service, settingsPage = null }: Props) {
   const { workspaces, conversations, latest, ready } = useWorkspaces();
-  const [toast, setToast] = useState<string | null>(null);
+  const [toast, setToast] = useState<ToastState | null>(null);
   const toastTimer = useRef<number | null>(null);
   const [homeStandIn, setHomeStandIn] = useState<AppRoute | null>(null);
 
@@ -125,10 +126,20 @@ export function AppShell({ route, lang, demo = false, service, settingsPage = nu
     || conversations.find((conv) => conv.id === activeConversationId)?.workspaceId
     || null;
 
-  const showToast = useCallback((message: string) => {
-    setToast(message);
+  const showToast = useCallback((input: ToastInput) => {
+    const next = normalizeToast(input);
+    setToast(next);
     if (toastTimer.current) window.clearTimeout(toastTimer.current);
-    toastTimer.current = window.setTimeout(() => setToast(null), 2200);
+    const duration = next.action ? 5000 : 2200;
+    toastTimer.current = window.setTimeout(() => setToast(null), duration);
+  }, []);
+
+  const dismissToast = useCallback(() => {
+    setToast(null);
+    if (toastTimer.current) {
+      window.clearTimeout(toastTimer.current);
+      toastTimer.current = null;
+    }
   }, []);
 
   return (
@@ -147,6 +158,7 @@ export function AppShell({ route, lang, demo = false, service, settingsPage = nu
           settingsPage={settingsPage}
           toast={toast}
           onToast={showToast}
+          onDismissToast={dismissToast}
           workspaces={workspaces}
           conversations={conversations}
         />
@@ -161,8 +173,9 @@ type LayoutProps = {
   demo: boolean;
   service: AboutService;
   settingsPage: SettingsPage | null;
-  toast: string | null;
-  onToast: (message: string) => void;
+  toast: ToastState | null;
+  onToast: (input: ToastInput) => void;
+  onDismissToast: () => void;
   workspaces: ReturnType<typeof useWorkspaces>['workspaces'];
   conversations: ReturnType<typeof useWorkspaces>['conversations'];
 };
@@ -175,6 +188,7 @@ function AppShellLayout({
   settingsPage,
   toast,
   onToast,
+  onDismissToast,
   workspaces,
   conversations,
 }: LayoutProps) {
@@ -407,7 +421,25 @@ function AppShellLayout({
         }}
       />
       <RightPane lang={lang} workspaceLabel={workspaceLabel} />
-      {toast ? <div className="toast-msg" data-testid="next-toast">{toast}</div> : null}
+      {toast ? (
+        <div className="toast-msg" data-testid="next-toast">
+          <span className="toast-text">{toast.message}</span>
+          {toast.action ? (
+            <button
+              type="button"
+              className="toast-action"
+              data-testid="next-toast-action"
+              onClick={() => {
+                const run = toast.action?.run;
+                onDismissToast();
+                run?.();
+              }}
+            >
+              {toast.action.label}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
       {confirm ? (
         <ConfirmDialog
           lang={lang}

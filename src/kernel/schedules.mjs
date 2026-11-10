@@ -545,6 +545,10 @@ export function createScheduleService({
         // Turning a schedule back on must not leave a once rule in the past.
         problems.push(...ruleProblems(merged.rule, { now: now() }));
       }
+      if (!problems.length && patch.enabled === true && !row.enabled && patch.target === undefined
+        && merged.target.kind === 'conversation' && !(await store.getConversation(merged.target.conversationId))) {
+        problems.push({ field: 'target.conversationId', key: 'conversation_missing' });
+      }
       if (problems.length) return invalid(lang, problems);
 
       const ruleChanged = patch.rule !== undefined && JSON.stringify(patch.rule) !== JSON.stringify(row.rule);
@@ -599,6 +603,31 @@ export function createScheduleService({
     }));
   }
 
+  /**
+   * A conversation was deleted: every enabled schedule that sends to it pauses now, with a failed
+   * run saying why, instead of finding out at its next run.
+   */
+  async function targetDeleted(conversationId) {
+    const rows = await store.listSchedules();
+    for (const row of rows) {
+      if (row.target.kind !== 'conversation' || row.target.conversationId !== conversationId || !row.enabled) continue;
+      await withLock(row.id, async () => {
+        const current = await store.getSchedule(row.id);
+        if (!current?.enabled) return;
+        await store.updateSchedule(row.id, { enabled: false, taskId: null }, { now: now() });
+        await store.addScheduleRun(row.id, {
+          id: `${row.id}:deleted:${now()}`,
+          at: now(),
+          status: 'failed',
+          conversationId: null,
+          error: TARGET_DELETED_ERROR,
+        });
+        await abortTask(current.taskId);
+      });
+    }
+    emit();
+  }
+
   async function runs(id, { lang = 'zh' } = {}) {
     const row = await store.getSchedule(id);
     if (!row) return missing(lang);
@@ -645,6 +674,7 @@ export function createScheduleService({
     remove,
     runNow,
     runs,
+    targetDeleted,
     reconcile,
     planFirstRun,
     fire,

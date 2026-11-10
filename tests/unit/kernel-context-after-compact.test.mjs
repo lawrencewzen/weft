@@ -445,3 +445,42 @@ test('a failed compaction keeps the previous context percent', { timeout: 60_000
     }
   });
 });
+
+test('handoff drops the context percent to the new context estimate before the next reply', { timeout: 60_000 }, async () => {
+  await withHarnessLock(async () => {
+    const dataDir = await mkdtemp(path.join(tmpdir(), 'weft-ctx-handoff-'));
+    const note = '交接要点：迁移 packages/core，下一步跑验证。';
+    const script = await writeScript(dataDir, [
+      { text: 'EARLY_REPLY', usage: usage(70000) },
+      { tool: 'handoff', args: { text: note }, usage: usage(71000) },
+      { when: '交接要点', text: 'PLACEHOLDER' },
+      { when: '交接要点', text: 'AFTER_HANDOFF', delayMs: 1500, usage: usage(3000) },
+    ]);
+    let opened = null;
+    try {
+      opened = await openKernel(dataDir, script);
+      const { store, kernel } = opened;
+      const conv = await makeConversation(store, kernel, dataDir);
+      await say(kernel, store, conv, 'EARLY_A remember');
+      const before = await contextOf(kernel, store, conv);
+      assert.equal(before.used, 70000, JSON.stringify(before));
+
+      const accepted = await kernel.handoff(conv.id, { requestId: 'ctx-handoff-1' });
+      assert.equal(accepted.status, 202, JSON.stringify(accepted.body));
+      let view = null;
+      for (let i = 0; i < 300; i += 1) {
+        view = (await activeView(kernel, conv)).view;
+        if ((view.entries || []).some((entry) => entry?.kind === 'pi.reset')) break;
+        await sleep(30);
+      }
+      assert.equal((view.entries || []).some((entry) => entry?.kind === 'pi.reset'), true);
+      const tokens = estimatedTokens(view);
+      const after = await contextOf(kernel, store, conv);
+      assert.equal(after.used, tokens, JSON.stringify(after));
+      assert.ok(after.used > 0 && after.used < before.used, JSON.stringify({ before, after }));
+      assert.ok(after.percent < before.percent, JSON.stringify({ before, after }));
+    } finally {
+      await closeOpened(opened);
+    }
+  });
+});
