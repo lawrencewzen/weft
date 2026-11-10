@@ -1,69 +1,55 @@
 import type { Schedule } from '../../data/api';
 import type { Lang } from '../../data/lang';
 import type { ScheduleRule, ScheduleTarget } from '../../data/store';
+import { t, type I18nKey } from '../../i18n';
 import type { ScheduleFormData } from './scheduleValidation';
 
 export function formatTarget(target: ScheduleTarget, lang: Lang): string {
   if (target.kind === 'conversation') {
-    return lang === 'en' ? `To: ${target.title}` : `发到：${target.title}`;
+    return t(lang, 'sched_fmt_to', { title: target.title });
   }
-  return lang === 'en'
-    ? `${target.workspaceName} · New chat each time`
-    : `${target.workspaceName} · 每次新开对话`;
+  return t(lang, 'sched_new_chat_each', { workspace: target.workspaceName });
+}
+
+const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+function monthLabel(d: Date, lang: Lang): string {
+  return lang === 'en' ? MONTH_NAMES[d.getMonth()] : String(d.getMonth() + 1);
+}
+
+function dayNames(days: number[], lang: Lang, kind: 'long' | 'full'): string[] {
+  return days.map((d) => t(lang, `wd_${kind}_${d}` as I18nKey));
 }
 
 export function formatRule(rule: ScheduleRule, lang: Lang): string {
   if (rule.kind === 'once') {
     const d = new Date(rule.at);
-    const month = d.getMonth() + 1;
-    const date = d.getDate();
     const hours = String(d.getHours()).padStart(2, '0');
     const minutes = String(d.getMinutes()).padStart(2, '0');
-    if (lang === 'en') {
-      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-      return `${monthNames[d.getMonth()]} ${date}, ${hours}:${minutes} once`;
-    }
-    return `${month}月${date}日 ${hours}:${minutes} 一次`;
+    return t(lang, 'sched_fmt_once', { month: monthLabel(d, lang), date: d.getDate(), time: `${hours}:${minutes}` });
   }
 
   if (rule.kind === 'daily') {
-    return lang === 'en' ? `Daily at ${rule.time}` : `每天 ${rule.time}`;
+    return t(lang, 'sched_fmt_daily', { time: rule.time });
   }
 
   if (rule.kind === 'weekly') {
     const days = [...new Set(rule.days || [])].sort((a, b) => a - b);
     const isWeekdays = days.length === 5 && [1, 2, 3, 4, 5].every((d, i) => days[i] === d);
-    if (isWeekdays) {
-      return lang === 'en' ? `Every weekday at ${rule.time}` : `每个工作日 ${rule.time}`;
-    }
+    if (isWeekdays) return t(lang, 'sched_fmt_weekdays', { time: rule.time });
     const isWeekends = days.length === 2 && days[0] === 6 && days[1] === 7;
-    if (isWeekends) {
-      return lang === 'en' ? `Every weekend at ${rule.time}` : `每个周末 ${rule.time}`;
-    }
-    const isAllDays = days.length === 7;
-    if (isAllDays) {
-      return lang === 'en' ? `Daily at ${rule.time}` : `每天 ${rule.time}`;
-    }
-
-    if (lang === 'en') {
-      const enDays = ['', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-      const str = days.map((d) => enDays[d] || String(d)).join(', ');
-      return `Every ${str} at ${rule.time}`;
-    }
-    const zhDays = ['', '一', '二', '三', '四', '五', '六', '日'];
-    const str = days.map((d) => zhDays[d] || String(d)).join('、');
-    return `每周${str} ${rule.time}`;
+    if (isWeekends) return t(lang, 'sched_fmt_weekends', { time: rule.time });
+    if (days.length === 7) return t(lang, 'sched_fmt_daily', { time: rule.time });
+    const str = dayNames(days, lang, 'long').join(lang === 'en' ? ', ' : '、');
+    return t(lang, 'sched_fmt_weekly', { days: str, time: rule.time });
   }
 
   if (rule.kind === 'interval') {
     if (rule.everyMinutes % 60 === 0) {
       const hours = rule.everyMinutes / 60;
-      if (lang === 'en') {
-        return `Every ${hours} hour${hours > 1 ? 's' : ''}`;
-      }
-      return `每 ${hours} 小时`;
+      return t(lang, hours > 1 ? 'sched_fmt_every_hours' : 'sched_fmt_every_hour', { n: hours });
     }
-    return lang === 'en' ? `Every ${rule.everyMinutes} minutes` : `每 ${rule.everyMinutes} 分钟`;
+    return t(lang, 'sched_fmt_every_minutes', { n: rule.everyMinutes });
   }
 
   return '';
@@ -80,15 +66,10 @@ export function formatScheduleTimeToast(timestamp: number, lang: Lang, now = Dat
   const targetDayStart = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
   const dayDiff = Math.round((targetDayStart - todayStart) / 86400000);
 
-  if (lang === 'en') {
-    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    if (dayDiff === 0) return `today at ${hh}:${mm}`;
-    if (dayDiff === 1) return `tomorrow at ${hh}:${mm}`;
-    return `${monthNames[d.getMonth()]} ${d.getDate()} at ${hh}:${mm}`;
-  }
-  if (dayDiff === 0) return `今天 ${hh}:${mm}`;
-  if (dayDiff === 1) return `明天 ${hh}:${mm}`;
-  return `${d.getMonth() + 1}月${d.getDate()}日 ${hh}:${mm}`;
+  const time = `${hh}:${mm}`;
+  if (dayDiff === 0) return t(lang, 'sched_toast_today', { time });
+  if (dayDiff === 1) return t(lang, 'sched_toast_tomorrow', { time });
+  return t(lang, 'sched_toast_date', { month: monthLabel(d, lang), date: d.getDate(), time });
 }
 
 export function formatConversationScheduleStripText(
@@ -104,22 +85,16 @@ export function formatConversationScheduleStripText(
   const preview = first.message.slice(0, 20);
   const count = schedules.length;
 
-  if (lang === 'en') {
-    if (count > 1) {
-      return `Scheduled: ${timeLabel} send "${preview}" and ${count - 1} more`;
-    }
-    return `Scheduled: ${timeLabel} send "${preview}"`;
-  }
   if (count > 1) {
-    return `已定时：${timeLabel} 发送「${preview}」等 ${count} 条`;
+    return t(lang, 'sched_strip_more', { when: timeLabel, preview, count, more: count - 1 });
   }
-  return `已定时：${timeLabel} 发送「${preview}」`;
+  return t(lang, 'sched_strip_one', { when: timeLabel, preview });
 }
 
 export function formatNextRunSummary(timestamp: number | null, lang: Lang, now = Date.now()): string {
   if (!timestamp) return '-';
   const timeStr = formatScheduleTimeToast(timestamp, lang, now);
-  return lang === 'en' ? `Next: ${timeStr}` : `下次 ${timeStr}`;
+  return t(lang, 'sched_next_short', { when: timeStr });
 }
 
 export function computeNextRunPreview(
@@ -130,7 +105,7 @@ export function computeNextRunPreview(
   if (data.ruleKind === 'once') {
     if (!data.onceAt || isNaN(data.onceAt)) return '';
     const timeStr = formatScheduleTimeToast(data.onceAt, lang, now);
-    return lang === 'en' ? `Next run: ${timeStr}` : `下次运行：${timeStr}`;
+    return t(lang, 'sched_next_run', { when: timeStr });
   }
 
   if (data.ruleKind === 'daily') {
@@ -140,7 +115,7 @@ export function computeNextRunPreview(
     d.setHours(hh, mm, 0, 0);
     const targetTs = d.getTime() > now ? d.getTime() : d.getTime() + 86400000;
     const timeStr = formatScheduleTimeToast(targetTs, lang, now);
-    return lang === 'en' ? `Next run: ${timeStr}` : `下次运行：${timeStr}`;
+    return t(lang, 'sched_next_run', { when: timeStr });
   }
 
   if (data.ruleKind === 'weekly') {
@@ -152,12 +127,7 @@ export function computeNextRunPreview(
       const day = d.getDay() === 0 ? 7 : d.getDay();
       if (data.weeklyDays.includes(day) && d.getTime() > now) {
         const timeStr = formatScheduleTimeToast(d.getTime(), lang, now);
-        const dayNamesZh = ['', '周一', '周二', '周三', '周四', '周五', '周六', '周日'];
-        const dayNamesEn = ['', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-        const dayName = lang === 'en' ? dayNamesEn[day] : dayNamesZh[day];
-        return lang === 'en'
-          ? `Next run: ${timeStr} (${dayName})`
-          : `下次运行：${timeStr} (${dayName})`;
+        return t(lang, 'sched_next_run_day', { when: timeStr, day: dayNames([day], lang, 'full')[0] });
       }
     }
     return '';
@@ -170,14 +140,10 @@ export function computeNextRunPreview(
     const d = new Date(targetTs);
     const pad = (n: number) => String(n).padStart(2, '0');
     const clock = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
-    if (lang === 'en') {
-      const unitStr = data.intervalUnit === 'hours'
-        ? `${data.intervalValue} hour${data.intervalValue > 1 ? 's' : ''}`
-        : `${data.intervalValue} minutes`;
-      return `Next run: in ${unitStr} (${clock})`;
-    }
-    const unitStr = data.intervalUnit === 'hours' ? `${data.intervalValue} 小时后` : `${data.intervalValue} 分钟后`;
-    return `下次运行：${unitStr} (${clock})`;
+    const span = data.intervalUnit === 'hours'
+      ? t(lang, data.intervalValue > 1 ? 'sched_in_hours_pl' : 'sched_in_hours', { n: data.intervalValue })
+      : t(lang, 'sched_in_minutes', { n: data.intervalValue });
+    return t(lang, 'sched_next_in', { span, clock });
   }
 
   return '';

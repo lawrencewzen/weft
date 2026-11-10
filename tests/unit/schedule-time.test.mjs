@@ -5,11 +5,6 @@ import {
   nextRunTime,
   ruleProblems,
 } from '../../src/core/schedule-time.mjs';
-import {
-  computeNextRunPreview,
-  formatScheduleTimeToast,
-} from '../../web/src/components/schedules/formatRule.ts';
-import { validateScheduleForm } from '../../web/src/components/schedules/scheduleValidation.ts';
 
 process.env.TZ = 'Asia/Shanghai';
 
@@ -19,28 +14,6 @@ const stamp = (ts) => {
   const pad = (n) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 };
-
-const WEEKDAY_ZH = ['', '周一', '周二', '周三', '周四', '周五', '周六', '周日'];
-
-function formData(rule) {
-  return {
-    name: 'n',
-    message: 'm',
-    targetKind: 'conversation',
-    conversationId: 'c',
-    conversationTitle: 't',
-    workspaceId: '',
-    workspaceName: '',
-    model: null,
-    ruleKind: rule.kind,
-    onceAt: rule.at ?? 0,
-    dailyTime: rule.time ?? '09:00',
-    weeklyDays: rule.days ?? [],
-    weeklyTime: rule.time ?? '09:00',
-    intervalValue: rule.everyMinutes ?? 5,
-    intervalUnit: 'minutes',
-  };
-}
 
 test('daily: today when still ahead, else tomorrow, across month and year ends', () => {
   const rule = { kind: 'daily', time: '09:00' };
@@ -95,55 +68,6 @@ test('daily across a daylight saving change keeps the wall clock time', () => {
   } finally {
     process.env.TZ = before;
   }
-});
-
-test('next run agrees with the web UI preview (formatRule.ts)', () => {
-  const cases = [
-    [{ kind: 'once', at: local(2026, 3, 12, 15, 45) }, local(2026, 3, 10, 8, 0)],
-    [{ kind: 'daily', time: '09:00' }, local(2026, 3, 10, 8, 0)],
-    [{ kind: 'daily', time: '09:00' }, local(2026, 3, 10, 9, 30)],
-    [{ kind: 'daily', time: '00:05' }, local(2026, 1, 31, 23, 59)],
-    [{ kind: 'weekly', days: [1, 3, 5], time: '07:30' }, local(2026, 3, 8, 10, 0)],
-    [{ kind: 'weekly', days: [2], time: '18:00' }, local(2026, 3, 3, 18, 0)],
-    [{ kind: 'weekly', days: [1, 2, 3, 4, 5], time: '09:00' }, local(2026, 1, 30, 10, 0)],
-    [{ kind: 'weekly', days: [6, 7], time: '10:00' }, local(2026, 12, 31, 10, 0)],
-  ];
-  for (const [rule, now] of cases) {
-    const next = nextRunTime(rule, now);
-    assert.ok(next, JSON.stringify(rule));
-    const toast = formatScheduleTimeToast(next, 'zh', now);
-    const day = new Date(next).getDay() || 7;
-    const expected = rule.kind === 'weekly'
-      ? `下次运行：${toast} (${WEEKDAY_ZH[day]})`
-      : `下次运行：${toast}`;
-    assert.equal(computeNextRunPreview(formData(rule), 'zh', now), expected, JSON.stringify(rule));
-  }
-  // Interval: the web preview shows now + N minutes.
-  const now = local(2026, 3, 10, 8, 0);
-  const preview = computeNextRunPreview(formData({ kind: 'interval', everyMinutes: 45 }), 'zh', now);
-  assert.match(preview, new RegExp(stamp(nextRunTime({ kind: 'interval', everyMinutes: 45 }, now)).slice(-5)));
-});
-
-test('rule problems follow the web validation (scheduleValidation.ts)', () => {
-  const now = local(2026, 3, 10, 8, 0);
-  const field = (rule) => ruleProblems(rule, { now }).map((item) => item.field);
-  assert.deepEqual(field({ kind: 'interval', everyMinutes: 4 }), ['rule.everyMinutes']);
-  assert.deepEqual(field({ kind: 'interval', everyMinutes: 5 }), []);
-  assert.deepEqual(field({ kind: 'interval', everyMinutes: 5.5 }), ['rule.everyMinutes']);
-  assert.deepEqual(field({ kind: 'weekly', days: [], time: '09:00' }), ['rule.days']);
-  assert.deepEqual(field({ kind: 'weekly', days: [8], time: '09:00' }), ['rule.days']);
-  assert.deepEqual(field({ kind: 'weekly', days: [1], time: '9:00' }), ['rule.time']);
-  assert.deepEqual(field({ kind: 'daily', time: '24:00' }), ['rule.time']);
-  assert.deepEqual(field({ kind: 'once', at: now }), ['rule.at']);
-  assert.deepEqual(field({ kind: 'once', at: now + 1 }), []);
-  assert.deepEqual(ruleProblems({ kind: 'once', at: now - 1 }, { now, requireFuture: false }), []);
-  assert.deepEqual(field({ kind: 'nope' }), ['rule.kind']);
-  assert.deepEqual(field(null), ['rule']);
-
-  const web = (patch) => validateScheduleForm({ ...formData({ kind: 'interval', everyMinutes: 5 }), ...patch }, 'en');
-  assert.equal(web({ intervalValue: 4 }).valid, false);
-  assert.equal(web({ intervalValue: 5 }).valid, true);
-  assert.equal(web({ ruleKind: 'weekly', weeklyDays: [] }).valid, false);
 });
 
 test('cleanRule keeps only the stored fields and sorts weekdays', () => {

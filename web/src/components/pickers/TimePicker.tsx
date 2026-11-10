@@ -1,3 +1,4 @@
+import { t } from '../../i18n';
 import {
   useCallback,
   useEffect,
@@ -300,7 +301,7 @@ export function TimePicker({
         data-testid={testId ? `${testId}-btn` : undefined}
         tabIndex={-1}
         disabled={disabled}
-        aria-label={lang === 'en' ? 'Select time' : '选择时间'}
+        aria-label={t(lang, 'sched_pick_time')}
         onClick={() => {
           if (open) closePopup();
           else openPopup();

@@ -1,3 +1,4 @@
+import { t } from '../../i18n';
 import {
   useCallback,
   useEffect,
@@ -338,7 +339,7 @@ export function DatePicker({
         data-testid={testId ? `${testId}-btn` : undefined}
         tabIndex={-1}
         disabled={disabled}
-        aria-label={lang === 'en' ? 'Select date' : '选择日期'}
+        aria-label={t(lang, 'sched_pick_date')}
         onClick={() => {
           if (open) closePopup();
           else openPopup();
@@ -360,7 +361,7 @@ export function DatePicker({
                   type="button"
                   className="date-picker-nav-btn"
                   data-testid="date-picker-prev-month"
-                  aria-label={lang === 'en' ? 'Previous month' : '上个月'}
+                  aria-label={t(lang, 'sched_prev_month')}
                   onClick={handlePrevMonth}
                 >
                   {CHEVRON_LEFT}
@@ -372,7 +373,7 @@ export function DatePicker({
                   type="button"
                   className="date-picker-nav-btn"
                   data-testid="date-picker-next-month"
-                  aria-label={lang === 'en' ? 'Next month' : '下个月'}
+                  aria-label={t(lang, 'sched_next_month')}
                   onClick={handleNextMonth}
                 >
                   {CHEVRON_RIGHT}

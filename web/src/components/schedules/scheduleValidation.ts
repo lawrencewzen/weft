@@ -1,3 +1,4 @@
+import { t } from '../../i18n';
 import type { Lang } from '../../data/lang';
 import type { ScheduleRule, ScheduleTarget } from '../../data/store';
 
@@ -38,44 +39,44 @@ export function validateScheduleForm(
   const errors: ScheduleFormErrors = {};
 
   if (!data.name.trim()) {
-    errors.name = lang === 'en' ? 'Task name is required' : '任务名称不能为空';
+    errors.name = t(lang, 'sched_err_name');
   }
 
   if (!data.message.trim()) {
-    errors.message = lang === 'en' ? 'Message content is required' : '消息内容不能为空';
+    errors.message = t(lang, 'sched_err_message');
   }
 
   if (data.targetKind === 'conversation') {
     if (!data.conversationId) {
-      errors.conversationId = lang === 'en' ? 'Please select a conversation' : '请选择目标对话';
+      errors.conversationId = t(lang, 'sched_err_conversation');
     }
   } else if (data.targetKind === 'new') {
     if (!data.workspaceId) {
-      errors.workspaceId = lang === 'en' ? 'Please select a workspace' : '请选择工作区';
+      errors.workspaceId = t(lang, 'sched_err_workspace');
     }
   }
 
   if (data.ruleKind === 'once') {
     if (!data.onceAt || isNaN(data.onceAt)) {
-      errors.onceAt = lang === 'en' ? 'Please select date and time' : '请选择执行日期和时间';
+      errors.onceAt = t(lang, 'sched_err_once');
     }
   } else if (data.ruleKind === 'daily') {
     if (!data.dailyTime || !/^\d{2}:\d{2}$/.test(data.dailyTime)) {
-      errors.dailyTime = lang === 'en' ? 'Please enter a valid time' : '请输入有效的时间（HH:MM）';
+      errors.dailyTime = t(lang, 'sched_err_time');
     }
   } else if (data.ruleKind === 'weekly') {
     if (!data.weeklyDays || data.weeklyDays.length === 0) {
-      errors.weeklyDays = lang === 'en' ? 'Please select at least one day' : '每周请至少选择一天';
+      errors.weeklyDays = t(lang, 'sched_err_days');
     }
     if (!data.weeklyTime || !/^\d{2}:\d{2}$/.test(data.weeklyTime)) {
-      errors.weeklyTime = lang === 'en' ? 'Please enter a valid time' : '请输入有效的时间（HH:MM）';
+      errors.weeklyTime = t(lang, 'sched_err_time');
     }
   } else if (data.ruleKind === 'interval') {
     const totalMinutes = data.intervalUnit === 'hours'
       ? data.intervalValue * 60
       : data.intervalValue;
     if (isNaN(totalMinutes) || totalMinutes < 5) {
-      errors.interval = lang === 'en' ? 'Interval must be at least 5 minutes' : '间隔不能少于 5 分钟';
+      errors.interval = t(lang, 'sched_err_interval');
     }
   }
 

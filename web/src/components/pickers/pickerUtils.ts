@@ -1,3 +1,4 @@
+import { t, type I18nKey } from '../../i18n';
 export function parseTime(str: string): { hour: number; minute: number } | null {
   if (!str) return null;
   const trimmed = str.trim();
@@ -186,14 +187,14 @@ const EN_MONTHS = [
 
 export function formatMonthHeader(year: number, month: number, lang: 'zh' | 'en'): string {
   if (lang === 'en') {
-    return `${EN_MONTHS[month - 1] || ''} ${year}`;
+    return t(lang, 'picker_month_header', { year, month: EN_MONTHS[month - 1] || '' });
   }
-  return `${year}年${month}月`;
+  return t(lang, 'picker_month_header', { year, month });
 }
 
 export const WEEKDAY_HEADERS: Record<'zh' | 'en', string[]> = {
-  zh: ['一', '二', '三', '四', '五', '六', '日'],
-  en: ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'],
+  zh: [1, 2, 3, 4, 5, 6, 7].map((i) => t('zh', `wd_short_${i}` as I18nKey)),
+  en: [1, 2, 3, 4, 5, 6, 7].map((i) => t('en', `wd_short_${i}` as I18nKey)),
 };
 
 export function addDays(dateStr: string, deltaDays: number): string {

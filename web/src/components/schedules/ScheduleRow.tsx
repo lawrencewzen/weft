@@ -62,23 +62,23 @@ export function ScheduleRow({
 
   // Determine last run status & hover title
   let lastRunStatus = 'never';
-  let lastRunTitle = lang === 'en' ? 'Never run' : '从未运行';
+  let lastRunTitle = t(lang, 'sched_never_run');
   if (schedule.lastRun) {
     lastRunStatus = schedule.lastRun.status;
     if (schedule.lastRun.status === 'ok') {
-      lastRunTitle = lang === 'en' ? 'Last run: Success' : '上次运行：成功';
+      lastRunTitle = t(lang, 'sched_last_ok');
     } else if (schedule.lastRun.status === 'missed_caught_up') {
-      lastRunTitle = lang === 'en' ? 'Last run: Caught up' : '上次运行：补跑完成';
+      lastRunTitle = t(lang, 'sched_last_caught');
     } else if (schedule.lastRun.status === 'failed') {
       const err = schedule.lastRun.error ? ` (${schedule.lastRun.error})` : '';
-      lastRunTitle = (lang === 'en' ? 'Last run: Failed' : '上次运行：失败') + err;
+      lastRunTitle = (t(lang, 'sched_last_failed')) + err;
     }
   }
 
   // Target label & icon
   const targetLabel = schedule.target.kind === 'conversation'
     ? schedule.target.title || schedule.target.conversationId
-    : `${schedule.target.workspaceName} · ${lang === 'en' ? 'New chat each time' : '每次新开对话'}`;
+    : t(lang, 'sched_new_chat_each', { workspace: schedule.target.workspaceName });
 
   return (
     <div

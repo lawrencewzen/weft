@@ -20,7 +20,7 @@ function formatRunTime(timestamp: number, lang: Lang): string {
     const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     return `${monthNames[d.getMonth()]} ${date}, ${hours}:${minutes}`;
   }
-  return `${month}月${date}日 ${hours}:${minutes}`;
+  return t(lang, 'sched_run_time', { month, date, time: `${hours}:${minutes}` });
 }
 
 export function ScheduleRunsList({ scheduleId, lang }: Props) {

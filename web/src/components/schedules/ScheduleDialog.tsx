@@ -3,7 +3,7 @@ import { createSchedule, patchSchedule, type Schedule } from '../../data/api';
 import type { Lang } from '../../data/lang';
 import { useProviders } from '../../data/useProviders';
 import { useWorkspaces } from '../../data/useWorkspaces';
-import { t } from '../../i18n';
+import { t, type I18nKey } from '../../i18n';
 import { computeNextRunPreview } from './formatRule';
 import { DatePicker } from '../pickers/DatePicker';
 import { TimePicker } from '../pickers/TimePicker';
@@ -224,8 +224,6 @@ export function ScheduleDialog({ lang, schedule, onClose, onToast }: Props) {
 
   const nextRunPreview = computeNextRunPreview(currentFormData, lang);
 
-  const zhDays = ['一', '二', '三', '四', '五', '六', '日'];
-  const enDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
   return (
     <div className="modal-overlay" data-testid="next-schedule-dialog-overlay" onClick={onClose}>
@@ -444,7 +442,7 @@ export function ScheduleDialog({ lang, schedule, onClose, onToast }: Props) {
                 <div className="schedule-once-grid">
                   <div>
                     <label className="schedule-sublabel" htmlFor="sched-once-date">
-                      {lang === 'en' ? 'Date' : '日期'}
+                      {t(lang, 'sched_date')}
                     </label>
                     <DatePicker
                       id="sched-once-date"
@@ -461,7 +459,7 @@ export function ScheduleDialog({ lang, schedule, onClose, onToast }: Props) {
                   </div>
                   <div>
                     <label className="schedule-sublabel" htmlFor="sched-once-time">
-                      {lang === 'en' ? 'Time' : '时间'}
+                      {t(lang, 'sched_time')}
                     </label>
                     <TimePicker
                       id="sched-once-time"
@@ -482,7 +480,7 @@ export function ScheduleDialog({ lang, schedule, onClose, onToast }: Props) {
               {ruleKind === 'daily' ? (
                 <div className="schedule-rule-subrow">
                   <label className="schedule-sublabel" htmlFor="sched-daily-time">
-                    {lang === 'en' ? 'Time' : '时间'}
+                    {t(lang, 'sched_time')}
                   </label>
                   <TimePicker
                     id="sched-daily-time"
@@ -504,7 +502,7 @@ export function ScheduleDialog({ lang, schedule, onClose, onToast }: Props) {
                   <div className="schedule-days-picker" data-testid="next-schedule-weekly-days">
                     {[1, 2, 3, 4, 5, 6, 7].map((d) => {
                       const active = weeklyDays.includes(d);
-                      const label = lang === 'en' ? enDays[d - 1] : zhDays[d - 1];
+                      const label = t(lang, `wd_long_${d}` as I18nKey);
                       return (
                         <button
                           key={d}
@@ -521,7 +519,7 @@ export function ScheduleDialog({ lang, schedule, onClose, onToast }: Props) {
                   </div>
                   <div style={{ marginTop: '8px' }}>
                     <label className="schedule-sublabel" htmlFor="sched-weekly-time">
-                      {lang === 'en' ? 'Time' : '时间'}
+                      {t(lang, 'sched_time')}
                     </label>
                     <TimePicker
                       id="sched-weekly-time"
