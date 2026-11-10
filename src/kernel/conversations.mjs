@@ -51,6 +51,16 @@ import {
   readTreeBlob,
 } from './workspace-snapshot.mjs';
 import { decodeWorkspaceBytes } from './workspace-text.mjs';
+import {
+  TurnChanges,
+  diffChangeRows,
+  hasPendingBaseline,
+  normalizeStoredTurns,
+  pickTurnAnchor,
+  plainChange,
+  plainChanges,
+  turnChangesItemId,
+} from './turn-changes.mjs';
 import { activeContextUsage, installUsageExtension } from './usage.mjs';
 import { createAntigravityCwdExtension } from './antigravity-cwd.mjs';
 import { createWorkspaceEnv } from './workspace-env.mjs';
@@ -224,7 +234,8 @@ export async function openConversationKernel({
     return rows.find((row) => Number(row.harnessId) === wanted)?.id ?? null;
   }
 
-  registry.install(createWorkspaceExtension());
+  const turnChangeHooks = {};
+  registry.install(createWorkspaceExtension(turnChangeHooks));
   installAgentExtensions(registry, agentBridge, { dataDir });
   installUsageExtension(registry);
   installPluginReload(registry, agentBridge);
@@ -489,6 +500,13 @@ export async function openConversationKernel({
     mapCtx.contextWindow = await conversationWindow(conv);
     const mapped = projectViewUpdate(projector, view, mapCtx);
     for (const ev of mapped.events) await deliver(cid, ev);
+    if (mapped.runEnded && typeof turnChangeHooks.settle === 'function') {
+      try {
+        await turnChangeHooks.settle(cid);
+      } catch (err) {
+        logTurnError(err);
+      }
+    }
     if (mapped.refresh || mapped.runEnded) {
       const current = await store.getConversation(cid);
       const status = await submissionView(current);
@@ -864,6 +882,164 @@ export async function openConversationKernel({
     return promise;
   }
 
+  const turnLocks = new Map();
+
+  function logTurnError(err) {
+    const message = err instanceof Error ? err.message : String(err ?? '');
+    if (message.includes('Session is closed')) return;
+    console.error(`WEFT_TURN_CHANGES ${redactAuthText(message)}`);
+  }
+
+  function withTurnLock(cid, fn) {
+    const prev = turnLocks.get(cid) || Promise.resolve();
+    const run = prev.then(fn, fn);
+    turnLocks.set(cid, run.then(() => {}, () => {}));
+    return run;
+  }
+
+  async function readTurnState(harnessId) {
+    if (harnessId == null) return null;
+    try {
+      return await harness.snapshot(TurnChanges, harnessId, context);
+    } catch (err) {
+      logTurnError(err);
+      return null;
+    }
+  }
+
+  async function plainCumulative(cid) {
+    try {
+      // Bypass the right-pane cache. A caller can edit the worktree as soon
+      // as the submission is done, while this read is still in flight.
+      const result = await computeChanges(cid);
+      return plainChanges(result.rows);
+    } catch (err) {
+      logTurnError(err);
+      return [];
+    }
+  }
+
+  function outsideOf(rows) {
+    return plainChanges((rows || []).filter((row) => isOutsideWorkspacePath(row?.path)));
+  }
+
+  /**
+   * Photograph the worktree before this run's tools. A later model call in
+   * the same run keeps the first photo. Child conversations are not app
+   * rows, so their runs do not open a turn.
+   */
+  async function ensureTurnBaseline(api, hookContext) {
+    const harnessId = api?.conversationId;
+    const cid = await conversationIdFor(harnessId);
+    if (!cid) return;
+    await withTurnLock(cid, async () => {
+      const conv = await store.getConversation(cid);
+      if (!conv?.harnessId) return;
+      if (hasPendingBaseline(await readTurnState(conv.harnessId))) return;
+      const workspacePath = conv.workspacePath || '';
+      const captured = workspacePath
+        ? await captureWorktree({
+          cwd: workspacePath,
+          indexFile: indexFileFor(dataDir, cid, workspacePath),
+          env,
+        })
+        : { mode: 'fallback', tree: '' };
+      let userEntryId = '';
+      try {
+        const page = await api.entries({ order: 'descending' }, 30, undefined, hookContext);
+        for (const entry of page?.items || []) {
+          if (entry?.kind === 'pi.user') {
+            userEntryId = String(entry.id);
+            break;
+          }
+        }
+      } catch {
+        userEntryId = '';
+      }
+      const cumulative = await plainCumulative(cid);
+      const git = captured.mode === 'git' && captured.tree;
+      const pending = {
+        mode: git ? 'git' : 'fallback',
+        tree: git ? captured.tree : '',
+        userEntryId,
+        rows: git ? outsideOf(cumulative) : cumulative,
+      };
+      await harness.commit(async (tx) => {
+        const state = await tx.doc(TurnChanges, conv.harnessId);
+        if (hasPendingBaseline(state)) return;
+        state.pending = pending;
+      }, context);
+    });
+  }
+
+  async function diffTurn(conv, pending) {
+    const workspacePath = conv.workspacePath || '';
+    if (pending.mode === 'git' && pending.tree && workspacePath) {
+      const entries = await listWorktreeChanges({
+        cwd: workspacePath,
+        indexFile: indexFileFor(dataDir, conv.id, workspacePath),
+        baseTree: pending.tree,
+        env,
+      });
+      const baselines = await baselinesFor(conv.id);
+      const gitRows = plainChanges(decorateGitChanges(entries, baselines));
+      const outside = diffChangeRows(pending.rows, outsideOf(await plainCumulative(conv.id)));
+      return plainChanges([...gitRows, ...outside]);
+    }
+    return diffChangeRows(pending.rows, await plainCumulative(conv.id));
+  }
+
+  async function settleTurn(cid, anchorId) {
+    if (!cid) return;
+    await withTurnLock(cid, async () => {
+      const conv = await store.getConversation(cid);
+      if (!conv?.harnessId) return;
+      const state = await readTurnState(conv.harnessId);
+      if (!hasPendingBaseline(state)) return;
+      const pending = state.pending;
+      let rows = [];
+      try {
+        rows = await diffTurn(conv, pending);
+      } catch (err) {
+        logTurnError(err);
+        rows = [];
+      }
+      let anchor = '';
+      if (rows.length) {
+        try {
+          const transcript = await readTranscript(conv.harnessId);
+          anchor = pickTurnAnchor(transcript.messages, pending.userEntryId, anchorId);
+        } catch (err) {
+          logTurnError(err);
+          anchor = '';
+        }
+        if (!anchor) {
+          console.error(`WEFT_TURN_CHANGES no anchor cid=${cid}`);
+        }
+      }
+      const record = anchor && rows.length
+        ? { id: turnChangesItemId(anchor), anchorId: anchor, changes: rows.map((row) => plainChange(row)).filter(Boolean) }
+        : null;
+      await harness.commit(async (tx) => {
+        const doc = await tx.doc(TurnChanges, conv.harnessId);
+        if (!hasPendingBaseline(doc)) return;
+        if (record && record.changes.length) {
+          const turns = Array.isArray(doc.turns) ? doc.turns.slice() : [];
+          const known = turns.some((row) => row && (String(row.anchorId) === record.anchorId || String(row.id) === record.id));
+          if (!known) turns.push(record);
+          doc.turns = turns;
+        }
+        doc.pending = null;
+      }, context);
+    });
+  }
+
+  turnChangeHooks.beforeRequest = (api, hookContext) => ensureTurnBaseline(api, hookContext);
+  turnChangeHooks.afterRun = (harnessId, anchorId) => (
+    conversationIdFor(harnessId).then((cid) => settleTurn(cid, anchorId))
+  );
+  turnChangeHooks.settle = (cid) => settleTurn(cid);
+
   async function legacyDiff(workspacePath, baseline) {
     if (baseline.oversized || baseline.error) {
       return {
@@ -1120,6 +1296,17 @@ export async function openConversationKernel({
       return subagents.stopConversation(cid);
     },
     changes,
+    async turnChanges(cid) {
+      try {
+        const conv = await store.getConversation(cid);
+        if (!conv?.harnessId) return [];
+        const state = await readTurnState(conv.harnessId);
+        return normalizeStoredTurns(state);
+      } catch (err) {
+        logTurnError(err);
+        return [];
+      }
+    },
     diff,
     async getMessageImage(cid, messageId, index) {
       const conv = await store.getConversation(cid);

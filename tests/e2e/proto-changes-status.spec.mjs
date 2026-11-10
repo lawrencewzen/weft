@@ -79,6 +79,7 @@ test('changes pane: file status letters, deleted strikethrough, rename display, 
   expect(await delDiff.locator('[data-op=del]').count()).toBeGreaterThan(0);
 
   // 6. Thread change summary also shows status badges
+  await page.getByTestId('next-change-summary-toggle').click();
   const sumAddRow = page.locator('[data-testid=next-change-summary-row][data-path="web/src/data/store.test.ts"]');
   await expect(sumAddRow.getByTestId('next-change-summary-status')).toHaveText('A');
   await expect(sumAddRow.getByTestId('next-change-summary-status')).toHaveAttribute('title', '新增');

@@ -6,7 +6,7 @@ import type { Lang } from '../data/lang';
 import { useSession } from '../data/session';
 import type { ConversationActions } from '../data/useConversation';
 import { useProviders } from '../data/useProviders';
-import { subagentTopic, type Change, type ThreadItem, type ToolCall } from '../data/store';
+import { subagentTopic, type ThreadItem, type ToolCall } from '../data/store';
 import { useStoreTopics } from '../data/useStoreTopic';
 import { conversationPath, navigate } from '../data/nav';
 import { t } from '../i18n';
@@ -50,7 +50,6 @@ type Props = {
   stickNonce: number;
   conversationId?: string | null;
   conversationModel?: ConversationModel | null;
-  changes?: Change[];
   isDraft?: boolean;
   draftWorkspaceId?: string | null;
   draftWorkspaceName?: string | null;
@@ -201,7 +200,6 @@ export function Thread({
   stickNonce,
   conversationId,
   conversationModel = null,
-  changes = [],
   isDraft = false,
   draftWorkspaceId = null,
   draftWorkspaceName = null,
@@ -344,6 +342,9 @@ export function Thread({
     if (item.kind === 'system_note') {
       return <SystemNote key={item.id} item={item} lang={lang} />;
     }
+    if (item.kind === 'turn_changes') {
+      return <ChangeSummary key={item.id} changes={item.changes} lang={lang} />;
+    }
     return null;
   }
 
@@ -407,9 +408,6 @@ export function Thread({
               : items.map(renderItem)}
           </>
         )}
-        {!empty && changes.length ? (
-          <ChangeSummary changes={changes} lang={lang} />
-        ) : null}
         {compacting ? (
           <div className="thread-pending" data-testid="next-thread-compacting">
             <span className="run-spin" aria-hidden="true"><span /></span>

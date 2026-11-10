@@ -2,6 +2,7 @@
 
 import { phrase, type Lang } from '../phrases/index.ts';
 import type { components } from '../contract.gen.ts';
+import type { Change } from './changes.ts';
 import { isPromptUserMessage } from './continuation.ts';
 import { parseSubagentReport } from './subagent-report.ts';
 import { extractPathRefs, type ExtractPathRefsOptions } from './path-refs.ts';
@@ -54,6 +55,12 @@ export type ThreadSubagent = {
   status?: unknown;
 };
 
+export type TurnChangeRecord = {
+  id: string;
+  anchorId: string;
+  changes: Change[];
+};
+
 export type BuildThreadOptions = {
   lang?: Lang;
   workspacePath?: string;
@@ -61,6 +68,8 @@ export type BuildThreadOptions = {
   subagents?: ThreadSubagent[];
   running?: boolean;
   exists?: ExtractPathRefsOptions['exists'];
+  /** Stored per-turn file lists. Missing records (old conversations) insert nothing. */
+  turnChanges?: readonly TurnChangeRecord[] | null;
 };
 
 export type ThreadView = {
@@ -175,6 +184,7 @@ export async function buildThread(
     subagents = [],
     running = false,
     exists,
+    turnChanges,
   }: BuildThreadOptions = {},
 ): Promise<ThreadView> {
   const msgs = Array.isArray(messages) ? messages : [];
@@ -309,5 +319,34 @@ export async function buildThread(
   }
 
   flushTools(Boolean(running));
-  return { items, tools };
+  return { items: insertTurnChanges(items, turnChanges), tools };
+}
+
+/** Place each stored card immediately after that turn's last assistant reply. */
+function insertTurnChanges(
+  items: ThreadItem[],
+  records: readonly TurnChangeRecord[] | null | undefined,
+): ThreadItem[] {
+  if (!records?.length) return items;
+  const byAnchor = new Map<string, TurnChangeRecord>();
+  for (const record of records) {
+    if (!record?.anchorId || !record.id || !record.changes?.length) continue;
+    if (!byAnchor.has(record.anchorId)) byAnchor.set(record.anchorId, record);
+  }
+  if (!byAnchor.size) return items;
+  const out: ThreadItem[] = [];
+  const used = new Set<string>();
+  for (const item of items) {
+    out.push(item);
+    if (item.kind !== 'assistant') continue;
+    const record = byAnchor.get(item.id);
+    if (!record || used.has(record.id)) continue;
+    used.add(record.id);
+    out.push({
+      kind: 'turn_changes',
+      id: record.id,
+      changes: record.changes,
+    });
+  }
+  return out;
 }
