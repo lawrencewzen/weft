@@ -352,7 +352,7 @@ function changedClause(tools: ToolLike[], t: Translate): string {
 }
 
 function failedClause(tools: ToolLike[], t: Translate): string {
-  const failed = tools.filter((tool) => isRealToolFailure(tool, tools));
+  const failed = tools.filter((tool) => isRealToolFailure(tool, tools) && !isSupersededFailure(tool, tools));
   if (!failed.length) return '';
   return failed.slice(0, 2).map((tool) => failedPhrase(tool, t)).join(t('tool_sum_names_join'));
 }
@@ -409,7 +409,7 @@ function namedKindPhrase(kind: string, tools: ToolLike[], t: Translate): string 
 
 function namedCountClause(tools: ToolLike[], t: Translate): string {
   const rest = tools.filter((tool) => {
-    if (isCallFailed(tool)) return false;
+    if (isCallFailed(tool) && !isSupersededFailure(tool, tools)) return false;
     return COUNT_KINDS.has(toolKind(tool?.name));
   });
   if (!rest.length) return '';
@@ -666,6 +666,19 @@ export function isProbeFailure(tool: ToolLike | null | undefined, tools: unknown
   const index = indexInGroup(tool, list);
   if (index < 0 || index === list.length - 1) return false;
   return list.slice(index + 1).some(isCallSuccessful);
+}
+
+/**
+ * A failed call of a named tool (ask_user_question, MCP, ...) that a later call in the
+ * group followed up on without failing. The heading follows the last call, so it stays
+ * in the call count instead of being worded as a failure. The failure count still has it.
+ */
+function isSupersededFailure(tool: ToolLike | null | undefined, tools: unknown): boolean {
+  if (!isCallFailed(tool) || toolKind(tool?.name) !== 'other') return false;
+  const list = Array.isArray(tools) ? (tools as ToolLike[]).filter(Boolean) : [];
+  const index = indexInGroup(tool, list);
+  if (index < 0 || index === list.length - 1) return false;
+  return !isCallFailed(list[list.length - 1]);
 }
 
 export function isRealToolFailure(tool: ToolLike | null | undefined, tools: unknown): boolean {

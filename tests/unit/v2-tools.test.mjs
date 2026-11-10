@@ -680,3 +680,22 @@ test('toolCallView success, failure, probe, running, bash exit, and diffs pass t
   const summary = toolGroupSummaryView([success, failed], 'zh');
   assert.equal(validateToolGroupSummary(summary), true, JSON.stringify(validateToolGroupSummary.errors));
 });
+
+test('a failed ask followed by a successful ask counts both calls and does not title a failure', () => {
+  const summary = summarizeToolGroup([
+    tool('ask_user_question', { id: 'a1', status: 'error' }),
+    tool('ask_user_question', { id: 'a2', status: 'done' }),
+  ], 'zh');
+  assert.equal(summary.text, '调用了 2 次 ask_user_question');
+  assert.equal(summary.failed, 1);
+  assert.equal(summary.running, false);
+});
+
+test('a failed ask that is also the last call still titles a failure', () => {
+  const summary = summarizeToolGroup([
+    tool('ask_user_question', { id: 'a1', status: 'done' }),
+    tool('ask_user_question', { id: 'a2', status: 'error' }),
+  ], 'zh');
+  assert.match(summary.text, /失败/);
+  assert.equal(summary.failed, 1);
+});
