@@ -305,3 +305,49 @@ test('three faux turns record per-turn file cards, including bash and a subagent
     await rm(dataDir, { recursive: true, force: true });
   }
 });
+
+test('one file edited several times is one row; an edit that returns to the turn start is no card', { timeout: 120_000 }, async () => {
+  const dataDir = await mkdtemp(path.join(tmpdir(), 'weft-turn-changes-multi-'));
+  const script = path.join(dataDir, 'script.json');
+  await writeFile(script, JSON.stringify({
+    turns: [
+      { tool: 'write', args: { path: 'm.txt', content: 'm1\n' } },
+      { text: 'created m' },
+      { tool: 'write', args: { path: 'm.txt', content: 'm1\nm2\n' } },
+      { tool: 'write', args: { path: 'm.txt', content: 'm1\nm2\nm3\n' } },
+      { text: 'extended m twice' },
+      { tool: 'write', args: { path: 'm.txt', content: 'changed\n' } },
+      { tool: 'write', args: { path: 'm.txt', content: 'm1\nm2\nm3\n' } },
+      { text: 'put m back' },
+    ],
+  }));
+  const env = { WEFT_LLM: 'faux', WEFT_FAUX_SCRIPT: script, WEFT_RETRY_MAX: '2' };
+  const srv = await startServer({ dataDir, token: TOKEN, env });
+  try {
+    const discovery = await readDiscovery(srv.dataDir);
+    const ws = await request(srv.base, 'POST', '/api/workspaces', { name: 'multi' }, TOKEN);
+    assert.equal(ws.status, 201, JSON.stringify(ws.body));
+    await initRepo(ws.body.path);
+    const conv = await request(srv.base, 'POST', `/api/workspaces/${ws.body.id}/conversations`, { title: 'multi' }, TOKEN);
+    const id = conv.body.id;
+    await send(srv.base, id, 'create');
+    await waitSnapshot(srv.base, discovery.token, id, (items) => assistantFollowedBy(items, 'created m', 'turn_changes'));
+    await send(srv.base, id, 'extend');
+    await waitSnapshot(srv.base, discovery.token, id, (items) => assistantFollowedBy(items, 'extended m twice', 'turn_changes'));
+    await send(srv.base, id, 'revert');
+    // Give the settle step time to run, then require that no card was added.
+    await new Promise((resolve) => setTimeout(resolve, 600));
+    const got = await waitSnapshot(srv.base, discovery.token, id, (items) => items.some((item) => String(item.text || '').includes('put m back')));
+    const items = got.body.items;
+    const first = cardAfter(items, 'created m');
+    assert.deepEqual(first.next.changes.map((row) => [row.path, row.added, row.removed]), [['m.txt', 1, 0]]);
+    const second = cardAfter(items, 'extended m twice');
+    assert.deepEqual(second.next.changes.map((row) => [row.path, row.added, row.removed]), [['m.txt', 2, 0]]);
+    const third = cardAfter(items, 'put m back');
+    assert.notEqual(third.next?.kind, 'turn_changes', JSON.stringify(third.next));
+    assert.equal(items.filter((item) => item.kind === 'turn_changes').length, 2);
+  } finally {
+    await stopServer(srv);
+    await rm(dataDir, { recursive: true, force: true });
+  }
+});
