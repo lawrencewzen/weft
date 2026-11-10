@@ -151,27 +151,26 @@ for (const scheme of ['light', 'dark']) {
   });
 }
 
-test('clicking close pops up dialog with tray/quit buttons, checkbox, and reminder note; cancel dismisses it', async ({ page }) => {
+test('clicking close pops up dialog with 2 option cards, checkbox, and hint; cancel dismisses it', async ({ page }) => {
   const state = await openProto(page, '?shell=1');
   await page.getByTestId('window-close').click();
 
   const dialog = page.getByTestId('window-close-dialog');
   await expect(dialog).toBeVisible();
-  await expect(page.getByTestId('window-close-tray')).toHaveText('缩到托盘');
-  await expect(page.getByTestId('window-close-quit')).toHaveText('退出 Weft');
-  await expect(page.getByTestId('window-close-remember')).toBeVisible();
-  await expect(page.getByTestId('window-close-note')).toHaveText('退出后定时任务不会执行。');
+  const trayCard = page.getByTestId('window-close-tray');
+  const quitCard = page.getByTestId('window-close-quit');
+  await expect(trayCard).toContainText('缩到托盘');
+  await expect(trayCard).toContainText('后台继续运行，定时任务照常执行');
+  await expect(quitCard).toContainText('退出 Weft');
+  await expect(quitCard).toContainText('停止服务，定时任务不会执行');
+  await expect(page.getByTestId('window-close-remember')).toHaveText('记住我的选择，不再询问');
+  await expect(page.getByTestId('window-close-settings-hint')).toHaveText('可在 设置 › 通用 中修改');
 
-  // Note is located above the bottom actions row
-  const noteBox = await box(page.getByTestId('window-close-note'));
-  const actionsBox = await box(page.locator('.window-close-actions'));
-  expect(noteBox.y + noteBox.height).toBeLessThanOrEqual(actionsBox.y);
-
-  // In normal close mode: secondary on left (退出 Weft), primary on right (缩到托盘)
-  const btns = dialog.locator('.window-close-btns button');
-  expect(await btns.nth(0).getAttribute('data-testid')).toBe('window-close-quit');
-  expect(await btns.nth(1).getAttribute('data-testid')).toBe('window-close-tray');
-  await expect(btns.nth(1)).toHaveClass(/p/);
+  // Default focus is on tray card
+  const isTrayFocused = await page.evaluate(() => {
+    return document.activeElement?.getAttribute('data-testid') === 'window-close-tray';
+  });
+  expect(isTrayFocused).toBe(true);
 
   // Cancel via Esc
   await page.keyboard.press('Escape');
@@ -190,7 +189,36 @@ test('clicking close pops up dialog with tray/quit buttons, checkbox, and remind
   expectClean(state);
 });
 
-test('clicking tray and quit buttons send hide-to-tray and quit messages respectively', async ({ page }) => {
+test('keyboard navigation switches between cards using ArrowLeft/ArrowRight and Enter executes focused card', async ({ page }) => {
+  const state = await openProto(page, '?shell=1');
+  await page.getByTestId('window-close').click();
+
+  const dialog = page.getByTestId('window-close-dialog');
+  await expect(dialog).toBeVisible();
+
+  // Initially on tray card
+  expect(await page.evaluate(() => document.activeElement?.getAttribute('data-testid'))).toBe('window-close-tray');
+
+  // Press ArrowRight -> moves to quit card
+  await page.keyboard.press('ArrowRight');
+  expect(await page.evaluate(() => document.activeElement?.getAttribute('data-testid'))).toBe('window-close-quit');
+
+  // Press ArrowLeft -> moves back to tray card
+  await page.keyboard.press('ArrowLeft');
+  expect(await page.evaluate(() => document.activeElement?.getAttribute('data-testid'))).toBe('window-close-tray');
+
+  // Press ArrowRight -> moves to quit card and press Enter
+  await page.keyboard.press('ArrowRight');
+  expect(await page.evaluate(() => document.activeElement?.getAttribute('data-testid'))).toBe('window-close-quit');
+  await page.keyboard.press('Enter');
+
+  await expect(dialog).toHaveCount(0);
+  expect(await page.evaluate(() => window.__protoShellMessages)).toEqual(['quit']);
+
+  expectClean(state);
+});
+
+test('clicking tray and quit cards send hide-to-tray and quit messages respectively', async ({ page }) => {
   const state = await openProto(page, '?shell=1');
 
   // Click tray
@@ -269,31 +297,79 @@ test('without shell attribute, settings general page does not show close action 
   expectClean(state);
 });
 
-test('confirm-quit simulated via window.__protoShell opens dialog with quit focused and hides remember checkbox', async ({ page }) => {
+test('confirm-quit simulated via window.__protoShell opens confirm dialog, cancel posts nothing, quit posts quit', async ({ page }) => {
   const state = await openProto(page, '?shell=1');
 
   await page.evaluate(() => window.__protoShell('confirm-quit'));
-  const dialog = page.getByTestId('window-close-dialog');
+  const dialog = page.getByTestId('confirm-quit-dialog');
   await expect(dialog).toBeVisible();
   await expect(page.getByTestId('window-close-remember')).toHaveCount(0);
-  await expect(page.getByTestId('window-close-note')).toHaveText('退出后定时任务不会执行。');
+  await expect(page.locator('.window-close-cards')).toHaveCount(0);
+  await expect(dialog.getByTestId('next-confirm-message')).toHaveText('退出后定时任务不会执行。');
 
-  // In confirm-quit mode: secondary on left (缩到托盘), primary on right (退出 Weft)
-  const btns = dialog.locator('.window-close-btns button');
-  expect(await btns.nth(0).getAttribute('data-testid')).toBe('window-close-tray');
-  expect(await btns.nth(1).getAttribute('data-testid')).toBe('window-close-quit');
-  await expect(btns.nth(1)).toHaveClass(/p/);
+  // Cancel on left, Quit on right as primary (p) and focused
+  const cancelBtn = page.getByTestId('confirm-quit-cancel');
+  const quitBtn = page.getByTestId('confirm-quit-ok');
+  await expect(cancelBtn).toHaveText('取消');
+  await expect(quitBtn).toHaveText('退出');
+  await expect(quitBtn).toHaveClass(/p/);
 
   // Focused element is the quit button
   const isQuitFocused = await page.evaluate(() => {
-    return document.activeElement?.getAttribute('data-testid') === 'window-close-quit';
+    return document.activeElement?.getAttribute('data-testid') === 'confirm-quit-ok';
   });
   expect(isQuitFocused).toBe(true);
 
-  // Clicking quit sends quit message
-  await page.getByTestId('window-close-quit').click();
+  // Cancel dismisses without posting
+  await cancelBtn.click();
+  await expect(dialog).toHaveCount(0);
+  expect(await page.evaluate(() => window.__protoShellMessages)).toEqual([]);
+
+  // Re-trigger and click quit -> posts quit
+  await page.evaluate(() => window.__protoShell('confirm-quit'));
+  await expect(dialog).toBeVisible();
+  await page.getByTestId('confirm-quit-ok').click();
   await expect(dialog).toHaveCount(0);
   expect(await page.evaluate(() => window.__protoShellMessages)).toEqual(['quit']);
+
+  expectClean(state);
+});
+
+test('in English locale, card titles are single line (height <= line-height * 1.5)', async ({ page }) => {
+  const state = await openProto(page, '?shell=1');
+  await page.evaluate(() => {
+    localStorage.setItem('weft_lang', 'en');
+  });
+  await page.reload();
+
+  await page.getByTestId('window-close').click();
+  const dialog = page.getByTestId('window-close-dialog');
+  await expect(dialog).toBeVisible();
+
+  const trayTitle = dialog.locator('[data-testid="window-close-tray"] .window-close-card-title');
+  const quitTitle = dialog.locator('[data-testid="window-close-quit"] .window-close-card-title');
+
+  await expect(trayTitle).toHaveText('Minimize to tray');
+  await expect(quitTitle).toHaveText('Quit Weft');
+
+  const trayBox = await box(trayTitle);
+  const quitBox = await box(quitTitle);
+
+  const [trayLineHeight, quitLineHeight] = await page.evaluate(() => {
+    const getLh = (sel) => {
+      const el = document.querySelector(sel);
+      const s = getComputedStyle(el);
+      const lh = parseFloat(s.lineHeight);
+      return Number.isNaN(lh) ? parseFloat(s.fontSize) * 1.35 : lh;
+    };
+    return [
+      getLh('[data-testid="window-close-tray"] .window-close-card-title'),
+      getLh('[data-testid="window-close-quit"] .window-close-card-title'),
+    ];
+  });
+
+  expect(trayBox.height).toBeLessThanOrEqual(trayLineHeight * 1.5);
+  expect(quitBox.height).toBeLessThanOrEqual(quitLineHeight * 1.5);
 
   expectClean(state);
 });
