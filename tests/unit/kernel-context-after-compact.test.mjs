@@ -342,22 +342,22 @@ test('automatic compaction drops the context percent before the next reply', { t
   await withHarnessLock(async () => {
     const dataDir = await mkdtemp(path.join(tmpdir(), 'weft-ctx-auto-'));
     const script = await writeScript(dataDir, [
-      { text: 'EARLY_REPLY', usage: usage(84000) },
-      { text: 'PAD_REPLY', usage: usage(84000) },
+      { text: 'EARLY_REPLY', usage: usage(70000) },
+      { text: 'PAD_REPLY', usage: usage(70000) },
       ...repeated({ text: 'NEXT_REPLY', when: 'AFTER_AUTO', usage: usage(8000) }, 8),
     ]);
     let opened = null;
     try {
       opened = await openKernel(dataDir, script);
       const { store, kernel } = opened;
-      const stored = await store.putSettings({ compaction: { triggerPercent: 80 } });
+      const stored = await store.putSettings({ compaction: { triggerPercent: 60 } });
       await kernel.noteSettings(stored);
       const conv = await makeConversation(store, kernel, dataDir);
       await say(kernel, store, conv, 'EARLY_AUTO remember');
       const primed = await contextOf(kernel, store, conv);
-      assert.equal(primed.used, 84000, JSON.stringify(primed));
+      assert.equal(primed.used, 70000, JSON.stringify(primed));
       // The pad is recent and large enough to leave the early turn outside
-      // keepRecent, while 84000 plus that pad stays under the blocking line.
+      // keepRecent, while 70000 plus that pad stays under the blocking line (96000 at 128k).
       await say(kernel, store, conv, `PAD_AUTO\n${'p'.repeat(80_000)}`);
 
       const handle = await kernel.harness.conversation(conv.harnessId, kernel.context);
@@ -376,7 +376,7 @@ test('automatic compaction drops the context percent before the next reply', { t
       const tokens = estimatedTokens(view);
       const after = await contextOf(kernel, store, conv);
       assert.equal(after.used, tokens, JSON.stringify(after));
-      assert.ok(after.used < 84000, JSON.stringify(after));
+      assert.ok(after.used < 70000, JSON.stringify(after));
       assert.ok(after.percent < primed.percent, JSON.stringify({ primed, after }));
 
       await say(kernel, store, conv, 'AFTER_AUTO next');

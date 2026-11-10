@@ -22,15 +22,32 @@
 import { DEFAULT_TRIGGER_PERCENT } from '../core/settings.mjs';
 
 /**
+ * Room kept free below the window. It is also what Pi sizes the summary request
+ * from: maxTokens = floor(0.8 * reserveTokens) (compaction.js), and thinking
+ * counts against it. 10% of the window is only ~10k summary tokens at 128k,
+ * too little for a long, code-heavy conversation, so the reserve is at least
+ * min(32000, 25% of W), and never below the old 10%.
+ */
+export function compactionReserve(window) {
+  const w = Math.floor(Number(window));
+  return Math.max(Math.floor(w * 0.1), Math.min(32000, Math.floor(w * 0.25)));
+}
+
+/**
  * reserve / background / keepRecent for one effective window W and trigger p.
- * p=90 → backgroundTokens 0, which is the official "no background compaction".
+ * Blocking compaction starts at W - reserve. Background compaction starts at
+ * W * p%, so backgroundTokens is the distance from there up to the blocking
+ * threshold. When p is above the blocking threshold, background compaction is
+ * off (backgroundTokens 0, the official "no background compaction") and the
+ * blocking threshold is the effective trigger.
  */
 export function compactionBudget(window, percent = DEFAULT_TRIGGER_PERCENT) {
   const w = Math.floor(Number(window));
   const p = Math.floor(Number(percent));
+  const reserveTokens = compactionReserve(w);
   return {
-    reserveTokens: Math.floor((w * 10) / 100),
-    backgroundTokens: Math.floor((w * (90 - p)) / 100),
+    reserveTokens,
+    backgroundTokens: Math.max(0, w - reserveTokens - Math.floor((w * p) / 100)),
     keepRecentTokens: Math.min(20000, Math.floor((w * 20) / 100)),
   };
 }

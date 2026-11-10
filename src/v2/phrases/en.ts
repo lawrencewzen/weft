@@ -6,6 +6,7 @@ export const en: Record<string, string> = {
   compaction_note: 'Earlier context was compacted',
   handoff_new_context: 'New context',
   compaction_failed: 'Compaction failed: {reason}',
+  compaction_failed_length: "Compaction failed: the summary hit the length limit. Raise the model's max output in Settings › Models, or lower the thinking level, then retry.",
   run_err_interrupted: 'The service was interrupted before this turn finished.',
   run_err_restart_limit: 'This turn was interrupted repeatedly and stopped.',
   run_err_faulted: 'This turn hit an internal error.',

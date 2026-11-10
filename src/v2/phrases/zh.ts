@@ -6,6 +6,7 @@ export const zh: Record<string, string> = {
   compaction_note: '已压缩较早的上下文',
   handoff_new_context: '新上下文',
   compaction_failed: '压缩失败：{reason}',
+  compaction_failed_length: '压缩失败：摘要超出长度上限。可在 设置 › 模型 中调大最大输出，或降低思考强度后重试。',
   run_err_interrupted: '服务中断，这一轮没有完成。',
   run_err_restart_limit: '这一轮多次中断，已停止。',
   run_err_faulted: '这一轮出现内部错误。',

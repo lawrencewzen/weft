@@ -14,17 +14,29 @@ import { buildThread } from '../../src/v2/views/thread.ts';
 import { runStateView } from '../../src/v2/views/run.ts';
 import { compactionView } from '../../src/v2/views/compaction.ts';
 
-const WINDOWS = [32_000, 128_000, 1_000_000];
+const WINDOWS = [8_000, 32_000, 128_000, 200_000, 1_000_000];
 const PERCENTS = [60, 80, 90];
 
-test('budgets for 32k, 128k and 1M at 60, 80 and 90', () => {
+// reserve = max(10% of W, min(32000, 25% of W)); background = max(0, (W - reserve) - W*p%).
+test('budgets for 8k, 32k, 128k, 200k and 1M at 60, 80 and 90', () => {
   const expected = {
-    '32000:60': { reserveTokens: 3200, backgroundTokens: 9600, keepRecentTokens: 6400 },
-    '32000:80': { reserveTokens: 3200, backgroundTokens: 3200, keepRecentTokens: 6400 },
-    '32000:90': { reserveTokens: 3200, backgroundTokens: 0, keepRecentTokens: 6400 },
-    '128000:60': { reserveTokens: 12800, backgroundTokens: 38400, keepRecentTokens: 20000 },
-    '128000:80': { reserveTokens: 12800, backgroundTokens: 12800, keepRecentTokens: 20000 },
-    '128000:90': { reserveTokens: 12800, backgroundTokens: 0, keepRecentTokens: 20000 },
+    // reserve 2000 (25% of 8k beats 800), blocking at 75%
+    '8000:60': { reserveTokens: 2000, backgroundTokens: 1200, keepRecentTokens: 1600 },
+    '8000:80': { reserveTokens: 2000, backgroundTokens: 0, keepRecentTokens: 1600 },
+    '8000:90': { reserveTokens: 2000, backgroundTokens: 0, keepRecentTokens: 1600 },
+    // reserve 8000, blocking at 75%
+    '32000:60': { reserveTokens: 8000, backgroundTokens: 4800, keepRecentTokens: 6400 },
+    '32000:80': { reserveTokens: 8000, backgroundTokens: 0, keepRecentTokens: 6400 },
+    '32000:90': { reserveTokens: 8000, backgroundTokens: 0, keepRecentTokens: 6400 },
+    // reserve 32000, blocking at 75%
+    '128000:60': { reserveTokens: 32000, backgroundTokens: 19200, keepRecentTokens: 20000 },
+    '128000:80': { reserveTokens: 32000, backgroundTokens: 0, keepRecentTokens: 20000 },
+    '128000:90': { reserveTokens: 32000, backgroundTokens: 0, keepRecentTokens: 20000 },
+    // reserve 32000, blocking at 84%
+    '200000:60': { reserveTokens: 32000, backgroundTokens: 48000, keepRecentTokens: 20000 },
+    '200000:80': { reserveTokens: 32000, backgroundTokens: 8000, keepRecentTokens: 20000 },
+    '200000:90': { reserveTokens: 32000, backgroundTokens: 0, keepRecentTokens: 20000 },
+    // the old 10% still wins on a large window
     '1000000:60': { reserveTokens: 100000, backgroundTokens: 300000, keepRecentTokens: 20000 },
     '1000000:80': { reserveTokens: 100000, backgroundTokens: 100000, keepRecentTokens: 20000 },
     '1000000:90': { reserveTokens: 100000, backgroundTokens: 0, keepRecentTokens: 20000 },
@@ -36,6 +48,22 @@ test('budgets for 32k, 128k and 1M at 60, 80 and 90', () => {
         expected[`${window}:${percent}`],
         `${window} p=${percent}`,
       );
+    }
+  }
+});
+
+test('background compaction still starts at W*p% while that is below the blocking threshold', () => {
+  for (const window of WINDOWS) {
+    for (const percent of [60, 65, 70, 75, 80, 85, 90]) {
+      const { reserveTokens, backgroundTokens } = compactionBudget(window, percent);
+      const blocking = window - reserveTokens;
+      const wanted = Math.floor((window * percent) / 100);
+      const start = backgroundTokens > 0 ? blocking - backgroundTokens : blocking;
+      if (wanted < blocking) assert.equal(start, wanted, `${window} p=${percent}`);
+      else {
+        assert.equal(backgroundTokens, 0, `${window} p=${percent}`);
+        assert.equal(start, blocking, `${window} p=${percent}`);
+      }
     }
   }
 });
