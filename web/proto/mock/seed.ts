@@ -1026,17 +1026,33 @@ function siteOne(now: number, threads: Map<string, MockSubThread>): MockConv {
 }
 
 function siteTwo(now: number): MockConv {
-  return conversation({
+  const conv = conversation({
     id: 'c-site-2',
     workspaceId: 'ws-website',
     title: '截图换成 4K 导出',
-    updatedAt: now - 4 * DAY,
+    updatedAt: now - 5 * MINUTE,
     used: 4_800,
+    status: 'running',
+    model: { sourceId: 'deepseek', modelId: 'deepseek-v4-pro', label: 'DeepSeek V4 Pro' },
     items: [
       user('site-u2', '效果图统一导 4K，别再用 2x 截图。'),
-      assistant('site-a2', '已经在 `design/` 里按 3840 宽导出，`mockup-v2-white.png` 换成了 4K 版本。'),
+      assistant('site-a2', '已经在 `design/` 里按 3840 宽导出，正在生成 4K 预览图。'),
     ],
   });
+  conv.view.run = {
+    status: 'running',
+    startedAt: now - 10 * MINUTE,
+    pendingText: null,
+    canSend: true,
+    canStop: true,
+    lockedReason: null,
+    error: null,
+    lastActivityAt: now - 5 * MINUTE,
+    stalledSince: now - 5 * MINUTE,
+    activeTool: { name: 'bash', startedAt: now - 6 * MINUTE, summary: 'npm run export:4k' },
+  };
+  conv.run = { id: 'run-seed-site-2', cancelled: false, steers: [], followUps: [] };
+  return conv;
 }
 
 function archivedOne(now: number): MockConv {

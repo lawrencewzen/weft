@@ -383,12 +383,6 @@ export function Composer({
   return (
     <footer className="center-composer">
       <div className="composer-stack">
-        {conversationId ? (
-          <StallStrip run={run} lang={lang} onStop={onStop} />
-        ) : null}
-        {conversationId ? (
-          <AgentsStrip cid={conversationId} lang={lang} />
-        ) : null}
         <div className="composer-where-bar" data-testid="next-composer-where">
           <WorkspaceChip
             lang={lang}
@@ -411,6 +405,12 @@ export function Composer({
           />
           <GitChip lang={lang} workspaceId={workspaceId} />
         </div>
+        {conversationId ? (
+          <StallStrip run={run} lang={lang} onStop={onStop} />
+        ) : null}
+        {conversationId ? (
+          <AgentsStrip cid={conversationId} lang={lang} />
+        ) : null}
         <div
           className={boxClass}
           data-testid="next-composer"
