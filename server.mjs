@@ -236,6 +236,9 @@ const v2Opts = {
     }
     return kernelApi.forkConversation(id, body);
   },
+  get schedules() {
+    return kernelApi?.schedules;
+  },
   extensions: {
     dataDir: DATA_DIR,
     rootDir: ROOT,
@@ -560,6 +563,9 @@ try {
     onConversationMeta(cid) {
       v2.notifyConversation(cid);
       v2.notifySidebarChanged();
+    },
+    onSchedulesChanged() {
+      v2.notifySchedulesChanged();
     },
   });
 } catch (err) {

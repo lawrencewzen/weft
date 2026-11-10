@@ -31,6 +31,8 @@ import { attachSubagentTopic, type LoadSubagent } from './stream/subagent-topic.
 import { createStuckWatch } from './stream/stuck-watch.ts';
 import { createStallWatch } from './stream/stall-watch.ts';
 import { attachExtensionsTopic } from './stream/extensions-topic.ts';
+import { attachSchedulesTopic } from './stream/schedules-topic.ts';
+import { handleSchedulesApi, lazySchedulesHost, type SchedulesHost } from './http/schedules.ts';
 import { handleExtensionsApi, loadExtensionsSnapshot, type ExtensionsHost } from './http/extensions.ts';
 import { handleOpenTerminalApi } from './http/open-terminal.ts';
 import {
@@ -281,6 +283,7 @@ export type V2Runtime = {
   notifyProvidersChanged: () => void;
   notifyConversation: NotifyConversationFn;
   notifyExtensionsChanged: () => void;
+  notifySchedulesChanged: () => void;
   dispose: () => void;
 };
 
@@ -644,6 +647,8 @@ export function createV2Handler(opts: {
   providers?: ProvidersHttpOpts;
   extensions?: ExtensionsHost;
   onExtensionsChanged?: () => void;
+  schedules?: SchedulesHost;
+  onSchedulesChanged?: () => void;
   gitStatus?: GitStatusCache;
   getSettings?: () => Promise<unknown>;
   putSettings?: (patch: Record<string, unknown>) => Promise<unknown>;
@@ -1936,6 +1941,20 @@ export function createV2Handler(opts: {
       return true;
     }
 
+    if (await handleSchedulesApi({
+      req,
+      res,
+      url,
+      pathname,
+      method,
+      sendV2: (response, requestPath, requestMethod, status, body) => {
+        sendV2(response, requestPath, requestMethod, status, body as V2JsonBody);
+      },
+      readObjectBody,
+      host: opts.schedules,
+      onChanged: opts.onSchedulesChanged,
+    })) return true;
+
     if (await handleExtensionsApi({
       req,
       res,
@@ -2032,6 +2051,7 @@ export function createV2Runtime(opts: {
     instructions?: string,
   ) => Promise<{ status: number; body?: { taskId?: unknown; error?: unknown; code?: unknown } }>;
   forkConversation?: ForkConversationFn;
+  schedules?: SchedulesHost;
 }): V2Runtime {
   const pid = opts.pid ?? process.pid;
   const auth = createV2Auth({
@@ -2111,6 +2131,8 @@ export function createV2Runtime(opts: {
   const extensionsTopic = attachExtensionsTopic(hub, {
     load: opts.extensions ? () => loadExtensionsSnapshot(opts.extensions as ExtensionsHost) : undefined,
   });
+  const schedulesHost = lazySchedulesHost(() => opts.schedules);
+  const schedulesTopic = attachSchedulesTopic(hub, { load: () => schedulesHost.list() });
   const handleApi = createV2Handler({
     serviceVersion: opts.serviceVersion,
     startedAt: opts.startedAt,
@@ -2151,6 +2173,8 @@ export function createV2Runtime(opts: {
     },
     extensions: opts.extensions,
     onExtensionsChanged: () => extensionsTopic.notify(),
+    schedules: schedulesHost,
+    onSchedulesChanged: () => schedulesTopic.notify(),
     gitStatus,
     getSettings: opts.getSettings,
     putSettings: opts.putSettings,
@@ -2190,7 +2214,11 @@ export function createV2Runtime(opts: {
     notifyExtensionsChanged() {
       extensionsTopic.notify();
     },
+    notifySchedulesChanged() {
+      schedulesTopic.notify();
+    },
     dispose() {
+      schedulesTopic.dispose();
       workspacesTopic.dispose();
       providersTopic.dispose();
       extensionsTopic.dispose();
