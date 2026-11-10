@@ -3,7 +3,7 @@
 // conversation ExecutionEnv. Path checks live only in workspace-env.mjs.
 import path from 'node:path';
 import { obj, opt, str } from '@earendil-works/pi-schema';
-import { defineExtension, defineTool, hook, ToolTask } from '@earendil-works/pi-durable';
+import { defineExtension, defineTool, GenerationTask, hook, ToolTask } from '@earendil-works/pi-durable';
 import { FileError, getOrThrow } from '@earendil-works/pi-durable/env';
 import {
   createBashTool,
@@ -349,8 +349,11 @@ export function fileChangeDetails({ path: filePath, before, after }) {
 /**
  * Host hook: after write/edit succeeds, keep official details and the diff
  * snapshot the right-hand changes list reads back.
+ * `hooks.beforeRequest` / `hooks.afterRun` record one turn's file list.
+ * The object is filled in after the kernel finishes opening.
  */
-export function createWorkspaceExtension() {
+export function createWorkspaceExtension(hooks = {}) {
+  const bridge = hooks || {};
   return defineExtension({
     name: EXT_WORKSPACE,
     tools: workspaceToolList,
@@ -374,6 +377,26 @@ export function createWorkspaceExtension() {
             ...result,
             details: { ...rest, ...change },
           };
+        },
+      }),
+      hook(GenerationTask, {
+        async beforeRequest(_request, api, hookContext) {
+          if (typeof bridge.beforeRequest !== 'function') return undefined;
+          try {
+            await bridge.beforeRequest(api, hookContext);
+          } catch (err) {
+            console.error(`WEFT_TURN_CHANGES ${err instanceof Error ? err.message : err}`);
+          }
+          return undefined;
+        },
+        async afterRun(run, api) {
+          if (typeof bridge.afterRun !== 'function') return undefined;
+          try {
+            await bridge.afterRun(api.conversationId, run?.answer);
+          } catch (err) {
+            console.error(`WEFT_TURN_CHANGES ${err instanceof Error ? err.message : err}`);
+          }
+          return undefined;
         },
       }),
     ],

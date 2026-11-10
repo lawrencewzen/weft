@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { refreshWorkspaceGit } from '../data/api';
+import { forkConversation, refreshWorkspaceGit } from '../data/api';
+import { setConversationPrefill } from '../data/composerPrefill';
 import { findPendingAsk } from '../data/ask';
 import type { ResolvedModel } from '../data/composerModel';
 import type { Lang } from '../data/lang';
 import { writeActiveWorkspace } from '../data/layout';
-import { draftPath, navigate, newChatPath } from '../data/nav';
+import { conversationPath, draftPath, navigate, newChatPath } from '../data/nav';
 import { NO_PROJECT_ID } from '../data/sidebarModel';
 import { isChatWorkspace, WORKSPACES_TOPIC, type Workspace } from '../data/store';
 import { useSession } from '../data/session';
@@ -33,6 +34,7 @@ type Props = {
   lang: Lang;
   demo?: boolean;
   onNewWorkspace?: () => void;
+  onToast?: (message: string) => void;
 };
 
 const DRAFT_RUN: ConversationView['run'] = {
@@ -71,10 +73,11 @@ export function CenterPane({
   lang,
   demo = false,
   onNewWorkspace,
+  onToast,
 }: Props) {
   const isDraft = isDraftProp || (!cid && Boolean(workspaceId));
   const { store } = useSession();
-  const { conversation, items, toolsById, changes, missing, actions } = useConversation(cid);
+  const { conversation, items, toolsById, missing, actions } = useConversation(cid);
   // Esc 停止：只在打开了真实对话（非草稿）且可停止时挂；和输入框停止按钮同一个 actions.stop
   useEscStop(!isDraft && Boolean(cid) && Boolean(conversation?.run.canStop), actions.stop);
   const [showDelayedLoading, setShowDelayedLoading] = useState(false);
@@ -126,6 +129,20 @@ export function CenterPane({
   const bumpStick = useCallback(() => setStickNonce((n) => n + 1), []);
   const [dismissedAskId, setDismissedAskId] = useState<string | null>(null);
   const refreshId = workspace?.id || workspaceId || conversation?.workspaceId || null;
+
+  const handleFork = useCallback(async (entryId: string) => {
+    if (!cid) return;
+    try {
+      const result = await forkConversation(cid, entryId);
+      if (result.prefill?.text) {
+        setConversationPrefill(result.conversationId, result.prefill.text);
+      }
+      navigate(conversationPath(result.conversationId));
+    } catch (err) {
+      const reason = err instanceof Error && err.message ? err.message : t(lang, 'err_request_failed');
+      onToast?.(t(lang, 'fork_failed', { reason }));
+    }
+  }, [cid, lang, onToast]);
 
   useEffect(() => {
     if (!refreshId) return;
@@ -271,9 +288,10 @@ export function CenterPane({
         stickNonce={stickNonce}
         conversationId={cid}
         conversationModel={conversation.model}
-        changes={changes}
         draftWorkspaceId={conversation.workspaceId || workspaceId}
         draftWorkspaceName={workspace && !isChatWorkspace(workspace) ? workspace.name : null}
+        forkedFrom={conversation.forkedFrom}
+        onFork={handleFork}
       />
       {activePendingAsk ? (
         <footer className="center-composer">

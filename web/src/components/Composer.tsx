@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent }
 import { AgentsStrip } from './AgentsStrip';
 import { StallStrip } from './StallStrip';
 import { compactConversation, patchConversation, putModelContextWindow, type SendMessageFile, type ThinkingLevel } from '../data/api';
+import { consumeConversationPrefill } from '../data/composerPrefill';
 import {
   IMAGE_MAX_COUNT,
   type ComposerHint,
@@ -130,7 +131,7 @@ export function Composer({
   queue = [],
   onWithdrawQueue,
 }: Props) {
-  const [draft, setDraft] = useState('');
+  const [draft, setDraft] = useState(() => consumeConversationPrefill(conversationId) || '');
   const [compactBusy, setCompactBusy] = useState(false);
   const [compactRequestError, setCompactRequestError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -405,21 +406,25 @@ export function Composer({
           />
           <GitChip lang={lang} workspaceId={workspaceId} />
         </div>
-        {conversationId ? (
-          <StallStrip run={run} lang={lang} onStop={onStop} />
-        ) : null}
-        {conversationId ? (
-          <AgentsStrip cid={conversationId} lang={lang} />
-        ) : null}
         <div
-          className={boxClass}
-          data-testid="next-composer"
+          className={`composer-card${focused ? ' is-focused' : ''}${att.dragging ? ' is-drop' : ''}`}
+          data-testid="next-composer-card"
           onDragEnter={att.onDragEnter}
           onDragOver={att.onDragOver}
           onDragLeave={att.onDragLeave}
           onDrop={att.onDrop}
         >
-          <div className="composer-body">
+          {conversationId ? (
+            <StallStrip run={run} lang={lang} onStop={onStop} />
+          ) : null}
+          {conversationId ? (
+            <AgentsStrip cid={conversationId} lang={lang} />
+          ) : null}
+          <div
+            className={boxClass}
+            data-testid="next-composer"
+          >
+            <div className="composer-body">
             {queue.length || att.hasTagItems ? (
               <div className="composer-tags" data-testid="next-composer-tags">
                 {queue.map((item) => (
@@ -610,15 +615,16 @@ export function Composer({
               </div>
             </div>
           </div>
-          {att.dragging ? (
-            <div className="composer-drop" data-testid="next-composer-drop">
-              {DROP_ICON}
-              <span className="composer-drop-title">{t(lang, 'attach_drop')}</span>
-              <span className="composer-drop-hint">{t(lang, 'attach_drop_hint')}</span>
-            </div>
-          ) : null}
         </div>
+        {att.dragging ? (
+          <div className="composer-drop" data-testid="next-composer-drop">
+            {DROP_ICON}
+            <span className="composer-drop-title">{t(lang, 'attach_drop')}</span>
+            <span className="composer-drop-hint">{t(lang, 'attach_drop_hint')}</span>
+          </div>
+        ) : null}
       </div>
-    </footer>
+    </div>
+  </footer>
   );
 }

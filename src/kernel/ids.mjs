@@ -8,6 +8,8 @@ export const SUBAGENT_REPORTER_KIND = `${KIND_PREFIX}subagent-reporter`;
 export const USER_TO_SUBAGENT_KIND = `${KIND_PREFIX}user-to-subagent`;
 /** Session-start worktree tree id. Latest-only conversation document. */
 export const WORKSPACE_SNAPSHOT_DOC_KIND = `${KIND_PREFIX}workspace-snapshot`;
+/** Per-turn file changes. Latest-only conversation document. */
+export const TURN_CHANGES_DOC_KIND = `${KIND_PREFIX}turn-changes`;
 
 export const EXT_SUBAGENTS = `${BRAND}-subagents`;
 export const EXT_SKILLS = `${BRAND}-skills`;
@@ -25,6 +27,7 @@ export const KIND_NAMES = Object.freeze([
   SUBAGENT_REPORTER_KIND,
   USER_TO_SUBAGENT_KIND,
   WORKSPACE_SNAPSHOT_DOC_KIND,
+  TURN_CHANGES_DOC_KIND,
 ]);
 
 export const EXTENSION_NAMES = Object.freeze([

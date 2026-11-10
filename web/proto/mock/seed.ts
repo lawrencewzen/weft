@@ -63,6 +63,7 @@ function conversation(input: {
   run?: RunState;
   archived?: boolean;
   error?: MockConv['error'];
+  forkFails?: boolean | Bilingual;
 }): MockConv {
   const tools = input.tools || {};
   return {
@@ -91,6 +92,7 @@ function conversation(input: {
     diffs: input.diffs || {},
     subagents: input.subagents || [],
     archived: input.archived ?? false,
+    forkFails: input.forkFails,
     run: null,
     requestRuns: new Map(),
   };
@@ -100,8 +102,9 @@ function user(
   id: string,
   text: string,
   pathRefs: { text: string; path: string; line?: number }[] = [],
+  entryId?: string | null,
 ): MockItem {
-  return { kind: 'user', id, text, pathRefs };
+  return { kind: 'user', id, text, pathRefs, entryId: entryId === undefined ? id : entryId };
 }
 
 function assistant(
@@ -110,8 +113,9 @@ function assistant(
   model = 'deepseek-flash',
   pathRefs: { text: string; path: string; line?: number }[] = [],
   truncated = false,
+  entryId?: string | null,
 ): MockItem {
-  return { kind: 'assistant', id, text, pathRefs, model, streaming: false, truncated };
+  return { kind: 'assistant', id, text, pathRefs, model, streaming: false, truncated, entryId: entryId === undefined ? id : entryId };
 }
 
 function group(
@@ -341,6 +345,16 @@ function richConversation(now: number, threads: Map<string, MockSubThread>): Moc
     [EDIT_TEST_RUN.id]: EDIT_TEST_RUN,
     ...spawnTools,
   };
+  const richChanges: Change[] = [
+    { path: 'web/src/data/store.ts', added: 8, removed: 3, error: null, by: { kind: 'main' }, status: 'modified' },
+    { path: 'web/src/data/store.test.ts', added: 12, removed: 0, error: null, by: { kind: 'subagent', agentId: 'c-rich:sub:sa-2', name: 'sub-delta-test' }, status: 'added' },
+    { path: 'web/src/data/diffView.ts', added: 16, removed: 4, error: null, by: { kind: 'main' } },
+    { path: 'web/src/components/ChangesPane.tsx', added: 24, removed: 6, error: null, by: { kind: 'subagent', agentId: 'c-rich:sub:sa-1', name: 'sub-load-order' } },
+    { path: 'web/src/components/Thread.tsx', added: 6, removed: 2, error: null, by: { kind: 'main' } },
+    { path: 'web/src/styles/app.css', added: 0, removed: 0, error: null, by: { kind: 'main' }, status: 'renamed', oldPath: 'web/src/styles/base.css' },
+    { path: 'web/src/data/pendingSend.ts', added: 0, removed: 3, error: null, by: null, status: 'deleted' },
+    { path: '/Users/lawrence/.config/weft/notes.md', added: 7, removed: 0, error: null, by: { kind: 'main' } },
+  ];
   const rich = conversation({
     id: 'c-rich',
     workspaceId: 'ws-weft',
@@ -409,17 +423,14 @@ function richConversation(now: number, threads: Map<string, MockSubThread>): Moc
         { zh: `调用了 ${spawnIds.length} 次工具`, en: `called a tool ${spawnIds.length} times` },
       )] : []),
       ...seedSubagentReports(),
+      {
+        kind: 'turn_changes',
+        id: 'rich-tc1',
+        changes: richChanges.map((c) => ({ ...c })),
+      },
+      user('rich-u2', '你好'),
     ],
-    changes: [
-      { path: 'web/src/data/store.ts', added: 8, removed: 3, error: null, by: { kind: 'main' }, status: 'modified' },
-      { path: 'web/src/data/store.test.ts', added: 12, removed: 0, error: null, by: { kind: 'subagent', agentId: 'c-rich:sub:sa-2', name: 'sub-delta-test' }, status: 'added' },
-      { path: 'web/src/data/diffView.ts', added: 16, removed: 4, error: null, by: { kind: 'main' } },
-      { path: 'web/src/components/ChangesPane.tsx', added: 24, removed: 6, error: null, by: { kind: 'subagent', agentId: 'c-rich:sub:sa-1', name: 'sub-load-order' } },
-      { path: 'web/src/components/Thread.tsx', added: 6, removed: 2, error: null, by: { kind: 'main' } },
-      { path: 'web/src/styles/app.css', added: 0, removed: 0, error: null, by: { kind: 'main' }, status: 'renamed', oldPath: 'web/src/styles/base.css' },
-      { path: 'web/src/data/pendingSend.ts', added: 0, removed: 3, error: null, by: null, status: 'deleted' },
-      { path: '/Users/lawrence/.config/weft/notes.md', added: 7, removed: 0, error: null, by: { kind: 'main' } },
-    ],
+    changes: richChanges,
     diffs: {
       'web/src/data/store.ts': mockDiff('web/src/data/store.ts', [
         {
@@ -879,6 +890,23 @@ function testsConversation(now: number): MockConv {
 function docsConversation(now: number, threads: Map<string, MockSubThread>): MockConv {
   const spawnTools = dispatchToolsOf(threads, 'c-docs');
   const spawnIds = Object.keys(spawnTools);
+  const docsEdit = tool({
+    id: 'docs-t1',
+    kind: 'edit',
+    title: hint('docs/ARCHITECTURE_V2.md', 'docs/ARCHITECTURE_V2.md'),
+    path: 'docs/ARCHITECTURE_V2.md',
+    diff: { added: 18, removed: 0 },
+  });
+  const docsChanges: Change[] = [
+    {
+      path: 'docs/ARCHITECTURE_V2.md',
+      added: 18,
+      removed: 0,
+      error: null,
+      by: { kind: 'main' },
+      status: 'modified',
+    },
+  ];
   return conversation({
     id: 'c-docs',
     workspaceId: 'ws-weft',
@@ -886,7 +914,10 @@ function docsConversation(now: number, threads: Map<string, MockSubThread>): Moc
     updatedAt: now - 3 * HOUR,
     used: 172_000,
     model: { sourceId: 'deepseek', modelId: 'deepseek-v4-pro', label: 'DeepSeek V4 Pro' },
-    tools: spawnTools,
+    tools: {
+      ...spawnTools,
+      [docsEdit.id]: docsEdit,
+    },
     subagents: [...threads.values()]
       .filter((thread) => thread.view.parentConversationId === 'c-docs')
       .map((thread) => thread.view),
@@ -910,7 +941,46 @@ function docsConversation(now: number, threads: Map<string, MockSubThread>): Moc
         ].join('\n'),
         'deepseek-v4-pro',
       ),
+      user('docs-u2', '画吧，直接加到架构文档末尾。'),
+      group(
+        'docs-g1',
+        [docsEdit.id],
+        { zh: '编辑了 1 个文件', en: 'edited 1 file' },
+      ),
+      assistant(
+        'docs-a2',
+        '已经把关系图补在 `docs/ARCHITECTURE_V2.md` 末尾。',
+        'deepseek-v4-pro',
+        [{ text: 'docs/ARCHITECTURE_V2.md', path: 'docs/ARCHITECTURE_V2.md' }],
+      ),
+      {
+        kind: 'turn_changes',
+        id: 'docs-tc1',
+        changes: docsChanges.map((c) => ({ ...c })),
+      },
     ],
+    changes: docsChanges,
+    diffs: {
+      'docs/ARCHITECTURE_V2.md': mockDiff('docs/ARCHITECTURE_V2.md', [
+        {
+          oldStart: 120,
+          newStart: 120,
+          lines: [
+            { op: 'add', text: '```mermaid' },
+            { op: 'add', text: 'flowchart TD' },
+            { op: 'add', text: '  subgraph 主题' },
+            { op: 'add', text: '    W[workspaces] --> C[conversation:id]' },
+            { op: 'add', text: '    P[providers] --> C' },
+            { op: 'add', text: '  end' },
+            { op: 'add', text: '  subgraph 事件' },
+            { op: 'add', text: '    S[snapshot] --> U[upsert]' },
+            { op: 'add', text: '    U --> D[text.delta]' },
+            { op: 'add', text: '  end' },
+            { op: 'add', text: '```' },
+          ],
+        },
+      ]),
+    },
   });
 }
 
@@ -932,6 +1002,7 @@ function scriptsConversation(now: number): MockConv {
     updatedAt: now - 6 * HOUR,
     used: 9_100,
     status: 'failed',
+    forkFails: { zh: '对话历史已损坏', en: 'Conversation history corrupted' },
     tools: { [bash.id]: bash },
     items: [
       user('scripts-u1', '内网那台 Windows 机器装的是 Node 22，启动脚本要检查一下。'),
@@ -1318,6 +1389,73 @@ const ASK_DEMO: MockTool = tool({
   },
 });
 
+const TURN_PATHS = {
+  load: 'web/src/data/useConversation.ts',
+  thread: 'web/src/components/Thread.tsx',
+  css: 'web/src/styles/app.css',
+};
+
+function turnEdit(id: string, path: string, added: number, removed: number): MockTool {
+  return tool({
+    id,
+    kind: 'edit',
+    title: hint(path, path),
+    path,
+    diff: { added, removed },
+    totalLines: added + removed,
+  });
+}
+
+function turnsConversation(now: number): MockConv {
+  const t1 = turnEdit('turns-t1', TURN_PATHS.load, 14, 5);
+  const t2 = turnEdit('turns-t2', TURN_PATHS.thread, 9, 2);
+  const t3 = turnEdit('turns-t3', TURN_PATHS.css, 31, 7);
+  const turnChange = (path: string, added: number, removed: number): Change => (
+    { path, added, removed, error: null, by: { kind: 'main' }, status: 'modified' }
+  );
+  const diffFor = (path: string, add: string, del: string) => mockDiff(path, [
+    { oldStart: 10, newStart: 10, lines: [
+      { op: 'ctx', text: '// ...' },
+      { op: 'del', text: del },
+      { op: 'add', text: add },
+      { op: 'ctx', text: '// ...' },
+    ] },
+  ]);
+  return conversation({
+    id: 'c-turns',
+    workspaceId: 'ws-weft',
+    title: '变更按轮显示',
+    updatedAt: now - 40 * MINUTE,
+    used: 9_400,
+    tools: { [t1.id]: t1, [t2.id]: t2, [t3.id]: t3 },
+    items: [
+      user('turns-u1', '把对话末尾累计的变更块改成跟着每一轮走。'),
+      group('turns-g1', [t1.id, t2.id], { zh: '编辑了 2 个文件', en: 'edited 2 files' }),
+      assistant('turns-a1', '改好了：变更摘要现在挂在改了文件的那一轮后面，改动在 `useConversation.ts` 和 `Thread.tsx`。'),
+      { kind: 'turn_changes', id: 'turns-c1', changes: [
+        turnChange(TURN_PATHS.load, 14, 5),
+        turnChange(TURN_PATHS.thread, 9, 2),
+      ] },
+      user('turns-u2', '没改文件的这一轮，下面应该什么都不显示吧？'),
+      assistant('turns-a2', '对，这一轮没动任何文件，所以下面不会出现变更摘要。'),
+      user('turns-u3', '那把样式也顺手收紧一下。'),
+      group('turns-g2', [t3.id], { zh: '编辑了 1 个文件', en: 'edited 1 file' }),
+      assistant('turns-a3', '样式收紧了，摘要默认只占一行，点开才看文件列表。'),
+      { kind: 'turn_changes', id: 'turns-c2', changes: [turnChange(TURN_PATHS.css, 31, 7)] },
+    ],
+    changes: [
+      turnChange(TURN_PATHS.load, 14, 5),
+      turnChange(TURN_PATHS.thread, 9, 2),
+      turnChange(TURN_PATHS.css, 31, 7),
+    ],
+    diffs: {
+      [TURN_PATHS.load]: diffFor(TURN_PATHS.load, '  const turnChanges = items.filter(isTurnChanges);', '  const changes = store.changes(id);'),
+      [TURN_PATHS.thread]: diffFor(TURN_PATHS.thread, "  if (item.kind === 'turn_changes') return <ChangeSummary />;", '  {changes.length ? <ChangeSummary /> : null}'),
+      [TURN_PATHS.css]: diffFor(TURN_PATHS.css, '  height: 36px;', '  height: 40px;'),
+    },
+  });
+}
+
 function askConversation(now: number): MockConv {
   return conversation({
     id: 'c-ask',
@@ -1443,6 +1581,7 @@ export function createSeed(now: number): MockDb {
     compactFailedConversation(now),
     retryingConversation(now),
     askConversation(now),
+    turnsConversation(now),
     testsConversation(now),
     docsConversation(now, subagents),
     scriptsConversation(now),

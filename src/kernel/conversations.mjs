@@ -28,7 +28,6 @@ import {
   statusFromSubmission,
   writesFromEntries,
 } from './events.mjs';
-import { latestCallUsage } from './usage.mjs';
 import { createScriptFloorExtension, installDemo } from './faux-script.mjs';
 import { FAUX_MODEL, openKernel } from './index.mjs';
 import { createKernelModels, explicitDemo } from './models.mjs';
@@ -51,11 +50,28 @@ import {
   readTreeBlob,
 } from './workspace-snapshot.mjs';
 import { decodeWorkspaceBytes } from './workspace-text.mjs';
-import { installUsageExtension } from './usage.mjs';
+import {
+  TurnChanges,
+  diffChangeRows,
+  hasPendingBaseline,
+  normalizeStoredTurns,
+  pickTurnAnchor,
+  plainChange,
+  plainChanges,
+  turnChangesItemId,
+} from './turn-changes.mjs';
+import { activeContextUsage, installUsageExtension } from './usage.mjs';
 import { createAntigravityCwdExtension } from './antigravity-cwd.mjs';
 import { createWorkspaceEnv } from './workspace-env.mjs';
 import { createCompactionControl } from './compaction-settings.mjs';
 import { readTriggerPercent } from '../core/settings.mjs';
+import {
+  describeForkPoint,
+  forkError,
+  forkPrefillJson,
+  forkTitle,
+  prefillFromStored,
+} from './fork.mjs';
 
 const DETAIL_CAP = 1024 * 1024;
 
@@ -187,6 +203,7 @@ export async function openConversationKernel({
   const tails = new Map();
   const listeners = new Map();
   const sends = new Map();
+  const forkInflight = new Map();
   const changeCache = new Map();
   const changeGen = new Map();
   const changeInflight = new Map();
@@ -213,7 +230,8 @@ export async function openConversationKernel({
     return rows.find((row) => Number(row.harnessId) === wanted)?.id ?? null;
   }
 
-  registry.install(createWorkspaceExtension());
+  const turnChangeHooks = {};
+  registry.install(createWorkspaceExtension(turnChangeHooks));
   installAgentExtensions(registry, agentBridge, { dataDir });
   installUsageExtension(registry);
   installPluginReload(registry, agentBridge);
@@ -478,6 +496,13 @@ export async function openConversationKernel({
     mapCtx.contextWindow = await conversationWindow(conv);
     const mapped = projectViewUpdate(projector, view, mapCtx);
     for (const ev of mapped.events) await deliver(cid, ev);
+    if (mapped.runEnded && typeof turnChangeHooks.settle === 'function') {
+      try {
+        await turnChangeHooks.settle(cid);
+      } catch (err) {
+        logTurnError(err);
+      }
+    }
     if (mapped.refresh || mapped.runEnded) {
       const current = await store.getConversation(cid);
       const status = await submissionView(current);
@@ -853,6 +878,164 @@ export async function openConversationKernel({
     return promise;
   }
 
+  const turnLocks = new Map();
+
+  function logTurnError(err) {
+    const message = err instanceof Error ? err.message : String(err ?? '');
+    if (message.includes('Session is closed')) return;
+    console.error(`WEFT_TURN_CHANGES ${redactAuthText(message)}`);
+  }
+
+  function withTurnLock(cid, fn) {
+    const prev = turnLocks.get(cid) || Promise.resolve();
+    const run = prev.then(fn, fn);
+    turnLocks.set(cid, run.then(() => {}, () => {}));
+    return run;
+  }
+
+  async function readTurnState(harnessId) {
+    if (harnessId == null) return null;
+    try {
+      return await harness.snapshot(TurnChanges, harnessId, context);
+    } catch (err) {
+      logTurnError(err);
+      return null;
+    }
+  }
+
+  async function plainCumulative(cid) {
+    try {
+      // Bypass the right-pane cache. A caller can edit the worktree as soon
+      // as the submission is done, while this read is still in flight.
+      const result = await computeChanges(cid);
+      return plainChanges(result.rows);
+    } catch (err) {
+      logTurnError(err);
+      return [];
+    }
+  }
+
+  function outsideOf(rows) {
+    return plainChanges((rows || []).filter((row) => isOutsideWorkspacePath(row?.path)));
+  }
+
+  /**
+   * Photograph the worktree before this run's tools. A later model call in
+   * the same run keeps the first photo. Child conversations are not app
+   * rows, so their runs do not open a turn.
+   */
+  async function ensureTurnBaseline(api, hookContext) {
+    const harnessId = api?.conversationId;
+    const cid = await conversationIdFor(harnessId);
+    if (!cid) return;
+    await withTurnLock(cid, async () => {
+      const conv = await store.getConversation(cid);
+      if (!conv?.harnessId) return;
+      if (hasPendingBaseline(await readTurnState(conv.harnessId))) return;
+      const workspacePath = conv.workspacePath || '';
+      const captured = workspacePath
+        ? await captureWorktree({
+          cwd: workspacePath,
+          indexFile: indexFileFor(dataDir, cid, workspacePath),
+          env,
+        })
+        : { mode: 'fallback', tree: '' };
+      let userEntryId = '';
+      try {
+        const page = await api.entries({ order: 'descending' }, 30, undefined, hookContext);
+        for (const entry of page?.items || []) {
+          if (entry?.kind === 'pi.user') {
+            userEntryId = String(entry.id);
+            break;
+          }
+        }
+      } catch {
+        userEntryId = '';
+      }
+      const cumulative = await plainCumulative(cid);
+      const git = captured.mode === 'git' && captured.tree;
+      const pending = {
+        mode: git ? 'git' : 'fallback',
+        tree: git ? captured.tree : '',
+        userEntryId,
+        rows: git ? outsideOf(cumulative) : cumulative,
+      };
+      await harness.commit(async (tx) => {
+        const state = await tx.doc(TurnChanges, conv.harnessId);
+        if (hasPendingBaseline(state)) return;
+        state.pending = pending;
+      }, context);
+    });
+  }
+
+  async function diffTurn(conv, pending) {
+    const workspacePath = conv.workspacePath || '';
+    if (pending.mode === 'git' && pending.tree && workspacePath) {
+      const entries = await listWorktreeChanges({
+        cwd: workspacePath,
+        indexFile: indexFileFor(dataDir, conv.id, workspacePath),
+        baseTree: pending.tree,
+        env,
+      });
+      const baselines = await baselinesFor(conv.id);
+      const gitRows = plainChanges(decorateGitChanges(entries, baselines));
+      const outside = diffChangeRows(pending.rows, outsideOf(await plainCumulative(conv.id)));
+      return plainChanges([...gitRows, ...outside]);
+    }
+    return diffChangeRows(pending.rows, await plainCumulative(conv.id));
+  }
+
+  async function settleTurn(cid, anchorId) {
+    if (!cid) return;
+    await withTurnLock(cid, async () => {
+      const conv = await store.getConversation(cid);
+      if (!conv?.harnessId) return;
+      const state = await readTurnState(conv.harnessId);
+      if (!hasPendingBaseline(state)) return;
+      const pending = state.pending;
+      let rows = [];
+      try {
+        rows = await diffTurn(conv, pending);
+      } catch (err) {
+        logTurnError(err);
+        rows = [];
+      }
+      let anchor = '';
+      if (rows.length) {
+        try {
+          const transcript = await readTranscript(conv.harnessId);
+          anchor = pickTurnAnchor(transcript.messages, pending.userEntryId, anchorId);
+        } catch (err) {
+          logTurnError(err);
+          anchor = '';
+        }
+        if (!anchor) {
+          console.error(`WEFT_TURN_CHANGES no anchor cid=${cid}`);
+        }
+      }
+      const record = anchor && rows.length
+        ? { id: turnChangesItemId(anchor), anchorId: anchor, changes: rows.map((row) => plainChange(row)).filter(Boolean) }
+        : null;
+      await harness.commit(async (tx) => {
+        const doc = await tx.doc(TurnChanges, conv.harnessId);
+        if (!hasPendingBaseline(doc)) return;
+        if (record && record.changes.length) {
+          const turns = Array.isArray(doc.turns) ? doc.turns.slice() : [];
+          const known = turns.some((row) => row && (String(row.anchorId) === record.anchorId || String(row.id) === record.id));
+          if (!known) turns.push(record);
+          doc.turns = turns;
+        }
+        doc.pending = null;
+      }, context);
+    });
+  }
+
+  turnChangeHooks.beforeRequest = (api, hookContext) => ensureTurnBaseline(api, hookContext);
+  turnChangeHooks.afterRun = (harnessId, anchorId) => (
+    conversationIdFor(harnessId).then((cid) => settleTurn(cid, anchorId))
+  );
+  turnChangeHooks.settle = (cid) => settleTurn(cid);
+
   async function legacyDiff(workspacePath, baseline) {
     if (baseline.oversized || baseline.error) {
       return {
@@ -974,6 +1157,83 @@ export async function openConversationKernel({
     return next;
   }
 
+  async function adoptConversation(fields) {
+    const conv = await store.createConversation(fields);
+    if (agentHost) await agentHost.afterCreate(conv);
+    await attach(conv);
+    return conv;
+  }
+
+  function forkResponse(row, prefill) {
+    const stored = prefill !== undefined ? prefill : prefillFromStored(row?.forkPrefillJson);
+    return {
+      status: 201,
+      body: {
+        conversationId: String(row?.id ?? ''),
+        prefill: stored,
+      },
+    };
+  }
+
+  /**
+   * Fork one Weft conversation at a harness entry. Assistant cuts include that
+   * entry. User cuts stop before it and return its text as prefill; the first
+   * message becomes an empty conversation in the same workspace. Pi Durable
+   * Conversation.fork copies history and the agent as of that entry. No fork
+   * tool is registered for the model.
+   */
+  async function forkConversation(cid, { entryId, requestId, lang } = {}) {
+    const id = typeof cid === 'string' ? cid.trim() : '';
+    const given = typeof requestId === 'string' ? requestId.trim() : '';
+    const key = given ? `${id}\0${given}` : '';
+    if (key) {
+      const pending = forkInflight.get(key);
+      if (pending) return pending;
+    }
+    const run = forkConversationOnce(id, { entryId, requestId: given, lang });
+    if (!key) return run;
+    forkInflight.set(key, run);
+    run.finally(() => {
+      if (forkInflight.get(key) === run) forkInflight.delete(key);
+    });
+    return run;
+  }
+
+  async function forkConversationOnce(id, { entryId, requestId, lang } = {}) {
+    const conv = id ? await store.getConversation(id) : null;
+    if (!conv?.harnessId) return { status: 404, body: { error: 'not found' } };
+    const language = lang === 'en' ? 'en' : 'zh';
+    if (requestId && typeof store.findFork === 'function') {
+      const prior = await store.findFork(conv.id, requestId);
+      if (prior) return forkResponse(prior);
+    }
+    const point = describeForkPoint((await readTranscript(conv.harnessId)).entries, entryId);
+    if (!point.ok) return forkError(point.code, language);
+    const shared = {
+      workspaceId: conv.workspaceId,
+      workspacePath: conv.workspacePath,
+      title: forkTitle(conv.title, language),
+      titleSource: 'user',
+      modelSourceId: conv.modelSourceId,
+      modelId: conv.modelId,
+      thinkingLevel: conv.thinkingLevel,
+      forkedFromId: conv.id,
+      forkedFromTitle: conv.title == null ? '' : String(conv.title),
+      forkRequestId: requestId || null,
+      forkPrefillJson: forkPrefillJson(point.prefill),
+    };
+    let created;
+    if (point.empty) {
+      created = await createConversation(shared);
+    } else {
+      const conversation = await conversationFor(conv);
+      if (!conversation) return { status: 404, body: { error: 'not found' } };
+      const forked = await conversation.fork(point.at, { ownership: { kind: 'ownerless' } }, context);
+      created = await adoptConversation({ ...shared, harnessId: forked.id });
+    }
+    return forkResponse(created, point.prefill);
+  }
+
   return {
     harness,
     context,
@@ -993,6 +1253,7 @@ export async function openConversationKernel({
       if (agentHost?.reloadPlugins) await agentHost.reloadPlugins();
     },
     createConversation,
+    forkConversation,
     listSubagents(conv) {
       return subagents.listSubagents(conv).then((agents) => agents.map((agent) => {
         const { harnessId, ...rest } = agent;
@@ -1018,6 +1279,17 @@ export async function openConversationKernel({
       return subagents.stopConversation(cid);
     },
     changes,
+    async turnChanges(cid) {
+      try {
+        const conv = await store.getConversation(cid);
+        if (!conv?.harnessId) return [];
+        const state = await readTurnState(conv.harnessId);
+        return normalizeStoredTurns(state);
+      } catch (err) {
+        logTurnError(err);
+        return [];
+      }
+    },
     diff,
     async getMessageImage(cid, messageId, index) {
       const conv = await store.getConversation(cid);
@@ -1044,10 +1316,11 @@ export async function openConversationKernel({
       const view = await submissionView(conv);
       const status = view.status;
       let messages;
-      // Context percent follows the active transcript. The full history still
-      // holds the pre-compaction call, and that number must not raise the chip.
+      // Context percent follows the active transcript. A call from before the
+      // compaction or reset head measured the prefix that head replaced.
+      // With no later call, estimate the messages the model will see.
       const harnessView = await readView(conv.harnessId);
-      const usage = presentContext(latestCallUsage(harnessView?.entries)).usage;
+      const usage = presentContext(activeContextUsage(harnessView)).usage;
       if (includeMessages) {
         messages = (await readTranscript(conv.harnessId)).messages;
       }
