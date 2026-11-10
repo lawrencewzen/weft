@@ -72,5 +72,22 @@ test('fork conversation from assistant message and user message (T123-1)', async
   // The input box is filled with the user message text!
   await expect(composerInput).toHaveValue(/看一下 `web\/src\/data\/store\.ts` 里 items 的加载顺序/);
 
+  // 3. Fork failure gives visible error toast (c-scripts has forkFails)
+  const scriptsConv = page.locator('[data-testid="next-conv-row"]').filter({ hasText: '整理 Windows 下的启动脚本' });
+  await scriptsConv.first().click();
+  await expect(page.getByTestId('next-status')).toContainText('整理 Windows 下的启动脚本');
+
+  const scriptsAssistantMsg = page.getByTestId('next-item-assistant').first();
+  await expect(scriptsAssistantMsg).toBeVisible();
+  await scriptsAssistantMsg.hover();
+  const scriptsForkBtn = scriptsAssistantMsg.getByTestId('next-msg-fork');
+  await expect(scriptsForkBtn).toBeVisible();
+  await scriptsForkBtn.click();
+
+  // Toast appears with error message
+  const toast = page.getByTestId('next-toast');
+  await expect(toast).toBeVisible();
+  await expect(toast).toContainText('分叉失败：对话历史已损坏');
+
   expectClean(state);
 });

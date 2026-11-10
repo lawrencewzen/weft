@@ -34,6 +34,7 @@ type Props = {
   lang: Lang;
   demo?: boolean;
   onNewWorkspace?: () => void;
+  onToast?: (message: string) => void;
 };
 
 const DRAFT_RUN: ConversationView['run'] = {
@@ -72,6 +73,7 @@ export function CenterPane({
   lang,
   demo = false,
   onNewWorkspace,
+  onToast,
 }: Props) {
   const isDraft = isDraftProp || (!cid && Boolean(workspaceId));
   const { store } = useSession();
@@ -136,10 +138,11 @@ export function CenterPane({
         setConversationPrefill(result.conversationId, result.prefill.text);
       }
       navigate(conversationPath(result.conversationId));
-    } catch {
-      // ignore
+    } catch (err) {
+      const reason = err instanceof Error && err.message ? err.message : t(lang, 'err_request_failed');
+      onToast?.(t(lang, 'fork_failed', { reason }));
     }
-  }, [cid]);
+  }, [cid, lang, onToast]);
 
   useEffect(() => {
     if (!refreshId) return;

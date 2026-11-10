@@ -71,6 +71,7 @@ import type {
   WorkspaceDirEntry,
   WorkspaceDirs,
 } from './types';
+import { tr } from './types';
 
 export type MockReply = {
   status: number;
@@ -305,6 +306,17 @@ function forkConversation(
   const entryId = typeof body.entryId === 'string' ? body.entryId : '';
   if (!entryId) {
     return fail(400, 'entryId is required', 'E_BAD_REQUEST');
+  }
+
+  if (conv.forkFails) {
+    const reason = typeof conv.forkFails === 'object'
+      ? tr(conv.forkFails, lang)
+      : (lang === 'en' ? 'Conversation history corrupted' : '对话历史已损坏');
+    return fail(400, reason, 'E_FORK_FAILED');
+  }
+
+  if (entryId.includes('fail')) {
+    return fail(400, lang === 'en' ? 'Snapshot corrupted' : '快照已损坏', 'E_FORK_FAILED');
   }
 
   const targetIndex = conv.items.findIndex((item) => {

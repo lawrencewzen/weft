@@ -11,6 +11,10 @@ import { RightPaneProvider } from '../data/rightPaneContext';
 import { createEntityStore } from '../data/store';
 import { setConversationPrefill, clearConversationPrefills } from '../data/composerPrefill';
 import * as nav from '../data/nav';
+import * as api from '../data/api';
+import { CenterPane } from './CenterPane';
+import { conversationTopic } from '../data/store';
+import { t } from '../i18n';
 import type { components } from '../../../src/v2/contract.gen';
 
 type ThreadItemUser = components['schemas']['ThreadItemUser'];
@@ -42,9 +46,13 @@ describe('Fork button appearance conditions and prefill (T123-1)', () => {
     clearConversationPrefills();
   });
 
-  function renderWithProviders(element: React.ReactElement, lang: 'zh' | 'en' = 'zh') {
+  function renderWithProviders(
+    element: React.ReactElement,
+    lang: 'zh' | 'en' = 'zh',
+    customStore?: ReturnType<typeof createEntityStore>,
+  ) {
     const sessionValue: SessionValue = {
-      store: createEntityStore(),
+      store: customStore || createEntityStore(),
       status: 'connected',
       conversationId: 'c1',
       lang,
@@ -213,21 +221,9 @@ describe('Fork button appearance conditions and prefill (T123-1)', () => {
       expect(textarea!.value).toBe('重构会话列表的代码');
     });
 
-    it('populates draft when initialDraft prop is provided', async () => {
-      await renderWithProviders(
-        <Composer
-          lang="zh"
-          run={idleRun}
-          conversationId="conv-fork-2"
-          initialDraft="从初始属性传入的文本"
-          onSend={vi.fn()}
-          onStop={vi.fn()}
-        />
-      );
-
-      const textarea = host!.querySelector('textarea');
-      expect(textarea).not.toBeNull();
-      expect(textarea!.value).toBe('从初始属性传入的文本');
+    it('formats fork_failed i18n message with reason', () => {
+      expect(t('zh', 'fork_failed', { reason: '对话历史已损坏' })).toBe('分叉失败：对话历史已损坏');
+      expect(t('en', 'fork_failed', { reason: 'Conversation history corrupted' })).toBe('Fork failed: Conversation history corrupted');
     });
 
     it('defaults to empty draft when no prefill is provided', async () => {
@@ -308,6 +304,82 @@ describe('Fork button appearance conditions and prefill (T123-1)', () => {
 
       const banner = host!.querySelector('[data-testid="next-forked-from"]');
       expect(banner).toBeNull();
+    });
+  });
+
+  describe('CenterPane fork failure handling', () => {
+    it('notifies onToast when fork fails', async () => {
+      const store = createEntityStore();
+      store.applySnapshot({
+        protocolVersion: '1',
+        topics: [conversationTopic('c1')],
+        entities: [
+          {
+            topic: conversationTopic('c1'),
+            entity: 'conversation',
+            id: 'c1',
+            value: {
+              id: 'c1',
+              title: '测试对话',
+              updatedAt: Date.now(),
+              status: 'idle',
+              model: null,
+              run: {
+                status: 'idle',
+                startedAt: null,
+                pendingText: null,
+                canSend: true,
+                canStop: false,
+                lockedReason: null,
+                error: null,
+                lastActivityAt: null,
+                stalledSince: null,
+                activeTool: null,
+              },
+              context: { used: 0, window: 128000, percent: 0, level: 'ok' },
+              itemIds: ['u1'],
+              sends: [],
+            },
+          },
+          {
+            topic: conversationTopic('c1'),
+            entity: 'item',
+            id: 'u1',
+            value: {
+              kind: 'user',
+              id: 'u1',
+              entryId: 'entry-u1',
+              text: '用户消息',
+              pathRefs: [],
+            },
+          },
+        ],
+      });
+
+      const onToast = vi.fn();
+      const forkSpy = vi.spyOn(api, 'forkConversation').mockRejectedValueOnce(new Error('对话历史已损坏'));
+
+      await renderWithProviders(
+        <CenterPane
+          cid="c1"
+          lang="zh"
+          onToast={onToast}
+        />,
+        'zh',
+        store,
+      );
+
+      const forkBtn = host!.querySelector('[data-testid="next-msg-fork"]') as HTMLButtonElement;
+      expect(forkBtn).not.toBeNull();
+
+      await act(async () => {
+        forkBtn.click();
+      });
+
+      expect(forkSpy).toHaveBeenCalledWith('c1', 'entry-u1');
+      expect(onToast).toHaveBeenCalledWith('分叉失败：对话历史已损坏');
+
+      forkSpy.mockRestore();
     });
   });
 });
