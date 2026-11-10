@@ -44,7 +44,7 @@ describe('SystemNote (T105-2)', () => {
     };
 
     await act(async () => {
-      root!.render(<SystemNote item={item} />);
+      root!.render(<SystemNote item={item} lang="zh" />);
     });
 
     const el = host!.querySelector('[data-testid="next-item-system-note"]');

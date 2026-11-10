@@ -6321,6 +6321,11 @@
           "requestId": {
             "type": "string",
             "description": "请求幂等 id"
+          },
+          "instructions": {
+            "type": "string",
+            "maxLength": 4000,
+            "description": "用户希望交接说明侧重什么，由模型据此写交接说明；省略则由模型自己判断。"
           }
         }
       },
@@ -6888,6 +6893,7 @@
               "grep",
               "bash",
               "ask",
+              "handoff",
               "other"
             ]
           },

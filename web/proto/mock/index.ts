@@ -206,6 +206,7 @@ declare global {
     /** Every mocked `/api` call, in order. Read by the prototype e2e tests. */
     __protoRequests?: Array<{ method: string; url: string }>;
     __protoFailContinue?: boolean;
+    __protoHandoff?: (instructions?: string) => Promise<Response>;
   }
 }
 
@@ -217,4 +218,17 @@ export function installMockBackend(): void {
   installFetch(db, hub);
   installEventSource(hub);
   installResetButton();
+
+  window.__protoHandoff = async (instructions?: string) => {
+    const match = window.location.hash.match(/^#\/c\/([^/?#]+)/);
+    const cid = match ? decodeURIComponent(match[1]) : 'c-docs';
+    return window.fetch(`/api/v2/conversations/${encodeURIComponent(cid)}/handoff`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        requestId: `proto-handoff-${Date.now()}`,
+        ...(instructions ? { instructions } : {}),
+      }),
+    });
+  };
 }

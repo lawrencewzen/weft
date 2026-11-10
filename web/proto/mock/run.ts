@@ -423,6 +423,7 @@ function runningLine(tool: MockTool): Bilingual {
     write: { zh: '正在写入', en: 'Writing' },
     ls: { zh: '正在列出', en: 'Listing' },
     ask: { zh: '正在提问', en: 'Asking' },
+    handoff: { zh: '正在交接', en: 'Handing off' },
     other: { zh: '正在调用', en: 'Calling' },
   }[tool.kind];
   return {
@@ -1178,6 +1179,7 @@ export function handoffConversation(
   hub: MockHub,
   _requestId?: string,
   lang: Lang = 'zh',
+  instructions?: string,
 ): HandoffResult {
   if (conv.run && conv.view.run.status === 'running') {
     return { ok: false, status: 409, error: lang === 'en' ? 'Already running' : '正在运行中', code: 'E_BUSY' };
@@ -1212,7 +1214,7 @@ export function handoffConversation(
   publishConversationView(conv, hub);
   publishSummary(db, hub, conv.view.id);
 
-  void executeHandoff(db, conv, hub, runHandle, lang);
+  void executeHandoff(db, conv, hub, runHandle, lang, instructions);
   return { ok: true };
 }
 
@@ -1222,6 +1224,7 @@ async function executeHandoff(
   hub: MockHub,
   run: RunHandle,
   lang: Lang,
+  instructions?: string,
 ): Promise<void> {
   await sleep(THINK_MS);
   if (run.cancelled) return;
@@ -1229,7 +1232,7 @@ async function executeHandoff(
   const toolId = nextId(db, 'tool');
   const handoffTool: MockTool = {
     id: toolId,
-    kind: 'handoff' as MockTool['kind'],
+    kind: 'handoff',
     status: 'done',
     title: { zh: '交接到新上下文', en: 'Handoff to new context' },
     fromIntent: false,
@@ -1266,6 +1269,7 @@ async function executeHandoff(
   const detailZh = [
     '### 迁移进度交接',
     '',
+    ...(instructions ? [`> **交接重点**：${instructions}`, ''] : []),
     '- **当前任务**：继续处理上文讨论的迁移需求。',
     '- **工作进度**：前期分析与代码修改已记录在案，未完成项已提炼入新上下文。',
     '- **下一步**：在新上下文中继续执行后续步骤并完成验证。',
@@ -1273,6 +1277,7 @@ async function executeHandoff(
   const detailEn = [
     '### Migration Progress Handoff',
     '',
+    ...(instructions ? [`> **Focus**: ${instructions}`, ''] : []),
     '- **Current Task**: Continuing the migration task discussed above.',
     '- **Progress**: Prior analysis and changes have been preserved; remaining items carry over to the new context.',
     '- **Next Step**: Proceed with next actions and verification under the fresh context.',
