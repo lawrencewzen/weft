@@ -1,7 +1,9 @@
 import type { components } from '../../../src/v2/contract.gen';
+import type { ThreadItem } from './store';
+
+export type { ThreadItem };
 
 export type ToolCall = components['schemas']['ToolCall'];
-export type ThreadItem = components['schemas']['ThreadItem'];
 export type AskQuestion = components['schemas']['AskQuestion'];
 export type AskSelection = components['schemas']['AskSelection'];
 

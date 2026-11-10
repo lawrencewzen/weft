@@ -14,18 +14,37 @@ async function openMenu(page) {
   await expect(page.getByTestId('next-context-pop')).toBeVisible();
 }
 
-test('1. c-compacted shows a grey compaction note, not a user bubble; no context banner', async ({ page }) => {
+test('1. c-compacted shows the "context compacted" divider with an expandable summary; earlier items are not folded', async ({ page }) => {
   const state = await openProto(page);
   await openConv(page, 'c-compacted');
 
   const note = page.getByTestId('next-item-system-note');
   await expect(note).toHaveCount(1);
   await expect(note).toHaveAttribute('data-kind', 'compaction');
-  await expect(note).toHaveText('已压缩较早的上下文');
+  const divider = note.getByTestId('next-compaction-divider');
+  await expect(divider).toBeVisible();
+  await expect(divider.getByTestId('next-compaction-title')).toHaveText('上下文已压缩');
+  await expect(divider.getByTestId('next-compaction-meta')).toHaveText('之前 2 条已摘要');
+  await expect(divider.locator('svg.handoff-divider-icon')).toBeVisible();
+
+  // Unlike a handoff, nothing before the divider is folded: the model still sees the summary.
+  await expect(page.getByTestId('next-thread-earlier-toggle')).toHaveCount(0);
   await expect(page.getByTestId('next-item-user')).toHaveCount(2);
   await expect(page.getByTestId('next-item-user').filter({ hasText: '已压缩' })).toHaveCount(0);
   await expect(page.getByTestId('next-context-banner')).toHaveCount(0);
   await expect(page.getByTestId('next-context-chip')).toBeVisible();
+
+  const toggle = note.getByTestId('next-compaction-toggle');
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(note.getByTestId('next-compaction-detail')).toHaveCount(0);
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  const detail = note.getByTestId('next-compaction-detail');
+  await expect(detail).toBeVisible();
+  await expect(detail).toContainText('对话摘要');
+  await expect(detail).toContainText('subscribe.ts');
+  await toggle.click();
+  await expect(note.getByTestId('next-compaction-detail')).toHaveCount(0);
   await expectClean(state);
 });
 
@@ -44,16 +63,31 @@ test('2. panel compact: running state with spinner and thread line, then the not
   await expect(row).toBeDisabled();
   await expect(row).toHaveAttribute('data-state', 'running');
   await expect(page.getByTestId('next-compact-spin')).toBeVisible();
-  await expect(page.getByTestId('next-thread-compacting')).toHaveText('正在压缩上下文');
+  const pending = page.getByTestId('next-thread-compacting');
+  await expect(pending).toHaveText('压缩中…');
+  await expect(pending.locator('.run-spin')).toBeVisible();
+  await expect(page.getByTestId('next-item-system-note')).toHaveCount(0);
+  const before = await pending.boundingBox();
+  const beforeBar = await pending.locator('.handoff-divider-bar').boundingBox();
 
-  await expect(page.getByTestId('next-thread-compacting')).toHaveCount(0, { timeout: 10_000 });
+  await expect(pending).toHaveCount(0, { timeout: 10_000 });
   const note = page.getByTestId('next-item-system-note');
   await expect(note).toHaveCount(1);
   await expect(note).toHaveAttribute('data-kind', 'compaction');
+  await expect(note.getByTestId('next-compaction-title')).toHaveText('上下文已压缩');
+  await expect(note.getByTestId('next-compaction-meta')).toHaveText(/^之前 \d+ 条已摘要$/);
+  // It lands in place: same slot, same height, no jump.
+  const after = await note.boundingBox();
+  const afterBar = await note.getByTestId('next-compaction-divider').boundingBox();
+  expect(Math.abs(after.y - before.y)).toBeLessThanOrEqual(1);
+  expect(Math.abs(after.height - before.height)).toBeLessThanOrEqual(1);
+  expect(Math.abs(afterBar.height - beforeBar.height)).toBeLessThanOrEqual(1);
   await expect(page.getByTestId('next-compaction-error')).toHaveCount(0);
   await expect(page.getByTestId('next-context-chip')).toHaveAttribute('title', /已用 12%/);
   await expect(page.getByTestId('next-context-chip').locator('.context-chip-pct')).toHaveCount(0);
   await expect(row).toBeEnabled();
+  await note.getByTestId('next-compaction-toggle').click();
+  await expect(note.getByTestId('next-compaction-detail')).toContainText('对话摘要');
 
   const calls = (await state.requests()).filter((r) => r.method === 'POST' && /\/compact$/.test(r.url));
   expect(calls).toHaveLength(1);
@@ -149,12 +183,62 @@ test('6. English labels and dark theme', async ({ page }) => {
   await openMenu(page);
   await expect(page.getByTestId('next-menu-compact')).toContainText('Compact');
   await page.getByTestId('next-menu-compact').click();
-  await expect(page.getByTestId('next-thread-compacting')).toHaveText('Compacting context');
+  await expect(page.getByTestId('next-thread-compacting')).toHaveText('Compacting…');
   await expect(page.getByTestId('next-compaction-error')).toBeVisible({ timeout: 10_000 });
 
   await page.keyboard.press('Escape');
   await openConv(page, 'c-compacted');
-  await expect(page.getByTestId('next-item-system-note')).toHaveText('Earlier context was compacted');
+  await expect(page.getByTestId('next-compaction-title')).toHaveText('Context compacted');
+  await expect(page.getByTestId('next-compaction-meta')).toHaveText('Previous 2 items summarized');
+  await page.getByTestId('next-compaction-toggle').click();
+  await expect(page.getByTestId('next-compaction-detail')).toContainText('Conversation summary');
+  await expectClean(state);
+});
+
+test('7. handoff divider is unchanged and shares the compaction divider look in light and dark', async ({ page }) => {
+  const state = await openProto(page);
+
+  const look = () => page.getByTestId('next-item-system-note').last().evaluate((el) => {
+    const css = (node, prop) => getComputedStyle(node)[prop];
+    const bar = el.querySelector('.handoff-divider-bar');
+    const line = el.querySelector('.handoff-divider-line');
+    const title = el.querySelector('.handoff-divider-title');
+    const toggle = el.querySelector('.handoff-detail-toggle');
+    return {
+      container: el.className,
+      barDisplay: css(bar, 'display'),
+      lineBg: css(line, 'backgroundColor'),
+      lineHeight: css(line, 'height'),
+      titleSize: css(title, 'fontSize'),
+      titleColor: css(title, 'color'),
+      toggleBorder: css(toggle, 'borderTopColor'),
+      toggleRadius: css(toggle, 'borderTopLeftRadius'),
+      margin: css(el, 'marginTop'),
+    };
+  });
+
+  const read = async (id) => {
+    await openConv(page, id);
+    await expect(page.getByTestId('next-item-system-note').last()).toBeVisible();
+    return look();
+  };
+
+  for (const mode of ['light', 'dark']) {
+    await page.getByTestId('next-open-settings').click();
+    await page.getByTestId('next-pref-appearance').locator(`[data-mode=${mode}]`).click();
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('next-settings')).toBeHidden();
+
+    const handoff = await read('c-handoff');
+    await expect(page.getByTestId('next-handoff-divider')).toBeVisible();
+    await expect(page.locator('.handoff-divider-icon')).toHaveCount(0);
+    await expect(page.getByTestId('next-handoff-title')).toHaveText('新上下文');
+    await expect(page.getByTestId('next-thread-earlier-toggle')).toContainText('之前的上下文');
+
+    const compaction = await read('c-compacted');
+    await expect(page.getByTestId('next-compaction-divider')).toBeVisible();
+    expect(compaction).toEqual(handoff);
+  }
   await expectClean(state);
 });
 

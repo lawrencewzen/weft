@@ -101,7 +101,10 @@ test('three windows at 60, 80 and 90 trigger background or blocking on the real 
     try {
       for (const model of MODELS) {
         for (const percent of [60, 80, 90]) {
-          const mode = percent === 90 ? 'blocking' : 'background';
+          // Blocking starts at W - reserve; background only exists when W*p% is below it.
+          const mode = compactionBudget(model.contextWindow, percent).backgroundTokens > 0
+            ? 'background'
+            : 'blocking';
           control.setPercent(percent);
           const spec = sized(model.contextWindow, percent, mode);
           assert.deepEqual(
@@ -135,12 +138,12 @@ test('three windows at 60, 80 and 90 trigger background or blocking on the real 
         }
       }
 
-      // p=90 does not background-compact the same usage that p=80 does. The
+      // p=90 does not background-compact the same usage that p=60 does. The
       // percent lives in the settings function, so the next prepare sees it
       // without reopening the Harness. The model is the 32k one, then we
       // switch to 128k below by creating that conversation on this same Harness.
       control.setPercent(90);
-      const quiet = sized(32_000, 80, 'background');
+      const quiet = sized(32_000, 60, 'background');
       const quietConv = await kernel.harness.createConversation({
         ownership: { kind: 'ownerless' },
         agent: { model: { provider: 'faux', modelId: 'small-32k' } },
@@ -152,7 +155,7 @@ test('three windows at 60, 80 and 90 trigger background or blocking on the real 
       await quietConv.waitForIdle(kernel.context);
       const quietView = await quietConv.context(kernel.context);
       assert.equal(quietView.entries.some((entry) => entry.kind === 'pi.compaction'), false);
-      control.setPercent(80);
+      control.setPercent(60);
       const hold = defer();
       faux.setResponses([async () => {
         await hold.promise;

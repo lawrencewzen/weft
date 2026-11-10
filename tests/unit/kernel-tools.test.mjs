@@ -158,11 +158,12 @@ test('read, ls, and grep replay safely; write, edit, and the command tool do not
     ls: 'safe',
     grep: 'safe',
     [agentShellKind()]: 'unsafe',
+    handoff: 'unsafe',
   });
 });
 
 test('workspaceTools lists every builtin tool in order', () => {
-  assert.deepEqual(workspaceTools().map((tool) => tool.name), ['read', 'write', 'edit', 'ls', 'grep', agentShellKind()]);
+  assert.deepEqual(workspaceTools().map((tool) => tool.name), ['read', 'write', 'edit', 'ls', 'grep', 'handoff', agentShellKind()]);
   assert.deepEqual(
     offeredToolNames({
       messages: [

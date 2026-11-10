@@ -34,8 +34,10 @@ open design/prototype/index.html    # macOS；Windows 直接双击
 | 切模型 | 输入框左下角的模型按钮 |
 | 上下文上限 | 模型按钮菜单的「上下文」子菜单：选一个上限或填自定义值（`/providers/{id}/models/{id}/context-window`） |
 | 已用 / 上限、立即压缩 | 点输入框右下角的圆环百分比，在它上方弹出小面板 |
+| 交接到新上下文 | 点圆环百分比小面板里的「交接到新上下文」（任意已有对话可点；运行中显示转圈，新上下文条目带分隔线和可展开的说明，旧内容自动折叠为「之前的上下文 · N 条」；控制台可用 `window.__protoHandoff('<重点说明>')` 触发带 instructions 的交接）；或打开预置对话 `c-handoff`（「把迁移脚本跑完整个仓库」）看 Agent 工具触发的交接与折叠效果 |
 | 模型请求在重试 | 打开对话 `c-retrying`（「模型连不上，正在重试」）：等待行显示灰字「连不上模型服务，正在重试（第 6 次，共 10 次）」，一直保持；停止后消失 |
 | 上下文快满 | 打开对话 `c-docs`（「把架构文档的图补上」）会看到输入框顶部的橙色提示条 |
+| 从这里分叉（T123-1） | 鼠标移到用户消息或助手消息上，点右侧/右下的「从这里分叉」小图标按钮。助手消息分叉：新对话包含到该消息为止的全部内容；用户消息分叉：新对话包含该消息之前的内容并把该消息文本填回输入框。新对话顶部有一行「分叉自 <原标题>」并可点原标题跳回原对话，同一行淡字标明「与原对话共用工作区文件」；打开 `c-scripts`（「整理 Windows 下的启动脚本」）点分叉可触发分叉失败提示「分叉失败：对话历史已损坏」 |
 
 ### 右栏
 
@@ -52,6 +54,15 @@ open design/prototype/index.html    # macOS；Windows 直接双击
 - 新建工作区（见下）会得到一个只含 `README.md` 的模拟仓库。
 
 模拟运行也会产生变更：新对话里发「改一下 web/src/data/store.ts 里的 items 顺序」，运行结束后右栏「变更」出现该文件及其 diff，文件树里标 `M`。
+
+### 文件变更按轮显示（T114）
+
+变更摘要默认只占一行（`N 个文件已更改  +A −B  查看 ›`）：点这一行展开文件列表、再点收起，每个摘要独立；点「查看」打开右栏变更页，点文件名打开差异。右栏「变更」和输入框下的 Git 状态仍是整条对话累计。
+
+- 演示对话 `c-turns`（路由 `#/c/c-turns`，「变更按轮显示」，侧栏 weft 工作区）：第 1 轮改 2 个文件、第 2 轮只问问题、第 3 轮改 1 个文件，所以只有第 1、3 轮回复后面有摘要。
+- 数据形式：消息流里的一种 item `{ kind: 'turn_changes', id, changes: Change[] }`，跟在那一轮回复之后，`changes` 只含这一轮的增删。契约里还没有，前端类型 `TurnChangesItem`（`web/src/data/store.ts`）是可选的联合成员，只有模拟后端产出。
+- 模拟运行：结束（或停止）时有改动才在那一轮末尾放一条 `turn_changes`；没改文件就什么都不放。
+- 没有 `turn_changes` 数据的对话，对话流里不显示任何变更摘要（累计只在右栏「变更」和输入框上方 Git 状态里看）。
 
 ### 子 Agent
 
@@ -104,6 +115,20 @@ open design/prototype/index.html    # macOS；Windows 直接双击
 - **不再询问**：勾选后点击任一动作，以后点关闭直接按上次的选择执行（发 `hide-to-tray` 或 `quit` 消息），不再弹窗。
 - **设置页偏好**：设置「通用」页增加「关闭窗口时」（询问 / 缩到托盘 / 退出 Weft）；选「退出 Weft」时下方同样显示一行小字「退出后定时任务不会执行。」。
 - **托盘菜单退出模拟**：控制台执行 `window.__protoShell('confirm-quit')` 模拟从托盘菜单触发退出，弹出确认对话框（默认焦点在「退出 Weft」，不显示「不再询问」勾选框）。发出的消息存入 `window.__protoShellMessages` 供断言。
+### 定时任务（T124-1）
+
+侧栏搜索下方新增「定时任务」入口（带时钟图标），右侧显示启用中任务的小徽标。
+
+| 功能 | 操作 |
+| --- | --- |
+| 进入定时任务页 | 点侧栏「定时任务」或直接访问 `#/schedules` |
+| 查看任务列表 | 列表展示开关、名称、规则摘要、目标摘要、下次执行时间、上次结果、Agent 标签、操作菜单 |
+| 启用 / 暂停 | 点击行内开关切换状态，侧栏小徽标实时更新 |
+| 查看执行记录 | 点击任务行展开最近执行记录（时间、状态、跳转对话、失败原因） |
+| 新建任务 | 点右上角「新建」按钮打开弹窗，填写名称、消息、目标（现有对话或新开对话）、执行规则（一次性 / 每天 / 每周 / 间隔，间隔最少 5 分钟），校验通过后保存 |
+| 立即执行一次 | 点击行尾「…」菜单里的「立即执行」，触发一次执行并更新上次结果与执行记录 |
+| 编辑任务 | 点击行尾「…」菜单里的「编辑」，修改后保存 |
+| 删除任务 | 点击行尾「…」菜单里的「删除」，在二次确认弹窗中确认后删除 |
 
 ## 代码在哪
 
@@ -112,22 +137,25 @@ open design/prototype/index.html    # macOS；Windows 直接双击
 | `web/proto/main.tsx` | 原型入口：先装模拟后端和 hash 路由，再渲染 `<App />` |
 | `web/vite.proto.config.ts` | 原型打包：入口换成 `web/proto/index.html`，把 JS/CSS 内联成一个 HTML |
 | `web/proto/brand-icons.ts` | 把 `brandIconUrl()` 指向的少数品牌图标换成 data URI（属性和 `setAttribute` 两条路径都要拦） |
-| `web/proto/mock/seed.ts` | 预置数据：2 个工作区、7 个对话、Provider、变更 / diff、子 Agent、插件 / 技能 / Git 连接 |
+| `web/proto/mock/seed.ts` | 预置数据：2 个工作区、7 个对话、Provider、变更 / diff、子 Agent、插件 / 技能 / Git 连接、4 个定时任务 |
 | `web/proto/mock/repo.ts` | 模拟仓库：文件树、文件内容、保存 / 版本、409 冲突、外部修改、行级 diff 统计 |
-| `web/proto/mock/db.ts` | 内存状态和发布辅助（会话 / 侧栏 / Provider / 扩展 / 变更） |
-| `web/proto/mock/http.ts` | `/api/v2/*` 路由，返回 `src/v2/contract.gen.ts` 里的形状；目录树、工作区、Provider、Git、插件、技能的写操作都在这里 |
+| `web/proto/mock/db.ts` | 内存状态和发布辅助（会话 / 侧栏 / Provider / 扩展 / 变更 / 定时任务） |
+| `web/proto/mock/http.ts` | `/api/v2/*` 路由，返回 `src/v2/contract.gen.ts` 里的形状；目录树、工作区、Provider、Git、插件、技能、定时任务的读写都在这里 |
 | `web/proto/mock/hub.ts` | 事件推送：`snapshot` → `upsert` / `remove` / `text.delta` / `heartbeat` |
-| `web/proto/mock/topics.ts` | 主题读取：`workspaces` / `providers` / `extensions` / `conversation:<id>` / `subagent:<cid>:<aid>` |
+| `web/proto/mock/topics.ts` | 主题读取：`workspaces` / `providers` / `extensions` / `schedules` / `conversation:<id>` / `subagent:<cid>:<aid>` |
 | `web/proto/mock/run.ts` | 一次运行的模拟：工具记录 → 变更实体 → 流式文字 → 完成 / 停止 / 插话排队 / 派子 Agent |
 | `web/proto/mock/subagents.ts` | 子 Agent 预置线程、`subagent:<cid>:<aid>` 推送、派活 / 回报 / 发消息 / 停止 |
 | `web/proto/mock/extensions.ts` | 插件、技能、Git 连接和 GitLab 项目 / 分支的预置数据 |
 | `web/proto/mock/views.ts` | 把内存数据转成前端收到的视图，按语言出文案 |
+| `tests/e2e/proto-turn-changes.spec.mjs` | 变更摘要按轮显示：有改动的轮一行、无改动的轮没有、展开收起、查看打开右栏、模拟运行 |
 | `tests/e2e/proto-retry.spec.mjs` | 重试等待文案、停止；减少动画模式下运行转圈仍在转、面板滑动仍关闭 |
 | `tests/e2e/proto-smoke.spec.mjs` | 冒烟：`file://` 打开、切对话、新建并发消息、流式完成、停止、零网络 / 零控制台报错 |
 | `tests/e2e/proto-right-pane.spec.mjs` | 变更 diff（含「一次点击只发一次请求」）、文件树 / 预览 / 保存 / 409、路径标签、运行产生的变更 |
 | `tests/e2e/proto-agents-strip.spec.mjs` | 子 Agent 状态条、展开/收起、行内展开、停止、派发卡片定位、淡出 |
 | `tests/e2e/proto-settings.spec.mjs` | 通用偏好、Provider 向导成功 / 失败 / Grok 登录 / 默认 / 上下文、删光 Provider 的「没有模型」、Git、插件、技能、关于 |
 | `tests/e2e/proto-workspace.spec.mjs` | 本地目录浏览 + 创建 + 在里面发消息、Git 导入选项目和分支 |
+| `tests/e2e/proto-schedules.spec.mjs` | 定时任务：入口徽标、路由导航、新建/编辑/删除确认、间隔校验、立即执行与展开执行记录 |
+| `tests/e2e/proto-handoff.spec.mjs` | 交接到新上下文：c-handoff 预置交接条目展开说明、手动点击交接模拟流程与百分比下降 |
 | `tests/e2e/helpers/proto.mjs` | 上面几个 spec 共用的 `file://` 打开 / 零报错 / 零网络断言 |
 
 ## 加数据、加交互
@@ -141,7 +169,7 @@ open design/prototype/index.html    # macOS；Windows 直接双击
 
 ```bash
 npx playwright test -c tests/playwright.config.mjs \
-  proto-smoke proto-right-pane proto-agents-strip proto-settings proto-workspace
+  proto-smoke proto-right-pane proto-agents-strip proto-settings proto-workspace proto-schedules
 ```
 
 ## 改界面的流程

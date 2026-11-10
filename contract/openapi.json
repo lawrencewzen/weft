@@ -349,7 +349,7 @@
       "get": {
         "operationId": "getEvents",
         "summary": "SSE 推送流",
-        "description": "一个客户端一条 SSE 连接，用查询参数 `topics` 订阅主题（逗号分隔），`lang` 为 zh 或 en（缺省 zh，不认识的按 zh）。\n每条业务事件带全局递增序号，写成标准 SSE：`id: <序号>`、`event: <类型>`、`data: <JSON>`。\n断线后带 `Last-Event-ID` 头（或查询参数 `lastEventId`）续传；环形缓冲里补不上（太旧、比当前还新、或格式不对）时先发一份新快照。\n没带 Last-Event-ID 时先发快照。快照的 SSE id 是开始计算快照时的最新序号；计算期间该连接订阅主题上到达的事件在快照之后按序补发（seq 大于该 id）。upsert / remove 是整实体替换，重复应用结果一样。\n订阅的主题和上次不同时，客户端不要带 Last-Event-ID / lastEventId，直接重新连接拿快照（续传只保证同一组主题）。\n心跳每 15 秒一次，不带 id，不进缓冲。\n\n主题 `workspaces` 注册为精确主题。实体：\n- `workspace`：id 为工作区 id，值为 Workspace（含可选 git 状态）\n- `conversation_summary`：id 为对话 id，值为 ConversationSummary\n\n快照与 GET /api/v2/workspaces 同一套数据拆成上述实体。工作区或对话增删改、运行状态、子 Agent 计数或 git 状态变化时 upsert；实体删除时 remove。值没变不推送。\n\n主题 `providers` 注册为精确主题。实体：\n- `provider`：id 为 Provider id，值为 Provider\n- `defaults`：id 为 `self`，值为 ProviderDefaults（`model` 为当前默认 `{ providerId, modelId }`，没有则为 null）\n\n快照是 GET /api/v2/providers 的 providers 与 defaultModel 拆成上述实体。任何 Provider 增删改（接入、自定义接口、测试、PATCH、删除）或默认模型修改后 upsert；实体删除时 remove。登录会话不进主题，靠轮询 GET /api/v2/login-sessions/{sid}。密钥永不明文出现在响应或推送里。\n\n主题 `extensions` 注册为精确主题。实体：\n- `plugin`：id 为插件 id，值为 Plugin\n- `skill`：id 为技能 id，值为 Skill\n- `git_connection`：id 为 Git 连接 id，值为 GitConnection\n\n快照是 GET /api/v2/plugins、GET /api/v2/skills、GET /api/v2/git/connections 同一套数据拆成上述实体。插件、技能、Git 连接增删改（含旧接口）后 upsert；实体删除时 remove。失败原因、Git 测试结果按订阅的 `lang` 出成句。\n\n主题 `conversation:<id>`（`<id>` 为对话 id）按前缀动态注册。实体：\n- `conversation`：id 为对话 id，值为 ConversationView\n- `item`：id 为 ThreadItem.id，值为 ThreadItem\n- `tool`：id 为 ToolCall.id，值为 ToolCall\n- `subagent`：id 为子 Agent id，值为 Subagent。卡住由服务端判定：kernel 状态为 running 且超过 stuckAfterMs（默认 60000，环境变量 WEFT_SUBAGENT_STUCK_MS）没有活动时 status 为 stuck，到点推送 upsert。\n- `change`：id 为相对工作区的路径（统一用 `/`），值为 Change。git 工作区以会话第一次发消息前拍下的工作区树为基准，只列出之后的新增、修改、删除和重命名；不是 git 仓库时仍只统计 write/edit。工具结束（write / edit / bash 都可能改文件）或经保存接口写入后随重算更新：变了才 upsert，从列表消失则 remove。不做文件监听。\n\n快照是 GET /api/v2/conversations/{id} 的 conversation / items / tools，再加上该对话的 subagent 和 change 实体。模型流式输出时先 upsert 一条 `item`，id 以 `live:` 开头、`streaming` 为 true、`text` 为空；随后用 `text.delta` 追加。正式助手消息到来后 remove 这条流式项，再 upsert 正式项和 conversation。bash 工具运行中用 `tool.delta` 追加保留窗口（不要复用 `text.delta`）；偏移对不上时客户端丢掉本地缓冲，等下一次 upsert。\n\n主题 `subagent:<cid>:<agentId>`（`<cid>` 为父对话 id，`<agentId>` 为子 Agent id）按前缀动态注册。实体：\n- `subagent`：id 为子 Agent id，值为 Subagent\n- `item`：id 为 ThreadItem.id，值为 ThreadItem（子 Agent 自己的消息流，没有嵌套子 Agent 汇报）\n- `tool`：id 为 ToolCall.id，值为 ToolCall\n\n快照是 GET /api/v2/conversations/{id}/subagents/{agentId} 同一套数据拆成上述实体。订阅父对话的内核事件（含 `agent`）后重算；子 Agent 的进展会体现在父对话事件里。\n\n订阅不存在的对话或子 Agent 时仍返回 200：先发 snapshot，entities 为空，并在 snapshot 数据里加 `missing: [\"conversation:<id>\"]` 或 `missing: [\"subagent:<cid>:<agentId>\"]`，连接保持。\n\n事件名与 data 的对应关系：\n- `snapshot` → SnapshotEvent\n- `upsert` → UpsertEvent\n- `remove` → RemoveEvent\n- `text.delta` → TextDeltaEvent\n- `tool.delta` → ToolDeltaEvent\n- `heartbeat` → HeartbeatEvent\n",
+        "description": "一个客户端一条 SSE 连接，用查询参数 `topics` 订阅主题（逗号分隔），`lang` 为 zh 或 en（缺省 zh，不认识的按 zh）。\n每条业务事件带全局递增序号，写成标准 SSE：`id: <序号>`、`event: <类型>`、`data: <JSON>`。\n断线后带 `Last-Event-ID` 头（或查询参数 `lastEventId`）续传；环形缓冲里补不上（太旧、比当前还新、或格式不对）时先发一份新快照。\n没带 Last-Event-ID 时先发快照。快照的 SSE id 是开始计算快照时的最新序号；计算期间该连接订阅主题上到达的事件在快照之后按序补发（seq 大于该 id）。upsert / remove 是整实体替换，重复应用结果一样。\n订阅的主题和上次不同时，客户端不要带 Last-Event-ID / lastEventId，直接重新连接拿快照（续传只保证同一组主题）。\n心跳每 15 秒一次，不带 id，不进缓冲。\n\n主题 `workspaces` 注册为精确主题。实体：\n- `workspace`：id 为工作区 id，值为 Workspace（含可选 git 状态）\n- `conversation_summary`：id 为对话 id，值为 ConversationSummary\n\n快照与 GET /api/v2/workspaces 同一套数据拆成上述实体。工作区或对话增删改、运行状态、子 Agent 计数或 git 状态变化时 upsert；实体删除时 remove。值没变不推送。\n\n主题 `providers` 注册为精确主题。实体：\n- `provider`：id 为 Provider id，值为 Provider\n- `defaults`：id 为 `self`，值为 ProviderDefaults（`model` 为当前默认 `{ providerId, modelId }`，没有则为 null）\n\n快照是 GET /api/v2/providers 的 providers 与 defaultModel 拆成上述实体。任何 Provider 增删改（接入、自定义接口、测试、PATCH、删除）或默认模型修改后 upsert；实体删除时 remove。登录会话不进主题，靠轮询 GET /api/v2/login-sessions/{sid}。密钥永不明文出现在响应或推送里。\n\n主题 `extensions` 注册为精确主题。实体：\n- `plugin`：id 为插件 id，值为 Plugin\n- `skill`：id 为技能 id，值为 Skill\n- `git_connection`：id 为 Git 连接 id，值为 GitConnection\n\n快照是 GET /api/v2/plugins、GET /api/v2/skills、GET /api/v2/git/connections 同一套数据拆成上述实体。插件、技能、Git 连接增删改（含旧接口）后 upsert；实体删除时 remove。失败原因、Git 测试结果按订阅的 `lang` 出成句。\n\n主题 `schedules` 注册为精确主题。实体：\n- `schedule`：id 为定时任务 id，值为 Schedule\n\n快照是 GET /api/v2/schedules 同一套数据拆成上述实体。定时任务增删改、启用/暂停或运行状态变化时 upsert；实体删除时 remove。值没变不推送。\n\n主题 `conversation:<id>`（`<id>` 为对话 id）按前缀动态注册。实体：\n- `conversation`：id 为对话 id，值为 ConversationView\n- `item`：id 为 ThreadItem.id，值为 ThreadItem\n- `tool`：id 为 ToolCall.id，值为 ToolCall\n- `subagent`：id 为子 Agent id，值为 Subagent。卡住由服务端判定：kernel 状态为 running 且超过 stuckAfterMs（默认 60000，环境变量 WEFT_SUBAGENT_STUCK_MS）没有活动时 status 为 stuck，到点推送 upsert。\n- `change`：id 为相对工作区的路径（统一用 `/`），值为 Change。git 工作区以会话第一次发消息前拍下的工作区树为基准，只列出之后的新增、修改、删除和重命名；不是 git 仓库时仍只统计 write/edit。工具结束（write / edit / bash 都可能改文件）或经保存接口写入后随重算更新：变了才 upsert，从列表消失则 remove。不做文件监听。\n\n快照是 GET /api/v2/conversations/{id} 的 conversation / items / tools，再加上该对话的 subagent 和 change 实体。模型流式输出时先 upsert 一条 `item`，id 以 `live:` 开头、`streaming` 为 true、`text` 为空；随后用 `text.delta` 追加。正式助手消息到来后 remove 这条流式项，再 upsert 正式项和 conversation。bash 工具运行中用 `tool.delta` 追加保留窗口（不要复用 `text.delta`）；偏移对不上时客户端丢掉本地缓冲，等下一次 upsert。\n\n主题 `subagent:<cid>:<agentId>`（`<cid>` 为父对话 id，`<agentId>` 为子 Agent id）按前缀动态注册。实体：\n- `subagent`：id 为子 Agent id，值为 Subagent\n- `item`：id 为 ThreadItem.id，值为 ThreadItem（子 Agent 自己的消息流，没有嵌套子 Agent 汇报）\n- `tool`：id 为 ToolCall.id，值为 ToolCall\n\n快照是 GET /api/v2/conversations/{id}/subagents/{agentId} 同一套数据拆成上述实体。订阅父对话的内核事件（含 `agent`）后重算；子 Agent 的进展会体现在父对话事件里。\n\n订阅不存在的对话或子 Agent 时仍返回 200：先发 snapshot，entities 为空，并在 snapshot 数据里加 `missing: [\"conversation:<id>\"]` 或 `missing: [\"subagent:<cid>:<agentId>\"]`，连接保持。\n\n事件名与 data 的对应关系：\n- `snapshot` → SnapshotEvent\n- `upsert` → UpsertEvent\n- `remove` → RemoveEvent\n- `text.delta` → TextDeltaEvent\n- `tool.delta` → ToolDeltaEvent\n- `heartbeat` → HeartbeatEvent\n",
         "security": [
           {
             "bearerAuth": []
@@ -418,6 +418,472 @@
           },
           "401": {
             "description": "未授权",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "客户端错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "服务端错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/schedules": {
+      "get": {
+        "operationId": "listSchedules",
+        "summary": "定时任务列表",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "定时任务列表",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "未授权",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "客户端错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "服务端错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "createSchedule",
+        "summary": "新建定时任务",
+        "description": "写请求带 requestId。校验错误 400 带字段名。成功后 schedules 主题推送 upsert。",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScheduleWrite"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "已创建",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Schedule"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "字段校验失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleInvalid"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "未授权",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "客户端错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "服务端错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/schedules/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "patch": {
+        "operationId": "updateSchedule",
+        "summary": "更新定时任务",
+        "description": "写请求带 requestId。校验错误 400 带字段名。成功后 schedules 主题推送 upsert。",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SchedulePatch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "更新后的定时任务",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Schedule"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "字段校验失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleInvalid"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "未授权",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "定时任务不存在",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "客户端错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "服务端错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteSchedule",
+        "summary": "删除定时任务",
+        "description": "写请求带 requestId。成功后 schedules 主题推送 remove。",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "requestId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "已删除",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OkId"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "未授权",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "定时任务不存在",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "客户端错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "服务端错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/schedules/{id}/run": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "post": {
+        "operationId": "runSchedule",
+        "summary": "立即执行一次定时任务",
+        "description": "立即触发执行一次并记录结果。写请求带 requestId。",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScheduleRunRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "本次执行结果",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleRun"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "未授权",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "定时任务不存在",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "客户端错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "服务端错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/schedules/{id}/runs": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "listScheduleRuns",
+        "summary": "获取定时任务最近 20 次执行记录",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "执行记录列表（最多 20 条，按时间倒序）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleRunList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "未授权",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "定时任务不存在",
             "content": {
               "application/json": {
                 "schema": {
@@ -4506,8 +4972,8 @@
       },
       "patch": {
         "operationId": "patchConversation",
-        "summary": "切换对话模型或思考档位",
-        "description": "`model` 为 `{ providerId, modelId }` 时绑定该模型，规则同旧 resolveConversationModelPatch。\n`model` 为 null 时回到默认。`thinkingLevel` 为档位名时写入对话；对当前模型不支持的档位按 clampThinkingLevel 就近处理，响应里的 thinkingLevel 是实际生效值。`thinkingLevel` 为 null 时清除，恢复模型默认。至少要有 model 或 thinkingLevel。运行中也能改，下次提交生效。成功后推送该对话主题的 ConversationView（含 model、thinkingLevel 和 context）。\n",
+        "summary": "切换对话模型或思考档位、归档状态",
+        "description": "`model` 为 `{ providerId, modelId }` 时绑定该模型，规则同旧 resolveConversationModelPatch。\n`model` 为 null 时回到默认。`thinkingLevel` 为档位名时写入对话；对当前模型不支持的档位按 clampThinkingLevel 就近处理，响应里的 thinkingLevel 是实际生效值。`thinkingLevel` 为 null 时清除，恢复模型默认。`archived` 为布尔值时设置归档状态。至少要有 model、thinkingLevel 或 archived。运行中也能改，下次提交生效。成功后推送该对话主题的 ConversationView（含 model、thinkingLevel 和 context）。\n",
         "security": [
           {
             "bearerAuth": []
@@ -4578,6 +5044,85 @@
           },
           "404": {
             "description": "对话不存在",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "客户端错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "服务端错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteConversation",
+        "summary": "删除对话",
+        "description": "删除会删掉对话记录和历史，不能恢复，不动工作区文件。\n对话正在运行时返回 409，错误码 E_CONVERSATION_RUNNING。不存在时返回 404。成功返回 204。\n",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "对话 id"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "已删除"
+          },
+          "401": {
+            "description": "未授权",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "对话不存在",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "对话正在运行（E_CONVERSATION_RUNNING）",
             "content": {
               "application/json": {
                 "schema": {
@@ -5454,6 +5999,212 @@
         }
       }
     },
+    "/api/v2/conversations/{id}/fork": {
+      "post": {
+        "operationId": "forkConversation",
+        "summary": "从指定 entry 处分叉新对话",
+        "description": "调用 Pi Durable 的 conversation.fork(entryId) 从某条记录处分出一个新对话。\n新对话带着到那里为止的历史，在同一工作区，沿用原对话的模型。\n在助手消息上分叉时 prefill 为 null；在用户消息上分叉时新对话包含该消息之前的内容，prefill 为该消息的文字。\n",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "对话 id"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ForkConversationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "分叉成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForkConversationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "请求体无效或 entryId 不存在",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "未授权",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "对话不存在",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "客户端错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "服务端错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/conversations/{id}/handoff": {
+      "post": {
+        "operationId": "handoffConversation",
+        "summary": "手动交接到新上下文",
+        "description": "请求服务端让模型编写交接说明并交接到新上下文（Pi Durable reset(handoff)）。\n成功受理返回 202 { ok: true }。\n",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "对话 id"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HandoffRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "已受理手动交接",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HandoffAccepted"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "客户端请求格式错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "未授权",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "对话不存在",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "官方拒绝或繁忙",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "客户端错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "服务端错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v2/conversations/{id}/tools/{toolId}/output": {
       "get": {
         "operationId": "getToolOutput",
@@ -6230,6 +6981,38 @@
           }
         }
       },
+      "HandoffRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "requestId"
+        ],
+        "properties": {
+          "requestId": {
+            "type": "string",
+            "description": "请求幂等 id"
+          },
+          "instructions": {
+            "type": "string",
+            "maxLength": 4000,
+            "description": "用户希望交接说明侧重什么，由模型据此写交接说明；省略则由模型自己判断。"
+          }
+        }
+      },
+      "HandoffAccepted": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "ok"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "const": true,
+            "description": "始终为 true。"
+          }
+        }
+      },
       "RunAccepted": {
         "type": "object",
         "additionalProperties": false,
@@ -6269,6 +7052,83 @@
             "description": "始终为 true。撤回成功。"
           }
         }
+      },
+      "ForkConversationRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "entryId"
+        ],
+        "properties": {
+          "entryId": {
+            "type": "string",
+            "description": "从哪条记录处分叉"
+          },
+          "requestId": {
+            "type": "string",
+            "description": "幂等键。缺省时服务端生成。"
+          }
+        },
+        "description": "POST /api/v2/conversations/{id}/fork 的请求体。"
+      },
+      "ForkPrefill": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "text"
+        ],
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "填回输入框的文本"
+          }
+        },
+        "description": "用户消息分叉时填回输入框的内容。"
+      },
+      "ForkConversationResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "conversationId",
+          "prefill"
+        ],
+        "properties": {
+          "conversationId": {
+            "type": "string",
+            "description": "新对话 id"
+          },
+          "prefill": {
+            "description": "填回输入框的内容。助手消息分叉时为 null，用户消息分叉时为 { text }。",
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ForkPrefill"
+              }
+            ]
+          }
+        },
+        "description": "POST /api/v2/conversations/{id}/fork 成功。"
+      },
+      "ForkedFrom": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "conversationId",
+          "title"
+        ],
+        "properties": {
+          "conversationId": {
+            "type": "string",
+            "description": "原对话 id"
+          },
+          "title": {
+            "type": "string",
+            "description": "原对话标题"
+          }
+        },
+        "description": "分叉来源。"
       },
       "SubagentMessageAccepted": {
         "type": "object",
@@ -6780,6 +7640,8 @@
               "grep",
               "bash",
               "ask",
+              "schedule",
+              "handoff",
               "other"
             ]
           },
@@ -6899,6 +7761,10 @@
                 "description": "Harness 保留的输出窗口（尾部）。运行中的 bash 或预览被截断时带上；省略则预览即全文"
               }
             }
+          },
+          "scheduleId": {
+            "type": "string",
+            "description": "kind 为 schedule 时对应的定时任务 id"
           },
           "ask": {
             "$ref": "#/components/schemas/AskCall",
@@ -7039,6 +7905,17 @@
             "items": {
               "$ref": "#/components/schemas/ThreadUserFile"
             }
+          },
+          "entryId": {
+            "description": "这条消息在 Harness 中的 entry id。不能从这里分叉时为 null。",
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "string"
+              }
+            ]
           }
         },
         "description": "用户消息。text 只含用户正文，不含粘贴块和附件说明。"
@@ -7082,6 +7959,17 @@
           "truncated": {
             "type": "boolean",
             "description": "最后一条可见回复且 stopReason 为 length 时为 true，客户端显示继续"
+          },
+          "entryId": {
+            "description": "这条消息在 Harness 中的 entry id。不能从这里分叉时为 null（例如还在流式输出）。",
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "string"
+              }
+            ]
           }
         },
         "description": "助手回复。空文字的助手消息不进入对话流。"
@@ -7190,14 +8078,46 @@
             "enum": [
               "correction",
               "note",
-              "compaction"
+              "compaction",
+              "handoff"
             ]
           },
           "text": {
             "type": "string"
+          },
+          "detail": {
+            "type": "string",
+            "description": "handoff 是交接说明全文，也用于 compaction 摘要。"
           }
         },
-        "description": "系统提示。correction 是交接，note 是给子 Agent 插话后的通知。\ncompaction 的 text 是服务端按语言出成的句子，对应一条 pi.compaction 条目，放在该条目的时间位置。\n"
+        "description": "系统提示。correction 是交接，note 是给子 Agent 插话后的通知。\ncompaction 的 text 是服务端按语言出成的句子，对应一条 pi.compaction 条目，放在该条目的时间位置。\nhandoff 是交接到新上下文的分隔线，detail 为交接说明全文。\ncompaction 同样画成分隔线，text 显示在标题右侧，detail 为压缩摘要全文；压缩之前的内容不折叠。\n"
+      },
+      "ThreadItemTurnChanges": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "id",
+          "changes"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "turn_changes"
+          },
+          "id": {
+            "type": "string",
+            "description": "稳定 id（`tc-` 加这一轮最后一条助手回复的 id）。重启后不变。"
+          },
+          "changes": {
+            "type": "array",
+            "description": "这一轮改过的文件。增删行数只算这一轮，不是对话累计。没改文件则不会有这条。",
+            "items": {
+              "$ref": "#/components/schemas/Change"
+            }
+          }
+        },
+        "description": "这一轮的文件变更，插在该轮最后一条助手回复后面。\n工作区快照在这一轮开始前和结束后的差，包含 bash 和子 Agent 改的文件。\n老对话没有按轮记录时不出现。累计变更仍在右栏。\n"
       },
       "ThreadItem": {
         "oneOf": [
@@ -7215,6 +8135,9 @@
           },
           {
             "$ref": "#/components/schemas/ThreadItemSystemNote"
+          },
+          {
+            "$ref": "#/components/schemas/ThreadItemTurnChanges"
           }
         ],
         "discriminator": {
@@ -7224,7 +8147,8 @@
             "assistant": "#/components/schemas/ThreadItemAssistant",
             "tool_group": "#/components/schemas/ThreadItemToolGroup",
             "subagent_report": "#/components/schemas/ThreadItemSubagentReport",
-            "system_note": "#/components/schemas/ThreadItemSystemNote"
+            "system_note": "#/components/schemas/ThreadItemSystemNote",
+            "turn_changes": "#/components/schemas/ThreadItemTurnChanges"
           }
         },
         "description": "对话流里的一项。按 kind 区分。"
@@ -7458,6 +8382,27 @@
                 "description": "failed 时的人话。中文为「压缩失败：原因」，英文为 Compaction failed 加原因。"
               }
             }
+          },
+          "handoff": {
+            "description": "交接中的状态。运行中且模型正在写交接说明时为 running，否则为 null。\n",
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "state"
+                ],
+                "properties": {
+                  "state": {
+                    "type": "string",
+                    "const": "running"
+                  }
+                }
+              }
+            ]
           }
         },
         "description": "当前运行状态。供输入框、停止按钮、等待提示和主对话卡住判定使用。"
@@ -8366,9 +9311,13 @@
                 "$ref": "#/components/schemas/ThinkingLevel"
               }
             ]
+          },
+          "archived": {
+            "type": "boolean",
+            "description": "是否归档。"
           }
         },
-        "description": "PATCH /api/v2/conversations/{id} 的请求体。至少包含 model 或 thinkingLevel。\n"
+        "description": "PATCH /api/v2/conversations/{id} 的请求体。至少包含 model、thinkingLevel 或 archived。\n"
       },
       "Workspace": {
         "type": "object",
@@ -8593,6 +9542,17 @@
           },
           "archived": {
             "type": "boolean"
+          },
+          "forkedFrom": {
+            "description": "分叉来源。不是分叉对话时为 null。",
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ForkedFrom"
+              }
+            ]
           }
         },
         "description": "侧栏对话摘要。"
@@ -8779,6 +9739,17 @@
               "$ref": "#/components/schemas/ConversationSend"
             },
             "description": "本进程内经 POST .../messages 与 .../continue 发出的提交，按先后顺序，最多保留最近 20 条。\n前端用 requestId 找到自己那条乐观上屏的消息落在哪个 entry 上，据此收回。\n还没写进对话的条目带 mode 和 text，供输入框显示排队小条、对话里显示「已插话」。\n只在写入它们的服务进程内存在。\n"
+          },
+          "forkedFrom": {
+            "description": "分叉来源。不是分叉对话时为 null。",
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ForkedFrom"
+              }
+            ]
           }
         },
         "description": "一个对话的视图。摘要字段加上模型、运行状态、上下文和对话流顺序。"
@@ -10191,6 +11162,417 @@
           }
         },
         "description": "删除成功。"
+      },
+      "ScheduleTargetConversation": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "conversationId",
+          "title"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "conversation"
+            ]
+          },
+          "conversationId": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        }
+      },
+      "ScheduleTargetNew": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "workspaceId",
+          "workspaceName",
+          "model"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "new"
+            ]
+          },
+          "workspaceId": {
+            "type": "string"
+          },
+          "workspaceName": {
+            "type": "string"
+          },
+          "model": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ResolvedModel"
+              }
+            ]
+          }
+        }
+      },
+      "ScheduleTarget": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/ScheduleTargetConversation"
+          },
+          {
+            "$ref": "#/components/schemas/ScheduleTargetNew"
+          }
+        ]
+      },
+      "ScheduleRuleOnce": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "at"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "once"
+            ]
+          },
+          "at": {
+            "type": "integer",
+            "description": "毫秒时间戳"
+          }
+        }
+      },
+      "ScheduleRuleDaily": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "time"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "daily"
+            ]
+          },
+          "time": {
+            "type": "string",
+            "description": "HH:MM"
+          }
+        }
+      },
+      "ScheduleRuleWeekly": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "days",
+          "time"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "weekly"
+            ]
+          },
+          "days": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            },
+            "description": "1=周一…7=周日"
+          },
+          "time": {
+            "type": "string",
+            "description": "HH:MM"
+          }
+        }
+      },
+      "ScheduleRuleInterval": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "everyMinutes"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "interval"
+            ]
+          },
+          "everyMinutes": {
+            "type": "integer",
+            "minimum": 5,
+            "description": "最少 5 分钟"
+          }
+        }
+      },
+      "ScheduleRule": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/ScheduleRuleOnce"
+          },
+          {
+            "$ref": "#/components/schemas/ScheduleRuleDaily"
+          },
+          {
+            "$ref": "#/components/schemas/ScheduleRuleWeekly"
+          },
+          {
+            "$ref": "#/components/schemas/ScheduleRuleInterval"
+          }
+        ]
+      },
+      "ScheduleRun": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "at",
+          "status",
+          "conversationId",
+          "error"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "at": {
+            "type": "integer",
+            "description": "执行时间（毫秒时间戳）"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "failed",
+              "missed_caught_up"
+            ]
+          },
+          "conversationId": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "description": "执行所在或新建的对话 id"
+          },
+          "error": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "description": "失败原因"
+          }
+        }
+      },
+      "Schedule": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "name",
+          "message",
+          "target",
+          "rule",
+          "enabled",
+          "createdBy",
+          "nextRunAt",
+          "lastRun"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "target": {
+            "$ref": "#/components/schemas/ScheduleTarget"
+          },
+          "rule": {
+            "$ref": "#/components/schemas/ScheduleRule"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "createdBy": {
+            "type": "string",
+            "enum": [
+              "user",
+              "agent"
+            ]
+          },
+          "nextRunAt": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "description": "下次执行时间（毫秒时间戳）"
+          },
+          "lastRun": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ScheduleRun"
+              }
+            ]
+          }
+        }
+      },
+      "ScheduleList": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "schedules"
+        ],
+        "properties": {
+          "schedules": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Schedule"
+            }
+          }
+        }
+      },
+      "ScheduleRunList": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "runs"
+        ],
+        "properties": {
+          "runs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ScheduleRun"
+            }
+          }
+        }
+      },
+      "ScheduleWrite": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "message",
+          "target",
+          "rule"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "target": {
+            "$ref": "#/components/schemas/ScheduleTarget"
+          },
+          "rule": {
+            "$ref": "#/components/schemas/ScheduleRule"
+          },
+          "enabled": {
+            "type": "boolean",
+            "default": true
+          },
+          "requestId": {
+            "type": "string"
+          }
+        }
+      },
+      "SchedulePatch": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "target": {
+            "$ref": "#/components/schemas/ScheduleTarget"
+          },
+          "rule": {
+            "$ref": "#/components/schemas/ScheduleRule"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "requestId": {
+            "type": "string"
+          }
+        }
+      },
+      "ScheduleRunRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "requestId": {
+            "type": "string"
+          }
+        }
+      },
+      "ScheduleInvalid": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "error",
+          "fields"
+        ],
+        "properties": {
+          "error": {
+            "type": "string",
+            "description": "校验错误文案"
+          },
+          "code": {
+            "type": "string",
+            "default": "E_INVALID_SCHEDULE"
+          },
+          "fields": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "出错的字段名列表"
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "详细错误说明列表"
+          }
+        }
       }
     }
   }

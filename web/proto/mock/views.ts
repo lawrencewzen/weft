@@ -23,6 +23,7 @@ export function summaryOf(conv: MockConv): ConversationSummary {
     runningAgents: (view.status === 'running' ? 1 : 0) + live,
     subagents: conv.subagents.length ? { total: conv.subagents.length, live } : null,
     archived: Boolean(conv.archived),
+    forkedFrom: view.forkedFrom ?? null,
   };
 }
 
@@ -105,9 +106,13 @@ export function conversationValue(conv: MockConv): EntityValue {
 }
 
 export function itemValue(item: MockItem): EntityValue {
-  if (item.kind === 'system_note' && item.i18n) {
-    const { i18n, ...rest } = item;
-    return (lang: Lang) => ({ ...rest, text: tr(i18n, lang) });
+  if (item.kind === 'system_note' && (item.i18n || item.detailI18n)) {
+    const { i18n, detailI18n, ...rest } = item;
+    return (lang: Lang) => ({
+      ...rest,
+      text: i18n ? tr(i18n, lang) : rest.text,
+      detail: detailI18n ? tr(detailI18n, lang) : rest.detail,
+    });
   }
   if (item.kind !== 'tool_group') return item as unknown as object;
   return toolGroupValue(item);
@@ -143,6 +148,7 @@ export function toolValue(tool: MockTool, groupId: string): EntityValue {
         fromIntent: tool.fromIntent,
       },
       ...(tool.path ? { path: tool.path } : {}),
+      ...(tool.scheduleId ? { scheduleId: tool.scheduleId } : {}),
       hint: { text: tr(tool.hint, lang), failed: tool.hintFailed },
       failure: tool.failure,
       diff: tool.diff,
@@ -193,4 +199,12 @@ export function conversationEntities(conv: MockConv): TopicEntities {
 
 export function conversationGroupId(conv: MockConv, toolId: string): string {
   return groupIdOf(conv, toolId);
+}
+
+export function schedulesEntities(db: MockDb): TopicEntities {
+  const out: TopicEntities = [];
+  for (const schedule of db.schedules.values()) {
+    out.push({ entity: 'schedule', id: schedule.id, value: schedule });
+  }
+  return out;
 }

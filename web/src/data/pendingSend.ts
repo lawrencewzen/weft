@@ -204,6 +204,10 @@ export function waitingForAgent(
 ): boolean {
   if (opts.pending) return true;
   if (!opts.running) return false;
-  const last = items[items.length - 1];
+  // 按轮变更只是回复末尾的摘要，不算 agent 已经显示了东西。
+  let last: ThreadItem | undefined;
+  for (let i = items.length - 1; i >= 0; i--) {
+    if (items[i].kind !== 'turn_changes') { last = items[i]; break; }
+  }
   return !last || last.kind === 'user';
 }

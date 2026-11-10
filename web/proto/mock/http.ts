@@ -14,7 +14,14 @@ import {
   recomputeContext,
   touch,
 } from './db';
-import { compactConversation, continueConversation, sendMessage, stopConversation, withdrawMessage } from './run';
+import {
+  compactConversation,
+  continueConversation,
+  handoffConversation,
+  sendMessage,
+  stopConversation,
+  withdrawMessage,
+} from './run';
 import { parseSendImages } from '../../../src/v2/views/message-images';
 import { inferCustomProviderBrand, inferModelBrand } from './brand';
 import { mockProviderName } from './providerNames';
@@ -57,10 +64,16 @@ import type {
   LoginSession,
   MockConv,
   MockDb,
+  MockItem,
+  MockTool,
   Model,
   Plugin,
   Provider,
   ResolvedModel,
+  Schedule,
+  ScheduleRun,
+  ScheduleTarget,
+  ScheduleRule,
   Skill,
   ThreadItem,
   MockSubThread,
@@ -69,6 +82,7 @@ import type {
   WorkspaceDirEntry,
   WorkspaceDirs,
 } from './types';
+import { tr } from './types';
 
 export type MockReply = {
   status: number;
@@ -223,6 +237,35 @@ function removeWorkspace(db: MockDb, hub: MockHub, workspaceId: string): MockRep
   return ok({ removed: true });
 }
 
+function deleteConversation(db: MockDb, hub: MockHub, conv: MockConv, lang: Lang): MockReply {
+  if (conv.view.status === 'running') {
+    return fail(409, lang === 'en' ? 'Conversation is running' : '对话正在运行', 'E_CONVERSATION_RUNNING');
+  }
+  const cid = conv.view.id;
+  const workspaceId = conv.view.workspaceId;
+  db.conversations.delete(cid);
+  publishRemove(conv, hub, 'conversation', cid);
+  hub.publish('workspaces', {
+    event: 'remove',
+    entity: 'conversation_summary',
+    id: cid,
+  });
+  const ws = db.workspaces.find((row) => row.id === workspaceId);
+  if (ws) {
+    hub.publish('workspaces', {
+      event: 'upsert',
+      entity: 'workspace',
+      id: ws.id,
+      value: {
+        ...ws,
+        conversationCount: [...db.conversations.values()].filter((row) => row.view.workspaceId === ws.id && !row.archived).length,
+        runningCount: [...db.conversations.values()].filter((row) => row.view.workspaceId === ws.id && !row.archived && row.view.status === 'running').length,
+      },
+    });
+  }
+  return noContent();
+}
+
 function createChatWorkspace(db: MockDb, convId: string, title: string): Workspace {
   const name = title || '对话';
   const ws: Workspace = {
@@ -294,6 +337,129 @@ function createConversation(db: MockDb, hub: MockHub, workspaceId: string | null
   return created(summaryOf(conv) as ConversationSummary);
 }
 
+function forkConversation(
+  db: MockDb,
+  hub: MockHub,
+  conv: MockConv,
+  body: Record<string, unknown>,
+  lang: Lang,
+): MockReply {
+  const entryId = typeof body.entryId === 'string' ? body.entryId : '';
+  if (!entryId) {
+    return fail(400, 'entryId is required', 'E_BAD_REQUEST');
+  }
+
+  if (conv.forkFails) {
+    const reason = typeof conv.forkFails === 'object'
+      ? tr(conv.forkFails, lang)
+      : (lang === 'en' ? 'Conversation history corrupted' : '对话历史已损坏');
+    return fail(400, reason, 'E_FORK_FAILED');
+  }
+
+  if (entryId.includes('fail')) {
+    return fail(400, lang === 'en' ? 'Snapshot corrupted' : '快照已损坏', 'E_FORK_FAILED');
+  }
+
+  const targetIndex = conv.items.findIndex((item) => {
+    const it = item as { entryId?: string | null; id: string };
+    return it.entryId === entryId || it.id === entryId;
+  });
+
+  if (targetIndex === -1) {
+    return fail(400, lang === 'en' ? 'Entry not found' : '指定的消息不存在', 'E_ENTRY_NOT_FOUND');
+  }
+
+  const targetItem = conv.items[targetIndex];
+  if ((targetItem as { streaming?: boolean }).streaming) {
+    return fail(400, lang === 'en' ? 'Cannot fork from streaming message' : '不能从流式输出中的消息分叉', 'E_STREAMING');
+  }
+
+  let forkedItems: MockItem[];
+  let prefill: { text: string } | null = null;
+
+  if (targetItem.kind === 'assistant') {
+    forkedItems = conv.items.slice(0, targetIndex + 1);
+    prefill = null;
+  } else if (targetItem.kind === 'user') {
+    forkedItems = conv.items.slice(0, targetIndex);
+    prefill = { text: targetItem.text };
+  } else {
+    forkedItems = conv.items.slice(0, targetIndex + 1);
+    prefill = null;
+  }
+
+  const clonedItems: MockItem[] = forkedItems.map((item) => {
+    if (item.kind === 'tool_group') {
+      return { ...item, toolIds: [...item.toolIds] };
+    }
+    return { ...item };
+  });
+
+  const clonedTools: Record<string, MockTool> = {};
+  for (const item of clonedItems) {
+    if (item.kind === 'tool_group') {
+      for (const tid of item.toolIds) {
+        if (conv.tools[tid]) {
+          clonedTools[tid] = { ...conv.tools[tid] };
+        }
+      }
+    }
+  }
+
+  const newId = nextId(db, 'c');
+  const now = Date.now();
+  const title = `${conv.view.title}（分叉）`;
+
+  const newConv: MockConv = {
+    view: {
+      id: newId,
+      workspaceId: conv.view.workspaceId,
+      title,
+      updatedAt: now,
+      status: 'idle',
+      model: conv.view.model ? { ...conv.view.model } : null,
+      thinkingLevel: conv.view.thinkingLevel ?? null,
+      run: {
+        status: 'idle',
+        startedAt: null,
+        pendingText: null,
+        canSend: true,
+        canStop: false,
+        lockedReason: null,
+        error: null,
+        lastActivityAt: null,
+        stalledSince: null,
+        activeTool: null,
+      },
+      context: { used: 0, window: conv.view.context.window, percent: 0, level: 'ok' },
+      itemIds: clonedItems.map((it) => it.id),
+      sends: [],
+      forkedFrom: {
+        conversationId: conv.view.id,
+        title: conv.view.title,
+      },
+    },
+    pending: null,
+    items: clonedItems,
+    tools: clonedTools,
+    changes: [],
+    diffs: {},
+    subagents: [],
+    run: null,
+    requestRuns: new Map(),
+  };
+
+  recomputeContext(db, newConv);
+  db.conversations.set(newId, newConv);
+  publishSummary(db, hub, newId);
+  publishWorkspaces(db, hub);
+
+  return created({
+    conversationId: newId,
+    prefill,
+  });
+}
+
 function patchConversation(
   db: MockDb,
   hub: MockHub,
@@ -302,8 +468,17 @@ function patchConversation(
 ): MockReply {
   const hasModel = Object.prototype.hasOwnProperty.call(body, 'model');
   const hasThinking = Object.prototype.hasOwnProperty.call(body, 'thinkingLevel');
-  if (!hasModel && !hasThinking) {
-    return fail(400, 'model or thinkingLevel required', 'E_BAD_REQUEST');
+  const hasArchived = Object.prototype.hasOwnProperty.call(body, 'archived');
+  if (!hasModel && !hasThinking && !hasArchived) {
+    return fail(400, 'model, thinkingLevel or archived required', 'E_BAD_REQUEST');
+  }
+
+  if (hasArchived) {
+    if (typeof body.archived !== 'boolean') {
+      return fail(400, 'archived must be a boolean', 'E_BAD_REQUEST');
+    }
+    conv.archived = body.archived;
+    publishSummary(db, hub, conv.view.id);
   }
 
   if (hasModel) {
@@ -1094,6 +1269,228 @@ function persistProtoGlab(glab: GlabSettings): void {
   }
 }
 
+function computeNextRun(rule: ScheduleRule, from = Date.now()): number | null {
+  if (rule.kind === 'once') {
+    return rule.at > from ? rule.at : null;
+  }
+  if (rule.kind === 'interval') {
+    return from + rule.everyMinutes * 60 * 1000;
+  }
+  if (rule.kind === 'daily') {
+    const parts = rule.time.split(':').map(Number);
+    const h = parts[0] || 0;
+    const m = parts[1] || 0;
+    const target = new Date(from);
+    target.setHours(h, m, 0, 0);
+    if (target.getTime() <= from) {
+      target.setDate(target.getDate() + 1);
+    }
+    return target.getTime();
+  }
+  if (rule.kind === 'weekly') {
+    const parts = rule.time.split(':').map(Number);
+    const h = parts[0] || 0;
+    const m = parts[1] || 0;
+    const days = rule.days || [];
+    for (let offset = 0; offset <= 7; offset++) {
+      const d = new Date(from + offset * 86400000);
+      d.setHours(h, m, 0, 0);
+      const dayOfWeek = d.getDay() === 0 ? 7 : d.getDay();
+      if (days.includes(dayOfWeek) && d.getTime() > from) {
+        return d.getTime();
+      }
+    }
+    return from + 86400000;
+  }
+  return null;
+}
+
+function validateScheduleInput(
+  input: {
+    name?: unknown;
+    message?: unknown;
+    target?: unknown;
+    rule?: unknown;
+  },
+  isPatch = false,
+  lang: Lang = 'zh',
+): { valid: boolean; fields: string[]; error: string } {
+  const fields: string[] = [];
+  const errors: string[] = [];
+
+  if (!isPatch || input.name !== undefined) {
+    if (typeof input.name !== 'string' || !input.name.trim()) {
+      fields.push('name');
+      errors.push(lang === 'en' ? 'Name is required' : '任务名称不能为空');
+    }
+  }
+
+  if (!isPatch || input.message !== undefined) {
+    if (typeof input.message !== 'string' || !input.message.trim()) {
+      fields.push('message');
+      errors.push(lang === 'en' ? 'Message is required' : '消息内容不能为空');
+    }
+  }
+
+  if (!isPatch || input.target !== undefined) {
+    const target = input.target as Record<string, unknown> | undefined;
+    if (!target || typeof target !== 'object') {
+      fields.push('target');
+      errors.push(lang === 'en' ? 'Target is required' : '目标不能为空');
+    } else if (target.kind === 'conversation') {
+      if (typeof target.conversationId !== 'string' || !target.conversationId) {
+        fields.push('target.conversationId');
+        errors.push(lang === 'en' ? 'Conversation is required' : '请选择目标对话');
+      }
+    } else if (target.kind === 'new') {
+      if (typeof target.workspaceId !== 'string' || !target.workspaceId) {
+        fields.push('target.workspaceId');
+        errors.push(lang === 'en' ? 'Workspace is required' : '请选择工作区');
+      }
+    } else {
+      fields.push('target.kind');
+      errors.push(lang === 'en' ? 'Invalid target kind' : '无效的目标类型');
+    }
+  }
+
+  if (!isPatch || input.rule !== undefined) {
+    const rule = input.rule as Record<string, unknown> | undefined;
+    if (!rule || typeof rule !== 'object') {
+      fields.push('rule');
+      errors.push(lang === 'en' ? 'Rule is required' : '时间规则不能为空');
+    } else if (rule.kind === 'interval') {
+      const minutes = Number(rule.everyMinutes);
+      if (isNaN(minutes) || minutes < 5) {
+        fields.push('rule.everyMinutes');
+        errors.push(lang === 'en' ? 'Interval must be at least 5 minutes' : '间隔不能少于 5 分钟');
+      }
+    } else if (rule.kind === 'weekly') {
+      if (!Array.isArray(rule.days) || rule.days.length === 0) {
+        fields.push('rule.days');
+        errors.push(lang === 'en' ? 'Please select at least one day' : '每周请至少选择一天');
+      }
+      if (typeof rule.time !== 'string' || !/^\d{2}:\d{2}$/.test(rule.time)) {
+        fields.push('rule.time');
+        errors.push(lang === 'en' ? 'Time is required' : '时间格式无效');
+      }
+    } else if (rule.kind === 'daily') {
+      if (typeof rule.time !== 'string' || !/^\d{2}:\d{2}$/.test(rule.time)) {
+        fields.push('rule.time');
+        errors.push(lang === 'en' ? 'Time is required' : '时间格式无效');
+      }
+    } else if (rule.kind === 'once') {
+      const at = Number(rule.at);
+      if (isNaN(at) || at <= 0) {
+        fields.push('rule.at');
+        errors.push(lang === 'en' ? 'Invalid timestamp' : '时间戳无效');
+      }
+    } else {
+      fields.push('rule.kind');
+      errors.push(lang === 'en' ? 'Invalid rule kind' : '无效的时间规则类型');
+    }
+  }
+
+  return {
+    valid: fields.length === 0,
+    fields,
+    error: errors.join('; ') || (lang === 'en' ? 'Invalid schedule fields' : '字段校验失败'),
+  };
+}
+
+function executeSchedule(
+  db: MockDb,
+  hub: MockHub,
+  schedule: Schedule,
+  lang: Lang,
+): ScheduleRun {
+  const runId = `run-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+  const run: ScheduleRun = {
+    id: runId,
+    at: Date.now(),
+    status: 'ok',
+    conversationId: null,
+    error: null,
+  };
+
+  const target = schedule.target;
+  if (target.kind === 'conversation') {
+    const conv = db.conversations.get(target.conversationId);
+    if (conv) {
+      run.conversationId = conv.view.id;
+      sendMessage(db, conv, hub, schedule.message, `req-sched-${Date.now()}`);
+    } else {
+      run.status = 'failed';
+      run.error = lang === 'en' ? 'Target conversation not found' : '目标对话不存在';
+    }
+  } else if (target.kind === 'new') {
+    const ws = db.workspaces.find((w) => w.id === target.workspaceId) || db.workspaces[0];
+    const wsId = ws ? ws.id : 'ws-weft';
+    const now = new Date();
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    const dd = String(now.getDate()).padStart(2, '0');
+    const hh = String(now.getHours()).padStart(2, '0');
+    const min = String(now.getMinutes()).padStart(2, '0');
+    const title = `${schedule.name} · ${mm}/${dd} ${hh}:${min}`;
+    const newCid = `c-sched-${Date.now()}`;
+
+    const model = target.model || db.defaultModel;
+    const provider = db.providers.find((row) => row.id === model?.providerId);
+    const found = provider?.models.find((row) => row.id === model?.modelId);
+    const window = found?.contextWindow || 200_000;
+
+    const conv: MockConv = {
+      view: {
+        id: newCid,
+        workspaceId: wsId,
+        title,
+        updatedAt: Date.now(),
+        status: 'idle',
+        model: model && found
+          ? { sourceId: model.providerId, modelId: model.modelId, label: modelLabel(db, model) }
+          : null,
+        thinkingLevel: found ? (found.defaultThinkingLevel ?? null) : null,
+        run: {
+          status: 'idle',
+          startedAt: null,
+          pendingText: null,
+          canSend: true,
+          canStop: false,
+          lockedReason: null,
+          error: null,
+          lastActivityAt: null,
+          stalledSince: null,
+          activeTool: null,
+        },
+        context: { used: 0, window, percent: 0, level: 'ok' },
+        itemIds: [],
+        sends: [],
+      },
+      pending: null,
+      items: [],
+      tools: {},
+      changes: [],
+      diffs: {},
+      subagents: [],
+      run: null,
+      requestRuns: new Map(),
+    };
+
+    db.conversations.set(newCid, conv);
+    publishSummary(db, hub, newCid);
+    run.conversationId = newCid;
+    sendMessage(db, conv, hub, schedule.message, `req-sched-${Date.now()}`);
+  }
+
+  schedule.lastRun = run;
+  const runs = db.scheduleRuns.get(schedule.id) || [];
+  runs.unshift(run);
+  if (runs.length > 20) runs.length = 20;
+  db.scheduleRuns.set(schedule.id, runs);
+  hub.publish('schedules', { event: 'upsert', entity: 'schedule', id: schedule.id, value: schedule });
+
+  return run;
+}
+
 /* ---------- routing ---------- */
 
 /** Route one mock HTTP call. Unknown `/api` paths answer 404 so the UI can show a message. */
@@ -1313,6 +1710,85 @@ export function handleMockRequest(
       }
       publishProviders(db, hub);
       return noContent();
+    }
+  }
+
+  /* ---- schedules ---- */
+  if (path === '/api/v2/schedules' && method === 'GET') {
+    return ok({ schedules: [...db.schedules.values()] });
+  }
+
+  if (path === '/api/v2/schedules' && method === 'POST') {
+    const val = validateScheduleInput(body, false, lang);
+    if (!val.valid) {
+      return fail(400, val.error, 'E_INVALID_SCHEDULE', { fields: val.fields });
+    }
+    const id = `sched-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    const enabled = body.enabled !== false;
+    const rule = body.rule as ScheduleRule;
+    const target = body.target as ScheduleTarget;
+    const schedule: Schedule = {
+      id,
+      name: String(body.name).trim(),
+      message: String(body.message).trim(),
+      target,
+      rule,
+      enabled,
+      createdBy: 'user',
+      nextRunAt: enabled ? computeNextRun(rule) : null,
+      lastRun: null,
+    };
+    db.schedules.set(id, schedule);
+    db.scheduleRuns.set(id, []);
+    hub.publish('schedules', { event: 'upsert', entity: 'schedule', id, value: schedule });
+    return created(schedule);
+  }
+
+  const schedRunsMatch = /^\/api\/v2\/schedules\/([^/]+)\/runs$/.exec(path);
+  if (schedRunsMatch && method === 'GET') {
+    const id = decodeURIComponent(schedRunsMatch[1]);
+    const schedule = db.schedules.get(id);
+    if (!schedule) return fail(404, lang === 'en' ? 'Schedule not found' : '定时任务不存在');
+    const runs = db.scheduleRuns.get(id) || [];
+    return ok({ runs });
+  }
+
+  const schedRunMatch = /^\/api\/v2\/schedules\/([^/]+)\/run$/.exec(path);
+  if (schedRunMatch && method === 'POST') {
+    const id = decodeURIComponent(schedRunMatch[1]);
+    const schedule = db.schedules.get(id);
+    if (!schedule) return fail(404, lang === 'en' ? 'Schedule not found' : '定时任务不存在');
+    const run = executeSchedule(db, hub, schedule, lang);
+    return ok(run);
+  }
+
+  const schedMatch = /^\/api\/v2\/schedules\/([^/]+)$/.exec(path);
+  if (schedMatch) {
+    const id = decodeURIComponent(schedMatch[1]);
+    const schedule = db.schedules.get(id);
+    if (!schedule) return fail(404, lang === 'en' ? 'Schedule not found' : '定时任务不存在');
+
+    if (method === 'PATCH') {
+      const val = validateScheduleInput(body, true, lang);
+      if (!val.valid) {
+        return fail(400, val.error, 'E_INVALID_SCHEDULE', { fields: val.fields });
+      }
+      if (body.name !== undefined) schedule.name = String(body.name).trim();
+      if (body.message !== undefined) schedule.message = String(body.message).trim();
+      if (body.target !== undefined) schedule.target = body.target as ScheduleTarget;
+      if (body.rule !== undefined) schedule.rule = body.rule as ScheduleRule;
+      if (body.enabled !== undefined) schedule.enabled = Boolean(body.enabled);
+      schedule.nextRunAt = schedule.enabled ? computeNextRun(schedule.rule) : null;
+
+      hub.publish('schedules', { event: 'upsert', entity: 'schedule', id: schedule.id, value: schedule });
+      return ok(schedule);
+    }
+
+    if (method === 'DELETE') {
+      db.schedules.delete(id);
+      db.scheduleRuns.delete(id);
+      hub.publish('schedules', { event: 'remove', entity: 'schedule', id });
+      return ok({ ok: true, id });
     }
   }
 
@@ -1745,9 +2221,10 @@ export function handleMockRequest(
   if (convMatch) {
     const cid = decodeURIComponent(convMatch[1]);
     const conv = getConv(db, cid);
-    if (!conv) return fail(404, '对话不存在');
+    if (!conv) return fail(404, lang === 'en' ? 'Conversation not found' : '对话不存在');
     if (method === 'GET') return ok(conversationSnapshot(conv, lang));
     if (method === 'PATCH') return patchConversation(db, hub, conv, body);
+    if (method === 'DELETE') return deleteConversation(db, hub, conv, lang);
   }
 
   const imageMatch = /^\/api\/v2\/conversations\/([^/]+)\/messages\/([^/]+)\/images\/([^/]+)$/.exec(path);
@@ -1868,6 +2345,10 @@ export function handleMockRequest(
       ? 'steer'
       : null;
     if (mode == null) return fail(400, 'invalid mode', 'E_BAD_REQUEST');
+    if (conv.archived) {
+      conv.archived = false;
+      publishSummary(db, hub, conv.view.id);
+    }
     const result = sendMessage(db, conv, hub, text, requestId, parsedImages.images, mode, files, pastes);
     if (!result.ok) return fail(result.status, result.error);
     return accepted({ runId: result.runId });
@@ -1910,6 +2391,24 @@ export function handleMockRequest(
     const result = compactConversation(db, conv, hub);
     if (!result.ok) return fail(result.status, result.error, result.code);
     return accepted({ taskId: result.taskId });
+  }
+  const handoffMatch = /^\/api\/v2\/conversations\/([^/]+)\/handoff$/.exec(path);
+  if (handoffMatch && method === 'POST') {
+    const conv = getConv(db, decodeURIComponent(handoffMatch[1]));
+    if (!conv) return fail(404, lang === 'en' ? 'Conversation not found' : '对话不存在');
+    const requestId = typeof body.requestId === 'string' ? body.requestId : '';
+    const instructions = typeof body.instructions === 'string' && body.instructions.trim()
+      ? body.instructions.trim()
+      : undefined;
+    const result = handoffConversation(db, conv, hub, requestId, lang, instructions);
+    if (!result.ok) return fail(result.status, result.error, result.code);
+    return accepted({ ok: true });
+  }
+  const forkMatch = /^\/api\/v2\/conversations\/([^/]+)\/fork$/.exec(path);
+  if (forkMatch && method === 'POST') {
+    const conv = getConv(db, decodeURIComponent(forkMatch[1]));
+    if (!conv) return fail(404, lang === 'en' ? 'Conversation not found' : '对话不存在');
+    return forkConversation(db, hub, conv, body, lang);
   }
   const toolMatch = /^\/api\/v2\/conversations\/([^/]+)\/tools\/([^/]+)\/output$/.exec(path);
   if (toolMatch && method === 'GET') {

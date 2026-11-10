@@ -37,6 +37,15 @@ export type PatchPluginRequest = components['schemas']['PatchPluginRequest'];
 export type Skill = components['schemas']['Skill'];
 export type SkillList = components['schemas']['SkillList'];
 export type ResolvedModel = components['schemas']['ResolvedModel'];
+export type Schedule = components['schemas']['Schedule'];
+export type ScheduleRun = components['schemas']['ScheduleRun'];
+export type ScheduleTarget = components['schemas']['ScheduleTarget'];
+export type ScheduleRule = components['schemas']['ScheduleRule'];
+export type ScheduleWrite = components['schemas']['ScheduleWrite'];
+export type SchedulePatch = components['schemas']['SchedulePatch'];
+export type ScheduleList = components['schemas']['ScheduleList'];
+export type ScheduleRunList = components['schemas']['ScheduleRunList'];
+export type ScheduleInvalid = components['schemas']['ScheduleInvalid'];
 
 export type AskOption = components['schemas']['AskOption'];
 export type AskQuestion = components['schemas']['AskQuestion'];
@@ -94,6 +103,8 @@ export type {
 };
 export type CompactionSettings = components['schemas']['CompactionSettingsView'];
 export type CompactAccepted = components['schemas']['CompactAccepted'];
+export type HandoffAccepted = components['schemas']['HandoffAccepted'];
+export type HandoffRequest = components['schemas']['HandoffRequest'];
 export type SkillWriteRequest = components['schemas']['SkillWriteRequest'];
 export type GitConnection = components['schemas']['GitConnection'];
 export type GitConnectionList = components['schemas']['GitConnectionList'];
@@ -392,6 +403,34 @@ export function patchConversationThinkingLevel(
   thinkingLevel: ThinkingLevel | null,
 ): Promise<ConversationView> {
   return patchConversation(cid, { thinkingLevel });
+}
+
+export function archiveConversation(
+  cid: string,
+  archived: boolean,
+): Promise<ConversationView> {
+  return patchConversation(cid, { archived });
+}
+
+export function deleteConversation(cid: string): Promise<void> {
+  return requestJson<void>(conversationPath(cid), {
+    method: 'DELETE',
+  });
+}
+
+export type ForkConversationResponse = components['schemas']['ForkConversationResponse'];
+
+export function forkConversation(
+  cid: string,
+  entryId: string,
+  requestId?: string,
+): Promise<ForkConversationResponse> {
+  const reqId = requestId ?? randomId();
+  const params = new URLSearchParams({ lang: getPreferredLang() });
+  return requestJson<ForkConversationResponse>(`${conversationPath(cid, '/fork')}?${params.toString()}`, {
+    method: 'POST',
+    body: JSON.stringify({ entryId, requestId: reqId }),
+  });
 }
 
 export function createConversation(
@@ -792,6 +831,13 @@ export function compactConversation(cid: string): Promise<CompactAccepted> {
 }
 
 export type CloseAction = 'ask' | 'tray' | 'quit';
+export function handoffConversation(cid: string, requestId?: string, instructions?: string): Promise<HandoffAccepted> {
+  const id = requestId ?? randomId();
+  return requestJson<HandoffAccepted>(conversationPath(cid, '/handoff'), {
+    method: 'POST',
+    body: JSON.stringify({ requestId: id, ...(instructions ? { instructions } : {}) }),
+  });
+}
 
 export function getSettings(): Promise<CompactionSettings> {
   return requestJson<CompactionSettings>('/api/v2/settings');
@@ -809,4 +855,43 @@ export function putCloseAction(closeAction: CloseAction): Promise<CompactionSett
     method: 'PUT',
     body: JSON.stringify({ closeAction }),
   });
+}
+export function listSchedules(lang?: string): Promise<ScheduleList> {
+  return requestJson<ScheduleList>(withLang('/api/v2/schedules', lang));
+}
+
+export function createSchedule(body: ScheduleWrite, lang?: string): Promise<Schedule> {
+  const reqId = body.requestId || randomId();
+  return requestJson<Schedule>(withLang('/api/v2/schedules', lang), {
+    method: 'POST',
+    body: JSON.stringify({ ...body, requestId: reqId }),
+  });
+}
+
+export function patchSchedule(id: string, body: SchedulePatch, lang?: string): Promise<Schedule> {
+  const reqId = body.requestId || randomId();
+  return requestJson<Schedule>(withLang(`/api/v2/schedules/${encodeURIComponent(id)}`, lang), {
+    method: 'PATCH',
+    body: JSON.stringify({ ...body, requestId: reqId }),
+  });
+}
+
+export function deleteSchedule(id: string, requestId?: string, lang?: string): Promise<{ ok: boolean; id: string }> {
+  const reqId = requestId || randomId();
+  return requestJson<{ ok: boolean; id: string }>(
+    withLang(`/api/v2/schedules/${encodeURIComponent(id)}?requestId=${encodeURIComponent(reqId)}`, lang),
+    { method: 'DELETE' },
+  );
+}
+
+export function runSchedule(id: string, requestId?: string, lang?: string): Promise<ScheduleRun> {
+  const reqId = requestId || randomId();
+  return requestJson<ScheduleRun>(withLang(`/api/v2/schedules/${encodeURIComponent(id)}/run`, lang), {
+    method: 'POST',
+    body: JSON.stringify({ requestId: reqId }),
+  });
+}
+
+export function listScheduleRuns(id: string, lang?: string): Promise<ScheduleRunList> {
+  return requestJson<ScheduleRunList>(withLang(`/api/v2/schedules/${encodeURIComponent(id)}/runs`, lang));
 }

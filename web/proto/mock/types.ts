@@ -39,6 +39,15 @@ export type GitConnection = components['schemas']['GitConnection'];
 export type GitProject = components['schemas']['GitProject'];
 export type GitBranch = components['schemas']['GitBranch'];
 export type GitTestResult = components['schemas']['GitTestResult'];
+export type Schedule = components['schemas']['Schedule'];
+export type ScheduleRun = components['schemas']['ScheduleRun'];
+export type ScheduleTarget = components['schemas']['ScheduleTarget'];
+export type ScheduleRule = components['schemas']['ScheduleRule'];
+export type ScheduleWrite = components['schemas']['ScheduleWrite'];
+export type SchedulePatch = components['schemas']['SchedulePatch'];
+export type ScheduleList = components['schemas']['ScheduleList'];
+export type ScheduleRunList = components['schemas']['ScheduleRunList'];
+export type ScheduleInvalid = components['schemas']['ScheduleInvalid'];
 import type { GlabBinaryInfo, GlabBinarySource, GlabSettings } from '../../src/data/api';
 export type { GlabBinaryInfo, GlabBinarySource, GlabSettings };
 
@@ -49,6 +58,7 @@ export type MockTool = {
   kind: ToolCall['kind'];
   status: ToolCall['status'];
   path?: string;
+  scheduleId?: string;
   title: Bilingual;
   detail?: Bilingual;
   fromIntent: boolean;
@@ -86,13 +96,16 @@ export type MockGroup = {
   running: boolean;
 };
 
+/** 一轮自己改的文件，跟在这一轮回复后面。形状与契约 ThreadItemTurnChanges 相同。 */
+export type MockTurnChanges = { kind: 'turn_changes'; id: string; changes: Change[] };
+
 type PlainItem = Exclude<ThreadItem, { kind: 'tool_group' }>;
 
 type SystemNoteItem = Extract<ThreadItem, { kind: 'system_note' }>;
 /** compaction note: the server writes the sentence in the client's language. */
-export type MockNote = SystemNoteItem & { i18n?: Bilingual };
+export type MockNote = SystemNoteItem & { i18n?: Bilingual; detailI18n?: Bilingual };
 
-export type MockItem = Exclude<PlainItem, SystemNoteItem> | MockNote | MockGroup;
+export type MockItem = Exclude<PlainItem, SystemNoteItem> | MockNote | MockGroup | MockTurnChanges;
 
 export type MockCompaction = {
   state: 'idle' | 'running' | 'failed';
@@ -120,6 +133,8 @@ export type RunHandle = {
   cancelled: boolean;
   steers: Steer[];
   followUps: FollowUp[];
+  /** 这一轮自己改的文件（路径 → 只含这一轮的增删），结束时变成 turn_changes。 */
+  turnChanges?: Map<string, Change>;
 };
 
 export type MockConv = {
@@ -133,6 +148,8 @@ export type MockConv = {
   /** Prototype only: the next compaction of this conversation ends in failure. */
   compactFails?: boolean;
   compactTimer?: number;
+  /** Prototype only: next fork of this conversation ends in failure. */
+  forkFails?: boolean | Bilingual;
   items: MockItem[];
   tools: Record<string, MockTool>;
   changes: Change[];
@@ -179,6 +196,8 @@ export type MockDb = {
   workspaceUploads: Map<string, components['schemas']['UploadResult']>;
   glab: GlabSettings;
   settings: { compaction: { triggerPercent: number }; closeAction: 'ask' | 'tray' | 'quit' };
+  schedules: Map<string, Schedule>;
+  scheduleRuns: Map<string, ScheduleRun[]>;
 };
 
 export type EntityValue = object | ((lang: Lang) => object);

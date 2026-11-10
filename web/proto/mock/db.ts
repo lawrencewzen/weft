@@ -182,9 +182,9 @@ export function publishSummary(db: MockDb, hub: MockHub, cid: string): void {
       value: {
         ...ws,
         conversationCount: [...db.conversations.values()]
-          .filter((row) => row.view.workspaceId === ws.id).length,
+          .filter((row) => row.view.workspaceId === ws.id && !row.archived).length,
         runningCount: [...db.conversations.values()]
-          .filter((row) => row.view.workspaceId === ws.id && row.view.status === 'running').length,
+          .filter((row) => row.view.workspaceId === ws.id && !row.archived && row.view.status === 'running').length,
       },
     });
   }
