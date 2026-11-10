@@ -343,7 +343,7 @@ test('pi.compaction is not a user or assistant bubble', () => {
   })), [
     { role: 'user', kind: undefined, text: EARLY_A },
     { role: 'assistant', kind: undefined, text: SUMMARY_TEXT },
-    { role: 'note', kind: 'compaction', text: undefined },
+    { role: 'note', kind: 'compaction', text: SUMMARY_TEXT },
     { role: 'user', kind: undefined, text: KEPT },
   ]);
   assert.equal(messages.some((message) => (

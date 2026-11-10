@@ -642,13 +642,19 @@ export function messagesFromEntries(entries) {
   const messages = [];
   for (const entry of entries || []) {
     // The model sees this entry as a user summary. The thread gets a system note,
-    // not a user or assistant bubble, and the summary text is not copied out.
+    // not a user or assistant bubble. The summary body (inside <summary>…</summary>,
+    // without the model-facing preamble) becomes the note text, shown on expand.
     if (entry?.kind === 'pi.compaction') {
-      messages.push({
+      const raw = textOf(entry.model?.[0]?.content);
+      const inner = /<summary>([\s\S]*)<\/summary>/.exec(raw);
+      const detail = (inner ? inner[1] : raw).trim();
+      const note = {
         id: String(entry.id),
         role: 'note',
         kind: 'compaction',
-      });
+      };
+      if (detail) note.text = detail;
+      messages.push(note);
       continue;
     }
     // pi.reset starts the new context. The model sees its user text; the thread

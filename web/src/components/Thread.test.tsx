@@ -230,8 +230,29 @@ describe('Thread failure and continue (T105-2)', () => {
     await act(async () => {
       root!.render(renderThread({ failed: false, compaction: { state: 'running', trigger: 'manual' } }));
     });
-    expect(host!.querySelector('[data-testid="next-thread-compacting"]')?.textContent).toBe('正在压缩上下文');
+    const pending = host!.querySelector('[data-testid="next-thread-compacting"]');
+    expect(pending?.textContent).toBe('压缩中…');
+    // Same divider shell as the final compaction line, with a spinner instead of the icon.
+    expect(pending?.classList.contains('handoff-divider-container')).toBe(true);
+    expect(pending?.querySelector('.handoff-divider-line')).not.toBeNull();
+    expect(pending?.querySelector('.run-spin')).not.toBeNull();
     expect(host!.querySelector('[data-testid="next-compaction-error"]')).toBeNull();
+  });
+
+  it('does not fold anything before a compaction divider', async () => {
+    const items: ThreadItem[] = [
+      { kind: 'user', id: 'u1', text: '之前的问题', pathRefs: [] },
+      { kind: 'assistant', id: 'a1', text: '之前的回答', pathRefs: [], streaming: false, truncated: false },
+      { kind: 'system_note', id: 'n1', noteKind: 'compaction', text: '之前 2 条已摘要', detail: '摘要全文' },
+      { kind: 'user', id: 'u2', text: '之后的问题', pathRefs: [] },
+    ];
+    await act(async () => {
+      root!.render(renderThread({ items, failed: false }));
+    });
+    expect(host!.querySelector('[data-testid="next-thread-earlier-toggle"]')).toBeNull();
+    expect(host!.querySelectorAll('[data-testid="next-item-user"]').length).toBe(2);
+    expect(host!.querySelector('[data-testid="next-item-assistant"]')).not.toBeNull();
+    expect(host!.querySelector('[data-testid="next-compaction-divider"]')).not.toBeNull();
   });
 
   it('shows the compaction error last, with no continue button', async () => {

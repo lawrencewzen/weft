@@ -143,8 +143,20 @@ test('pi.compaction entries become a compaction note at that position', async ()
   assert.equal(zh.items[1].noteKind, 'compaction');
   assert.equal(zh.items[1].text, '已压缩较早的上下文');
   assert.equal(zh.items[1].text.includes('SECRET'), false);
+  assert.equal(zh.items[1].detail, 'SECRET SUMMARY');
   const en = await buildThread(messages, { lang: 'en' });
   assert.equal(en.items[1].text, 'Earlier context was compacted');
+});
+
+test('compaction note detail is the summary body without the model-facing wrapper', async () => {
+  const wrapped = 'The conversation history before this point was compacted:\n\n<summary>\n## Goal\nShip it\n</summary>';
+  const { messages } = messagesFromEntries([
+    { id: 1, kind: 'pi.compaction', model: [{ role: 'user', content: [{ type: 'text', text: wrapped }] }] },
+    { id: 2, kind: 'pi.compaction', model: [{ role: 'user', content: [{ type: 'text', text: '   ' }] }] },
+  ]);
+  const { items } = await buildThread(messages, { lang: 'en' });
+  assert.equal(items[0].detail, '## Goal\nShip it');
+  assert.equal('detail' in items[1], false);
 });
 
 test('compaction failure and blocking model_error use the same redacted sentence', () => {

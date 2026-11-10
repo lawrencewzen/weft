@@ -1755,6 +1755,7 @@ export interface components {
          * @description 系统提示。correction 是交接，note 是给子 Agent 插话后的通知。
          *     compaction 的 text 是服务端按语言出成的句子，对应一条 pi.compaction 条目，放在该条目的时间位置。
          *     handoff 是交接到新上下文的分隔线，detail 为交接说明全文。
+         *     compaction 同样画成分隔线，text 显示在标题右侧，detail 为压缩摘要全文；压缩之前的内容不折叠。
          */
         ThreadItemSystemNote: {
             /**
@@ -1766,7 +1767,7 @@ export interface components {
             /** @enum {string} */
             noteKind: "correction" | "note" | "compaction" | "handoff";
             text: string;
-            /** @description 交接说明全文，只有 handoff 用。 */
+            /** @description handoff 是交接说明全文，也用于 compaction 摘要。 */
             detail?: string;
         };
         /**

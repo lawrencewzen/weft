@@ -233,12 +233,15 @@ export async function buildThread(
     }
 
     if (m?.role === 'note' && m.kind === 'compaction') {
-      items.push({
+      const detail = String(m.text || '').trim();
+      const note: components['schemas']['ThreadItemSystemNote'] = {
         kind: 'system_note',
         id: messageId(m),
         noteKind: 'compaction',
         text: phrase(lang, 'compaction_note'),
-      });
+      };
+      if (detail) note.detail = detail;
+      items.push(note);
       continue;
     }
 

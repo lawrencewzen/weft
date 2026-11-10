@@ -1170,6 +1170,7 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.65; backgrou
   align-items: center;
   gap: 12px;
   width: 100%;
+  min-height: 18px;
 }
 .handoff-divider-line {
   flex: 1;
@@ -1177,18 +1178,48 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.65; backgrou
   background: var(--line2);
   min-width: 12px;
 }
+.handoff-divider-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 70%;
+}
 .handoff-divider-title {
   font-size: var(--fs-xs);
   color: var(--mute);
   font-weight: 500;
   white-space: nowrap;
   user-select: none;
+  flex-shrink: 0;
 }
+.handoff-divider-icon {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+  color: var(--mute);
+}
+.handoff-divider-meta {
+  font-size: var(--fs-xs);
+  color: var(--faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+  margin-left: 2px;
+}
+/* Running state: same shell as the final divider, so it lands in place without a jump. */
+.handoff-divider-container.is-pending .handoff-divider-title { color: var(--faint); }
+.handoff-divider-container.is-pending .run-spin { width: 12px; height: 12px; }
+.handoff-divider-container.is-pending .run-spin span { display: none; }
+.handoff-divider-container.is-pending .run-spin::before { border-width: 1.5px; border-color: var(--line); border-top-color: var(--mute); }
 .handoff-detail-toggle {
   display: inline-flex;
   align-items: center;
+  box-sizing: border-box;
+  height: 18px;
   gap: 4px;
-  padding: 2px 8px;
+  padding: 0 8px;
   border: 1px solid var(--line2);
   border-radius: 6px;
   background: transparent;
