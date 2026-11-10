@@ -396,6 +396,19 @@ export function patchConversationThinkingLevel(
   return patchConversation(cid, { thinkingLevel });
 }
 
+export function archiveConversation(
+  cid: string,
+  archived: boolean,
+): Promise<ConversationView> {
+  return patchConversation(cid, { archived });
+}
+
+export function deleteConversation(cid: string): Promise<void> {
+  return requestJson<void>(conversationPath(cid), {
+    method: 'DELETE',
+  });
+}
+
 export type ForkConversationResponse = components['schemas']['ForkConversationResponse'];
 
 export function forkConversation(

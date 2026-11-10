@@ -107,12 +107,14 @@ function convFromRow(row) {
         title: row.forked_from_title == null ? '' : String(row.forked_from_title),
       }
       : null,
+    archived: Number(row.archived) === 1,
     forkRequestId: row.fork_request_id == null || row.fork_request_id === '' ? null : String(row.fork_request_id),
     forkPrefillJson: row.fork_prefill_json == null ? null : String(row.fork_prefill_json),
   };
 }
 
 export function createSqliteStore(dir, { log = console } = {}) {
+  const deletedIds = new Set();
   const dbPath = resolveAppDatabasePath(dir, { log });
   const db = new DatabaseSync(dbPath);
   db.exec('PRAGMA journal_mode = WAL');
@@ -256,6 +258,7 @@ export function createSqliteStore(dir, { log = console } = {}) {
     if (!convCols.has('thinking_level')) db.exec('ALTER TABLE conversations ADD COLUMN thinking_level TEXT');
     if (!convCols.has('title_source')) db.exec("ALTER TABLE conversations ADD COLUMN title_source TEXT NOT NULL DEFAULT 'auto'");
     if (!convCols.has('title_generated_at')) db.exec('ALTER TABLE conversations ADD COLUMN title_generated_at INTEGER');
+    if (!convCols.has('archived')) db.exec('ALTER TABLE conversations ADD COLUMN archived INTEGER NOT NULL DEFAULT 0');
     if (!convCols.has('forked_from_id')) db.exec('ALTER TABLE conversations ADD COLUMN forked_from_id TEXT');
     if (!convCols.has('forked_from_title')) db.exec('ALTER TABLE conversations ADD COLUMN forked_from_title TEXT');
     if (!convCols.has('fork_request_id')) db.exec('ALTER TABLE conversations ADD COLUMN fork_request_id TEXT');
@@ -313,8 +316,9 @@ export function createSqliteStore(dir, { log = console } = {}) {
       workspace_id=?, title=?, updated_at=?,
       workspace_path=?, last_progress_at=?, original_text=?, usage_json=?, harness_id=?,
       last_submission_id=?, model_source_id=?, model_id=?, thinking_level=?,
-      title_source=?, title_generated_at=?
+      title_source=?, title_generated_at=?, archived=?
       WHERE id=?`),
+    delConv: db.prepare('DELETE FROM conversations WHERE id = ?'),
     listConv: db.prepare('SELECT * FROM conversations WHERE workspace_id = ? AND harness_id IS NOT NULL ORDER BY updated_at DESC'),
     insTomb: db.prepare('INSERT OR IGNORE INTO catalog_tombstones (kind, id) VALUES (?, ?)'),
     delTomb: db.prepare('DELETE FROM catalog_tombstones WHERE kind = ? AND id = ?'),
@@ -438,6 +442,7 @@ export function createSqliteStore(dir, { log = console } = {}) {
         thinkingLevel: thinkingLevel ?? null,
         titleSource: titleSource === 'user' ? 'user' : 'auto',
         titleGeneratedAt: null,
+        archived: false,
         forkedFrom: parentId
           ? { conversationId: parentId, title: forkedFromTitle == null ? '' : String(forkedFromTitle) }
           : null,
@@ -480,6 +485,8 @@ export function createSqliteStore(dir, { log = console } = {}) {
       return q.listKernel.all().map(convFromRow);
     },
     async updateConversation(id, patch = {}) {
+      // A late write for a deleted conversation must not bring its row back.
+      if (deletedIds.has(id)) return { id, ...patch, updatedAt: Date.now(), deleted: true };
       let conv = convFromRow(q.getConv.get(id));
       if (!conv) {
         const now = Date.now();
@@ -499,6 +506,7 @@ export function createSqliteStore(dir, { log = console } = {}) {
           thinkingLevel: null,
           titleSource: 'auto',
           titleGeneratedAt: null,
+          archived: false,
         };
         q.insConv.run(
           conv.id, conv.workspaceId, conv.title, null, null, null,
@@ -510,7 +518,7 @@ export function createSqliteStore(dir, { log = console } = {}) {
           null, null, null, null,
         );
       }
-      const next = { ...conv, ...patch, updatedAt: Date.now() };
+      const next = { ...conv, ...patch, updatedAt: patch.updatedAt ?? Date.now() };
       next.titleSource = next.titleSource === 'user' ? 'user' : 'auto';
       next.titleGeneratedAt = next.titleGeneratedAt == null ? null : Number(next.titleGeneratedAt);
       q.updConv.run(
@@ -518,9 +526,16 @@ export function createSqliteStore(dir, { log = console } = {}) {
         next.workspacePath, next.lastProgressAt, next.originalText, usageToSql(next.usage),
         next.harnessId ?? null, next.lastSubmissionId ?? null,
         next.modelSourceId ?? null, next.modelId ?? null, next.thinkingLevel ?? null,
-        next.titleSource, next.titleGeneratedAt, id,
+        next.titleSource, next.titleGeneratedAt, next.archived ? 1 : 0, id,
       );
       return next;
+    },
+
+    /** Drops the conversation row. Returns false when it was not there. */
+    async deleteConversation(id) {
+      const key = String(id);
+      deletedIds.add(key);
+      return q.delConv.run(key).changes > 0;
     },
 
     async tombstoneCatalog(kind, id) {

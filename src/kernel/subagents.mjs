@@ -854,6 +854,18 @@ export function createSubagentHost({
         },
       };
     },
+    /** Stops watching the children of a deleted conversation. Their Pi data is left as it is. */
+    async forget(conv) {
+      if (!conv) return;
+      let agents = [];
+      try { agents = await listSubagents(conv); } catch { agents = []; }
+      for (const agent of agents) {
+        const watch = childWatches.get(agent.harnessId);
+        childWatches.delete(agent.harnessId);
+        lastAgent.delete(agent.id);
+        try { await watch?.stop(); } catch { /* already stopped */ }
+      }
+    },
     async stopConversation(cid) {
       const conv = await store.getConversation(cid);
       if (!conv) return { status: 404, body: { error: 'conversation not found' } };
