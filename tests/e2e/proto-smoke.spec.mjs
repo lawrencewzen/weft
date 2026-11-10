@@ -201,7 +201,7 @@ test('prototype runs from file:// with mock data, no network and no console erro
   await page.getByTestId('next-model-chip').click();
   await expect(page.getByTestId('next-model-menu')).toBeVisible();
   await page.getByTestId('next-menu-model').hover();
-  await expect(page.getByTestId('next-model-option')).toHaveCount(10);
+  await expect(page.getByTestId('next-model-option')).toHaveCount(11);
   await page.locator('[data-testid=next-model-option][data-model="deepseek-v4-pro"]').click();
   await expect(page.getByTestId('next-model-chip')).toContainText('DeepSeek V4 Pro');
 

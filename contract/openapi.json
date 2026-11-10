@@ -6901,10 +6901,58 @@
         ],
         "properties": {
           "compaction": {
-            "$ref": "#/components/schemas/CompactionPreference"
+            "$ref": "#/components/schemas/CompactionPreferenceView"
           }
         },
-        "description": "全局压缩触发点。"
+        "description": "全局压缩触发点，以及实际起点比它更早的模型。"
+      },
+      "CompactionPreferenceView": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "triggerPercent",
+          "effective"
+        ],
+        "properties": {
+          "triggerPercent": {
+            "type": "integer",
+            "minimum": 60,
+            "maximum": 90,
+            "description": "自动压缩触发点，占模型上下文窗口的百分比。整数 60–90，缺省 80。"
+          },
+          "effective": {
+            "type": "array",
+            "description": "只读。实际起点低于 triggerPercent 的模型（窗口较小的模型要给摘要留出空间，会更早开始后台压缩）。来源是已注册且 contextWindow 大于 0 的模型，按当前 triggerPercent 计算。",
+            "items": {
+              "$ref": "#/components/schemas/CompactionEffectiveModel"
+            }
+          }
+        }
+      },
+      "CompactionEffectiveModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "providerId",
+          "modelId",
+          "name",
+          "percent"
+        ],
+        "properties": {
+          "providerId": {
+            "type": "string"
+          },
+          "modelId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "percent": {
+            "type": "integer",
+            "description": "实际开始后台压缩的位置，占该模型上下文窗口的百分比，四舍五入取整。"
+          }
+        }
       },
       "CompactionPreference": {
         "type": "object",

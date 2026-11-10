@@ -351,3 +351,25 @@ test('git connections, plugins, skills and about', async ({ page }) => {
 
   expectClean(state);
 });
+
+test('general: the earlier-start line follows the compaction trigger', async ({ page }) => {
+  const state = await openProto(page);
+  await page.getByTestId('next-open-settings').click();
+  const input = page.getByTestId('next-pref-compact-trigger');
+  const hint = page.getByTestId('next-pref-compact-effective');
+  await expect(input).toHaveValue('80');
+  await expect(hint).toContainText('部分模型会更早开始');
+  await expect(hint).toContainText('70%');
+
+  await input.fill('60');
+  await input.press('Enter');
+  await expect(hint).toHaveCount(0);
+
+  await input.fill('90');
+  await input.press('Enter');
+  await expect(hint).toContainText('部分模型会更早开始');
+  const title = await hint.getAttribute('title');
+  expect(title).toContain('qwen2.5-coder-32b 70%');
+  expect(title).toContain('DeepSeek-V3.2 71%');
+  expectClean(state);
+});
