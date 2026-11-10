@@ -653,36 +653,13 @@ test('query lastEventId and Last-Event-ID header resume the same way', async () 
   }
 });
 
-const IDLE_MINUTES = '0.02';
-const IDLE_MS = Number(IDLE_MINUTES) * 60_000;
-
-async function waitExit(proc, timeoutMs, logs = () => '') {
-  if (proc.exitCode != null || proc.signalCode != null) {
-    return { code: proc.exitCode, signal: proc.signalCode };
-  }
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => {
-      proc.off('exit', onExit);
-      reject(new Error(`process still running after ${timeoutMs}ms:\n${logs()}`));
-    }, timeoutMs);
-    const onExit = (code, signal) => {
-      clearTimeout(timer);
-      resolve({ code, signal });
-    };
-    proc.once('exit', onExit);
-  });
-}
-
-test('v2 events SSE keeps a launcher-started idle service alive until the connection closes', { timeout: 45000 }, async () => {
-  const srv = await startServer({
-    env: {
-      WEFT_LAUNCHED_BY: 'weft-open',
-      WEFT_IDLE_EXIT_MINUTES: IDLE_MINUTES,
-      WEFT_LLM: 'faux',
-    },
-  });
+test('an idle service stays up with an events stream and after it closes', { timeout: 20000 }, async () => {
+  const srv = await startServer({ env: { WEFT_LLM: 'faux' } });
   let req;
   try {
+    await sleep(3000);
+    assert.equal(srv.proc.exitCode, null, srv.logs());
+    assert.equal(srv.logs().includes('WEFT_IDLE_EXIT'), false, srv.logs());
     const discovery = await readDiscovery(srv.dataDir);
     const opened = await new Promise((resolve, reject) => {
       const request = http.request({
@@ -702,12 +679,19 @@ test('v2 events SSE keeps a launcher-started idle service alive until the connec
     });
     req = opened.req;
     assert.equal(opened.res.statusCode, 200);
-    await sleep(IDLE_MS * 2.5);
+    await sleep(1500);
     assert.equal(srv.proc.exitCode, null, srv.logs());
     req.destroy();
     req = null;
-    const ended = await waitExit(srv.proc, IDLE_MS * 8, srv.logs);
-    assert.equal(ended.code, 0, srv.logs());
+    await sleep(1500);
+    assert.equal(srv.proc.exitCode, null, srv.logs());
+    assert.equal(srv.logs().includes('WEFT_IDLE_EXIT'), false, srv.logs());
+    const service = await rawEvents({
+      port: srv.port,
+      path: '/api/v2/service',
+      headers: { authorization: `Bearer ${discovery.token}` },
+    });
+    assert.equal(service.status, 200, service.text);
   } finally {
     try { req?.destroy(); } catch { /* ignore */ }
     await stopServer(srv);
