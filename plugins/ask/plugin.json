@@ -14,7 +14,7 @@
         "properties": {
           "questions": {
             "type": "array",
-            "description": "1 to 4 questions. The UI adds Other; do not include it."
+            "description": "1 to 4 questions as a JSON array of objects (not a string). The UI adds Other; do not include it."
           }
         },
         "required": ["questions"],

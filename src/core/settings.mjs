@@ -106,12 +106,9 @@ export function validateCloseActionPatch(patch) {
   return 'closeAction must be ask, tray or quit';
 }
 
-/**
- * @returns {{ compaction: { triggerPercent: number }, closeAction: 'ask' | 'tray' | 'quit' }}
- */
-export function compactionSettingsView(settings) {
+export function compactionSettingsView(settings, effective = []) {
   return {
-    compaction: { triggerPercent: readTriggerPercent(settings) },
+    compaction: { triggerPercent: readTriggerPercent(settings), effective },
     closeAction: readCloseAction(settings),
   };
 }

@@ -1067,7 +1067,7 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.65; backgrou
 }
 .msg-fork-btn:focus-visible {
   opacity: 1;
-  outline: 2px solid var(--accent, #3b82f6);
+  outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
 .msg-group:hover .msg-fork-btn,
@@ -2277,13 +2277,13 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.65; backgrou
   width: 5px;
   height: 5px;
   border-radius: 50%;
-  background: var(--on-accent, #fff);
+  background: var(--on-accent);
 }
 .ask-option.is-selected[role="checkbox"] .ask-option-check::after {
   content: '';
   width: 3px;
   height: 6px;
-  border: solid var(--on-accent, #fff);
+  border: solid var(--on-accent);
   border-width: 0 1.5px 1.5px 0;
   transform: rotate(45deg);
   margin-bottom: 2px;
@@ -2422,7 +2422,7 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.65; backgrou
 }
 .ask-btn-submit {
   background: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
 }
 .ask-btn-submit:not(:disabled):hover {
   opacity: 0.9;

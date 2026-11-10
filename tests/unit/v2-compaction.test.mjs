@@ -33,7 +33,13 @@ async function v2(base, method, apiPath, token, body) {
 test('settings trigger percent persists, rejects illegal values, and compact is admitted', { timeout: 40_000 }, async () => {
   const dataDir = await makeTempDir('weft-compact-http-');
   const seed = createSqliteStore(dataDir);
-  await seed.putSettingsRaw('app', { version: 3, language: 'zh', providers: [] });
+  await seed.putSettingsRaw('app', { version: 3, language: 'zh', providers: [
+      { id: 'custom-abcdef01', kind: 'custom', name: 'C', baseUrl: 'http://127.0.0.1:9/v1', api: 'openai-completions', enabled: ['m128'] },
+      { id: 'custom-abcdef02', kind: 'custom', name: 'D', baseUrl: 'http://127.0.0.1:9/v1', api: 'openai-completions', enabled: [] },
+    ] });
+  const cached = (id) => ({ models: [{ id, name: id.toUpperCase(), contextWindow: 128000, maxTokens: 4096, input: ['text'], reasoning: false }] });
+  seed.putProviderModels('custom-abcdef01', cached('m128'));
+  seed.putProviderModels('custom-abcdef02', cached('off128'));
   seed.close();
   const srv = await startServer({
     dataDir,
@@ -48,7 +54,8 @@ test('settings trigger percent persists, rejects illegal values, and compact is 
 
     const initial = await v2(srv.base, 'GET', '/api/v2/settings', discovery.token);
     assert.equal(initial.status, 200, initial.text);
-    assert.deepEqual(initial.body, { compaction: { triggerPercent: 80 }, closeAction: 'ask' });
+    const fauxEarly = { providerId: 'custom-abcdef01', modelId: 'm128', name: 'm128', percent: 70 };
+    assert.deepEqual(initial.body, { compaction: { triggerPercent: 80, effective: [fauxEarly] }, closeAction: 'ask' });
     assert.equal(validateResponse('/api/v2/settings', 'GET', 200, initial.body).ok, true);
 
     for (const triggerPercent of [59, 91, 80.5, '80', true]) {
@@ -65,7 +72,17 @@ test('settings trigger percent persists, rejects illegal values, and compact is 
       compaction: { triggerPercent: 70 },
     });
     assert.equal(saved.status, 200, saved.text);
-    assert.deepEqual(saved.body, { compaction: { triggerPercent: 70 }, closeAction: 'ask' });
+    // At 70 the 128k model's real start (70%) is no longer earlier than p, so it drops out.
+    assert.deepEqual(saved.body, { compaction: { triggerPercent: 70, effective: [] }, closeAction: 'ask' });
+    const reset = await v2(srv.base, 'PUT', '/api/v2/settings', discovery.token, {
+      compaction: { triggerPercent: 90 },
+    });
+    assert.deepEqual(reset.body, { compaction: { triggerPercent: 90, effective: [fauxEarly] }, closeAction: 'ask' });
+    assert.equal(validateResponse('/api/v2/settings', 'PUT', 200, reset.body).ok, true);
+    const back = await v2(srv.base, 'PUT', '/api/v2/settings', discovery.token, {
+      compaction: { triggerPercent: 70 },
+    });
+    assert.equal(back.body.compaction.triggerPercent, 70);
     const legacy = await request(srv.base, 'GET', '/api/settings', undefined, TOKEN);
     assert.equal(legacy.status, 200);
     assert.equal(legacy.body.compaction.triggerPercent, 70);
@@ -123,12 +140,12 @@ test('settings trigger percent persists, rejects illegal values, and compact is 
       compaction: { triggerPercent: 75 },
     });
     assert.equal(both.status, 200, both.text);
-    assert.deepEqual(both.body, { compaction: { triggerPercent: 75 }, closeAction: 'tray' });
+    assert.deepEqual(both.body, { compaction: { triggerPercent: 75, effective: both.body.compaction.effective }, closeAction: 'tray' });
     const onlyPercent = await v2(srv.base, 'PUT', '/api/v2/settings', discovery.token, {
       compaction: { triggerPercent: 61 },
     });
     assert.equal(onlyPercent.status, 200, onlyPercent.text);
-    assert.deepEqual(onlyPercent.body, { compaction: { triggerPercent: 61 }, closeAction: 'tray' });
+    assert.deepEqual(onlyPercent.body, { compaction: { triggerPercent: 61, effective: onlyPercent.body.compaction.effective }, closeAction: 'tray' });
 
     const legacyClose = await request(srv.base, 'GET', '/api/settings', undefined, TOKEN);
     assert.equal(legacyClose.status, 200);

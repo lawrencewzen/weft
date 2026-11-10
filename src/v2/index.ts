@@ -42,7 +42,7 @@ import {
   type KernelChange,
   type KernelDiffBody,
 } from './views/changes.ts';
-import { compactionSettingsView, validateCloseActionPatch, validateCompactionPatch } from '../core/settings.mjs';
+import { compactionSettingsView, readTriggerPercent, validateCloseActionPatch, validateCompactionPatch } from '../core/settings.mjs';
 import {
   conversationSnapshot,
   findPresentedTool,
@@ -661,6 +661,7 @@ export function createV2Handler(opts: {
   gitStatus?: GitStatusCache;
   getSettings?: () => Promise<unknown>;
   putSettings?: (patch: Record<string, unknown>) => Promise<unknown>;
+  compactionEffective?: (percent: number) => Promise<CompactionSettingsView['compaction']['effective']>;
   compactConversation?: (
     id: string,
     instructions?: string,
@@ -746,6 +747,12 @@ export function createV2Handler(opts: {
       return true;
     }
 
+    const settingsView = async (stored: unknown): Promise<CompactionSettingsView> => {
+      const percent = readTriggerPercent(stored);
+      const effective = opts.compactionEffective ? await opts.compactionEffective(percent) : [];
+      return compactionSettingsView(stored, effective) as CompactionSettingsView;
+    };
+
     if (method === 'GET' && pathname === '/api/v2/settings') {
       if (!opts.getSettings) {
         sendV2(res, pathname, method, 500, { error: 'settings not ready', code: 'E_INTERNAL' } satisfies V2Error);
@@ -753,7 +760,7 @@ export function createV2Handler(opts: {
       }
       try {
         const stored = await opts.getSettings();
-        sendV2(res, pathname, method, 200, compactionSettingsView(stored) satisfies components['schemas']['CompactionSettingsView']);
+        sendV2(res, pathname, method, 200, await settingsView(stored) satisfies components['schemas']['CompactionSettingsView']);
       } catch (err) {
         const message = err instanceof Error ? err.message : 'read settings failed';
         sendV2(res, pathname, method, 500, { error: message, code: 'E_INTERNAL' } satisfies V2Error);
@@ -784,7 +791,7 @@ export function createV2Handler(opts: {
       try {
         if (Object.keys(patch).length) await opts.putSettings(patch);
         const stored = await opts.getSettings();
-        sendV2(res, pathname, method, 200, compactionSettingsView(stored) satisfies components['schemas']['CompactionSettingsView']);
+        sendV2(res, pathname, method, 200, await settingsView(stored) satisfies components['schemas']['CompactionSettingsView']);
       } catch (err) {
         const message = err instanceof Error ? err.message : 'save settings failed';
         sendV2(res, pathname, method, 500, { error: message, code: 'E_INTERNAL' } satisfies V2Error);
@@ -2178,6 +2185,7 @@ export function createV2Runtime(opts: {
   extensions?: ExtensionsHost;
   getSettings?: () => Promise<unknown>;
   putSettings?: (patch: Record<string, unknown>) => Promise<unknown>;
+  compactionEffective?: (percent: number) => Promise<CompactionSettingsView['compaction']['effective']>;
   compactConversation?: (
     id: string,
     instructions?: string,
@@ -2315,6 +2323,7 @@ export function createV2Runtime(opts: {
     gitStatus,
     getSettings: opts.getSettings,
     putSettings: opts.putSettings,
+    compactionEffective: opts.compactionEffective,
     compactConversation: opts.compactConversation,
     handoffConversation: opts.handoffConversation,
     forkConversation: opts.forkConversation,

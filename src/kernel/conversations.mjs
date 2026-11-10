@@ -65,7 +65,7 @@ import {
 } from './turn-changes.mjs';
 import { activeContextUsage, installUsageExtension } from './usage.mjs';
 import { createWorkspaceEnv } from './workspace-env.mjs';
-import { createCompactionControl } from './compaction-settings.mjs';
+import { createCompactionControl, effectiveTriggers, selectableModelKeys } from './compaction-settings.mjs';
 import { readTriggerPercent } from '../core/settings.mjs';
 import {
   describeForkPoint,
@@ -1522,6 +1522,21 @@ export async function openConversationKernel({
         const message = redactAuthText(err instanceof Error ? err.message : err);
         return { status: 500, body: { error: message || 'handoff failed', code: 'E_INTERNAL' } };
       }
+    },
+    async compactionEffective(percent) {
+      try {
+        await modelRoutes.warm();
+      } catch (err) {
+        console.error(`WEFT_COMPACTION_SETTINGS ${redactAuthText(err instanceof Error ? err.message : err)}`);
+      }
+      let selectable;
+      try {
+        selectable = selectableModelKeys(await providers.listProviders());
+      } catch (err) {
+        console.error(`WEFT_COMPACTION_SETTINGS ${redactAuthText(err instanceof Error ? err.message : err)}`);
+        return [];
+      }
+      return effectiveTriggers(models, percent, selectable);
     },
     async noteSettings(stored) {
       compaction.setPercent(readTriggerPercent(stored));
