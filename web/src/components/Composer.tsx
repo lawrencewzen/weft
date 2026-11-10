@@ -9,6 +9,7 @@ import {
   type SendMessageFile,
   type ThinkingLevel,
 } from '../data/api';
+import { consumeConversationPrefill } from '../data/composerPrefill';
 import {
   IMAGE_MAX_COUNT,
   type ComposerHint,
@@ -138,7 +139,7 @@ export function Composer({
   queue = [],
   onWithdrawQueue,
 }: Props) {
-  const [draft, setDraft] = useState('');
+  const [draft, setDraft] = useState(() => consumeConversationPrefill(conversationId) || '');
   const [compactBusy, setCompactBusy] = useState(false);
   const [compactRequestError, setCompactRequestError] = useState<string | null>(null);
   const [handoffBusy, setHandoffBusy] = useState(false);

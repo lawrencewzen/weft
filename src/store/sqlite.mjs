@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { DEFAULT_SETTINGS, mergeSettings, normalizeSettings } from '../core/settings.mjs';
 
-const SCHEMA_VERSION = 10;
+const SCHEMA_VERSION = 11;
 const MESSAGE_META_KEYS = ['kind', 'fromAgent', 'toAgent', 'agentId'];
 export const APP_DB_FILE = 'weft.sqlite';
 export const LEGACY_APP_DB_FILE = 'pi-work.sqlite';
@@ -101,6 +101,14 @@ function convFromRow(row) {
     thinkingLevel: row.thinking_level || null,
     titleSource: row.title_source === 'user' ? 'user' : 'auto',
     titleGeneratedAt: row.title_generated_at == null ? null : Number(row.title_generated_at),
+    forkedFrom: row.forked_from_id
+      ? {
+        conversationId: String(row.forked_from_id),
+        title: row.forked_from_title == null ? '' : String(row.forked_from_title),
+      }
+      : null,
+    forkRequestId: row.fork_request_id == null || row.fork_request_id === '' ? null : String(row.fork_request_id),
+    forkPrefillJson: row.fork_prefill_json == null ? null : String(row.fork_prefill_json),
   };
 }
 
@@ -248,6 +256,10 @@ export function createSqliteStore(dir, { log = console } = {}) {
     if (!convCols.has('thinking_level')) db.exec('ALTER TABLE conversations ADD COLUMN thinking_level TEXT');
     if (!convCols.has('title_source')) db.exec("ALTER TABLE conversations ADD COLUMN title_source TEXT NOT NULL DEFAULT 'auto'");
     if (!convCols.has('title_generated_at')) db.exec('ALTER TABLE conversations ADD COLUMN title_generated_at INTEGER');
+    if (!convCols.has('forked_from_id')) db.exec('ALTER TABLE conversations ADD COLUMN forked_from_id TEXT');
+    if (!convCols.has('forked_from_title')) db.exec('ALTER TABLE conversations ADD COLUMN forked_from_title TEXT');
+    if (!convCols.has('fork_request_id')) db.exec('ALTER TABLE conversations ADD COLUMN fork_request_id TEXT');
+    if (!convCols.has('fork_prefill_json')) db.exec('ALTER TABLE conversations ADD COLUMN fork_prefill_json TEXT');
     if (convCols.has('role_id')) {
       try { db.exec('ALTER TABLE conversations DROP COLUMN role_id'); } catch { /* keep the column, stop reading it */ }
     }
@@ -290,8 +302,10 @@ export function createSqliteStore(dir, { log = console } = {}) {
       current_step, updated_at, created_at,
       workspace_path, last_progress_at, original_text, usage_json, harness_id, host_mark,
       last_submission_id, model_source_id, model_id, thinking_level,
-      title_source, title_generated_at
-    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`),
+      title_source, title_generated_at,
+      forked_from_id, forked_from_title, fork_request_id, fork_prefill_json
+    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`),
+    findFork: db.prepare('SELECT * FROM conversations WHERE forked_from_id = ? AND fork_request_id = ? LIMIT 1'),
     getConv: db.prepare('SELECT * FROM conversations WHERE id = ?'),
     listRecoverable: db.prepare("SELECT * FROM conversations WHERE status IN ('running','recovering') AND harness_id IS NULL"),
     listKernel: db.prepare('SELECT * FROM conversations WHERE harness_id IS NOT NULL'),
@@ -403,8 +417,11 @@ export function createSqliteStore(dir, { log = console } = {}) {
 
     async createConversation({
       id, workspaceId, title, workspacePath, modelSourceId, modelId,
+      thinkingLevel, titleSource, harnessId,
+      forkedFromId, forkedFromTitle, forkRequestId, forkPrefillJson,
     } = {}) {
       const now = Date.now();
+      const parentId = forkedFromId == null || forkedFromId === '' ? null : String(forkedFromId);
       const conv = {
         id: id || randomUUID(),
         workspaceId: workspaceId ?? null,
@@ -415,12 +432,17 @@ export function createSqliteStore(dir, { log = console } = {}) {
         lastProgressAt: now,
         originalText: null,
         usage: null,
-        harnessId: null,
+        harnessId: harnessId ?? null,
         modelSourceId: modelSourceId ?? null,
         modelId: modelId ?? null,
-        thinkingLevel: null,
-        titleSource: 'auto',
+        thinkingLevel: thinkingLevel ?? null,
+        titleSource: titleSource === 'user' ? 'user' : 'auto',
         titleGeneratedAt: null,
+        forkedFrom: parentId
+          ? { conversationId: parentId, title: forkedFromTitle == null ? '' : String(forkedFromTitle) }
+          : null,
+        forkRequestId: forkRequestId == null || forkRequestId === '' ? null : String(forkRequestId),
+        forkPrefillJson: forkPrefillJson == null ? null : String(forkPrefillJson),
       };
       q.insConv.run(
         conv.id, conv.workspaceId, conv.title, null, null, null,
@@ -429,8 +451,16 @@ export function createSqliteStore(dir, { log = console } = {}) {
         usageToSql(conv.usage), conv.harnessId, null, null,
         conv.modelSourceId, conv.modelId, conv.thinkingLevel,
         conv.titleSource, conv.titleGeneratedAt,
+        parentId, parentId ? conv.forkedFrom.title : null,
+        conv.forkRequestId, conv.forkPrefillJson,
       );
       return conv;
+    },
+    async findFork(parentId, requestId) {
+      const parent = parentId == null ? '' : String(parentId);
+      const rid = requestId == null ? '' : String(requestId);
+      if (!parent || !rid) return undefined;
+      return convFromRow(q.findFork.get(parent, rid));
     },
     async getConversation(id) {
       return convFromRow(q.getConv.get(id));
@@ -477,6 +507,7 @@ export function createSqliteStore(dir, { log = console } = {}) {
           usageToSql(conv.usage), null, null, patch.lastSubmissionId ?? null,
           conv.modelSourceId, conv.modelId, conv.thinkingLevel,
           conv.titleSource, conv.titleGeneratedAt,
+          null, null, null, null,
         );
       }
       const next = { ...conv, ...patch, updatedAt: Date.now() };

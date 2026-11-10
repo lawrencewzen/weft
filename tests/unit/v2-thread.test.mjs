@@ -111,7 +111,9 @@ test('each ThreadItem kind is produced and contract-valid', async () => {
   ]);
   assert.equal(thread.items.some((item) => item.id === 'ac1'), false);
   assert.equal(thread.items[0].pathRefs[0].path, 'src/a.ts');
+  assert.equal(thread.items[0].entryId, 'u1');
   assert.equal(thread.items[1].model, 'grok-build');
+  assert.equal(thread.items[1].entryId, 'a1');
   assert.equal(thread.items[1].streaming, false);
   assert.equal(thread.items[1].truncated, false);
   assert.equal(thread.items[1].pathRefs[0].line, 12);
@@ -300,4 +302,24 @@ test('legacy auto-continue messages are omitted; correction and note stay', asyn
   assert.equal(thread.items[0].text, 'switched model');
   assert.equal(thread.items[1].noteKind, 'note');
   assert.equal(thread.items[1].text, 'pinged scout');
+});
+
+test('fork entryId is the harness id, and streaming or live placeholders are null', async () => {
+  const thread = await buildThread([
+    { id: '12', entryId: '12', role: 'user', text: 'hello' },
+    { id: '13', entryId: '13', role: 'assistant', text: 'world' },
+    { id: '14', entryId: '14', role: 'assistant', text: 'partial', streaming: true },
+    { id: 'live-2', role: 'assistant', text: 'live tail' },
+    { id: 'live:9', role: 'user', text: 'optimistic' },
+  ], { exists: none });
+  assertValidThread(thread, 'fork-entry');
+  assert.equal(thread.items[0].kind, 'user');
+  assert.equal(thread.items[0].entryId, '12');
+  assert.equal(thread.items[1].kind, 'assistant');
+  assert.equal(thread.items[1].entryId, '13');
+  assert.equal(thread.items[1].streaming, false);
+  assert.equal(thread.items[2].streaming, true);
+  assert.equal(thread.items[2].entryId, null);
+  assert.equal(thread.items[3].entryId, null);
+  assert.equal(thread.items[4].entryId, null);
 });

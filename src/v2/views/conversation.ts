@@ -5,6 +5,7 @@ import type { components } from '../contract.gen.ts';
 import { contextWindowFromEnv } from '../../core/usage.mjs';
 import { contextUsageView } from './context.ts';
 import { conversationStatus, runStateView } from './run.ts';
+import { forkedFromView } from './sidebar.ts';
 import { buildThread, type BuildThreadOptions, type ThreadMessage, type ThreadSubagent } from './thread.ts';
 import { outputLineCount, toolOutputText, type ToolLike } from './tools.ts';
 
@@ -40,6 +41,8 @@ export type PresentedConversation = {
   sends?: unknown;
   /** True while the current submission is asking the model to hand off. */
   handoffRunning?: boolean;
+  /** Stored fork source. Null when this conversation was not forked. */
+  forkedFrom?: unknown;
 };
 
 /** Result of resolveConversationTarget in src/core/model-sources.mjs. */
@@ -146,6 +149,7 @@ export async function conversationSnapshot({
     }),
     itemIds: thread.items.map((item) => item.id),
     sends: sendsView(presented?.sends),
+    forkedFrom: forkedFromView(presented?.forkedFrom),
   };
   return { conversation, items: thread.items, tools: thread.tools };
 }

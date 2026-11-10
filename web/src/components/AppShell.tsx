@@ -381,6 +381,7 @@ function AppShellLayout({
         lang={lang}
         demo={demo}
         onNewWorkspace={handleNewWorkspace}
+        onToast={onToast}
       />
       <div
         className="col-divider"

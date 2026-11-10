@@ -133,6 +133,8 @@ export type MockConv = {
   /** Prototype only: the next compaction of this conversation ends in failure. */
   compactFails?: boolean;
   compactTimer?: number;
+  /** Prototype only: next fork of this conversation ends in failure. */
+  forkFails?: boolean | Bilingual;
   items: MockItem[];
   tools: Record<string, MockTool>;
   changes: Change[];
