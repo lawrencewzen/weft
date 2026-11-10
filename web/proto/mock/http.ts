@@ -23,6 +23,7 @@ import {
   withdrawMessage,
 } from './run';
 import { parseSendImages } from '../../../src/v2/views/message-images';
+import { mockEffectiveTriggers } from './compaction';
 import { inferCustomProviderBrand, inferModelBrand } from './brand';
 import { mockProviderName } from './providerNames';
 import { replyInSubThread, stopSubThread, subagentKey } from './subagents';
@@ -1463,7 +1464,12 @@ export function handleMockRequest(
         db.settings.compaction.triggerPercent = n;
       }
     }
-    return ok({ compaction: { ...db.settings.compaction } });
+    return ok({
+      compaction: {
+        ...db.settings.compaction,
+        effective: mockEffectiveTriggers(db.providers, db.settings.compaction.triggerPercent),
+      },
+    });
   }
 
   if (path === '/api/v2/service') {

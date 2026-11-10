@@ -48,7 +48,8 @@ test('settings trigger percent persists, rejects illegal values, and compact is 
 
     const initial = await v2(srv.base, 'GET', '/api/v2/settings', discovery.token);
     assert.equal(initial.status, 200, initial.text);
-    assert.deepEqual(initial.body, { compaction: { triggerPercent: 80 } });
+    const fauxEarly = { providerId: 'faux', modelId: 'faux-1', name: 'Faux Model', percent: 70 };
+    assert.deepEqual(initial.body, { compaction: { triggerPercent: 80, effective: [fauxEarly] } });
     assert.equal(validateResponse('/api/v2/settings', 'GET', 200, initial.body).ok, true);
 
     for (const triggerPercent of [59, 91, 80.5, '80', true]) {
@@ -65,7 +66,17 @@ test('settings trigger percent persists, rejects illegal values, and compact is 
       compaction: { triggerPercent: 70 },
     });
     assert.equal(saved.status, 200, saved.text);
-    assert.deepEqual(saved.body, { compaction: { triggerPercent: 70 } });
+    // At 70 the 128k model's real start (70%) is no longer earlier than p, so it drops out.
+    assert.deepEqual(saved.body, { compaction: { triggerPercent: 70, effective: [] } });
+    const reset = await v2(srv.base, 'PUT', '/api/v2/settings', discovery.token, {
+      compaction: { triggerPercent: 90 },
+    });
+    assert.deepEqual(reset.body, { compaction: { triggerPercent: 90, effective: [fauxEarly] } });
+    assert.equal(validateResponse('/api/v2/settings', 'PUT', 200, reset.body).ok, true);
+    const back = await v2(srv.base, 'PUT', '/api/v2/settings', discovery.token, {
+      compaction: { triggerPercent: 70 },
+    });
+    assert.equal(back.body.compaction.triggerPercent, 70);
     const legacy = await request(srv.base, 'GET', '/api/settings', undefined, TOKEN);
     assert.equal(legacy.status, 200);
     assert.equal(legacy.body.compaction.triggerPercent, 70);

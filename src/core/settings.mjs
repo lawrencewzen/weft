@@ -81,8 +81,8 @@ export function validateCompactionPatch(patch) {
   return null;
 }
 
-export function compactionSettingsView(settings) {
-  return { compaction: { triggerPercent: readTriggerPercent(settings) } };
+export function compactionSettingsView(settings, effective = []) {
+  return { compaction: { triggerPercent: readTriggerPercent(settings), effective } };
 }
 
 function applyCompaction(out, input) {

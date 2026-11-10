@@ -1467,9 +1467,22 @@ export interface components {
             /** @description 幂等键。缺省时服务端生成。同一个 requestId 重复提交返回同一个 runId。 */
             requestId?: string;
         };
-        /** @description 全局压缩触发点。 */
+        /** @description 全局压缩触发点，以及实际起点比它更早的模型。 */
         CompactionSettingsView: {
-            compaction: components["schemas"]["CompactionPreference"];
+            compaction: components["schemas"]["CompactionPreferenceView"];
+        };
+        CompactionPreferenceView: {
+            /** @description 自动压缩触发点，占模型上下文窗口的百分比。整数 60–90，缺省 80。 */
+            triggerPercent: number;
+            /** @description 只读。实际起点低于 triggerPercent 的模型（窗口较小的模型要给摘要留出空间，会更早开始后台压缩）。来源是已注册且 contextWindow 大于 0 的模型，按当前 triggerPercent 计算。 */
+            effective: components["schemas"]["CompactionEffectiveModel"][];
+        };
+        CompactionEffectiveModel: {
+            providerId: string;
+            modelId: string;
+            name: string;
+            /** @description 实际开始后台压缩的位置，占该模型上下文窗口的百分比，四舍五入取整。 */
+            percent: number;
         };
         CompactionPreference: {
             /** @description 自动压缩触发点，占模型上下文窗口的百分比。整数 60–90，缺省 80。全局一个值，不按模型单独设置。 */

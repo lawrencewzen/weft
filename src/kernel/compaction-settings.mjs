@@ -79,6 +79,32 @@ export function compactionOverrides(models, percent = DEFAULT_TRIGGER_PERCENT) {
   return { enabled: true, modelOverrides };
 }
 
+/**
+ * Models whose real background-compaction start is earlier than p% of their
+ * window. Same registered models and same compactionBudget as
+ * compactionOverrides; start = blocking line - backgroundTokens (the blocking
+ * line itself when background compaction is off). percent is rounded to an
+ * integer; a model is listed only when that integer is below p.
+ */
+export function effectiveTriggers(models, percent = DEFAULT_TRIGGER_PERCENT) {
+  const p = Math.floor(Number(percent));
+  const out = [];
+  const list = typeof models?.getAllModels === 'function' ? models.getAllModels() : [];
+  for (const model of list) {
+    const window = model?.contextWindow;
+    const provider = typeof model?.provider === 'string' ? model.provider : '';
+    const id = typeof model?.id === 'string' ? model.id : '';
+    if (!provider || !id || !Number.isInteger(window) || window <= 0) continue;
+    const budget = compactionBudget(window, p);
+    const start = window - budget.reserveTokens - budget.backgroundTokens;
+    const startPercent = Math.round((start * 100) / window);
+    if (startPercent >= p) continue;
+    const name = typeof model.name === 'string' && model.name.trim() ? model.name : id;
+    out.push({ providerId: provider, modelId: id, name, percent: startPercent });
+  }
+  return out;
+}
+
 /** Synchronous snapshot. settings() runs on the Session line, so it must not scan providers. */
 export function createCompactionControl(models) {
   let percent = DEFAULT_TRIGGER_PERCENT;

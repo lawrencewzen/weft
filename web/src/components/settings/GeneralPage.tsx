@@ -49,6 +49,23 @@ const CHAT_WIDTH_KEYS: Record<ChatWidth, I18nKey> = {
   full: 'width_full',
 };
 
+export type CompactionEffective = { providerId: string; modelId: string; name: string; percent: number };
+
+const EFFECTIVE_SHOWN = 3;
+
+export function effectiveHint(lang: Lang, list: CompactionEffective[]): { text: string; title: string } | null {
+  if (!list.length) return null;
+  const item = (m: CompactionEffective) => `${m.name} ${m.percent}%`;
+  const sep = lang === 'en' ? ', ' : '、';
+  const shown = list.slice(0, EFFECTIVE_SHOWN).map(item).join(sep);
+  const rest = list.length - EFFECTIVE_SHOWN;
+  const listText = rest > 0 ? `${shown} ${t(lang, 'compact_effective_more', { n: rest })}` : shown;
+  return {
+    text: t(lang, 'compact_effective_hint', { list: listText }),
+    title: list.map(item).join('\n'),
+  };
+}
+
 type Props = {
   lang: Lang;
 };
@@ -70,6 +87,7 @@ export function GeneralPage({ lang }: Props) {
   const [chatWidth, setChatWidth] = useState(readChatWidth);
   const [trigger, setTrigger] = useState('');
   const [saved, setSaved] = useState<number | null>(null);
+  const [effective, setEffective] = useState<CompactionEffective[]>([]);
   const [triggerError, setTriggerError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -78,6 +96,7 @@ export function GeneralPage({ lang }: Props) {
       .then((view) => {
         if (!alive) return;
         setSaved(view.compaction.triggerPercent);
+        setEffective(view.compaction.effective ?? []);
         setTrigger(String(view.compaction.triggerPercent));
       })
       .catch(() => {});
@@ -95,6 +114,7 @@ export function GeneralPage({ lang }: Props) {
     try {
       const view = await putCompactionTrigger(n);
       setSaved(view.compaction.triggerPercent);
+      setEffective(view.compaction.effective ?? []);
       setTrigger(String(view.compaction.triggerPercent));
     } catch {
       setTriggerError(t(lang, 'compact_trigger_save_failed'));
@@ -141,6 +161,8 @@ export function GeneralPage({ lang }: Props) {
     });
     notifyPrefs();
   }
+
+  const hint = effectiveHint(lang, effective);
 
   return (
     <div className="next-settings-content" data-testid="next-settings-general">
@@ -268,6 +290,9 @@ export function GeneralPage({ lang }: Props) {
           <b>{t(lang, 'compact_trigger_label')}</b>
           {triggerError ? (
             <span className="ns-pref-error" data-testid="next-pref-compact-error" role="alert">{triggerError}</span>
+          ) : null}
+          {hint ? (
+            <span data-testid="next-pref-compact-effective" title={hint.title}>{hint.text}</span>
           ) : null}
         </div>
         <div className="ns-pref-input">

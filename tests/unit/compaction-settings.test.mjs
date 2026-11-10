@@ -8,6 +8,7 @@ import {
   compactionBudget,
   compactionOverrides,
   createCompactionControl,
+  effectiveTriggers,
 } from '../../src/kernel/compaction-settings.mjs';
 import { messagesFromEntries } from '../../src/kernel/events.mjs';
 import { buildThread } from '../../src/v2/views/thread.ts';
@@ -223,4 +224,36 @@ test('compaction failure and blocking model_error use the same redacted sentence
   }, 'en');
   assert.deepEqual(running, { state: 'running', trigger: 'threshold' });
   assert.deepEqual(compactionView(null, 'zh'), { state: 'idle' });
+});
+
+test('effective lists only models that start earlier than p, from the same budget', () => {
+  const models = {
+    getAllModels: () => [
+      { provider: 'a', id: 'w128', name: 'W128', contextWindow: 128_000 },
+      { provider: 'a', id: 'w200', name: 'W200', contextWindow: 200_000 },
+      { provider: 'a', id: 'zero', name: 'Zero', contextWindow: 0 },
+      { provider: 'a', id: 'unnamed', contextWindow: 32_000 },
+    ],
+  };
+  const pick = (p) => effectiveTriggers(models, p).map((m) => `${m.modelId}:${m.percent}`);
+  // 128k: blocking 96000 (75%), 5% margin -> starts at 70% for any p above that.
+  // 200k: blocking 168000 (84%), margin 10000 -> starts at 79%.
+  // 32k: blocking 24000 (75%), margin 1600 -> 70%.
+  assert.deepEqual(pick(60), []);
+  assert.deepEqual(pick(80), ['w128:70', 'w200:79', 'unnamed:70']);
+  assert.deepEqual(pick(90), ['w128:70', 'w200:79', 'unnamed:70']);
+  assert.equal(effectiveTriggers(models, 80)[2].name, 'unnamed');
+  assert.deepEqual(effectiveTriggers(models, 80)[0], {
+    providerId: 'a', modelId: 'w128', name: 'W128', percent: 70,
+  });
+  // The listed percent is exactly where compactionBudget puts the background start.
+  for (const p of [60, 70, 80, 90]) {
+    for (const item of effectiveTriggers(models, p)) {
+      const model = models.getAllModels().find((m) => m.id === item.modelId);
+      const b = compactionBudget(model.contextWindow, p);
+      const start = model.contextWindow - b.reserveTokens - b.backgroundTokens;
+      assert.equal(item.percent, Math.round((start * 100) / model.contextWindow));
+      assert.ok(item.percent < p);
+    }
+  }
 });
