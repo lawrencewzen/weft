@@ -1,7 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { AgentsStrip } from './AgentsStrip';
 import { StallStrip } from './StallStrip';
-import { compactConversation, patchConversation, putModelContextWindow, type SendMessageFile, type ThinkingLevel } from '../data/api';
+import {
+  compactConversation,
+  handoffConversation,
+  patchConversation,
+  putModelContextWindow,
+  type SendMessageFile,
+  type ThinkingLevel,
+} from '../data/api';
 import { consumeConversationPrefill } from '../data/composerPrefill';
 import {
   IMAGE_MAX_COUNT,
@@ -32,6 +39,7 @@ import type { QueueChip, SendMode } from '../data/pendingSend';
 import { useProviders } from '../data/useProviders';
 import type { components } from '../../../src/v2/contract.gen';
 import { t } from '../i18n';
+import { handoffCommandOf } from '../data/handoffCommand';
 import { writeActiveWorkspace } from '../data/layout';
 import { subscribePrefs } from '../data/prefs';
 import { useRightActions } from '../data/rightPaneContext';
@@ -134,6 +142,8 @@ export function Composer({
   const [draft, setDraft] = useState(() => consumeConversationPrefill(conversationId) || '');
   const [compactBusy, setCompactBusy] = useState(false);
   const [compactRequestError, setCompactRequestError] = useState<string | null>(null);
+  const [handoffBusy, setHandoffBusy] = useState(false);
+  const [handoffRequestError, setHandoffRequestError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hint, setHint] = useState<ComposerHint | null>(null);
@@ -242,6 +252,9 @@ export function Composer({
       return;
     }
 
+    const command = !imagePayload.length && !sentFiles.length && !sentPastes.length
+      ? handoffCommandOf(payload)
+      : null;
     const requestId = req.current.begin(payload, extraKey);
     setBusy(true);
     setError(null);
@@ -254,14 +267,19 @@ export function Composer({
     at.setAtDismissed(false);
     requestAnimationFrame(resize);
     try {
-      await onSend(
-        sentText,
-        requestId,
-        imagePayload.length ? imagePayload : undefined,
-        mode,
-        sentFiles.length ? sentFiles : undefined,
-        sentPastes.length ? sentPastes : undefined,
-      );
+      if (command) {
+        if (!conversationId) throw new Error(t(lang, 'send_failed'));
+        await handoffConversation(conversationId, requestId, command.instructions);
+      } else {
+        await onSend(
+          sentText,
+          requestId,
+          imagePayload.length ? imagePayload : undefined,
+          mode,
+          sentFiles.length ? sentFiles : undefined,
+          sentPastes.length ? sentPastes : undefined,
+        );
+      }
       req.current.succeed();
       att.revokeSnapshot(snapshot);
       onSent?.();
@@ -370,6 +388,22 @@ export function Composer({
       setCompactRequestError(errorMessage(err, t(lang, 'send_failed')));
     } finally {
       setCompactBusy(false);
+    }
+  }
+
+  const handoffState = run.handoff?.state ?? 'idle';
+  const handoffRunning = handoffBusy || handoffState === 'running';
+
+  async function requestHandoff() {
+    if (!conversationId || handoffRunning) return;
+    setHandoffBusy(true);
+    setHandoffRequestError(null);
+    try {
+      await handoffConversation(conversationId);
+    } catch (err) {
+      setHandoffRequestError(errorMessage(err, t(lang, 'send_failed')));
+    } finally {
+      setHandoffBusy(false);
     }
   }
 
@@ -583,6 +617,11 @@ export function Composer({
                       state: compactRunning ? 'running' : compactionState,
                       error: compactError,
                       onCompact: () => { void requestCompact(); },
+                    } : undefined}
+                    handoff={conversationId && !isDraft ? {
+                      state: handoffRunning ? 'running' : 'idle',
+                      error: handoffRequestError,
+                      onHandoff: () => { void requestHandoff(); },
                     } : undefined}
                   />
                 ) : null}

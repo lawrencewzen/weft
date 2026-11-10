@@ -1,8 +1,10 @@
 /** 服务端视图文案（英文）。 */
 export const en: Record<string, string> = {
   pending_thinking: 'Thinking',
+  pending_handoff: 'Handoff to new context in progress...',
   pending_subagents: '· {n} sub-agents',
   compaction_note: 'Earlier context was compacted',
+  handoff_new_context: 'New context',
   compaction_failed: 'Compaction failed: {reason}',
   run_err_interrupted: 'The service was interrupted before this turn finished.',
   run_err_restart_limit: 'This turn was interrupted repeatedly and stopped.',
@@ -80,6 +82,12 @@ export const en: Record<string, string> = {
   tool_act_ls: 'List',
   tool_act_grep: 'Search',
   tool_act_bash: 'Run',
+  tool_act_handoff: 'Handoff to new context',
+  tool_one_handoff: 'Handed off to a new context',
+  tool_run_handoff: 'Handing off to a new context',
+  tool_run_handoff_bare: 'Handing off to a new context',
+  tool_sum_handoff: 'Handed off {n} times',
+  tool_sum_handoff_one: 'Handed off to a new context',
   src_why_unsigned: 'Not signed in',
   src_why_no_key: 'Missing key',
   src_why_no_url: 'Missing URL',

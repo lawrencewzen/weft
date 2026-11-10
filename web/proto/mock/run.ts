@@ -431,6 +431,7 @@ function runningLine(tool: MockTool): Bilingual {
     write: { zh: '正在写入', en: 'Writing' },
     ls: { zh: '正在列出', en: 'Listing' },
     ask: { zh: '正在提问', en: 'Asking' },
+    handoff: { zh: '正在交接', en: 'Handing off' },
     other: { zh: '正在调用', en: 'Calling' },
   }[tool.kind];
   return {
@@ -1201,4 +1202,164 @@ export function compactConversation(db: MockDb, conv: MockConv, hub: MockHub): C
   if (conv.compactTimer) window.clearTimeout(conv.compactTimer);
   conv.compactTimer = window.setTimeout(settle, COMPACT_MS);
   return { ok: true, taskId };
+}
+
+export type HandoffResult = { ok: true } | { ok: false; status: number; error: string; code?: string };
+
+export function handoffConversation(
+  db: MockDb,
+  conv: MockConv,
+  hub: MockHub,
+  _requestId?: string,
+  lang: Lang = 'zh',
+  instructions?: string,
+): HandoffResult {
+  if (conv.run && conv.view.run.status === 'running') {
+    return { ok: false, status: 409, error: lang === 'en' ? 'Already running' : '正在运行中', code: 'E_BUSY' };
+  }
+
+  const runHandle: RunHandle = {
+    id: nextId(db, 'run'),
+    cancelled: false,
+    steers: [],
+    followUps: [],
+  };
+  conv.run = runHandle;
+  conv.view.status = 'running';
+  conv.view.run = {
+    status: 'running',
+    startedAt: Date.now(),
+    pendingText: lang === 'en' ? 'Handoff to new context in progress...' : '正在交接到新上下文',
+    canSend: true,
+    canStop: true,
+    lockedReason: null,
+    error: null,
+    lastActivityAt: Date.now(),
+    stalledSince: null,
+    activeTool: null,
+    handoff: { state: 'running' },
+  };
+  conv.pending = {
+    zh: '正在交接到新上下文',
+    en: 'Handoff to new context in progress...',
+  };
+  touch(conv);
+  publishConversationView(conv, hub);
+  publishSummary(db, hub, conv.view.id);
+
+  void executeHandoff(db, conv, hub, runHandle, lang, instructions);
+  return { ok: true };
+}
+
+async function executeHandoff(
+  db: MockDb,
+  conv: MockConv,
+  hub: MockHub,
+  run: RunHandle,
+  lang: Lang,
+  instructions?: string,
+): Promise<void> {
+  await sleep(THINK_MS);
+  if (run.cancelled) return;
+
+  const toolId = nextId(db, 'tool');
+  const handoffTool: MockTool = {
+    id: toolId,
+    kind: 'handoff',
+    status: 'done',
+    title: { zh: '交接到新上下文', en: 'Handoff to new context' },
+    fromIntent: false,
+    hint: { zh: '', en: '' },
+    hintFailed: false,
+    failure: 'none',
+    diff: null,
+    preview: '',
+    truncated: false,
+    totalLines: 0,
+    output: '',
+  };
+  conv.tools[toolId] = handoffTool;
+
+  const groupId = nextId(db, 'g');
+  const group: MockGroup = {
+    kind: 'tool_group',
+    id: groupId,
+    toolIds: [toolId],
+    summary: { zh: '交接到新上下文', en: 'Handoff to new context' },
+    failed: 0,
+    running: false,
+    live: false,
+  };
+  conv.items.push(group);
+  conv.view.itemIds.push(groupId);
+  publishTool(conv, hub, handoffTool, groupId);
+  publishItem(conv, hub, group);
+
+  await sleep(400);
+  if (run.cancelled) return;
+
+  const noteId = nextId(db, 'note');
+  const detailZh = [
+    '### 迁移进度交接',
+    '',
+    ...(instructions ? [`> **交接重点**：${instructions}`, ''] : []),
+    '- **当前任务**：继续处理上文讨论的迁移需求。',
+    '- **工作进度**：前期分析与代码修改已记录在案，未完成项已提炼入新上下文。',
+    '- **下一步**：在新上下文中继续执行后续步骤并完成验证。',
+  ].join('\n');
+  const detailEn = [
+    '### Migration Progress Handoff',
+    '',
+    ...(instructions ? [`> **Focus**: ${instructions}`, ''] : []),
+    '- **Current Task**: Continuing the migration task discussed above.',
+    '- **Progress**: Prior analysis and changes have been preserved; remaining items carry over to the new context.',
+    '- **Next Step**: Proceed with next actions and verification under the fresh context.',
+  ].join('\n');
+
+  const note: MockNote = {
+    kind: 'system_note',
+    id: noteId,
+    noteKind: 'handoff',
+    text: '新上下文',
+    i18n: { zh: '新上下文', en: 'New context' },
+    detail: detailZh,
+    detailI18n: { zh: detailZh, en: detailEn },
+  };
+  conv.items.push(note);
+  conv.view.itemIds.push(noteId);
+  publishItem(conv, hub, note);
+
+  await sleep(400);
+  if (run.cancelled) return;
+
+  const replyZh = '已交接到新上下文，已继承交接说明。我将继续执行接下来的任务。';
+  const replyEn = 'Switched to new context with handoff notes preserved. I will continue with the next steps.';
+  await streamAssistant(db, conv, hub, run, lang === 'en' ? replyEn : replyZh);
+  if (run.cancelled) return;
+
+  conv.view.context = {
+    ...conv.view.context,
+    used: Math.round(conv.view.context.window * 0.14),
+    percent: 14,
+    level: 'ok',
+  };
+  conv.run = null;
+  conv.pending = null;
+  conv.view.status = 'idle';
+  conv.view.run = {
+    status: 'idle',
+    startedAt: null,
+    pendingText: null,
+    canSend: true,
+    canStop: false,
+    lockedReason: null,
+    error: null,
+    lastActivityAt: null,
+    stalledSince: null,
+    activeTool: null,
+    handoff: null,
+  };
+  touch(conv);
+  publishConversationView(conv, hub);
+  publishSummary(db, hub, conv.view.id);
 }

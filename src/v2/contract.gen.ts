@@ -1158,6 +1158,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/conversations/{id}/handoff": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 手动交接到新上下文
+         * @description 请求服务端让模型编写交接说明并交接到新上下文（Pi Durable reset(handoff)）。
+         *     成功受理返回 202 { ok: true }。
+         */
+        post: operations["handoffConversation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/conversations/{id}/tools/{toolId}/output": {
         parameters: {
             query?: never;
@@ -1373,6 +1394,19 @@ export interface components {
             /** @description Pi Durable 这次手动压缩任务的 id。 */
             taskId: string;
         };
+        HandoffRequest: {
+            /** @description 请求幂等 id */
+            requestId: string;
+            /** @description 用户希望交接说明侧重什么，由模型据此写交接说明；省略则由模型自己判断。 */
+            instructions?: string;
+        };
+        HandoffAccepted: {
+            /**
+             * @description 始终为 true。
+             * @constant
+             */
+            ok: true;
+        };
         RunAccepted: {
             /** @description Pi Durable 这次提交的 id */
             runId: string;
@@ -1574,7 +1608,7 @@ export interface components {
             /** @description 所属工具组 id，由组内第一条调用算出 */
             groupId: string;
             /** @enum {string} */
-            kind: "read" | "write" | "edit" | "ls" | "grep" | "bash" | "ask" | "other";
+            kind: "read" | "write" | "edit" | "ls" | "grep" | "bash" | "ask" | "handoff" | "other";
             /** @enum {string} */
             status: "running" | "failed" | "interrupted" | "done";
             heading: {
@@ -1720,6 +1754,7 @@ export interface components {
         /**
          * @description 系统提示。correction 是交接，note 是给子 Agent 插话后的通知。
          *     compaction 的 text 是服务端按语言出成的句子，对应一条 pi.compaction 条目，放在该条目的时间位置。
+         *     handoff 是交接到新上下文的分隔线，detail 为交接说明全文。
          */
         ThreadItemSystemNote: {
             /**
@@ -1729,8 +1764,10 @@ export interface components {
             kind: "system_note";
             id: string;
             /** @enum {string} */
-            noteKind: "correction" | "note" | "compaction";
+            noteKind: "correction" | "note" | "compaction" | "handoff";
             text: string;
+            /** @description 交接说明全文，只有 handoff 用。 */
+            detail?: string;
         };
         /**
          * @description 这一轮的文件变更，插在该轮最后一条助手回复后面。
@@ -1826,6 +1863,11 @@ export interface components {
                 trigger?: "manual" | "threshold" | "overflow";
                 /** @description failed 时的人话。中文为「压缩失败：原因」，英文为 Compaction failed 加原因。 */
                 error?: string;
+            };
+            /** @description 交接中的状态。运行中且模型正在写交接说明时为 running，否则为 null。 */
+            handoff?: null | {
+                /** @constant */
+                state: "running";
             };
         };
         /** @description 对话当前模型。取对话自己选的或默认模型。 */
@@ -6637,6 +6679,87 @@ export interface operations {
             };
             /** @description 对话不存在 */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 客户端错误 */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 服务端错误 */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+        };
+    };
+    handoffConversation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 对话 id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HandoffRequest"];
+            };
+        };
+        responses: {
+            /** @description 已受理手动交接 */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HandoffAccepted"];
+                };
+            };
+            /** @description 客户端请求格式错误 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 未授权 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 对话不存在 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 官方拒绝或繁忙 */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

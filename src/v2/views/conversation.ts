@@ -40,6 +40,8 @@ export type PresentedConversation = {
   thinkingLevel?: unknown;
   /** Where the conversation's recent sends landed; see `sendsView`. */
   sends?: unknown;
+  /** True while the current submission is asking the model to hand off. */
+  handoffRunning?: boolean;
   /** Stored fork source. Null when this conversation was not forked. */
   forkedFrom?: unknown;
 };
@@ -142,6 +144,7 @@ export async function conversationSnapshot({
     hasWorkspace: Boolean(presented?.workspaceId),
     live: presented?.live,
     retryMaxAttempts: presented?.retryMaxAttempts,
+    handoffRunning: presented?.handoffRunning === true,
   });
   const thread = await buildThread(messages, {
     lang,

@@ -242,6 +242,19 @@ export async function buildThread(
       continue;
     }
 
+    if (m?.role === 'note' && m.kind === 'handoff') {
+      const detail = String(m.text || '').trim();
+      const note: components['schemas']['ThreadItemSystemNote'] = {
+        kind: 'system_note',
+        id: messageId(m),
+        noteKind: 'handoff',
+        text: phrase(lang, 'handoff_new_context'),
+      };
+      if (detail) note.detail = detail;
+      items.push(note);
+      continue;
+    }
+
     if (m?.role === 'note') {
       const note = String(m.text || '').trim();
       if (!note) continue;

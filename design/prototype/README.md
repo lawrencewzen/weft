@@ -33,6 +33,7 @@ open design/prototype/index.html    # macOS；Windows 直接双击
 | 切模型 | 输入框左下角的模型按钮 |
 | 上下文上限 | 模型按钮菜单的「上下文」子菜单：选一个上限或填自定义值（`/providers/{id}/models/{id}/context-window`） |
 | 已用 / 上限、立即压缩 | 点输入框右下角的圆环百分比，在它上方弹出小面板 |
+| 交接到新上下文 | 点圆环百分比小面板里的「交接到新上下文」（任意已有对话可点；运行中显示转圈，新上下文条目带分隔线和可展开的说明，旧内容自动折叠为「之前的上下文 · N 条」；控制台可用 `window.__protoHandoff('<重点说明>')` 触发带 instructions 的交接）；或打开预置对话 `c-handoff`（「把迁移脚本跑完整个仓库」）看 Agent 工具触发的交接与折叠效果 |
 | 模型请求在重试 | 打开对话 `c-retrying`（「模型连不上，正在重试」）：等待行显示灰字「连不上模型服务，正在重试（第 6 次，共 10 次）」，一直保持；停止后消失 |
 | 上下文快满 | 打开对话 `c-docs`（「把架构文档的图补上」）会看到输入框顶部的橙色提示条 |
 | 从这里分叉（T123-1） | 鼠标移到用户消息或助手消息上，点右侧/右下的「从这里分叉」小图标按钮。助手消息分叉：新对话包含到该消息为止的全部内容；用户消息分叉：新对话包含该消息之前的内容并把该消息文本填回输入框。新对话顶部有一行「分叉自 <原标题>」并可点原标题跳回原对话，同一行淡字标明「与原对话共用工作区文件」；打开 `c-scripts`（「整理 Windows 下的启动脚本」）点分叉可触发分叉失败提示「分叉失败：对话历史已损坏」 |
@@ -130,6 +131,7 @@ open design/prototype/index.html    # macOS；Windows 直接双击
 | `tests/e2e/proto-agents-strip.spec.mjs` | 子 Agent 状态条、展开/收起、行内展开、停止、派发卡片定位、淡出 |
 | `tests/e2e/proto-settings.spec.mjs` | 通用偏好、Provider 向导成功 / 失败 / Grok 登录 / 默认 / 上下文、删光 Provider 的「没有模型」、Git、插件、技能、关于 |
 | `tests/e2e/proto-workspace.spec.mjs` | 本地目录浏览 + 创建 + 在里面发消息、Git 导入选项目和分支 |
+| `tests/e2e/proto-handoff.spec.mjs` | 交接到新上下文：c-handoff 预置交接条目展开说明、手动点击交接模拟流程与百分比下降 |
 | `tests/e2e/helpers/proto.mjs` | 上面几个 spec 共用的 `file://` 打开 / 零报错 / 零网络断言 |
 
 ## 加数据、加交互

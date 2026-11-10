@@ -23,6 +23,7 @@ import {
   SUBAGENTS_DOC_KIND,
 } from './ids.mjs';
 import { ASK_TOOL_NAME } from './ask.mjs';
+import { HANDOFF_TOOL_NAME } from './handoff.mjs';
 import { formatSubagentReport, parseSubagentOutcome } from './subagent-report.mjs';
 
 export const TITLE_DESCRIPTION = 'A one-line summary of at most 20 characters, in the user\'s language, saying what this subagent will do. Shown as the heading to the user. Do not include a file path.';
@@ -37,8 +38,8 @@ export const SUBAGENT_INSTRUCTIONS = [
 ].join(' ');
 export const SUBAGENT_DESCRIPTION = `${DELEGATE_DESCRIPTION} On spawn, pass that text as message. \`name\` is used later with send, wait, and stop. Also pass title on spawn.`;
 const DISPATCH_TOOLS = new Set(['delegate', 'subagent', 'skill']);
-/** Dispatch tools, plus ask: a child cannot question the user. */
-export const CHILD_HIDDEN_TOOLS = new Set([...DISPATCH_TOOLS, ASK_TOOL_NAME]);
+/** Dispatch tools, ask, and handoff: a child cannot question the user or reset the parent's context. */
+export const CHILD_HIDDEN_TOOLS = new Set([...DISPATCH_TOOLS, ASK_TOOL_NAME, HANDOFF_TOOL_NAME]);
 const NAME_CAP = 30;
 
 // Example 23: the main conversation maps background names to child conversations.

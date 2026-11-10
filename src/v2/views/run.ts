@@ -108,6 +108,8 @@ export type RunStateInput = {
   } | null;
   /** Attempts the kernel allows per model call, first one included (WEFT_RETRY_MAX). */
   retryMaxAttempts?: unknown;
+  /** True while the in-flight submission is a manual or model handoff. */
+  handoffRunning?: boolean;
 };
 
 function isRealSubagent(agent: ThreadSubagent | null | undefined): boolean {
@@ -262,9 +264,11 @@ export function runStateView({
   stallAfterMs,
   live = null,
   retryMaxAttempts,
+  handoffRunning = false,
 }: RunStateInput = {}): RunState {
   const runStatus = normalizeRunStatus(status);
   const running = runStatus === 'running';
+  const handingOff = running && handoffRunning === true;
   const last = running ? asStartedAt(lastActivityAt) : null;
   const t = now ?? Date.now();
   const threshold = stallAfterMs ?? resolveStallAfterMs();
@@ -274,7 +278,9 @@ export function runStateView({
     startedAt: asStartedAt(startedAt),
     pendingText: retry
       ? retryMessage(lang, retry.kind, retry.attempt, retry.maxAttempts)
-      : running ? pendingTextFor(lang, messages, tools, subagents) : null,
+      : handingOff
+        ? phrase(lang, 'pending_handoff')
+        : running ? pendingTextFor(lang, messages, tools, subagents) : null,
     canSend: Boolean(hasWorkspace),
     canStop: running,
     lockedReason: hasWorkspace ? null : 'no_workspace',
@@ -283,6 +289,7 @@ export function runStateView({
     stalledSince: stalledSinceOf(running, last, t, threshold),
     activeTool: running ? activeTool : null,
     compaction: compactionView(live, lang),
+    handoff: handingOff ? { state: 'running' } : null,
   };
   if (retry) out.retry = retry;
   return out;

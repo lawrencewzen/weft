@@ -13,6 +13,7 @@ import {
 } from '@earendil-works/pi-durable/tools';
 import { diffStats, splitLines } from '../core/diff.mjs';
 import { applyBashEnvAllowlist } from './bash-env.mjs';
+import { createHandoffTool } from './handoff.mjs';
 import { EXT_WORKSPACE } from './ids.mjs';
 
 const DETAIL_CAP = 1024 * 1024;
@@ -302,6 +303,7 @@ const workspaceToolList = [
       applyBashEnvAllowlist(execution);
     },
   })), 'unsafe')),
+  withIntent(createHandoffTool()),
 ];
 
 export function workspaceTools() {
