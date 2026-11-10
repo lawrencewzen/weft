@@ -182,20 +182,43 @@ function UserPasteBlock({
   );
 }
 
+const FORK_ICON = (
+  <svg
+    width="14"
+    height="14"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.8"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
+    <circle cx="12" cy="18" r="3" />
+    <circle cx="6" cy="6" r="3" />
+    <circle cx="18" cy="6" r="3" />
+    <path d="M18 9v2c0 .6-.4 1-1 1H7c-.6 0-1-.4-1-1V9" />
+    <path d="M12 12v3" />
+  </svg>
+);
+
 export function UserMessage({
   item,
   lang,
   conversationId,
+  onFork,
 }: {
   item: Item;
   lang: Lang;
   conversationId?: string | null;
+  onFork?: (entryId: string) => void;
 }) {
   const images = item.images || [];
   const files = item.files || [];
   const pastes = item.pastes || [];
   const [open, setOpen] = useState<ThreadUserImage | null>(null);
   const text = item.text.trim();
+  const canFork = Boolean(item.entryId);
   useEffect(() => {
     if (!open) return;
     function onKey(event: KeyboardEvent) {
@@ -265,6 +288,20 @@ export function UserMessage({
       {isSteered(item) ? (
         <div className="msg-steer-hint" data-testid="next-steer-hint">
           {t(lang, 'composer_steered')}
+        </div>
+      ) : null}
+      {canFork ? (
+        <div className="msg-fork-wrap msg-fork-user">
+          <button
+            type="button"
+            className="msg-fork-btn"
+            data-testid="next-msg-fork"
+            title={t(lang, 'fork_from_here')}
+            aria-label={t(lang, 'fork_from_here')}
+            onClick={() => onFork?.(item.entryId!)}
+          >
+            {FORK_ICON}
+          </button>
         </div>
       ) : null}
     </div>

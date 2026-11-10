@@ -44,6 +44,8 @@ export type ThreadMessage = {
     name?: unknown;
     bytes?: unknown;
   }>;
+  /** Harness entry id when this message can be forked. Null when it cannot. */
+  entryId?: unknown;
 };
 
 export type ThreadSubagent = {
@@ -72,6 +74,16 @@ function messageId(message: ThreadMessage | null | undefined): string {
 
 function messageText(message: ThreadMessage | null | undefined): string {
   return String(message?.text ?? '');
+}
+
+/** Real harness entry id, or null while streaming or for a live placeholder. */
+export function forkEntryId(message: ThreadMessage | null | undefined): string | null {
+  if (!message || message.streaming === true) return null;
+  const raw = message.entryId !== undefined ? message.entryId : message.id;
+  if (raw == null) return null;
+  const id = String(raw).trim();
+  if (!id || id === 'live' || id.startsWith('live-') || id.startsWith('live:')) return null;
+  return id;
 }
 
 function asNonNegInt(value: unknown): number | null {
@@ -255,6 +267,7 @@ export async function buildThread(
         id: messageId(m),
         text: messageText(m),
         pathRefs: await pathRefsFor(m.text, { workspacePath, exists }),
+        entryId: forkEntryId(m),
       };
       const images = toThreadUserImages(m.images, conversationId, messageId(m));
       if (images.length) userItem.images = images;
@@ -267,13 +280,15 @@ export async function buildThread(
     }
 
     if (!String(m?.text || '').trim()) continue;
+    const streaming = m.streaming === true;
     const assistant: components['schemas']['ThreadItemAssistant'] = {
       kind: 'assistant',
       id: messageId(m),
       text: messageText(m),
       pathRefs: await pathRefsFor(m.text, { workspacePath, exists }),
-      streaming: false,
-      truncated: m === truncatedMsg && m?.stopReason === 'length',
+      streaming,
+      truncated: !streaming && m === truncatedMsg && m?.stopReason === 'length',
+      entryId: forkEntryId(m),
     };
     const model = typeof m?.model === 'string' && m.model ? m.model : '';
     if (model) assistant.model = model;
