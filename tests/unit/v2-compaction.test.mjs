@@ -140,12 +140,12 @@ test('settings trigger percent persists, rejects illegal values, and compact is 
       compaction: { triggerPercent: 75 },
     });
     assert.equal(both.status, 200, both.text);
-    assert.deepEqual(both.body, { compaction: { triggerPercent: 75 }, closeAction: 'tray' });
+    assert.deepEqual(both.body, { compaction: { triggerPercent: 75, effective: both.body.compaction.effective }, closeAction: 'tray' });
     const onlyPercent = await v2(srv.base, 'PUT', '/api/v2/settings', discovery.token, {
       compaction: { triggerPercent: 61 },
     });
     assert.equal(onlyPercent.status, 200, onlyPercent.text);
-    assert.deepEqual(onlyPercent.body, { compaction: { triggerPercent: 61 }, closeAction: 'tray' });
+    assert.deepEqual(onlyPercent.body, { compaction: { triggerPercent: 61, effective: onlyPercent.body.compaction.effective }, closeAction: 'tray' });
 
     const legacyClose = await request(srv.base, 'GET', '/api/settings', undefined, TOKEN);
     assert.equal(legacyClose.status, 200);

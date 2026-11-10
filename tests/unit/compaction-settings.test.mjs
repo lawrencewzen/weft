@@ -106,7 +106,7 @@ test('closeAction defaults to ask and only stores ask, tray or quit', () => {
   assert.equal(settings.readCloseAction({ closeAction: 'nope' }), 'ask');
   assert.equal(settings.publicSettings(missing).closeAction, 'ask');
   assert.deepEqual(settings.compactionSettingsView(missing), {
-    compaction: { triggerPercent: 80 },
+    compaction: { triggerPercent: 80, effective: [] },
     closeAction: 'ask',
   });
 
