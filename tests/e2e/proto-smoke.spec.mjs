@@ -67,6 +67,9 @@ test('prototype runs from file:// with mock data, no network and no console erro
   await expect(page.locator('.task-list-item.is-done')).toHaveCount(2);
   await expect(page.locator('.md-path').first()).toBeVisible();
   await expect(page.getByTestId('next-change-summary')).toBeVisible();
+  // 默认只有一行，点开才有文件列表。
+  await expect(page.getByTestId('next-change-summary-row')).toHaveCount(0);
+  await page.getByTestId('next-change-summary-toggle').click();
   await expect(page.getByTestId('next-change-summary-row')).toHaveCount(5);
   const storeSummaryRow = page.locator('[data-testid=next-change-summary-row][data-path="web/src/data/store.ts"]');
   await expect(storeSummaryRow).toBeVisible();

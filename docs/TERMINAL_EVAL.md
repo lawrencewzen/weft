@@ -287,7 +287,7 @@ taskId?: TaskId
 - 只有已经登录的本机浏览器能连上；
 - 不能从工作区外的 cwd 起进程；
 - 限制同时打开的数量（建议 ≤ 8），避免 fork 炸弹；
-- 服务退出时杀掉所有 PTY（空闲退出、崩溃、主动停）。`createIdleWatcher` 的「有活」今天只看 Harness 任务 + HTTP/SSE 连接。浏览器开着时 SSE 会 `trackConnection`。浏览器关了但 PTY 还在：要把「有活 PTY」算进 `hasActiveWork`，否则 `weft open` 拉起的服务会在空闲计时后把用户的编译杀掉。
+- 服务退出时杀掉所有 PTY（崩溃、主动停）。服务不因空闲自动退出。`hasActiveWork` 仍要算上活着的 PTY，这样 `weft stop` 在终端还开着时会拒绝停止，避免把用户的编译杀掉。
 - PTY 不持久化、不进检查点、不进 SQLite。重启就没了。不要为终端自写一套检查点。
 
 ### 4.5 其它
@@ -353,7 +353,7 @@ taskId?: TaskId
 
 **不要做：** 重做 Agent 标签；不要让 Agent 往用户 PTY 里写。
 
-**风险：** 最高。原生模块、Windows ConPTY、Git Bash 路径、xterm 主题、空闲退出误杀。第一版可以不支持真正的全屏 TUI 美化，但 PTY 必须是真的，这样 Ctrl+C 和颜色从一开始就对。
+**风险：** 最高。原生模块、Windows ConPTY、Git Bash 路径、xterm 主题。第一版可以不支持真正的全屏 TUI 美化，但 PTY 必须是真的，这样 Ctrl+C 和颜色从一开始就对。
 
 ### 刻意不做（除非以后单独立项）
 

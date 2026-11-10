@@ -3,9 +3,11 @@
 import type { Lang } from '../phrases/index.ts';
 import type { components } from '../contract.gen.ts';
 import { contextWindowFromEnv } from '../../core/usage.mjs';
+import { changeViews, type KernelChange } from './changes.ts';
 import { contextUsageView } from './context.ts';
 import { conversationStatus, runStateView } from './run.ts';
-import { buildThread, type BuildThreadOptions, type ThreadMessage, type ThreadSubagent } from './thread.ts';
+import { forkedFromView } from './sidebar.ts';
+import { buildThread, type BuildThreadOptions, type ThreadMessage, type ThreadSubagent, type TurnChangeRecord } from './thread.ts';
 import { outputLineCount, toolOutputText, type ToolLike } from './tools.ts';
 
 export type ConversationView = components['schemas']['ConversationView'];
@@ -38,6 +40,10 @@ export type PresentedConversation = {
   thinkingLevel?: unknown;
   /** Where the conversation's recent sends landed; see `sendsView`. */
   sends?: unknown;
+  /** True while the current submission is asking the model to hand off. */
+  handoffRunning?: boolean;
+  /** Stored fork source. Null when this conversation was not forked. */
+  forkedFrom?: unknown;
 };
 
 /** Result of resolveConversationTarget in src/core/model-sources.mjs. */
@@ -53,7 +59,25 @@ export type ConversationSnapshotInput = {
   window?: unknown;
   lang?: Lang;
   exists?: BuildThreadOptions['exists'];
+  /** Absent on conversations that never stored a per-turn diff. */
+  turnChanges?: Array<{ id?: unknown; anchorId?: unknown; changes?: KernelChange[] | null }> | null;
 };
+
+function turnChangeRecords(
+  rows: ConversationSnapshotInput['turnChanges'],
+): TurnChangeRecord[] {
+  if (!Array.isArray(rows)) return [];
+  const out: TurnChangeRecord[] = [];
+  for (const row of rows) {
+    const anchorId = row?.anchorId == null ? '' : String(row.anchorId);
+    const id = row?.id == null ? '' : String(row.id);
+    if (!anchorId || !id) continue;
+    const changes = changeViews(row?.changes);
+    if (!changes.length) continue;
+    out.push({ id, anchorId, changes });
+  }
+  return out;
+}
 
 export type LoadConversation = (id: string) => Promise<Omit<ConversationSnapshotInput, 'lang' | 'exists'> | null>;
 
@@ -107,6 +131,7 @@ export async function conversationSnapshot({
   window,
   lang = 'zh',
   exists,
+  turnChanges,
 }: ConversationSnapshotInput): Promise<ConversationSnapshot> {
   const messages = Array.isArray(presented?.messages) ? presented.messages : [];
   const agents = Array.isArray(subagents) ? subagents : [];
@@ -119,6 +144,7 @@ export async function conversationSnapshot({
     hasWorkspace: Boolean(presented?.workspaceId),
     live: presented?.live,
     retryMaxAttempts: presented?.retryMaxAttempts,
+    handoffRunning: presented?.handoffRunning === true,
   });
   const thread = await buildThread(messages, {
     lang,
@@ -127,6 +153,7 @@ export async function conversationSnapshot({
     subagents: agents,
     running: run.status === 'running',
     exists,
+    turnChanges: turnChangeRecords(turnChanges),
   });
   const conversation: ConversationView = {
     id: String(presented?.id ?? ''),
@@ -143,6 +170,7 @@ export async function conversationSnapshot({
     }),
     itemIds: thread.items.map((item) => item.id),
     sends: sendsView(presented?.sends),
+    forkedFrom: forkedFromView(presented?.forkedFrom),
   };
   return { conversation, items: thread.items, tools: thread.tools };
 }

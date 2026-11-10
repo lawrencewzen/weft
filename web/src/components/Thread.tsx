@@ -6,13 +6,15 @@ import type { Lang } from '../data/lang';
 import { useSession } from '../data/session';
 import type { ConversationActions } from '../data/useConversation';
 import { useProviders } from '../data/useProviders';
-import { subagentTopic, type Change, type ThreadItem, type ToolCall } from '../data/store';
+import { subagentTopic, type ThreadItem, type ToolCall } from '../data/store';
 import { useStoreTopics } from '../data/useStoreTopic';
+import { conversationPath, navigate } from '../data/nav';
 import { t } from '../i18n';
 import { AssistantMessage } from './AssistantMessage';
 import { ChangeSummary } from './ChangeSummary';
 import { DispatchCard } from './DispatchCard';
 import { SubagentReport } from './SubagentReport';
+import { ContextDividerPending } from './ContextDivider';
 import { SystemNote } from './SystemNote';
 import { ToolGroup } from './ToolGroup';
 import { UserMessage } from './UserMessage';
@@ -49,7 +51,6 @@ type Props = {
   stickNonce: number;
   conversationId?: string | null;
   conversationModel?: ConversationModel | null;
-  changes?: Change[];
   isDraft?: boolean;
   draftWorkspaceId?: string | null;
   draftWorkspaceName?: string | null;
@@ -62,6 +63,8 @@ type Props = {
   error?: components['schemas']['RunState']['error'];
   onContinue?: (requestId?: string) => Promise<unknown>;
   compaction?: components['schemas']['RunState']['compaction'];
+  forkedFrom?: components['schemas']['ForkedFrom'] | null;
+  onFork?: (entryId: string) => void;
 };
 
 
@@ -198,7 +201,6 @@ export function Thread({
   stickNonce,
   conversationId,
   conversationModel = null,
-  changes = [],
   isDraft = false,
   draftWorkspaceId = null,
   draftWorkspaceName = null,
@@ -211,6 +213,8 @@ export function Thread({
   error = null,
   onContinue,
   compaction,
+  forkedFrom = null,
+  onFork,
 }: Props) {
   const { providers } = useProviders();
   const scroller = useRef<HTMLDivElement>(null);
@@ -275,6 +279,76 @@ export function Thread({
     stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < STICK_PX;
   }
 
+  const [expandedEarlier, setExpandedEarlier] = useState(false);
+  useEffect(() => {
+    setExpandedEarlier(false);
+  }, [conversationId]);
+
+  let lastHandoffIndex = -1;
+  for (let i = items.length - 1; i >= 0; i--) {
+    const item = items[i];
+    if (item.kind === 'system_note' && item.noteKind === 'handoff') {
+      lastHandoffIndex = i;
+      break;
+    }
+  }
+
+  function renderItem(item: ThreadItem) {
+    if (item.kind === 'user') {
+      return (
+        <UserMessage
+          key={item.id}
+          item={item}
+          lang={lang}
+          conversationId={conversationId}
+          onFork={onFork}
+        />
+      );
+    }
+    if (item.kind === 'assistant') {
+      return (
+        <AssistantMessage
+          key={item.id}
+          item={item}
+          lang={lang}
+          running={running}
+          attribution={modelAttribution(item.model, providers, conversationModel)}
+          onFork={onFork}
+        />
+      );
+    }
+    if (item.kind === 'tool_group') {
+      return (
+        <ToolGroupItem
+          key={item.id}
+          item={item}
+          toolsById={toolsById}
+          lang={lang}
+          conversationId={conversationId}
+          onLoadOutput={actions.loadToolOutput}
+          onRender={onToolGroupRender}
+        />
+      );
+    }
+    if (item.kind === 'subagent_report') {
+      return (
+        <SubagentReport
+          key={item.id}
+          item={item}
+          lang={lang}
+          conversationId={conversationId}
+        />
+      );
+    }
+    if (item.kind === 'system_note') {
+      return <SystemNote key={item.id} item={item} lang={lang} />;
+    }
+    if (item.kind === 'turn_changes') {
+      return <ChangeSummary key={item.id} changes={item.changes} lang={lang} />;
+    }
+    return null;
+  }
+
   const innerClass = [
     'thread-inner',
     empty ? 'is-empty' : '',
@@ -289,6 +363,20 @@ export function Thread({
       onScroll={onScroll}
     >
       <div className={innerClass}>
+        {forkedFrom ? (
+          <div className="thread-forked-from" data-testid="next-forked-from">
+            <span className="thread-forked-label">{t(lang, 'forked_from')}</span>
+            <button
+              type="button"
+              className="thread-forked-link"
+              data-testid="next-forked-link"
+              onClick={() => navigate(conversationPath(forkedFrom.conversationId))}
+            >
+              {forkedFrom.title}
+            </button>
+            <span className="thread-forked-note">{t(lang, 'forked_shared_workspace')}</span>
+          </div>
+        ) : null}
         {empty ? (
           <DraftHero
             lang={lang}
@@ -297,56 +385,31 @@ export function Thread({
             onPickWorkspace={onPickWorkspace}
             onNewWorkspace={onNewWorkspace}
           />
-        ) : items.map((item) => {
-            if (item.kind === 'user') return <UserMessage key={item.id} item={item} lang={lang} conversationId={conversationId} />;
-            if (item.kind === 'assistant') {
-              return (
-                <AssistantMessage
-                  key={item.id}
-                  item={item}
-                  lang={lang}
-                  running={running}
-                  attribution={modelAttribution(item.model, providers, conversationModel)}
-                />
-              );
-            }
-            if (item.kind === 'tool_group') {
-              return (
-                <ToolGroupItem
-                  key={item.id}
-                  item={item}
-                  toolsById={toolsById}
-                  lang={lang}
-                  conversationId={conversationId}
-                  onLoadOutput={actions.loadToolOutput}
-                  onRender={onToolGroupRender}
-                />
-              );
-            }
-            if (item.kind === 'subagent_report') {
-              return (
-                <SubagentReport
-                  key={item.id}
-                  item={item}
-                  lang={lang}
-                  conversationId={conversationId}
-                />
-              );
-            }
-            if (item.kind === 'system_note') {
-              return <SystemNote key={item.id} item={item} />;
-            }
-            return null;
-          })}
-        {!empty && changes.length ? (
-          <ChangeSummary changes={changes} lang={lang} />
-        ) : null}
-        {compacting ? (
-          <div className="thread-pending" data-testid="next-thread-compacting">
-            <span className="run-spin" aria-hidden="true"><span /></span>
-            <span className="thread-pending-text">{t(lang, 'compacting_context')}</span>
-          </div>
-        ) : pending ? (
+        ) : (
+          <>
+            {lastHandoffIndex > 0 ? (
+              <button
+                type="button"
+                className={`thread-earlier-toggle${expandedEarlier ? ' is-expanded' : ''}`}
+                data-testid="next-thread-earlier-toggle"
+                aria-expanded={expandedEarlier}
+                onClick={() => setExpandedEarlier((v) => !v)}
+              >
+                <svg className={`icon earlier-chevron${expandedEarlier ? ' is-open' : ''}`} viewBox="0 0 24 24" aria-hidden="true">
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+                <span>{t(lang, 'earlier_context_count', { n: lastHandoffIndex })}</span>
+              </button>
+            ) : null}
+            {lastHandoffIndex > 0 && expandedEarlier
+              ? items.slice(0, lastHandoffIndex).map(renderItem)
+              : null}
+            {lastHandoffIndex > 0
+              ? items.slice(lastHandoffIndex).map(renderItem)
+              : items.map(renderItem)}
+          </>
+        )}
+        {compacting ? <ContextDividerPending lang={lang} /> : pending ? (
           <div
             className={retrying ? 'thread-pending is-retrying' : 'thread-pending'}
             data-testid="next-thread-pending"

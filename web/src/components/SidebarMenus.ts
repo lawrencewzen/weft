@@ -47,12 +47,17 @@ export interface ConversationMenuOpts {
   conv: ConversationSummary;
   openConversation: (wsId: string, convId: string) => void;
   copy: (text: string) => Promise<void>;
+  onArchive: (conv: ConversationSummary, archived: boolean) => void | Promise<void>;
+  onDelete: (conv: ConversationSummary) => void | Promise<void>;
 }
 
 export function buildConversationItems(opts: ConversationMenuOpts): CtxMenuItem[] {
-  const { lang, wsId, conv, openConversation, copy } = opts;
+  const { lang, wsId, conv, openConversation, copy, onArchive, onDelete } = opts;
   const items: CtxMenuItem[] = [];
-  if (conv.status === 'running') {
+  const isRunning = conv.status === 'running';
+  const disabledHint = isRunning ? t(lang, 'stop_conversation_first') : undefined;
+
+  if (isRunning) {
     items.push({
       label: t(lang, 'ctx_stop'),
       action: 'stop',
@@ -69,6 +74,22 @@ export function buildConversationItems(opts: ConversationMenuOpts): CtxMenuItem[
     label: t(lang, 'copy_conversation_id'),
     action: 'copy-id',
     run: () => { void copy(conv.id); },
+  });
+  items.push({ sep: true });
+  items.push({
+    label: conv.archived ? t(lang, 'unarchive_conversation') : t(lang, 'archive_conversation'),
+    action: conv.archived ? 'unarchive' : 'archive',
+    disabled: isRunning,
+    title: disabledHint,
+    run: () => { void onArchive(conv, !conv.archived); },
+  });
+  items.push({
+    label: t(lang, 'delete_conversation'),
+    action: 'delete',
+    danger: true,
+    disabled: isRunning,
+    title: disabledHint,
+    run: () => { void onDelete(conv); },
   });
   return items;
 }

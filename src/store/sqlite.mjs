@@ -4,7 +4,10 @@ import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { DEFAULT_SETTINGS, mergeSettings, normalizeSettings } from '../core/settings.mjs';
 
-const SCHEMA_VERSION = 10;
+const SCHEMA_VERSION = 12;
+/** Execution records kept per schedule. */
+export const SCHEDULE_RUNS_KEPT = 50;
+const SCHEDULE_REQUESTS_KEPT = 500;
 const MESSAGE_META_KEYS = ['kind', 'fromAgent', 'toAgent', 'agentId'];
 export const APP_DB_FILE = 'weft.sqlite';
 export const LEGACY_APP_DB_FILE = 'pi-work.sqlite';
@@ -101,10 +104,20 @@ function convFromRow(row) {
     thinkingLevel: row.thinking_level || null,
     titleSource: row.title_source === 'user' ? 'user' : 'auto',
     titleGeneratedAt: row.title_generated_at == null ? null : Number(row.title_generated_at),
+    forkedFrom: row.forked_from_id
+      ? {
+        conversationId: String(row.forked_from_id),
+        title: row.forked_from_title == null ? '' : String(row.forked_from_title),
+      }
+      : null,
+    archived: Number(row.archived) === 1,
+    forkRequestId: row.fork_request_id == null || row.fork_request_id === '' ? null : String(row.fork_request_id),
+    forkPrefillJson: row.fork_prefill_json == null ? null : String(row.fork_prefill_json),
   };
 }
 
 export function createSqliteStore(dir, { log = console } = {}) {
+  const deletedIds = new Set();
   const dbPath = resolveAppDatabasePath(dir, { log });
   const db = new DatabaseSync(dbPath);
   db.exec('PRAGMA journal_mode = WAL');
@@ -206,6 +219,36 @@ export function createSqliteStore(dir, { log = console } = {}) {
       json TEXT NOT NULL,
       updated_at INTEGER NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS schedules (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      message TEXT NOT NULL,
+      target_json TEXT NOT NULL,
+      rule_json TEXT NOT NULL,
+      enabled INTEGER NOT NULL DEFAULT 1,
+      created_by TEXT NOT NULL DEFAULT 'user',
+      task_id TEXT,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS schedule_runs (
+      id TEXT PRIMARY KEY,
+      schedule_id TEXT NOT NULL,
+      at INTEGER NOT NULL,
+      status TEXT NOT NULL,
+      conversation_id TEXT,
+      error TEXT,
+      seq INTEGER NOT NULL DEFAULT 0
+    );
+    CREATE INDEX IF NOT EXISTS schedule_runs_by_schedule ON schedule_runs (schedule_id, at DESC);
+    CREATE TABLE IF NOT EXISTS schedule_requests (
+      request_id TEXT NOT NULL,
+      scope TEXT NOT NULL,
+      status INTEGER NOT NULL,
+      body_json TEXT NOT NULL,
+      at INTEGER NOT NULL,
+      PRIMARY KEY (scope, request_id)
+    );
     CREATE TABLE IF NOT EXISTS schema_version (
       version INTEGER NOT NULL
     );
@@ -248,6 +291,11 @@ export function createSqliteStore(dir, { log = console } = {}) {
     if (!convCols.has('thinking_level')) db.exec('ALTER TABLE conversations ADD COLUMN thinking_level TEXT');
     if (!convCols.has('title_source')) db.exec("ALTER TABLE conversations ADD COLUMN title_source TEXT NOT NULL DEFAULT 'auto'");
     if (!convCols.has('title_generated_at')) db.exec('ALTER TABLE conversations ADD COLUMN title_generated_at INTEGER');
+    if (!convCols.has('archived')) db.exec('ALTER TABLE conversations ADD COLUMN archived INTEGER NOT NULL DEFAULT 0');
+    if (!convCols.has('forked_from_id')) db.exec('ALTER TABLE conversations ADD COLUMN forked_from_id TEXT');
+    if (!convCols.has('forked_from_title')) db.exec('ALTER TABLE conversations ADD COLUMN forked_from_title TEXT');
+    if (!convCols.has('fork_request_id')) db.exec('ALTER TABLE conversations ADD COLUMN fork_request_id TEXT');
+    if (!convCols.has('fork_prefill_json')) db.exec('ALTER TABLE conversations ADD COLUMN fork_prefill_json TEXT');
     if (convCols.has('role_id')) {
       try { db.exec('ALTER TABLE conversations DROP COLUMN role_id'); } catch { /* keep the column, stop reading it */ }
     }
@@ -290,8 +338,10 @@ export function createSqliteStore(dir, { log = console } = {}) {
       current_step, updated_at, created_at,
       workspace_path, last_progress_at, original_text, usage_json, harness_id, host_mark,
       last_submission_id, model_source_id, model_id, thinking_level,
-      title_source, title_generated_at
-    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`),
+      title_source, title_generated_at,
+      forked_from_id, forked_from_title, fork_request_id, fork_prefill_json
+    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`),
+    findFork: db.prepare('SELECT * FROM conversations WHERE forked_from_id = ? AND fork_request_id = ? LIMIT 1'),
     getConv: db.prepare('SELECT * FROM conversations WHERE id = ?'),
     listRecoverable: db.prepare("SELECT * FROM conversations WHERE status IN ('running','recovering') AND harness_id IS NULL"),
     listKernel: db.prepare('SELECT * FROM conversations WHERE harness_id IS NOT NULL'),
@@ -299,8 +349,9 @@ export function createSqliteStore(dir, { log = console } = {}) {
       workspace_id=?, title=?, updated_at=?,
       workspace_path=?, last_progress_at=?, original_text=?, usage_json=?, harness_id=?,
       last_submission_id=?, model_source_id=?, model_id=?, thinking_level=?,
-      title_source=?, title_generated_at=?
+      title_source=?, title_generated_at=?, archived=?
       WHERE id=?`),
+    delConv: db.prepare('DELETE FROM conversations WHERE id = ?'),
     listConv: db.prepare('SELECT * FROM conversations WHERE workspace_id = ? AND harness_id IS NOT NULL ORDER BY updated_at DESC'),
     insTomb: db.prepare('INSERT OR IGNORE INTO catalog_tombstones (kind, id) VALUES (?, ?)'),
     delTomb: db.prepare('DELETE FROM catalog_tombstones WHERE kind = ? AND id = ?'),
@@ -314,6 +365,25 @@ export function createSqliteStore(dir, { log = console } = {}) {
     putProvModels: db.prepare(`INSERT INTO provider_models (provider_id, json, updated_at) VALUES (?, ?, ?)
       ON CONFLICT(provider_id) DO UPDATE SET json = excluded.json, updated_at = excluded.updated_at`),
     delProvModels: db.prepare('DELETE FROM provider_models WHERE provider_id = ?'),
+    insSched: db.prepare(`INSERT INTO schedules (
+      id, name, message, target_json, rule_json, enabled, created_by, task_id, created_at, updated_at
+    ) VALUES (?,?,?,?,?,?,?,?,?,?)`),
+    getSched: db.prepare('SELECT * FROM schedules WHERE id = ?'),
+    listSched: db.prepare('SELECT * FROM schedules ORDER BY created_at ASC, rowid ASC'),
+    updSched: db.prepare(`UPDATE schedules SET
+      name=?, message=?, target_json=?, rule_json=?, enabled=?, task_id=?, updated_at=? WHERE id=?`),
+    delSched: db.prepare('DELETE FROM schedules WHERE id = ?'),
+    insSchedRun: db.prepare(`INSERT OR IGNORE INTO schedule_runs (id, schedule_id, at, status, conversation_id, error, seq)
+      VALUES (?,?,?,?,?,?, COALESCE((SELECT MAX(seq) FROM schedule_runs WHERE schedule_id = ?), 0) + 1)`),
+    getSchedRun: db.prepare('SELECT * FROM schedule_runs WHERE id = ?'),
+    listSchedRuns: db.prepare('SELECT * FROM schedule_runs WHERE schedule_id = ? ORDER BY seq DESC LIMIT ?'),
+    pruneSchedRuns: db.prepare(`DELETE FROM schedule_runs WHERE schedule_id = ? AND id NOT IN (
+      SELECT id FROM schedule_runs WHERE schedule_id = ? ORDER BY seq DESC LIMIT ?)`),
+    delSchedRuns: db.prepare('DELETE FROM schedule_runs WHERE schedule_id = ?'),
+    getSchedReq: db.prepare('SELECT status, body_json FROM schedule_requests WHERE scope = ? AND request_id = ?'),
+    putSchedReq: db.prepare('INSERT OR IGNORE INTO schedule_requests (request_id, scope, status, body_json, at) VALUES (?,?,?,?,?)'),
+    pruneSchedReq: db.prepare(`DELETE FROM schedule_requests WHERE rowid NOT IN (
+      SELECT rowid FROM schedule_requests ORDER BY rowid DESC LIMIT ?)`),
   };
 
   chmodSecret(dbPath);
@@ -343,6 +413,34 @@ export function createSqliteStore(dir, { log = console } = {}) {
       removed: row.removed ?? undefined,
       beforeHash: row.before_hash ?? undefined,
       afterHash: row.after_hash ?? undefined,
+    };
+  }
+
+  function scheduleFromRow(row) {
+    if (!row) return undefined;
+    return {
+      id: row.id,
+      name: row.name,
+      message: row.message,
+      target: p(row.target_json),
+      rule: p(row.rule_json),
+      enabled: Boolean(row.enabled),
+      createdBy: row.created_by === 'agent' ? 'agent' : 'user',
+      taskId: row.task_id == null || row.task_id === '' ? null : String(row.task_id),
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
+  }
+
+  function scheduleRunFromRow(row) {
+    if (!row) return undefined;
+    return {
+      id: row.id,
+      scheduleId: row.schedule_id,
+      at: Number(row.at),
+      status: row.status,
+      conversationId: row.conversation_id == null || row.conversation_id === '' ? null : String(row.conversation_id),
+      error: row.error == null || row.error === '' ? null : String(row.error),
     };
   }
 
@@ -403,8 +501,11 @@ export function createSqliteStore(dir, { log = console } = {}) {
 
     async createConversation({
       id, workspaceId, title, workspacePath, modelSourceId, modelId,
+      thinkingLevel, titleSource, harnessId,
+      forkedFromId, forkedFromTitle, forkRequestId, forkPrefillJson,
     } = {}) {
       const now = Date.now();
+      const parentId = forkedFromId == null || forkedFromId === '' ? null : String(forkedFromId);
       const conv = {
         id: id || randomUUID(),
         workspaceId: workspaceId ?? null,
@@ -415,12 +516,18 @@ export function createSqliteStore(dir, { log = console } = {}) {
         lastProgressAt: now,
         originalText: null,
         usage: null,
-        harnessId: null,
+        harnessId: harnessId ?? null,
         modelSourceId: modelSourceId ?? null,
         modelId: modelId ?? null,
-        thinkingLevel: null,
-        titleSource: 'auto',
+        thinkingLevel: thinkingLevel ?? null,
+        titleSource: titleSource === 'user' ? 'user' : 'auto',
         titleGeneratedAt: null,
+        archived: false,
+        forkedFrom: parentId
+          ? { conversationId: parentId, title: forkedFromTitle == null ? '' : String(forkedFromTitle) }
+          : null,
+        forkRequestId: forkRequestId == null || forkRequestId === '' ? null : String(forkRequestId),
+        forkPrefillJson: forkPrefillJson == null ? null : String(forkPrefillJson),
       };
       q.insConv.run(
         conv.id, conv.workspaceId, conv.title, null, null, null,
@@ -429,8 +536,16 @@ export function createSqliteStore(dir, { log = console } = {}) {
         usageToSql(conv.usage), conv.harnessId, null, null,
         conv.modelSourceId, conv.modelId, conv.thinkingLevel,
         conv.titleSource, conv.titleGeneratedAt,
+        parentId, parentId ? conv.forkedFrom.title : null,
+        conv.forkRequestId, conv.forkPrefillJson,
       );
       return conv;
+    },
+    async findFork(parentId, requestId) {
+      const parent = parentId == null ? '' : String(parentId);
+      const rid = requestId == null ? '' : String(requestId);
+      if (!parent || !rid) return undefined;
+      return convFromRow(q.findFork.get(parent, rid));
     },
     async getConversation(id) {
       return convFromRow(q.getConv.get(id));
@@ -450,6 +565,8 @@ export function createSqliteStore(dir, { log = console } = {}) {
       return q.listKernel.all().map(convFromRow);
     },
     async updateConversation(id, patch = {}) {
+      // A late write for a deleted conversation must not bring its row back.
+      if (deletedIds.has(id)) return { id, ...patch, updatedAt: Date.now(), deleted: true };
       let conv = convFromRow(q.getConv.get(id));
       if (!conv) {
         const now = Date.now();
@@ -469,6 +586,7 @@ export function createSqliteStore(dir, { log = console } = {}) {
           thinkingLevel: null,
           titleSource: 'auto',
           titleGeneratedAt: null,
+          archived: false,
         };
         q.insConv.run(
           conv.id, conv.workspaceId, conv.title, null, null, null,
@@ -477,9 +595,10 @@ export function createSqliteStore(dir, { log = console } = {}) {
           usageToSql(conv.usage), null, null, patch.lastSubmissionId ?? null,
           conv.modelSourceId, conv.modelId, conv.thinkingLevel,
           conv.titleSource, conv.titleGeneratedAt,
+          null, null, null, null,
         );
       }
-      const next = { ...conv, ...patch, updatedAt: Date.now() };
+      const next = { ...conv, ...patch, updatedAt: patch.updatedAt ?? Date.now() };
       next.titleSource = next.titleSource === 'user' ? 'user' : 'auto';
       next.titleGeneratedAt = next.titleGeneratedAt == null ? null : Number(next.titleGeneratedAt);
       q.updConv.run(
@@ -487,9 +606,16 @@ export function createSqliteStore(dir, { log = console } = {}) {
         next.workspacePath, next.lastProgressAt, next.originalText, usageToSql(next.usage),
         next.harnessId ?? null, next.lastSubmissionId ?? null,
         next.modelSourceId ?? null, next.modelId ?? null, next.thinkingLevel ?? null,
-        next.titleSource, next.titleGeneratedAt, id,
+        next.titleSource, next.titleGeneratedAt, next.archived ? 1 : 0, id,
       );
       return next;
+    },
+
+    /** Drops the conversation row. Returns false when it was not there. */
+    async deleteConversation(id) {
+      const key = String(id);
+      deletedIds.add(key);
+      return q.delConv.run(key).changes > 0;
     },
 
     async tombstoneCatalog(kind, id) {
@@ -565,6 +691,73 @@ export function createSqliteStore(dir, { log = console } = {}) {
         if (mapped) q.updConvModel.run(mapped, row.model_id, row.id);
         else q.updConvModel.run(null, null, row.id);
       }
+    },
+    /** Schedule configuration. What runs when is the Durable task's job; `taskId` only points at it. */
+    async createSchedule({ id, name, message, target, rule, enabled, createdBy, taskId, now } = {}) {
+      const at = now ?? Date.now();
+      const row = {
+        id: id || randomUUID(),
+        name,
+        message,
+        target,
+        rule,
+        enabled: enabled !== false,
+        createdBy: createdBy === 'agent' ? 'agent' : 'user',
+        taskId: taskId ?? null,
+        createdAt: at,
+        updatedAt: at,
+      };
+      q.insSched.run(
+        row.id, row.name, row.message, j(row.target), j(row.rule),
+        row.enabled ? 1 : 0, row.createdBy, row.taskId, at, at,
+      );
+      return row;
+    },
+    async getSchedule(id) {
+      return scheduleFromRow(q.getSched.get(id));
+    },
+    async listSchedules() {
+      return q.listSched.all().map(scheduleFromRow);
+    },
+    async updateSchedule(id, patch = {}, { now } = {}) {
+      const cur = scheduleFromRow(q.getSched.get(id));
+      if (!cur) return undefined;
+      const next = { ...cur };
+      for (const key of ['name', 'message', 'target', 'rule', 'enabled', 'taskId']) {
+        if (patch[key] !== undefined) next[key] = patch[key];
+      }
+      next.updatedAt = now ?? Date.now();
+      q.updSched.run(
+        next.name, next.message, j(next.target), j(next.rule),
+        next.enabled ? 1 : 0, next.taskId ?? null, next.updatedAt, id,
+      );
+      return next;
+    },
+    async deleteSchedule(id) {
+      q.delSchedRuns.run(id);
+      return q.delSched.run(id).changes > 0;
+    },
+    /** One record per run id; a repeated id is ignored. Keeps the newest SCHEDULE_RUNS_KEPT. */
+    async addScheduleRun(scheduleId, { id, at, status, conversationId, error }) {
+      const runId = id || randomUUID();
+      q.insSchedRun.run(runId, scheduleId, at, status, conversationId ?? null, error ?? null, scheduleId);
+      q.pruneSchedRuns.run(scheduleId, scheduleId, SCHEDULE_RUNS_KEPT);
+      return scheduleRunFromRow(q.getSchedRun.get(runId));
+    },
+    async getScheduleRun(id) {
+      return scheduleRunFromRow(q.getSchedRun.get(id));
+    },
+    async listScheduleRuns(scheduleId, limit = SCHEDULE_RUNS_KEPT) {
+      return q.listSchedRuns.all(scheduleId, limit).map(scheduleRunFromRow);
+    },
+    /** Replay of a write that carried a requestId: the stored status and body, or undefined. */
+    async getScheduleRequest(scope, requestId) {
+      const row = q.getSchedReq.get(scope, requestId);
+      return row ? { status: Number(row.status), body: p(row.body_json) } : undefined;
+    },
+    async putScheduleRequest(scope, requestId, status, body, { now } = {}) {
+      q.putSchedReq.run(requestId, scope, status, j(body), now ?? Date.now());
+      q.pruneSchedReq.run(SCHEDULE_REQUESTS_KEPT);
     },
     async withTransaction(fn) {
       db.exec('BEGIN IMMEDIATE');

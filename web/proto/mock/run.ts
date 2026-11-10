@@ -13,6 +13,7 @@ import {
   touch,
 } from './db';
 import { mockDiff } from './repo';
+import { compactionNote } from './compaction';
 import { SPAWN_TITLE, appendReport, createSubThread, runSubagent } from './subagents';
 import { conversationGroupId } from './views';
 import { decodedBase64Bytes, imageDataUrl } from '../../../src/v2/views/message-images';
@@ -25,6 +26,7 @@ import type {
   MockConv,
   MockDb,
   MockGroup,
+  MockItem,
   MockNote,
   MockTool,
   FollowUp,
@@ -394,6 +396,13 @@ function applyEditChange(db: MockDb, conv: MockConv, hub: MockHub, tool: MockToo
   change.added += diff.added;
   change.removed += diff.removed;
   if (!existing) conv.changes.push(change);
+  if (conv.run) {
+    const turn = conv.run.turnChanges || (conv.run.turnChanges = new Map());
+    const row = turn.get(path) || { ...change, added: 0, removed: 0 };
+    row.added += diff.added;
+    row.removed += diff.removed;
+    turn.set(path, row);
+  }
   conv.diffs[path] = diff;
   tool.diff = { added: diff.added, removed: diff.removed };
   const repo = db.repos.get(conv.view.workspaceId);
@@ -423,6 +432,8 @@ function runningLine(tool: MockTool): Bilingual {
     write: { zh: '正在写入', en: 'Writing' },
     ls: { zh: '正在列出', en: 'Listing' },
     ask: { zh: '正在提问', en: 'Asking' },
+    schedule: { zh: '正在配置定时任务', en: 'Configuring schedule' },
+    handoff: { zh: '正在交接', en: 'Handing off' },
     other: { zh: '正在调用', en: 'Calling' },
   }[tool.kind];
   return {
@@ -494,6 +505,7 @@ function drainSteers(db: MockDb, conv: MockConv, hub: MockHub, run: RunHandle): 
       id,
       text: steer.text,
       pathRefs: [],
+      entryId: id,
       ...(images ? { images } : {}),
     };
     conv.items.push(item);
@@ -639,6 +651,7 @@ async function streamAssistant(
     model: conv.view.model?.modelId || 'grok-4.6',
     streaming: true,
     truncated: false,
+    entryId: null,
   };
   conv.items.push(live);
   conv.view.itemIds.push(liveId);
@@ -658,14 +671,16 @@ async function streamAssistant(
   conv.items = conv.items.filter((item) => item.id !== liveId);
   conv.view.itemIds = conv.view.itemIds.filter((id) => id !== liveId);
   publishRemove(conv, hub, 'item', liveId);
+  const finalId = nextId(db, 'a');
   const final: ThreadItem = {
     kind: 'assistant',
-    id: nextId(db, 'a'),
+    id: finalId,
     text,
     pathRefs: refsIn(text),
     model: conv.view.model?.modelId || 'grok-4.6',
     streaming: false,
     truncated: false,
+    entryId: finalId,
   };
   conv.items.push(final);
   conv.view.itemIds.push(final.id);
@@ -674,9 +689,25 @@ async function streamAssistant(
   return true;
 }
 
+/** 这一轮改过文件才在回复后面放一条 turn_changes；没改就什么都不放。 */
+function emitTurnChanges(db: MockDb, conv: MockConv, hub: MockHub): void {
+  const rows = conv.run?.turnChanges;
+  if (!rows || !rows.size) return;
+  const item: MockItem = {
+    kind: 'turn_changes',
+    id: nextId(db, 'tc'),
+    changes: [...rows.values()].map((row) => ({ ...row })),
+  };
+  conv.items.push(item);
+  conv.view.itemIds.push(item.id);
+  publishItem(conv, hub, item);
+  publishConversationView(conv, hub);
+}
+
 function finishRun(db: MockDb, conv: MockConv, hub: MockHub): void {
   const run = conv.run;
   if (!run) return;
+  emitTurnChanges(db, conv, hub);
   const next = run.followUps.shift();
   const rest = run.followUps.slice();
   conv.run = null;
@@ -704,6 +735,7 @@ function finishRun(db: MockDb, conv: MockConv, hub: MockHub): void {
       id,
       text: next.text,
       pathRefs: [],
+      entryId: id,
       ...(images ? { images } : {}),
       ...(files?.length ? { files } : {}),
       ...(pastes?.length ? { pastes } : {}),
@@ -973,6 +1005,7 @@ export function sendMessage(
     id,
     text,
     pathRefs: [],
+    entryId: id,
     ...(threadImages ? { images: threadImages } : {}),
     ...(threadFiles?.length ? { files: threadFiles } : {}),
     ...(threadPastes?.length ? { pastes: threadPastes } : {}),
@@ -1044,14 +1077,16 @@ export function stopConversation(db: MockDb, conv: MockConv, hub: MockHub): void
     conv.view.itemIds = conv.view.itemIds.filter((id) => id !== live.id);
     publishRemove(conv, hub, 'item', live.id);
     if (live.text.trim()) {
+      const finalId = nextId(db, 'a');
       const final: ThreadItem = {
         kind: 'assistant',
-        id: nextId(db, 'a'),
+        id: finalId,
         text: live.text,
         pathRefs: refsIn(live.text),
         model: live.model || conv.view.model?.modelId || 'grok-4.6',
         streaming: false,
         truncated: false,
+        entryId: finalId,
       };
       conv.items.push(final);
       conv.view.itemIds.push(final.id);
@@ -1074,6 +1109,7 @@ export function stopConversation(db: MockDb, conv: MockConv, hub: MockHub): void
     if (changed) refreshGroup(conv, hub, item, false);
     else publishItem(conv, hub, item);
   }
+  emitTurnChanges(db, conv, hub);
   conv.run = null;
   conv.view.status = 'idle';
   conv.view.run = {
@@ -1145,13 +1181,7 @@ export function compactConversation(db: MockDb, conv: MockConv, hub: MockHub): C
       };
     } else {
       conv.compaction = { state: 'idle' };
-      const note: MockNote = {
-        kind: 'system_note',
-        id: nextId(db, 'note'),
-        noteKind: 'compaction',
-        text: '已压缩较早的上下文',
-        i18n: { zh: '已压缩较早的上下文', en: 'Earlier context was compacted' },
-      };
+      const note: MockNote = compactionNote(nextId(db, 'note'), conv.items.length);
       conv.items.push(note);
       conv.view.itemIds.push(note.id);
       conv.view.context = {
@@ -1168,4 +1198,164 @@ export function compactConversation(db: MockDb, conv: MockConv, hub: MockHub): C
   if (conv.compactTimer) window.clearTimeout(conv.compactTimer);
   conv.compactTimer = window.setTimeout(settle, COMPACT_MS);
   return { ok: true, taskId };
+}
+
+export type HandoffResult = { ok: true } | { ok: false; status: number; error: string; code?: string };
+
+export function handoffConversation(
+  db: MockDb,
+  conv: MockConv,
+  hub: MockHub,
+  _requestId?: string,
+  lang: Lang = 'zh',
+  instructions?: string,
+): HandoffResult {
+  if (conv.run && conv.view.run.status === 'running') {
+    return { ok: false, status: 409, error: lang === 'en' ? 'Already running' : '正在运行中', code: 'E_BUSY' };
+  }
+
+  const runHandle: RunHandle = {
+    id: nextId(db, 'run'),
+    cancelled: false,
+    steers: [],
+    followUps: [],
+  };
+  conv.run = runHandle;
+  conv.view.status = 'running';
+  conv.view.run = {
+    status: 'running',
+    startedAt: Date.now(),
+    pendingText: lang === 'en' ? 'Handoff to new context in progress...' : '正在交接到新上下文',
+    canSend: true,
+    canStop: true,
+    lockedReason: null,
+    error: null,
+    lastActivityAt: Date.now(),
+    stalledSince: null,
+    activeTool: null,
+    handoff: { state: 'running' },
+  };
+  conv.pending = {
+    zh: '正在交接到新上下文',
+    en: 'Handoff to new context in progress...',
+  };
+  touch(conv);
+  publishConversationView(conv, hub);
+  publishSummary(db, hub, conv.view.id);
+
+  void executeHandoff(db, conv, hub, runHandle, lang, instructions);
+  return { ok: true };
+}
+
+async function executeHandoff(
+  db: MockDb,
+  conv: MockConv,
+  hub: MockHub,
+  run: RunHandle,
+  lang: Lang,
+  instructions?: string,
+): Promise<void> {
+  await sleep(THINK_MS);
+  if (run.cancelled) return;
+
+  const toolId = nextId(db, 'tool');
+  const handoffTool: MockTool = {
+    id: toolId,
+    kind: 'handoff',
+    status: 'done',
+    title: { zh: '交接到新上下文', en: 'Handoff to new context' },
+    fromIntent: false,
+    hint: { zh: '', en: '' },
+    hintFailed: false,
+    failure: 'none',
+    diff: null,
+    preview: '',
+    truncated: false,
+    totalLines: 0,
+    output: '',
+  };
+  conv.tools[toolId] = handoffTool;
+
+  const groupId = nextId(db, 'g');
+  const group: MockGroup = {
+    kind: 'tool_group',
+    id: groupId,
+    toolIds: [toolId],
+    summary: { zh: '交接到新上下文', en: 'Handoff to new context' },
+    failed: 0,
+    running: false,
+    live: false,
+  };
+  conv.items.push(group);
+  conv.view.itemIds.push(groupId);
+  publishTool(conv, hub, handoffTool, groupId);
+  publishItem(conv, hub, group);
+
+  await sleep(400);
+  if (run.cancelled) return;
+
+  const noteId = nextId(db, 'note');
+  const detailZh = [
+    '### 迁移进度交接',
+    '',
+    ...(instructions ? [`> **交接重点**：${instructions}`, ''] : []),
+    '- **当前任务**：继续处理上文讨论的迁移需求。',
+    '- **工作进度**：前期分析与代码修改已记录在案，未完成项已提炼入新上下文。',
+    '- **下一步**：在新上下文中继续执行后续步骤并完成验证。',
+  ].join('\n');
+  const detailEn = [
+    '### Migration Progress Handoff',
+    '',
+    ...(instructions ? [`> **Focus**: ${instructions}`, ''] : []),
+    '- **Current Task**: Continuing the migration task discussed above.',
+    '- **Progress**: Prior analysis and changes have been preserved; remaining items carry over to the new context.',
+    '- **Next Step**: Proceed with next actions and verification under the fresh context.',
+  ].join('\n');
+
+  const note: MockNote = {
+    kind: 'system_note',
+    id: noteId,
+    noteKind: 'handoff',
+    text: '新上下文',
+    i18n: { zh: '新上下文', en: 'New context' },
+    detail: detailZh,
+    detailI18n: { zh: detailZh, en: detailEn },
+  };
+  conv.items.push(note);
+  conv.view.itemIds.push(noteId);
+  publishItem(conv, hub, note);
+
+  await sleep(400);
+  if (run.cancelled) return;
+
+  const replyZh = '已交接到新上下文，已继承交接说明。我将继续执行接下来的任务。';
+  const replyEn = 'Switched to new context with handoff notes preserved. I will continue with the next steps.';
+  await streamAssistant(db, conv, hub, run, lang === 'en' ? replyEn : replyZh);
+  if (run.cancelled) return;
+
+  conv.view.context = {
+    ...conv.view.context,
+    used: Math.round(conv.view.context.window * 0.14),
+    percent: 14,
+    level: 'ok',
+  };
+  conv.run = null;
+  conv.pending = null;
+  conv.view.status = 'idle';
+  conv.view.run = {
+    status: 'idle',
+    startedAt: null,
+    pendingText: null,
+    canSend: true,
+    canStop: false,
+    lockedReason: null,
+    error: null,
+    lastActivityAt: null,
+    stalledSince: null,
+    activeTool: null,
+    handoff: null,
+  };
+  touch(conv);
+  publishConversationView(conv, hub);
+  publishSummary(db, hub, conv.view.id);
 }

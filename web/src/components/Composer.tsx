@@ -1,7 +1,19 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { AgentsStrip } from './AgentsStrip';
+import { ConversationScheduleStrip } from './ConversationScheduleStrip';
 import { StallStrip } from './StallStrip';
-import { compactConversation, patchConversation, putModelContextWindow, type SendMessageFile, type ThinkingLevel } from '../data/api';
+import {
+  compactConversation,
+  createSchedule,
+  handoffConversation,
+  patchConversation,
+  putModelContextWindow,
+  type ScheduleTarget,
+  type ScheduleWrite,
+  type SendMessageFile,
+  type ThinkingLevel,
+} from '../data/api';
+import { consumeConversationPrefill } from '../data/composerPrefill';
 import {
   IMAGE_MAX_COUNT,
   type ComposerHint,
@@ -29,8 +41,10 @@ import { NO_PROJECT_ID } from '../data/sidebarModel';
 import { isMac } from '../data/sidebarSearchModel';
 import type { QueueChip, SendMode } from '../data/pendingSend';
 import { useProviders } from '../data/useProviders';
+import { useSession } from '../data/session';
 import type { components } from '../../../src/v2/contract.gen';
 import { t } from '../i18n';
+import { handoffCommandOf } from '../data/handoffCommand';
 import { writeActiveWorkspace } from '../data/layout';
 import { subscribePrefs } from '../data/prefs';
 import { useRightActions } from '../data/rightPaneContext';
@@ -38,6 +52,12 @@ import { ContextChip } from './ContextChip';
 import { DemoModelBadge } from './DemoModelBadge';
 import { ModelChip } from './ModelChip';
 import { WorkspaceChip } from './WorkspaceChip';
+import { CLOCK_ICON } from './SidebarIcons';
+import { formatScheduleTimeToast } from './schedules/formatRule';
+import { DatePicker } from './pickers/DatePicker';
+import { TimePicker } from './pickers/TimePicker';
+import { formatDate, getTodayDateString } from './pickers/pickerUtils';
+import type { ConfirmOpts } from './ConfirmDialog';
 import { createSendRequest, errorMessage } from './sendRequest';
 
 type RunState = components['schemas']['RunState'];
@@ -58,6 +78,8 @@ type Props = {
   draftThinkingLevel?: ThinkingLevel | null;
   onDraftThinkingLevel?: (level: ThinkingLevel | null) => void;
   showModelControls?: boolean;
+  onConfirm?: (opts: ConfirmOpts) => Promise<boolean>;
+  onToast?: (msg: string) => void;
   onNewWorkspace?: () => void;
   onSend: (
     text: string,
@@ -107,6 +129,13 @@ function hintText(lang: Lang, hint: ComposerHint): string {
   return t(lang, 'attach_outside', { name: hint.name || '' });
 }
 
+function tomorrowNineAm(): number {
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  d.setHours(9, 0, 0, 0);
+  return d.getTime();
+}
+
 export function Composer({
   lang,
   run,
@@ -123,6 +152,8 @@ export function Composer({
   draftThinkingLevel = null,
   onDraftThinkingLevel,
   showModelControls = true,
+  onConfirm,
+  onToast: onToastProp,
   onNewWorkspace,
   onSend,
   onStop,
@@ -130,9 +161,11 @@ export function Composer({
   queue = [],
   onWithdrawQueue,
 }: Props) {
-  const [draft, setDraft] = useState('');
+  const [draft, setDraft] = useState(() => consumeConversationPrefill(conversationId) || '');
   const [compactBusy, setCompactBusy] = useState(false);
   const [compactRequestError, setCompactRequestError] = useState<string | null>(null);
+  const [handoffBusy, setHandoffBusy] = useState(false);
+  const [handoffRequestError, setHandoffRequestError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hint, setHint] = useState<ComposerHint | null>(null);
@@ -140,7 +173,13 @@ export function Composer({
   const req = useRef(createSendRequest());
   const area = useRef<HTMLTextAreaElement>(null);
   const { providers, defaultModel, ready: providersReady } = useProviders();
-  const { openInTerminal, copyPath } = useRightActions();
+  const { openInTerminal, copyPath, onToast: actionToast } = useRightActions();
+  const { store } = useSession();
+  const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [customMode, setCustomMode] = useState(false);
+  const [customDate, setCustomDate] = useState('');
+  const [customTime, setCustomTime] = useState('09:00');
+  const scheduleWrapRef = useRef<HTMLDivElement>(null);
   const groups = useMemo(() => groupComposerModels(providers, defaultModel), [providers, defaultModel]);
   const available = hasAvailableModels(providers);
   const selected = useMemo(() => resolveComposerSelection({
@@ -227,6 +266,86 @@ export function Composer({
     requestAnimationFrame(resize);
   }), []);
 
+  useEffect(() => {
+    if (!scheduleOpen) return;
+    function onMouseDown(ev: globalThis.MouseEvent) {
+      const target = ev.target as Element | null;
+      if (target?.closest?.('.picker-popup')) return;
+      if (scheduleWrapRef.current && !scheduleWrapRef.current.contains(ev.target as Node)) {
+        setScheduleOpen(false);
+        setCustomMode(false);
+      }
+    }
+    function onKeyDownEv(ev: globalThis.KeyboardEvent) {
+      if (ev.key === 'Escape') {
+        if (ev.defaultPrevented) return; // a picker popup consumed this Esc
+        setScheduleOpen(false);
+        setCustomMode(false);
+      }
+    }
+    window.addEventListener('mousedown', onMouseDown);
+    window.addEventListener('keydown', onKeyDownEv);
+    return () => {
+      window.removeEventListener('mousedown', onMouseDown);
+      window.removeEventListener('keydown', onKeyDownEv);
+    };
+  }, [scheduleOpen]);
+
+  async function handleScheduleSend(targetAt: number) {
+    const text = draft.trim();
+    if (!text) return;
+
+    const name = text.slice(0, 20);
+    let target: ScheduleTarget;
+
+    if (conversationId) {
+      const conv = store.conversation(conversationId);
+      target = {
+        kind: 'conversation',
+        conversationId,
+        title: conv?.title || name,
+      };
+    } else {
+      const ws = workspaceId ? store.workspaces().find((w) => w.id === workspaceId) : null;
+      target = {
+        kind: 'new',
+        workspaceId: workspaceId || '',
+        workspaceName: ws?.name || 'workspace',
+        model: selected?.providerId && selected?.modelId ? {
+          providerId: selected.providerId,
+          modelId: selected.modelId,
+        } : null,
+      };
+    }
+
+    const payload: ScheduleWrite = {
+      name,
+      message: text,
+      target,
+      rule: {
+        kind: 'once',
+        at: targetAt,
+      },
+      enabled: true,
+    };
+
+    try {
+      await createSchedule(payload, lang);
+      const snapshot = att.takeAndClear();
+      setDraft('');
+      at.setCursorPos(null);
+      at.setAtDismissed(false);
+      requestAnimationFrame(resize);
+      att.revokeSnapshot(snapshot);
+      setScheduleOpen(false);
+      setCustomMode(false);
+      const timeText = formatScheduleTimeToast(targetAt, lang);
+      (onToastProp || actionToast)?.(t(lang, 'scheduled_toast', { time: timeText }));
+    } catch (err) {
+      (onToastProp || actionToast)?.(err instanceof Error ? err.message : String(err));
+    }
+  }
+
   async function submit(text = draft.trim(), mode?: SendMode) {
     const payload = text.trim();
     const { imagePayload, sentFiles, sentPastes, extraKey } = att.buildSendPayload();
@@ -241,6 +360,9 @@ export function Composer({
       return;
     }
 
+    const command = !imagePayload.length && !sentFiles.length && !sentPastes.length
+      ? handoffCommandOf(payload)
+      : null;
     const requestId = req.current.begin(payload, extraKey);
     setBusy(true);
     setError(null);
@@ -253,14 +375,19 @@ export function Composer({
     at.setAtDismissed(false);
     requestAnimationFrame(resize);
     try {
-      await onSend(
-        sentText,
-        requestId,
-        imagePayload.length ? imagePayload : undefined,
-        mode,
-        sentFiles.length ? sentFiles : undefined,
-        sentPastes.length ? sentPastes : undefined,
-      );
+      if (command) {
+        if (!conversationId) throw new Error(t(lang, 'send_failed'));
+        await handoffConversation(conversationId, requestId, command.instructions);
+      } else {
+        await onSend(
+          sentText,
+          requestId,
+          imagePayload.length ? imagePayload : undefined,
+          mode,
+          sentFiles.length ? sentFiles : undefined,
+          sentPastes.length ? sentPastes : undefined,
+        );
+      }
       req.current.succeed();
       att.revokeSnapshot(snapshot);
       onSent?.();
@@ -372,6 +499,22 @@ export function Composer({
     }
   }
 
+  const handoffState = run.handoff?.state ?? 'idle';
+  const handoffRunning = handoffBusy || handoffState === 'running';
+
+  async function requestHandoff() {
+    if (!conversationId || handoffRunning) return;
+    setHandoffBusy(true);
+    setHandoffRequestError(null);
+    try {
+      await handoffConversation(conversationId);
+    } catch (err) {
+      setHandoffRequestError(errorMessage(err, t(lang, 'send_failed')));
+    } finally {
+      setHandoffBusy(false);
+    }
+  }
+
   const boxClass = [
     'composer-box',
     focused ? 'is-focused' : '',
@@ -405,21 +548,33 @@ export function Composer({
           />
           <GitChip lang={lang} workspaceId={workspaceId} />
         </div>
-        {conversationId ? (
-          <StallStrip run={run} lang={lang} onStop={onStop} />
-        ) : null}
-        {conversationId ? (
-          <AgentsStrip cid={conversationId} lang={lang} />
-        ) : null}
         <div
-          className={boxClass}
-          data-testid="next-composer"
+          className={`composer-card${focused ? ' is-focused' : ''}${att.dragging ? ' is-drop' : ''}`}
+          data-testid="next-composer-card"
           onDragEnter={att.onDragEnter}
           onDragOver={att.onDragOver}
           onDragLeave={att.onDragLeave}
           onDrop={att.onDrop}
         >
-          <div className="composer-body">
+          {conversationId ? (
+            <StallStrip run={run} lang={lang} onStop={onStop} />
+          ) : null}
+          {conversationId ? (
+            <AgentsStrip cid={conversationId} lang={lang} />
+          ) : null}
+          {conversationId ? (
+            <ConversationScheduleStrip
+              conversationId={conversationId}
+              lang={lang}
+              onConfirm={onConfirm}
+              onToast={onToastProp || actionToast}
+            />
+          ) : null}
+          <div
+            className={boxClass}
+            data-testid="next-composer"
+          >
+            <div className="composer-body">
             {queue.length || att.hasTagItems ? (
               <div className="composer-tags" data-testid="next-composer-tags">
                 {queue.map((item) => (
@@ -579,8 +734,113 @@ export function Composer({
                       error: compactError,
                       onCompact: () => { void requestCompact(); },
                     } : undefined}
+                    handoff={conversationId && !isDraft ? {
+                      state: handoffRunning ? 'running' : 'idle',
+                      error: handoffRequestError,
+                      onHandoff: () => { void requestHandoff(); },
+                    } : undefined}
                   />
                 ) : null}
+                <div className="composer-schedule-wrapper" ref={scheduleWrapRef}>
+                  <button
+                    type="button"
+                    className={`composer-schedule-btn${scheduleOpen ? ' is-open' : ''}`}
+                    data-testid="next-composer-schedule"
+                    title={t(lang, 'composer_schedule_send')}
+                    aria-label={t(lang, 'composer_schedule_send')}
+                    disabled={!draft.trim() || locked || busy}
+                    onClick={() => {
+                      setScheduleOpen((open) => !open);
+                      setCustomMode(false);
+                      const tomorrow = new Date(tomorrowNineAm());
+                      setCustomDate(formatDate(tomorrow.getFullYear(), tomorrow.getMonth() + 1, tomorrow.getDate()));
+                      setCustomTime('09:00');
+                    }}
+                  >
+                    {CLOCK_ICON}
+                  </button>
+                  {scheduleOpen ? (
+                    <div className="composer-schedule-popover" data-testid="next-composer-schedule-popover">
+                      {!customMode ? (
+                        <div className="composer-schedule-menu">
+                          <button
+                            type="button"
+                            className="composer-schedule-menu-item"
+                            data-testid="next-schedule-opt-30m"
+                            onClick={() => { void handleScheduleSend(Date.now() + 30 * 60 * 1000); }}
+                          >
+                            {t(lang, 'composer_schedule_30m')}
+                          </button>
+                          <button
+                            type="button"
+                            className="composer-schedule-menu-item"
+                            data-testid="next-schedule-opt-1h"
+                            onClick={() => { void handleScheduleSend(Date.now() + 60 * 60 * 1000); }}
+                          >
+                            {t(lang, 'composer_schedule_1h')}
+                          </button>
+                          <button
+                            type="button"
+                            className="composer-schedule-menu-item"
+                            data-testid="next-schedule-opt-tomorrow"
+                            onClick={() => { void handleScheduleSend(tomorrowNineAm()); }}
+                          >
+                            {t(lang, 'composer_schedule_tomorrow_9am')}
+                          </button>
+                          <button
+                            type="button"
+                            className="composer-schedule-menu-item"
+                            data-testid="next-schedule-opt-custom"
+                            onClick={() => setCustomMode(true)}
+                          >
+                            {t(lang, 'composer_schedule_custom')}
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="composer-schedule-custom" data-testid="next-schedule-custom-view">
+                          <div className="composer-schedule-custom-pickers">
+                            <DatePicker
+                              value={customDate}
+                              min={getTodayDateString()}
+                              lang={lang}
+                              testId="next-schedule-custom-date"
+                              onChange={setCustomDate}
+                            />
+                            <TimePicker
+                              value={customTime}
+                              lang={lang}
+                              testId="next-schedule-custom-time"
+                              onChange={setCustomTime}
+                            />
+                          </div>
+                          <div className="composer-schedule-custom-actions">
+                            <button
+                              type="button"
+                              className="btn btn-xs"
+                              onClick={() => setCustomMode(false)}
+                            >
+                              {t(lang, 'btn_cancel')}
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-xs p"
+                              data-testid="next-schedule-custom-confirm"
+                              disabled={!customDate || !customTime}
+                              onClick={() => {
+                                const at = new Date(`${customDate}T${customTime}`).getTime();
+                                if (Number.isFinite(at)) {
+                                  void handleScheduleSend(at);
+                                }
+                              }}
+                            >
+                              {t(lang, 'btn_confirm')}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ) : null}
+                </div>
                 {stopMode ? (
                   <button
                     type="button"
@@ -610,15 +870,16 @@ export function Composer({
               </div>
             </div>
           </div>
-          {att.dragging ? (
-            <div className="composer-drop" data-testid="next-composer-drop">
-              {DROP_ICON}
-              <span className="composer-drop-title">{t(lang, 'attach_drop')}</span>
-              <span className="composer-drop-hint">{t(lang, 'attach_drop_hint')}</span>
-            </div>
-          ) : null}
         </div>
+        {att.dragging ? (
+          <div className="composer-drop" data-testid="next-composer-drop">
+            {DROP_ICON}
+            <span className="composer-drop-title">{t(lang, 'attach_drop')}</span>
+            <span className="composer-drop-hint">{t(lang, 'attach_drop_hint')}</span>
+          </div>
+        ) : null}
       </div>
-    </footer>
+    </div>
+  </footer>
   );
 }

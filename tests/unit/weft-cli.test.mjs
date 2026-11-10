@@ -21,9 +21,6 @@ function weftEnv(extra = {}) {
   if (!Object.prototype.hasOwnProperty.call(extra, 'WEFT_EXPECT_PROTOCOL')) {
     delete env.WEFT_EXPECT_PROTOCOL;
   }
-  if (!Object.prototype.hasOwnProperty.call(extra, 'WEFT_LAUNCHED_BY')) {
-    delete env.WEFT_LAUNCHED_BY;
-  }
   // Parallel unit tests must not all grab 3300. Default to random unless the
   // case under test sets WEFT_PORT / PORT itself.
   if (!Object.prototype.hasOwnProperty.call(extra, 'WEFT_PORT')) {
@@ -36,10 +33,7 @@ function weftEnv(extra = {}) {
   } else if (extra.PORT == null || extra.PORT === '') {
     delete env.PORT;
   }
-  return {
-    ...env,
-    WEFT_IDLE_EXIT_MINUTES: extra.WEFT_IDLE_EXIT_MINUTES ?? '0',
-  };
+  return env;
 }
 
 function runWeft(args, { env = {}, timeoutMs = 45000 } = {}) {

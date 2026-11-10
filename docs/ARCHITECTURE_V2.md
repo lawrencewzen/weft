@@ -23,7 +23,7 @@
 │ views/     视图模型：对话流、工具、子 Agent、运行状态…    │
 │ phrases/   服务端文案（按客户端语言）                     │
 │ providers/ Provider 抽象、钥匙串                          │
-│ daemon/    发现文件、单实例、空闲退出、版本握手            │
+│ daemon/    发现文件、单实例、版本握手                    │
 │ kernel/    Pi Durable 门面（现有 src/kernel 演进而来）     │
 │ core/      Git、工作区、技能、插件（现有 src/core 复用）    │
 └──────┬──────────────┬───────────────┬────────────────────┘
@@ -39,7 +39,7 @@
 - **单实例**：沿用现在数据目录下的锁文件。
 - **发现文件**：服务启动后写 `<dataDir>/service.json`，内容是实际端口、pid、协议版本、服务版本和本机令牌。只有本用户能读（mac 设 0600；Windows 靠用户目录本身的 ACL）。服务退出时删除。
 - **端口**：只监听 `127.0.0.1`。`weft open` 拉起的服务默认固定端口 `3300`（`WEFT_PORT` 优先，其次 `PORT`，`WEFT_PORT=0` 仍为随机端口）；端口被占用时报错，不换端口。手动 `npm start` 仍沿用 `PORT` 和默认的 3000。
-- **空闲退出**：没有运行中的任务、也没有客户端连接超过 `idleExitMinutes`（默认 30，可配）就退出。只对启动器拉起的服务生效；手动启动和打开开机自启时不退出。
+- **常驻**：服务启动后一直运行，不因空闲自动退出。停止用 `weft stop`（有任务在跑时拒绝）或结束进程。
 - **版本握手**：每个响应头和 SSE 快照里都带 `protocolVersion`（语义化版本）。同一个大版本内服务端保持向后兼容。客户端发现服务太旧时：如果没有运行中的任务，就请求服务重启（`POST /api/v2/service/restart`，由客户端重新拉起）；有任务就提示用户等任务跑完。
 - 只监听 `127.0.0.1`。
 
@@ -171,7 +171,7 @@ Provider {
 
 | 阶段 | 内容 | 做完能看到什么 |
 |---|---|---|
-| 0 地基 | TS 工程和类型检查、契约文件和类型生成、契约校验、`/api/v2` 骨架、发现文件、本机令牌和一次性码、`weft open`、SSE（快照、序号、续传、心跳）、空闲退出、版本握手、`web/` 脚手架 | `weft open` 打开 `/next`，能连上流并收到心跳 |
+| 0 地基 | TS 工程和类型检查、契约文件和类型生成、契约校验、`/api/v2` 骨架、发现文件、本机令牌和一次性码、`weft open`、SSE（快照、序号、续传、心跳）、版本握手、`web/` 脚手架 | `weft open` 打开 `/next`，能连上流并收到心跳 |
 | 1 对话区 | ConversationView、ThreadItem、ToolCall、RunState、ContextUsage，服务端文案（zh、en），发送、停止、插话、继续；`/next` 只做中间栏 | 在 `/next` 里打开已有对话并聊天 |
 | 2 侧栏 | Workspace、ConversationSummary、Subagent，卡住判定，新建和归档对话 | `/next` 可以切换对话、查看子 Agent |
 | 3 右栏 | Change、Diff、FileNode、FileContent，编辑保存 | `/next` 看 diff、浏览和编辑文件 |

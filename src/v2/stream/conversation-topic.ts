@@ -174,6 +174,7 @@ function liveAssistant(id: string, text: string): AssistantItem {
     pathRefs: [],
     streaming: true,
     truncated: false,
+    entryId: null,
   };
 }
 
@@ -211,7 +212,7 @@ function overlayLive(
       if (have.has(id)) {
         const idx = items.findIndex((item) => item.id === id);
         if (idx >= 0 && items[idx]?.kind === 'assistant') {
-          items[idx] = { ...items[idx], text, streaming: true } as ThreadItem;
+          items[idx] = { ...items[idx], text, streaming: true, entryId: null } as ThreadItem;
         }
         continue;
       }

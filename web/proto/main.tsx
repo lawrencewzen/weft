@@ -10,6 +10,7 @@ import { installMockShell } from './mockShell';
 import '../src/styles/themes.css';
 import '../src/styles/app.css';
 import '../src/styles/settings.css';
+import '../src/styles/schedules.css';
 
 // Order matters: routing and the fake backend are in place before the first render.
 setAddressMode('hash');

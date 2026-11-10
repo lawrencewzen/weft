@@ -21,7 +21,12 @@ export function compactionFailureReason(raw: unknown): string {
   return redactAuthText(text);
 }
 
+/** Pi's summaryFailure text when the summarizer stopped on length (compaction.js). */
+const LENGTH_FAILURE = /^Summarization hit the token limit\b/i;
+
 export function compactionFailureMessage(lang: Lang, raw: unknown): string {
+  const text = String(raw ?? '').replace(OFFICIAL_PREFIX, '').trim();
+  if (LENGTH_FAILURE.test(text)) return phrase(lang, 'compaction_failed_length');
   return phrase(lang, 'compaction_failed', { reason: compactionFailureReason(raw) });
 }
 

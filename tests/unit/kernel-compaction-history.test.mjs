@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { estimateMessageTokens } from '@earendil-works/pi-ai/utils/estimate';
 import { createExtensionHost } from '../../src/core/extensions.mjs';
 import {
   createMapContext,
@@ -125,6 +126,21 @@ async function say(kernel, store, conv, text) {
   const done = await waitDone(kernel, store, conv.id);
   assert.equal(done.status, 'done', JSON.stringify(done.llmError || done.status));
   return done;
+}
+
+async function activeContextTokens(kernel, conv) {
+  const handle = await kernel.harness.conversation(conv.harnessId, kernel.context);
+  const view = await handle.context(kernel.context);
+  let tokens = 0;
+  for (const message of view?.messages || []) tokens += estimateMessageTokens(message);
+  return tokens;
+}
+
+function assertContextMatches(snapshot, tokens) {
+  const context = snapshot.conversation.context;
+  assert.ok(tokens > 0, JSON.stringify(context));
+  assert.equal(context.used, tokens, JSON.stringify(context));
+  assert.equal(context.percent, Math.min(100, Math.round((tokens / context.window) * 100)));
 }
 
 async function snapshotOf(kernel, store, conv) {
@@ -327,7 +343,7 @@ test('pi.compaction is not a user or assistant bubble', () => {
   })), [
     { role: 'user', kind: undefined, text: EARLY_A },
     { role: 'assistant', kind: undefined, text: SUMMARY_TEXT },
-    { role: 'note', kind: 'compaction', text: undefined },
+    { role: 'note', kind: 'compaction', text: SUMMARY_TEXT },
     { role: 'user', kind: undefined, text: KEPT },
   ]);
   assert.equal(messages.some((message) => (
@@ -430,8 +446,9 @@ test('compacted thread keeps every user, assistant, and tool message', { timeout
       assert.ok(readTool, `tools: ${JSON.stringify(snap.tools)}`);
       const group = rows.find((row) => row.kind === 'tool_group' && row.toolIds.includes(readTool.id));
       assert.ok(group, fail);
-      assert.equal(snap.conversation.context.used, 0, JSON.stringify(snap.conversation.context));
-      assert.equal(snap.conversation.context.percent, 0, JSON.stringify(snap.conversation.context));
+      const compactTokens = await activeContextTokens(kernel, conv);
+      assertContextMatches(snap, compactTokens);
+      assert.notEqual(compactTokens, DROPPED_USAGE);
 
       const forkSnap = await snapshotOf(kernel, store, forkRow);
       const forkTexts = threadRows(forkSnap).map((row) => `${row.kind}:${row.text}`);
@@ -491,7 +508,8 @@ test('compacted thread keeps every user, assistant, and tool message', { timeout
       threadRows(reread).map((row) => row.text),
       threadRows(keptSnap).map((row) => row.text),
     );
-    assert.equal(reread.conversation.context.used, 0, JSON.stringify(reread.conversation.context));
+    const reopenedTokens = await activeContextTokens(reopened.kernel, conv);
+    assertContextMatches(reread, reopenedTokens);
     await reopened.kernel.close();
     reopened.store.close();
     opened = null;
@@ -509,7 +527,7 @@ test('compacted thread keeps every user, assistant, and tool message', { timeout
       assert.equal(checked.ok, true, JSON.stringify(checked.errors));
       const httpTexts = threadRows(http.body).map((row) => row.text);
       assert.deepEqual(httpTexts, threadRows(keptSnap).map((row) => row.text));
-      assert.equal(http.body.conversation.context.used, 0, JSON.stringify(http.body.conversation.context));
+      assertContextMatches(http.body, reopenedTokens);
     } finally {
       await stopServer(srv);
     }
@@ -562,7 +580,7 @@ test('a fork-unrelated child still lists after the parent is compacted', { timeo
     const parent = await snapshotOf(kernel, store, conv);
     const parentText = threadRows(parent).map((row) => row.text).join('\n');
     assert.equal(parentText.includes(EARLY_A), true, parentText.slice(0, 500));
-    assert.equal(parent.conversation.context.used, 0, JSON.stringify(parent.conversation.context));
+    assertContextMatches(parent, await activeContextTokens(kernel, conv));
   } finally {
     if (opened?.kernel) await opened.kernel.close();
     if (opened?.store) opened.store.close();

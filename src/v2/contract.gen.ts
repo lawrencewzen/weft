@@ -118,6 +118,11 @@ export interface paths {
          *
          *     快照是 GET /api/v2/plugins、GET /api/v2/skills、GET /api/v2/git/connections 同一套数据拆成上述实体。插件、技能、Git 连接增删改（含旧接口）后 upsert；实体删除时 remove。失败原因、Git 测试结果按订阅的 `lang` 出成句。
          *
+         *     主题 `schedules` 注册为精确主题。实体：
+         *     - `schedule`：id 为定时任务 id，值为 Schedule
+         *
+         *     快照是 GET /api/v2/schedules 同一套数据拆成上述实体。定时任务增删改、启用/暂停或运行状态变化时 upsert；实体删除时 remove。值没变不推送。
+         *
          *     主题 `conversation:<id>`（`<id>` 为对话 id）按前缀动态注册。实体：
          *     - `conversation`：id 为对话 id，值为 ConversationView
          *     - `item`：id 为 ThreadItem.id，值为 ThreadItem
@@ -145,6 +150,94 @@ export interface paths {
          *     - `heartbeat` → HeartbeatEvent
          */
         get: operations["getEvents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/schedules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 定时任务列表 */
+        get: operations["listSchedules"];
+        put?: never;
+        /**
+         * 新建定时任务
+         * @description 写请求带 requestId。校验错误 400 带字段名。成功后 schedules 主题推送 upsert。
+         */
+        post: operations["createSchedule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/schedules/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * 删除定时任务
+         * @description 写请求带 requestId。成功后 schedules 主题推送 remove。
+         */
+        delete: operations["deleteSchedule"];
+        options?: never;
+        head?: never;
+        /**
+         * 更新定时任务
+         * @description 写请求带 requestId。校验错误 400 带字段名。成功后 schedules 主题推送 upsert。
+         */
+        patch: operations["updateSchedule"];
+        trace?: never;
+    };
+    "/api/v2/schedules/{id}/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 立即执行一次定时任务
+         * @description 立即触发执行一次并记录结果。写请求带 requestId。
+         */
+        post: operations["runSchedule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/schedules/{id}/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        /** 获取定时任务最近 20 次执行记录 */
+        get: operations["listScheduleRuns"];
         put?: never;
         post?: never;
         delete?: never;
@@ -948,13 +1041,18 @@ export interface paths {
         get: operations["getConversation"];
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * 删除对话
+         * @description 删除会删掉对话记录和历史，不能恢复，不动工作区文件。
+         *     对话正在运行时返回 409，错误码 E_CONVERSATION_RUNNING。不存在时返回 404。成功返回 204。
+         */
+        delete: operations["deleteConversation"];
         options?: never;
         head?: never;
         /**
-         * 切换对话模型或思考档位
+         * 切换对话模型或思考档位、归档状态
          * @description `model` 为 `{ providerId, modelId }` 时绑定该模型，规则同旧 resolveConversationModelPatch。
-         *     `model` 为 null 时回到默认。`thinkingLevel` 为档位名时写入对话；对当前模型不支持的档位按 clampThinkingLevel 就近处理，响应里的 thinkingLevel 是实际生效值。`thinkingLevel` 为 null 时清除，恢复模型默认。至少要有 model 或 thinkingLevel。运行中也能改，下次提交生效。成功后推送该对话主题的 ConversationView（含 model、thinkingLevel 和 context）。
+         *     `model` 为 null 时回到默认。`thinkingLevel` 为档位名时写入对话；对当前模型不支持的档位按 clampThinkingLevel 就近处理，响应里的 thinkingLevel 是实际生效值。`thinkingLevel` 为 null 时清除，恢复模型默认。`archived` 为布尔值时设置归档状态。至少要有 model、thinkingLevel 或 archived。运行中也能改，下次提交生效。成功后推送该对话主题的 ConversationView（含 model、thinkingLevel 和 context）。
          */
         patch: operations["patchConversation"];
         trace?: never;
@@ -1136,6 +1234,49 @@ export interface paths {
          *     `instructions` 可省略。官方 `compact()` 不因忙抛 ConversationBusy；若运行时抛了该错误，这里返回 409。
          */
         post: operations["compactConversation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/conversations/{id}/fork": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 从指定 entry 处分叉新对话
+         * @description 调用 Pi Durable 的 conversation.fork(entryId) 从某条记录处分出一个新对话。
+         *     新对话带着到那里为止的历史，在同一工作区，沿用原对话的模型。
+         *     在助手消息上分叉时 prefill 为 null；在用户消息上分叉时新对话包含该消息之前的内容，prefill 为该消息的文字。
+         */
+        post: operations["forkConversation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/conversations/{id}/handoff": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 手动交接到新上下文
+         * @description 请求服务端让模型编写交接说明并交接到新上下文（Pi Durable reset(handoff)）。
+         *     成功受理返回 202 { ok: true }。
+         */
+        post: operations["handoffConversation"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1368,6 +1509,19 @@ export interface components {
             /** @description Pi Durable 这次手动压缩任务的 id。 */
             taskId: string;
         };
+        HandoffRequest: {
+            /** @description 请求幂等 id */
+            requestId: string;
+            /** @description 用户希望交接说明侧重什么，由模型据此写交接说明；省略则由模型自己判断。 */
+            instructions?: string;
+        };
+        HandoffAccepted: {
+            /**
+             * @description 始终为 true。
+             * @constant
+             */
+            ok: true;
+        };
         RunAccepted: {
             /** @description Pi Durable 这次提交的 id */
             runId: string;
@@ -1382,6 +1536,32 @@ export interface components {
              * @constant
              */
             ok: true;
+        };
+        /** @description POST /api/v2/conversations/{id}/fork 的请求体。 */
+        ForkConversationRequest: {
+            /** @description 从哪条记录处分叉 */
+            entryId: string;
+            /** @description 幂等键。缺省时服务端生成。 */
+            requestId?: string;
+        };
+        /** @description 用户消息分叉时填回输入框的内容。 */
+        ForkPrefill: {
+            /** @description 填回输入框的文本 */
+            text: string;
+        };
+        /** @description POST /api/v2/conversations/{id}/fork 成功。 */
+        ForkConversationResponse: {
+            /** @description 新对话 id */
+            conversationId: string;
+            /** @description 填回输入框的内容。助手消息分叉时为 null，用户消息分叉时为 { text }。 */
+            prefill: null | components["schemas"]["ForkPrefill"];
+        };
+        /** @description 分叉来源。 */
+        ForkedFrom: {
+            /** @description 原对话 id */
+            conversationId: string;
+            /** @description 原对话标题 */
+            title: string;
         };
         SubagentMessageAccepted: {
             /** @description 始终为 true。 */
@@ -1543,7 +1723,7 @@ export interface components {
             /** @description 所属工具组 id，由组内第一条调用算出 */
             groupId: string;
             /** @enum {string} */
-            kind: "read" | "write" | "edit" | "ls" | "grep" | "bash" | "ask" | "other";
+            kind: "read" | "write" | "edit" | "ls" | "grep" | "bash" | "ask" | "schedule" | "handoff" | "other";
             /** @enum {string} */
             status: "running" | "failed" | "interrupted" | "done";
             heading: {
@@ -1575,6 +1755,8 @@ export interface components {
                 /** @description Harness 保留的输出窗口（尾部）。运行中的 bash 或预览被截断时带上；省略则预览即全文 */
                 text?: string;
             };
+            /** @description kind 为 schedule 时对应的定时任务 id */
+            scheduleId?: string;
             /**
              * @description 仅 ask_user_question，且参数通过插件校验时出现。kind 为 ask。
              *     questions 来自工具结果 details（插件校验后的题目）。
@@ -1634,6 +1816,8 @@ export interface components {
             pastes?: components["schemas"]["ThreadUserPaste"][];
             /** @description 附上的文件。没有则省略。path 相对工作区。 */
             files?: components["schemas"]["ThreadUserFile"][];
+            /** @description 这条消息在 Harness 中的 entry id。不能从这里分叉时为 null。 */
+            entryId?: null | string;
         };
         /** @description 助手回复。空文字的助手消息不进入对话流。 */
         ThreadItemAssistant: {
@@ -1651,6 +1835,8 @@ export interface components {
             streaming: boolean;
             /** @description 最后一条可见回复且 stopReason 为 length 时为 true，客户端显示继续 */
             truncated: boolean;
+            /** @description 这条消息在 Harness 中的 entry id。不能从这里分叉时为 null（例如还在流式输出）。 */
+            entryId?: null | string;
         };
         /** @description 连续工具调用合成的一组。 */
         ThreadItemToolGroup: {
@@ -1685,6 +1871,8 @@ export interface components {
         /**
          * @description 系统提示。correction 是交接，note 是给子 Agent 插话后的通知。
          *     compaction 的 text 是服务端按语言出成的句子，对应一条 pi.compaction 条目，放在该条目的时间位置。
+         *     handoff 是交接到新上下文的分隔线，detail 为交接说明全文。
+         *     compaction 同样画成分隔线，text 显示在标题右侧，detail 为压缩摘要全文；压缩之前的内容不折叠。
          */
         ThreadItemSystemNote: {
             /**
@@ -1694,11 +1882,29 @@ export interface components {
             kind: "system_note";
             id: string;
             /** @enum {string} */
-            noteKind: "correction" | "note" | "compaction";
+            noteKind: "correction" | "note" | "compaction" | "handoff";
             text: string;
+            /** @description handoff 是交接说明全文，也用于 compaction 摘要。 */
+            detail?: string;
+        };
+        /**
+         * @description 这一轮的文件变更，插在该轮最后一条助手回复后面。
+         *     工作区快照在这一轮开始前和结束后的差，包含 bash 和子 Agent 改的文件。
+         *     老对话没有按轮记录时不出现。累计变更仍在右栏。
+         */
+        ThreadItemTurnChanges: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "turn_changes";
+            /** @description 稳定 id（`tc-` 加这一轮最后一条助手回复的 id）。重启后不变。 */
+            id: string;
+            /** @description 这一轮改过的文件。增删行数只算这一轮，不是对话累计。没改文件则不会有这条。 */
+            changes: components["schemas"]["Change"][];
         };
         /** @description 对话流里的一项。按 kind 区分。 */
-        ThreadItem: components["schemas"]["ThreadItemUser"] | components["schemas"]["ThreadItemAssistant"] | components["schemas"]["ThreadItemToolGroup"] | components["schemas"]["ThreadItemSubagentReport"] | components["schemas"]["ThreadItemSystemNote"];
+        ThreadItem: components["schemas"]["ThreadItemUser"] | components["schemas"]["ThreadItemAssistant"] | components["schemas"]["ThreadItemToolGroup"] | components["schemas"]["ThreadItemSubagentReport"] | components["schemas"]["ThreadItemSystemNote"] | components["schemas"]["ThreadItemTurnChanges"];
         /** @description 当前运行状态。供输入框、停止按钮、等待提示和主对话卡住判定使用。 */
         RunState: {
             /**
@@ -1775,6 +1981,11 @@ export interface components {
                 trigger?: "manual" | "threshold" | "overflow";
                 /** @description failed 时的人话。中文为「压缩失败：原因」，英文为 Compaction failed 加原因。 */
                 error?: string;
+            };
+            /** @description 交接中的状态。运行中且模型正在写交接说明时为 running，否则为 null。 */
+            handoff?: null | {
+                /** @constant */
+                state: "running";
             };
         };
         /** @description 对话当前模型。取对话自己选的或默认模型。 */
@@ -2005,7 +2216,7 @@ export interface components {
         LoginAnswerRequest: {
             value: string;
         };
-        /** @description PATCH /api/v2/conversations/{id} 的请求体。至少包含 model 或 thinkingLevel。 */
+        /** @description PATCH /api/v2/conversations/{id} 的请求体。至少包含 model、thinkingLevel 或 archived。 */
         PatchConversationModelRequest: {
             /** @description 绑定的模型；null 回到默认。可与 thinkingLevel 同时传。 */
             model?: null | components["schemas"]["ResolvedModel"];
@@ -2014,6 +2225,8 @@ export interface components {
              *     当前模型不支持的档位按 clampThinkingLevel 就近处理，响应返回实际生效值。null 清除，恢复模型默认。
              */
             thinkingLevel?: null | components["schemas"]["ThinkingLevel"];
+            /** @description 是否归档。 */
+            archived?: boolean;
         };
         /** @description 侧栏工作区。kind 为 project（项目）或 chat（不选项目的对话目录）。 */
         Workspace: {
@@ -2077,6 +2290,8 @@ export interface components {
             /** @description 没有子 Agent 时为 null */
             subagents: null | components["schemas"]["SubagentCounts"];
             archived: boolean;
+            /** @description 分叉来源。不是分叉对话时为 null。 */
+            forkedFrom?: null | components["schemas"]["ForkedFrom"];
         };
         /** @description GET /api/v2/workspaces 的响应。 */
         WorkspacesSnapshot: {
@@ -2143,6 +2358,8 @@ export interface components {
              *     只在写入它们的服务进程内存在。
              */
             sends?: components["schemas"]["ConversationSend"][];
+            /** @description 分叉来源。不是分叉对话时为 null。 */
+            forkedFrom?: null | components["schemas"]["ForkedFrom"];
         };
         /** @description 一次发送在对话里的落点，供前端按 requestId 收回乐观上屏的消息。 */
         ConversationSend: {
@@ -2553,6 +2770,107 @@ export interface components {
             ok: true;
             id: string;
         };
+        ScheduleTargetConversation: {
+            /** @enum {string} */
+            kind: "conversation";
+            conversationId: string;
+            title: string;
+        };
+        ScheduleTargetNew: {
+            /** @enum {string} */
+            kind: "new";
+            workspaceId: string;
+            workspaceName: string;
+            model: null | components["schemas"]["ResolvedModel"];
+        };
+        ScheduleTarget: components["schemas"]["ScheduleTargetConversation"] | components["schemas"]["ScheduleTargetNew"];
+        ScheduleRuleOnce: {
+            /** @enum {string} */
+            kind: "once";
+            /** @description 毫秒时间戳 */
+            at: number;
+        };
+        ScheduleRuleDaily: {
+            /** @enum {string} */
+            kind: "daily";
+            /** @description HH:MM */
+            time: string;
+        };
+        ScheduleRuleWeekly: {
+            /** @enum {string} */
+            kind: "weekly";
+            /** @description 1=周一…7=周日 */
+            days: number[];
+            /** @description HH:MM */
+            time: string;
+        };
+        ScheduleRuleInterval: {
+            /** @enum {string} */
+            kind: "interval";
+            /** @description 最少 5 分钟 */
+            everyMinutes: number;
+        };
+        ScheduleRule: components["schemas"]["ScheduleRuleOnce"] | components["schemas"]["ScheduleRuleDaily"] | components["schemas"]["ScheduleRuleWeekly"] | components["schemas"]["ScheduleRuleInterval"];
+        ScheduleRun: {
+            id: string;
+            /** @description 执行时间（毫秒时间戳） */
+            at: number;
+            /** @enum {string} */
+            status: "ok" | "failed" | "missed_caught_up";
+            /** @description 执行所在或新建的对话 id */
+            conversationId: null | string;
+            /** @description 失败原因 */
+            error: null | string;
+        };
+        Schedule: {
+            id: string;
+            name: string;
+            message: string;
+            target: components["schemas"]["ScheduleTarget"];
+            rule: components["schemas"]["ScheduleRule"];
+            enabled: boolean;
+            /** @enum {string} */
+            createdBy: "user" | "agent";
+            /** @description 下次执行时间（毫秒时间戳） */
+            nextRunAt: null | number;
+            lastRun: null | components["schemas"]["ScheduleRun"];
+        };
+        ScheduleList: {
+            schedules: components["schemas"]["Schedule"][];
+        };
+        ScheduleRunList: {
+            runs: components["schemas"]["ScheduleRun"][];
+        };
+        ScheduleWrite: {
+            name: string;
+            message: string;
+            target: components["schemas"]["ScheduleTarget"];
+            rule: components["schemas"]["ScheduleRule"];
+            /** @default true */
+            enabled: boolean;
+            requestId?: string;
+        };
+        SchedulePatch: {
+            name?: string;
+            message?: string;
+            target?: components["schemas"]["ScheduleTarget"];
+            rule?: components["schemas"]["ScheduleRule"];
+            enabled?: boolean;
+            requestId?: string;
+        };
+        ScheduleRunRequest: {
+            requestId?: string;
+        };
+        ScheduleInvalid: {
+            /** @description 校验错误文案 */
+            error: string;
+            /** @default E_INVALID_SCHEDULE */
+            code: string;
+            /** @description 出错的字段名列表 */
+            fields: string[];
+            /** @description 详细错误说明列表 */
+            errors?: string[];
+        };
     };
     responses: never;
     parameters: never;
@@ -2880,6 +3198,364 @@ export interface operations {
             };
             /** @description 未授权 */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 客户端错误 */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 服务端错误 */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+        };
+    };
+    listSchedules: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 定时任务列表 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduleList"];
+                };
+            };
+            /** @description 未授权 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 客户端错误 */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 服务端错误 */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+        };
+    };
+    createSchedule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScheduleWrite"];
+            };
+        };
+        responses: {
+            /** @description 已创建 */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Schedule"];
+                };
+            };
+            /** @description 字段校验失败 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduleInvalid"];
+                };
+            };
+            /** @description 未授权 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 客户端错误 */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 服务端错误 */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+        };
+    };
+    deleteSchedule: {
+        parameters: {
+            query?: {
+                requestId?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 已删除 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OkId"];
+                };
+            };
+            /** @description 未授权 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 定时任务不存在 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 客户端错误 */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 服务端错误 */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+        };
+    };
+    updateSchedule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SchedulePatch"];
+            };
+        };
+        responses: {
+            /** @description 更新后的定时任务 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Schedule"];
+                };
+            };
+            /** @description 字段校验失败 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduleInvalid"];
+                };
+            };
+            /** @description 未授权 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 定时任务不存在 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 客户端错误 */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 服务端错误 */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+        };
+    };
+    runSchedule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ScheduleRunRequest"];
+            };
+        };
+        responses: {
+            /** @description 本次执行结果 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduleRun"];
+                };
+            };
+            /** @description 未授权 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 定时任务不存在 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 客户端错误 */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 服务端错误 */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+        };
+    };
+    listScheduleRuns: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 执行记录列表（最多 20 条，按时间倒序） */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduleRunList"];
+                };
+            };
+            /** @description 未授权 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 定时任务不存在 */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -5837,6 +6513,72 @@ export interface operations {
             };
         };
     };
+    deleteConversation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 对话 id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 已删除 */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 未授权 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 对话不存在 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 对话正在运行（E_CONVERSATION_RUNNING） */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 客户端错误 */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 服务端错误 */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+        };
+    };
     patchConversation: {
         parameters: {
             query?: {
@@ -6473,6 +7215,159 @@ export interface operations {
                 };
             };
             /** @description 官方拒绝（ConversationBusy） */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 客户端错误 */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 服务端错误 */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+        };
+    };
+    forkConversation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 对话 id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ForkConversationRequest"];
+            };
+        };
+        responses: {
+            /** @description 分叉成功 */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ForkConversationResponse"];
+                };
+            };
+            /** @description 请求体无效或 entryId 不存在 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 未授权 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 对话不存在 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 客户端错误 */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 服务端错误 */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+        };
+    };
+    handoffConversation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 对话 id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HandoffRequest"];
+            };
+        };
+        responses: {
+            /** @description 已受理手动交接 */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HandoffAccepted"];
+                };
+            };
+            /** @description 客户端请求格式错误 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 未授权 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 对话不存在 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 官方拒绝或繁忙 */
             409: {
                 headers: {
                     [name: string]: unknown;

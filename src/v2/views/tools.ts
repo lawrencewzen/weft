@@ -4,7 +4,7 @@ import { isCommandToolName } from '../../core/config.mjs';
 import { phrase, type Lang } from '../phrases/index.ts';
 import type { components } from '../contract.gen.ts';
 
-export type ToolKind = 'read' | 'write' | 'edit' | 'ls' | 'grep' | 'bash' | 'other';
+export type ToolKind = 'read' | 'write' | 'edit' | 'ls' | 'grep' | 'bash' | 'handoff' | 'other';
 export type ToolStatusBucket = 'running' | 'failed' | 'interrupted' | 'done';
 export type ToolFailureKind = 'none' | 'probe' | 'real';
 
@@ -28,11 +28,12 @@ export type ToolHint = { text: string; failed: boolean };
 type ToolCall = components['schemas']['ToolCall'];
 type AskCall = components['schemas']['AskCall'];
 const ASK_TOOL_NAME = 'ask_user_question';
+const SCHEDULE_TOOL_NAME = 'schedule';
 type ToolGroupSummary = components['schemas']['ToolGroupSummary'];
 type Translate = (key: string, params?: Record<string, unknown>) => string;
 type JsonObject = Record<string, unknown>;
 
-const KINDS = new Set<string>(['read', 'write', 'edit', 'ls', 'grep', 'bash']);
+const KINDS = new Set<string>(['read', 'write', 'edit', 'ls', 'grep', 'bash', 'handoff']);
 const COUNT_KINDS = new Set<string>(['read', 'ls', 'grep', 'other']);
 const CHANGE_KINDS = new Set<string>(['write', 'edit']);
 const PROBE_KINDS = new Set<string>(['read', 'ls', 'grep']);
@@ -42,7 +43,7 @@ const OUTPUT_PREVIEW_LINES = 20;
 export const TOOL_GROUP_PREVIEW = 8;
 export const TOOL_ERROR_PREVIEW_LINES = 8;
 export const TOOL_COMMAND_PREVIEW_LINES = 5;
-export const TOOL_KINDS = ['read', 'write', 'edit', 'ls', 'grep', 'bash'] as const;
+export const TOOL_KINDS = ['read', 'write', 'edit', 'ls', 'grep', 'bash', 'handoff'] as const;
 
 function translator(lang: Lang): Translate {
   return (key, params) => phrase(lang, key, params);
@@ -305,6 +306,7 @@ function singlePhrase(tool: ToolLike, t: Translate): string {
 }
 
 function runningPhrase(tool: ToolLike, t: Translate): string {
+  if (isScheduleTool(tool)) return t('tool_run_schedule');
   const intent = toolIntent(tool);
   if (intent) return intent;
   const kind = toolKind(tool?.name);
@@ -430,7 +432,48 @@ function namedCountClause(tools: ToolLike[], t: Translate): string {
   }).join(t('tool_sum_join'));
 }
 
+function isScheduleTool(tool: ToolLike | null | undefined): boolean {
+  return String(tool?.name || '') === SCHEDULE_TOOL_NAME;
+}
+
+type ScheduleFacts = { action: string; name: string; id: string };
+
+/** What the schedule tool did, from its input and the text it returned (`"name" (id: x)`). */
+function scheduleFacts(tool: ToolLike): ScheduleFacts {
+  const input = tool?.input && typeof tool.input === 'object' ? asRecord(tool.input) : {};
+  const output = parseToolOutput(tool?.output).text;
+  const found = /schedule ("(?:[^"\\]|\\.)*") \(id: ([^)\s]+)\)/.exec(output);
+  let name = typeof input.name === 'string' ? input.name.trim() : '';
+  if (found) {
+    try {
+      const parsed = JSON.parse(found[1]) as unknown;
+      if (typeof parsed === 'string' && parsed) name = parsed;
+    } catch {
+      // keep the name from the input
+    }
+  }
+  const id = typeof input.id === 'string' && input.id ? input.id : (found ? found[2] : '');
+  return { action: String(input.action || ''), name: oneLine(name, 40), id };
+}
+
+function scheduleHeading(facts: ScheduleFacts, t: Translate): string {
+  const { action, name } = facts;
+  if (action === 'list') return t('tool_sched_list');
+  if (!['create', 'update', 'pause', 'resume', 'delete'].includes(action)) return t('tool_sum_schedule');
+  return name ? t(`tool_sched_${action}`, { name }) : t(`tool_sched_${action}_bare`);
+}
+
+function scheduleHint(tool: ToolLike, facts: ScheduleFacts, t: Translate): ToolHint {
+  if (facts.action === 'list') {
+    const n = parseToolOutput(tool?.output).text.split(/\r?\n/).filter((line) => line.startsWith('- ')).length;
+    return { text: n ? t('tool_hint_items', { n }) : '', failed: false };
+  }
+  if (!['create', 'update', 'pause', 'resume', 'delete'].includes(facts.action)) return { text: '', failed: false };
+  return { text: t(`tool_sched_hint_${facts.action}`), failed: false };
+}
+
 function richSummary(list: ToolLike[], t: Translate): string {
+  if (list.length > 0 && list.every(isScheduleTool)) return t('tool_sum_schedule');
   if (list.length === 1) {
     const tool = list[0];
     if (toolStatusBucket(tool.status) === 'failed') return failedPhrase(tool, t);
@@ -852,8 +895,9 @@ export function toolCallView(
   const workspacePath = opts.workspacePath || '';
   const group = (Array.isArray(groupTools) && groupTools.length ? groupTools : [tool]).filter(Boolean) as ToolLike[];
   const namedAsk = String(tool?.name || '') === ASK_TOOL_NAME;
+  const namedSchedule = isScheduleTool(tool);
   const ask = namedAsk ? askCallOf(tool) : undefined;
-  const kind: ToolCall['kind'] = namedAsk ? 'ask' : toolKind(tool?.name);
+  const kind: ToolCall['kind'] = namedAsk ? 'ask' : namedSchedule ? 'schedule' : toolKind(tool?.name);
   const status = toolStatusBucket(tool?.status);
   const path = displayPath(tool, workspacePath);
   const outputText = toolOutputText(tool, workspacePath);
@@ -882,6 +926,13 @@ export function toolCallView(
   if (path) view.path = path;
   const exitCode = bashExitCode(tool);
   if (kind === 'bash' && exitCode != null) view.exitCode = exitCode;
+  if (namedSchedule) {
+    const t = translator(lang);
+    const facts = scheduleFacts(tool);
+    view.heading = { title: scheduleHeading(facts, t), detail: '', fromIntent: false };
+    if (status === 'done' && !failed) view.hint = scheduleHint(tool, facts, t);
+    if (facts.id && status !== 'failed') view.scheduleId = facts.id;
+  }
   if (ask) {
     view.ask = ask;
     const first = ask.questions[0];

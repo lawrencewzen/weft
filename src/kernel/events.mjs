@@ -494,6 +494,12 @@ export function projectViewUpdate(projector, view, mapCtx) {
       if (!snapshot) events.push({ event: 'compaction', data: { entryId: key } });
       continue;
     }
+    // A reset starts a new context and is not a chat bubble. The event only
+    // refreshes the conversation entity, so the chip does not wait for a reply.
+    if (entry.kind === 'pi.reset') {
+      if (!snapshot) events.push({ event: 'reset', data: { entryId: key } });
+      continue;
+    }
     if (!snapshot && (entry.kind === 'pi.user' || entry.kind === 'pi.assistant')) {
       const done = messageDone(entry);
       if (entry.kind === 'pi.assistant' && mapCtx?.liveId) {
@@ -636,13 +642,32 @@ export function messagesFromEntries(entries) {
   const messages = [];
   for (const entry of entries || []) {
     // The model sees this entry as a user summary. The thread gets a system note,
-    // not a user or assistant bubble, and the summary text is not copied out.
+    // not a user or assistant bubble. The summary body (inside <summary>…</summary>,
+    // without the model-facing preamble) becomes the note text, shown on expand.
     if (entry?.kind === 'pi.compaction') {
-      messages.push({
+      const raw = textOf(entry.model?.[0]?.content);
+      const inner = /<summary>([\s\S]*)<\/summary>/.exec(raw);
+      const detail = (inner ? inner[1] : raw).trim();
+      const note = {
         id: String(entry.id),
         role: 'note',
         kind: 'compaction',
-      });
+      };
+      if (detail) note.text = detail;
+      messages.push(note);
+      continue;
+    }
+    // pi.reset starts the new context. The model sees its user text; the thread
+    // shows a handoff divider at this entry, and the text is the note detail.
+    if (entry?.kind === 'pi.reset') {
+      const detail = textOf(entry.model?.[0]?.content).trim();
+      const note = {
+        id: String(entry.id),
+        role: 'note',
+        kind: 'handoff',
+      };
+      if (detail) note.text = detail;
+      messages.push(note);
       continue;
     }
     if (entry?.kind === USER_TO_SUBAGENT_KIND) {
@@ -663,7 +688,11 @@ export function messagesFromEntries(entries) {
       const parts = entry.kind === 'pi.user' ? parseUserMessageParts(content) : null;
       const text = parts ? parts.text : textOf(content);
       if (entry.kind === 'pi.assistant' && !text) continue;
-      const msg = { id: String(entry.id), role: entry.kind === 'pi.user' ? 'user' : 'assistant' };
+      const msg = {
+        id: String(entry.id),
+        entryId: String(entry.id),
+        role: entry.kind === 'pi.user' ? 'user' : 'assistant',
+      };
       if (text) msg.text = text;
       if (entry.kind === 'pi.user') {
         const kind = kindOfUserText(text);

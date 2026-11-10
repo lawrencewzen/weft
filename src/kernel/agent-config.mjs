@@ -257,6 +257,20 @@ export function createAgentHost({
       patch.title = trimmed;
       patch.titleSource = 'user';
     }
+    if (Object.prototype.hasOwnProperty.call(input, 'archived')) {
+      if (typeof input.archived !== 'boolean') {
+        return { status: 400, body: { error: 'archived must be a boolean' } };
+      }
+      // A running conversation cannot be archived. Unarchiving is always allowed.
+      if (input.archived && status === 'running') {
+        return { status: 409, body: { error: 'conversation is running', code: 'E_CONVERSATION_RUNNING' } };
+      }
+      if (input.archived !== Boolean(conv.archived)) {
+        patch.archived = input.archived;
+        // Archiving is not activity: keep the sidebar order.
+        patch.updatedAt = conv.updatedAt;
+      }
+    }
     if (!Object.keys(patch).length) {
       // Unknown keys (pipeline leftovers, retired fields) are ignored.
       if (Object.keys(input).length) {
@@ -267,7 +281,8 @@ export function createAgentHost({
     const next = await store.updateConversation(cid, patch);
     remember(next);
     // A model change while running is stored and picked up on the next submit.
-    if (status !== 'running') await configure(next);
+    const agentChanged = Object.keys(patch).some((key) => key !== 'archived' && key !== 'updatedAt');
+    if (status !== 'running' && agentChanged) await configure(next);
     return { status: 200, body: await patchBody(next) };
   }
 
@@ -297,6 +312,10 @@ export function createAgentHost({
     },
     async seed(rows) {
       for (const row of rows || []) remember(row);
+    },
+    forget(conv) {
+      if (conv?.harnessId != null) byHarness.delete(conv.harnessId);
+      if (conv?.id != null) lastAgent.delete(conv.id);
     },
   };
 }
