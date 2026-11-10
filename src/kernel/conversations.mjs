@@ -1164,6 +1164,51 @@ export async function openConversationKernel({
     return conv;
   }
 
+  /**
+   * Pi Durable has no call that deletes a conversation or its history. So this
+   * aborts what is left of the work (background subagents), stops Weft's watches,
+   * and removes Weft's own record. The harness data stays in Pi's storage with
+   * nothing pointing at it. The workspace is never touched.
+   */
+  async function deleteConversation(cid) {
+    const conv = await store.getConversation(cid);
+    if (!conv) return { status: 404, body: { error: 'conversation not found' } };
+    if ((await statusOf(conv)) === 'running') {
+      return { status: 409, body: { error: 'conversation is running', code: 'E_CONVERSATION_RUNNING' } };
+    }
+    if (conv.harnessId != null) {
+      const conversation = await harness.conversation(conv.harnessId, context);
+      if (conversation) await conversation.abort(context, { background: true });
+    }
+    await subagents.forget(conv);
+    const watch = watches.get(cid);
+    watches.delete(cid);
+    if (watch) {
+      try { await watch.stream.stop(); } catch { /* already stopped */ }
+    }
+    // Let events already queued for this conversation finish before the row goes.
+    await (tails.get(cid) || Promise.resolve());
+    if (conv.harnessId != null) {
+      histories.delete(Number(conv.harnessId));
+      historyLocks.delete(Number(conv.harnessId));
+    }
+    agentHost.forget(conv);
+    sends.delete(cid);
+    changeCache.delete(cid);
+    changeGen.delete(cid);
+    changeInflight.delete(cid);
+    snapshotLocks.delete(cid);
+    tails.delete(cid);
+    listeners.delete(cid);
+    await store.deleteConversation(cid);
+    return { status: 204 };
+  }
+
+  async function unarchiveOnSend(conv) {
+    if (!conv?.archived) return;
+    await store.updateConversation(conv.id, { archived: false });
+  }
+
   function forkResponse(row, prefill) {
     const stored = prefill !== undefined ? prefill : prefillFromStored(row?.forkPrefillJson);
     return {
@@ -1254,6 +1299,7 @@ export async function openConversationKernel({
     },
     createConversation,
     forkConversation,
+    deleteConversation,
     listSubagents(conv) {
       return subagents.listSubagents(conv).then((agents) => agents.map((agent) => {
         const { harnessId, ...rest } = agent;
@@ -1386,6 +1432,7 @@ export async function openConversationKernel({
         try {
           const submission = await conversation.submit({ type: 'continue', requestId }, context);
           await store.updateConversation(current.id, { lastSubmissionId: submission.id });
+          await unarchiveOnSend(current);
           return { status: 202, body: { runId: String(submission.id), status: 'running' } };
         } catch (err) {
           if (err instanceof ConversationBusy || err?.name === 'ConversationBusy') {
@@ -1428,6 +1475,7 @@ export async function openConversationKernel({
         entryId,
       });
       await store.updateConversation(current.id, { lastSubmissionId: submission.id });
+      await unarchiveOnSend(current);
       return { status: 202, body: { runId: String(submission.id), status: 'running' } };
     },
     async withdrawMessage(cid, requestId) {
