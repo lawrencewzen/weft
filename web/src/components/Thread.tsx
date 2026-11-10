@@ -334,7 +334,7 @@ export function Thread({
               );
             }
             if (item.kind === 'system_note') {
-              return <SystemNote key={item.id} item={item} />;
+              return <SystemNote key={item.id} item={item} lang={lang} />;
             }
             return null;
           })}

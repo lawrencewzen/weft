@@ -90,7 +90,7 @@ type PlainItem = Exclude<ThreadItem, { kind: 'tool_group' }>;
 
 type SystemNoteItem = Extract<ThreadItem, { kind: 'system_note' }>;
 /** compaction note: the server writes the sentence in the client's language. */
-export type MockNote = SystemNoteItem & { i18n?: Bilingual };
+export type MockNote = SystemNoteItem & { i18n?: Bilingual; detailI18n?: Bilingual };
 
 export type MockItem = Exclude<PlainItem, SystemNoteItem> | MockNote | MockGroup;
 

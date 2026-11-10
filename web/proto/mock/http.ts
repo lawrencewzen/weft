@@ -14,7 +14,14 @@ import {
   recomputeContext,
   touch,
 } from './db';
-import { compactConversation, continueConversation, sendMessage, stopConversation, withdrawMessage } from './run';
+import {
+  compactConversation,
+  continueConversation,
+  handoffConversation,
+  sendMessage,
+  stopConversation,
+  withdrawMessage,
+} from './run';
 import { parseSendImages } from '../../../src/v2/views/message-images';
 import { inferCustomProviderBrand, inferModelBrand } from './brand';
 import { mockProviderName } from './providerNames';
@@ -1808,6 +1815,15 @@ export function handleMockRequest(
     const result = compactConversation(db, conv, hub);
     if (!result.ok) return fail(result.status, result.error, result.code);
     return accepted({ taskId: result.taskId });
+  }
+  const handoffMatch = /^\/api\/v2\/conversations\/([^/]+)\/handoff$/.exec(path);
+  if (handoffMatch && method === 'POST') {
+    const conv = getConv(db, decodeURIComponent(handoffMatch[1]));
+    if (!conv) return fail(404, lang === 'en' ? 'Conversation not found' : '对话不存在');
+    const requestId = typeof body.requestId === 'string' ? body.requestId : '';
+    const result = handoffConversation(db, conv, hub, requestId, lang);
+    if (!result.ok) return fail(result.status, result.error, result.code);
+    return accepted({ ok: true });
   }
   const toolMatch = /^\/api\/v2\/conversations\/([^/]+)\/tools\/([^/]+)\/output$/.exec(path);
   if (toolMatch && method === 'GET') {

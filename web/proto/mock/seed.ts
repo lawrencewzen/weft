@@ -805,6 +805,118 @@ function compactFailedConversation(now: number): MockConv {
   return conv;
 }
 
+function handoffConversation(now: number): MockConv {
+  const tHandoff = tool({
+    id: 'handoff-tool-1',
+    kind: 'handoff' as MockTool['kind'],
+    status: 'done',
+    title: hint('交接到新上下文', 'Handoff to new context'),
+  });
+
+  const tLs1 = tool({
+    id: 'handoff-ls-1',
+    kind: 'ls',
+    status: 'done',
+    path: 'packages',
+    title: hint('packages', 'packages'),
+    hint: hint('8 项', '8 items'),
+  });
+
+  const tBash1 = tool({
+    id: 'handoff-bash-1',
+    kind: 'bash',
+    status: 'done',
+    title: hint('node scripts/migrate-v2.mjs packages/core', 'node scripts/migrate-v2.mjs packages/core'),
+    output: '✓ packages/core migrated (14 files, 0 errors)\nexit 0',
+  });
+
+  const tBash2 = tool({
+    id: 'handoff-bash-2',
+    kind: 'bash',
+    status: 'done',
+    title: hint('node scripts/migrate-v2.mjs packages/cli', 'node scripts/migrate-v2.mjs packages/cli'),
+    output: '✓ packages/cli migrated (9 files, 0 errors)\nexit 0',
+  });
+
+  const tBashAfter = tool({
+    id: 'handoff-bash-after',
+    kind: 'bash',
+    status: 'done',
+    title: hint('node scripts/migrate-v2.mjs packages/server', 'node scripts/migrate-v2.mjs packages/server'),
+    output: '✓ packages/server migrated (22 files, 0 errors)\nexit 0',
+  });
+
+  const detailZh = [
+    '### 迁移进度交接',
+    '',
+    '- **已完成模块**：`packages/core`、`packages/cli`、`packages/store` 等 8 个基础包已完成 AST 转换与单测验证（退出码均 0）。',
+    '- **待处理模块**：`packages/server`、`packages/web` 等 12 个大型模块。',
+    '- **关键注意点**：`packages/server` 依赖 Node 22+ 的原生 ESM 顶层 await，迁移脚本需加上 `--experimental-vm-modules`。',
+    '- **下一步操作**：在新上下文中继续执行 `node scripts/migrate-v2.mjs packages/server`。',
+  ].join('\n');
+
+  const detailEn = [
+    '### Migration Progress Handoff',
+    '',
+    '- **Completed modules**: 8 base packages including `packages/core`, `packages/cli`, and `packages/store` have passed AST transform and unit tests (all exit code 0).',
+    '- **Pending modules**: 12 large modules including `packages/server` and `packages/web`.',
+    '- **Key note**: `packages/server` relies on Node 22+ native ESM top-level await; run migration with `--experimental-vm-modules`.',
+    '- **Next step**: Continue in new context with `node scripts/migrate-v2.mjs packages/server`.',
+  ].join('\n');
+
+  return conversation({
+    id: 'c-handoff',
+    workspaceId: 'ws-weft',
+    title: '把迁移脚本跑完整个仓库',
+    updatedAt: now - 8 * MINUTE,
+    used: 28_000,
+    tools: {
+      [tLs1.id]: tLs1,
+      [tBash1.id]: tBash1,
+      [tBash2.id]: tBash2,
+      [tHandoff.id]: tHandoff,
+      [tBashAfter.id]: tBashAfter,
+    },
+    items: [
+      user('handoff-u1', '把 `scripts/migrate-v2.mjs` 跑完整个仓库的所有项目，注意检查每个项目的返回码。'),
+      assistant('handoff-a1', '好的，我先列出 `packages/` 下的所有模块并开始分批迁移。'),
+      group('handoff-g1', [tLs1.id, tBash1.id, tBash2.id], {
+        zh: '列出了 1 个目录 · 执行了 2 条命令',
+        en: 'listed 1 directory · ran 2 commands',
+      }),
+      assistant(
+        'handoff-a2',
+        '前 8 个基础包已全部完成迁移并验证通过。由于涉及较多 AST 转换与依赖检查，上下文用量已接近上限，我将整理当前进度并交接到新上下文继续。',
+      ),
+      group('handoff-g-hand', [tHandoff.id], {
+        zh: '交接到新上下文',
+        en: 'Handoff to new context',
+      }),
+      {
+        kind: 'system_note',
+        id: 'handoff-n1',
+        noteKind: 'handoff',
+        text: '新上下文',
+        i18n: hint('新上下文', 'New context'),
+        detail: detailZh,
+        detailI18n: hint(detailZh, detailEn),
+      },
+      assistant(
+        'handoff-a3',
+        '已在新上下文中恢复执行。交接说明已归档在上方的折叠面板中，现在开始处理 `packages/server`。',
+      ),
+      group('handoff-g2', [tBashAfter.id], {
+        zh: '执行了 1 条命令',
+        en: 'ran 1 command',
+      }),
+      assistant(
+        'handoff-a4',
+        '`packages/server` 迁移完成，单测全部通过（22 个测试套件，0 失败）。正在准备下一个模块。',
+      ),
+    ],
+  });
+}
+
 /** 持续处于重试中：模型请求失败，服务端在等下一次重试。pendingText 是服务端出好的人话。 */
 function retryingConversation(now: number): MockConv {
   const conv = conversation({
@@ -1441,6 +1553,7 @@ export function createSeed(now: number): MockDb {
     truncatedConversation(now),
     compactedConversation(now),
     compactFailedConversation(now),
+    handoffConversation(now),
     retryingConversation(now),
     askConversation(now),
     testsConversation(now),
