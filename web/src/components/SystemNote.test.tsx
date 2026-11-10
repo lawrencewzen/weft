@@ -112,4 +112,77 @@ describe('SystemNote (T105-2)', () => {
     expect(host!.querySelector('[data-testid="next-handoff-title"]')?.textContent).toBe('New context');
     expect(host!.querySelector('[data-testid="next-handoff-toggle"]')?.textContent).toContain('Handoff notes');
   });
+
+  it('renders the compaction divider with icon, title, meta and an expandable summary', async () => {
+    const item: Item = {
+      kind: 'system_note',
+      id: 'sn-compaction',
+      text: '之前 12 条已摘要',
+      noteKind: 'compaction',
+      detail: '### 对话摘要\n\n已完成任务 B。',
+    };
+
+    await act(async () => {
+      root!.render(<SystemNote item={item} lang="zh" />);
+    });
+
+    const note = host!.querySelector('[data-testid="next-item-system-note"]');
+    expect(note?.getAttribute('data-kind')).toBe('compaction');
+    expect(note?.classList.contains('handoff-divider-container')).toBe(true);
+    const divider = host!.querySelector('[data-testid="next-compaction-divider"]');
+    expect(divider).not.toBeNull();
+    expect(divider?.querySelector('svg.handoff-divider-icon')).not.toBeNull();
+    expect(divider?.querySelector('[data-testid="next-compaction-title"]')?.textContent).toBe('上下文已压缩');
+    expect(divider?.querySelector('[data-testid="next-compaction-meta"]')?.textContent).toBe('之前 12 条已摘要');
+
+    const toggle = host!.querySelector('[data-testid="next-compaction-toggle"]') as HTMLButtonElement;
+    expect(toggle.textContent).toContain('摘要');
+    expect(host!.querySelector('[data-testid="next-compaction-detail"]')).toBeNull();
+
+    await act(async () => {
+      toggle.click();
+    });
+    const detail = host!.querySelector('[data-testid="next-compaction-detail"]');
+    expect(detail?.textContent).toContain('对话摘要');
+    expect(detail?.textContent).toContain('已完成任务 B。');
+
+    await act(async () => {
+      toggle.click();
+    });
+    expect(host!.querySelector('[data-testid="next-compaction-detail"]')).toBeNull();
+  });
+
+  it('renders the compaction divider in English and without a toggle when there is no summary', async () => {
+    const item: Item = {
+      kind: 'system_note',
+      id: 'sn-compaction-en',
+      text: 'Previous 3 items summarized',
+      noteKind: 'compaction',
+    };
+
+    await act(async () => {
+      root!.render(<SystemNote item={item} lang="en" />);
+    });
+
+    expect(host!.querySelector('[data-testid="next-compaction-title"]')?.textContent).toBe('Context compacted');
+    expect(host!.querySelector('[data-testid="next-compaction-meta"]')?.textContent).toBe('Previous 3 items summarized');
+    expect(host!.querySelector('[data-testid="next-compaction-toggle"]')).toBeNull();
+  });
+
+  it('keeps the handoff divider without icon or meta', async () => {
+    const item: Item = {
+      kind: 'system_note',
+      id: 'sn-handoff-plain',
+      text: '新上下文',
+      noteKind: 'handoff',
+      detail: '交接说明',
+    };
+
+    await act(async () => {
+      root!.render(<SystemNote item={item} lang="zh" />);
+    });
+
+    expect(host!.querySelector('.handoff-divider-icon')).toBeNull();
+    expect(host!.querySelector('[data-testid="next-handoff-meta"]')).toBeNull();
+  });
 });

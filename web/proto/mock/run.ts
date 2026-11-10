@@ -13,6 +13,7 @@ import {
   touch,
 } from './db';
 import { mockDiff } from './repo';
+import { compactionNote } from './compaction';
 import { SPAWN_TITLE, appendReport, createSubThread, runSubagent } from './subagents';
 import { conversationGroupId } from './views';
 import { decodedBase64Bytes, imageDataUrl } from '../../../src/v2/views/message-images';
@@ -1146,13 +1147,7 @@ export function compactConversation(db: MockDb, conv: MockConv, hub: MockHub): C
       };
     } else {
       conv.compaction = { state: 'idle' };
-      const note: MockNote = {
-        kind: 'system_note',
-        id: nextId(db, 'note'),
-        noteKind: 'compaction',
-        text: '已压缩较早的上下文',
-        i18n: { zh: '已压缩较早的上下文', en: 'Earlier context was compacted' },
-      };
+      const note: MockNote = compactionNote(nextId(db, 'note'), conv.items.length);
       conv.items.push(note);
       conv.view.itemIds.push(note.id);
       conv.view.context = {

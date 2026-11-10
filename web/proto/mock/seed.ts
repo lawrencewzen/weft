@@ -20,6 +20,7 @@ import { seedWebsiteRepo, seedWeftRepo, mockDiff, createRepo } from './repo';
 import { inferCustomProviderBrand, inferModelBrand } from './brand';
 import { seedGitConnections, seedGitProjects, seedPlugins, seedSkills } from './extensions';
 import { seedSubThreads, seedSubagentReports } from './subagents';
+import { compactionNote } from './compaction';
 
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
@@ -771,13 +772,7 @@ function compactedConversation(now: number): MockConv {
     items: [
       user('compacted-u1', '把 store 里的订阅逻辑拆成独立模块。'),
       assistant('compacted-a1', '已经拆成 `subscribe.ts`，store 只保留数据读写。'),
-      {
-        kind: 'system_note',
-        id: 'compacted-n1',
-        noteKind: 'compaction',
-        text: '已压缩较早的上下文',
-        i18n: hint('已压缩较早的上下文', 'Earlier context was compacted'),
-      },
+      compactionNote('compacted-n1', 2),
       user('compacted-u2', '再补一组订阅取消的单测。'),
       assistant('compacted-a2', '补了 3 个用例，覆盖重复取消和取消后不再收到事件。'),
     ],

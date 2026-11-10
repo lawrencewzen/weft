@@ -13,6 +13,7 @@ import { AssistantMessage } from './AssistantMessage';
 import { ChangeSummary } from './ChangeSummary';
 import { DispatchCard } from './DispatchCard';
 import { SubagentReport } from './SubagentReport';
+import { ContextDividerPending } from './ContextDivider';
 import { SystemNote } from './SystemNote';
 import { ToolGroup } from './ToolGroup';
 import { UserMessage } from './UserMessage';
@@ -377,15 +378,13 @@ export function Thread({
               : items.map(renderItem)}
           </>
         )}
+        {compacting ? (
+          <ContextDividerPending lang={lang} />
+        ) : null}
         {!empty && changes.length ? (
           <ChangeSummary changes={changes} lang={lang} />
         ) : null}
-        {compacting ? (
-          <div className="thread-pending" data-testid="next-thread-compacting">
-            <span className="run-spin" aria-hidden="true"><span /></span>
-            <span className="thread-pending-text">{t(lang, 'compacting_context')}</span>
-          </div>
-        ) : pending ? (
+        {compacting ? null : pending ? (
           <div
             className={retrying ? 'thread-pending is-retrying' : 'thread-pending'}
             data-testid="next-thread-pending"
