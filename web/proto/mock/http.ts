@@ -64,6 +64,8 @@ import type {
   LoginSession,
   MockConv,
   MockDb,
+  MockItem,
+  MockTool,
   Model,
   Plugin,
   Provider,
@@ -76,6 +78,7 @@ import type {
   WorkspaceDirEntry,
   WorkspaceDirs,
 } from './types';
+import { tr } from './types';
 
 export type MockReply = {
   status: number;
@@ -229,6 +232,35 @@ function removeWorkspace(db: MockDb, hub: MockHub, workspaceId: string): MockRep
   return ok({ removed: true });
 }
 
+function deleteConversation(db: MockDb, hub: MockHub, conv: MockConv, lang: Lang): MockReply {
+  if (conv.view.status === 'running') {
+    return fail(409, lang === 'en' ? 'Conversation is running' : '对话正在运行', 'E_CONVERSATION_RUNNING');
+  }
+  const cid = conv.view.id;
+  const workspaceId = conv.view.workspaceId;
+  db.conversations.delete(cid);
+  publishRemove(conv, hub, 'conversation', cid);
+  hub.publish('workspaces', {
+    event: 'remove',
+    entity: 'conversation_summary',
+    id: cid,
+  });
+  const ws = db.workspaces.find((row) => row.id === workspaceId);
+  if (ws) {
+    hub.publish('workspaces', {
+      event: 'upsert',
+      entity: 'workspace',
+      id: ws.id,
+      value: {
+        ...ws,
+        conversationCount: [...db.conversations.values()].filter((row) => row.view.workspaceId === ws.id && !row.archived).length,
+        runningCount: [...db.conversations.values()].filter((row) => row.view.workspaceId === ws.id && !row.archived && row.view.status === 'running').length,
+      },
+    });
+  }
+  return noContent();
+}
+
 function createChatWorkspace(db: MockDb, convId: string, title: string): Workspace {
   const name = title || '对话';
   const ws: Workspace = {
@@ -300,6 +332,129 @@ function createConversation(db: MockDb, hub: MockHub, workspaceId: string | null
   return created(summaryOf(conv) as ConversationSummary);
 }
 
+function forkConversation(
+  db: MockDb,
+  hub: MockHub,
+  conv: MockConv,
+  body: Record<string, unknown>,
+  lang: Lang,
+): MockReply {
+  const entryId = typeof body.entryId === 'string' ? body.entryId : '';
+  if (!entryId) {
+    return fail(400, 'entryId is required', 'E_BAD_REQUEST');
+  }
+
+  if (conv.forkFails) {
+    const reason = typeof conv.forkFails === 'object'
+      ? tr(conv.forkFails, lang)
+      : (lang === 'en' ? 'Conversation history corrupted' : '对话历史已损坏');
+    return fail(400, reason, 'E_FORK_FAILED');
+  }
+
+  if (entryId.includes('fail')) {
+    return fail(400, lang === 'en' ? 'Snapshot corrupted' : '快照已损坏', 'E_FORK_FAILED');
+  }
+
+  const targetIndex = conv.items.findIndex((item) => {
+    const it = item as { entryId?: string | null; id: string };
+    return it.entryId === entryId || it.id === entryId;
+  });
+
+  if (targetIndex === -1) {
+    return fail(400, lang === 'en' ? 'Entry not found' : '指定的消息不存在', 'E_ENTRY_NOT_FOUND');
+  }
+
+  const targetItem = conv.items[targetIndex];
+  if ((targetItem as { streaming?: boolean }).streaming) {
+    return fail(400, lang === 'en' ? 'Cannot fork from streaming message' : '不能从流式输出中的消息分叉', 'E_STREAMING');
+  }
+
+  let forkedItems: MockItem[];
+  let prefill: { text: string } | null = null;
+
+  if (targetItem.kind === 'assistant') {
+    forkedItems = conv.items.slice(0, targetIndex + 1);
+    prefill = null;
+  } else if (targetItem.kind === 'user') {
+    forkedItems = conv.items.slice(0, targetIndex);
+    prefill = { text: targetItem.text };
+  } else {
+    forkedItems = conv.items.slice(0, targetIndex + 1);
+    prefill = null;
+  }
+
+  const clonedItems: MockItem[] = forkedItems.map((item) => {
+    if (item.kind === 'tool_group') {
+      return { ...item, toolIds: [...item.toolIds] };
+    }
+    return { ...item };
+  });
+
+  const clonedTools: Record<string, MockTool> = {};
+  for (const item of clonedItems) {
+    if (item.kind === 'tool_group') {
+      for (const tid of item.toolIds) {
+        if (conv.tools[tid]) {
+          clonedTools[tid] = { ...conv.tools[tid] };
+        }
+      }
+    }
+  }
+
+  const newId = nextId(db, 'c');
+  const now = Date.now();
+  const title = `${conv.view.title}（分叉）`;
+
+  const newConv: MockConv = {
+    view: {
+      id: newId,
+      workspaceId: conv.view.workspaceId,
+      title,
+      updatedAt: now,
+      status: 'idle',
+      model: conv.view.model ? { ...conv.view.model } : null,
+      thinkingLevel: conv.view.thinkingLevel ?? null,
+      run: {
+        status: 'idle',
+        startedAt: null,
+        pendingText: null,
+        canSend: true,
+        canStop: false,
+        lockedReason: null,
+        error: null,
+        lastActivityAt: null,
+        stalledSince: null,
+        activeTool: null,
+      },
+      context: { used: 0, window: conv.view.context.window, percent: 0, level: 'ok' },
+      itemIds: clonedItems.map((it) => it.id),
+      sends: [],
+      forkedFrom: {
+        conversationId: conv.view.id,
+        title: conv.view.title,
+      },
+    },
+    pending: null,
+    items: clonedItems,
+    tools: clonedTools,
+    changes: [],
+    diffs: {},
+    subagents: [],
+    run: null,
+    requestRuns: new Map(),
+  };
+
+  recomputeContext(db, newConv);
+  db.conversations.set(newId, newConv);
+  publishSummary(db, hub, newId);
+  publishWorkspaces(db, hub);
+
+  return created({
+    conversationId: newId,
+    prefill,
+  });
+}
+
 function patchConversation(
   db: MockDb,
   hub: MockHub,
@@ -308,8 +463,17 @@ function patchConversation(
 ): MockReply {
   const hasModel = Object.prototype.hasOwnProperty.call(body, 'model');
   const hasThinking = Object.prototype.hasOwnProperty.call(body, 'thinkingLevel');
-  if (!hasModel && !hasThinking) {
-    return fail(400, 'model or thinkingLevel required', 'E_BAD_REQUEST');
+  const hasArchived = Object.prototype.hasOwnProperty.call(body, 'archived');
+  if (!hasModel && !hasThinking && !hasArchived) {
+    return fail(400, 'model, thinkingLevel or archived required', 'E_BAD_REQUEST');
+  }
+
+  if (hasArchived) {
+    if (typeof body.archived !== 'boolean') {
+      return fail(400, 'archived must be a boolean', 'E_BAD_REQUEST');
+    }
+    conv.archived = body.archived;
+    publishSummary(db, hub, conv.view.id);
   }
 
   if (hasModel) {
@@ -1650,9 +1814,10 @@ export function handleMockRequest(
   if (convMatch) {
     const cid = decodeURIComponent(convMatch[1]);
     const conv = getConv(db, cid);
-    if (!conv) return fail(404, '对话不存在');
+    if (!conv) return fail(404, lang === 'en' ? 'Conversation not found' : '对话不存在');
     if (method === 'GET') return ok(conversationSnapshot(conv, lang));
     if (method === 'PATCH') return patchConversation(db, hub, conv, body);
+    if (method === 'DELETE') return deleteConversation(db, hub, conv, lang);
   }
 
   const imageMatch = /^\/api\/v2\/conversations\/([^/]+)\/messages\/([^/]+)\/images\/([^/]+)$/.exec(path);
@@ -1773,6 +1938,10 @@ export function handleMockRequest(
       ? 'steer'
       : null;
     if (mode == null) return fail(400, 'invalid mode', 'E_BAD_REQUEST');
+    if (conv.archived) {
+      conv.archived = false;
+      publishSummary(db, hub, conv.view.id);
+    }
     const result = sendMessage(db, conv, hub, text, requestId, parsedImages.images, mode, files, pastes);
     if (!result.ok) return fail(result.status, result.error);
     return accepted({ runId: result.runId });
@@ -1827,6 +1996,12 @@ export function handleMockRequest(
     const result = handoffConversation(db, conv, hub, requestId, lang, instructions);
     if (!result.ok) return fail(result.status, result.error, result.code);
     return accepted({ ok: true });
+  }
+  const forkMatch = /^\/api\/v2\/conversations\/([^/]+)\/fork$/.exec(path);
+  if (forkMatch && method === 'POST') {
+    const conv = getConv(db, decodeURIComponent(forkMatch[1]));
+    if (!conv) return fail(404, lang === 'en' ? 'Conversation not found' : '对话不存在');
+    return forkConversation(db, hub, conv, body, lang);
   }
   const toolMatch = /^\/api\/v2\/conversations\/([^/]+)\/tools\/([^/]+)\/output$/.exec(path);
   if (toolMatch && method === 'GET') {

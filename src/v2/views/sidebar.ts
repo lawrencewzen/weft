@@ -13,6 +13,18 @@ export type ConversationSummary = components['schemas']['ConversationSummary'];
 export type WorkspacesSnapshot = components['schemas']['WorkspacesSnapshot'];
 export type SubagentCounts = components['schemas']['SubagentCounts'];
 export type GitStatus = components['schemas']['GitStatus'];
+export type ForkedFrom = components['schemas']['ForkedFrom'];
+
+export function forkedFromView(value: unknown): ForkedFrom | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const row = value as Record<string, unknown>;
+  const conversationId = typeof row.conversationId === 'string' ? row.conversationId : '';
+  if (!conversationId) return null;
+  return {
+    conversationId,
+    title: typeof row.title === 'string' ? row.title : '',
+  };
+}
 
 export type SidebarConv = {
   id?: unknown;
@@ -84,6 +96,7 @@ export function conversationSummaryView(input: {
     runningAgents,
     subagents: total > 0 ? { total, live } : null,
     archived,
+    forkedFrom: forkedFromView(input.conv.forkedFrom),
   };
 }
 

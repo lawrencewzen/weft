@@ -12,7 +12,6 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { discoveryPath, type ServiceDiscovery } from './daemon/discovery.ts';
-import { LAUNCHER_ID } from './daemon/idle.ts';
 import { PROTOCOL_VERSION } from './version.ts';
 
 export const PROBE_TIMEOUT_MS = 3_000;
@@ -409,7 +408,6 @@ function launchService(dataDir: string, port: number): number {
         ...process.env,
         PORT: String(port),
         WEFT_DATA_DIR: dataDir,
-        WEFT_LAUNCHED_BY: LAUNCHER_ID,
       },
     });
   } finally {

@@ -554,6 +554,12 @@ function liveIdFromEvents(events) {
   return upsert?.data?.id || null;
 }
 
+function hasTurnCard(events, cid) {
+  const store = applyEvents(events);
+  const conv = store.get(entityKey('conversation', cid));
+  return (conv?.itemIds || []).some((id) => store.get(entityKey('item', id))?.kind === 'turn_changes');
+}
+
 function runSettled(events, cid, { tools = false } = {}) {
   const store = applyEvents(events);
   const conv = store.get(entityKey('conversation', cid));
@@ -726,7 +732,9 @@ test('Last-Event-ID resume reconstructs the same snapshot as GET', { timeout: 45
     await waitEvents(session, (list) => list.some((ev) => ev.event === 'snapshot'));
     const sent = await request(srv.base, 'POST', `/api/conversations/${conv.id}/messages`, { text: 'go' }, TOKEN);
     assert.equal(sent.status, 202, JSON.stringify(sent.body));
-    const first = await waitEvents(session, (list) => runSettled(list, conv.id, { tools: true }), 40000);
+    // The per-turn card lands a little after the run settles (it diffs the
+    // worktree), so wait for it too; BASIC writes files.
+    const first = await waitEvents(session, (list) => runSettled(list, conv.id, { tools: true }) && hasTurnCard(list, conv.id), 40000);
     const lastId = [...first].reverse().find((ev) => ev.id != null)?.id;
     assert.ok(lastId != null);
     session.close();

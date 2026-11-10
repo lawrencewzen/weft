@@ -65,8 +65,9 @@ const CHEV_ICON = (
 );
 
 export function ChangeSummary({ changes, lang }: Props) {
-  const { setOpen, setTab } = useRightLayout();
+  const { setOpen: setPaneOpen, setTab } = useRightLayout();
   const { openChangeDiff } = useRightActions();
+  const [open, setCardOpen] = useState(false);
   const [expanded, setExpanded] = useState(false);
 
   const deduped = useMemo(() => dedupeRenamedChanges(changes), [changes]);
@@ -89,46 +90,50 @@ export function ChangeSummary({ changes, lang }: Props) {
 
   function openDiff(path: string) {
     if (!path) return;
-    setOpen(true);
+    setPaneOpen(true);
     openChangeDiff(path);
   }
 
   function openChangesPane() {
-    setOpen(true);
+    setPaneOpen(true);
     setTab('changes');
   }
 
   return (
     <div
-      className="change-summary"
+      className={`change-summary${open ? ' is-open' : ''}`}
       data-testid="next-change-summary"
     >
-      <div
-        className="change-summary-head"
-        data-testid="next-change-summary-head"
-        role="button"
-        tabIndex={0}
-        onClick={openChangesPane}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            openChangesPane();
-          }
-        }}
-      >
-        {DIFF_ICON}
-        <span className="change-summary-head-title">
-          {t(lang, 'change_summary_title', { n: deduped.length })}
-        </span>
-        <span className="change-summary-head-sum">
-          <span className="add">+{totalAdd.toLocaleString('en-US')}</span>{' '}
-          <span className="del">−{totalDel.toLocaleString('en-US')}</span>
-        </span>
-        <span className="change-summary-head-view">
+      <div className="change-summary-head" data-testid="next-change-summary-head">
+        <button
+          type="button"
+          className="change-summary-toggle"
+          data-testid="next-change-summary-toggle"
+          aria-expanded={open}
+          onClick={() => setCardOpen((prev) => !prev)}
+        >
+          {DIFF_ICON}
+          <span className="change-summary-head-title">
+            {t(lang, 'change_summary_title', { n: deduped.length })}
+          </span>
+          <span className="change-summary-head-sum">
+            <span className="add">+{totalAdd.toLocaleString('en-US')}</span>{' '}
+            <span className="del">−{totalDel.toLocaleString('en-US')}</span>
+          </span>
+          <span className="change-summary-chev">{CHEV_ICON}</span>
+        </button>
+        <button
+          type="button"
+          className="change-summary-head-view"
+          data-testid="next-change-summary-view"
+          onClick={openChangesPane}
+        >
           {t(lang, 'change_summary_view_changes')}
-        </span>
+        </button>
       </div>
 
+      {open ? (
+      <>
       <div className={`change-summary-rows${expanded ? ' is-scroll' : ''}`}>
         {shown.map((change) => {
           const split = splitChangePath(change.path);
@@ -203,6 +208,8 @@ export function ChangeSummary({ changes, lang }: Props) {
               : t(lang, 'change_summary_more_files', { n: remaining })}
           </span>
         </button>
+      ) : null}
+      </>
       ) : null}
     </div>
   );

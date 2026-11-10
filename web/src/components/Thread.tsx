@@ -6,8 +6,9 @@ import type { Lang } from '../data/lang';
 import { useSession } from '../data/session';
 import type { ConversationActions } from '../data/useConversation';
 import { useProviders } from '../data/useProviders';
-import { subagentTopic, type Change, type ThreadItem, type ToolCall } from '../data/store';
+import { subagentTopic, type ThreadItem, type ToolCall } from '../data/store';
 import { useStoreTopics } from '../data/useStoreTopic';
+import { conversationPath, navigate } from '../data/nav';
 import { t } from '../i18n';
 import { AssistantMessage } from './AssistantMessage';
 import { ChangeSummary } from './ChangeSummary';
@@ -50,7 +51,6 @@ type Props = {
   stickNonce: number;
   conversationId?: string | null;
   conversationModel?: ConversationModel | null;
-  changes?: Change[];
   isDraft?: boolean;
   draftWorkspaceId?: string | null;
   draftWorkspaceName?: string | null;
@@ -63,6 +63,8 @@ type Props = {
   error?: components['schemas']['RunState']['error'];
   onContinue?: (requestId?: string) => Promise<unknown>;
   compaction?: components['schemas']['RunState']['compaction'];
+  forkedFrom?: components['schemas']['ForkedFrom'] | null;
+  onFork?: (entryId: string) => void;
 };
 
 
@@ -199,7 +201,6 @@ export function Thread({
   stickNonce,
   conversationId,
   conversationModel = null,
-  changes = [],
   isDraft = false,
   draftWorkspaceId = null,
   draftWorkspaceName = null,
@@ -212,6 +213,8 @@ export function Thread({
   error = null,
   onContinue,
   compaction,
+  forkedFrom = null,
+  onFork,
 }: Props) {
   const { providers } = useProviders();
   const scroller = useRef<HTMLDivElement>(null);
@@ -291,7 +294,17 @@ export function Thread({
   }
 
   function renderItem(item: ThreadItem) {
-    if (item.kind === 'user') return <UserMessage key={item.id} item={item} lang={lang} conversationId={conversationId} />;
+    if (item.kind === 'user') {
+      return (
+        <UserMessage
+          key={item.id}
+          item={item}
+          lang={lang}
+          conversationId={conversationId}
+          onFork={onFork}
+        />
+      );
+    }
     if (item.kind === 'assistant') {
       return (
         <AssistantMessage
@@ -300,6 +313,7 @@ export function Thread({
           lang={lang}
           running={running}
           attribution={modelAttribution(item.model, providers, conversationModel)}
+          onFork={onFork}
         />
       );
     }
@@ -329,6 +343,9 @@ export function Thread({
     if (item.kind === 'system_note') {
       return <SystemNote key={item.id} item={item} lang={lang} />;
     }
+    if (item.kind === 'turn_changes') {
+      return <ChangeSummary key={item.id} changes={item.changes} lang={lang} />;
+    }
     return null;
   }
 
@@ -346,6 +363,20 @@ export function Thread({
       onScroll={onScroll}
     >
       <div className={innerClass}>
+        {forkedFrom ? (
+          <div className="thread-forked-from" data-testid="next-forked-from">
+            <span className="thread-forked-label">{t(lang, 'forked_from')}</span>
+            <button
+              type="button"
+              className="thread-forked-link"
+              data-testid="next-forked-link"
+              onClick={() => navigate(conversationPath(forkedFrom.conversationId))}
+            >
+              {forkedFrom.title}
+            </button>
+            <span className="thread-forked-note">{t(lang, 'forked_shared_workspace')}</span>
+          </div>
+        ) : null}
         {empty ? (
           <DraftHero
             lang={lang}
@@ -378,13 +409,7 @@ export function Thread({
               : items.map(renderItem)}
           </>
         )}
-        {compacting ? (
-          <ContextDividerPending lang={lang} />
-        ) : null}
-        {!empty && changes.length ? (
-          <ChangeSummary changes={changes} lang={lang} />
-        ) : null}
-        {compacting ? null : pending ? (
+        {compacting ? <ContextDividerPending lang={lang} /> : pending ? (
           <div
             className={retrying ? 'thread-pending is-retrying' : 'thread-pending'}
             data-testid="next-thread-pending"

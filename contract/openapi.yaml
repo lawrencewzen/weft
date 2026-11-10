@@ -2832,10 +2832,10 @@ paths:
                 $ref: "#/components/schemas/V2Error"
     patch:
       operationId: patchConversation
-      summary: 切换对话模型或思考档位
+      summary: 切换对话模型或思考档位、归档状态
       description: |
         `model` 为 `{ providerId, modelId }` 时绑定该模型，规则同旧 resolveConversationModelPatch。
-        `model` 为 null 时回到默认。`thinkingLevel` 为档位名时写入对话；对当前模型不支持的档位按 clampThinkingLevel 就近处理，响应里的 thinkingLevel 是实际生效值。`thinkingLevel` 为 null 时清除，恢复模型默认。至少要有 model 或 thinkingLevel。运行中也能改，下次提交生效。成功后推送该对话主题的 ConversationView（含 model、thinkingLevel 和 context）。
+        `model` 为 null 时回到默认。`thinkingLevel` 为档位名时写入对话；对当前模型不支持的档位按 clampThinkingLevel 就近处理，响应里的 thinkingLevel 是实际生效值。`thinkingLevel` 为 null 时清除，恢复模型默认。`archived` 为布尔值时设置归档状态。至少要有 model、thinkingLevel 或 archived。运行中也能改，下次提交生效。成功后推送该对话主题的 ConversationView（含 model、thinkingLevel 和 context）。
       security:
         - bearerAuth: []
         - sessionCookie: []
@@ -2878,6 +2878,55 @@ paths:
                 $ref: "#/components/schemas/V2Error"
         "404":
           description: 对话不存在
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        4XX:
+          description: 客户端错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        5XX:
+          description: 服务端错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+    delete:
+      operationId: deleteConversation
+      summary: 删除对话
+      description: |
+        删除会删掉对话记录和历史，不能恢复，不动工作区文件。
+        对话正在运行时返回 409，错误码 E_CONVERSATION_RUNNING。不存在时返回 404。成功返回 204。
+      security:
+        - bearerAuth: []
+        - sessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: 对话 id
+      responses:
+        "204":
+          description: 已删除
+        "401":
+          description: 未授权
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        "404":
+          description: 对话不存在
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        "409":
+          description: 对话正在运行（E_CONVERSATION_RUNNING）
           content:
             application/json:
               schema:
@@ -3418,6 +3467,67 @@ paths:
                 $ref: "#/components/schemas/V2Error"
         "409":
           description: 官方拒绝（ConversationBusy）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        4XX:
+          description: 客户端错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        5XX:
+          description: 服务端错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+  /api/v2/conversations/{id}/fork:
+    post:
+      operationId: forkConversation
+      summary: 从指定 entry 处分叉新对话
+      description: |
+        调用 Pi Durable 的 conversation.fork(entryId) 从某条记录处分出一个新对话。
+        新对话带着到那里为止的历史，在同一工作区，沿用原对话的模型。
+        在助手消息上分叉时 prefill 为 null；在用户消息上分叉时新对话包含该消息之前的内容，prefill 为该消息的文字。
+      security:
+        - bearerAuth: []
+        - sessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: 对话 id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ForkConversationRequest"
+      responses:
+        "201":
+          description: 分叉成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ForkConversationResponse"
+        "400":
+          description: 请求体无效或 entryId 不存在
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        "401":
+          description: 未授权
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        "404":
+          description: 对话不存在
           content:
             application/json:
               schema:
@@ -4078,6 +4188,59 @@ components:
           type: boolean
           const: true
           description: 始终为 true。撤回成功。
+    ForkConversationRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - entryId
+      properties:
+        entryId:
+          type: string
+          description: 从哪条记录处分叉
+        requestId:
+          type: string
+          description: 幂等键。缺省时服务端生成。
+      description: POST /api/v2/conversations/{id}/fork 的请求体。
+    ForkPrefill:
+      type: object
+      additionalProperties: false
+      required:
+        - text
+      properties:
+        text:
+          type: string
+          description: 填回输入框的文本
+      description: 用户消息分叉时填回输入框的内容。
+    ForkConversationResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - conversationId
+        - prefill
+      properties:
+        conversationId:
+          type: string
+          description: 新对话 id
+        prefill:
+          description: 填回输入框的内容。助手消息分叉时为 null，用户消息分叉时为 { text }。
+          oneOf:
+            - type: "null"
+            - $ref: "#/components/schemas/ForkPrefill"
+      description: POST /api/v2/conversations/{id}/fork 成功。
+    ForkedFrom:
+      type: object
+      additionalProperties: false
+      required:
+        - conversationId
+        - title
+      properties:
+        conversationId:
+          type: string
+          description: 原对话 id
+        title:
+          type: string
+          description: 原对话标题
+      description: 分叉来源。
     SubagentMessageAccepted:
       type: object
       additionalProperties: false
@@ -4652,6 +4815,11 @@ components:
           description: 附上的文件。没有则省略。path 相对工作区。
           items:
             $ref: "#/components/schemas/ThreadUserFile"
+        entryId:
+          description: 这条消息在 Harness 中的 entry id。不能从这里分叉时为 null。
+          oneOf:
+            - type: "null"
+            - type: string
       description: 用户消息。text 只含用户正文，不含粘贴块和附件说明。
     ThreadItemAssistant:
       type: object
@@ -4684,6 +4852,11 @@ components:
         truncated:
           type: boolean
           description: 最后一条可见回复且 stopReason 为 length 时为 true，客户端显示继续
+        entryId:
+          description: 这条消息在 Harness 中的 entry id。不能从这里分叉时为 null（例如还在流式输出）。
+          oneOf:
+            - type: "null"
+            - type: string
       description: 助手回复。空文字的助手消息不进入对话流。
     ThreadItemToolGroup:
       type: object
@@ -4768,12 +4941,35 @@ components:
           type: string
         detail:
           type: string
-          description: handoff 是交接说明全文，compaction 是压缩摘要全文。
+          description: handoff 是交接说明全文，也用于 compaction 摘要。
       description: |
         系统提示。correction 是交接，note 是给子 Agent 插话后的通知。
         compaction 的 text 是服务端按语言出成的句子，对应一条 pi.compaction 条目，放在该条目的时间位置。
         handoff 是交接到新上下文的分隔线，detail 为交接说明全文。
         compaction 同样画成分隔线，text 显示在标题右侧，detail 为压缩摘要全文；压缩之前的内容不折叠。
+    ThreadItemTurnChanges:
+      type: object
+      additionalProperties: false
+      required:
+        - kind
+        - id
+        - changes
+      properties:
+        kind:
+          type: string
+          const: turn_changes
+        id:
+          type: string
+          description: 稳定 id（`tc-` 加这一轮最后一条助手回复的 id）。重启后不变。
+        changes:
+          type: array
+          description: 这一轮改过的文件。增删行数只算这一轮，不是对话累计。没改文件则不会有这条。
+          items:
+            $ref: "#/components/schemas/Change"
+      description: |
+        这一轮的文件变更，插在该轮最后一条助手回复后面。
+        工作区快照在这一轮开始前和结束后的差，包含 bash 和子 Agent 改的文件。
+        老对话没有按轮记录时不出现。累计变更仍在右栏。
     ThreadItem:
       oneOf:
         - $ref: "#/components/schemas/ThreadItemUser"
@@ -4781,6 +4977,7 @@ components:
         - $ref: "#/components/schemas/ThreadItemToolGroup"
         - $ref: "#/components/schemas/ThreadItemSubagentReport"
         - $ref: "#/components/schemas/ThreadItemSystemNote"
+        - $ref: "#/components/schemas/ThreadItemTurnChanges"
       discriminator:
         propertyName: kind
         mapping:
@@ -4789,6 +4986,7 @@ components:
           tool_group: "#/components/schemas/ThreadItemToolGroup"
           subagent_report: "#/components/schemas/ThreadItemSubagentReport"
           system_note: "#/components/schemas/ThreadItemSystemNote"
+          turn_changes: "#/components/schemas/ThreadItemTurnChanges"
       description: 对话流里的一项。按 kind 区分。
     RunState:
       type: object
@@ -5505,8 +5703,11 @@ components:
           oneOf:
             - type: "null"
             - $ref: "#/components/schemas/ThinkingLevel"
+        archived:
+          type: boolean
+          description: 是否归档。
       description: |
-        PATCH /api/v2/conversations/{id} 的请求体。至少包含 model 或 thinkingLevel。
+        PATCH /api/v2/conversations/{id} 的请求体。至少包含 model、thinkingLevel 或 archived。
     Workspace:
       type: object
       additionalProperties: false
@@ -5661,6 +5862,11 @@ components:
             - $ref: "#/components/schemas/SubagentCounts"
         archived:
           type: boolean
+        forkedFrom:
+          description: 分叉来源。不是分叉对话时为 null。
+          oneOf:
+            - type: "null"
+            - $ref: "#/components/schemas/ForkedFrom"
       description: 侧栏对话摘要。
     WorkspacesSnapshot:
       type: object
@@ -5797,6 +6003,11 @@ components:
             前端用 requestId 找到自己那条乐观上屏的消息落在哪个 entry 上，据此收回。
             还没写进对话的条目带 mode 和 text，供输入框显示排队小条、对话里显示「已插话」。
             只在写入它们的服务进程内存在。
+        forkedFrom:
+          description: 分叉来源。不是分叉对话时为 null。
+          oneOf:
+            - type: "null"
+            - $ref: "#/components/schemas/ForkedFrom"
       description: 一个对话的视图。摘要字段加上模型、运行状态、上下文和对话流顺序。
     ConversationSend:
       type: object

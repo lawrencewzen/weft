@@ -10,19 +10,6 @@ import { discoveryPath } from '../../src/v2/daemon/discovery.ts';
 import { validateResponse } from '../../src/v2/validate.ts';
 import { readDiscovery, startServer, stopServer } from './_server.mjs';
 
-const IDLE_MINUTES = '0.02';
-const IDLE_MS = Number(IDLE_MINUTES) * 60_000;
-
-function launchEnv(extra = {}) {
-  return {
-    WEFT_LAUNCHED_BY: 'weft-open',
-    WEFT_IDLE_EXIT_MINUTES: IDLE_MINUTES,
-    WEFT_LLM: 'faux',
-    WEFT_FAUX_TEXT: 'idle-ok',
-    ...extra,
-  };
-}
-
 function raw({ port, method = 'GET', path: reqPath = '/', headers = {}, body }) {
   return new Promise((resolve, reject) => {
     const req = http.request({
@@ -93,13 +80,13 @@ async function waitForStatus(port, cid, pred, timeoutMs = 15000) {
   throw new Error(`status wait failed: ${JSON.stringify(last)}`);
 }
 
-async function openConversation(port, title = 'idle') {
+async function openConversation(port, title = 'restart') {
   const ws = await raw({
     port,
     method: 'POST',
     path: '/api/workspaces',
     headers: jsonHeaders(),
-    body: JSON.stringify({ name: 'idle-ws' }),
+    body: JSON.stringify({ name: 'restart-ws' }),
   });
   assert.equal(ws.status, 201, ws.text);
   const conv = await raw({
@@ -111,22 +98,6 @@ async function openConversation(port, title = 'idle') {
   });
   assert.equal(conv.status, 201, conv.text);
   return conv.json;
-}
-
-function openSse(port, cid) {
-  return new Promise((resolve, reject) => {
-    const req = http.request({
-      host: '127.0.0.1',
-      port,
-      path: `/api/conversations/${cid}/events`,
-      headers: { accept: 'text/event-stream' },
-    }, (res) => {
-      res.on('data', () => {});
-      resolve({ req, res });
-    });
-    req.on('error', reject);
-    req.end();
-  });
 }
 
 async function postRestart(port, headers, body = '{}') {
@@ -143,84 +114,6 @@ async function bearerFor(srv) {
   const discovery = await readDiscovery(srv.dataDir);
   return { authorization: `Bearer ${discovery.token}` };
 }
-
-test('launcher-started idle service exits and removes service.json', { timeout: 30000 }, async () => {
-  const srv = await startServer({ env: launchEnv() });
-  try {
-    assert.equal(existsSync(discoveryPath(srv.dataDir)), true);
-    const ended = await waitExit(srv.proc, IDLE_MS * 8, srv.logs);
-    assert.equal(ended.code, 0, srv.logs());
-    assert.equal(ended.signal, null);
-  } finally {
-    await stopServer(srv);
-  }
-  assert.equal(existsSync(discoveryPath(srv.dataDir)), false);
-});
-
-test('manual start does not idle-exit', { timeout: 30000 }, async () => {
-  const srv = await startServer({
-    env: {
-      WEFT_IDLE_EXIT_MINUTES: IDLE_MINUTES,
-      WEFT_LLM: 'faux',
-    },
-  });
-  try {
-    await sleep(IDLE_MS * 2.5);
-    assert.equal(srv.proc.exitCode, null, srv.logs());
-    const headers = await bearerFor(srv);
-    const res = await raw({ port: srv.port, path: '/api/v2/service', headers });
-    assert.equal(res.status, 200);
-  } finally {
-    await stopServer(srv);
-  }
-});
-
-test('open SSE connection delays idle exit until it closes', { timeout: 45000 }, async () => {
-  const srv = await startServer({ env: launchEnv() });
-  let sse;
-  try {
-    const conv = await openConversation(srv.port);
-    sse = await openSse(srv.port, conv.id);
-    assert.equal(sse.res.statusCode, 200);
-    await sleep(IDLE_MS * 2.5);
-    assert.equal(srv.proc.exitCode, null, srv.logs());
-    sse.req.destroy();
-    sse = null;
-    const ended = await waitExit(srv.proc, IDLE_MS * 8, srv.logs);
-    assert.equal(ended.code, 0, srv.logs());
-  } finally {
-    try { sse?.req.destroy(); } catch { /* ignore */ }
-    await stopServer(srv);
-  }
-});
-
-test('live harness work blocks idle exit', { timeout: 45000 }, async () => {
-  const dataDir = await mkdtemp(path.join(tmpdir(), 'weft-idle-hold-'));
-  const ready = path.join(dataDir, 'hold-ready');
-  const srv = await startServer({
-    dataDir,
-    env: launchEnv({
-      WEFT_FAUX_HOLD: '1',
-      WEFT_FAUX_HOLD_READY: ready,
-    }),
-  });
-  try {
-    const conv = await openConversation(srv.port, 'hold');
-    const sent = await raw({
-      port: srv.port,
-      method: 'POST',
-      path: `/api/conversations/${conv.id}/messages`,
-      headers: jsonHeaders(),
-      body: JSON.stringify({ text: 'stay-busy' }),
-    });
-    assert.equal(sent.status, 202, sent.text);
-    await waitForFile(ready);
-    await sleep(IDLE_MS * 2.5);
-    assert.equal(srv.proc.exitCode, null, srv.logs());
-  } finally {
-    await stopServer(srv);
-  }
-});
 
 test('restart when idle returns 202 and exits', { timeout: 30000 }, async () => {
   const srv = await startServer({ env: { WEFT_LLM: 'faux' } });

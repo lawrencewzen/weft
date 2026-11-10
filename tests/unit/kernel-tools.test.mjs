@@ -137,11 +137,12 @@ test('read, ls, and grep replay safely; write, edit, and bash do not', () => {
     ls: 'safe',
     grep: 'safe',
     bash: 'unsafe',
+    handoff: 'unsafe',
   });
 });
 
 test('workspaceTools lists every builtin tool in order', () => {
-  assert.deepEqual(workspaceTools().map((tool) => tool.name), ['read', 'write', 'edit', 'ls', 'grep', 'bash']);
+  assert.deepEqual(workspaceTools().map((tool) => tool.name), ['read', 'write', 'edit', 'ls', 'grep', 'bash', 'handoff']);
   assert.deepEqual(
     offeredToolNames({
       messages: [

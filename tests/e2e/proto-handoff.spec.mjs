@@ -122,7 +122,7 @@ test('2. click handoff in context panel: shows spinner, pending text, lands divi
   const toggle = newNote.getByTestId('next-handoff-toggle');
   await toggle.click();
   await expect(newNote.getByTestId('next-handoff-detail')).toBeVisible();
-  await expect(newNote.getByTestId('next-handoff-detail')).toContainText('交接说明');
+  await expect(newNote.getByTestId('next-handoff-detail')).toContainText('迁移进度交接');
 
   const calls = (await state.requests()).filter((r) => r.method === 'POST' && /\/handoff$/.test(r.url));
   expect(calls).toHaveLength(1);
@@ -146,14 +146,15 @@ test('3. multiple handoffs only produce a single earlier-context toggle, and win
   await expect(page.getByTestId('next-thread-pending')).toContainText('正在交接到新上下文');
   await expect(page.getByTestId('next-thread-pending')).toHaveCount(0, { timeout: 10_000 });
 
-  // Now there are 2 handoffs, but still ONLY ONE earlier-context toggle row
-  await expect(page.getByTestId('next-handoff-divider')).toHaveCount(2);
+  // Now there are 2 handoffs: the first one is folded into the earlier context,
+  // so only the latest divider shows and there is still ONLY ONE toggle row
+  await expect(page.getByTestId('next-handoff-divider')).toHaveCount(1);
   const earlierToggle = page.getByTestId('next-thread-earlier-toggle');
   await expect(earlierToggle).toHaveCount(1);
 
   // The latest handoff's notes contain the instructions
   const notes = page.getByTestId('next-item-system-note').filter({ has: page.getByTestId('next-handoff-divider') });
-  const secondNote = notes.nth(1);
+  const secondNote = notes.last();
   const toggleSecond = secondNote.getByTestId('next-handoff-toggle');
   await toggleSecond.click();
 
@@ -165,15 +166,15 @@ test('3. multiple handoffs only produce a single earlier-context toggle, and win
   // Expanding the earlier context shows all earlier items (including the first handoff)
   await earlierToggle.click();
   await expect(earlierToggle).toHaveAttribute('aria-expanded', 'true');
-  const firstNote = notes.nth(0);
-  await expect(firstNote).toBeVisible();
+  await expect(page.getByTestId('next-handoff-divider')).toHaveCount(2);
+  await expect(notes.first()).toBeVisible();
 
   await expectClean(state);
 });
 
 test('4. draft conversation disables handoff in context pop', async ({ page }) => {
   const state = await openProto(page);
-  await page.getByTestId('next-nav-new-chat').click();
+  await page.getByTestId('next-new-chat').click();
   await openMenu(page);
   const row = page.getByTestId('next-menu-handoff');
   await expect(row).toBeDisabled();

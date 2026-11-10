@@ -36,6 +36,7 @@ open design/prototype/index.html    # macOS；Windows 直接双击
 | 交接到新上下文 | 点圆环百分比小面板里的「交接到新上下文」（任意已有对话可点；运行中显示转圈，新上下文条目带分隔线和可展开的说明，旧内容自动折叠为「之前的上下文 · N 条」；控制台可用 `window.__protoHandoff('<重点说明>')` 触发带 instructions 的交接）；或打开预置对话 `c-handoff`（「把迁移脚本跑完整个仓库」）看 Agent 工具触发的交接与折叠效果 |
 | 模型请求在重试 | 打开对话 `c-retrying`（「模型连不上，正在重试」）：等待行显示灰字「连不上模型服务，正在重试（第 6 次，共 10 次）」，一直保持；停止后消失 |
 | 上下文快满 | 打开对话 `c-docs`（「把架构文档的图补上」）会看到输入框顶部的橙色提示条 |
+| 从这里分叉（T123-1） | 鼠标移到用户消息或助手消息上，点右侧/右下的「从这里分叉」小图标按钮。助手消息分叉：新对话包含到该消息为止的全部内容；用户消息分叉：新对话包含该消息之前的内容并把该消息文本填回输入框。新对话顶部有一行「分叉自 <原标题>」并可点原标题跳回原对话，同一行淡字标明「与原对话共用工作区文件」；打开 `c-scripts`（「整理 Windows 下的启动脚本」）点分叉可触发分叉失败提示「分叉失败：对话历史已损坏」 |
 
 ### 右栏
 
@@ -52,6 +53,15 @@ open design/prototype/index.html    # macOS；Windows 直接双击
 - 新建工作区（见下）会得到一个只含 `README.md` 的模拟仓库。
 
 模拟运行也会产生变更：新对话里发「改一下 web/src/data/store.ts 里的 items 顺序」，运行结束后右栏「变更」出现该文件及其 diff，文件树里标 `M`。
+
+### 文件变更按轮显示（T114）
+
+变更摘要默认只占一行（`N 个文件已更改  +A −B  查看 ›`）：点这一行展开文件列表、再点收起，每个摘要独立；点「查看」打开右栏变更页，点文件名打开差异。右栏「变更」和输入框下的 Git 状态仍是整条对话累计。
+
+- 演示对话 `c-turns`（路由 `#/c/c-turns`，「变更按轮显示」，侧栏 weft 工作区）：第 1 轮改 2 个文件、第 2 轮只问问题、第 3 轮改 1 个文件，所以只有第 1、3 轮回复后面有摘要。
+- 数据形式：消息流里的一种 item `{ kind: 'turn_changes', id, changes: Change[] }`，跟在那一轮回复之后，`changes` 只含这一轮的增删。契约里还没有，前端类型 `TurnChangesItem`（`web/src/data/store.ts`）是可选的联合成员，只有模拟后端产出。
+- 模拟运行：结束（或停止）时有改动才在那一轮末尾放一条 `turn_changes`；没改文件就什么都不放。
+- 没有 `turn_changes` 数据的对话，对话流里不显示任何变更摘要（累计只在右栏「变更」和输入框上方 Git 状态里看）。
 
 ### 子 Agent
 
@@ -114,6 +124,7 @@ open design/prototype/index.html    # macOS；Windows 直接双击
 | `web/proto/mock/subagents.ts` | 子 Agent 预置线程、`subagent:<cid>:<aid>` 推送、派活 / 回报 / 发消息 / 停止 |
 | `web/proto/mock/extensions.ts` | 插件、技能、Git 连接和 GitLab 项目 / 分支的预置数据 |
 | `web/proto/mock/views.ts` | 把内存数据转成前端收到的视图，按语言出文案 |
+| `tests/e2e/proto-turn-changes.spec.mjs` | 变更摘要按轮显示：有改动的轮一行、无改动的轮没有、展开收起、查看打开右栏、模拟运行 |
 | `tests/e2e/proto-retry.spec.mjs` | 重试等待文案、停止；减少动画模式下运行转圈仍在转、面板滑动仍关闭 |
 | `tests/e2e/proto-smoke.spec.mjs` | 冒烟：`file://` 打开、切对话、新建并发消息、流式完成、停止、零网络 / 零控制台报错 |
 | `tests/e2e/proto-right-pane.spec.mjs` | 变更 diff（含「一次点击只发一次请求」）、文件树 / 预览 / 保存 / 409、路径标签、运行产生的变更 |
