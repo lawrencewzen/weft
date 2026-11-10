@@ -1727,8 +1727,24 @@ export interface components {
             noteKind: "correction" | "note" | "compaction";
             text: string;
         };
+        /**
+         * @description 这一轮的文件变更，插在该轮最后一条助手回复后面。
+         *     工作区快照在这一轮开始前和结束后的差，包含 bash 和子 Agent 改的文件。
+         *     老对话没有按轮记录时不出现。累计变更仍在右栏。
+         */
+        ThreadItemTurnChanges: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "turn_changes";
+            /** @description 稳定 id（`tc-` 加这一轮最后一条助手回复的 id）。重启后不变。 */
+            id: string;
+            /** @description 这一轮改过的文件。增删行数只算这一轮，不是对话累计。没改文件则不会有这条。 */
+            changes: components["schemas"]["Change"][];
+        };
         /** @description 对话流里的一项。按 kind 区分。 */
-        ThreadItem: components["schemas"]["ThreadItemUser"] | components["schemas"]["ThreadItemAssistant"] | components["schemas"]["ThreadItemToolGroup"] | components["schemas"]["ThreadItemSubagentReport"] | components["schemas"]["ThreadItemSystemNote"];
+        ThreadItem: components["schemas"]["ThreadItemUser"] | components["schemas"]["ThreadItemAssistant"] | components["schemas"]["ThreadItemToolGroup"] | components["schemas"]["ThreadItemSubagentReport"] | components["schemas"]["ThreadItemSystemNote"] | components["schemas"]["ThreadItemTurnChanges"];
         /** @description 当前运行状态。供输入框、停止按钮、等待提示和主对话卡住判定使用。 */
         RunState: {
             /**

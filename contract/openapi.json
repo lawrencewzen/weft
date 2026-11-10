@@ -7369,6 +7369,33 @@
         },
         "description": "系统提示。correction 是交接，note 是给子 Agent 插话后的通知。\ncompaction 的 text 是服务端按语言出成的句子，对应一条 pi.compaction 条目，放在该条目的时间位置。\n"
       },
+      "ThreadItemTurnChanges": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "id",
+          "changes"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "turn_changes"
+          },
+          "id": {
+            "type": "string",
+            "description": "稳定 id（`tc-` 加这一轮最后一条助手回复的 id）。重启后不变。"
+          },
+          "changes": {
+            "type": "array",
+            "description": "这一轮改过的文件。增删行数只算这一轮，不是对话累计。没改文件则不会有这条。",
+            "items": {
+              "$ref": "#/components/schemas/Change"
+            }
+          }
+        },
+        "description": "这一轮的文件变更，插在该轮最后一条助手回复后面。\n工作区快照在这一轮开始前和结束后的差，包含 bash 和子 Agent 改的文件。\n老对话没有按轮记录时不出现。累计变更仍在右栏。\n"
+      },
       "ThreadItem": {
         "oneOf": [
           {
@@ -7385,6 +7412,9 @@
           },
           {
             "$ref": "#/components/schemas/ThreadItemSystemNote"
+          },
+          {
+            "$ref": "#/components/schemas/ThreadItemTurnChanges"
           }
         ],
         "discriminator": {
@@ -7394,7 +7424,8 @@
             "assistant": "#/components/schemas/ThreadItemAssistant",
             "tool_group": "#/components/schemas/ThreadItemToolGroup",
             "subagent_report": "#/components/schemas/ThreadItemSubagentReport",
-            "system_note": "#/components/schemas/ThreadItemSystemNote"
+            "system_note": "#/components/schemas/ThreadItemSystemNote",
+            "turn_changes": "#/components/schemas/ThreadItemTurnChanges"
           }
         },
         "description": "对话流里的一项。按 kind 区分。"

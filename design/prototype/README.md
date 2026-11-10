@@ -53,6 +53,15 @@ open design/prototype/index.html    # macOS；Windows 直接双击
 
 模拟运行也会产生变更：新对话里发「改一下 web/src/data/store.ts 里的 items 顺序」，运行结束后右栏「变更」出现该文件及其 diff，文件树里标 `M`。
 
+### 文件变更按轮显示（T114）
+
+变更摘要默认只占一行（`N 个文件已更改  +A −B  查看 ›`）：点这一行展开文件列表、再点收起，每个摘要独立；点「查看」打开右栏变更页，点文件名打开差异。右栏「变更」和输入框下的 Git 状态仍是整条对话累计。
+
+- 演示对话 `c-turns`（路由 `#/c/c-turns`，「变更按轮显示」，侧栏 weft 工作区）：第 1 轮改 2 个文件、第 2 轮只问问题、第 3 轮改 1 个文件，所以只有第 1、3 轮回复后面有摘要。
+- 数据形式：消息流里的一种 item `{ kind: 'turn_changes', id, changes: Change[] }`，跟在那一轮回复之后，`changes` 只含这一轮的增删。契约里还没有，前端类型 `TurnChangesItem`（`web/src/data/store.ts`）是可选的联合成员，只有模拟后端产出。
+- 模拟运行：结束（或停止）时有改动才在那一轮末尾放一条 `turn_changes`；没改文件就什么都不放。
+- 没有 `turn_changes` 数据的对话，对话流里不显示任何变更摘要（累计只在右栏「变更」和输入框上方 Git 状态里看）。
+
 ### 子 Agent
 
 预置对话 `c-rich` 有 5 个子 Agent，侧栏对话行上的 chip 显示 `3/5`（运行中 + 卡住 + 等待算 live）。对话本身是「运行中」；`c-tests` 是「等待确认」，`c-scripts` 是「失败」，收起的 `website` 工作区显示「1 运行中」。`c-docs` 有 3 个已完成的子 Agent，角标只显示 `3`，点开会展开树。
@@ -114,6 +123,7 @@ open design/prototype/index.html    # macOS；Windows 直接双击
 | `web/proto/mock/subagents.ts` | 子 Agent 预置线程、`subagent:<cid>:<aid>` 推送、派活 / 回报 / 发消息 / 停止 |
 | `web/proto/mock/extensions.ts` | 插件、技能、Git 连接和 GitLab 项目 / 分支的预置数据 |
 | `web/proto/mock/views.ts` | 把内存数据转成前端收到的视图，按语言出文案 |
+| `tests/e2e/proto-turn-changes.spec.mjs` | 变更摘要按轮显示：有改动的轮一行、无改动的轮没有、展开收起、查看打开右栏、模拟运行 |
 | `tests/e2e/proto-retry.spec.mjs` | 重试等待文案、停止；减少动画模式下运行转圈仍在转、面板滑动仍关闭 |
 | `tests/e2e/proto-smoke.spec.mjs` | 冒烟：`file://` 打开、切对话、新建并发消息、流式完成、停止、零网络 / 零控制台报错 |
 | `tests/e2e/proto-right-pane.spec.mjs` | 变更 diff（含「一次点击只发一次请求」）、文件树 / 预览 / 保存 / 409、路径标签、运行产生的变更 |

@@ -208,7 +208,7 @@ describe('streamPerf: 20,000 chars across 2,000 deltas (T55-2b)', () => {
     const handleToolGroupRender = () => { toolGroupItemRenders++; };
 
     function ThreadContainer() {
-      const { items, toolsById, changes, actions } = useConversation(cid);
+      const { items, toolsById, actions } = useConversation(cid);
       return createElement(
         Profiler,
         { id: 'Thread', onRender: () => { threadRenders++; } },
@@ -220,7 +220,6 @@ describe('streamPerf: 20,000 chars across 2,000 deltas (T55-2b)', () => {
           actions,
           stickNonce: 0,
           conversationId: cid,
-          changes,
           onToolGroupRender: handleToolGroupRender,
         }),
       );
