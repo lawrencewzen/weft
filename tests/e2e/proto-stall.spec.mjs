@@ -83,14 +83,14 @@ test('stall strip and agents strip stack correctly without inner border-radius w
   });
   expect(agentsRadius).toBe('0px 0px');
 
-  // Stall strip preserves rounded top corners
+  // Stall strip preserves rounded top corners (18px for unified card)
   const stallRadius = await page.evaluate(() => {
     const stall = document.querySelector('[data-testid="next-stall-strip"]');
     if (!stall) return '';
     const style = window.getComputedStyle(stall);
     return `${style.borderTopLeftRadius} ${style.borderTopRightRadius}`;
   });
-  expect(stallRadius).toBe('12px 12px');
+  expect(stallRadius).toBe('18px 18px');
 
   await expectClean(state);
 });
@@ -114,5 +114,97 @@ test('new activity in stalled conversation dismisses the stall strip', async ({ 
 
   // New activity dismisses stall strip
   await expect(strip).toHaveCount(0, { timeout: 10_000 });
+  await expectClean(state);
+});
+
+test('composer card and status strips align perfectly as one card across c-rich, c-site-1, and c-site-2', async ({ page }) => {
+  const state = await openProto(page);
+
+  async function assertCardAlignment(options) {
+    const { expectStall, expectAgents } = options;
+    const composerBox = page.getByTestId('next-composer');
+    await expect(composerBox).toBeVisible();
+    const boxRect = await composerBox.boundingBox();
+    expect(boxRect).not.toBeNull();
+
+    const whereChip = page.locator('[data-testid="next-composer-where"] [data-testid="next-ws-chip"]');
+    await expect(whereChip).toBeVisible();
+    const chipRect = await whereChip.boundingBox();
+    expect(chipRect).not.toBeNull();
+    // where-bar first chip left edge aligns with composer-box (tolerance <= 1px)
+    expect(Math.abs(chipRect.x - boxRect.x)).toBeLessThanOrEqual(1);
+
+    if (expectStall) {
+      const stallStrip = page.getByTestId('next-stall-strip');
+      await expect(stallStrip).toBeVisible();
+      const stallRect = await stallStrip.boundingBox();
+      expect(stallRect).not.toBeNull();
+      // stall-strip left and right edges match composer-box (tolerance <= 1px)
+      expect(Math.abs(stallRect.x - boxRect.x)).toBeLessThanOrEqual(1);
+      expect(Math.abs((stallRect.x + stallRect.width) - (boxRect.x + boxRect.width))).toBeLessThanOrEqual(1);
+
+      const stallRadius = await stallStrip.evaluate((el) => {
+        const s = window.getComputedStyle(el);
+        return `${s.borderTopLeftRadius} ${s.borderTopRightRadius}`;
+      });
+      expect(stallRadius).toBe('18px 18px');
+    } else {
+      await expect(page.getByTestId('next-stall-strip')).toHaveCount(0);
+    }
+
+    if (expectAgents) {
+      const agentsStrip = page.getByTestId('next-agents-strip');
+      await expect(agentsStrip).toBeVisible();
+      const agentsRect = await agentsStrip.boundingBox();
+      expect(agentsRect).not.toBeNull();
+      // agents-strip left and right edges match composer-box (tolerance <= 1px)
+      expect(Math.abs(agentsRect.x - boxRect.x)).toBeLessThanOrEqual(1);
+      expect(Math.abs((agentsRect.x + agentsRect.width) - (boxRect.x + boxRect.width))).toBeLessThanOrEqual(1);
+
+      const agentsRadius = await agentsStrip.evaluate((el) => {
+        const s = window.getComputedStyle(el);
+        return `${s.borderTopLeftRadius} ${s.borderTopRightRadius}`;
+      });
+      // If stall is present, agents-strip top radius is 0; if stall is absent, agents-strip top radius is 18px
+      if (expectStall) {
+        expect(agentsRadius).toBe('0px 0px');
+      } else {
+        expect(agentsRadius).toBe('18px 18px');
+      }
+    } else {
+      await expect(page.getByTestId('next-agents-strip')).toHaveCount(0);
+    }
+
+    // composer-box top radius is 0 if any strip is present; bottom radius is always 18px
+    const boxRadius = await composerBox.evaluate((el) => {
+      const s = window.getComputedStyle(el);
+      return `${s.borderTopLeftRadius} ${s.borderTopRightRadius} ${s.borderBottomRightRadius} ${s.borderBottomLeftRadius}`;
+    });
+    if (expectStall || expectAgents) {
+      expect(boxRadius).toBe('0px 0px 18px 18px');
+    } else {
+      expect(boxRadius).toBe('18px 18px 18px 18px');
+    }
+  }
+
+  // 1. Check c-rich (only sub-agent strip)
+  await page.locator('[data-testid=next-conv-row][data-id="c-rich"]').click();
+  await expect(page).toHaveURL(/#\/c\/c-rich$/);
+  await assertCardAlignment({ expectStall: false, expectAgents: true });
+
+  // 2. Check c-site-1 (both stall strip and agents strip)
+  const websiteNode = page.locator('[data-testid=next-ws-node][data-id="ws-website"]');
+  if (await websiteNode.locator('.sb-conv-list').isHidden()) {
+    await websiteNode.getByTestId('next-ws-toggle').click();
+  }
+  await page.locator('[data-testid=next-conv-row][data-id="c-site-1"]').click();
+  await expect(page).toHaveURL(/#\/c\/c-site-1$/);
+  await assertCardAlignment({ expectStall: true, expectAgents: true });
+
+  // 3. Check c-site-2 (only stall strip)
+  await page.locator('[data-testid=next-conv-row][data-id="c-site-2"]').click();
+  await expect(page).toHaveURL(/#\/c\/c-site-2$/);
+  await assertCardAlignment({ expectStall: true, expectAgents: false });
+
   await expectClean(state);
 });

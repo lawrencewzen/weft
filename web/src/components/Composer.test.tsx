@@ -133,8 +133,8 @@ describe('Composer send button title', () => {
     expect(insideWsChip).toBeNull();
   });
 
-  describe('stack DOM ordering and adjacency', () => {
-    it('renders where-bar before stall-strip, and stall-strip adjacent to composer-box', async () => {
+  describe('stack DOM ordering and card composition', () => {
+    it('renders where-bar before composer-card, with stall-strip adjacent to composer-box inside card', async () => {
       const stalledRun: Parameters<typeof Composer>[0]['run'] = {
         status: 'running',
         startedAt: Date.now() - 600_000,
@@ -150,18 +150,21 @@ describe('Composer send button title', () => {
       await renderComposer('zh', stalledRun);
 
       const whereBar = host?.querySelector<HTMLDivElement>('[data-testid="next-composer-where"]');
+      const composerCard = host?.querySelector<HTMLDivElement>('[data-testid="next-composer-card"]');
       const stallStrip = host?.querySelector<HTMLDivElement>('[data-testid="next-stall-strip"]');
       const composerBox = host?.querySelector<HTMLDivElement>('[data-testid="next-composer"]');
 
       expect(whereBar).not.toBeNull();
+      expect(composerCard).not.toBeNull();
       expect(stallStrip).not.toBeNull();
       expect(composerBox).not.toBeNull();
 
-      expect(whereBar?.nextElementSibling).toBe(stallStrip);
+      expect(whereBar?.nextElementSibling).toBe(composerCard);
+      expect(composerCard?.firstElementChild).toBe(stallStrip);
       expect(stallStrip?.nextElementSibling).toBe(composerBox);
     });
 
-    it('renders where-bar before stall-strip, stall-strip adjacent to agents-strip, and agents-strip adjacent to composer-box', async () => {
+    it('renders where-bar before composer-card, with stall-strip, agents-strip, and composer-box inside card in order', async () => {
       const stalledRun: Parameters<typeof Composer>[0]['run'] = {
         status: 'running',
         startedAt: Date.now() - 600_000,
@@ -202,29 +205,35 @@ describe('Composer send button title', () => {
       await renderComposer('zh', stalledRun, store);
 
       const whereBar = host?.querySelector<HTMLDivElement>('[data-testid="next-composer-where"]');
+      const composerCard = host?.querySelector<HTMLDivElement>('[data-testid="next-composer-card"]');
       const stallStrip = host?.querySelector<HTMLDivElement>('[data-testid="next-stall-strip"]');
       const agentsStrip = host?.querySelector<HTMLDivElement>('[data-testid="next-agents-strip"]');
       const composerBox = host?.querySelector<HTMLDivElement>('[data-testid="next-composer"]');
 
       expect(whereBar).not.toBeNull();
+      expect(composerCard).not.toBeNull();
       expect(stallStrip).not.toBeNull();
       expect(agentsStrip).not.toBeNull();
       expect(composerBox).not.toBeNull();
 
-      expect(whereBar?.nextElementSibling).toBe(stallStrip);
+      expect(whereBar?.nextElementSibling).toBe(composerCard);
+      expect(composerCard?.firstElementChild).toBe(stallStrip);
       expect(stallStrip?.nextElementSibling).toBe(agentsStrip);
       expect(agentsStrip?.nextElementSibling).toBe(composerBox);
     });
 
-    it('renders where-bar directly above composer-box when no strips are active', async () => {
+    it('renders where-bar directly above composer-card containing composer-box when no strips are active', async () => {
       await renderComposer('zh', idleRun);
 
       const whereBar = host?.querySelector<HTMLDivElement>('[data-testid="next-composer-where"]');
+      const composerCard = host?.querySelector<HTMLDivElement>('[data-testid="next-composer-card"]');
       const composerBox = host?.querySelector<HTMLDivElement>('[data-testid="next-composer"]');
 
       expect(whereBar).not.toBeNull();
+      expect(composerCard).not.toBeNull();
       expect(composerBox).not.toBeNull();
-      expect(whereBar?.nextElementSibling).toBe(composerBox);
+      expect(whereBar?.nextElementSibling).toBe(composerCard);
+      expect(composerCard?.firstElementChild).toBe(composerBox);
     });
   });
 });
