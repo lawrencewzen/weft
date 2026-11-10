@@ -28,7 +28,6 @@ import {
   statusFromSubmission,
   writesFromEntries,
 } from './events.mjs';
-import { latestCallUsage } from './usage.mjs';
 import { createScriptFloorExtension, installDemo } from './faux-script.mjs';
 import { FAUX_MODEL, openKernel } from './index.mjs';
 import { createKernelModels, explicitDemo } from './models.mjs';
@@ -51,7 +50,7 @@ import {
   readTreeBlob,
 } from './workspace-snapshot.mjs';
 import { decodeWorkspaceBytes } from './workspace-text.mjs';
-import { installUsageExtension } from './usage.mjs';
+import { activeContextUsage, installUsageExtension } from './usage.mjs';
 import { createAntigravityCwdExtension } from './antigravity-cwd.mjs';
 import { createWorkspaceEnv } from './workspace-env.mjs';
 import { createCompactionControl } from './compaction-settings.mjs';
@@ -1130,10 +1129,11 @@ export async function openConversationKernel({
       const view = await submissionView(conv);
       const status = view.status;
       let messages;
-      // Context percent follows the active transcript. The full history still
-      // holds the pre-compaction call, and that number must not raise the chip.
+      // Context percent follows the active transcript. A call from before the
+      // compaction or reset head measured the prefix that head replaced.
+      // With no later call, estimate the messages the model will see.
       const harnessView = await readView(conv.harnessId);
-      const usage = presentContext(latestCallUsage(harnessView?.entries)).usage;
+      const usage = presentContext(activeContextUsage(harnessView)).usage;
       if (includeMessages) {
         messages = (await readTranscript(conv.harnessId)).messages;
       }
