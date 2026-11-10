@@ -1,6 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 import { buildConversationItems } from './SidebarMenus';
 import type { ConversationSummary } from '../data/store';
+import type { CtxMenuItem } from './CtxMenu';
+
+function find(items: CtxMenuItem[], action: string) {
+  const item = items.find((it) => it.action === action);
+  if (!item || item.sep) throw new Error(`missing ${action}`);
+  return item;
+}
 
 function makeConv(partial: Partial<ConversationSummary>): ConversationSummary {
   return {
@@ -42,20 +49,20 @@ describe('SidebarMenus.buildConversationItems', () => {
       'delete',
     ]);
 
-    const archiveItem = items.find((it) => it.action === 'archive');
-    expect(archiveItem?.label).toBe('归档');
-    expect(archiveItem?.disabled).toBe(false);
-    expect(archiveItem?.title).toBeUndefined();
+    const archiveItem = find(items, 'archive');
+    expect(archiveItem.label).toBe('归档');
+    expect(archiveItem.disabled).toBe(false);
+    expect(archiveItem.title).toBeUndefined();
 
-    const deleteItem = items.find((it) => it.action === 'delete');
-    expect(deleteItem?.label).toBe('删除');
-    expect(deleteItem?.danger).toBe(true);
-    expect(deleteItem?.disabled).toBe(false);
+    const deleteItem = find(items, 'delete');
+    expect(deleteItem.label).toBe('删除');
+    expect(deleteItem.danger).toBe(true);
+    expect(deleteItem.disabled).toBe(false);
 
-    archiveItem?.run();
+    archiveItem.run();
     expect(onArchive).toHaveBeenCalledWith(conv, true);
 
-    deleteItem?.run();
+    deleteItem.run();
     expect(onDelete).toHaveBeenCalledWith(conv);
   });
 
@@ -73,11 +80,11 @@ describe('SidebarMenus.buildConversationItems', () => {
       onDelete: vi.fn(),
     });
 
-    const unarchiveItem = items.find((it) => it.action === 'unarchive');
-    expect(unarchiveItem?.label).toBe('取消归档');
-    expect(unarchiveItem?.disabled).toBe(false);
+    const unarchiveItem = find(items, 'unarchive');
+    expect(unarchiveItem.label).toBe('取消归档');
+    expect(unarchiveItem.disabled).toBe(false);
 
-    unarchiveItem?.run();
+    unarchiveItem.run();
     expect(onArchive).toHaveBeenCalledWith(conv, false);
   });
 
@@ -104,13 +111,13 @@ describe('SidebarMenus.buildConversationItems', () => {
       'delete',
     ]);
 
-    const archiveItem = items.find((it) => it.action === 'archive');
-    expect(archiveItem?.disabled).toBe(true);
-    expect(archiveItem?.title).toBe('先停止对话');
+    const archiveItem = find(items, 'archive');
+    expect(archiveItem.disabled).toBe(true);
+    expect(archiveItem.title).toBe('先停止对话');
 
-    const deleteItem = items.find((it) => it.action === 'delete');
-    expect(deleteItem?.disabled).toBe(true);
-    expect(deleteItem?.title).toBe('先停止对话');
+    const deleteItem = find(items, 'delete');
+    expect(deleteItem.disabled).toBe(true);
+    expect(deleteItem.title).toBe('先停止对话');
   });
 
   it('supports English translations', () => {
@@ -126,12 +133,12 @@ describe('SidebarMenus.buildConversationItems', () => {
       onDelete: vi.fn(),
     });
 
-    const archiveItem = items.find((it) => it.action === 'archive');
-    expect(archiveItem?.label).toBe('Archive');
-    expect(archiveItem?.title).toBe('Stop the conversation first');
+    const archiveItem = find(items, 'archive');
+    expect(archiveItem.label).toBe('Archive');
+    expect(archiveItem.title).toBe('Stop the conversation first');
 
-    const deleteItem = items.find((it) => it.action === 'delete');
-    expect(deleteItem?.label).toBe('Delete');
-    expect(deleteItem?.title).toBe('Stop the conversation first');
+    const deleteItem = find(items, 'delete');
+    expect(deleteItem.label).toBe('Delete');
+    expect(deleteItem.title).toBe('Stop the conversation first');
   });
 });

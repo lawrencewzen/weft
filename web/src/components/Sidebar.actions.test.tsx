@@ -8,6 +8,8 @@ import { SessionContext, type SessionValue } from '../data/session';
 import { RightPaneProvider } from '../data/rightPaneContext';
 import { createEntityStore, WORKSPACES_TOPIC, type ConversationSummary, type Workspace } from '../data/store';
 import { LeftPanelProvider } from '../data/leftPanelContext';
+import type { ConfirmOpts } from './ConfirmDialog';
+import type { ToastInput } from '../data/toast';
 import * as api from '../data/api';
 import * as nav from '../data/nav';
 
@@ -53,8 +55,8 @@ function renderSidebar(props: {
   workspaces?: Workspace[];
   conversations?: ConversationSummary[];
   activeConversationId?: string | null;
-  onToast?: ReturnType<typeof vi.fn>;
-  onConfirm?: ReturnType<typeof vi.fn>;
+  onToast?: (toast: ToastInput) => void;
+  onConfirm?: (opts: ConfirmOpts) => Promise<boolean>;
 } = {}) {
   host = document.createElement('div');
   document.body.appendChild(host);
@@ -106,7 +108,7 @@ function renderSidebar(props: {
               activeAgentId={null}
               draftWorkspaceId={null}
               onToast={props.onToast || vi.fn()}
-              onConfirm={props.onConfirm || vi.fn().mockResolvedValue(true)}
+              onConfirm={props.onConfirm || (async () => true)}
               onRemoveWorkspace={vi.fn()}
               onNewWorkspace={vi.fn()}
             />
@@ -136,8 +138,8 @@ describe('Sidebar conversation actions', () => {
   });
 
   it('triggers archive and shows undo toast on normal conversation', async () => {
-    const archiveSpy = vi.spyOn(api, 'archiveConversation').mockResolvedValue({} as any);
-    const onToast = vi.fn();
+    const archiveSpy = vi.spyOn(api, 'archiveConversation').mockResolvedValue({} as Awaited<ReturnType<typeof api.archiveConversation>>);
+    const onToast = vi.fn<(toast: ToastInput) => void>();
     await renderSidebar({ onToast });
 
     const moreBtn = host?.querySelector<HTMLButtonElement>('[data-id="c1"] .sb-conv-more');
@@ -165,7 +167,7 @@ describe('Sidebar conversation actions', () => {
   });
 
   it('triggers unarchive on archived conversation', async () => {
-    const archiveSpy = vi.spyOn(api, 'archiveConversation').mockResolvedValue({} as any);
+    const archiveSpy = vi.spyOn(api, 'archiveConversation').mockResolvedValue({} as Awaited<ReturnType<typeof api.archiveConversation>>);
     await renderSidebar();
 
     // Toggle archived section
@@ -195,8 +197,8 @@ describe('Sidebar conversation actions', () => {
   it('confirms and deletes conversation, navigating to draft if active', async () => {
     const deleteSpy = vi.spyOn(api, 'deleteConversation').mockResolvedValue(undefined);
     const navigateSpy = vi.spyOn(nav, 'navigate').mockImplementation(() => {});
-    const onConfirm = vi.fn().mockResolvedValue(true);
-    const onToast = vi.fn();
+    const onConfirm = vi.fn<(opts: ConfirmOpts) => Promise<boolean>>().mockResolvedValue(true);
+    const onToast = vi.fn<(toast: ToastInput) => void>();
 
     await renderSidebar({ activeConversationId: 'c1', onConfirm, onToast });
 
@@ -226,7 +228,7 @@ describe('Sidebar conversation actions', () => {
 
   it('cancels deletion when confirm dialog is rejected', async () => {
     const deleteSpy = vi.spyOn(api, 'deleteConversation');
-    const onConfirm = vi.fn().mockResolvedValue(false);
+    const onConfirm = vi.fn<(opts: ConfirmOpts) => Promise<boolean>>().mockResolvedValue(false);
 
     await renderSidebar({ onConfirm });
 
