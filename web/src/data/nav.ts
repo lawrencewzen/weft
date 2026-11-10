@@ -21,8 +21,8 @@ export function homePath(): string {
   return '/';
 }
 
-export function schedulesPath(): string {
-  return '/schedules';
+export function schedulesPath(highlightId?: string): string {
+  return highlightId ? `/schedules?highlight=${encodeURIComponent(highlightId)}` : '/schedules';
 }
 
 export function settingsPath(page: SettingsPage = 'general'): string {

@@ -1614,7 +1614,7 @@ export interface components {
             /** @description 所属工具组 id，由组内第一条调用算出 */
             groupId: string;
             /** @enum {string} */
-            kind: "read" | "write" | "edit" | "ls" | "grep" | "bash" | "ask" | "other";
+            kind: "read" | "write" | "edit" | "ls" | "grep" | "bash" | "ask" | "schedule" | "other";
             /** @enum {string} */
             status: "running" | "failed" | "interrupted" | "done";
             heading: {
@@ -1646,6 +1646,8 @@ export interface components {
                 /** @description Harness 保留的输出窗口（尾部）。运行中的 bash 或预览被截断时带上；省略则预览即全文 */
                 text?: string;
             };
+            /** @description kind 为 schedule 时对应的定时任务 id */
+            scheduleId?: string;
             /**
              * @description 仅 ask_user_question，且参数通过插件校验时出现。kind 为 ask。
              *     questions 来自工具结果 details（插件校验后的题目）。

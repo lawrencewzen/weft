@@ -6,7 +6,7 @@ export type AppRoute =
   | { name: 'subagent'; conversationId: string; agentId: string }
   | { name: 'draft'; workspaceId: string }
   | { name: 'new' }
-  | { name: 'schedules' }
+  | { name: 'schedules'; highlightId?: string }
   | { name: 'settings'; page: SettingsPage };
 
 function decodePart(raw: string): string {
@@ -24,7 +24,9 @@ function asSettingsPage(raw: string | undefined): SettingsPage {
 
 export function parseRoute(pathname: string): AppRoute {
   const raw = String(pathname || '');
-  const trimmed = raw.replace(/\/+$/, '') || '/';
+  const [pathOnly, search] = raw.split('?');
+  const params = new URLSearchParams(search || '');
+  const trimmed = pathOnly.replace(/\/+$/, '') || '/';
   const settings = /^\/settings(?:\/([^/]+))?$/.exec(trimmed);
   if (settings) {
     return { name: 'settings', page: asSettingsPage(settings[1]) };
@@ -45,7 +47,8 @@ export function parseRoute(pathname: string): AppRoute {
     return { name: 'new' };
   }
   if (trimmed === '/schedules') {
-    return { name: 'schedules' };
+    const highlightId = params.get('highlight') || undefined;
+    return { name: 'schedules', highlightId };
   }
   return { name: 'home' };
 }

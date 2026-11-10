@@ -16,6 +16,8 @@ import type { components } from '../../../src/v2/contract.gen';
 import { AgentsStrip } from './AgentsStrip';
 import { AskPanel } from './AskPanel';
 import { Composer } from './Composer';
+import type { ConfirmOpts } from './ConfirmDialog';
+import { ConversationScheduleStrip } from './ConversationScheduleStrip';
 import { useEscStop } from '../data/escStop';
 import { StallStrip } from './StallStrip';
 import { StatusBar } from './StatusBar';
@@ -32,6 +34,8 @@ type Props = {
   maximized?: boolean;
   lang: Lang;
   demo?: boolean;
+  onConfirm?: (opts: ConfirmOpts) => Promise<boolean>;
+  onToast?: (msg: string) => void;
   onNewWorkspace?: () => void;
 };
 
@@ -70,6 +74,8 @@ export function CenterPane({
   maximized = false,
   lang,
   demo = false,
+  onConfirm,
+  onToast,
   onNewWorkspace,
 }: Props) {
   const isDraft = isDraftProp || (!cid && Boolean(workspaceId));
@@ -173,6 +179,8 @@ export function CenterPane({
           onDraftModel={setDraftModel}
           draftThinkingLevel={draftThinkingLevel}
           onDraftThinkingLevel={setDraftThinkingLevel}
+          onConfirm={onConfirm}
+          onToast={onToast}
           onNewWorkspace={onNewWorkspace}
           workspacePath={workspace && !isChatWorkspace(workspace) ? workspace.path : undefined}
           onSend={draftActions.send}
@@ -280,6 +288,14 @@ export function CenterPane({
           <div className="composer-stack">
             {cid ? <StallStrip run={conversation.run} lang={lang} onStop={actions.stop} /> : null}
             {cid ? <AgentsStrip cid={cid} lang={lang} /> : null}
+            {cid ? (
+              <ConversationScheduleStrip
+                conversationId={cid}
+                lang={lang}
+                onConfirm={onConfirm}
+                onToast={onToast}
+              />
+            ) : null}
             <AskPanel
               key={activePendingAsk.id}
               cid={cid || ''}
@@ -303,6 +319,8 @@ export function CenterPane({
           model={conversation.model}
           thinkingLevel={conversation.thinkingLevel}
           context={conversation.context}
+          onConfirm={onConfirm}
+          onToast={onToast}
           onNewWorkspace={onNewWorkspace}
           workspacePath={workspace?.path}
           onSend={optimistic.send}

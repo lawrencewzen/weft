@@ -84,6 +84,11 @@
   border-color: var(--line2, #aaa);
 }
 
+.schedule-card.is-highlighted {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--focus-ring, rgba(0, 120, 212, 0.3));
+}
+
 .schedule-card-summary {
   display: flex;
   align-items: center;
@@ -417,4 +422,171 @@
   font-size: var(--fs-xs, 12px);
   color: var(--red, #cb2431);
   margin-top: 2px;
+}
+
+/* Conversation schedule strip */
+.conversation-schedule-strip {
+  margin: 0 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 8px 0 12px;
+  border: 1px solid var(--line);
+  border-bottom: 0;
+  border-radius: 12px 12px 0 0;
+  background: var(--panel);
+  font-size: var(--fs-sm);
+  color: var(--ink3);
+  position: relative;
+  z-index: 1;
+}
+
+.stall-strip + .conversation-schedule-strip,
+.agents-strip + .conversation-schedule-strip {
+  border-radius: 0;
+}
+
+.schedule-strip-icon {
+  display: inline-flex;
+  align-items: center;
+  color: var(--mute);
+}
+
+.schedule-strip-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+.schedule-strip-text {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--ink);
+}
+
+.schedule-strip-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.schedule-strip-cancel,
+.schedule-strip-manage {
+  border: none;
+  background: none;
+  font-size: var(--fs-ui, 12px);
+  color: var(--ink2);
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.schedule-strip-cancel:hover,
+.schedule-strip-manage:hover {
+  color: var(--ink);
+}
+
+.schedule-strip-cancel {
+  color: var(--del-ink, #c0392b);
+}
+
+/* Composer schedule button & popover */
+.composer-schedule-wrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.composer-schedule-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: var(--ink3);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  padding: 0;
+  transition: background .15s, color .15s;
+}
+
+.composer-schedule-btn svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.composer-schedule-btn:hover,
+.composer-schedule-btn.is-open {
+  background: var(--hover);
+  color: var(--ink);
+}
+
+.composer-schedule-btn:disabled {
+  cursor: not-allowed;
+  opacity: .4;
+}
+
+.composer-schedule-popover {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  right: 0;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md, 8px);
+  box-shadow: var(--shadow-composer, 0 4px 16px rgba(0, 0, 0, 0.12));
+  padding: 6px;
+  min-width: 140px;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.composer-schedule-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.composer-schedule-menu-item {
+  border: none;
+  background: transparent;
+  padding: 7px 12px;
+  border-radius: 6px;
+  font-size: var(--fs-ui, 13px);
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background .12s;
+}
+
+.composer-schedule-menu-item:hover {
+  background: var(--hover);
+}
+
+.composer-schedule-custom {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px;
+}
+
+.composer-schedule-custom-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
 }

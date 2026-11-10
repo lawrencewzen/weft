@@ -58,6 +58,7 @@ export type MockTool = {
   kind: ToolCall['kind'];
   status: ToolCall['status'];
   path?: string;
+  scheduleId?: string;
   title: Bilingual;
   detail?: Bilingual;
   fromIntent: boolean;

@@ -631,6 +631,19 @@ const zh = {
   schedule_saved: '定时任务已保存',
   schedule_next_run_label: '下次执行',
   schedule_last_run_label: '上次结果',
+  tool_act_schedule: '定时任务：',
+  composer_schedule_send: '定时发送',
+  composer_schedule_30m: '30 分钟后',
+  composer_schedule_1h: '1 小时后',
+  composer_schedule_tomorrow_9am: '明天 09:00',
+  composer_schedule_custom: '自定义…',
+  scheduled_toast: '已定时：{time} 发送',
+  scheduled_strip_text: '已定时：{time} 发送「{preview}」',
+  scheduled_strip_text_more: '已定时：{time} 发送「{preview}」等 {count} 条',
+  schedules_cancel: '取消',
+  schedules_manage: '管理',
+  schedules_cancel_title: '取消定时任务',
+  schedules_cancel_msg: '确定要取消定时任务「{name}」吗？',
 } as const;
 
 const en: Record<keyof typeof zh, string> = {
@@ -1263,6 +1276,19 @@ const en: Record<keyof typeof zh, string> = {
   schedule_saved: 'Schedule saved',
   schedule_next_run_label: 'Next run',
   schedule_last_run_label: 'Last run',
+  tool_act_schedule: 'Schedule: ',
+  composer_schedule_send: 'Schedule send',
+  composer_schedule_30m: 'In 30 minutes',
+  composer_schedule_1h: 'In 1 hour',
+  composer_schedule_tomorrow_9am: 'Tomorrow at 09:00',
+  composer_schedule_custom: 'Custom…',
+  scheduled_toast: 'Scheduled to send at {time}',
+  scheduled_strip_text: 'Scheduled: send "{preview}" at {time}',
+  scheduled_strip_text_more: 'Scheduled: send "{preview}" at {time} and {more} more',
+  schedules_cancel: 'Cancel',
+  schedules_manage: 'Manage',
+  schedules_cancel_title: 'Cancel Scheduled Task',
+  schedules_cancel_msg: 'Are you sure you want to cancel scheduled task "{name}"?',
 };
 
 const DICT: Record<Lang, Record<keyof typeof zh, string>> = { zh, en };
@@ -1292,6 +1318,7 @@ export function toolActionLabel(lang: Lang, kind: string): string {
   if (kind === 'ls') return t(lang, 'tool_act_ls');
   if (kind === 'grep') return t(lang, 'tool_act_grep');
   if (kind === 'bash') return t(lang, 'tool_act_bash');
+  if (kind === 'schedule') return t(lang, 'tool_act_schedule');
   return t(lang, 'tool_act_other');
 }
 

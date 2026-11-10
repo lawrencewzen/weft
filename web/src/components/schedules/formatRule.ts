@@ -1,3 +1,4 @@
+import type { Schedule } from '../../data/api';
 import type { Lang } from '../../data/lang';
 import type { ScheduleRule, ScheduleTarget } from '../../data/store';
 
@@ -65,4 +66,51 @@ export function formatRule(rule: ScheduleRule, lang: Lang): string {
   }
 
   return '';
+}
+
+export function formatScheduleTimeToast(timestamp: number, lang: Lang, now = Date.now()): string {
+  const d = new Date(timestamp);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const hh = pad(d.getHours());
+  const mm = pad(d.getMinutes());
+
+  const nowDate = new Date(now);
+  const todayStart = new Date(nowDate.getFullYear(), nowDate.getMonth(), nowDate.getDate()).getTime();
+  const targetDayStart = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const dayDiff = Math.round((targetDayStart - todayStart) / 86400000);
+
+  if (lang === 'en') {
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    if (dayDiff === 0) return `today at ${hh}:${mm}`;
+    if (dayDiff === 1) return `tomorrow at ${hh}:${mm}`;
+    return `${monthNames[d.getMonth()]} ${d.getDate()} at ${hh}:${mm}`;
+  }
+  if (dayDiff === 0) return `今天 ${hh}:${mm}`;
+  if (dayDiff === 1) return `明天 ${hh}:${mm}`;
+  return `${d.getMonth() + 1}月${d.getDate()}日 ${hh}:${mm}`;
+}
+
+export function formatConversationScheduleStripText(
+  schedules: Schedule[],
+  lang: Lang,
+  now = Date.now(),
+): string {
+  if (schedules.length === 0) return '';
+  const first = schedules[0];
+  const timeLabel = first.rule.kind === 'once'
+    ? formatScheduleTimeToast(first.rule.at, lang, now)
+    : formatRule(first.rule, lang);
+  const preview = first.message.slice(0, 20);
+  const count = schedules.length;
+
+  if (lang === 'en') {
+    if (count > 1) {
+      return `Scheduled: ${timeLabel} send "${preview}" and ${count - 1} more`;
+    }
+    return `Scheduled: ${timeLabel} send "${preview}"`;
+  }
+  if (count > 1) {
+    return `已定时：${timeLabel} 发送「${preview}」等 ${count} 条`;
+  }
+  return `已定时：${timeLabel} 发送「${preview}」`;
 }

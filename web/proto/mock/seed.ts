@@ -878,6 +878,35 @@ function testsConversation(now: number): MockConv {
   });
 }
 
+function scheduleConversation(now: number): MockConv {
+  const schedTool = tool({
+    id: 'ci-t1',
+    kind: 'schedule',
+    scheduleId: 'sched-2',
+    title: hint('新建「每天看 CI」', 'Create "Check CI Daily"'),
+    hint: hint('已创建', 'created'),
+    status: 'done',
+  });
+  return conversation({
+    id: 'c-ci-schedule',
+    workspaceId: 'ws-weft',
+    title: '每天早上帮我看 CI',
+    updatedAt: now - 15 * MINUTE,
+    used: 16_000,
+    status: 'idle',
+    tools: { [schedTool.id]: schedTool },
+    items: [
+      user('ci-u1', '每天早上帮我看 CI'),
+      group('ci-g1', [schedTool.id], { zh: '定时任务', en: 'Scheduled Task' }),
+      assistant(
+        'ci-a1',
+        '好的，已为你创建定时任务「每天看 CI」，每个工作日 09:00 会自动在此汇报 CI 状态。',
+        'deepseek-flash',
+      ),
+    ],
+  });
+}
+
 function docsConversation(now: number, threads: Map<string, MockSubThread>): MockConv {
   const spawnTools = dispatchToolsOf(threads, 'c-docs');
   const spawnIds = Object.keys(spawnTools);
@@ -1477,14 +1506,14 @@ export function seedSchedules(now: number): {
       id: 'run-2-1',
       at: now - 5 * 60 * 1000,
       status: 'failed',
-      conversationId: 'c-rich',
+      conversationId: 'c-ci-schedule',
       error: '构建任务超时（120s 无响应）',
     },
     {
       id: 'run-2-2',
       at: now - 35 * 60 * 1000,
       status: 'ok',
-      conversationId: 'c-rich',
+      conversationId: 'c-ci-schedule',
       error: null,
     },
   ];
@@ -1524,20 +1553,21 @@ export function seedSchedules(now: number): {
     },
     {
       id: 'sched-2',
-      name: '看构建',
-      message: '拉取最新构建日志并检查是否有异常',
+      name: '每天看 CI',
+      message: '检查最新 CI 构建状态并汇报',
       target: {
         kind: 'conversation',
-        conversationId: 'c-rich',
-        title: '重构会话列表的加载逻辑',
+        conversationId: 'c-ci-schedule',
+        title: '每天早上帮我看 CI',
       },
       rule: {
-        kind: 'interval',
-        everyMinutes: 30,
+        kind: 'weekly',
+        days: [1, 2, 3, 4, 5],
+        time: '09:00',
       },
       enabled: true,
       createdBy: 'agent',
-      nextRunAt: now + 25 * 60 * 1000,
+      nextRunAt: nextWeekdayAt(now, 9, 0, [1, 2, 3, 4, 5]),
       lastRun: sched2Runs[0],
     },
     {
@@ -1596,6 +1626,7 @@ export function createSeed(now: number): MockDb {
   const subagents = seedSubThreads(now);
   const conversations = [
     richConversation(now, subagents),
+    scheduleConversation(now),
     failedConversation(now),
     interruptedConversation(now),
     noModelFailedConversation(now),

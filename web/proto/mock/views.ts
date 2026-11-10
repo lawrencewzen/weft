@@ -142,6 +142,7 @@ export function toolValue(tool: MockTool, groupId: string): EntityValue {
         fromIntent: tool.fromIntent,
       },
       ...(tool.path ? { path: tool.path } : {}),
+      ...(tool.scheduleId ? { scheduleId: tool.scheduleId } : {}),
       hint: { text: tr(tool.hint, lang), failed: tool.hintFailed },
       failure: tool.failure,
       diff: tool.diff,

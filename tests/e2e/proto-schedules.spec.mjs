@@ -177,3 +177,117 @@ test('scheduled tasks: create, immediate run, expand runs, and delete with confi
 
   expectClean(state);
 });
+
+test('composer scheduled send creates once task, displays strip, cancel confirms deletion and removes strip', async ({ page }) => {
+  const state = await openProto(page);
+
+  // 1. Open conversation c-tests which has no scheduled tasks
+  await page.locator('[data-testid="next-conv-row"][data-id="c-tests"]').click();
+  await expect(page.getByTestId('next-conversation-schedule-strip')).toHaveCount(0);
+
+  // 2. Schedule button in composer is disabled when empty
+  const schedBtn = page.getByTestId('next-composer-schedule');
+  await expect(schedBtn).toBeVisible();
+  await expect(schedBtn).toBeDisabled();
+
+  // 3. Type message into composer
+  const input = page.locator('[data-testid="next-composer"] textarea');
+  await input.fill('请在明天九点运行单测并汇报结果');
+  await expect(schedBtn).toBeEnabled();
+
+  // 4. Click schedule button to open quick menu
+  await schedBtn.click();
+  const popover = page.getByTestId('next-composer-schedule-popover');
+  await expect(popover).toBeVisible();
+  await expect(page.getByTestId('next-schedule-opt-30m')).toBeVisible();
+  await expect(page.getByTestId('next-schedule-opt-1h')).toBeVisible();
+  await expect(page.getByTestId('next-schedule-opt-tomorrow')).toBeVisible();
+  await expect(page.getByTestId('next-schedule-opt-custom')).toBeVisible();
+
+  // 5. Select "明天 09:00"
+  await page.getByTestId('next-schedule-opt-tomorrow').click();
+  await expect(popover).toHaveCount(0);
+
+  // 6. Input is cleared and toast appears
+  await expect(input).toHaveValue('');
+  await expect(page.getByTestId('next-toast')).toContainText('已定时：明天 09:00 发送');
+
+  // 7. Conversation schedule strip appears above composer
+  const strip = page.getByTestId('next-conversation-schedule-strip');
+  await expect(strip).toBeVisible();
+  await expect(strip.getByTestId('next-schedule-strip-text')).toContainText('已定时：明天 09:00 发送「请在明天九点运行单测并汇报结果」');
+
+  const cancelBtn = strip.getByTestId('next-schedule-strip-cancel');
+  const manageBtn = strip.getByTestId('next-schedule-strip-manage');
+  await expect(cancelBtn).toBeVisible();
+  await expect(manageBtn).toBeVisible();
+
+  // 8. Cancel with confirmation
+  await cancelBtn.click();
+  const confirmDialog = page.getByTestId('next-confirm');
+  await expect(confirmDialog).toBeVisible();
+  await expect(confirmDialog.getByTestId('next-confirm-message')).toContainText('请在明天九点运行单测并汇报结果');
+
+  // Dismiss confirmation -> strip remains
+  await page.getByTestId('next-confirm-cancel').click();
+  await expect(confirmDialog).toHaveCount(0);
+  await expect(strip).toBeVisible();
+
+  // Confirm cancellation -> task is deleted, strip disappears
+  await cancelBtn.click();
+  await expect(confirmDialog).toBeVisible();
+  await page.getByTestId('next-confirm-ok').click();
+  await expect(confirmDialog).toHaveCount(0);
+  await expect(strip).toHaveCount(0);
+
+  expectClean(state);
+});
+
+test('agent created schedule in conversation shows schedule strip, manage navigates and highlights schedule', async ({ page }) => {
+  const state = await openProto(page);
+
+  // 1. Open conversation c-ci-schedule (seeded with agent-created task sched-2)
+  await page.locator('[data-testid="next-conv-row"][data-id="c-ci-schedule"]').click();
+
+  // 2. Schedule strip appears above composer
+  const strip = page.getByTestId('next-conversation-schedule-strip');
+  await expect(strip).toBeVisible();
+  await expect(strip.getByTestId('next-schedule-strip-text')).toContainText('已定时：每个工作日 09:00 发送「检查最新 CI 构建状态并汇报」');
+
+  // Repeating task should NOT display cancel button
+  await expect(strip.getByTestId('next-schedule-strip-cancel')).toHaveCount(0);
+
+  // 3. Click "管理" navigates to #/schedules with highlight
+  const manageBtn = strip.getByTestId('next-schedule-strip-manage');
+  await expect(manageBtn).toBeVisible();
+  await manageBtn.click();
+
+  await expect(page).toHaveURL(/#\/schedules\?highlight=sched-2/);
+  const row = page.locator('[data-testid="next-schedule-row"][data-id="sched-2"]');
+  await expect(row).toBeVisible();
+  await expect(row).toHaveAttribute('data-highlighted', 'true');
+
+  expectClean(state);
+});
+
+test('schedule tool row in conversation navigates to schedules and highlights schedule', async ({ page }) => {
+  const state = await openProto(page);
+
+  // 1. Open conversation c-ci-schedule
+  await page.locator('[data-testid="next-conv-row"][data-id="c-ci-schedule"]').click();
+
+  // 2. Expand tool group to see tool row
+  await page.getByTestId('next-tool-group-summary').first().click();
+  const toolRow = page.locator('[data-testid="next-tool-row"][data-tool="schedule"]');
+  await expect(toolRow).toBeVisible();
+  await expect(toolRow).toContainText('定时任务：新建「每天看 CI」');
+
+  // 3. Click tool row navigates to #/schedules and highlights sched-2
+  await toolRow.click();
+  await expect(page).toHaveURL(/#\/schedules\?highlight=sched-2/);
+  const row = page.locator('[data-testid="next-schedule-row"][data-id="sched-2"]');
+  await expect(row).toBeVisible();
+  await expect(row).toHaveAttribute('data-highlighted', 'true');
+
+  expectClean(state);
+});

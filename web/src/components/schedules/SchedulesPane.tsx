@@ -10,6 +10,7 @@ import { ScheduleRow } from './ScheduleRow';
 
 type Props = {
   lang: Lang;
+  highlightId?: string;
   onToast: (msg: string) => void;
   onConfirm: (opts: ConfirmOpts) => Promise<boolean>;
 };
@@ -21,7 +22,7 @@ type MenuState = {
   items: CtxMenuItem[];
 };
 
-export function SchedulesPane({ lang, onToast, onConfirm }: Props) {
+export function SchedulesPane({ lang, highlightId, onToast, onConfirm }: Props) {
   const { schedules, ready } = useSchedules();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingSchedule, setEditingSchedule] = useState<Schedule | null>(null);
@@ -121,6 +122,7 @@ export function SchedulesPane({ lang, onToast, onConfirm }: Props) {
                 key={schedule.id}
                 schedule={schedule}
                 lang={lang}
+                highlighted={schedule.id === highlightId}
                 onToggle={handleToggle}
                 onEdit={handleEdit}
                 onRun={handleRun}

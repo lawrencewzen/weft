@@ -1,4 +1,4 @@
-import { useState, type MouseEvent } from 'react';
+import { useEffect, useRef, useState, type MouseEvent } from 'react';
 import type { Schedule } from '../../data/api';
 import type { Lang } from '../../data/lang';
 import { conversationPath, navigate } from '../../data/nav';
@@ -11,6 +11,7 @@ import { ScheduleRunsList } from './ScheduleRunsList';
 type Props = {
   schedule: Schedule;
   lang: Lang;
+  highlighted?: boolean;
   onToggle: (schedule: Schedule) => void;
   onEdit: (schedule: Schedule) => void;
   onRun: (schedule: Schedule) => void;
@@ -37,6 +38,7 @@ function formatNextRunTime(timestamp: number | null, enabled: boolean, lang: Lan
 export function ScheduleRow({
   schedule,
   lang,
+  highlighted,
   onToggle,
   onEdit,
   onRun,
@@ -44,6 +46,13 @@ export function ScheduleRow({
   onOpenMenu,
 }: Props) {
   const [expanded, setExpanded] = useState(false);
+  const rowRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (highlighted) {
+      rowRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  }, [highlighted]);
 
   function handleRowClick(ev: MouseEvent) {
     const target = ev.target as HTMLElement;
@@ -111,9 +120,11 @@ export function ScheduleRow({
 
   return (
     <div
-      className={`schedule-card${expanded ? ' is-expanded' : ''}`}
+      ref={rowRef}
+      className={`schedule-card${expanded ? ' is-expanded' : ''}${highlighted ? ' is-highlighted' : ''}`}
       data-testid="next-schedule-row"
       data-id={schedule.id}
+      data-highlighted={highlighted ? 'true' : undefined}
       onClick={handleRowClick}
     >
       <div className="schedule-card-summary">

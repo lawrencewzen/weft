@@ -7219,6 +7219,7 @@
               "grep",
               "bash",
               "ask",
+              "schedule",
               "other"
             ]
           },
@@ -7338,6 +7339,10 @@
                 "description": "Harness 保留的输出窗口（尾部）。运行中的 bash 或预览被截断时带上；省略则预览即全文"
               }
             }
+          },
+          "scheduleId": {
+            "type": "string",
+            "description": "kind 为 schedule 时对应的定时任务 id"
           },
           "ask": {
             "$ref": "#/components/schemas/AskCall",

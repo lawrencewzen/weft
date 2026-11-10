@@ -372,7 +372,12 @@ function AppShellLayout({
         }}
       />
       {route.name === 'schedules' ? (
-        <SchedulesPane lang={lang} onToast={onToast} onConfirm={askConfirm} />
+        <SchedulesPane
+          lang={lang}
+          highlightId={route.highlightId}
+          onToast={onToast}
+          onConfirm={askConfirm}
+        />
       ) : (
         <CenterPane
           // 草稿页和对话页用不同的 key：从对话页切回草稿页时重新挂载，
@@ -385,6 +390,8 @@ function AppShellLayout({
           maximized={maximized}
           lang={lang}
           demo={demo}
+          onConfirm={askConfirm}
+          onToast={onToast}
           onNewWorkspace={handleNewWorkspace}
         />
       )}
