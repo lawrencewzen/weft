@@ -209,3 +209,29 @@ export function addMonths(dateStr: string, deltaMonths: number): string {
   const d = new Date(p.year, p.month - 1 + deltaMonths, p.day);
   return formatDate(d.getFullYear(), d.getMonth() + 1, d.getDate());
 }
+
+export type PopupCoords = { top: number; left: number };
+
+/**
+ * Anchor a `position: fixed` popup under a trigger. All inputs are visual px
+ * (getBoundingClientRect / innerWidth); the result is converted to CSS px with
+ * `zoom` because html carries `zoom: var(--ui-zoom)` and fixed offsets get
+ * multiplied by it again. Flips above when there is no room below.
+ */
+export function computePopupPosition(
+  trigger: { left: number; top: number; bottom: number },
+  popup: { width: number; height: number },
+  viewport: { width: number; height: number },
+  zoom: number,
+  gap = 4,
+  margin = 8,
+): PopupCoords {
+  let top = trigger.bottom + gap;
+  if (top + popup.height + margin > viewport.height && trigger.top - gap - popup.height >= margin) {
+    top = trigger.top - gap - popup.height;
+  }
+  const maxLeft = viewport.width - margin - popup.width;
+  const left = Math.max(margin, Math.min(trigger.left, maxLeft));
+  const z = Number.isFinite(zoom) && zoom > 0 ? zoom : 1;
+  return { top: top / z, left: left / z };
+}

@@ -3,6 +3,7 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { computePopupPosition } from './pickerUtils';
 import { TimePicker } from './TimePicker';
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -258,5 +259,41 @@ describe('TimePicker component', () => {
 
     const popup = document.querySelector('.time-picker-popup');
     expect(popup).toBeNull();
+  });
+
+  it('opens with 09 highlighted and both columns scrolled to center the selection', () => {
+    act(() => {
+      root?.render(<TimePicker value="09:00" onChange={() => {}} testId="time-in" />);
+    });
+    const input = host?.querySelector<HTMLInputElement>('input[data-testid="time-in"]');
+    act(() => {
+      input?.click();
+    });
+    const hour09 = document.querySelector<HTMLElement>('[data-testid="time-in-hour-09"]');
+    const min00 = document.querySelector<HTMLElement>('[data-testid="time-in-min-00"]');
+    expect(hour09?.classList.contains('is-selected')).toBe(true);
+    expect(min00?.classList.contains('is-selected')).toBe(true);
+    // jsdom has no layout: clientHeight falls back to 192, item pitch is 30px.
+    // 09 -> top 2 + 9*30 = 272, centered => 272 - 96 + 14 = 190.
+    const hourCol = document.querySelector<HTMLElement>('[data-testid="time-picker-hours-col"]');
+    expect(hourCol?.scrollTop).toBe(190);
+    const hour09Top = 2 + 9 * 30;
+    expect(hour09Top).toBeGreaterThanOrEqual(hourCol!.scrollTop);
+    expect(hour09Top + 28).toBeLessThanOrEqual(hourCol!.scrollTop + 192);
+    const minCol = document.querySelector<HTMLElement>('[data-testid="time-picker-minutes-col"]');
+    expect(minCol?.scrollTop).toBe(0);
+  });
+});
+
+describe('computePopupPosition', () => {
+  it('anchors under the trigger and converts visual px to css px by zoom', () => {
+    const c = computePopupPosition({ left: 450, top: 600, bottom: 630 }, { width: 135, height: 185 }, { width: 1440, height: 900 }, 0.9);
+    expect(c.left).toBeCloseTo(500, 5);
+    expect(c.top).toBeCloseTo((630 + 4) / 0.9, 5);
+  });
+  it('flips above when no room below and clamps horizontally', () => {
+    const c = computePopupPosition({ left: 1430, top: 800, bottom: 830 }, { width: 135, height: 185 }, { width: 1440, height: 900 }, 1);
+    expect(c.top).toBe(800 - 4 - 185);
+    expect(c.left).toBe(1440 - 8 - 135);
   });
 });

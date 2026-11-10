@@ -1,14 +1,17 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
 } from 'react';
 import { createPortal } from 'react-dom';
 import type { Lang } from '../../data/lang';
+import { readUiZoom } from '../../data/uiZoom';
 import {
   addDays,
+  computePopupPosition,
   addMonths,
   formatMonthHeader,
   getCalendarGrid,
@@ -127,18 +130,20 @@ export function DatePicker({
 
   const updatePosition = useCallback(() => {
     if (!triggerRef.current) return;
+    const zoom = readUiZoom();
     const rect = triggerRef.current.getBoundingClientRect();
-    const popupHeight = 290;
-    const popupWidth = 268;
-    let top = rect.bottom + 4;
-    if (rect.bottom + popupHeight + 8 > window.innerHeight && rect.top - popupHeight - 4 > 0) {
-      top = rect.top - popupHeight - 4;
-    }
-    let left = rect.left;
-    if (left + popupWidth > window.innerWidth - 8) {
-      left = Math.max(8, window.innerWidth - popupWidth - 8);
-    }
-    setPopupCoords({ top: Math.max(4, top), left: Math.max(4, left) });
+    const measured = popupRef.current?.getBoundingClientRect();
+    const popupW = measured && measured.width > 0 ? measured.width : 268 * zoom;
+    const popupH = measured && measured.height > 0 ? measured.height : 290 * zoom;
+    const next = computePopupPosition(
+      rect,
+      { width: popupW, height: popupH },
+      { width: window.innerWidth, height: window.innerHeight },
+      zoom,
+    );
+    setPopupCoords((prev) =>
+      prev && Math.abs(prev.top - next.top) < 0.5 && Math.abs(prev.left - next.left) < 0.5 ? prev : next,
+    );
   }, []);
 
   const openPopup = useCallback(() => {
@@ -158,6 +163,11 @@ export function DatePicker({
   const closePopup = useCallback(() => {
     setOpen(false);
   }, []);
+
+  // Re-anchor with the measured popup size once it is rendered.
+  useLayoutEffect(() => {
+    if (open) updatePosition();
+  }, [open, viewMonth, viewYear, updatePosition]);
 
   const commitText = useCallback(() => {
     const rawVal = inputRef.current ? inputRef.current.value : text;

@@ -8,7 +8,8 @@ import {
 } from 'react';
 import { createPortal } from 'react-dom';
 import type { Lang } from '../../data/lang';
-import { formatTime, normalizeTimeString, parseTime } from './pickerUtils';
+import { readUiZoom } from '../../data/uiZoom';
+import { computePopupPosition, formatTime, normalizeTimeString, parseTime } from './pickerUtils';
 
 export type TimePickerProps = {
   value: string; // "HH:MM"
@@ -25,6 +26,8 @@ export type TimePickerProps = {
 
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
 const MINUTES = Array.from({ length: 12 }, (_, i) => i * 5);
+const ITEM_HEIGHT = 28;
+const COLUMN_HEIGHT = 192;
 
 const CLOCK_ICON = (
   <svg
@@ -82,18 +85,20 @@ export function TimePicker({
 
   const updatePosition = useCallback(() => {
     if (!triggerRef.current) return;
+    const zoom = readUiZoom();
     const rect = triggerRef.current.getBoundingClientRect();
-    const popupHeight = 208;
-    const popupWidth = 150;
-    let top = rect.bottom + 4;
-    if (rect.bottom + popupHeight + 8 > window.innerHeight && rect.top - popupHeight - 4 > 0) {
-      top = rect.top - popupHeight - 4;
-    }
-    let left = rect.left;
-    if (left + popupWidth > window.innerWidth - 8) {
-      left = Math.max(8, window.innerWidth - popupWidth - 8);
-    }
-    setPopupCoords({ top: Math.max(4, top), left: Math.max(4, left) });
+    const measured = popupRef.current?.getBoundingClientRect();
+    const popupW = measured && measured.width > 0 ? measured.width : 150 * zoom;
+    const popupH = measured && measured.height > 0 ? measured.height : 206 * zoom;
+    const next = computePopupPosition(
+      rect,
+      { width: popupW, height: popupH },
+      { width: window.innerWidth, height: window.innerHeight },
+      zoom,
+    );
+    setPopupCoords((prev) =>
+      prev && Math.abs(prev.top - next.top) < 0.5 && Math.abs(prev.left - next.left) < 0.5 ? prev : next,
+    );
   }, []);
 
   const openPopup = useCallback(() => {
@@ -117,23 +122,17 @@ export function TimePicker({
     if (!open) return;
     updatePosition();
 
-    const hourCol = hourColRef.current;
-    if (hourCol) {
-      const selHourEl = hourCol.querySelector<HTMLElement>('.time-picker-item.is-selected');
-      if (selHourEl) {
-        const targetTop = selHourEl.offsetTop - hourCol.clientHeight / 2 + selHourEl.clientHeight / 2;
-        hourCol.scrollTop = Math.max(0, targetTop);
-      }
-    }
-
-    const minCol = minColRef.current;
-    if (minCol) {
-      const selMinEl = minCol.querySelector<HTMLElement>('.time-picker-item.is-selected');
-      if (selMinEl) {
-        const targetTop = selMinEl.offsetTop - minCol.clientHeight / 2 + selMinEl.clientHeight / 2;
-        minCol.scrollTop = Math.max(0, targetTop);
-      }
-    }
+    const centerItem = (col: HTMLDivElement | null, index: number) => {
+      if (!col) return;
+      // Column layout: 2px padding, 28px items, 2px gap (CSS px, zoom-independent).
+      const viewH = col.clientHeight || COLUMN_HEIGHT;
+      const itemTop = 2 + index * (ITEM_HEIGHT + 2);
+      col.scrollTop = Math.max(0, itemTop - viewH / 2 + ITEM_HEIGHT / 2);
+    };
+    centerItem(hourColRef.current, selectedHour);
+    centerItem(minColRef.current, Math.max(0, MINUTES.indexOf(selectedMinute - (selectedMinute % 5))));
+  // Only re-center when the popup opens, not on every selection change.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, updatePosition]);
 
   const commitText = useCallback(() => {

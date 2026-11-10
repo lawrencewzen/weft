@@ -394,3 +394,103 @@ test('composer clock custom: DatePicker + TimePicker create once task and show s
 
   expectClean(state);
 });
+
+async function expectPopupPlacement(page, trigger, popup, placement = 'below') {
+  const t = await trigger.boundingBox();
+  const p = await popup.boundingBox();
+  expect(t).not.toBeNull();
+  expect(p).not.toBeNull();
+  const vp = page.viewportSize();
+  expect(Math.abs(p.x - t.x)).toBeLessThanOrEqual(2);
+  if (placement === 'below') {
+    expect(p.y).toBeGreaterThanOrEqual(t.y + t.height - 0.5);
+    expect(p.y - (t.y + t.height)).toBeLessThanOrEqual(8);
+  } else {
+    expect(p.y + p.height).toBeLessThanOrEqual(t.y + 0.5);
+  }
+  expect(p.x).toBeGreaterThanOrEqual(8 - 0.5);
+  expect(p.x + p.width).toBeLessThanOrEqual(vp.width - 8 + 0.5);
+  expect(p.y).toBeGreaterThanOrEqual(0);
+  expect(p.y + p.height).toBeLessThanOrEqual(vp.height);
+}
+
+test('schedule dialog: time and date popups anchor below their trigger, 09 centered', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1100 });
+  const state = await openProto(page);
+  await page.getByTestId('next-schedules').click();
+  await page.getByTestId('next-schedules-new').click();
+  await expect(page.getByTestId('next-schedule-dialog')).toBeVisible();
+
+  await page.getByTestId('next-schedule-rule-weekly').click();
+  const timeTrigger = page.getByTestId('next-schedule-weekly-time').locator('xpath=ancestor::div[contains(@class,"picker-trigger")][1]');
+  await page.getByTestId('next-schedule-weekly-time').click();
+  const popup = page.getByTestId('next-schedule-weekly-time-popup');
+  await expect(popup).toBeVisible();
+  await expectPopupPlacement(page, timeTrigger, popup);
+  const hour09 = page.getByTestId('next-schedule-weekly-time-hour-09');
+  await expect(hour09).toHaveClass(/is-selected/);
+  await expect(page.getByTestId('next-schedule-weekly-time-min-00')).toHaveClass(/is-selected/);
+  const cb = await hour09.boundingBox();
+  const col = await page.getByTestId('time-picker-hours-col').boundingBox();
+  expect(cb.y).toBeGreaterThanOrEqual(col.y - 1);
+  expect(cb.y + cb.height).toBeLessThanOrEqual(col.y + col.height + 1);
+  const mid = cb.y + cb.height / 2 - (col.y + col.height / 2);
+  expect(Math.abs(mid)).toBeLessThanOrEqual(30);
+  await page.keyboard.press('Escape');
+  await expect(popup).toHaveCount(0);
+
+  await page.getByTestId('next-schedule-rule-once').click();
+  const dateTrigger = page.getByTestId('next-schedule-once-date').locator('xpath=ancestor::div[contains(@class,"picker-trigger")][1]');
+  await page.getByTestId('next-schedule-once-date').click();
+  const dpopup = page.getByTestId('next-schedule-once-date-popup');
+  await expect(dpopup).toBeVisible();
+  await expectPopupPlacement(page, dateTrigger, dpopup);
+
+  // Dark theme: same anchoring
+  await page.keyboard.press('Escape');
+  await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'dark'));
+  await page.getByTestId('next-schedule-once-date').click();
+  await expectPopupPlacement(page, dateTrigger, page.getByTestId('next-schedule-once-date-popup'));
+
+  expectClean(state);
+});
+
+test('composer custom pickers: popups anchor to their triggers', async ({ page }) => {
+  const state = await openProto(page);
+  await page.locator('[data-testid="next-conv-row"][data-id="c-tests"]').click();
+  await page.locator('[data-testid="next-composer"] textarea').fill('定位测试');
+  await page.getByTestId('next-composer-schedule').click();
+  await page.getByTestId('next-schedule-opt-custom').click();
+
+  const timeTrigger = page.getByTestId('next-schedule-custom-time').locator('xpath=ancestor::div[contains(@class,"picker-trigger")][1]');
+  await page.getByTestId('next-schedule-custom-time').click();
+  const popup = page.getByTestId('next-schedule-custom-time-popup');
+  await expect(popup).toBeVisible();
+  await expectPopupPlacement(page, timeTrigger, popup, 'above');
+
+  const dateTrigger = page.getByTestId('next-schedule-custom-date').locator('xpath=ancestor::div[contains(@class,"picker-trigger")][1]');
+  await page.getByTestId('next-schedule-custom-date').click();
+  const dpopup = page.getByTestId('next-schedule-custom-date-popup');
+  await expect(dpopup).toBeVisible();
+  await expectPopupPlacement(page, dateTrigger, dpopup, 'above');
+
+  expectClean(state);
+});
+
+test('schedule dialog: popup flips above the trigger when there is no room below', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 760 });
+  const state = await openProto(page);
+  await page.getByTestId('next-schedules').click();
+  await page.getByTestId('next-schedules-new').click();
+  await page.getByTestId('next-schedule-rule-once').click();
+  const dateTrigger = page.getByTestId('next-schedule-once-date').locator('xpath=ancestor::div[contains(@class,"picker-trigger")][1]');
+  await page.getByTestId('next-schedule-once-date').click();
+  const popup = page.getByTestId('next-schedule-once-date-popup');
+  await expect(popup).toBeVisible();
+  const t = await dateTrigger.boundingBox();
+  const p = await popup.boundingBox();
+  expect(p.y + p.height).toBeLessThanOrEqual(t.y + 0.5);
+  expect(p.y).toBeGreaterThanOrEqual(0);
+  expect(Math.abs(p.x - t.x)).toBeLessThanOrEqual(2);
+  expectClean(state);
+});
