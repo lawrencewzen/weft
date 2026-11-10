@@ -4,7 +4,7 @@ import http from 'node:http';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { resolveAuthToken, unauthenticatedHostsWarning } from '../../src/core/auth.mjs';
+import { resolveAuthToken, unauthenticatedHostsWarning, SECURITY_HEADERS } from '../../src/core/auth.mjs';
 import { startServer, stopServer } from './_server.mjs';
 
 const TOKEN = 'unit-optional-auth-token';
@@ -34,11 +34,22 @@ function raw({ port, method = 'GET', path: reqPath = '/', headers = {}, body }) 
 }
 
 function assertSecurityHeaders(headers) {
-  assert.match(String(headers['content-security-policy'] || ''), /default-src 'self'/);
+  const csp = String(headers['content-security-policy'] || '');
+  assert.match(csp, /default-src 'self'/);
+  assert.match(csp, /img-src 'self' data: blob:/);
+  assert.doesNotMatch(csp, /img-src[^;]*\*/);
+  assert.doesNotMatch(csp, /img-src[^;]*http:/);
   assert.equal(headers['x-content-type-options'], 'nosniff');
   assert.equal(headers['referrer-policy'], 'no-referrer');
   assert.equal(headers['x-frame-options'], 'DENY');
 }
+
+test('CSP img-src includes blob: and data: without wildcard or http', () => {
+  const csp = SECURITY_HEADERS['Content-Security-Policy'];
+  assert.match(csp, /img-src 'self' data: blob:/);
+  assert.doesNotMatch(csp, /img-src[^;]*\*/);
+  assert.doesNotMatch(csp, /img-src[^;]*http:/);
+});
 
 test('resolveAuthToken only enables login for a non-empty WEFT_TOKEN', () => {
   assert.deepEqual(resolveAuthToken({}), { token: '', enabled: false });

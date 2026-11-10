@@ -14,6 +14,7 @@ import { ApiError, getWorkspaceTree, uploadWorkspaceFile, type SendMessageFile }
 import {
   addImages,
   createPasteAttachment,
+  dedupeFiles,
   filePathOf,
   fileToImageAttachment,
   imageFingerprint,
@@ -213,10 +214,11 @@ export function useComposerAttachments({
   }, [lang, setError, uploads.length, workspaceId]);
 
   const dropFiles = useCallback(async (fileList: File[], uriList = '') => {
+    const dedupedList = dedupeFiles(fileList);
     const uriPaths = pathsFromUriList(uriList);
     const imageFiles: File[] = [];
     const others: File[] = [];
-    for (const file of fileList) {
+    for (const file of dedupedList) {
       if (isImageFile(file)) imageFiles.push(file);
       else others.push(file);
     }
@@ -289,21 +291,27 @@ export function useComposerAttachments({
 
   function onPaste(event: ClipboardEvent<HTMLTextAreaElement>) {
     if (!allowAttach) return;
-    const files = [...(event.clipboardData?.files || [])];
-    const items = event.clipboardData?.items;
-    if (items) {
-      for (const item of items) {
+    const clipboardFiles = Array.from(event.clipboardData?.files || []);
+    let files: File[] = [];
+    if (clipboardFiles.length > 0) {
+      files = clipboardFiles;
+    } else if (event.clipboardData?.items) {
+      for (const item of event.clipboardData.items) {
         if (item.kind !== 'file') continue;
         const file = item.getAsFile();
-        if (file && !files.some((row) => row === file)) files.push(file);
+        if (file) files.push(file);
       }
     }
+    files = dedupeFiles(files);
     if (files.length > 0) {
       event.preventDefault();
       const imageFiles = files.filter(isImageFile);
       const nonImageFiles = files.filter((f) => !isImageFile(f));
-      if (imageFiles.length) void addImageFiles(imageFiles);
-      if (nonImageFiles.length) void uploadFiles(nonImageFiles);
+      if (imageFiles.length && nonImageFiles.length) {
+        return Promise.all([addImageFiles(imageFiles), uploadFiles(nonImageFiles)]).then(() => {});
+      }
+      if (imageFiles.length) return addImageFiles(imageFiles);
+      if (nonImageFiles.length) return uploadFiles(nonImageFiles);
       return;
     }
     const text = event.clipboardData?.getData('text/plain') || '';
@@ -350,7 +358,18 @@ export function useComposerAttachments({
     event.preventDefault();
     dragDepth.current = 0;
     setDragging(false);
-    const files = [...(event.dataTransfer?.files || [])];
+    const dtFiles = Array.from(event.dataTransfer?.files || []);
+    let files: File[] = [];
+    if (dtFiles.length > 0) {
+      files = dtFiles;
+    } else if (event.dataTransfer?.items) {
+      for (const item of event.dataTransfer.items) {
+        if (item.kind !== 'file') continue;
+        const file = item.getAsFile();
+        if (file) files.push(file);
+      }
+    }
+    files = dedupeFiles(files);
     const uriList = event.dataTransfer?.getData('text/uri-list') || '';
     void dropFiles(files, uriList);
   }

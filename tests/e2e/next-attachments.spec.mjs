@@ -35,7 +35,7 @@ test('pastes an image, sends it, and keeps the thumbnail after reload', async ({
     await page.goto(`${srv.url}/c/${encodeURIComponent(conv.id)}`);
     await expect(page.getByTestId('next-composer-input')).toBeVisible();
     await pasteImage(page);
-    await expect(page.getByTestId('next-attach-image')).toBeVisible();
+    await expect(page.getByTestId('next-attach-image')).toHaveCount(1);
     await expect(page.getByTestId('next-attach-image')).toContainText('screenshot.png');
     await page.getByTestId('next-composer-input').fill('看这张图');
     await page.getByTestId('next-send').click();
@@ -45,6 +45,52 @@ test('pastes an image, sends it, and keeps the thumbnail after reload', async ({
     await expect(page.getByTestId('next-user-image')).toBeVisible();
     await page.getByTestId('next-user-image').click();
     await expect(page.getByTestId('next-image-lightbox')).toBeVisible();
+  } finally {
+    await srv.kill();
+  }
+});
+
+test('pasting an image adds exactly one attachment, shows thumbnail with naturalWidth > 0, and has no CSP error', async ({ page }) => {
+  const cspErrors = [];
+  page.on('console', (msg) => {
+    const text = msg.text();
+    if (/Content[- ]Security[- ]Policy/i.test(text) || /violates the following Content Security Policy directive/i.test(text)) {
+      cspErrors.push(text);
+    }
+  });
+
+  const prepared = await prepareWorkspaces(['ws']);
+  const srv = await startServer({
+    script: 'no-usage.json',
+    extraEnv: { WEFT_WORKSPACE_ROOT: prepared.root },
+  });
+  try {
+    const { conv } = await openWorkspaceConversation(srv, 'demo', prepared.dirs[0]);
+    await loginNext(page, srv);
+    await page.goto(`${srv.url}/c/${encodeURIComponent(conv.id)}`);
+    await expect(page.getByTestId('next-composer-input')).toBeVisible();
+
+    await pasteImage(page, 'pasted-shot.png');
+
+    const attachments = page.getByTestId('next-attach-image');
+    await expect(attachments).toHaveCount(1);
+    await expect(attachments.first()).toContainText('pasted-shot.png');
+
+    const thumbImg = attachments.first().locator('img.composer-tag-thumb');
+    await expect(thumbImg).toBeVisible();
+    await expect.poll(async () => {
+      return await thumbImg.evaluate((img) => (img.complete ? img.naturalWidth : 0));
+    }).toBeGreaterThan(0);
+
+    expect(cspErrors).toEqual([]);
+
+    await page.getByTestId('next-send').click();
+    await expect(page.getByTestId('next-user-image')).toBeVisible();
+    const userImg = page.getByTestId('next-user-image').first().locator('img');
+    await expect.poll(async () => {
+      return await userImg.evaluate((img) => (img.complete ? img.naturalWidth : 0));
+    }).toBeGreaterThan(0);
+    expect(cspErrors).toEqual([]);
   } finally {
     await srv.kill();
   }
