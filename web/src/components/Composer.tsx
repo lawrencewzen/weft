@@ -38,6 +38,7 @@ import type { QueueChip, SendMode } from '../data/pendingSend';
 import { useProviders } from '../data/useProviders';
 import type { components } from '../../../src/v2/contract.gen';
 import { t } from '../i18n';
+import { handoffCommandOf } from '../data/handoffCommand';
 import { writeActiveWorkspace } from '../data/layout';
 import { subscribePrefs } from '../data/prefs';
 import { useRightActions } from '../data/rightPaneContext';
@@ -250,6 +251,9 @@ export function Composer({
       return;
     }
 
+    const command = !imagePayload.length && !sentFiles.length && !sentPastes.length
+      ? handoffCommandOf(payload)
+      : null;
     const requestId = req.current.begin(payload, extraKey);
     setBusy(true);
     setError(null);
@@ -262,14 +266,19 @@ export function Composer({
     at.setAtDismissed(false);
     requestAnimationFrame(resize);
     try {
-      await onSend(
-        sentText,
-        requestId,
-        imagePayload.length ? imagePayload : undefined,
-        mode,
-        sentFiles.length ? sentFiles : undefined,
-        sentPastes.length ? sentPastes : undefined,
-      );
+      if (command) {
+        if (!conversationId) throw new Error(t(lang, 'send_failed'));
+        await handoffConversation(conversationId, requestId, command.instructions);
+      } else {
+        await onSend(
+          sentText,
+          requestId,
+          imagePayload.length ? imagePayload : undefined,
+          mode,
+          sentFiles.length ? sentFiles : undefined,
+          sentPastes.length ? sentPastes : undefined,
+        );
+      }
       req.current.succeed();
       att.revokeSnapshot(snapshot);
       onSent?.();

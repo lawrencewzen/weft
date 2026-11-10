@@ -494,6 +494,12 @@ export function projectViewUpdate(projector, view, mapCtx) {
       if (!snapshot) events.push({ event: 'compaction', data: { entryId: key } });
       continue;
     }
+    // A reset is the handoff divider, not a user bubble. The note is rebuilt
+    // from the entry; this event only refreshes the conversation snapshot.
+    if (entry.kind === 'pi.reset') {
+      if (!snapshot) events.push({ event: 'handoff', data: { entryId: key } });
+      continue;
+    }
     if (!snapshot && (entry.kind === 'pi.user' || entry.kind === 'pi.assistant')) {
       const done = messageDone(entry);
       if (entry.kind === 'pi.assistant' && mapCtx?.liveId) {
@@ -643,6 +649,19 @@ export function messagesFromEntries(entries) {
         role: 'note',
         kind: 'compaction',
       });
+      continue;
+    }
+    // pi.reset starts the new context. The model sees its user text; the thread
+    // shows a handoff divider at this entry, and the text is the note detail.
+    if (entry?.kind === 'pi.reset') {
+      const detail = textOf(entry.model?.[0]?.content).trim();
+      const note = {
+        id: String(entry.id),
+        role: 'note',
+        kind: 'handoff',
+      };
+      if (detail) note.text = detail;
+      messages.push(note);
       continue;
     }
     if (entry?.kind === USER_TO_SUBAGENT_KIND) {
