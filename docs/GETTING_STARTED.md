@@ -42,7 +42,7 @@ npm run weft -- open
 
 ```bash
 npm run weft -- status          # 在跑则打印端口、pid、协议版本、服务版本、启动时间
-npm run weft -- stop            # 空闲时退出服务；有任务在跑则拒绝
+npm run weft -- stop            # 没有任务时停止服务；有任务在跑则拒绝
 npm run weft -- open --print    # 只把登录地址打印到 stdout，不打开浏览器
 ```
 
