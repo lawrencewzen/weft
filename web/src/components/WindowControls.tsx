@@ -3,15 +3,37 @@ import { t } from '../i18n';
 import { cssColorToHex } from '../data/cssColor';
 import type { Lang } from '../data/lang';
 import { readUiZoom } from '../data/uiZoom';
+import {
+  fetchCloseAction,
+  getCachedCloseAction,
+  updateCloseAction,
+} from '../data/shellExit';
+import { WindowCloseDialog } from './WindowCloseDialog';
 
 type ShellAction = 'minimize' | 'toggle-maximize' | 'close';
 
+/**
+ * Windows desktop shell (Weft.exe) messaging protocol contract:
+ *
+ * Web -> Shell:
+ * - 'minimize': minimize window
+ * - 'toggle-maximize': maximize or restore window
+ * - 'theme:...': theme color reporting for shell pre-rendering
+ * - 'hide-to-tray': hide window to system notification area / tray (service keeps running)
+ * - 'quit': completely exit Weft and stop backend service
+ *
+ * Shell -> Web:
+ * - 'confirm-quit': sent when user clicks "退出 Weft" in the tray context menu.
+ *   Shell displays the window and instructs Web to pop up the exit confirmation dialog
+ *   (with default focus on 'Exit Weft', and without the 'Do not ask again' checkbox).
+ */
+
 function shellOn(): boolean {
-  return document.documentElement.dataset.desktopShell === '1';
+  return typeof document !== 'undefined' && document.documentElement.dataset.desktopShell === '1';
 }
 
 function maximizedOn(): boolean {
-  return document.documentElement.dataset.windowMaximized === '1';
+  return typeof document !== 'undefined' && document.documentElement.dataset.windowMaximized === '1';
 }
 
 /** Re-read the two <html> data attributes the desktop shell (or the prototype) sets. */
@@ -33,14 +55,21 @@ function useShellState(): { shell: boolean; maximized: boolean } {
   return state;
 }
 
-function postRaw(msg: string): void {
-  // Only exists inside the WebView2 shell; in the prototype the buttons do nothing.
-  const webview = (window as unknown as { chrome?: { webview?: { postMessage(msg: string): void } } }).chrome?.webview;
-  webview?.postMessage(msg);
+interface ChromeWebView {
+  postMessage(msg: string): void;
+  addEventListener(type: string, listener: (ev: { data: unknown }) => void): void;
+  removeEventListener?(type: string, listener: (ev: { data: unknown }) => void): void;
 }
 
-function post(action: ShellAction): void {
-  postRaw(action);
+function getWebView(): ChromeWebView | null {
+  if (typeof window === 'undefined') return null;
+  const webview = (window as unknown as { chrome?: { webview?: ChromeWebView } })?.chrome?.webview;
+  return webview ?? null;
+}
+
+export function postRaw(msg: string): void {
+  const webview = getWebView();
+  webview?.postMessage(msg);
 }
 
 /**
@@ -87,8 +116,64 @@ const ICONS = {
 /** Windows-style caption buttons, drawn only when the Weft.exe desktop shell is active. */
 export function WindowControls({ lang }: { lang: Lang }) {
   const { shell, maximized } = useShellState();
+  const [dialogMode, setDialogMode] = useState<'normal' | 'confirm-quit' | null>(null);
+
   useReportTheme(shell);
+
+  useEffect(() => {
+    if (!shell) return;
+    void fetchCloseAction();
+  }, [shell]);
+
+  useEffect(() => {
+    if (!shell) return;
+
+    const webview = getWebView();
+    if (!webview) return;
+
+    const onMessage = (event: { data: unknown }) => {
+      if (event.data === 'confirm-quit') {
+        setDialogMode('confirm-quit');
+      }
+    };
+
+    webview.addEventListener('message', onMessage);
+    return () => {
+      webview.removeEventListener?.('message', onMessage);
+    };
+  }, [shell]);
+
   if (!shell) return null;
+
+  const handleButtonClick = (action: ShellAction) => {
+    if (action === 'minimize') {
+      postRaw('minimize');
+    } else if (action === 'toggle-maximize') {
+      postRaw('toggle-maximize');
+    } else if (action === 'close') {
+      const pref = getCachedCloseAction();
+      if (pref === 'tray') {
+        postRaw('hide-to-tray');
+      } else if (pref === 'quit') {
+        postRaw('quit');
+      } else {
+        setDialogMode('normal');
+      }
+    }
+  };
+
+  const handleDialogAction = (action: 'tray' | 'quit', remember: boolean) => {
+    if (dialogMode !== 'confirm-quit' && remember) {
+      void updateCloseAction(action);
+    }
+    setDialogMode(null);
+    if (action === 'tray') {
+      postRaw('hide-to-tray');
+    } else {
+      postRaw('quit');
+    }
+  };
+
   const buttons: { action: ShellAction; icon: keyof typeof ICONS; label: string; cls?: string }[] = [
     { action: 'minimize', icon: 'minimize', label: t(lang, 'window_minimize') },
     {
@@ -98,23 +183,34 @@ export function WindowControls({ lang }: { lang: Lang }) {
     },
     { action: 'close', icon: 'close', label: t(lang, 'window_close'), cls: ' is-close' },
   ];
+
   return (
-    <div className="wc-btns" data-testid="window-controls">
-      {buttons.map((b) => (
-        <button
-          key={b.action}
-          type="button"
-          className={`icon-btn wc-btn${b.cls ?? ''}`}
-          data-testid={`window-${b.action}`}
-          title={b.label}
-          aria-label={b.label}
-          onClick={() => post(b.action)}
-        >
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
-            {ICONS[b.icon]}
-          </svg>
-        </button>
-      ))}
-    </div>
+    <>
+      <div className="wc-btns" data-testid="window-controls">
+        {buttons.map((b) => (
+          <button
+            key={b.action}
+            type="button"
+            className={`icon-btn wc-btn${b.cls ?? ''}`}
+            data-testid={`window-${b.action}`}
+            title={b.label}
+            aria-label={b.label}
+            onClick={() => handleButtonClick(b.action)}
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
+              {ICONS[b.icon]}
+            </svg>
+          </button>
+        ))}
+      </div>
+      {dialogMode ? (
+        <WindowCloseDialog
+          lang={lang}
+          isConfirmQuit={dialogMode === 'confirm-quit'}
+          onCancel={() => setDialogMode(null)}
+          onAction={handleDialogAction}
+        />
+      ) : null}
+    </>
   );
 }

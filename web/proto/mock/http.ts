@@ -1115,8 +1115,14 @@ export function handleMockRequest(
   const lang = langOf(url);
 
   if (path === '/api/settings') {
-    if (method === 'PUT') return ok({ ok: true });
-    return ok({});
+    if (method === 'PUT') {
+      const nextClose = (body as { closeAction?: unknown })?.closeAction;
+      if (nextClose === 'ask' || nextClose === 'tray' || nextClose === 'quit') {
+        db.settings.closeAction = nextClose;
+      }
+      return ok({ ok: true });
+    }
+    return ok({ closeAction: db.settings.closeAction });
   }
 
   if (path === '/api/v2/settings') {
@@ -1133,8 +1139,22 @@ export function handleMockRequest(
         }
         db.settings.compaction.triggerPercent = n;
       }
+      const nextCloseAction = body.closeAction as unknown;
+      if (nextCloseAction !== undefined) {
+        if (nextCloseAction !== 'ask' && nextCloseAction !== 'tray' && nextCloseAction !== 'quit') {
+          return fail(
+            400,
+            lang === 'en' ? 'closeAction must be ask, tray or quit' : 'closeAction 必须是 ask、tray 或 quit',
+            'E_BAD_REQUEST',
+          );
+        }
+        db.settings.closeAction = nextCloseAction;
+      }
     }
-    return ok({ compaction: { ...db.settings.compaction } });
+    return ok({
+      compaction: { ...db.settings.compaction },
+      closeAction: db.settings.closeAction,
+    });
   }
 
   if (path === '/api/v2/service') {

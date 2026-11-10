@@ -14,6 +14,10 @@ async function box(locator) {
   return b;
 }
 
+async function shellMessages(page) {
+  return page.evaluate(() => (window.__protoShellMessages || []).filter((m) => !m.startsWith('theme:')));
+}
+
 test('without the shell attribute there are no window buttons or drag regions', async ({ page }) => {
   const state = await openProto(page);
   await expect(page.getByTestId('window-controls')).toHaveCount(0);
@@ -150,3 +154,239 @@ for (const scheme of ['light', 'dark']) {
     expectClean(state);
   });
 }
+
+test('clicking close pops up dialog with 2 option cards, checkbox, and hint; cancel dismisses it', async ({ page }) => {
+  const state = await openProto(page, '?shell=1');
+  await page.getByTestId('window-close').click();
+
+  const dialog = page.getByTestId('window-close-dialog');
+  await expect(dialog).toBeVisible();
+  const trayCard = page.getByTestId('window-close-tray');
+  const quitCard = page.getByTestId('window-close-quit');
+  await expect(trayCard).toContainText('缩到托盘');
+  await expect(trayCard).toContainText('后台继续运行，定时任务照常执行');
+  await expect(quitCard).toContainText('退出 Weft');
+  await expect(quitCard).toContainText('停止服务，定时任务不会执行');
+  await expect(page.getByTestId('window-close-remember')).toHaveText('记住我的选择，不再询问');
+  await expect(page.getByTestId('window-close-settings-hint')).toHaveText('可在 设置 › 通用 中修改');
+
+  // Bounding box alignment assertions:
+  // 1. Checkbox vertical center vs text vertical center <= 2px
+  // 2. Checkbox left edge vs left card left edge <= 2px
+  const chkBox = await box(dialog.locator('.window-close-remember input[type="checkbox"]'));
+  const textBox = await box(dialog.locator('.window-close-remember-text'));
+  const trayCardBox = await box(page.getByTestId('window-close-tray'));
+
+  const chkCenterY = chkBox.y + chkBox.height / 2;
+  const textCenterY = textBox.y + textBox.height / 2;
+  expect(Math.abs(chkCenterY - textCenterY)).toBeLessThanOrEqual(2);
+  expect(Math.abs(chkBox.x - trayCardBox.x)).toBeLessThanOrEqual(2);
+
+  // Default focus is on tray card
+  const isTrayFocused = await page.evaluate(() => {
+    return document.activeElement?.getAttribute('data-testid') === 'window-close-tray';
+  });
+  expect(isTrayFocused).toBe(true);
+
+  // Cancel via Esc
+  await page.keyboard.press('Escape');
+  await expect(dialog).toHaveCount(0);
+  const msgs1 = await shellMessages(page);
+  expect(msgs1).toEqual([]);
+
+  // Re-open and cancel via backdrop click
+  await page.getByTestId('window-close').click();
+  await expect(dialog).toBeVisible();
+  await page.getByTestId('window-close-overlay').click({ position: { x: 5, y: 5 } });
+  await expect(dialog).toHaveCount(0);
+  const msgs2 = await shellMessages(page);
+  expect(msgs2).toEqual([]);
+
+  expectClean(state);
+});
+
+test('keyboard navigation switches between cards using ArrowLeft/ArrowRight and Enter executes focused card', async ({ page }) => {
+  const state = await openProto(page, '?shell=1');
+  await page.getByTestId('window-close').click();
+
+  const dialog = page.getByTestId('window-close-dialog');
+  await expect(dialog).toBeVisible();
+
+  // Initially on tray card
+  expect(await page.evaluate(() => document.activeElement?.getAttribute('data-testid'))).toBe('window-close-tray');
+
+  // Press ArrowRight -> moves to quit card
+  await page.keyboard.press('ArrowRight');
+  expect(await page.evaluate(() => document.activeElement?.getAttribute('data-testid'))).toBe('window-close-quit');
+
+  // Press ArrowLeft -> moves back to tray card
+  await page.keyboard.press('ArrowLeft');
+  expect(await page.evaluate(() => document.activeElement?.getAttribute('data-testid'))).toBe('window-close-tray');
+
+  // Press ArrowRight -> moves to quit card and press Enter
+  await page.keyboard.press('ArrowRight');
+  expect(await page.evaluate(() => document.activeElement?.getAttribute('data-testid'))).toBe('window-close-quit');
+  await page.keyboard.press('Enter');
+
+  await expect(dialog).toHaveCount(0);
+  expect(await shellMessages(page)).toEqual(['quit']);
+
+  expectClean(state);
+});
+
+test('clicking tray and quit cards send hide-to-tray and quit messages respectively', async ({ page }) => {
+  const state = await openProto(page, '?shell=1');
+
+  // Click tray
+  await page.getByTestId('window-close').click();
+  await page.getByTestId('window-close-tray').click();
+  await expect(page.getByTestId('window-close-dialog')).toHaveCount(0);
+  expect(await shellMessages(page)).toEqual(['hide-to-tray']);
+
+  // Click quit
+  await page.getByTestId('window-close').click();
+  await page.getByTestId('window-close-quit').click();
+  await expect(page.getByTestId('window-close-dialog')).toHaveCount(0);
+  expect(await shellMessages(page)).toEqual(['hide-to-tray', 'quit']);
+
+  expectClean(state);
+});
+
+test('remembering preference executes directly on subsequent close clicks', async ({ page }) => {
+  const state = await openProto(page, '?shell=1');
+
+  await page.getByTestId('window-close').click();
+  await page.getByTestId('window-close-remember').locator('input').check();
+  await page.getByTestId('window-close-tray').click();
+  await expect(page.getByTestId('window-close-dialog')).toHaveCount(0);
+  expect(await shellMessages(page)).toEqual(['hide-to-tray']);
+
+  // Second close click should execute directly without dialog
+  await page.getByTestId('window-close').click();
+  await expect(page.getByTestId('window-close-dialog')).toHaveCount(0);
+  expect(await shellMessages(page)).toEqual(['hide-to-tray', 'hide-to-tray']);
+
+  expectClean(state);
+});
+
+test('settings general page toggles close action preference and reflects in close behavior', async ({ page }) => {
+  const state = await openProto(page, '?shell=1');
+
+  await page.keyboard.press('Control+,');
+  const overlay = page.locator('.next-settings-ov');
+  if (await overlay.count() === 0) {
+    await page.goto(page.url().replace(/#.*$/, '') + '#/settings');
+  }
+  await expect(page.locator('.next-settings-ov')).toBeVisible();
+
+  const prefSeg = page.getByTestId('next-pref-close-action');
+  await expect(prefSeg).toBeVisible();
+  await expect(page.getByTestId('next-pref-close-action-note')).toHaveCount(0);
+
+  // Switch to quit
+  await prefSeg.locator('button[data-action="quit"]').click();
+  await expect(prefSeg.locator('button[data-action="quit"]')).toHaveClass(/is-on/);
+  await expect(page.getByTestId('next-pref-close-action-note')).toBeVisible();
+  await expect(page.getByTestId('next-pref-close-action-note')).toHaveText('退出后定时任务不会执行。');
+
+  // Close settings
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.next-settings-ov')).toHaveCount(0);
+
+  // Clicking window close now directly sends quit
+  await page.getByTestId('window-close').click();
+  await expect(page.getByTestId('window-close-dialog')).toHaveCount(0);
+  expect(await shellMessages(page)).toEqual(['quit']);
+
+  expectClean(state);
+});
+
+test('without shell attribute, settings general page does not show close action setting', async ({ page }) => {
+  const state = await openProto(page);
+  await page.keyboard.press('Control+,');
+  const overlay = page.locator('.next-settings-ov');
+  if (await overlay.count() === 0) {
+    await page.goto(page.url().replace(/#.*$/, '') + '#/settings');
+  }
+  await expect(page.locator('.next-settings-ov')).toBeVisible();
+  await expect(page.getByTestId('next-pref-close-action')).toHaveCount(0);
+  expectClean(state);
+});
+
+test('confirm-quit simulated via window.__protoShell opens confirm dialog, cancel posts nothing, quit posts quit', async ({ page }) => {
+  const state = await openProto(page, '?shell=1');
+
+  await page.evaluate(() => window.__protoShell('confirm-quit'));
+  const dialog = page.getByTestId('confirm-quit-dialog');
+  await expect(dialog).toBeVisible();
+  await expect(page.getByTestId('window-close-remember')).toHaveCount(0);
+  await expect(page.locator('.window-close-cards')).toHaveCount(0);
+  await expect(dialog.getByTestId('next-confirm-message')).toHaveText('退出后定时任务不会执行。');
+
+  // Cancel on left, Quit on right as primary (p) and focused
+  const cancelBtn = page.getByTestId('confirm-quit-cancel');
+  const quitBtn = page.getByTestId('confirm-quit-ok');
+  await expect(cancelBtn).toHaveText('取消');
+  await expect(quitBtn).toHaveText('退出');
+  await expect(quitBtn).toHaveClass(/p/);
+
+  // Focused element is the quit button
+  const isQuitFocused = await page.evaluate(() => {
+    return document.activeElement?.getAttribute('data-testid') === 'confirm-quit-ok';
+  });
+  expect(isQuitFocused).toBe(true);
+
+  // Cancel dismisses without posting
+  await cancelBtn.click();
+  await expect(dialog).toHaveCount(0);
+  expect(await shellMessages(page)).toEqual([]);
+
+  // Re-trigger and click quit -> posts quit
+  await page.evaluate(() => window.__protoShell('confirm-quit'));
+  await expect(dialog).toBeVisible();
+  await page.getByTestId('confirm-quit-ok').click();
+  await expect(dialog).toHaveCount(0);
+  expect(await shellMessages(page)).toEqual(['quit']);
+
+  expectClean(state);
+});
+
+test('in English locale, card titles are single line (height <= line-height * 1.5)', async ({ page }) => {
+  const state = await openProto(page, '?shell=1');
+  await page.evaluate(() => {
+    localStorage.setItem('weft_lang', 'en');
+  });
+  await page.reload();
+
+  await page.getByTestId('window-close').click();
+  const dialog = page.getByTestId('window-close-dialog');
+  await expect(dialog).toBeVisible();
+
+  const trayTitle = dialog.locator('[data-testid="window-close-tray"] .window-close-card-title');
+  const quitTitle = dialog.locator('[data-testid="window-close-quit"] .window-close-card-title');
+
+  await expect(trayTitle).toHaveText('Minimize to tray');
+  await expect(quitTitle).toHaveText('Quit Weft');
+
+  const trayBox = await box(trayTitle);
+  const quitBox = await box(quitTitle);
+
+  const [trayLineHeight, quitLineHeight] = await page.evaluate(() => {
+    const getLh = (sel) => {
+      const el = document.querySelector(sel);
+      const s = getComputedStyle(el);
+      const lh = parseFloat(s.lineHeight);
+      return Number.isNaN(lh) ? parseFloat(s.fontSize) * 1.35 : lh;
+    };
+    return [
+      getLh('[data-testid="window-close-tray"] .window-close-card-title'),
+      getLh('[data-testid="window-close-quit"] .window-close-card-title'),
+    ];
+  });
+
+  expect(trayBox.height).toBeLessThanOrEqual(trayLineHeight * 1.5);
+  expect(quitBox.height).toBeLessThanOrEqual(quitLineHeight * 1.5);
+
+  expectClean(state);
+});
+

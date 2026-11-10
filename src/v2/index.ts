@@ -41,7 +41,7 @@ import {
   type KernelChange,
   type KernelDiffBody,
 } from './views/changes.ts';
-import { compactionSettingsView, validateCompactionPatch } from '../core/settings.mjs';
+import { compactionSettingsView, validateCloseActionPatch, validateCompactionPatch } from '../core/settings.mjs';
 import {
   conversationSnapshot,
   findPresentedTool,
@@ -740,14 +740,15 @@ export function createV2Handler(opts: {
     if (method === 'PUT' && pathname === '/api/v2/settings') {
       const body = await readObjectBody(req, res, pathname, method);
       if (!body) return true;
-      const extra = Object.keys(body).filter((key) => key !== 'compaction');
+      const extra = Object.keys(body).filter((key) => key !== 'compaction' && key !== 'closeAction');
       if (extra.length) {
         sendV2(res, pathname, method, 400, { error: 'invalid body', code: 'E_BAD_REQUEST' } satisfies V2Error);
         return true;
       }
       const patch: Record<string, unknown> = {};
       if (Object.prototype.hasOwnProperty.call(body, 'compaction')) patch.compaction = body.compaction;
-      const invalid = validateCompactionPatch(patch);
+      if (Object.prototype.hasOwnProperty.call(body, 'closeAction')) patch.closeAction = body.closeAction;
+      const invalid = validateCompactionPatch(patch) || validateCloseActionPatch(patch);
       if (invalid) {
         sendV2(res, pathname, method, 400, { error: invalid, code: 'E_BAD_REQUEST' } satisfies V2Error);
         return true;

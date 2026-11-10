@@ -54,6 +54,21 @@ namespace Weft.Desktop
         private bool customFrame;
         private bool runtimeMissing;
 
+        // Closing the window is handed to the page (it knows closeAction). The process
+        // exits only after the page says quit, or when the page cannot answer yet.
+        private volatile bool allowClose;
+        private volatile bool quitting;
+        private bool handingClose;
+        private readonly object launchLock = new object();
+        private Process launcherProcess;
+        private NotifyIcon tray;
+        private Icon trayIcon;
+
+        private const int PageCloseTimeoutMs = 2000;
+        private const int StopTimeoutMs = 20000;
+        private const string AskPageToCloseScript =
+            "(function(){var b=document.querySelector('[data-testid=\"window-close\"]');if(!b)return 'missing';b.click();return 'ok';})()";
+
         // CoreWebView2Settings.IsNonClientRegionSupportEnabled first ships in Release SDK 1.0.2420.47, which
         // "requires WebView2 Runtime 123.0.2420.47 or later"
         // (https://learn.microsoft.com/microsoft-edge/webview2/release-notes/sdk/1-0-2420-47).
@@ -506,7 +521,9 @@ namespace Weft.Desktop
 
         private void OnShellMessage(CoreWebView2WebMessageReceivedEventArgs a)
         {
-            // Only our own service may drive the window, and only these three actions.
+            // Only our own page may drive the window.
+            // Page -> shell: minimize, toggle-maximize, close, hide-to-tray, quit, theme, pick-folder.
+            // Shell -> page: confirm-quit (tray "退出 Weft"), posted with PostWebMessageAsString.
             if (!SameOrigin(a.Source)) return;
             string msg;
             try { msg = a.TryGetWebMessageAsString(); } catch (ArgumentException) { return; }
@@ -528,8 +545,251 @@ namespace Weft.Desktop
                 case "toggle-maximize":
                     WindowState = WindowState == FormWindowState.Maximized ? FormWindowState.Normal : FormWindowState.Maximized;
                     break;
-                case "close": Close(); break; // window only; the service keeps running
+                case "close": HandCloseToPage(); break;
+                case "hide-to-tray": HideToTray(); break;
+                case "quit": QuitProcess(); break;
             }
+        }
+
+        // The page draws the close button and applies closeAction. A system close (Alt+F4, the
+        // splash close button) asks that button to run. If the page is not up yet, quit outright.
+        private async void HandCloseToPage()
+        {
+            if (quitting || handingClose || allowClose) return;
+            handingClose = true;
+            bool accepted = false;
+            try { accepted = await AskPageToHandleClose(); }
+            catch { accepted = false; }
+            if (!accepted && !quitting) QuitProcess();
+            if (!quitting) handingClose = false;
+        }
+
+        private async Task<bool> AskPageToHandleClose()
+        {
+            var core = web.CoreWebView2;
+            if (core == null || splash.Visible) return false;
+            var script = core.ExecuteScriptAsync(AskPageToCloseScript);
+            var finished = await Task.WhenAny(script, Task.Delay(PageCloseTimeoutMs));
+            if (finished != script) return false;
+            return await script == "\"ok\"";
+        }
+
+        private void HideToTray()
+        {
+            if (quitting) return;
+            try { EnsureTray(); }
+            catch { return; }
+            if (tray == null) return;
+            tray.Visible = true;
+            ShowInTaskbar = false;
+            Hide();
+        }
+
+        private void ShowFromTray()
+        {
+            ShowInTaskbar = true;
+            if (!Visible) Show();
+            if (WindowState == FormWindowState.Minimized) WindowState = FormWindowState.Normal;
+            Activate();
+            BringToFront();
+        }
+
+        private void EnsureTray()
+        {
+            if (tray != null) return;
+            trayIcon = TrayIconImage();
+            tray = new NotifyIcon
+            {
+                Icon = trayIcon,
+                Text = "Weft",
+                Visible = false,
+            };
+            var menu = new ContextMenuStrip();
+            var open = new ToolStripMenuItem("打开 Weft");
+            open.Click += (o, e) => ShowFromTray();
+            var quit = new ToolStripMenuItem("退出 Weft");
+            quit.Click += (o, e) => RequestConfirmQuit();
+            menu.Items.Add(open);
+            menu.Items.Add(quit);
+            tray.ContextMenuStrip = menu;
+            tray.MouseDoubleClick += (o, e) =>
+            {
+                if (e.Button == MouseButtons.Left) ShowFromTray();
+            };
+        }
+
+        private Icon TrayIconImage()
+        {
+            if (smallIcon != null) return (Icon)smallIcon.Clone();
+            if (Icon != null) return (Icon)Icon.Clone();
+            try
+            {
+                var extracted = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
+                if (extracted != null) return extracted;
+            }
+            catch { }
+            return (Icon)SystemIcons.Application.Clone();
+        }
+
+        private void DisposeTray()
+        {
+            if (tray != null)
+            {
+                tray.Visible = false;
+                tray.Dispose();
+                tray = null;
+            }
+            if (trayIcon != null)
+            {
+                trayIcon.Dispose();
+                trayIcon = null;
+            }
+        }
+
+        // Tray "退出 Weft": if the window is hidden, show it first, then ask the page to confirm.
+        private void RequestConfirmQuit()
+        {
+            if (quitting) return;
+            if (!Visible || WindowState == FormWindowState.Minimized) ShowFromTray();
+            else Activate();
+            BeginInvoke(new Action(PostConfirmQuit));
+        }
+
+        private void PostConfirmQuit()
+        {
+            if (quitting) return;
+            var core = web.CoreWebView2;
+            if (core == null || splash.Visible)
+            {
+                QuitProcess();
+                return;
+            }
+            try { core.PostWebMessageAsString("confirm-quit"); }
+            catch { QuitProcess(); }
+        }
+
+        // Hide first, stop the service the same way as `weft stop`, then exit.
+        // Exit 2 (a task is still running) leaves the window open; the service stays up.
+        private void QuitProcess()
+        {
+            if (quitting) return;
+            quitting = true;
+            bool hadTray = tray != null && tray.Visible;
+            if (tray != null) tray.Visible = false;
+            Hide();
+            Task.Run(() =>
+            {
+                StopLauncher();
+                int code = 1;
+                string detail = "";
+                try { code = RunWeftStop(out detail); }
+                catch (Exception ex) { detail = ex.Message; }
+                try
+                {
+                    BeginInvoke(new Action(() =>
+                    {
+                        if (code == 0)
+                        {
+                            FinishQuit();
+                            return;
+                        }
+                        quitting = false;
+                        if (hadTray)
+                        {
+                            EnsureTray();
+                            tray.Visible = true;
+                        }
+                        ShowFromTray();
+                        string text = code == 2
+                            ? "服务正在运行任务，没有停止"
+                            : "停止服务失败。" + (string.IsNullOrWhiteSpace(detail) ? "" : "\n\n" + detail);
+                        MessageBox.Show(this, text, "Weft", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    }));
+                }
+                catch
+                {
+                    Environment.Exit(code == 0 ? 0 : 1);
+                }
+            });
+        }
+
+        private void FinishQuit()
+        {
+            allowClose = true;
+            DisposeTray();
+            Close();
+        }
+
+        private void CloseLeavingService()
+        {
+            allowClose = true;
+            Close();
+        }
+
+        private void StopLauncher()
+        {
+            Process p;
+            lock (launchLock) p = launcherProcess;
+            if (p == null) return;
+            try
+            {
+                if (!p.HasExited) p.Kill();
+            }
+            catch { }
+        }
+
+        private static void ApplyDataDir(ProcessStartInfo psi)
+        {
+            if (string.IsNullOrWhiteSpace(psi.EnvironmentVariables["WEFT_DATA_DIR"]))
+                psi.EnvironmentVariables["WEFT_DATA_DIR"] = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Weft");
+        }
+
+        // Same command as Weft-stop.cmd: `node app\bin\weft.mjs stop`. Exit 0 means the service is gone.
+        private int RunWeftStop(out string detail)
+        {
+            detail = "";
+            string dir = AppDomain.CurrentDomain.BaseDirectory;
+            string node = Path.Combine(dir, "node", "node.exe");
+            string cli = Path.Combine(dir, "app", "bin", "weft.mjs");
+            // The packaged layout is node\node.exe next to Weft.exe. Nothing was started without it.
+            if (!File.Exists(node) || !File.Exists(cli))
+            {
+                detail = "";
+                return 0;
+            }
+            var lines = new List<string>();
+            var psi = new ProcessStartInfo(node)
+            {
+                Arguments = "\"" + cli + "\" stop",
+                WorkingDirectory = dir,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                StandardOutputEncoding = System.Text.Encoding.UTF8,
+                StandardErrorEncoding = System.Text.Encoding.UTF8,
+            };
+            ApplyDataDir(psi);
+            var p = new Process { StartInfo = psi };
+            DataReceivedEventHandler collect = (o, a) => { if (a.Data != null) lock (lines) lines.Add(a.Data); };
+            p.OutputDataReceived += collect;
+            p.ErrorDataReceived += collect;
+            p.Start();
+            p.BeginOutputReadLine();
+            p.BeginErrorReadLine();
+            if (!p.WaitForExit(StopTimeoutMs))
+            {
+                try { p.Kill(); } catch { }
+                detail = "停止服务超时";
+                return 1;
+            }
+            p.WaitForExit();
+            string text;
+            lock (lines) text = string.Join("\n", lines.GetRange(0, Math.Min(5, lines.Count)));
+            if (text.Length > 500) text = text.Substring(0, 500);
+            detail = text;
+            return p.ExitCode;
         }
 
         private bool isPickingFolder;
@@ -777,8 +1037,7 @@ namespace Weft.Desktop
 
         private void Bring()
         {
-            if (WindowState == FormWindowState.Minimized) WindowState = FormWindowState.Normal;
-            Activate();
+            ShowFromTray();
         }
 
         private void DecideFrame()
@@ -794,6 +1053,29 @@ namespace Weft.Desktop
             catch (Exception) { }
         }
 
+        protected override void OnFormClosing(FormClosingEventArgs e)
+        {
+            // Logoff must not be held up by the page. The service is stopped with the session.
+            if (e.CloseReason == CloseReason.WindowsShutDown)
+            {
+                allowClose = true;
+            }
+            if (allowClose)
+            {
+                base.OnFormClosing(e);
+                return;
+            }
+            // Let the page apply closeAction. Cancel so the window stays until it answers.
+            e.Cancel = true;
+            if (!quitting) BeginInvoke(new Action(HandCloseToPage));
+        }
+
+        protected override void OnFormClosed(FormClosedEventArgs e)
+        {
+            DisposeTray();
+            base.OnFormClosed(e);
+        }
+
         protected override async void OnShown(EventArgs e)
         {
             base.OnShown(e);
@@ -804,7 +1086,7 @@ namespace Weft.Desktop
         private async Task Start()
         {
             string url = await Task.Run(() => LaunchService());
-            if (url == null) return;
+            if (quitting || url == null) return;
             origin = new Uri(url).GetLeftPart(UriPartial.Authority);
 
             if (runtimeMissing)
@@ -812,7 +1094,8 @@ namespace Weft.Desktop
                 MessageBox.Show(this, "没有找到 WebView2 运行库，将改用默认浏览器打开 Weft。\n如需独立窗口，请先安装 Microsoft Edge WebView2 Runtime。",
                     "Weft", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 OpenExternal(url);
-                Close();
+                // The browser keeps using the service, so this close must not run weft stop.
+                CloseLeavingService();
                 return;
             }
 
@@ -879,10 +1162,10 @@ namespace Weft.Desktop
                     StandardOutputEncoding = System.Text.Encoding.UTF8,
                     StandardErrorEncoding = System.Text.Encoding.UTF8,
                 };
-                if (string.IsNullOrWhiteSpace(psi.EnvironmentVariables["WEFT_DATA_DIR"]))
-                    psi.EnvironmentVariables["WEFT_DATA_DIR"] = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Weft");
+                ApplyDataDir(psi);
 
                 var p = new Process { StartInfo = psi };
+                lock (launchLock) launcherProcess = p;
                 DataReceivedEventHandler collect = (o, a) => { if (a.Data != null) lock (lines) lines.Add(a.Data); };
                 p.OutputDataReceived += collect;
                 p.ErrorDataReceived += collect;
@@ -893,17 +1176,19 @@ namespace Weft.Desktop
                 var deadline = DateTime.UtcNow + StartTimeout;
                 while (DateTime.UtcNow < deadline)
                 {
+                    if (quitting) return null;
                     string hit = FindUrl(lines);
-                    if (hit != null) return hit;
+                    if (hit != null) return quitting ? null : hit;
                     if (p.HasExited)
                     {
                         Thread.Sleep(300); // let the last output lines arrive
                         hit = FindUrl(lines);
-                        if (hit != null) return hit;
+                        if (hit != null) return quitting ? null : hit;
                         break;
                     }
                     Thread.Sleep(100);
                 }
+                if (quitting) return null;
                 if (!p.HasExited)
                 {
                     try { p.Kill(); } catch { }
@@ -912,8 +1197,10 @@ namespace Weft.Desktop
             }
             catch (Exception ex)
             {
+                if (quitting) return null;
                 lines.Add(ex.Message);
             }
+            if (quitting) return null;
             string head;
             lock (lines) head = string.Join("\n", lines.GetRange(0, Math.Min(5, lines.Count)));
             Fail("Weft 服务启动失败。\n\n" + head);
@@ -935,7 +1222,9 @@ namespace Weft.Desktop
 
         private void Fail(string message)
         {
+            if (quitting || allowClose) return;
             if (InvokeRequired) { Invoke(new Action(() => Fail(message))); return; }
+            if (quitting || allowClose) return;
             MessageBox.Show(this, message, "Weft", MessageBoxButtons.OK, MessageBoxIcon.Error);
             Close();
         }

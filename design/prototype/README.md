@@ -12,7 +12,7 @@ npm run build:proto       # 生成 design/prototype/index.html（单文件，构
 open design/prototype/index.html    # macOS；Windows 直接双击
 ```
 
-- 桌面壳布局预览（内网版）：打开 `index.html?shell=1`，页面按 Weft.exe 无标题栏的样子显示窗口按钮和拖动区；按钮点了没反应。
+- 桌面壳布局与关闭/退出交互预览（内网版）：打开 `index.html?shell=1`，页面按 Weft.exe 无标题栏的样子显示窗口按钮和拖动区。点右上角关闭按钮弹出「关闭 Weft」对话框，支持缩到托盘、退出 Weft 与「不再询问」；设置「通用」页提供「关闭窗口时」偏好切换；控制台执行 `window.__protoShell('confirm-quit')` 模拟托盘菜单退出确认。
 - 单文件：JS、CSS、品牌图标全部内联，用 `file://` 打开，不发任何网络请求。
 - 路由用 hash（`index.html#/c/<id>`），因为 `file://` 下不能 pushState 到别的路径。
 - 数据只在内存里：刷新页面或点右下角「重置原型数据」都会回到预置状态。
@@ -96,6 +96,14 @@ open design/prototype/index.html    # macOS；Windows 直接双击
 - **添加项目**：对话框只有一个路径框，「浏览」在框内右端（模拟系统选文件夹：第 1 次选中 `C:\Users\demo\Projects\billing-api`，第 2 次取消，交替）。选中或输入路径回车后，框下一行显示「项目名 xxx」，Git 仓库带「Git」标签；路径不存在或不允许时框变红、下面一行红字。「添加」在路径为空时禁用，手输有效路径可直接点「添加」。模拟目录树根是 `D:\work`（`weft`、`website`、`sandbox/playground`、`sandbox/notes`、`archive/old-site`），盘符大小写不敏感。
 - **页内目录浏览**：只在「浏览」不可用时出现（模拟远程访问，用 `index.html?pick=unsupported` 打开，点「浏览」后「浏览」按钮消失、下面出现面包屑 + 子目录列表）。
 - **Git 导入**：默认用预置的「内网 GitLab」连接，项目列表两个（可搜索），选项目后能选分支（默认分支 + 两个候选），再创建。行内还有「仓库地址」方式，手填 URL 和分支。
+
+### 桌面壳窗口关闭与退出（T125-2）
+
+以 `index.html?shell=1` 打开（普通浏览器无 `?shell=1` 时以下均不出现）：
+- **点右上角关闭按钮**：弹出「关闭 Weft」对话框，包含主按钮「缩到托盘」（默认焦点）、副按钮「退出 Weft」、勾选框「不再询问」，底部一行淡色小字提醒「退出后定时任务不会执行。」。按 Esc 或点遮罩取消。
+- **不再询问**：勾选后点击任一动作，以后点关闭直接按上次的选择执行（发 `hide-to-tray` 或 `quit` 消息），不再弹窗。
+- **设置页偏好**：设置「通用」页增加「关闭窗口时」（询问 / 缩到托盘 / 退出 Weft）；选「退出 Weft」时下方同样显示一行小字「退出后定时任务不会执行。」。
+- **托盘菜单退出模拟**：控制台执行 `window.__protoShell('confirm-quit')` 模拟从托盘菜单触发退出，弹出确认对话框（默认焦点在「退出 Weft」，不显示「不再询问」勾选框）。发出的消息存入 `window.__protoShellMessages` 供断言。
 
 ## 代码在哪
 

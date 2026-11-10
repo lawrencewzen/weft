@@ -1532,6 +1532,6 @@ export function createSeed(now: number): MockDb {
     messagePastes: new Map(),
     workspaceUploads: new Map(),
     glab: seedGlab(),
-    settings: { compaction: { triggerPercent: 80 } },
+    settings: { compaction: { triggerPercent: 80 }, closeAction: 'ask' },
   };
 }

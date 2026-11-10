@@ -45,15 +45,18 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * 读取压缩触发点
-         * @description 全局一个值，存在现有 settings 里。缺省或旧数据没有该字段时为 80。
-         *     改完不必重启：下一次官方压缩判断读取当时的 settings。
+         * 读取全局设置
+         * @description 读取全局设置，包含自动压缩触发点（compaction.triggerPercent，缺省或旧数据为 80）与 Windows 桌面壳关闭窗口行为（closeAction: ask / tray / quit，缺省为 ask）。
+         *     改完不必重启：下一次官方压缩判断与窗口关闭读取当时的 settings。
          */
         get: operations["getSettings"];
         /**
-         * 设置压缩触发点
-         * @description `triggerPercent` 必须是 60 到 90 的整数。缺字段不改现有值。非法返回 400。
-         *     写入后下一次判断即用新值，不重启进程。
+         * 修改全局设置
+         * @description 修改全局设置。可按需提供 compaction 或 closeAction。
+         *     `compaction.triggerPercent` 必须是 60 到 90 的整数。
+         *     `closeAction` 为 ask（询问）、tray（缩到托盘）或 quit（退出 Weft）。
+         *     缺字段不改现有值。非法返回 400。
+         *     写入后即刻生效，不重启进程。
          */
         put: operations["putSettings"];
         post?: never;
@@ -1334,17 +1337,28 @@ export interface components {
             /** @description 幂等键。缺省时服务端生成。同一个 requestId 重复提交返回同一个 runId。 */
             requestId?: string;
         };
-        /** @description 全局压缩触发点。 */
+        /** @description 全局设置（压缩触发点与 Windows 桌面壳关闭行为）。 */
         CompactionSettingsView: {
             compaction: components["schemas"]["CompactionPreference"];
+            /**
+             * @description Windows 桌面壳点击关闭按钮时的行为：ask 询问 / tray 缩到托盘 / quit 退出 Weft。缺省为 ask。
+             * @default ask
+             * @enum {string}
+             */
+            closeAction: "ask" | "tray" | "quit";
         };
         CompactionPreference: {
             /** @description 自动压缩触发点，占模型上下文窗口的百分比。整数 60–90，缺省 80。全局一个值，不按模型单独设置。 */
             triggerPercent: number;
         };
-        /** @description 只改压缩触发点。省略 compaction 表示不改。 */
+        /** @description 修改全局设置。省略字段表示不改。 */
         CompactionSettingsPatch: {
             compaction?: components["schemas"]["CompactionPreference"];
+            /**
+             * @description 修改 Windows 桌面壳点击关闭按钮时的行为。省略表示不改。
+             * @enum {string}
+             */
+            closeAction?: "ask" | "tray" | "quit";
         };
         CompactRequest: {
             /** @description 传给官方 compact 的可选说明。省略则不带。 */

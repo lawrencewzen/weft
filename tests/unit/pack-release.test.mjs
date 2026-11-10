@@ -139,6 +139,9 @@ test('README covers start, data dir, upgrade, and stop', () => {
   assert.match(text, /http:\/\/127\.0\.0\.1:3300/);
   assert.match(text, /set WEFT_PORT=/);
   assert.match(text, /只能这台电脑自己访问/);
+  assert.match(text, /缩到通知区后窗口隐藏，服务继续运行/);
+  assert.match(text, /托盘菜单「退出 Weft」会先确认/);
+  assert.match(text, /再次双击 Weft\.exe，都会打开原来的窗口/);
 });
 
 test('runtime copy list includes the built app and the OpenAPI file the server loads', () => {

@@ -4,6 +4,9 @@ import { normalizeProvidersV3 } from './provider-config.mjs';
 export const DEFAULT_TRIGGER_PERCENT = 80;
 export const MIN_TRIGGER_PERCENT = 60;
 export const MAX_TRIGGER_PERCENT = 90;
+export const DEFAULT_CLOSE_ACTION = 'ask';
+
+const CLOSE_ACTIONS = new Set(['ask', 'tray', 'quit']);
 
 export const DEFAULT_SETTINGS = {
   version: 3,
@@ -15,6 +18,7 @@ export const DEFAULT_SETTINGS = {
   plugins: {},
   skills: {},
   compaction: { triggerPercent: DEFAULT_TRIGGER_PERCENT },
+  closeAction: DEFAULT_CLOSE_ACTION,
 };
 
 const THEMES = new Set(['white', 'claude', 'codex', 'grok', 'cursor']);
@@ -81,8 +85,35 @@ export function validateCompactionPatch(patch) {
   return null;
 }
 
+/**
+ * Stored close action, or ask when the field is missing or not ask|tray|quit.
+ * @returns {'ask' | 'tray' | 'quit'}
+ */
+export function readCloseAction(settings) {
+  const raw = settings?.closeAction;
+  if (typeof raw === 'string' && CLOSE_ACTIONS.has(raw)) return raw;
+  return DEFAULT_CLOSE_ACTION;
+}
+
+/**
+ * `null` when the patch does not touch closeAction.
+ * A string when `closeAction` is present and not ask, tray, or quit (HTTP 400).
+ */
+export function validateCloseActionPatch(patch) {
+  if (!patch || typeof patch !== 'object' || Array.isArray(patch)) return null;
+  if (!Object.prototype.hasOwnProperty.call(patch, 'closeAction')) return null;
+  if (typeof patch.closeAction === 'string' && CLOSE_ACTIONS.has(patch.closeAction)) return null;
+  return 'closeAction must be ask, tray or quit';
+}
+
+/**
+ * @returns {{ compaction: { triggerPercent: number }, closeAction: 'ask' | 'tray' | 'quit' }}
+ */
 export function compactionSettingsView(settings) {
-  return { compaction: { triggerPercent: readTriggerPercent(settings) } };
+  return {
+    compaction: { triggerPercent: readTriggerPercent(settings) },
+    closeAction: readCloseAction(settings),
+  };
 }
 
 function applyCompaction(out, input) {
@@ -94,10 +125,15 @@ function applyCompaction(out, input) {
   out.compaction = { triggerPercent: readTriggerPercent({ compaction: { triggerPercent: candidate } }) };
 }
 
+function applyCloseAction(out) {
+  out.closeAction = readCloseAction(out);
+}
+
 function applyCommon(out, input) {
   out.plugins = normalizeFlagMap(out.plugins);
   out.skills = normalizeFlagMap(out.skills);
   applyCompaction(out, input);
+  applyCloseAction(out);
   if (typeof out.theme === 'string' && out.theme.includes('-')) {
     const [family, mode] = out.theme.split('-');
     if (THEMES.has(family)) out.theme = family;
@@ -162,6 +198,7 @@ export function publicSettings(s) {
     plugins: { ...n.plugins },
     skills: { ...n.skills },
     compaction: { triggerPercent: readTriggerPercent(n) },
+    closeAction: readCloseAction(n),
   };
   if (n.version === 3) {
     body.version = 3;
@@ -206,6 +243,9 @@ function applySharedPatch(next, cur, patchObj) {
     && !Array.isArray(patchObj.compaction)
     && Object.prototype.hasOwnProperty.call(patchObj.compaction, 'triggerPercent')) {
     next.compaction = { triggerPercent: patchObj.compaction.triggerPercent };
+  }
+  if (typeof patchObj.closeAction === 'string' && CLOSE_ACTIONS.has(patchObj.closeAction)) {
+    next.closeAction = patchObj.closeAction;
   }
 }
 

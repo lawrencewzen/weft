@@ -1,5 +1,10 @@
 import { useEffect, useState } from 'react';
-import { getSettings, putCompactionTrigger } from '../../data/api';
+import { getSettings, putCompactionTrigger, type CloseAction } from '../../data/api';
+import {
+  getCachedCloseAction,
+  setCachedCloseAction,
+  updateCloseAction,
+} from '../../data/shellExit';
 import { getPreferredLang, setPreferredLang, type Lang } from '../../data/lang';
 import {
   APPEARANCES,
@@ -71,6 +76,8 @@ export function GeneralPage({ lang }: Props) {
   const [trigger, setTrigger] = useState('');
   const [saved, setSaved] = useState<number | null>(null);
   const [triggerError, setTriggerError] = useState<string | null>(null);
+  const isShell = typeof document !== 'undefined' && document.documentElement.dataset.desktopShell === '1';
+  const [closeAction, setCloseAction] = useState<CloseAction>(getCachedCloseAction);
 
   useEffect(() => {
     let alive = true;
@@ -79,10 +86,21 @@ export function GeneralPage({ lang }: Props) {
         if (!alive) return;
         setSaved(view.compaction.triggerPercent);
         setTrigger(String(view.compaction.triggerPercent));
+        if (view.closeAction) {
+          setCloseAction(view.closeAction);
+          setCachedCloseAction(view.closeAction);
+        }
       })
       .catch(() => {});
-    return () => { alive = false; };
+    return () => {
+      alive = false;
+    };
   }, []);
+
+  const handleCloseActionChange = (action: CloseAction) => {
+    setCloseAction(action);
+    void updateCloseAction(action);
+  };
 
   async function commitTrigger() {
     const n = parseTriggerPercent(trigger);
@@ -292,6 +310,52 @@ export function GeneralPage({ lang }: Props) {
           <span className="ns-pref-input-unit">%</span>
         </div>
       </div>
+
+      {isShell ? (
+        <div className="ns-pref-row">
+          <div className="ns-pref-copy">
+            <b>{t(lang, 'pref_close_action_label')}</b>
+            <span>{t(lang, 'pref_close_action_desc')}</span>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
+            <div className="ns-seg" data-testid="next-pref-close-action">
+              <button
+                type="button"
+                className={closeAction === 'ask' ? 'is-on' : ''}
+                data-action="ask"
+                onClick={() => handleCloseActionChange('ask')}
+              >
+                {t(lang, 'close_action_ask')}
+              </button>
+              <button
+                type="button"
+                className={closeAction === 'tray' ? 'is-on' : ''}
+                data-action="tray"
+                onClick={() => handleCloseActionChange('tray')}
+              >
+                {t(lang, 'window_close_tray')}
+              </button>
+              <button
+                type="button"
+                className={closeAction === 'quit' ? 'is-on' : ''}
+                data-action="quit"
+                onClick={() => handleCloseActionChange('quit')}
+              >
+                {t(lang, 'window_close_quit')}
+              </button>
+            </div>
+            {closeAction === 'quit' ? (
+              <span
+                className="ns-field-hint"
+                data-testid="next-pref-close-action-note"
+                style={{ margin: 0, textAlign: 'right' }}
+              >
+                {t(lang, 'window_close_quit_note')}
+              </span>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -724,6 +724,109 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.65; backgrou
   line-height: 1.55;
   color: var(--text-secondary);
 }
+.window-close-dialog {
+  width: min(480px, calc(100vw - 32px));
+  max-width: calc(100vw - 32px);
+  color: var(--ink);
+}
+.window-close-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin: 0;
+}
+.window-close-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+  background: var(--sub);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 14px 16px;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+  color: var(--ink);
+  font: inherit;
+  width: 100%;
+  box-sizing: border-box;
+}
+.window-close-card:hover {
+  background: var(--hover);
+}
+.window-close-card:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.window-close-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  width: 100%;
+}
+.window-close-card-icon {
+  flex-shrink: 0;
+  color: var(--mute);
+  transition: color 0.15s ease;
+}
+.window-close-card:hover .window-close-card-icon {
+  color: var(--ink);
+}
+.window-close-card-title {
+  font-size: var(--fs-body);
+  font-weight: 500;
+  line-height: 1.35;
+  color: var(--ink);
+  white-space: nowrap;
+}
+.window-close-card-desc {
+  font-size: var(--fs-sm);
+  color: var(--mute);
+  line-height: 1.45;
+  margin: 0;
+  word-break: normal;
+}
+.window-close-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0;
+}
+.window-close-remember {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--fs-sm);
+  color: var(--ink);
+  cursor: pointer;
+  user-select: none;
+  margin: 0;
+  padding: 0;
+  line-height: 1;
+}
+.window-close-remember input {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  padding: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+  flex-shrink: 0;
+  display: block;
+}
+.window-close-remember-text {
+  font-size: var(--fs-sm);
+  line-height: 1.4;
+  white-space: nowrap;
+}
+.window-close-settings-hint {
+  font-size: var(--fs-sm);
+  color: var(--mute);
+  white-space: nowrap;
+  line-height: 1.4;
+}
 .btn.p { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
 /* .btn:hover 的浅灰底写在后面、优先级相同，会把主按钮悬停时刷成「浅灰底白字」，这里压回去。 */
 .btn.p:hover { background: color-mix(in srgb, var(--accent) 86%, var(--on-accent)); border-color: var(--accent); color: var(--on-accent); }
