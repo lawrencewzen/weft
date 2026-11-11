@@ -41,12 +41,18 @@ public static class PreviewRenderer
                     Mode = InstallMode.Install, NewVersion = "0.1.3", OldVersion = "0.1.2", DesktopShortcut = true,
                     Dir = Engine.DefaultDir,
                 };
-                // 纯离屏：不 Show、不进消息循环，只建句柄后 DrawToBitmap
-                using var form = new MainForm(ctx, null, preview: true);
-                form.CreateControl();
-                _ = form.Handle;
+                // 窗口放在屏幕外并 Show：没 Show 过的窗体 DrawToBitmap 画不出子控件（实测全空白）。
+                // 日志区不用 TextBox（LogPane.Offscreen），不进 Application.Run，不弹任何对话框。
+                using var form = new MainForm(ctx, null, preview: true)
+                {
+                    StartPosition = FormStartPosition.Manual,
+                    ShowInTaskbar = false,
+                    Location = new Point(-20000, -20000),
+                };
+                form.Show();
                 Log.Write("预览 构建完成");
                 form.ShowPreviewState(state);
+                Application.DoEvents();
                 Log.Write("预览 状态就绪");
                 using var bmp = new Bitmap(form.Width, form.Height);
                 form.DrawToBitmap(bmp, new Rectangle(0, 0, form.Width, form.Height));
