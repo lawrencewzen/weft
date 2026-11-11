@@ -211,19 +211,39 @@ export function installProcessHandlers(logger = log) {
 }
 
 /**
- * Log one finished HTTP request: 5xx as error, slow as warn, 4xx as debug.
+ * Log one finished HTTP request: 5xx as error, slow as warn (SSE streams are long by design and never slow), 4xx as debug.
  * The path has no query string; headers and bodies are never logged.
  */
 export function trackHttp(req, res, { logger = log, slowMs = httpSlowMs() } = {}) {
   const started = Date.now();
+  // writeHead(status, headers) does not populate getHeader(), so remember the type here.
+  let streamType = false;
+  const writeHead = res.writeHead;
+  res.writeHead = function patched(...args) {
+    const headers = args.find((a) => a && typeof a === 'object');
+    streamType = /^text\/event-stream/i.test(contentTypeOf(headers));
+    return writeHead.apply(this, args);
+  };
   res.on('finish', () => {
     const ms = Date.now() - started;
     const status = res.statusCode;
     const fields = { method: req.method, path: String(req.url || '/').split('?')[0], status, ms };
     if (status >= 500) logger.error('WEFT_HTTP', 'server error', fields);
-    else if (ms > slowMs) logger.warn('WEFT_HTTP', 'slow request', fields);
+    else if (ms > slowMs && !(streamType || /^text\/event-stream/i.test(String(res.getHeader('content-type') || '')))) logger.warn('WEFT_HTTP', 'slow request', fields);
     else if (status >= 400) logger.debug('WEFT_HTTP', 'client error', fields);
   });
+}
+
+function contentTypeOf(headers) {
+  if (!headers) return '';
+  if (Array.isArray(headers)) {
+    for (let k = 0; k + 1 < headers.length; k += 2) {
+      if (String(headers[k]).toLowerCase() === 'content-type') return String(headers[k + 1]);
+    }
+    return '';
+  }
+  for (const [k, v] of Object.entries(headers)) if (k.toLowerCase() === 'content-type') return String(v);
+  return '';
 }
 
 export function httpSlowMs() {

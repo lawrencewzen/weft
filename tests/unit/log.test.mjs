@@ -244,3 +244,25 @@ test('uncaught exception: logged with stack, process still exits non-zero', asyn
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test('HTTP: a long SSE response is not a slow request, but an SSE 5xx is still an error', async () => {
+  const dir = await tmp();
+  try {
+    const logger = createLogger({ dataDir: dir, console: false });
+    await withHttp((req, res) => {
+      trackHttp(req, res, { logger, slowMs: 20 });
+      const status = req.url.startsWith('/bad') ? 500 : 200;
+      res.writeHead(status, { 'content-type': 'text/event-stream' });
+      setTimeout(() => res.end(), 60);
+    }, async (port) => {
+      const base = `http://127.0.0.1:${port}`;
+      for (const p of ['/events', '/bad-events']) await (await fetch(base + p)).text();
+    });
+    const text = read(dir);
+    assert.equal(text.includes('path=/events'), false);
+    assert.match(text, /ERROR \[WEFT_HTTP\] method=GET path=\/bad-events status=500/);
+    assert.equal(/slow request/.test(text), false);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});

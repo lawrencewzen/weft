@@ -53,7 +53,6 @@ import { loadSubagentFromStore } from './src/v2/load-subagent.ts';
 import { phrase } from './src/v2/phrases/index.ts';
 import fs from 'node:fs/promises';
 import { log, installProcessHandlers, trackHttp } from './src/core/log.mjs';
-import { execFileSync } from 'node:child_process';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_NEXT = path.join(ROOT, 'public-next');
@@ -1384,14 +1383,33 @@ async function routeApi(req, res, url) {
   sendJson(res, 404, { error: 'not found' });
 }
 
+// Reads .git directly (no git process). Release packages have no .git: the commit is omitted.
 function gitCommit() {
   try {
-    return execFileSync('git', ['rev-parse', '--short', 'HEAD'], {
-      cwd: ROOT, timeout: 2000, stdio: ['ignore', 'pipe', 'ignore'], encoding: 'utf8',
-    }).trim() || undefined;
-  } catch {
-    return undefined;
-  }
+    let gitDir = path.join(ROOT, '.git');
+    if (!existsSync(gitDir)) return undefined;
+    if (statSync(gitDir).isFile()) {
+      const m = /^gitdir:\s*(.+)$/m.exec(readFileSync(gitDir, 'utf8'));
+      if (!m) return undefined;
+      gitDir = path.resolve(ROOT, m[1].trim());
+    }
+    const head = readFileSync(path.join(gitDir, 'HEAD'), 'utf8').trim();
+    if (!head.startsWith('ref: ')) return head.slice(0, 7) || undefined;
+    const ref = head.slice(5).trim();
+    const dirs = [gitDir];
+    try { dirs.push(path.resolve(gitDir, readFileSync(path.join(gitDir, 'commondir'), 'utf8').trim())); } catch { /* none */ }
+    for (const dir of dirs) {
+      try {
+        const sha = readFileSync(path.join(dir, ref), 'utf8').trim();
+        if (sha) return sha.slice(0, 7);
+      } catch { /* try packed-refs */ }
+      try {
+        const line = readFileSync(path.join(dir, 'packed-refs'), 'utf8').split('\n').find((l) => l.endsWith(` ${ref}`));
+        if (line) return line.slice(0, 7);
+      } catch { /* none */ }
+    }
+  } catch { /* no commit info */ }
+  return undefined;
 }
 
 function logStartup(port) {
