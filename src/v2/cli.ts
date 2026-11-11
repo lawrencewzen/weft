@@ -13,6 +13,7 @@ import { fileURLToPath } from 'node:url';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { discoveryPath, type ServiceDiscovery } from './daemon/discovery.ts';
 import { PROTOCOL_VERSION } from './version.ts';
+import { MAX_LOG_BYTES, STDIO_LOG_FILE, rotateFiles } from '../core/log.mjs';
 
 export const PROBE_TIMEOUT_MS = 3_000;
 export const LAUNCH_TIMEOUT_MS = 30_000;
@@ -394,10 +395,20 @@ function portInUseError(port: number): CliError {
   );
 }
 
+function stdioLogPath(dataDir: string): string {
+  return path.join(dataDir, 'logs', STDIO_LOG_FILE);
+}
+
 function launchService(dataDir: string, port: number): number {
   mkdirSync(path.join(dataDir, 'logs'), { recursive: true });
-  const outFd = openSync(logPath(dataDir), 'a');
-  const errFd = openSync(logPath(dataDir), 'a');
+  // The service writes service.log itself. This file only catches raw stdout/stderr
+  // (native crashes, output before the logger starts), so one rotated copy is enough.
+  const stdioPath = stdioLogPath(dataDir);
+  try {
+    if (statSync(stdioPath).size > MAX_LOG_BYTES) rotateFiles(stdioPath, 1);
+  } catch { /* no file yet */ }
+  const outFd = openSync(stdioPath, 'a');
+  const errFd = openSync(stdioPath, 'a');
   let child;
   try {
     child = spawn(process.execPath, [SERVER_ENTRY], {
@@ -437,7 +448,12 @@ function launchedProcessDiedError(dataDir: string, port: number, logStart: numbe
   const fresh = readLogFrom(dataDir, logStart);
   if (port !== 0 && logShowsAddrInUse(fresh)) return portInUseError(port);
   const log = fresh.trim() ? fresh.trim() : tailLog(dataDir);
-  return new CliError(`服务进程已退出。最近日志：\n${log || '(没有日志)'}`, 1);
+  let raw = '';
+  try {
+    raw = readFileSync(stdioLogPath(dataDir), 'utf8').split(/\r?\n/).filter(Boolean).slice(-20).join('\n');
+  } catch { /* none */ }
+  const tail = raw ? `\n进程原始输出（service-stdio.log）：\n${raw}` : '';
+  return new CliError(`服务进程已退出。最近日志：\n${log || '(没有日志)'}${tail}`, 1);
 }
 
 async function waitForLaunched(

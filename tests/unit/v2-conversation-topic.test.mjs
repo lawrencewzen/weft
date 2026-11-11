@@ -762,7 +762,7 @@ test('Last-Event-ID resume reconstructs the same snapshot as GET', { timeout: 45
 test('last subscriber leaving unsubscribes the kernel', { timeout: 40_000 }, async () => {
   const srv = await startServer({
     token: TOKEN,
-    env: { WEFT_LLM: 'faux' },
+    env: { WEFT_LLM: 'faux', WEFT_LOG_LEVEL: 'debug' },
   });
   try {
     const discovery = await readDiscovery(srv.dataDir);
@@ -779,17 +779,17 @@ test('last subscriber leaving unsubscribes the kernel', { timeout: 40_000 }, asy
     });
     await waitEvents(a, (list) => list.some((ev) => ev.event === 'snapshot'));
     await waitEvents(b, (list) => list.some((ev) => ev.event === 'snapshot'));
-    assert.match(srv.logs(), new RegExp(`WEFT_V2_CONV_SUB ${conv.id}`));
+    assert.match(srv.logs(), new RegExp(`WEFT_V2_CONV_SUB\\] ${conv.id}`));
     a.close();
     await sleep(150);
     assert.equal(/WEFT_V2_CONV_UNSUB/.test(srv.logs()), false, srv.logs());
     b.close();
     const started = Date.now();
     while (Date.now() - started < 3000) {
-      if (srv.logs().includes(`WEFT_V2_CONV_UNSUB ${conv.id}`)) break;
+      if (srv.logs().includes(`WEFT_V2_CONV_UNSUB] ${conv.id}`)) break;
       await sleep(50);
     }
-    assert.match(srv.logs(), new RegExp(`WEFT_V2_CONV_UNSUB ${conv.id}`));
+    assert.match(srv.logs(), new RegExp(`WEFT_V2_CONV_UNSUB\\] ${conv.id}`));
   } finally {
     await stopServer(srv);
   }

@@ -12,6 +12,7 @@ import {
   KIND_NAMES,
   KIND_PREFIX,
 } from './ids.mjs';
+import { lineLog } from '../core/log.mjs';
 
 const LEGACY_BRAND = `pi${'-'}work`;
 const LEGACY_KIND_PREFIX = `app.${LEGACY_BRAND}.`;
@@ -392,7 +393,7 @@ function applyForwardRewrite(db) {
  * SQL transaction, keep the backup, and return without throwing so startup
  * can continue.
  */
-export async function migrateWeftIds(dataDir, { log = console } = {}) {
+export async function migrateWeftIds(dataDir, { log = lineLog } = {}) {
   if (!dataDir) return { status: 'skipped', reason: 'no-data-dir' };
   const storagePath = harnessSqlitePath(dataDir);
   if (!existsSync(storagePath)) return { status: 'skipped', reason: 'missing' };

@@ -6,6 +6,7 @@
 import { obj } from '@earendil-works/pi-schema';
 import { defineExtension, defineTool, GenerationTask, hook } from '@earendil-works/pi-durable';
 import { EXT_PLUGIN_RELOAD, EXT_PLUGIN_TOOLS } from './ids.mjs';
+import { log } from '../core/log.mjs';
 
 const LOOSE_PARAMS = obj({}, { open: true });
 const EXTENSION = EXT_PLUGIN_TOOLS;
@@ -98,7 +99,7 @@ async function readSpecs(extensions) {
       list = await extensions.pluginTools();
     }
   } catch (err) {
-    console.error(`WEFT_KERNEL_PLUGIN ${err instanceof Error ? err.message : err}`);
+    log.error('WEFT_KERNEL_PLUGIN', '', err);
     list = [];
   }
   return (Array.isArray(list) ? list : []).filter((tool) => (
@@ -124,7 +125,7 @@ export function installPluginReload(registry, bridge) {
           try {
             if (typeof bridge?.afterTools === 'function') await bridge.afterTools(api.conversationId);
           } catch (err) {
-            console.error(`WEFT_KERNEL_PLUGIN ${err instanceof Error ? err.message : err}`);
+            log.error('WEFT_KERNEL_PLUGIN', '', err);
           }
         },
       }),

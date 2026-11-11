@@ -6,6 +6,7 @@ import {
   resolveStuckAfterMs,
   type SubagentLike,
 } from '../views/subagents.ts';
+import { log } from '../../core/log.mjs';
 
 export type TimerHandle = ReturnType<typeof setTimeout>;
 
@@ -85,7 +86,7 @@ export function createStuckWatch(opts: StuckWatchOpts = {}): StuckWatch {
       try {
         fn(cid);
       } catch (err) {
-        console.error(`WEFT_V2_STUCK ${cid}`, err);
+        log.error('WEFT_V2_STUCK', `${cid}`, err);
       }
     }
   }

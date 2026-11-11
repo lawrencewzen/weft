@@ -13,6 +13,7 @@ import { cleanRule, nextRunTime, ruleProblems } from '../core/schedule-time.mjs'
 import { EXT_SCHEDULES, SCHEDULE_TASK_KIND } from './ids.mjs';
 import { createScheduleTool } from './schedule-tool.mjs';
 import { readTaskGraph } from './subagents.mjs';
+import { log } from '../core/log.mjs';
 
 /** A run later than this after its planned time is a catch-up (the server was off or asleep). */
 export const MISSED_GRACE_MS = 60_000;
@@ -203,7 +204,7 @@ export function createScheduleService({
     try {
       await harness.abortTask(Number(taskId), context);
     } catch (err) {
-      console.error(`WEFT_SCHEDULE_ABORT ${err instanceof Error ? err.message : err}`);
+      log.error('WEFT_SCHEDULE_ABORT', '', err);
     }
   }
 
@@ -421,12 +422,21 @@ export function createScheduleService({
     }
   }
 
+  function logScheduleRun(id, status, sent, extra = {}) {
+    const fields = { schedule: id, status, cid: sent.conversationId, ...extra };
+    if (sent.error) log.error('WEFT_SCHEDULE', `run failed: ${sent.error}`, fields);
+    else log.info('WEFT_SCHEDULE', 'run triggered', fields);
+  }
+
   /** The task's fire phase. Safe to repeat: the run id and the message request id are fixed per planned time. */
   async function fire(id, { taskId, due, now: at }) {
     const pending = arming.get(id);
     if (pending) await pending.catch(() => {});
     const row = await store.getSchedule(id);
-    if (!row || !row.enabled || row.taskId !== String(taskId)) return { next: null };
+    if (!row || !row.enabled || row.taskId !== String(taskId)) {
+      log.info('WEFT_SCHEDULE', 'run skipped', { schedule: id, reason: !row ? 'deleted' : (!row.enabled ? 'disabled' : 'replaced') });
+      return { next: null };
+    }
     const runId = `${id}:${due}`;
     let run = await store.getScheduleRun(runId);
     if (!run) {
@@ -439,6 +449,7 @@ export function createScheduleService({
         conversationId: sent.conversationId,
         error: sent.error ?? null,
       });
+      logScheduleRun(id, status, sent, { lateMs: Math.max(0, at - due) });
     }
     const gone = run.status === 'failed' && run.error === TARGET_DELETED_ERROR;
     let next = null;
@@ -594,6 +605,7 @@ export function createScheduleService({
         conversationId: sent.conversationId,
         error: sent.error ?? null,
       });
+      logScheduleRun(id, run.status, sent, { manual: true });
       if (sent.gone && row.enabled) {
         await abortTask(row.taskId);
         await store.updateSchedule(id, { enabled: false, taskId: null }, { now: now() });
@@ -661,7 +673,7 @@ export function createScheduleService({
         if (node.kind === SCHEDULE_TASK_KIND && !known.has(String(node.id))) await abortTask(node.id);
       }
     } catch (err) {
-      console.error(`WEFT_SCHEDULE_RECONCILE ${err instanceof Error ? err.message : err}`);
+      log.error('WEFT_SCHEDULE_RECONCILE', '', err);
     }
     emit();
   }

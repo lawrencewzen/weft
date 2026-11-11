@@ -62,6 +62,92 @@
         }
       }
     },
+    "/api/v2/diagnostics/report": {
+      "post": {
+        "operationId": "createDiagnosticsReport",
+        "summary": "导出问题报告（zip）",
+        "description": "把现场信息打成一个 zip 返回，用户自己通过聊天或邮件交给开发者。不联网、不上传。\nzip 里固定有 report.txt（用户描述、版本、时间）、system.txt（系统与运行环境）、settings.json（已去除密钥）。\nincludeDoctor 为 true 时加 doctor.txt（环境检查结果）；includeLogs 为 true 时加 logs/service.log、\n轮转文件 service.log.1 至 .5（合计最多取最近 20MB，超出从旧到新截掉）和 service-stdio.log（最后 2MB，存在才加）；\n带 conversationId 时加 conversation-<id>.json（该对话记录，单条工具输出截断到 20KB）。\n所有文本写入前去除密钥；settings.json 只导出白名单字段。整个 zip 不超过 50MB，超出返回 413。\n将要包含的文件列表由前端按这四个参数本地推算，没有单独的 preview 接口。\n响应头 Content-Disposition 给出建议文件名 weft-report-<日期时间>.zip。\n",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DiagnosticsReportRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "问题报告 zip",
+            "headers": {
+              "Content-Disposition": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "attachment; filename=\"weft-report-<日期时间>.zip\""
+              }
+            },
+            "content": {
+              "application/zip": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "未授权",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "conversationId 对应的对话不存在",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "客户端错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "服务端错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v2/service/restart": {
       "post": {
         "operationId": "restartService",
@@ -98,6 +184,76 @@
           },
           "409": {
             "description": "有活着的任务，此时不能退出",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "客户端错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "服务端错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/client-log": {
+      "post": {
+        "operationId": "postClientLog",
+        "summary": "前端把报错写进服务端日志",
+        "description": "页面崩溃、window.onerror、未处理的 Promise 拒绝、React 错误边界时由前端上报，服务端写入 service.log（标签 WEFT_CLIENT）。\nurl 只保留 pathname 和 hash，不要带 query。不要上报对话正文或输入框内容。\n服务端截断：message 最多 2KB，stack 最多 8KB。每个会话每分钟最多 30 条，超出的丢弃，并每分钟记一条「dropped N」。被丢弃时仍返回 204。\n",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClientLogRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "已接收（含被限流丢弃的）"
+          },
+          "400": {
+            "description": "请求体不合法",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "未授权",
             "content": {
               "application/json": {
                 "schema": {
@@ -6638,6 +6794,34 @@
           }
         }
       },
+      "DiagnosticsReportRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "description",
+          "includeLogs",
+          "includeDoctor"
+        ],
+        "properties": {
+          "description": {
+            "type": "string",
+            "maxLength": 20000,
+            "description": "用户描述「发生了什么」，可为空串"
+          },
+          "includeLogs": {
+            "type": "boolean",
+            "description": "是否附带服务日志"
+          },
+          "includeDoctor": {
+            "type": "boolean",
+            "description": "是否附带环境检查结果"
+          },
+          "conversationId": {
+            "type": "string",
+            "description": "给出时附带该对话的记录（conversation-<id>.json）；不给则不附带"
+          }
+        }
+      },
       "RestartAccepted": {
         "type": "object",
         "additionalProperties": false,
@@ -9652,6 +9836,52 @@
           }
         },
         "description": "DELETE /api/v2/workspaces/{id} 成功。"
+      },
+      "ClientLogRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "level",
+          "message"
+        ],
+        "properties": {
+          "level": {
+            "type": "string",
+            "enum": [
+              "error",
+              "warn"
+            ]
+          },
+          "message": {
+            "type": "string",
+            "minLength": 1,
+            "description": "服务端截断到 2KB。"
+          },
+          "stack": {
+            "type": "string",
+            "description": "服务端截断到 8KB。"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "window.onerror",
+              "unhandledrejection",
+              "error-boundary",
+              "console"
+            ]
+          },
+          "url": {
+            "type": "string",
+            "description": "只要 pathname 加 hash，不要 query。"
+          },
+          "userAgent": {
+            "type": "string"
+          },
+          "appVersion": {
+            "type": "string"
+          }
+        },
+        "description": "POST /api/v2/client-log 的请求体。"
       },
       "OpenTerminalRequest": {
         "type": "object",

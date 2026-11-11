@@ -44,6 +44,7 @@ export async function startServer({ script = 'basic.json', dataDir, port = 0, ex
     ...process.env,
     PORT: String(port),
     WEFT_DATA_DIR: dataDir,
+    WEFT_LOG_CONSOLE: '1',
     WEFT_LLM: 'faux',
     WEFT_FAUX_SCRIPT: path.join(FIXTURES, script),
     WEFT_RETRY_BASE_MS: '50',

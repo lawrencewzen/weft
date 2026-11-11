@@ -74,6 +74,8 @@ import {
   forkTitle,
   prefillFromStored,
 } from './fork.mjs';
+import { log } from '../core/log.mjs';
+import { createRunLog } from './run-log.mjs';
 
 const DETAIL_CAP = 1024 * 1024;
 
@@ -197,6 +199,7 @@ export async function openConversationKernel({
   const agentBridge = {};
   const subagentApi = {};
   const watches = new Map();
+  const runLog = createRunLog();
   // One official ConversationTranscript per harness conversation. The watch window
   // merges into it; loadEarlier/fillGap run only for a hole that is still open.
   const histories = new Map();
@@ -300,7 +303,7 @@ export async function openConversationKernel({
     try {
       await agentHost.emitAgent(cid, status, messages);
     } catch (err) {
-      console.error(`WEFT_KERNEL_AGENT ${redactAuthText(err instanceof Error ? err.message : err)}`);
+      log.error('WEFT_KERNEL_AGENT', '', err);
     }
   }
 
@@ -323,7 +326,7 @@ export async function openConversationKernel({
     if (!conv?.lastSubmissionId) return { status: 'idle' };
     const handle = await harness.submission(conv.lastSubmissionId, context);
     if (!handle) {
-      console.error(`WEFT_SUBMISSION_MISSING conversation=${conv.id} submission=${conv.lastSubmissionId}`);
+      log.error('WEFT_SUBMISSION_MISSING', '', { conversation: conv.id, submission: conv.lastSubmissionId });
       return {
         status: 'failed',
         llmError: { code: 'E_SUBMISSION_MISSING', message: '找不到这次运行的记录' },
@@ -504,6 +507,7 @@ export async function openConversationKernel({
     const conv = await store.getConversation(cid);
     mapCtx.contextWindow = await conversationWindow(conv);
     const mapped = projectViewUpdate(projector, view, mapCtx);
+    runLog.observe(cid, view, mapped.events, { snapshot: mapped.refresh });
     for (const ev of mapped.events) await deliver(cid, ev);
     if (mapped.runEnded && typeof turnChangeHooks.settle === 'function') {
       try {
@@ -543,7 +547,7 @@ export async function openConversationKernel({
         });
         await applyView(row.id, call.value, mapCtx, projector);
       } catch (err) {
-        console.error(`WEFT_KERNEL_EVENT ${redactAuthText(err instanceof Error ? (err.stack || err.message) : err)}`);
+        log.error('WEFT_KERNEL_EVENT', '', err);
       }
     }));
   }
@@ -799,7 +803,7 @@ export async function openConversationKernel({
           state.tree = stored.tree;
         }, context);
       } catch (err) {
-        console.error(`WEFT_CHANGE_SNAPSHOT ${redactAuthText(err instanceof Error ? err.message : err)}`);
+        log.error('WEFT_CHANGE_SNAPSHOT', '', err);
         return { mode: 'fallback', tree: '' };
       }
       return stored;
@@ -876,7 +880,7 @@ export async function openConversationKernel({
       );
       return { cache: true, rows: appendOutsideChanges(gitRows, outside) };
     } catch (err) {
-      console.error(`WEFT_CHANGE_DIFF ${redactAuthText(err instanceof Error ? err.message : err)}`);
+      log.error('WEFT_CHANGE_DIFF', '', err);
       return { cache: false, rows: await rowsFromBaselines(workspacePath, baselines) };
     }
   }
@@ -904,7 +908,7 @@ export async function openConversationKernel({
   function logTurnError(err) {
     const message = err instanceof Error ? err.message : String(err ?? '');
     if (message.includes('Session is closed')) return;
-    console.error(`WEFT_TURN_CHANGES ${redactAuthText(message)}`);
+    log.error('WEFT_TURN_CHANGES', '', err);
   }
 
   function withTurnLock(cid, fn) {
@@ -1031,7 +1035,7 @@ export async function openConversationKernel({
           anchor = '';
         }
         if (!anchor) {
-          console.error(`WEFT_TURN_CHANGES no anchor cid=${cid}`);
+          log.error('WEFT_TURN_CHANGES', 'no anchor', { cid });
         }
       }
       const record = anchor && rows.length
@@ -1217,6 +1221,7 @@ export async function openConversationKernel({
     await subagents.forget(conv);
     const watch = watches.get(cid);
     watches.delete(cid);
+    runLog.forget(cid);
     if (watch) {
       try { await watch.stream.stop(); } catch { /* already stopped */ }
     }
@@ -1238,7 +1243,7 @@ export async function openConversationKernel({
     try {
       await schedules.targetDeleted(cid);
     } catch (err) {
-      console.error(`WEFT_SCHEDULE_TARGET_DELETED ${redactAuthText(err instanceof Error ? err.message : err)}`);
+      log.error('WEFT_SCHEDULE_TARGET_DELETED', '', err);
     }
     return { status: 204 };
   }
@@ -1315,6 +1320,7 @@ export async function openConversationKernel({
       const forked = await conversation.fork(point.at, { ownership: { kind: 'ownerless' } }, context);
       created = await adoptConversation({ ...shared, harnessId: forked.id });
     }
+    log.info('WEFT_FORK', 'conversation forked', { cid: conv.id, forkCid: created?.id, empty: Boolean(point.empty) });
     return forkResponse(created, point.prefill);
   }
 
@@ -1446,11 +1452,13 @@ export async function openConversationKernel({
       }
       try {
         const taskId = await conversation.compact(instructions, context);
+        log.info('WEFT_COMPACTION', 'compaction requested', { cid, taskId: String(taskId), trigger: 'manual' });
         return { status: 202, body: { taskId: String(taskId) } };
       } catch (err) {
         if (err?.name === 'ConversationBusy') {
           return { status: 409, body: { error: 'busy', code: 'E_BUSY' } };
         }
+        log.error('WEFT_COMPACTION', 'compaction request failed', { cid }, err);
         const message = redactAuthText(err instanceof Error ? err.message : err);
         return { status: 500, body: { error: message || 'compact failed', code: 'E_INTERNAL' } };
       }
@@ -1499,7 +1507,7 @@ export async function openConversationKernel({
       try {
         await ensureWorkspaceSnapshot(current);
       } catch (err) {
-        console.error(`WEFT_CHANGE_SNAPSHOT ${redactAuthText(err instanceof Error ? err.message : err)}`);
+        log.error('WEFT_CHANGE_SNAPSHOT', '', err);
       }
       try {
         const submission = await conversation.submit({
@@ -1513,12 +1521,14 @@ export async function openConversationKernel({
           },
         }, context);
         handoffSubmissions.add(String(submission.id));
+        log.info('WEFT_HANDOFF', 'handoff requested', { cid, submission: String(submission.id) });
         await store.updateConversation(current.id, { lastSubmissionId: submission.id });
         return { status: 202, body: { ok: true } };
       } catch (err) {
         if (err instanceof ConversationBusy || err?.name === 'ConversationBusy') {
           return { status: 409, body: { error: 'busy', code: 'E_BUSY' } };
         }
+        log.error('WEFT_HANDOFF', 'handoff request failed', { cid }, err);
         const message = redactAuthText(err instanceof Error ? err.message : err);
         return { status: 500, body: { error: message || 'handoff failed', code: 'E_INTERNAL' } };
       }
@@ -1527,13 +1537,13 @@ export async function openConversationKernel({
       try {
         await modelRoutes.warm();
       } catch (err) {
-        console.error(`WEFT_COMPACTION_SETTINGS ${redactAuthText(err instanceof Error ? err.message : err)}`);
+        log.error('WEFT_COMPACTION_SETTINGS', '', err);
       }
       let selectable;
       try {
         selectable = selectableModelKeys(await providers.listProviders());
       } catch (err) {
-        console.error(`WEFT_COMPACTION_SETTINGS ${redactAuthText(err instanceof Error ? err.message : err)}`);
+        log.error('WEFT_COMPACTION_SETTINGS', '', err);
         return [];
       }
       return effectiveTriggers(models, percent, selectable);
@@ -1546,7 +1556,7 @@ export async function openConversationKernel({
       try {
         await modelRoutes.warm();
       } catch (err) {
-        console.error(`WEFT_COMPACTION_SETTINGS ${redactAuthText(err instanceof Error ? err.message : err)}`);
+        log.error('WEFT_COMPACTION_SETTINGS', '', err);
       }
       const conversation = await conversationFor(conv);
       if (!conversation) return { status: 404, body: { error: 'conversation not found' } };
@@ -1558,7 +1568,7 @@ export async function openConversationKernel({
       try {
         await ensureWorkspaceSnapshot(current);
       } catch (err) {
-        console.error(`WEFT_CHANGE_SNAPSHOT ${redactAuthText(err instanceof Error ? err.message : err)}`);
+        log.error('WEFT_CHANGE_SNAPSHOT', '', err);
       }
       const given = typeof options.requestId === 'string' ? options.requestId.trim() : '';
       const requestId = given || prepared?.requestId || randomUUID();
@@ -1713,7 +1723,7 @@ export async function openConversationKernel({
   try {
     await schedules.reconcile();
   } catch (err) {
-    console.error(`WEFT_SCHEDULE_RECONCILE ${redactAuthText(err instanceof Error ? err.message : err)}`);
+    log.error('WEFT_SCHEDULE_RECONCILE', '', err);
   }
   return kernelApi;
 }

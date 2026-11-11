@@ -1,4 +1,5 @@
 import type { Lang } from '../../data/lang';
+import { openReportDialog } from '../../data/reportDialog';
 import { t } from '../../i18n';
 
 export type AboutService = {
@@ -51,6 +52,14 @@ export function AboutPage({ lang, service }: Props) {
           <span className="ns-about-dot" aria-hidden="true" />
           {t(lang, 'about_runtime_connected')}
         </span>
+      </div>
+      <div className="ns-pref-row">
+        <div className="ns-pref-copy">
+          <b>{t(lang, 'report_issue')}</b>
+        </div>
+        <button type="button" className="btn" data-testid="next-about-report" onClick={() => openReportDialog()}>
+          {t(lang, 'report_issue')}
+        </button>
       </div>
     </div>
   );

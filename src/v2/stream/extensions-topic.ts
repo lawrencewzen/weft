@@ -10,6 +10,7 @@ import {
 } from '../views/extensions.ts';
 import { normalizeLang, type Entity, type EventHub } from './hub.ts';
 import type { Lang } from '../phrases/index.ts';
+import { log as serverLog, logLine } from '../../core/log.mjs';
 
 export const EXTENSIONS_TOPIC = 'extensions';
 export const COALESCE_MS = 50;
@@ -103,7 +104,7 @@ function viewFor(entity: string, raw: object, lang: Lang): object {
 export function attachExtensionsTopic(hub: EventHub, opts: ExtensionsTopicOpts = {}): ExtensionsTopic {
   const coalesceMs = opts.coalesceMs ?? COALESCE_MS;
   const log = opts.log ?? ((line: string) => {
-    console.log(line);
+    logLine('debug', line);
   });
   let last = new Map<EntityKey, object>();
   let timer: ReturnType<typeof setTimeout> | null = null;
@@ -156,7 +157,7 @@ export function attachExtensionsTopic(hub: EventHub, opts: ExtensionsTopicOpts =
     try {
       snap = await loadSnapshot();
     } catch (err) {
-      console.error('WEFT_V2_EXTENSIONS_SNAPSHOT', err);
+      serverLog.error('WEFT_V2_EXTENSIONS_SNAPSHOT', '', err);
       return;
     }
     if (disposed || !active) return;

@@ -26,6 +26,7 @@ import {
 import { ASK_TOOL_NAME } from './ask.mjs';
 import { HANDOFF_TOOL_NAME } from './handoff.mjs';
 import { formatSubagentReport, parseSubagentOutcome } from './subagent-report.mjs';
+import { log } from '../core/log.mjs';
 
 export const TITLE_DESCRIPTION = 'A one-line summary of at most 20 characters, in the user\'s language, saying what this subagent will do. Shown as the heading to the user. Do not include a file path.';
 export const DELEGATE_DESCRIPTION = 'Use this for independent tasks that can run on their own. Do simple work yourself. Run a self-contained task on a subagent and return its answer. The subagent cannot see this conversation, or your instructions; put everything it needs in task: what to do, where, when it is done, and what to report back. The subagent will not ask questions; if its report says the work is incomplete, you decide whether to fill in the missing information and re-dispatch, do it yourself, or ask the user. Pass title: a short heading (at most 20 characters, user\'s language, no file path) shown to the user.';
@@ -775,7 +776,7 @@ export function createSubagentHost({
     if (typeof emit !== 'function' || !ev?.event) return;
     if (ev.event === 'tool.delta') {
       void Promise.resolve(emit(parentCid, ev.event, ev.data)).catch((err) => {
-        console.error(`WEFT_KERNEL_SUBAGENT ${err instanceof Error ? err.message : err}`);
+        log.error('WEFT_KERNEL_SUBAGENT', '', err);
       });
       return;
     }
@@ -783,7 +784,7 @@ export function createSubagentHost({
     const name = ev.data?.tool?.name;
     if (!isCommandToolName(name)) return;
     void Promise.resolve(emit(parentCid, ev.event, ev.data)).catch((err) => {
-      console.error(`WEFT_KERNEL_SUBAGENT ${err instanceof Error ? err.message : err}`);
+      log.error('WEFT_KERNEL_SUBAGENT', '', err);
     });
   }
 
@@ -796,7 +797,7 @@ export function createSubagentHost({
     const projector = createViewProjector();
     projectViewUpdate(projector, watch.value, mapCtx);
     const run = () => publish(parentCid, childId).catch((err) => {
-      console.error(`WEFT_KERNEL_SUBAGENT ${err instanceof Error ? err.message : err}`);
+      log.error('WEFT_KERNEL_SUBAGENT', '', err);
     });
     await run();
     watch.start((call) => {
@@ -806,7 +807,7 @@ export function createSubagentHost({
         const mapped = projectViewUpdate(projector, call.value, mapCtx);
         for (const ev of mapped.events) forwardChildTool(parentCid, ev);
       } catch (err) {
-        console.error(`WEFT_KERNEL_SUBAGENT ${err instanceof Error ? err.message : err}`);
+        log.error('WEFT_KERNEL_SUBAGENT', '', err);
       }
       return Promise.resolve();
     });
@@ -817,7 +818,7 @@ export function createSubagentHost({
     if (!parentCid) return;
     setImmediate(() => {
       attach(parentCid, childId).catch((err) => {
-        console.error(`WEFT_KERNEL_SUBAGENT ${err instanceof Error ? err.message : err}`);
+        log.error('WEFT_KERNEL_SUBAGENT', '', err);
       });
     });
   }

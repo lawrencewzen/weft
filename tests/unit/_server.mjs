@@ -47,6 +47,7 @@ function childEnv(dataDir, { token, extra = {} } = {}) {
     ...env,
     PORT: '0',
     WEFT_DATA_DIR: dataDir,
+    WEFT_LOG_CONSOLE: '1',
     WEFT_RETRY_BASE_MS: '20',
     WEFT_RETRY_MAX: '5',
     WEFT_V2_VALIDATE: '1',

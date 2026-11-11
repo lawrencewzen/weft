@@ -16,6 +16,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/diagnostics/report": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 导出问题报告（zip）
+         * @description 把现场信息打成一个 zip 返回，用户自己通过聊天或邮件交给开发者。不联网、不上传。
+         *     zip 里固定有 report.txt（用户描述、版本、时间）、system.txt（系统与运行环境）、settings.json（已去除密钥）。
+         *     includeDoctor 为 true 时加 doctor.txt（环境检查结果）；includeLogs 为 true 时加 logs/service.log、
+         *     轮转文件 service.log.1 至 .5（合计最多取最近 20MB，超出从旧到新截掉）和 service-stdio.log（最后 2MB，存在才加）；
+         *     带 conversationId 时加 conversation-<id>.json（该对话记录，单条工具输出截断到 20KB）。
+         *     所有文本写入前去除密钥；settings.json 只导出白名单字段。整个 zip 不超过 50MB，超出返回 413。
+         *     将要包含的文件列表由前端按这四个参数本地推算，没有单独的 preview 接口。
+         *     响应头 Content-Disposition 给出建议文件名 weft-report-<日期时间>.zip。
+         */
+        post: operations["createDiagnosticsReport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/service/restart": {
         parameters: {
             query?: never;
@@ -31,6 +58,28 @@ export interface paths {
          *     任务图里还有活着的任务（含后台子 Agent）时返回 409，避免打断正在跑的工作。
          */
         post: operations["restartService"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/client-log": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 前端把报错写进服务端日志
+         * @description 页面崩溃、window.onerror、未处理的 Promise 拒绝、React 错误边界时由前端上报，服务端写入 service.log（标签 WEFT_CLIENT）。
+         *     url 只保留 pathname 和 hash，不要带 query。不要上报对话正文或输入框内容。
+         *     服务端截断：message 最多 2KB，stack 最多 8KB。每个会话每分钟最多 30 条，超出的丢弃，并每分钟记一条「dropped N」。被丢弃时仍返回 204。
+         */
+        post: operations["postClientLog"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1380,6 +1429,16 @@ export interface components {
             /** @description 走本地剧本（WEFT_LLM=faux / LLM_API=faux / WEFT_FAUX_SCRIPT）时为 true，界面要标出「演示模型」 */
             demo: boolean;
         };
+        DiagnosticsReportRequest: {
+            /** @description 用户描述「发生了什么」，可为空串 */
+            description: string;
+            /** @description 是否附带服务日志 */
+            includeLogs: boolean;
+            /** @description 是否附带环境检查结果 */
+            includeDoctor: boolean;
+            /** @description 给出时附带该对话的记录（conversation-<id>.json）；不给则不附带 */
+            conversationId?: string;
+        };
         RestartAccepted: {
             /** @description 始终为 true。服务即将退出，由客户端重新拉起。 */
             exiting: boolean;
@@ -2321,6 +2380,21 @@ export interface components {
             /** @constant */
             removed: true;
         };
+        /** @description POST /api/v2/client-log 的请求体。 */
+        ClientLogRequest: {
+            /** @enum {string} */
+            level: "error" | "warn";
+            /** @description 服务端截断到 2KB。 */
+            message: string;
+            /** @description 服务端截断到 8KB。 */
+            stack?: string;
+            /** @enum {string} */
+            source?: "window.onerror" | "unhandledrejection" | "error-boundary" | "console";
+            /** @description 只要 pathname 加 hash，不要 query。 */
+            url?: string;
+            userAgent?: string;
+            appVersion?: string;
+        };
         /** @description POST /api/v2/workspaces/{id}/open-terminal 的请求体。 */
         OpenTerminalRequest: {
             /** @description 相对工作区的目录。缺省或空字符串表示工作区根。 */
@@ -2940,6 +3014,68 @@ export interface operations {
             };
         };
     };
+    createDiagnosticsReport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DiagnosticsReportRequest"];
+            };
+        };
+        responses: {
+            /** @description 问题报告 zip */
+            200: {
+                headers: {
+                    /** @description attachment; filename="weft-report-<日期时间>.zip" */
+                    "Content-Disposition"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/zip": string;
+                };
+            };
+            /** @description 未授权 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description conversationId 对应的对话不存在 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 客户端错误 */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 服务端错误 */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+        };
+    };
     restartService: {
         parameters: {
             query?: never;
@@ -2969,6 +3105,64 @@ export interface operations {
             };
             /** @description 有活着的任务，此时不能退出 */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 客户端错误 */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 服务端错误 */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+        };
+    };
+    postClientLog: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClientLogRequest"];
+            };
+        };
+        responses: {
+            /** @description 已接收（含被限流丢弃的） */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 请求体不合法 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 未授权 */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };
