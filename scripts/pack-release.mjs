@@ -52,7 +52,7 @@ function usageText() {
   return `用法: node scripts/pack-release.mjs --platform win-x64 [--node-version ${NODE_VERSION}] [--shell <壳产物目录>] --out <目录>
 
 先构建前端（npm run build:web）。只支持 Windows x64。
-桌面壳产物目录是 dotnet build desktop/win -c Release 的输出（desktop/win/bin/Release/net48）；不传则跳过，包里没有 Weft.exe。`;
+桌面壳产物目录是 dotnet publish desktop/win -c Release -o <目录> 的输出（单文件 Weft.exe，自带 .NET 8），并已把 WebView2 固定版解到其中的 webview2\\；不传则跳过，包里没有 Weft.exe。`;
 }
 
 export function assertNodeVersion(version) {
@@ -146,8 +146,10 @@ export function readmeText(version) {
     '',
     '一、启动',
     '双击本目录里的 Weft.exe，会打开独立窗口，不需要浏览器和登录码。',
-    '需要系统里有 Microsoft Edge WebView2 Runtime（Windows 11 和较新的 Windows 10 自带）。',
-    '没有时会提示，并改用默认浏览器打开。',
+    'Weft.exe 自带 .NET 8 运行时和 WebView2 固定版（webview2 文件夹），不需要系统另外安装。',
+    '请保持 webview2 文件夹在 Weft.exe 旁边。启动时会给它补上 Windows 10 需要的读取权限（ALL APPLICATION PACKAGES）；失败只记在 %LOCALAPPDATA%\\Weft\\shell.log，不影响启动。',
+    '若 webview2 文件夹缺失，会改用系统的 WebView2 Runtime；都没有时提示，并改用默认浏览器打开。',
+    '自检：在命令行运行 Weft.exe --self-check，不开窗口，打印 .NET 版本、WebView2 来源和版本。',
     '点关闭按钮时按设置里的「关闭窗口时」处理：询问、缩到通知区，或退出 Weft。',
     '缩到通知区后窗口隐藏，服务继续运行，空闲约 30 分钟后仍会自动退出。',
     '双击托盘图标、托盘菜单「打开 Weft」，或再次双击 Weft.exe，都会打开原来的窗口。',
@@ -168,7 +170,7 @@ export function readmeText(version) {
     '',
     '四、升级',
     '1. 双击 Weft-stop.cmd，确认服务已经停掉。',
-    '2. 用新的压缩包解压，替换整个程序文件夹（Weft.exe 和它旁边的 dll、Weft.cmd、Weft-stop.cmd、README.txt、node、app 一起换）。',
+    '2. 用新的压缩包解压，替换整个程序文件夹（Weft.exe、webview2、Weft.cmd、Weft-stop.cmd、README.txt、node、app 一起换）。',
     '数据在 %APPDATA%\\Weft，不在程序文件夹里。替换程序不会改动已有数据。',
     '',
     '五、地址和端口',
@@ -712,15 +714,14 @@ async function stripPostinstall(appDir) {
 export async function copyShell(shellDir, stage) {
   const src = path.resolve(shellDir);
   if (!(await stat(path.join(src, 'Weft.exe')).catch(() => null))) {
-    throw new Error(`壳产物目录里没有 Weft.exe：${src}（先 dotnet build desktop/win -c Release）`);
+    throw new Error(`壳产物目录里没有 Weft.exe：${src}（先 dotnet publish desktop/win -c Release，再把 WebView2 固定版解到 webview2\\）`);
   }
-  const loader = path.join(src, 'runtimes', 'win-x64', 'native', 'WebView2Loader.dll');
-  if (!(await stat(loader).catch(() => null)) && !(await stat(path.join(src, 'WebView2Loader.dll')).catch(() => null))) {
-    throw new Error(`壳产物目录里没有 WebView2Loader.dll：${src}`);
+  if (!(await stat(path.join(src, 'webview2', 'msedgewebview2.exe')).catch(() => null))) {
+    throw new Error(`壳产物目录里没有 webview2\\msedgewebview2.exe（WebView2 固定版运行库）：${src}`);
   }
   await cp(src, stage, {
     recursive: true,
-    filter: (from) => !/\.(pdb|xml)$/i.test(from) && path.basename(from) !== 'Microsoft.Web.WebView2.Wpf.dll',
+    filter: (from) => !/\.(pdb|xml)$/i.test(from),
   });
 }
 
