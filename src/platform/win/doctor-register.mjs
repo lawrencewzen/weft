@@ -11,7 +11,6 @@ export function createWinDoctorSection({ run = runWinDoctor, timeoutMs = WIN_DOC
     let timer;
     const timeout = new Promise((resolve) => {
       timer = setTimeout(() => resolve(WIN_DOCTOR_TIMEOUT_TEXT), timeoutMs);
-      timer.unref?.();
     });
     try {
       const text = await Promise.race([Promise.resolve().then(() => run({ dataDir: ctx.dataDir || '' })), timeout]);
