@@ -408,7 +408,7 @@ jobs:
             # 安装时就该补好 webview2\ 的权限；先查 ACL（self-check 自己也会补，所以要在它之前查）
             $wvDir = Join-Path $root 'webview2'
             Assert-True (Test-Path -LiteralPath (Join-Path $wvDir 'msedgewebview2.exe')) 'webview2 should be installed'
-            $wvRules = (Get-Item -LiteralPath $wvDir).GetAccessControl().GetAccessRules($true, $true, [System.Security.Principal.SecurityIdentifier])
+            $wvRules = [System.IO.FileSystemAclExtensions]::GetAccessControl([System.IO.DirectoryInfo]$wvDir).GetAccessRules($true, $true, [System.Security.Principal.SecurityIdentifier])
             foreach ($sid in @('S-1-15-2-1', 'S-1-15-2-2')) {
               $hit = @($wvRules | Where-Object { $_.IdentityReference.Value -eq $sid -and $_.AccessControlType -eq 'Allow' -and (($_.FileSystemRights -band 'ReadAndExecute') -eq 'ReadAndExecute') })
               Assert-True ($hit.Count -gt 0) "installer should have granted $sid on webview2"
