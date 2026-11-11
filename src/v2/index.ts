@@ -35,6 +35,7 @@ import { attachSchedulesTopic } from './stream/schedules-topic.ts';
 import { handleSchedulesApi, lazySchedulesHost, type SchedulesHost } from './http/schedules.ts';
 import { handleExtensionsApi, loadExtensionsSnapshot, type ExtensionsHost } from './http/extensions.ts';
 import { handleOpenTerminalApi } from './http/open-terminal.ts';
+import { handleDiagnosticsApi } from './http/diagnostics.ts';
 import { createClientLogLimiter, handleClientLogApi } from './http/client-log.ts';
 import {
   diffView,
@@ -621,6 +622,8 @@ function serviceInfo(opts: { serviceVersion: string; startedAt: number; pid: num
 export function createV2Handler(opts: {
   serviceVersion: string;
   startedAt: number;
+  dataDir?: string;
+  commit?: string;
   auth: V2Auth;
   hub: EventHub;
   pid?: number;
@@ -736,6 +739,25 @@ export function createV2Handler(opts: {
     }, opts.providers || {})) {
       return true;
     }
+
+    if (await handleDiagnosticsApi({
+      req,
+      res,
+      pathname,
+      method,
+      sendV2: (response, requestPath, requestMethod, status, body) => {
+        sendV2(response, requestPath, requestMethod, status, body as V2JsonBody);
+      },
+      readObjectBody,
+      host: {
+        version: serviceVersion,
+        commit: opts.commit,
+        dataDir: opts.dataDir,
+        startedAt,
+        getSettings: opts.getSettings,
+        loadConversation: opts.loadConversation,
+      },
+    })) return true;
 
     if (method === 'POST' && pathname === '/api/v2/service/restart') {
       let busy = false;
@@ -2160,6 +2182,7 @@ export function createV2Runtime(opts: {
   serviceVersion: string;
   startedAt: number;
   dataDir: string;
+  commit?: string;
   pid?: number;
   now?: () => number;
   webCodeTtlMs?: number;
@@ -2290,6 +2313,8 @@ export function createV2Runtime(opts: {
   const handleApi = createV2Handler({
     serviceVersion: opts.serviceVersion,
     startedAt: opts.startedAt,
+    dataDir: opts.dataDir,
+    commit: opts.commit,
     auth,
     hub,
     pid,

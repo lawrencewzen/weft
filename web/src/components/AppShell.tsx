@@ -36,6 +36,8 @@ import type { SettingsPage } from '../data/settingsPages';
 import type { AppRoute } from '../route';
 import { CenterPane } from './CenterPane';
 import { ConfirmDialog, type ConfirmOpts } from './ConfirmDialog';
+import { ReportDialog } from './ReportDialog';
+import { useReportDialog } from '../data/reportDialog';
 import { RightPane } from './RightPane';
 import { SchedulesPane } from './schedules/SchedulesPane';
 import { SettingsOverlay } from './settings/SettingsOverlay';
@@ -197,6 +199,7 @@ function AppShellLayout({
   const { leftOpen, setLeftOpen, dragging, setDragging } = useLeftPanel();
   const [leftW, setLeftW] = useState(() => readLeftWidth());
   const motionReady = usePanelMotionReady();
+  const reportOpen = useReportDialog();
   const [confirm, setConfirm] = useState<{
     opts: ConfirmOpts;
     resolve: (ok: boolean) => void;
@@ -457,6 +460,7 @@ function AppShellLayout({
           onConfirm={askConfirm}
         />
       ) : null}
+      {reportOpen ? <ReportDialog lang={lang} open={reportOpen} /> : null}
       {wsDialog ? (
         <WorkspaceDialog
           lang={lang}

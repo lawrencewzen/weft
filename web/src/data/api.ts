@@ -881,3 +881,21 @@ export function runSchedule(id: string, requestId?: string, lang?: string): Prom
 export function listScheduleRuns(id: string, lang?: string): Promise<ScheduleRunList> {
   return requestJson<ScheduleRunList>(withLang(`/api/v2/schedules/${encodeURIComponent(id)}/runs`, lang));
 }
+
+export type DiagnosticsReportRequest = components['schemas']['DiagnosticsReportRequest'];
+
+/** POST /api/v2/diagnostics/report: the zip as a Blob. */
+export async function createDiagnosticsReport(body: DiagnosticsReportRequest): Promise<Blob> {
+  const res = await fetch('/api/v2/diagnostics/report', {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (res.status === 401) throw new UnauthenticatedError();
+  if (!res.ok) {
+    const parsed = parseErrorBody(res.status, res.statusText, await res.text());
+    throw new ApiError(parsed.error, { status: res.status, code: parsed.code });
+  }
+  return res.blob();
+}

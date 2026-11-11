@@ -141,4 +141,24 @@ describe('SidebarMenus.buildConversationItems', () => {
     expect(deleteItem.label).toBe('Delete');
     expect(deleteItem.title).toBe('Stop the conversation first');
   });
+
+  it('adds a report item only when onReport is given, and passes the conversation', () => {
+    const conv = makeConv({ archived: false, status: 'idle' });
+    const onReport = vi.fn();
+    const items = buildConversationItems({
+      lang: 'zh',
+      wsId: 'w1',
+      conv,
+      openConversation: vi.fn(),
+      copy: vi.fn(),
+      onArchive: vi.fn(),
+      onDelete: vi.fn(),
+      onReport,
+    });
+    expect(items.map((it) => it.action ?? 'sep')).toEqual(['open', 'copy-id', 'report', 'sep', 'archive', 'delete']);
+    const item = find(items, 'report');
+    expect(item.label).toBe('报告问题');
+    item.run();
+    expect(onReport).toHaveBeenCalledWith(conv);
+  });
 });
