@@ -384,24 +384,6 @@ jobs:
       - name: Publish installer
         run: dotnet publish desktop/installer -c Release -o installer-out
 
-      - name: Render installer preview
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $p = Start-Process -FilePath installer-out/WeftSetup.exe -ArgumentList '--render-preview', 'installer-preview' -Wait -PassThru
-          if ($p.ExitCode -ne 0) { throw "render-preview exit $($p.ExitCode)" }
-          $n = (Get-ChildItem installer-preview -Filter *.png).Count
-          Write-Host "preview pngs=$n"
-          if ($n -lt 104) { throw "expected 104 preview pngs, got $n" }
-
-      - name: Upload installer preview
-        uses: actions/upload-artifact@v7
-        with:
-          name: installer-preview
-          path: installer-preview/*.png
-          if-no-files-found: error
-          retention-days: 14
-
       - name: Build Weft-Setup
         shell: pwsh
         run: |
@@ -630,6 +612,33 @@ jobs:
           name: weft-setup-win-x64
           path: dist/Weft-Setup-*.exe
           if-no-files-found: error
+          retention-days: 14
+
+      # 预览图只是自检手段：放在安装包产出和冒烟之后，卡住或失败都不影响安装包
+      - name: Render installer preview
+        id: render_preview
+        continue-on-error: true
+        timeout-minutes: 3
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $log = Join-Path $env:TEMP 'Weft-Setup.log'
+          $p = Start-Process -FilePath installer-out/WeftSetup.exe -ArgumentList '--render-preview', 'installer-preview' -PassThru
+          $done = $p.WaitForExit(120000)
+          $n = (Get-ChildItem installer-preview -Filter *.png -ErrorAction SilentlyContinue | Measure-Object).Count
+          Write-Host "preview pngs=$n"
+          if (Test-Path $log) { Write-Host '--- Weft-Setup.log (tail) ---'; Get-Content $log -Tail 40 }
+          if (-not $done) { try { $p.Kill($true) } catch {}; throw "render-preview timed out after $n pngs" }
+          if ($p.ExitCode -ne 0) { throw "render-preview exit $($p.ExitCode) after $n pngs" }
+          if ($n -lt 104) { throw "expected 104 preview pngs, got $n" }
+
+      - name: Upload installer preview
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: installer-preview
+          path: installer-preview/*.png
+          if-no-files-found: warn
           retention-days: 14
 
       - name: Upload installer smoke log

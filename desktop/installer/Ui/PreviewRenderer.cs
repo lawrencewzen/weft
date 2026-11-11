@@ -14,12 +14,25 @@ public static class PreviewRenderer
         Directory.CreateDirectory(dir);
         var themes = cli.PreviewTheme == null ? new[] { "dark", "light" } : new[] { cli.PreviewTheme };
         var n = 0;
+        var cur = "";
+        // 总超时：整个预览渲染不允许超过 90 秒，到点输出已渲染数量并退出
+        var guard = new Thread(() =>
+        {
+            Thread.Sleep(90_000);
+            var msg = $"预览渲染超时，已渲染 {n} 张，卡在 {cur}";
+            Log.Write(msg);
+            Console.Error.WriteLine(msg);
+            Environment.Exit(3);
+        }) { IsBackground = true };
+        guard.Start();
         try
         {
             foreach (var theme in themes)
             foreach (var scale in cli.PreviewScales)
             foreach (var state in States)
             {
+                cur = $"{theme} {scale}x {state}";
+                Log.Write("预览 " + cur);
                 Theme.Apply(theme == "dark");
                 Dpi.Override = (float)scale;
                 var ctx = new SetupContext
@@ -27,20 +40,15 @@ public static class PreviewRenderer
                     Mode = InstallMode.Install, NewVersion = "0.1.3", OldVersion = "0.1.2", DesktopShortcut = true,
                     Dir = Engine.DefaultDir,
                 };
-                using var form = new MainForm(ctx, null, preview: true)
-                {
-                    StartPosition = FormStartPosition.Manual,
-                    ShowInTaskbar = false,
-                    Location = new Point(-20000, -20000),
-                };
-                form.Show();
+                // 纯离屏：不 Show、不进消息循环，只建句柄后 DrawToBitmap
+                using var form = new MainForm(ctx, null, preview: true);
+                form.CreateControl();
+                _ = form.Handle;
                 form.ShowPreviewState(state);
-                Application.DoEvents();
                 using var bmp = new Bitmap(form.Width, form.Height);
                 form.DrawToBitmap(bmp, new Rectangle(0, 0, form.Width, form.Height));
                 var name = $"{theme}-{scale.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)}x-{state}.png";
                 bmp.Save(Path.Combine(dir, name), System.Drawing.Imaging.ImageFormat.Png);
-                form.Close();
                 n++;
             }
         }
