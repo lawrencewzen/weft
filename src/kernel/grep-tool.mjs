@@ -14,11 +14,14 @@ import { computeLineHash } from '../vendor/hashline/hash.mjs';
 import { bashChildEnv } from './bash-env.mjs';
 import { splitVisibleLines as splitVisibleLinesOf } from '../vendor/hashline/format.mjs';
 import { normalizeToLF, requireEnv, stripBom } from './hashline-tools.mjs';
+import { detect, isTextEncodingDetectEnabled } from '../platform/win/text-encoding.mjs';
 
 export const GREP_MAX_MATCHES = 200;
 export const GREP_TIMEOUT_MS = 20_000;
 const GREP_MAX_LINE_CHARS = 400;
 const FALLBACK_MAX_FILE_BYTES = 2 * 1024 * 1024;
+const NON_ASCII = /[^\x00-\x7f]/;
+const GBK_DETECT_MAX_BYTES = 32 * 1024 * 1024;
 const SKIP_DIR_NAMES = new Set(['.git', 'node_modules']);
 const APP_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -181,7 +184,51 @@ const GREP_DESCRIPTION = [
 ].join('\n');
 
 /** `rg` and `readText` are injectable for tests; defaults resolve ripgrep and read through api.env. */
-export function createGrepTool({ ripgrep = () => resolveRipgrep(), limit = GREP_MAX_MATCHES, timeoutMs = GREP_TIMEOUT_MS } = {}) {
+/**
+ * ripgrep matches bytes, so a Chinese pattern never hits a GBK file (the
+ * intranet encoding). With `gbkSearch` on and a non-ASCII pattern a second
+ * `--encoding gbk` pass runs; its hits count only in files the env itself
+ * decodes as GBK, so UTF-8 files are never mis-hit by the GBK decoder.
+ */
+async function onlyGbkFiles(env, hits, context) {
+  const verdict = new Map();
+  const kept = [];
+  for (const hit of hits) {
+    const file = path.resolve(env.cwd, hit.file);
+    if (!verdict.has(file)) {
+      let isGbk = false;
+      try {
+        const info = await env.fileInfo(file, context);
+        if (info.ok && info.value.size <= GBK_DETECT_MAX_BYTES) {
+          const bytes = await env.readBinaryFile(file, context);
+          isGbk = bytes.ok && detect(bytes.value) === 'gbk';
+        }
+      } catch { /* unreadable: not a GBK hit */ }
+      verdict.set(file, isGbk);
+    }
+    if (verdict.get(file)) kept.push(hit);
+  }
+  return kept;
+}
+
+export function mergeHits(first, second, cwd, limit) {
+  const seen = new Set(first.map((h) => `${path.resolve(cwd, h.file)}\0${h.line}`));
+  const merged = [...first];
+  for (const hit of second) {
+    const key = `${path.resolve(cwd, hit.file)}\0${hit.line}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    merged.push(hit);
+  }
+  return { hits: merged.slice(0, limit), truncated: merged.length > limit };
+}
+
+export function createGrepTool({
+  ripgrep = () => resolveRipgrep(),
+  limit = GREP_MAX_MATCHES,
+  timeoutMs = GREP_TIMEOUT_MS,
+  gbkSearch = () => isTextEncodingDetectEnabled(),
+} = {}) {
   return defineTool({
     name: 'grep',
     description: GREP_DESCRIPTION,
@@ -214,10 +261,11 @@ export function createGrepTool({ ripgrep = () => resolveRipgrep(), limit = GREP_
           ...(args.literal ? ['-F'] : []),
           '-e', args.pattern, '--', target,
         ];
-        const ran = await runRipgrep({
-          rg, args: rgArgs, cwd: env.cwd, limit, timeoutMs, signal: context?.abortSignal,
+        const pass = (extra = [], cap = limit) => runRipgrep({
+          rg, args: [...extra, ...rgArgs], cwd: env.cwd, limit: cap, timeoutMs, signal: context?.abortSignal,
           spawnEnv: bashChildEnv(process.env),
         });
+        const ran = await pass();
         if (ran.aborted) throw new Error('Operation aborted');
         if (!ran.unavailable) {
           if (ran.code === 2 && ran.hits.length === 0 && !ran.truncated && !ran.timedOut) {
@@ -225,6 +273,20 @@ export function createGrepTool({ ripgrep = () => resolveRipgrep(), limit = GREP_
             throw new Error(`ripgrep: ${reason || 'search failed'}. Fix the pattern, or set literal: true.`);
           }
           found = ran;
+          if (NON_ASCII.test(args.pattern) && gbkSearch()) {
+            const gbk = await pass(['--encoding', 'gbk'], limit * 5); // UTF-8 files may hit too and are dropped below
+            if (gbk.aborted) throw new Error('Operation aborted');
+            if (!gbk.unavailable && gbk.code !== 2) {
+              const extra = await onlyGbkFiles(env, gbk.hits, context);
+              const merged = mergeHits(found.hits, extra, env.cwd, limit);
+              found = {
+                ...found,
+                hits: merged.hits,
+                truncated: found.truncated || gbk.truncated || merged.truncated,
+                timedOut: found.timedOut || gbk.timedOut,
+              };
+            }
+          }
         }
       }
       if (!found) found = await scanWithoutRipgrep({ env, root, args, context, limit, deadline });
