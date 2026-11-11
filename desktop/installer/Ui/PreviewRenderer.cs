@@ -13,6 +13,7 @@ public static class PreviewRenderer
         var dir = Path.GetFullPath(cli.PreviewDir!);
         Directory.CreateDirectory(dir);
         var themes = cli.PreviewTheme == null ? new[] { "dark", "light" } : new[] { cli.PreviewTheme };
+        LogPane.Offscreen = true;
         var n = 0;
         var cur = "";
         // 总超时：整个预览渲染不允许超过 90 秒，到点输出已渲染数量并退出
@@ -44,7 +45,9 @@ public static class PreviewRenderer
                 using var form = new MainForm(ctx, null, preview: true);
                 form.CreateControl();
                 _ = form.Handle;
+                Log.Write("预览 构建完成");
                 form.ShowPreviewState(state);
+                Log.Write("预览 状态就绪");
                 using var bmp = new Bitmap(form.Width, form.Height);
                 form.DrawToBitmap(bmp, new Rectangle(0, 0, form.Width, form.Height));
                 var name = $"{theme}-{scale.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)}x-{state}.png";

@@ -397,6 +397,9 @@ public sealed class MiniLink : FlatControl
 /// <summary>只读日志区：圆角浅底 + 等宽字体，最近 200 行，新行自动滚到底，可选中复制。</summary>
 public sealed class LogPane : Control
 {
+    /// <summary>--render-preview 用：不创建真正的 TextBox，改为自绘文字（纯离屏渲染时 DrawToBitmap 一个 Edit 控件会卡住）。</summary>
+    public static bool Offscreen;
+    readonly List<string> _lines = new();
     readonly TextBox _tb = new()
     {
         Multiline = true, ReadOnly = true, BorderStyle = BorderStyle.None, ScrollBars = ScrollBars.Vertical,
@@ -411,12 +414,13 @@ public sealed class LogPane : Control
     {
         SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
         TabStop = false;
-        Controls.Add(_tb);
+        if (!Offscreen) Controls.Add(_tb);
         Visible = false;
     }
 
     public void Relayout()
     {
+        if (Offscreen) { Invalidate(); return; }
         var old = _font;
         _font = new Font("Consolas", 11.5f * S, FontStyle.Regular, GraphicsUnit.Pixel);
         _tb.Font = _font;
@@ -434,6 +438,13 @@ public sealed class LogPane : Control
     {
         var lines = Log.Since(ref _seq);
         if (lines.Length == 0) return;
+        if (Offscreen)
+        {
+            _lines.AddRange(lines);
+            if (_lines.Count > Log.RingSize) _lines.RemoveRange(0, _lines.Count - Log.RingSize);
+            Invalidate();
+            return;
+        }
         if (_count + lines.Length > Log.RingSize)
         {
             lines = Log.Snapshot(out _seq);
@@ -460,5 +471,18 @@ public sealed class LogPane : Control
         g.FillPath(b, p);
         using var pen = new Pen(Theme.Line, 1f);
         g.DrawPath(pen, p);
+        if (!Offscreen) return;
+        var f = new Font("Consolas", 11.5f * S, FontStyle.Regular, GraphicsUnit.Pixel);
+        try
+        {
+            var lh = (int)Math.Ceiling(f.Height * 1.05);
+            var pad = (int)(8 * S);
+            var rows = Math.Max(1, (Height - (int)(12 * S)) / lh);
+            var start = Math.Max(0, _lines.Count - rows);
+            for (var i = start; i < _lines.Count; i++)
+                TextRenderer.DrawText(g, _lines[i], f, new Rectangle(pad, (int)(6 * S) + (i - start) * lh, Width - 2 * pad, lh), Theme.Mute,
+                    TextFormatFlags.NoPadding | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis);
+        }
+        finally { f.Dispose(); }
     }
 }
