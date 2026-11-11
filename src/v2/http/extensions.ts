@@ -100,7 +100,7 @@ export type SendV2Fn = (
   requestPath: string,
   method: string,
   status: number,
-  body: object,
+  body: object | null,
 ) => void;
 
 export type ReadObjectBodyFn = (
