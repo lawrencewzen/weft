@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Weft 安装程序</title>
+<style>
+:root{
+  --stage:#e9e8ee;--win:#ffffff;--ink:#1f1f1f;--mute:#6e6e6e;--faint:#999;--line:#e6e6ea;--sub:#f4f4f7;--hover:#ececf1;
+  --btn:#2b2b2b;--on-btn:#fff;--track:#e8e8ee;--err:#d14343;--errbg:#fbeeee;--ok:#10b981;--winbd:#d9d9e0;
+  --g1:#34d399;--g2:#06b6d4;--g3:#8b5cf6;
+  --font:"Microsoft YaHei UI","Microsoft YaHei","PingFang SC",-apple-system,"Segoe UI",sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){
+  --stage:#0e0e12;--win:#1b1b20;--ink:#e4e4e4;--mute:#8f8f8f;--faint:#6b6b6b;--line:#2c2c33;--sub:#242429;--hover:#2b2b32;
+  --btn:#e4e4e4;--on-btn:#181818;--track:#2a2a31;--err:#f27171;--errbg:#2c1f21;--winbd:#33333b;}}
+:root[data-theme=dark]{
+  --stage:#0e0e12;--win:#1b1b20;--ink:#e4e4e4;--mute:#8f8f8f;--faint:#6b6b6b;--line:#2c2c33;--sub:#242429;--hover:#2b2b32;
+  --btn:#e4e4e4;--on-btn:#181818;--track:#2a2a31;--err:#f27171;--errbg:#2c1f21;--winbd:#33333b;}
+*{box-sizing:border-box;margin:0}
+html,body{height:100%}
+body{background:var(--stage);font-family:var(--font);color:var(--ink);font-size:13px;display:flex;align-items:center;justify-content:center;overflow:auto;min-width:600px;min-height:440px;-webkit-font-smoothing:antialiased}
+.win{position:relative;width:560px;height:400px;background:var(--win);border:1px solid var(--winbd);border-radius:8px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 12px 32px rgba(0,0,0,.18)}
+.glow{position:absolute;left:0;right:0;top:0;height:3px;background:linear-gradient(90deg,var(--g1),var(--g2),var(--g3))}
+.title{height:36px;display:flex;align-items:center;justify-content:space-between;padding-left:14px;flex:none;-webkit-app-region:drag;user-select:none}
+.title .t{display:flex;align-items:center;gap:7px;color:var(--mute);font-size:12px}
+.title svg{width:14px;height:14px}
+.wc{display:flex;height:100%}
+.wc button{width:46px;height:100%;border:0;background:transparent;color:var(--mute);cursor:pointer;display:grid;place-items:center}
+.wc button:hover{background:var(--hover);color:var(--ink)}
+.wc button.x:hover{background:#e81123;color:#fff}
+.wc svg{width:10px;height:10px;stroke:currentColor;fill:none;stroke-width:1.1}
+.body{flex:1;display:flex;flex-direction:column;padding:6px 36px 28px;min-height:0}
+.view{flex:1;display:none;flex-direction:column;min-height:0;animation:in .22s ease}
+.view.on{display:flex}
+@keyframes in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.head{display:flex;align-items:center;gap:16px}
+.head .logo{width:64px;height:64px;flex:none}
+.head h1{font-size:24px;font-weight:600;letter-spacing:.2px}
+.head .sub{color:var(--mute);margin-top:3px;font-size:13px}
+.mid{flex:1;display:flex;flex-direction:column;justify-content:center;gap:14px}
+.center{align-items:center;text-align:center;justify-content:center;gap:12px}
+.field{display:flex;flex-direction:column;gap:6px}
+.lbl{color:var(--mute);font-size:12px}
+.path{display:flex;align-items:center;gap:8px;background:var(--sub);border:1px solid var(--line);border-radius:6px;padding:0 4px 0 11px;height:34px}
+.path span{flex:1;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.link{border:0;background:transparent;color:var(--ink);font:inherit;font-size:12.5px;padding:5px 9px;border-radius:5px;cursor:pointer;text-decoration:underline;text-underline-offset:3px;text-decoration-color:var(--faint)}
+.link:hover{background:var(--hover)}
+.chk{display:flex;align-items:center;gap:9px;cursor:pointer;user-select:none;font-size:13px}
+.chk input{display:none}
+.box{width:16px;height:16px;border-radius:4px;border:1.5px solid var(--faint);display:grid;place-items:center;flex:none;transition:.12s}
+.box svg{width:10px;height:10px;stroke:var(--on-btn);stroke-width:2.2;fill:none;opacity:0}
+.chk input:checked+.box{background:var(--btn);border-color:var(--btn)}
+.chk input:checked+.box svg{opacity:1}
+.chk:focus-within .box{outline:2px solid var(--g2);outline-offset:2px}
+.foot{display:flex;justify-content:flex-end;align-items:center;gap:10px;min-height:34px}
+.foot .grow{flex:1;color:var(--faint);font-size:12px}
+.btn{height:34px;padding:0 22px;border-radius:6px;border:1px solid var(--line);background:transparent;color:var(--ink);font:inherit;font-size:13px;cursor:pointer;transition:background .12s}
+.btn:hover{background:var(--hover)}
+.btn.pri{background:var(--btn);color:var(--on-btn);border-color:var(--btn);font-weight:600;min-width:96px}
+.btn.pri:hover{opacity:.88}
+.btn.dng{background:var(--err);border-color:var(--err);color:#fff}
+.btn:focus-visible,.link:focus-visible,.wc button:focus-visible{outline:2px solid var(--g2);outline-offset:2px}
+.ver{display:inline-flex;align-items:center;gap:10px;font-size:22px;font-weight:600;font-variant-numeric:tabular-nums}
+.ver .o{color:var(--faint);font-weight:500}
+.ver .ar{width:22px;height:12px;stroke:var(--g2);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.ver .n{background:linear-gradient(90deg,var(--g1),var(--g2),var(--g3));-webkit-background-clip:text;background-clip:text;color:transparent}
+.bar{height:6px;border-radius:3px;background:var(--track);overflow:hidden}
+.bar i{display:block;height:100%;width:0;border-radius:3px;background:linear-gradient(90deg,var(--g1),var(--g2),var(--g3));transition:width .2s linear}
+.step{display:flex;justify-content:space-between;color:var(--mute);font-size:12.5px}
+.big{width:56px;height:56px;border-radius:50%;display:grid;place-items:center}
+.big svg{width:26px;height:26px;fill:none;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+.big.ok{background:linear-gradient(135deg,var(--g1),var(--g2));}
+.big.ok svg{stroke:#fff}
+.big.er{background:var(--errbg)}
+.big.er svg{stroke:var(--err)}
+.big.un{background:var(--sub)}
+.big.un svg{stroke:var(--mute);stroke-width:1.8}
+.center h2{font-size:20px;font-weight:600}
+.center p{color:var(--mute);font-size:12.5px;max-width:380px;line-height:1.6}
+.mask{position:absolute;inset:0;background:rgba(0,0,0,.42);display:none;align-items:center;justify-content:center;z-index:5}
+.mask.on{display:flex}
+.dlg{background:var(--win);border:1px solid var(--line);border-radius:8px;padding:20px 22px;width:300px;animation:in .15s ease}
+.dlg b{font-weight:600;font-size:14px}
+.dlg p{color:var(--mute);margin-top:6px;font-size:12.5px}
+.dlg .foot{margin-top:18px}
+.closed{display:none;flex-direction:column;align-items:center;gap:10px;color:var(--mute)}
+.closed.on{display:flex}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute"><defs>
+  <linearGradient id="l" gradientUnits="userSpaceOnUse" x1="10" y1="22" x2="54" y2="46"><stop offset="0" stop-color="#34d399"/><stop offset=".55" stop-color="#06b6d4"/><stop offset="1" stop-color="#8b5cf6"/></linearGradient>
+  <linearGradient id="t" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1d1a2b"/><stop offset="1" stop-color="#110f1a"/></linearGradient>
+  <symbol id="icon" viewBox="0 0 64 64"><rect width="64" height="64" rx="15" fill="url(#t)"/><rect x=".5" y=".5" width="63" height="63" rx="14.5" fill="none" stroke="#fff" stroke-opacity=".1"/><path d="M10 22 C12 46, 22 48, 26 34 C29 24, 35 24, 38 34 C42 48, 52 46, 54 22" fill="none" stroke="url(#l)" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+</defs></svg>
+
+<div class="closed" id="closed"><span>窗口已关闭</span><button class="btn" onclick="location.reload()">重新打开</button></div>
+
+<div class="win" id="win">
+  <div class="glow"></div>
+  <div class="title">
+    <div class="t"><svg><use href="#icon"/></svg><span id="ttl">Weft 安装程序</span></div>
+    <div class="wc">
+      <button title="最小化" aria-label="最小化"><svg viewBox="0 0 10 10"><path d="M0 5.5h10"/></svg></button>
+      <button class="x" id="xbtn" title="关闭" aria-label="关闭"><svg viewBox="0 0 10 10"><path d="M0 0l10 10M10 0L0 10"/></svg></button>
+    </div>
+  </div>
+  <div class="body">
+
+    <!-- 首次安装 -->
+    <section class="view" id="v-install">
+      <div class="head"><svg class="logo"><use href="#icon"/></svg><div><h1>Weft</h1><div class="sub">版本 <span class="ver-new"></span></div></div></div>
+      <div class="mid">
+        <div class="field"><div class="lbl">安装位置</div>
+          <div class="path"><span id="path"></span><button class="link" id="chg">更改</button></div></div>
+        <label class="chk"><input type="checkbox" id="lnk" checked><span class="box"><svg viewBox="0 0 10 10"><path d="M1.5 5.2l2.4 2.4 4.6-5"/></svg></span>创建桌面快捷方式</label>
+      </div>
+      <div class="foot"><button class="btn pri" id="go-install">安装</button></div>
+    </section>
+
+    <!-- 升级 -->
+    <section class="view" id="v-upgrade">
+      <div class="head"><svg class="logo"><use href="#icon"/></svg><div><h1>Weft</h1><div class="sub">检测到已安装的版本</div></div></div>
+      <div class="mid center" style="gap:8px"><div class="ver"><span class="o ver-old"></span><svg class="ar" viewBox="0 0 22 12"><path d="M1 6h19M15 1l5 5-5 5"/></svg><span class="n ver-new"></span></div><div class="lbl" id="up-path" style="color:var(--faint)"></div></div>
+      <div class="foot"><button class="btn pri" id="go-upgrade">更新</button></div>
+    </section>
+
+    <!-- 进度（安装 / 更新 / 卸载共用） -->
+    <section class="view" id="v-prog">
+      <div class="head"><svg class="logo"><use href="#icon"/></svg><div><h1 id="p-title">正在安装</h1><div class="sub" id="p-sub"></div></div></div>
+      <div class="mid"><div class="bar"><i id="bar"></i></div><div class="step"><span id="stp"></span><span id="pct">0%</span></div></div>
+      <div class="foot"><span class="grow"></span></div>
+    </section>
+
+    <!-- 完成 -->
+    <section class="view" id="v-done">
+      <div class="mid center">
+        <div class="big ok"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>
+        <h2 id="d-title">已安装</h2><p id="d-sub"></p>
+      </div>
+      <div class="foot"><button class="btn" id="d-fin">完成</button><button class="btn pri" id="d-open">打开 Weft</button></div>
+    </section>
+
+    <!-- 出错 -->
+    <section class="view" id="v-err">
+      <div class="mid center">
+        <div class="big er"><svg viewBox="0 0 24 24"><path d="M12 6v7M12 17.5v.01"/></svg></div>
+        <h2 id="e-title"></h2><p id="e-sub"></p>
+      </div>
+      <div class="foot"><button class="btn" id="e-cancel">取消</button><button class="btn pri" id="e-retry">重试</button></div>
+    </section>
+
+    <!-- 卸载确认 -->
+    <section class="view" id="v-un">
+      <div class="head"><svg class="logo"><use href="#icon"/></svg><div><h1>卸载 Weft</h1><div class="sub">版本 <span class="ver-old"></span></div></div></div>
+      <div class="mid">
+        <label class="chk"><input type="checkbox" id="deldata"><span class="box"><svg viewBox="0 0 10 10"><path d="M1.5 5.2l2.4 2.4 4.6-5"/></svg></span>同时删除数据（对话、设置）</label>
+        <div class="lbl" id="un-hint">数据会保留，重新安装后可继续使用。</div>
+      </div>
+      <div class="foot"><button class="btn" id="un-cancel">取消</button><button class="btn pri dng" id="go-un">卸载</button></div>
+    </section>
+  </div>
+
+  <div class="mask" id="mask"><div class="dlg">
+    <b id="m-t">退出安装？</b><p id="m-p">安装尚未完成，现在退出可能留下不完整的文件。</p>
+    <div class="foot"><button class="btn" id="m-quit">退出</button><button class="btn pri" id="m-keep">继续</button></div>
+  </div></div>
+</div>
+
+<script>
+(function(){
+  var q=new URLSearchParams(location.search);
+  var theme=q.get('theme'); if(theme==='dark'||theme==='light') document.documentElement.dataset.theme=theme;
+  var fail=q.get('fail'); // running | disk
+  var mode=q.get('mode');
+  if(mode!=='install'&&mode!=='upgrade'&&mode!=='uninstall') mode=(fail==='running')?'upgrade':'install';
+  var NEW='0.1.3', OLD='0.1.2', DEF='%LOCALAPPDATA%\\Programs\\Weft', ALT='D:\\Weft';
+  var $=function(i){return document.getElementById(i)};
+  document.querySelectorAll('.ver-new').forEach(function(e){e.textContent=NEW});
+  document.querySelectorAll('.ver-old').forEach(function(e){e.textContent=OLD});
+  $('up-path').textContent='安装在 '+ALT; // 识别到的安装位置，不可改
+  var views=['install','upgrade','prog','done','err','un'];
+  function show(v){views.forEach(function(n){$('v-'+n).classList.toggle('on',n===v)})}
+
+  var path=DEF, busy=false, timer=null, pending=null; // pending = 出错后重试的位置
+  $('path').textContent=path;
+  $('chg').onclick=function(){path=(path===DEF)?ALT:DEF;$('path').textContent=path;$('chg').textContent=(path===DEF)?'更改':'恢复默认'};
+
+  var steps={
+    install:[['正在复制文件',0,60],['正在准备运行环境',60,90],['正在创建快捷方式',90,100]],
+    upgrade:[['正在停止 Weft',0,15],['正在复制文件',15,70],['正在准备运行环境',70,92],['正在更新快捷方式',92,100]],
+    uninstall:[['正在停止 Weft',0,15],['正在删除文件',15,70],['正在移除快捷方式',70,100]]
+  };
+  var titles={install:['正在安装',''],upgrade:['正在更新',OLD+' → '+NEW],uninstall:['正在卸载','']};
+  var pct=0, failAt=45, failed=false;
+  function run(from){
+    busy=true; pct=from||0; show('prog');
+    $('p-title').textContent=titles[mode][0]; $('p-sub').textContent=titles[mode][1];
+    $('ttl').textContent=mode==='uninstall'?'Weft 卸载程序':'Weft 安装程序';
+    clearInterval(timer);
+    timer=setInterval(function(){
+      pct+=1.1+Math.random()*1.2;
+      if(fail&&!failed&&pct>=failAt){clearInterval(timer);failed=true;busy=false;return showErr()}
+      if(pct>=100){pct=100;clearInterval(timer);paint();setTimeout(finish,350);return}
+      paint();
+    },90);
+    paint();
+  }
+  function paint(){
+    $('bar').style.width=pct+'%'; $('pct').textContent=Math.floor(pct)+'%';
+    var s=steps[mode],t=s[s.length-1][0];
+    for(var i=0;i<s.length;i++) if(pct<s[i][2]){t=s[i][0];break}
+    $('stp').textContent=t;
+  }
+  function showErr(){
+    var running=fail==='running';
+    $('e-title').textContent=running?'无法停止 Weft':'磁盘空间不足';
+    $('e-sub').textContent=running?'Weft 正在运行。请先退出，再重试。':'安装位置 '+(mode==='install'?path:'所在磁盘')+' 需要约 320 MB 可用空间。';
+    $('e-retry').textContent='重试';
+    show('err');
+  }
+  $('e-retry').onclick=function(){fail=null;run(Math.max(0,failAt-6))}; // 模拟用户已处理，重试通过
+  $('e-cancel').onclick=function(){closeWin()};
+
+  function finish(){
+    busy=false;
+    var up=mode==='upgrade',un=mode==='uninstall';
+    $('d-title').textContent=un?'已卸载':up?'已更新':'已安装';
+    $('d-sub').textContent=un?($('deldata').checked?'程序和数据已删除。':'数据已保留。'):up?'当前版本 '+NEW:'';
+    $('d-open').style.display=un?'none':'';
+    $('d-fin').className=un?'btn pri':'btn';
+    show('done');
+  }
+  $('d-fin').onclick=closeWin;
+  $('d-open').onclick=function(){closeWin('Weft 已启动')};
+  $('go-install').onclick=function(){run(0)};
+  $('go-upgrade').onclick=function(){run(0)};
+  $('go-un').onclick=function(){run(0)};
+  $('un-cancel').onclick=closeWin;
+  $('deldata').onchange=function(){$('un-hint').textContent=this.checked?'对话和设置将被永久删除，无法恢复。':'数据会保留，重新安装后可继续使用。'};
+
+  function closeWin(msg){
+    $('win').style.display='none';
+    $('closed').querySelector('span').textContent=(typeof msg==='string')?msg:'窗口已关闭';
+    $('closed').classList.add('on');
+  }
+  $('xbtn').onclick=function(){
+    if(!busy) return closeWin();
+    var un=mode==='uninstall';
+    $('m-t').textContent=un?'退出卸载？':'退出安装？';
+    $('m-p').textContent=un?'卸载尚未完成，现在退出会留下残余文件。':'安装尚未完成，现在退出可能留下不完整的文件。';
+    $('mask').classList.add('on');
+  };
+  $('m-keep').onclick=function(){$('mask').classList.remove('on')};
+  $('m-quit').onclick=function(){clearInterval(timer);$('mask').classList.remove('on');busy=false;closeWin()};
+
+  if(mode==='upgrade') show('upgrade'); else if(mode==='uninstall') show('un'); else show('install');
+  if(mode==='uninstall') $('ttl').textContent='Weft 卸载程序';
+  window.__weft={mode:function(){return mode}};
+})();
+</script>
+</body>
+</html>

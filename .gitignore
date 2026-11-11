@@ -25,4 +25,10 @@ node_modules
 # .NET build output of the Windows desktop shell
 /desktop/win/bin/
 /desktop/win/obj/
+
+# 安装程序（desktop/installer）的构建产物
+/desktop/installer/bin/
+/desktop/installer/obj/
+/desktop/installer/tests/bin/
+/desktop/installer/tests/obj/
 /desktop/win/publish/
