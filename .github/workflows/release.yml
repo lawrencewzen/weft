@@ -50,11 +50,38 @@ jobs:
       - name: Build frontend
         run: npm run build:web
 
-      - name: Build desktop shell
-        run: dotnet build desktop/win -c Release
+      - name: Publish desktop shell (.NET 8, self-contained, single file)
+        run: dotnet publish desktop/win -c Release -o desktop/win/publish
+
+      - name: Add WebView2 Fixed Version Runtime
+        shell: pwsh
+        env:
+          WEBVIEW2_VERSION: "157.0.4341.46"
+          WEBVIEW2_URL: "https://msedge.sf.dl.delivery.mp.microsoft.com/filestreamingservice/files/edb19202-9173-4dd1-ab87-c45c2d80aaec/Microsoft.WebView2.FixedVersionRuntime.157.0.4341.46.x64.cab"
+          WEBVIEW2_SHA256: "0ac7317a08c3f3beebbb9b6d90f5b77352569f0a33a54a15ef6aaabc82899b7c"
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $cab = Join-Path $env:RUNNER_TEMP 'webview2.cab'
+          Invoke-WebRequest -Uri $env:WEBVIEW2_URL -OutFile $cab -UseBasicParsing
+          $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $cab).Hash.ToLower()
+          Write-Host "webview2 cab bytes=$((Get-Item $cab).Length) sha256=$hash"
+          if ($hash -ne $env:WEBVIEW2_SHA256) { throw "WebView2 cab sha256 mismatch: $hash" }
+          $tmp = Join-Path $env:RUNNER_TEMP 'webview2-expand'
+          if (Test-Path -LiteralPath $tmp) { Remove-Item -LiteralPath $tmp -Recurse -Force }
+          New-Item -ItemType Directory -Path $tmp | Out-Null
+          expand.exe -F:* $cab $tmp | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw "expand.exe exit $LASTEXITCODE" }
+          # The cab holds one top-level folder Microsoft.WebView2.FixedVersionRuntime.<ver>.x64\
+          $inner = @(Get-ChildItem -LiteralPath $tmp -Directory)
+          if ($inner.Count -ne 1) { throw "unexpected cab layout: $($inner.Count) top-level folders" }
+          $dest = 'desktop/win/publish/webview2'
+          if (Test-Path -LiteralPath $dest) { Remove-Item -LiteralPath $dest -Recurse -Force }
+          Move-Item -LiteralPath $inner[0].FullName -Destination $dest
+          if (-not (Test-Path -LiteralPath (Join-Path $dest 'msedgewebview2.exe'))) { throw 'msedgewebview2.exe missing after expand' }
+          Write-Host "webview2 expanded: $dest"
 
       - name: Pack portable zip
-        run: node scripts/pack-release.mjs --platform win-x64 --shell desktop/win/bin/Release/net48 --out dist
+        run: node scripts/pack-release.mjs --platform win-x64 --shell desktop/win/publish --out dist
 
       - name: Smoke test portable package
         shell: pwsh
@@ -79,9 +106,30 @@ jobs:
           $cli = Join-Path $root 'app\bin\weft.mjs'
           if (-not (Test-Path -LiteralPath $node)) { throw "missing $node" }
           if (-not (Test-Path -LiteralPath $cli)) { throw "missing $cli" }
-          foreach ($launcher in @('Weft.exe', 'Weft.exe.config', 'Microsoft.Web.WebView2.Core.dll', 'runtimes\win-x64\native\WebView2Loader.dll', 'Weft.cmd', 'Weft-stop.cmd', 'README.txt')) {
+          foreach ($launcher in @('Weft.exe', 'webview2\msedgewebview2.exe', 'Weft.cmd', 'Weft-stop.cmd', 'README.txt')) {
             if (-not (Test-Path -LiteralPath (Join-Path $root $launcher))) { throw "missing $launcher" }
           }
+          # No .NET Framework leftovers and no loose managed dlls: the shell is one self-contained exe.
+          foreach ($gone in @('Weft.exe.config', 'Microsoft.Web.WebView2.Core.dll', 'runtimes')) {
+            if (Test-Path -LiteralPath (Join-Path $root $gone)) { throw "unexpected $gone in package root" }
+          }
+          Write-Host '--- package root ---'
+          Get-ChildItem -LiteralPath $root -Force | ForEach-Object { Write-Host ("root> " + $_.Name + $(if ($_.PSIsContainer) { '\' } else { ' ' + $_.Length })) }
+          $rootFiles = @(Get-ChildItem -LiteralPath $root -File | ForEach-Object { $_.Name })
+          Write-Host ("root files: " + ($rootFiles -join ', '))
+
+          Write-Host '--- Weft.exe --self-check ---'
+          $selfOut = Join-Path $env:RUNNER_TEMP 'self-check.txt'
+          if (Test-Path -LiteralPath $selfOut) { Remove-Item -LiteralPath $selfOut -Force }
+          $p = Start-Process -FilePath (Join-Path $root 'Weft.exe') -ArgumentList @('--self-check', '--out', $selfOut) -Wait -PassThru
+          if (-not (Test-Path -LiteralPath $selfOut)) { throw 'self-check wrote no output' }
+          $selfText = Get-Content -LiteralPath $selfOut -Raw
+          Write-Host $selfText
+          if ($p.ExitCode -ne 0) { throw "self-check exit $($p.ExitCode)" }
+          if ($selfText -notmatch '(?m)^dotnet: 8\.') { throw 'self-check is not running on .NET 8' }
+          if ($selfText -notmatch '(?m)^webview2\.source: bundled\r?$') { throw 'self-check did not pick the bundled WebView2' }
+          if ($selfText -notmatch '(?m)^webview2\.version: 157\.') { throw 'unexpected bundled WebView2 version' }
+          if ($selfText -notmatch '(?m)^webview2\.permissions: ready\r?$') { throw 'WebView2 folder permissions are not ready' }
 
           Write-Host '--- app/node_modules ---'
           $nm = Join-Path $root 'app\node_modules'
@@ -356,6 +404,26 @@ jobs:
             Assert-True (Test-Path -LiteralPath $deskLnk) 'desktop shortcut'
             Assert-True (Lnk-Has $startLnk (Join-Path $root 'Weft.exe')) 'start lnk should point at Weft.exe in the install dir'
             Assert-True ((Log-Text) -match "total=$count written=$count skipped=0") 'first install should write every file'
+
+            # 安装时就该补好 webview2\ 的权限；先查 ACL（self-check 自己也会补，所以要在它之前查）
+            $wvDir = Join-Path $root 'webview2'
+            Assert-True (Test-Path -LiteralPath (Join-Path $wvDir 'msedgewebview2.exe')) 'webview2 should be installed'
+            $wvRules = (Get-Item -LiteralPath $wvDir).GetAccessControl().GetAccessRules($true, $true, [System.Security.Principal.SecurityIdentifier])
+            foreach ($sid in @('S-1-15-2-1', 'S-1-15-2-2')) {
+              $hit = @($wvRules | Where-Object { $_.IdentityReference.Value -eq $sid -and $_.AccessControlType -eq 'Allow' -and (($_.FileSystemRights -band 'ReadAndExecute') -eq 'ReadAndExecute') })
+              Assert-True ($hit.Count -gt 0) "installer should have granted $sid on webview2"
+            }
+            Assert-True ((Log-Text) -match 'webview2 权限') 'installer log should mention webview2 permissions'
+            $selfOut = Join-Path $env:RUNNER_TEMP 'installed-self-check.txt'
+            if (Test-Path -LiteralPath $selfOut) { Remove-Item -LiteralPath $selfOut -Force }
+            $sp = Start-Process -FilePath (Join-Path $root 'Weft.exe') -ArgumentList @('--self-check', '--out', "`"$selfOut`"") -Wait -PassThru
+            Assert-True (Test-Path -LiteralPath $selfOut) 'installed Weft.exe --self-check wrote no output'
+            $selfText = Get-Content -LiteralPath $selfOut -Raw
+            Write-Host '--- installed Weft.exe --self-check ---'
+            Write-Host $selfText
+            Assert-True ($sp.ExitCode -eq 0) "self-check exit $($sp.ExitCode)"
+            Assert-True ($selfText -match '(?m)^webview2\.source: bundled\r?$') 'installed self-check should use the bundled WebView2'
+            Assert-True ($selfText -match '(?m)^webview2\.permissions: ready\r?$') 'installed self-check should report permissions: ready'
 
             # ---- 2. 起服务再停 ----
             Write-Host '=== 2. service start/stop ==='

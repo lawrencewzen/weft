@@ -67,8 +67,9 @@ public static class Engine
         var lnkLabel = upgrade ? "正在更新快捷方式" : "正在创建快捷方式";
 
         report("正在校验安装包", 0);
+        var swVerify = Stopwatch.StartNew();
         Payload.Verify(c.ExePath, info, p => report("正在校验安装包", p * verifyEnd), ct);
-        Log.Write("载荷校验通过 bytes=" + info.Length);
+        Log.Write($"载荷校验通过 bytes={info.Length} 耗时 {swVerify.ElapsedMilliseconds} ms");
 
         using var stream = Payload.Open(c.ExePath, info);
         using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
@@ -87,11 +88,13 @@ public static class Engine
         }
         report(upgrade ? "正在复制文件" : "正在复制文件", stopEnd);
 
+        var swApply = Stopwatch.StartNew();
         var stats = FileInstaller.Apply(zip, next, prev, dir, (done, total) =>
             report("正在复制文件", stopEnd + (copyEnd - stopEnd) * done / total), ct, diff);
-        Log.Write("文件写入完成 " + stats);
+        Log.Write($"文件写入完成 {stats} 耗时 {swApply.ElapsedMilliseconds} ms");
 
         report("正在准备运行环境", copyEnd);
+        WebViewPermissions.Ensure(dir, ct);
         WriteUninstaller(c, dir, info);
         Registration.Write(dir, next.Version, next.TotalSize);
         report("正在准备运行环境", envEnd);

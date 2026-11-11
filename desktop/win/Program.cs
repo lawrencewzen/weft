@@ -8,6 +8,9 @@ using System.Globalization;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Runtime.InteropServices;
+using System.Security.AccessControl;
+using System.Security.Principal;
+using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using Microsoft.Web.WebView2.Core;
@@ -18,8 +21,9 @@ namespace Weft.Desktop
     internal static class Program
     {
         [STAThread]
-        private static void Main()
+        private static int Main(string[] args)
         {
+            if (args.Length > 0 && args[0] == "--self-check") return SelfCheck.Run(args);
             bool first;
             using (var mutex = new Mutex(true, @"Local\Weft.Desktop.Shell", out first))
             {
@@ -28,13 +32,163 @@ namespace Weft.Desktop
                 {
                     // Wake the window of the running instance, then leave.
                     activate.Set();
-                    return;
+                    return 0;
                 }
+                // The manifest already asks for PerMonitorV2; this keeps the intent explicit (returns false if already set).
+                Application.SetHighDpiMode(HighDpiMode.PerMonitorV2);
                 Application.EnableVisualStyles();
                 Application.SetCompatibleTextRenderingDefault(false);
                 Application.Run(new MainForm(activate));
                 GC.KeepAlive(mutex);
             }
+            return 0;
+        }
+    }
+
+    internal enum RuntimeSource { None, Bundled, Evergreen }
+
+    internal sealed class RuntimeChoice
+    {
+        public RuntimeSource Source;
+        public string Folder;   // browser executable folder for Bundled, otherwise null
+        public string Version;  // e.g. "157.0.4341.46", null when none
+        public string Error;
+    }
+
+    // Picks the WebView2 runtime: the fixed version next to Weft.exe first, then the system Evergreen runtime.
+    internal static class WebViewRuntime
+    {
+        public static string BundledDir()
+        {
+            string exeDir = Path.GetDirectoryName(Environment.ProcessPath) ?? AppContext.BaseDirectory;
+            return Path.Combine(exeDir, "webview2");
+        }
+
+        public static RuntimeChoice Choose()
+        {
+            var c = new RuntimeChoice { Source = RuntimeSource.None };
+            string dir = BundledDir();
+            if (File.Exists(Path.Combine(dir, "msedgewebview2.exe")))
+            {
+                try
+                {
+                    c.Version = CoreWebView2Environment.GetAvailableBrowserVersionString(dir);
+                    c.Source = RuntimeSource.Bundled;
+                    c.Folder = dir;
+                    return c;
+                }
+                catch (Exception ex) { c.Error = "bundled: " + ex.Message; }
+            }
+            try
+            {
+                c.Version = CoreWebView2Environment.GetAvailableBrowserVersionString();
+                if (!string.IsNullOrEmpty(c.Version)) c.Source = RuntimeSource.Evergreen;
+            }
+            catch (WebView2RuntimeNotFoundException) { }
+            catch (Exception ex) { c.Error = (c.Error == null ? "" : c.Error + "; ") + "evergreen: " + ex.Message; }
+            return c;
+        }
+
+        // Fixed Version known issue: the folder must be readable and executable by ALL APPLICATION PACKAGES
+        // (S-1-15-2-1) and ALL RESTRICTED APPLICATION PACKAGES (S-1-15-2-2), or the renderer sandbox fails on Windows 10.
+        // https://learn.microsoft.com/microsoft-edge/webview2/concepts/distribution#details-about-the-fixed-version-runtime-distribution-mode
+        private static readonly string[] PackageSids = { "S-1-15-2-1", "S-1-15-2-2" };
+
+        public static bool PermissionsReady(string dir)
+        {
+            try
+            {
+                var rules = new DirectoryInfo(dir).GetAccessControl().GetAccessRules(true, true, typeof(SecurityIdentifier));
+                foreach (string sid in PackageSids)
+                {
+                    bool ok = false;
+                    foreach (FileSystemAccessRule r in rules)
+                    {
+                        if (r.IdentityReference.Value != sid || r.AccessControlType != AccessControlType.Allow) continue;
+                        if ((r.FileSystemRights & FileSystemRights.ReadAndExecute) == FileSystemRights.ReadAndExecute) { ok = true; break; }
+                    }
+                    if (!ok) return false;
+                }
+                return true;
+            }
+            catch (Exception) { return false; }
+        }
+
+        // Grants the two package SIDs read+execute (inherited). Failure is returned as text, never thrown.
+        public static string EnsurePermissions(string dir)
+        {
+            if (PermissionsReady(dir)) return null;
+            var errors = new StringBuilder();
+            foreach (string sid in PackageSids)
+            {
+                try
+                {
+                    var psi = new ProcessStartInfo(Path.Combine(Environment.SystemDirectory, "icacls.exe"))
+                    {
+                        Arguments = "\"" + dir + "\" /grant *" + sid + ":(OI)(CI)(RX) /T /C /Q",
+                        UseShellExecute = false,
+                        CreateNoWindow = true,
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = true,
+                    };
+                    using (var p = Process.Start(psi))
+                    {
+                        string o = p.StandardOutput.ReadToEnd() + p.StandardError.ReadToEnd();
+                        if (!p.WaitForExit(120000)) { try { p.Kill(); } catch { } errors.Append(sid + ": icacls timeout; "); }
+                        else if (p.ExitCode != 0) errors.Append(sid + ": icacls exit " + p.ExitCode + " " + o.Trim() + "; ");
+                    }
+                }
+                catch (Exception ex) { errors.Append(sid + ": " + ex.Message + "; "); }
+            }
+            return PermissionsReady(dir) ? null : (errors.Length > 0 ? errors.ToString() : "permissions still missing");
+        }
+    }
+
+    // `Weft.exe --self-check [--out file]`: no window. Prints to the console it was started from (when there is one)
+    // and, with --out, also to a file, because a WinExe has no console of its own in CI.
+    internal static class SelfCheck
+    {
+        [DllImport("kernel32.dll")] private static extern bool AttachConsole(int pid);
+
+        public static int Run(string[] args)
+        {
+            string outFile = null;
+            for (int i = 1; i < args.Length - 1; i++) if (args[i] == "--out") outFile = args[i + 1];
+            var sb = new StringBuilder();
+            int code = 0;
+            try
+            {
+                sb.AppendLine("dotnet: " + Environment.Version + " (" + System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription + ")");
+                sb.AppendLine("os: " + Environment.OSVersion);
+                var c = WebViewRuntime.Choose();
+                sb.AppendLine("webview2.source: " + c.Source.ToString().ToLowerInvariant());
+                sb.AppendLine("webview2.version: " + (c.Version ?? "none"));
+                if (c.Folder != null) sb.AppendLine("webview2.folder: " + c.Folder);
+                if (c.Error != null) sb.AppendLine("webview2.note: " + c.Error);
+                if (c.Source == RuntimeSource.Bundled)
+                {
+                    string err = WebViewRuntime.EnsurePermissions(c.Folder);
+                    bool ready = WebViewRuntime.PermissionsReady(c.Folder);
+                    sb.AppendLine("webview2.permissions: " + (ready ? "ready" : "missing"));
+                    if (err != null) sb.AppendLine("webview2.permissions.error: " + err);
+                    if (!ready) code = 2;
+                }
+                else
+                {
+                    sb.AppendLine("webview2.permissions: n/a");
+                    if (c.Source == RuntimeSource.None) code = 3;
+                }
+            }
+            catch (Exception ex)
+            {
+                sb.AppendLine("error: " + ex);
+                code = 1;
+            }
+            sb.AppendLine("exit: " + code);
+            string text = sb.ToString();
+            try { AttachConsole(-1); Console.Out.Write(text); Console.Out.Flush(); } catch { }
+            if (outFile != null) { try { File.WriteAllText(outFile, text, new UTF8Encoding(false)); } catch { } }
+            return code;
         }
     }
 
@@ -53,6 +207,7 @@ namespace Weft.Desktop
         // Only chosen when the installed WebView2 Runtime can do non-client regions; otherwise the system title bar stays.
         private bool customFrame;
         private bool runtimeMissing;
+        private RuntimeChoice choice;
 
         // Closing the window is handed to the page (it knows closeAction). The process
         // exits only after the page says quit, or when the page cannot answer yet.
@@ -1044,12 +1199,13 @@ namespace Weft.Desktop
         {
             try
             {
-                string v = CoreWebView2Environment.GetAvailableBrowserVersionString();
+                choice = WebViewRuntime.Choose();
+                runtimeMissing = choice.Source == RuntimeSource.None;
                 // e.g. "123.0.2420.47" or "125.0.2535.13 beta"
                 Version ver;
-                customFrame = Version.TryParse(v.Split(' ')[0], out ver) && ver >= MinNonClientRuntime;
+                customFrame = !runtimeMissing && choice.Version != null
+                    && Version.TryParse(choice.Version.Split(' ')[0], out ver) && ver >= MinNonClientRuntime;
             }
-            catch (WebView2RuntimeNotFoundException) { runtimeMissing = true; }
             catch (Exception) { }
         }
 
@@ -1100,7 +1256,24 @@ namespace Weft.Desktop
             }
 
             string userData = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Weft", "WebView2");
-            var env = await CoreWebView2Environment.CreateAsync(null, userData);
+            string browserDir = null;
+            if (choice != null && choice.Source == RuntimeSource.Bundled)
+            {
+                browserDir = choice.Folder;
+                // Failure is only logged: the user may have extracted the folder somewhere we cannot change.
+                string permErr = await Task.Run(() => WebViewRuntime.EnsurePermissions(browserDir));
+                if (permErr != null)
+                {
+                    try
+                    {
+                        Directory.CreateDirectory(Path.GetDirectoryName(userData));
+                        File.AppendAllText(Path.Combine(Path.GetDirectoryName(userData), "shell.log"),
+                            DateTime.Now.ToString("s") + " WebView2 folder permissions: " + permErr + "\r\n");
+                    }
+                    catch { }
+                }
+            }
+            var env = await CoreWebView2Environment.CreateAsync(browserDir, userData);
             await web.EnsureCoreWebView2Async(env);
 
             var core = web.CoreWebView2;

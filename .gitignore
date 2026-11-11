@@ -31,3 +31,4 @@ node_modules
 /desktop/installer/obj/
 /desktop/installer/tests/bin/
 /desktop/installer/tests/obj/
+/desktop/win/publish/
