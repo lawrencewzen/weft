@@ -14,8 +14,10 @@ on:
     paths:
       - ".github/workflows/release.yml"
       - "scripts/pack-release.mjs"
+      - "scripts/build-installer.mjs"
       - "desktop/**"
       - "tests/unit/pack-release.test.mjs"
+      - "tests/unit/build-installer.test.mjs"
       - "package.json"
       - "package-lock.json"
 
@@ -268,6 +270,269 @@ jobs:
           files=(dist/weft-*-win-x64.zip)
           if [ "${#files[@]}" -ne 1 ]; then
             echo "expected one zip, found ${#files[@]}" >&2
+            exit 1
+          fi
+          gh release upload "$tag" "${files[0]}" --clobber
+
+      # ---- 自制安装程序（desktop/installer）：在 zip 冒烟之后，用同一个 zip 做 Setup ----
+      - name: Test installer logic
+        run: |
+          dotnet test desktop/installer/tests -c Release
+          node --test tests/unit/build-installer.test.mjs
+
+      - name: Publish installer
+        run: dotnet publish desktop/installer -c Release -o installer-out
+
+      - name: Build Weft-Setup
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $zip = Get-ChildItem -Path dist -Filter 'weft-*-win-x64.zip' | Select-Object -First 1
+          if (-not $zip) { throw 'dist has no win-x64 zip' }
+          node scripts/build-installer.mjs --package $zip.FullName --installer installer-out/WeftSetup.exe --out dist
+          if ($LASTEXITCODE -ne 0) { throw "build-installer exit $LASTEXITCODE" }
+          $setup = Get-ChildItem -Path dist -Filter 'Weft-Setup-*.exe' | Select-Object -First 1
+          if (-not $setup) { throw 'dist has no Weft-Setup exe' }
+          $mb = [math]::Round($setup.Length / 1MB, 1)
+          Write-Host ("setup=" + $setup.FullName)
+          Write-Host ("setup bytes=" + $setup.Length + " (" + $mb + " MB)")
+          Write-Host ("setup sha256=" + (Get-FileHash -Algorithm SHA256 -LiteralPath $setup.FullName).Hash.ToLower())
+          "Weft-Setup size: $mb MB ($($setup.Length) bytes); zip: $([math]::Round($zip.Length / 1MB, 1)) MB" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+
+      - name: Smoke test installer
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $false
+
+          $setup = (Get-ChildItem -Path dist -Filter 'Weft-Setup-*.exe' | Select-Object -First 1).FullName
+          $log = Join-Path $env:TEMP 'Weft-Setup.log'
+          $logKeep = Join-Path (Get-Location) 'setup-smoke-logs'
+          New-Item -ItemType Directory -Force -Path $logKeep | Out-Null
+          $root = Join-Path $env:RUNNER_TEMP 'weft 安装 中文'
+          if (Test-Path -LiteralPath $root) { Remove-Item -LiteralPath $root -Recurse -Force }
+          $data = Join-Path (Get-Location) 'setup-smoke-data'
+          if (Test-Path -LiteralPath $data) { Remove-Item -LiteralPath $data -Recurse -Force }
+          New-Item -ItemType Directory -Path $data | Out-Null
+          $env:WEFT_DATA_DIR = $data
+          $regPath = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\Weft'
+          $startLnk = Join-Path ([Environment]::GetFolderPath('Programs')) 'Weft.lnk'
+          $deskLnk = Join-Path ([Environment]::GetFolderPath('DesktopDirectory')) 'Weft.lnk'
+          # 默认数据位置：卸载默认保留，勾选「同时删除数据」才删
+          $appData = Join-Path $env:APPDATA 'Weft'
+          New-Item -ItemType Directory -Force -Path $appData | Out-Null
+          Set-Content -LiteralPath (Join-Path $appData 'sentinel.txt') -Value 'keep'
+
+          function Run-Exe([string]$exe, [string]$argLine) {
+            if (Test-Path -LiteralPath $log) { Remove-Item -LiteralPath $log -Force }
+            $p = Start-Process -FilePath $exe -ArgumentList $argLine -Wait -PassThru -WindowStyle Hidden
+            $code = $p.ExitCode
+            if (Test-Path -LiteralPath $log) {
+              Write-Host "--- Weft-Setup.log ($argLine) ---"
+              Get-Content -LiteralPath $log | ForEach-Object { Write-Host "log> $_" }
+              Copy-Item -LiteralPath $log -Destination (Join-Path $logKeep ("run-{0}.log" -f (Get-Date -Format 'HHmmss-fff'))) -Force
+            }
+            Write-Host "exit=$code"
+            return $code
+          }
+          function Log-Text { if (Test-Path -LiteralPath $log) { return (Get-Content -LiteralPath $log -Raw) } else { return '' } }
+          function Assert-True($cond, [string]$msg) { if (-not $cond) { throw "FAILED: $msg" } }
+          # WScript.Shell 返回的 TargetPath 会把中文转成 ?，直接在 .lnk 的二进制里找 UTF-16 路径
+          function Lnk-Has([string]$lnk, [string]$text) {
+            $b = [System.IO.File]::ReadAllBytes($lnk)
+            $needle = [System.Text.Encoding]::Unicode.GetString([System.Text.Encoding]::Unicode.GetBytes($text))
+            foreach ($off in 0, 1) {
+              if ([System.Text.Encoding]::Unicode.GetString($b, $off, $b.Length - $off - (($b.Length - $off) % 2)).Contains($needle)) { return $true }
+            }
+            return $false
+          }
+          function Start-Weft {
+            Push-Location -LiteralPath $root
+            try {
+              $lines = @(& .\node\node.exe .\app\bin\weft.mjs open --print 2>&1 | ForEach-Object { "$_" })
+              $code = $LASTEXITCODE
+              $lines | ForEach-Object { Write-Host "open> $_" }
+              if ($code -ne 0) { throw "open --print exit $code" }
+              $url = @($lines | Where-Object { $_ -match '^http://127\.0\.0\.1:\d+/auth\?code=' } | Select-Object -Last 1)
+              if (-not $url) { throw 'open --print did not print a login url' }
+              $homeUrl = ("$url").Trim() -replace '/auth\?code=.*$', '/'
+              $resp = Invoke-WebRequest -Uri $homeUrl -UseBasicParsing
+              if ([int]$resp.StatusCode -ne 200) { throw "home HTTP $($resp.StatusCode)" }
+              Write-Host "service up: $homeUrl"
+            } finally { Pop-Location }
+          }
+          function Weft-Running {
+            Push-Location -LiteralPath $root
+            try { & .\node\node.exe .\app\bin\weft.mjs status 2>&1 | Out-Null; return ($LASTEXITCODE -eq 0) } finally { Pop-Location }
+          }
+          function Assert-Installed([string]$dir) {
+            foreach ($f in @('Weft.exe', 'node\node.exe', 'app\bin\weft.mjs', 'Weft.cmd', 'Weft-stop.cmd', 'uninstall.exe', 'install-manifest.json')) {
+              Assert-True (Test-Path -LiteralPath (Join-Path $dir $f)) "missing $f"
+            }
+            $m = Get-Content -LiteralPath (Join-Path $dir 'install-manifest.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+            foreach ($f in $m.files) {
+              $p = Join-Path $dir ($f.path -replace '/', '\')
+              Assert-True (Test-Path -LiteralPath $p) "manifest file missing on disk: $($f.path)"
+              Assert-True ((Get-Item -LiteralPath $p).Length -eq $f.size) "size differs: $($f.path)"
+            }
+            # 抽查哈希：node.exe 和入口脚本
+            foreach ($f in @($m.files | Where-Object { $_.path -in @('node/node.exe', 'app/bin/weft.mjs', 'Weft.exe') })) {
+              $h = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $dir ($f.path -replace '/', '\'))).Hash.ToLower()
+              Assert-True ($h -eq $f.sha256) "sha256 differs: $($f.path)"
+            }
+            return $m
+          }
+
+          try {
+            # ---- 1. 静默安装到含空格和中文的目录 ----
+            Write-Host '=== 1. install ==='
+            $code = Run-Exe $setup "/S /D=`"$root`""
+            Assert-True ($code -eq 0) "install exit $code"
+            $m = Assert-Installed $root
+            $count = @($m.files).Count
+            Write-Host "manifest version=$($m.version) files=$count"
+            $reg = Get-ItemProperty -LiteralPath $regPath
+            Assert-True ($reg.DisplayName -eq 'Weft') 'DisplayName'
+            Assert-True ($reg.DisplayVersion -eq $m.version) "DisplayVersion $($reg.DisplayVersion) != $($m.version)"
+            Assert-True ($reg.InstallLocation -eq $root) "InstallLocation $($reg.InstallLocation)"
+            Assert-True ($reg.UninstallString -like '*uninstall.exe*/uninstall') "UninstallString $($reg.UninstallString)"
+            Assert-True ($reg.QuietUninstallString -like '*uninstall.exe*/uninstall /S') "QuietUninstallString $($reg.QuietUninstallString)"
+            Assert-True ($reg.DisplayIcon -like '*Weft.exe*') 'DisplayIcon'
+            Assert-True ([int]$reg.EstimatedSize -gt 0) 'EstimatedSize'
+            Assert-True ($reg.NoModify -eq 1 -and $reg.NoRepair -eq 1) 'NoModify/NoRepair'
+            Assert-True (Test-Path -LiteralPath $startLnk) 'start menu shortcut'
+            Assert-True (Test-Path -LiteralPath $deskLnk) 'desktop shortcut'
+            Assert-True (Lnk-Has $startLnk (Join-Path $root 'Weft.exe')) 'start lnk should point at Weft.exe in the install dir'
+            Assert-True ((Log-Text) -match "total=$count written=$count skipped=0") 'first install should write every file'
+
+            # 安装时就该补好 webview2\ 的权限；先查 ACL（self-check 自己也会补，所以要在它之前查）
+            $wvDir = Join-Path $root 'webview2'
+            Assert-True (Test-Path -LiteralPath (Join-Path $wvDir 'msedgewebview2.exe')) 'webview2 should be installed'
+            $wvRules = [System.IO.FileSystemAclExtensions]::GetAccessControl([System.IO.DirectoryInfo]$wvDir).GetAccessRules($true, $true, [System.Security.Principal.SecurityIdentifier])
+            foreach ($sid in @('S-1-15-2-1', 'S-1-15-2-2')) {
+              $hit = @($wvRules | Where-Object { $_.IdentityReference.Value -eq $sid -and $_.AccessControlType -eq 'Allow' -and (($_.FileSystemRights -band 'ReadAndExecute') -eq 'ReadAndExecute') })
+              Assert-True ($hit.Count -gt 0) "installer should have granted $sid on webview2"
+            }
+            Assert-True ((Log-Text) -match 'webview2 权限') 'installer log should mention webview2 permissions'
+            $selfOut = Join-Path $env:RUNNER_TEMP 'installed-self-check.txt'
+            if (Test-Path -LiteralPath $selfOut) { Remove-Item -LiteralPath $selfOut -Force }
+            $sp = Start-Process -FilePath (Join-Path $root 'Weft.exe') -ArgumentList @('--self-check', '--out', "`"$selfOut`"") -Wait -PassThru
+            Assert-True (Test-Path -LiteralPath $selfOut) 'installed Weft.exe --self-check wrote no output'
+            $selfText = Get-Content -LiteralPath $selfOut -Raw
+            Write-Host '--- installed Weft.exe --self-check ---'
+            Write-Host $selfText
+            Assert-True ($sp.ExitCode -eq 0) "self-check exit $($sp.ExitCode)"
+            Assert-True ($selfText -match '(?m)^webview2\.source: bundled\r?$') 'installed self-check should use the bundled WebView2'
+            Assert-True ($selfText -match '(?m)^webview2\.permissions: ready\r?$') 'installed self-check should report permissions: ready'
+
+            # ---- 2. 起服务再停 ----
+            Write-Host '=== 2. service start/stop ==='
+            Start-Weft
+            Assert-True (Weft-Running) 'service should be running'
+            Push-Location -LiteralPath $root
+            $stopLines = @(& cmd.exe /d /c 'Weft-stop.cmd' 2>&1 | ForEach-Object { "$_" })
+            $stopCode = $LASTEXITCODE
+            Pop-Location
+            $stopLines | ForEach-Object { Write-Host "stop> $_" }
+            Assert-True ($stopCode -eq 0) "Weft-stop.cmd exit $stopCode"
+            Assert-True (-not (Weft-Running)) 'service should be stopped'
+
+            # ---- 3. 再装同一个包：不带 /D，靠登记识别升级路径，全部跳过 ----
+            Write-Host '=== 3. upgrade (same package) ==='
+            $code = Run-Exe $setup '/S'
+            Assert-True ($code -eq 0) "upgrade exit $code"
+            $t = Log-Text
+            Assert-True ($t -match '识别：Upgrade') 'second run should take the upgrade path'
+            Assert-True ($t -match 'registry') 'upgrade dir should come from the registry'
+            Assert-True ($t -match "total=$count written=0 skipped=$count removed=0") "upgrade should skip all $count files"
+            Assert-Installed $root | Out-Null
+
+            # ---- 4. 改坏一个文件 + 服务在运行：只重写那一个，并先停掉服务 ----
+            Write-Host '=== 4. upgrade with a changed file while Weft is running ==='
+            Add-Content -LiteralPath (Join-Path $root 'README.txt') -Value 'tampered'
+            Start-Weft
+            Assert-True (Weft-Running) 'service should be running before upgrade'
+            $code = Run-Exe $setup '/S'
+            Assert-True ($code -eq 0) "upgrade-while-running exit $code"
+            $t = Log-Text
+            Assert-True ($t -match 'written=1 skipped=') 'only the changed file should be rewritten'
+            Assert-True (-not (Weft-Running)) 'upgrade should have stopped the service'
+            Assert-True (-not ((Get-Content -LiteralPath (Join-Path $root 'README.txt') -Raw) -match 'tampered')) 'README.txt should be restored'
+            Assert-Installed $root | Out-Null
+
+            # ---- 5. 服务在运行时卸载（默认保留数据）----
+            Write-Host '=== 5. uninstall ==='
+            Start-Weft
+            $code = Run-Exe $setup '/uninstall /S'
+            Assert-True ($code -eq 0) "uninstall exit $code"
+            Assert-True (-not (Test-Path -LiteralPath $root)) 'install dir should be gone'
+            Assert-True (-not (Test-Path -LiteralPath $startLnk)) 'start menu shortcut should be gone'
+            Assert-True (-not (Test-Path -LiteralPath $deskLnk)) 'desktop shortcut should be gone'
+            Assert-True (-not (Test-Path -LiteralPath $regPath)) 'registry key should be gone'
+            Assert-True (Test-Path -LiteralPath (Join-Path $appData 'sentinel.txt')) 'data dir must be kept'
+            Assert-True (Test-Path -LiteralPath $data) 'WEFT_DATA_DIR must be kept'
+
+            # ---- 6. 装回去，用 uninstall.exe（延迟删除自己）+ 删除数据 ----
+            Write-Host '=== 6. uninstall.exe with /deletedata ==='
+            $code = Run-Exe $setup "/S /D=`"$root`" /NODESKTOP"
+            Assert-True ($code -eq 0) "reinstall exit $code"
+            Assert-True (-not (Test-Path -LiteralPath $deskLnk)) '/NODESKTOP should skip the desktop shortcut'
+            $q = (Get-ItemProperty -LiteralPath $regPath).QuietUninstallString
+            Write-Host "QuietUninstallString=$q"
+            $code = Run-Exe (Join-Path $root 'uninstall.exe') '/uninstall /S /deletedata'
+            Assert-True ($code -eq 0) "uninstall.exe exit $code"
+            $deadline = (Get-Date).AddSeconds(30)
+            while ((Test-Path -LiteralPath $root) -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 500 }
+            Assert-True (-not (Test-Path -LiteralPath $root)) 'uninstall.exe should delete itself and the install dir'
+            Assert-True (-not (Test-Path -LiteralPath $regPath)) 'registry key should be gone (2)'
+            Assert-True (-not (Test-Path -LiteralPath $startLnk)) 'start menu shortcut should be gone (2)'
+            Assert-True (-not (Test-Path -LiteralPath $appData)) '/deletedata should remove %APPDATA%\Weft'
+
+            # ---- 7. 没装东西时卸载：退出码 9 ----
+            $code = Run-Exe $setup '/uninstall /S'
+            Assert-True ($code -eq 9) "uninstall with nothing installed should exit 9, got $code"
+            Write-Host 'installer smoke passed'
+          } catch {
+            Write-Host "ERROR: $_"
+            $svc = Join-Path $data 'logs\service.log'
+            if (Test-Path -LiteralPath $svc) { Write-Host '--- service.log ---'; Get-Content -LiteralPath $svc -Tail 80 }
+            throw
+          } finally {
+            $node = Join-Path $root 'node\node.exe'
+            if (Test-Path -LiteralPath $node) { & $node (Join-Path $root 'app\bin\weft.mjs') stop 2>&1 | Out-Null }
+          }
+
+      - name: Upload Weft-Setup
+        uses: actions/upload-artifact@v7
+        with:
+          name: weft-setup-win-x64
+          path: dist/Weft-Setup-*.exe
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload installer smoke log
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: installer-smoke-log
+          path: |
+            setup-smoke-logs/
+            setup-smoke-data/logs/
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Attach Weft-Setup to GitHub Release
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/intranet-v')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          shopt -s nullglob
+          files=(dist/Weft-Setup-*.exe)
+          if [ "${#files[@]}" -ne 1 ]; then
+            echo "expected one Weft-Setup exe, found ${#files[@]}" >&2
             exit 1
           fi
           gh release upload "$tag" "${files[0]}" --clobber
