@@ -97,6 +97,15 @@ jobs:
           if (-not (Test-Path -LiteralPath (Join-Path $dest 'msedgewebview2.exe'))) { throw 'msedgewebview2.exe missing after expand' }
           Write-Host "webview2 expanded: $dest"
 
+      - name: Cache bundled tool archives
+        uses: actions/cache@v5
+        with:
+          path: |
+            ${{ runner.temp }}/ripgrep.zip
+            ${{ runner.temp }}/powershell.zip
+          # Keys carry the pinned SHA256s; bump together with RG_SHA256 / PWSH_SHA256 below.
+          key: bundled-tools-71b2fef860abe467217a538ff31de02f5258807c0129f771846f87bd029aafc5-7d871531806eb1646264e4bbabd9f0c30c23355591bc756bb9909448c29ae166
+
       - name: Add bundled tools (ripgrep, PowerShell 7)
         shell: pwsh
         env:
@@ -117,7 +126,8 @@ jobs:
 
           function Get-Verified([string]$url, [string]$sha, [string]$name) {
             $file = Join-Path $env:RUNNER_TEMP $name
-            Invoke-WebRequest -Uri $url -OutFile $file -UseBasicParsing
+            # A restored cache hit is still verified against the pinned SHA256 below.
+            if (-not (Test-Path -LiteralPath $file)) { Invoke-WebRequest -Uri $url -OutFile $file -UseBasicParsing }
             $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $file).Hash.ToLower()
             Write-Host "$name bytes=$((Get-Item $file).Length) sha256=$hash"
             if ($hash -ne $sha) { throw "$name sha256 mismatch: $hash (expected $sha)" }
