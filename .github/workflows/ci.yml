@@ -40,14 +40,10 @@ jobs:
       - run: npm run check:contract
       - run: npm run test:web
 
-  unit:
-    name: unit (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
+  unit-ubuntu:
+    name: unit (ubuntu-latest)
+    runs-on: ubuntu-latest
     timeout-minutes: 20
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest]
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -56,8 +52,50 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Unit tests
-        shell: bash
         run: npm test
+
+  # Windows 单测按文件分 3 片并行（node --test-shard，Node 20.5+）。
+  # 必需检查名是 unit (windows-latest)，由下面的汇总 job 提供。
+  unit-windows-shard:
+    name: unit-windows-shard (${{ matrix.shard }}/3)
+    runs-on: windows-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+      # Windows 上 npm ci 很慢：命中缓存就直接复用 node_modules。
+      - name: Cache node_modules
+        id: nm-cache
+        uses: actions/cache@v5
+        with:
+          path: node_modules
+          key: node-modules-${{ runner.os }}-node22-${{ hashFiles('package-lock.json') }}
+      - name: npm ci
+        if: steps.nm-cache.outputs.cache-hit != 'true'
+        run: npm ci
+      - name: Unit tests (shard ${{ matrix.shard }}/3)
+        shell: bash
+        run: node --test --test-timeout=120000 --test-shard=${{ matrix.shard }}/3 tests/unit/*.test.mjs
+
+  # 汇总：保持必需检查名 unit (windows-latest) 不变。分片全部成功才成功。
+  unit-windows:
+    name: unit (windows-latest)
+    runs-on: ubuntu-latest
+    needs: unit-windows-shard
+    if: always()
+    timeout-minutes: 5
+    steps:
+      - name: Check shard results
+        run: |
+          echo "unit-windows-shard result: ${{ needs.unit-windows-shard.result }}"
+          [ "${{ needs.unit-windows-shard.result }}" = "success" ]
 
   # e2e 按文件分 5 片并行（workers 仍是 1，每片一台机器）。
   # 必需检查名是 e2e，由下面的汇总 job 提供，分片 job 的名字不进分支保护。
