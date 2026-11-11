@@ -12,7 +12,6 @@ import { VENDOR_PRESETS } from './src/core/model-sources.mjs';
 import { createCredentialStore, createModelsStore } from './src/core/provider-stores.mjs';
 import { createProviderService } from './src/core/provider-service.mjs';
 import { loadAntigravityAcp } from './src/core/antigravity-acp.mjs';
-import { migrateAppSettingsToV3 } from './src/core/provider-migrate.mjs';
 import { cloneGitRepo, stripGitUrlCredentials } from './src/core/git-import.mjs';
 import { gitFailureBody, planWorkspaceGit as planGitImport, usesConnectionClone } from './src/core/workspace-git.mjs';
 import {
@@ -369,7 +368,6 @@ function envRequestsFaux() {
 }
 
 async function ensureSettings() {
-  await migrateAppSettingsToV3(store, { credentials: credentialStore });
   return store.getSettings();
 }
 
