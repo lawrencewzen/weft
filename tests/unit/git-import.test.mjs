@@ -588,6 +588,7 @@ test('POST /api/workspaces returns git import error codes and stores a stripped 
       ...process.env,
       PORT: '0',
       WEFT_DATA_DIR: dataDir,
+    WEFT_LOG_CONSOLE: '1',
       WEFT_GIT_HTTP_HOSTS: '127.0.0.1',
     },
     stdio: ['ignore', 'pipe', 'pipe'],

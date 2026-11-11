@@ -2,6 +2,7 @@
 
 import type { components } from '../contract.gen.ts';
 import type { Entity, EventHub } from './hub.ts';
+import { log as serverLog, logLine } from '../../core/log.mjs';
 
 export const SCHEDULES_TOPIC = 'schedules';
 export const COALESCE_MS = 50;
@@ -31,7 +32,7 @@ export function entitiesFromSchedules(list: Schedule[]): Entity[] {
 export function attachSchedulesTopic(hub: EventHub, opts: SchedulesTopicOpts = {}): SchedulesTopic {
   const coalesceMs = opts.coalesceMs ?? COALESCE_MS;
   const log = opts.log ?? ((line: string) => {
-    console.log(line);
+    logLine('debug', line);
   });
   let last = new Map<string, Schedule>();
   let timer: ReturnType<typeof setTimeout> | null = null;
@@ -59,7 +60,7 @@ export function attachSchedulesTopic(hub: EventHub, opts: SchedulesTopicOpts = {
     try {
       list = await load();
     } catch (err) {
-      console.error('WEFT_V2_SCHEDULES_SNAPSHOT', err);
+      serverLog.error('WEFT_V2_SCHEDULES_SNAPSHOT', '', err);
       return;
     }
     if (disposed || !active) return;

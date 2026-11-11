@@ -1,3 +1,4 @@
+import { log } from '../core/log.mjs';
 // Allow-list for the environment passed to Agent commands.
 // Official Pi Durable path: createBashTool prepare and ExecutionEnv.exec
 // both set inheritEnv: false and env to this filtered object. NodeExecutionEnv
@@ -154,7 +155,7 @@ function readAllowRaw(source, platform) {
 }
 
 function defaultLog(message) {
-  console.warn(message);
+  log.warn('WEFT_BASH_ENV', message);
 }
 
 function warnBlocked(log, warned, name, reason) {

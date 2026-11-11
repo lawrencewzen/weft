@@ -11,6 +11,7 @@ import { defineDoc } from '@earendil-works/pi-durable';
 import { buildGitChildEnv, resolveGitBin } from '../core/git-import.mjs';
 import { WORKSPACE_SNAPSHOT_DOC_KIND } from './ids.mjs';
 import { decodeWorkspaceBytes } from './workspace-text.mjs';
+import { log } from '../core/log.mjs';
 
 /** Same cap as write/edit details and the legacy changes list. */
 export const FILE_CAP = 1024 * 1024;
@@ -222,7 +223,7 @@ async function addAndWriteTree(cwd, indexFile, env) {
       added = await runGit(args, { cwd, env, indexFile, timeoutMs: ADD_TIMEOUT_MS });
     }
     if (added.killed) {
-      console.error('WEFT_CHANGE_SNAPSHOT git add timed out');
+      log.error('WEFT_CHANGE_SNAPSHOT', 'git add timed out');
       const error = new Error('git add timed out');
       error.code = 'E_GIT_TIMEOUT';
       throw error;

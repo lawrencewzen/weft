@@ -10,6 +10,7 @@ import {
   type ResolvedModel,
 } from '../views/providers.ts';
 import { normalizeLang, type Entity, type EventHub } from './hub.ts';
+import { log as serverLog, logLine } from '../../core/log.mjs';
 
 export const PROVIDERS_TOPIC = 'providers';
 
@@ -64,7 +65,7 @@ function mapsFromSnapshot(snap: ProvidersSnapshot): Map<EntityKey, object> {
 
 export function attachProvidersTopic(hub: EventHub, opts: ProvidersTopicOpts = {}): ProvidersTopic {
   const log = opts.log ?? ((line: string) => {
-    console.log(line);
+    logLine('debug', line);
   });
   let lastZh = new Map<EntityKey, object>();
   let lastEn = new Map<EntityKey, object>();
@@ -130,7 +131,7 @@ export function attachProvidersTopic(hub: EventHub, opts: ProvidersTopicOpts = {
       zh = await loadSnapshot('zh');
       en = await loadSnapshot('en');
     } catch (err) {
-      console.error('WEFT_V2_PROVIDERS_SNAPSHOT', err);
+      serverLog.error('WEFT_V2_PROVIDERS_SNAPSHOT', '', err);
       return;
     }
     if (disposed || !active) return;

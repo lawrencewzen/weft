@@ -19,6 +19,7 @@ import { EXT_BUILTIN_TOOLS, EXT_SKILLS } from './ids.mjs';
 import { createSkillTool } from './skill-tool.mjs';
 import { isMainAgent, systemPromptSections } from './system-prompt.mjs';
 import { workspaceTools } from './tools.mjs';
+import { log } from '../core/log.mjs';
 
 const LOOSE_PARAMS = obj({}, { open: true });
 
@@ -61,7 +62,7 @@ export function installAgentExtensions(registry, bridge, { dataDir } = {}) {
           const text = String((await bridge.skillPrompt()) || '').trim();
           return text || undefined;
         } catch (err) {
-          console.error(`WEFT_KERNEL_AGENT ${err instanceof Error ? err.message : err}`);
+          log.error('WEFT_KERNEL_AGENT', '', err);
           return undefined;
         }
       }),
@@ -180,7 +181,7 @@ export function createAgentHost({
       try {
         await configure(conv);
       } catch (err) {
-        console.error(`WEFT_KERNEL_PLUGIN ${err instanceof Error ? err.message : err}`);
+        log.error('WEFT_KERNEL_PLUGIN', '', err);
       }
     }
   }
@@ -205,7 +206,7 @@ export function createAgentHost({
     try {
       agents = await describeAgents({ ...conv, status: conv.status }, msgs || []);
     } catch (err) {
-      console.error(`WEFT_KERNEL_AGENT ${err instanceof Error ? err.message : err}`);
+      log.error('WEFT_KERNEL_AGENT', '', err);
       return;
     }
     const agent = agents[0];

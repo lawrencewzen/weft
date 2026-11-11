@@ -1,6 +1,7 @@
 import { createCredentialStore } from './provider-stores.mjs';
 import { migrateSettingsV2toV3, SETTINGS_VERSION_V3 } from './provider-config.mjs';
 import { migrateLegacySettings } from './model-sources.mjs';
+import { lineLog } from './log.mjs';
 
 export const SETTINGS_V2_BACKUP_ID = 'app-v2-backup';
 
@@ -17,7 +18,7 @@ function errorText(err) {
  * write) so the next boot retries. The raw JSON is copied to settings id
  * `app-v2-backup` inside the same transaction (existing backup is kept).
  */
-export async function migrateAppSettingsToV3(store, { log = console, credentials } = {}) {
+export async function migrateAppSettingsToV3(store, { log = lineLog, credentials } = {}) {
   if (!store) throw new Error('store is required');
   const raw = asRecord(await store.getSettingsRaw('app'));
   if (!raw) return { migrated: false };

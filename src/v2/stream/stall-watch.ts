@@ -5,6 +5,7 @@ import {
   finiteTs,
   resolveStallAfterMs,
 } from '../views/run.ts';
+import { log } from '../../core/log.mjs';
 
 export type StallWatchOpts = {
   stallAfterMs?: number;
@@ -78,7 +79,7 @@ export function createStallWatch(opts: StallWatchOpts = {}): StallWatch {
       try {
         fn(cid);
       } catch (err) {
-        console.error(`WEFT_V2_STALL ${cid}`, err);
+        log.error('WEFT_V2_STALL', `${cid}`, err);
       }
     }
   }

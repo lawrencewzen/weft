@@ -3,6 +3,7 @@ import { mkdirSync, chmodSync, existsSync, renameSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { DEFAULT_SETTINGS, mergeSettings, normalizeSettings } from '../core/settings.mjs';
+import { lineLog } from '../core/log.mjs';
 
 const SCHEMA_VERSION = 12;
 /** Execution records kept per schedule. */
@@ -17,7 +18,7 @@ const SQLITE_SIDECARS = Object.freeze(['', '-wal', '-shm']);
  * App database path. If only the old filename exists, rename it (and WAL/SHM)
  * onto the new name. If both exist, keep the new file and leave the old one.
  */
-export function resolveAppDatabasePath(dir, { log = console } = {}) {
+export function resolveAppDatabasePath(dir, { log = lineLog } = {}) {
   mkdirSync(dir, { recursive: true });
   const nextPath = path.join(dir, APP_DB_FILE);
   const legacyPath = path.join(dir, LEGACY_APP_DB_FILE);
@@ -116,7 +117,7 @@ function convFromRow(row) {
   };
 }
 
-export function createSqliteStore(dir, { log = console } = {}) {
+export function createSqliteStore(dir, { log = lineLog } = {}) {
   const deletedIds = new Set();
   const dbPath = resolveAppDatabasePath(dir, { log });
   const db = new DatabaseSync(dbPath);

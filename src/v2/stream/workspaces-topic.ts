@@ -8,6 +8,7 @@ import {
   type WorkspacesSnapshot,
 } from '../views/sidebar.ts';
 import type { Entity, EventHub } from './hub.ts';
+import { log as serverLog, logLine } from '../../core/log.mjs';
 
 export const WORKSPACES_TOPIC = 'workspaces';
 export const COALESCE_MS = 200;
@@ -76,7 +77,7 @@ export function attachWorkspacesTopic(hub: EventHub, opts: WorkspacesTopicOpts =
   const coalesceMs = opts.coalesceMs ?? COALESCE_MS;
   const sweepMs = opts.sweepMs ?? SWEEP_MS;
   const log = opts.log ?? ((line: string) => {
-    console.log(line);
+    logLine('debug', line);
   });
   let last = new Map<EntityKey, object>();
   let timer: ReturnType<typeof setTimeout> | null = null;
@@ -111,7 +112,7 @@ export function attachWorkspacesTopic(hub: EventHub, opts: WorkspacesTopicOpts =
       if (ws.kind === 'chat') return;
       await opts.gitStatus.refresh(wsId, String(ws.path));
     } catch (err) {
-      console.error('WEFT_V2_GIT_REFRESH', err);
+      serverLog.error('WEFT_V2_GIT_REFRESH', '', err);
     }
   }
 
@@ -150,7 +151,7 @@ export function attachWorkspacesTopic(hub: EventHub, opts: WorkspacesTopicOpts =
     try {
       snap = await recompute();
     } catch (err) {
-      console.error('WEFT_V2_SIDEBAR_SNAPSHOT', err);
+      serverLog.error('WEFT_V2_SIDEBAR_SNAPSHOT', '', err);
       return;
     }
     if (disposed || !active) return;
@@ -210,7 +211,7 @@ export function attachWorkspacesTopic(hub: EventHub, opts: WorkspacesTopicOpts =
     try {
       unsub?.();
     } catch (err) {
-      console.error('WEFT_V2_SIDEBAR_UNSUB', err);
+      serverLog.error('WEFT_V2_SIDEBAR_UNSUB', '', err);
     }
     unsub = null;
     last = new Map();

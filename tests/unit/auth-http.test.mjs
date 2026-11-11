@@ -263,7 +263,7 @@ test('acceptance 4: WEFT_ALLOWED_HOSTS without a token prints a warning', async 
     const settings = await raw({ port: srv.port, path: '/api/settings' });
     assert.equal(settings.status, 200);
     const log = srv.logs();
-    assert.match(log, /WEFT_WARN 服务对这些主机开放且没有鉴权: lab\.example,other\.internal/);
+    assert.match(log, /\[WEFT_WARN\] 服务对这些主机开放且没有鉴权: lab\.example,other\.internal/);
     assert.match(log, /WEFT_READY http:\/\/127\.0\.0\.1:\d+/);
     assert.doesNotMatch(log, /WEFT_LOGIN/);
     assert.doesNotMatch(log, /WEFT_TOKEN/);

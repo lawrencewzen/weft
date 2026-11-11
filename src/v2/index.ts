@@ -83,6 +83,7 @@ import {
 } from './views/sidebar.ts';
 import { createGitStatusCache, type GitStatusCache } from './views/git-status.ts';
 import { subagentSnapshot } from './views/subagents.ts';
+import { log, logLine } from '../core/log.mjs';
 
 type ServiceInfo = components['schemas']['ServiceInfo'];
 type V2Error = components['schemas']['V2Error'];
@@ -323,7 +324,7 @@ function sendV2(
   if (process.env.WEFT_V2_VALIDATE === '1') {
     const result = validateResponse(requestPath, method, status, body);
     if (!result.ok) {
-      console.error(contractMismatchLog(requestPath, method, status, result.errors));
+      logLine('error', contractMismatchLog(requestPath, method, status, result.errors));
       const errorBody: V2Error = { error: 'contract mismatch', code: 'E_CONTRACT' };
       writeJson(res, 500, errorBody);
       return;
@@ -736,7 +737,7 @@ export function createV2Handler(opts: {
         return true;
       }
       sendV2(res, pathname, method, 202, { exiting: true } satisfies RestartAccepted, () => {
-        console.log('WEFT_SERVICE_RESTART');
+        log.info('WEFT_SERVICE_RESTART', 'restart requested');
         opts.onRestart?.();
       });
       return true;
@@ -1213,7 +1214,7 @@ export function createV2Handler(opts: {
             if (cid) opts.notifyConversation?.(cid);
           }
         } catch (err) {
-          console.error('WEFT_V2_FILE_NOTIFY', err);
+          log.error('WEFT_V2_FILE_NOTIFY', '', err);
         }
         sendV2(res, pathname, method, 200, saved);
       } catch (err) {
@@ -1960,7 +1961,7 @@ export function createV2Handler(opts: {
             const child = await opts.loadSubagent(id, agentId);
             tool = findPresentedTool({ messages: child?.messages }, toolId);
           } catch (err) {
-            console.error(`WEFT_V2_TOOL_OUTPUT ${id} ${agentId}`, err);
+            log.error('WEFT_V2_TOOL_OUTPUT', `${id} ${agentId}`, err);
             continue;
           }
           if (tool) break;
@@ -2260,7 +2261,7 @@ export function createV2Runtime(opts: {
         }
       }
     } catch (err) {
-      console.error('WEFT_V2_PROVIDERS_CONV_NOTIFY', err);
+      log.error('WEFT_V2_PROVIDERS_CONV_NOTIFY', '', err);
     }
   }
   function notifyProvidersChanged(): void {
