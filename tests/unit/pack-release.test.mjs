@@ -581,6 +581,26 @@ test('copyShell puts Weft.exe and webview2 at the stage root, drops pdb/xml, no 
   }
 });
 
+test('copyShell keeps tools\\ untouched, including .xml files', async () => {
+  const tmp = await mkdtemp(path.join(tmpdir(), 'weft-shell-'));
+  try {
+    const shell = path.join(tmp, 'shell out');
+    await mkdir(path.join(shell, 'webview2'), { recursive: true });
+    await mkdir(path.join(shell, 'tools', 'pwsh', 'Modules'), { recursive: true });
+    await writeFile(path.join(shell, 'Weft.exe'), 'x');
+    await writeFile(path.join(shell, 'webview2', 'msedgewebview2.exe'), 'x');
+    await writeFile(path.join(shell, 'tools', 'pwsh', 'pwsh.exe'), 'x');
+    await writeFile(path.join(shell, 'tools', 'pwsh', 'Modules', 'help.xml'), 'x');
+    const stage = path.join(tmp, 'stage');
+    await mkdir(stage);
+    await copyShell(shell, stage);
+    await access(path.join(stage, 'tools', 'pwsh', 'pwsh.exe'));
+    await access(path.join(stage, 'tools', 'pwsh', 'Modules', 'help.xml'));
+  } finally {
+    await rm(tmp, { recursive: true, force: true });
+  }
+});
+
 test('copyShell refuses a directory without Weft.exe or the bundled WebView2', async () => {
   const tmp = await mkdtemp(path.join(tmpdir(), 'weft-shell-'));
   try {

@@ -138,7 +138,7 @@ export function windowsPickerExecOptions(env) {
 }
 
 /**
- * pwsh.exe first when it exists on PATH, then powershell.exe.
+ * Bundled tools\\pwsh\\pwsh.exe first, then pwsh.exe on PATH, then powershell.exe.
  * An empty list means both are missing.
  *
  * @param {NodeJS.ProcessEnv} [env]

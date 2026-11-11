@@ -12,6 +12,7 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { wrapPwshCommand } from './output-transcode.mjs';
 import { agentPowerShellScript } from './shell.mjs';
+import { DEFAULT_APP_ROOT, resolveTool } from './bundled-tools.mjs';
 
 export const NA = '不适用';
 export const ROUNDTRIP_TEXT = '中文自检';
@@ -218,6 +219,7 @@ export async function runDoctor(opts = {}) {
   const system = await collectSystem(deps);
   const node = collectNode(deps);
   const ps = await collectPowerShell(deps);
+  const tools = await collectTools(deps);
   const git = await collectGit(deps);
   const weft = await collectWeft(deps);
   const roundtrip = await collectRoundtrip(deps, ps);
@@ -231,6 +233,8 @@ export async function runDoctor(opts = {}) {
     render('Node', node),
     '',
     render('PowerShell', ps.lines),
+    '',
+    render('内置工具', tools),
     '',
     render('Git', git),
     '',
@@ -272,6 +276,7 @@ function makeDeps(opts) {
     loadShellModule: opts.loadShellModule ?? defaultLoadShellModule,
     readRegistry: opts.readRegistry ?? ((key) => defaultReadRegistry(key, exec)),
     existsSync: opts.existsSync ?? existsSync,
+    appRoot: opts.appRoot ?? DEFAULT_APP_ROOT,
     readFileSync: opts.readFileSync ?? readFileSync,
     writeFileSync: opts.writeFileSync ?? writeFileSync,
     rmSync: opts.rmSync ?? rmSync,
@@ -314,7 +319,7 @@ function collectNode(deps) {
 }
 
 async function collectPowerShell(deps) {
-  const pwshPath = deps.which('pwsh');
+  const pwshPath = resolveBundledFirst(deps, 'pwsh').path;
   const powershellPath = deps.platform === 'win32'
     ? (deps.which('powershell') || deps.which('powershell.exe'))
     : null;
@@ -336,11 +341,39 @@ async function collectPowerShell(deps) {
   });
   const agent = await resolveAgentShell(deps, { pwsh, powershell, bash });
   const lines = [
-    `pwsh: ${formatProg(pwsh)}`,
+    `pwsh: ${formatProg(pwsh)}${pwsh?.path ? `（来源 ${resolveBundledFirst(deps, 'pwsh').source}）` : ''}`,
     `Windows PowerShell: ${deps.platform === 'win32' ? formatProg(powershell) : NA}`,
     `Agent 命令将使用: ${agent}`,
   ];
   return { lines, pwsh, powershell, bash, agent };
+}
+
+function resolveBundledFirst(deps, name) {
+  return resolveTool(name, {
+    platform: deps.platform,
+    appRoot: deps.appRoot,
+    exists: deps.existsSync,
+    findOnPath: (program) => deps.which(program),
+  });
+}
+
+/** Bundled rg / pwsh: where each one comes from (bundled, PATH, none) and its version. */
+async function collectTools(deps) {
+  const lines = [];
+  for (const [name, args] of [
+    ['rg', ['--version']],
+    ['pwsh', ['-NoProfile', '-NonInteractive', '-Command', '$PSVersionTable.PSVersion.ToString()']],
+  ]) {
+    const found = resolveBundledFirst(deps, name);
+    if (!found.path) {
+      lines.push(`${name}: 来源 none，未找到`);
+      continue;
+    }
+    let version = '';
+    try { version = firstLine(await deps.exec(found.path, args)); } catch { version = ''; }
+    lines.push(`${name}: 来源 ${found.source}，${found.path}${version ? `，${version}` : ''}`);
+  }
+  return lines;
 }
 
 async function resolveAgentShell(deps, found) {

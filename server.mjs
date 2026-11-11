@@ -53,8 +53,11 @@ import { phrase } from './src/v2/phrases/index.ts';
 import fs from 'node:fs/promises';
 import { log, installProcessHandlers, trackHttp } from './src/core/log.mjs';
 import { readGitCommit } from './src/core/git-commit.mjs';
+import { applyBundledRgEnv } from './src/platform/win/bundled-tools.mjs';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
+// Windows package: tools\rg\rg.exe next to app\ (no-op elsewhere, and when WEFT_RG_PATH is already set).
+applyBundledRgEnv(process.env, { appRoot: ROOT });
 const PUBLIC_NEXT = path.join(ROOT, 'public-next');
 const PORT = process.env.PORT !== undefined && process.env.PORT !== '' ? Number(process.env.PORT) : 3000;
 const pkg = JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
