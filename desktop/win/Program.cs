@@ -24,6 +24,7 @@ namespace Weft.Desktop
         private static int Main(string[] args)
         {
             if (args.Length > 0 && args[0] == "--self-check") return SelfCheck.Run(args);
+            if (args.Length > 0 && args[0] == "--service-check") return ServiceCheck.Run(args);
             bool first;
             using (var mutex = new Mutex(true, @"Local\Weft.Desktop.Shell", out first))
             {
@@ -160,6 +161,13 @@ namespace Weft.Desktop
             {
                 sb.AppendLine("dotnet: " + Environment.Version + " (" + System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription + ")");
                 sb.AppendLine("os: " + Environment.OSVersion);
+                // Regression guard for the .NET 8 missing-key throw: ApplyDataDir must fill in a missing WEFT_DATA_DIR.
+                var probe = new ProcessStartInfo("node.exe");
+                probe.Environment.Remove("WEFT_DATA_DIR");
+                ServiceRunner.ApplyDataDir(probe);
+                bool dataOk = probe.Environment["WEFT_DATA_DIR"] == ServiceRunner.DefaultDataDir();
+                sb.AppendLine("datadir.default: " + (dataOk ? "ok" : "wrong"));
+                if (!dataOk) code = 4;
                 var c = WebViewRuntime.Choose();
                 sb.AppendLine("webview2.source: " + c.Source.ToString().ToLowerInvariant());
                 sb.AppendLine("webview2.version: " + (c.Version ?? "none"));
@@ -185,18 +193,20 @@ namespace Weft.Desktop
                 code = 1;
             }
             sb.AppendLine("exit: " + code);
-            string text = sb.ToString();
+            Emit(sb.ToString(), outFile);
+            return code;
+        }
+
+        public static void Emit(string text, string outFile)
+        {
             try { AttachConsole(-1); Console.Out.Write(text); Console.Out.Flush(); } catch { }
             if (outFile != null) { try { File.WriteAllText(outFile, text, new UTF8Encoding(false)); } catch { } }
-            return code;
         }
     }
 
     internal sealed class MainForm : Form
     {
-        private static readonly Regex LoginUrl = new Regex(@"http://127\.0\.0\.1:\d+/auth\?code=\S+", RegexOptions.Compiled);
         private static readonly Regex PickFolderRegex = new Regex(@"^pick-folder:([A-Za-z0-9_-]{1,40})$", RegexOptions.Compiled);
-        private static readonly TimeSpan StartTimeout = TimeSpan.FromSeconds(60);
 
         private readonly WebView2 web = new WebView2 { Dock = DockStyle.Fill };
         private readonly EventWaitHandle activate;
@@ -220,7 +230,6 @@ namespace Weft.Desktop
         private Icon trayIcon;
 
         private const int PageCloseTimeoutMs = 2000;
-        private const int StopTimeoutMs = 20000;
         private const string AskPageToCloseScript =
             "(function(){var b=document.querySelector('[data-testid=\"window-close\"]');if(!b)return 'missing';b.click();return 'ok';})()";
 
@@ -893,58 +902,10 @@ namespace Weft.Desktop
             catch { }
         }
 
-        private static void ApplyDataDir(ProcessStartInfo psi)
-        {
-            if (string.IsNullOrWhiteSpace(psi.EnvironmentVariables["WEFT_DATA_DIR"]))
-                psi.EnvironmentVariables["WEFT_DATA_DIR"] = Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Weft");
-        }
-
         // Same command as Weft-stop.cmd: `node app\bin\weft.mjs stop`. Exit 0 means the service is gone.
         private int RunWeftStop(out string detail)
         {
-            detail = "";
-            string dir = AppDomain.CurrentDomain.BaseDirectory;
-            string node = Path.Combine(dir, "node", "node.exe");
-            string cli = Path.Combine(dir, "app", "bin", "weft.mjs");
-            // The packaged layout is node\node.exe next to Weft.exe. Nothing was started without it.
-            if (!File.Exists(node) || !File.Exists(cli))
-            {
-                detail = "";
-                return 0;
-            }
-            var lines = new List<string>();
-            var psi = new ProcessStartInfo(node)
-            {
-                Arguments = "\"" + cli + "\" stop",
-                WorkingDirectory = dir,
-                UseShellExecute = false,
-                CreateNoWindow = true,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                StandardOutputEncoding = System.Text.Encoding.UTF8,
-                StandardErrorEncoding = System.Text.Encoding.UTF8,
-            };
-            ApplyDataDir(psi);
-            var p = new Process { StartInfo = psi };
-            DataReceivedEventHandler collect = (o, a) => { if (a.Data != null) lock (lines) lines.Add(a.Data); };
-            p.OutputDataReceived += collect;
-            p.ErrorDataReceived += collect;
-            p.Start();
-            p.BeginOutputReadLine();
-            p.BeginErrorReadLine();
-            if (!p.WaitForExit(StopTimeoutMs))
-            {
-                try { p.Kill(); } catch { }
-                detail = "停止服务超时";
-                return 1;
-            }
-            p.WaitForExit();
-            string text;
-            lock (lines) text = string.Join("\n", lines.GetRange(0, Math.Min(5, lines.Count)));
-            if (text.Length > 500) text = text.Substring(0, 500);
-            detail = text;
-            return p.ExitCode;
+            return ServiceRunner.Stop(AppDomain.CurrentDomain.BaseDirectory, out detail);
         }
 
         private bool isPickingFolder;
@@ -1356,54 +1317,11 @@ namespace Weft.Desktop
         private string LaunchService()
         {
             string dir = AppDomain.CurrentDomain.BaseDirectory;
-            string node = Path.Combine(dir, "node", "node.exe");
-            string cli = Path.Combine(dir, "app", "bin", "weft.mjs");
             var lines = new List<string>();
             try
             {
-                var psi = new ProcessStartInfo(node)
-                {
-                    Arguments = "\"" + cli + "\" open --print",
-                    WorkingDirectory = dir,
-                    UseShellExecute = false,
-                    CreateNoWindow = true,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    StandardOutputEncoding = System.Text.Encoding.UTF8,
-                    StandardErrorEncoding = System.Text.Encoding.UTF8,
-                };
-                ApplyDataDir(psi);
-
-                var p = new Process { StartInfo = psi };
-                lock (launchLock) launcherProcess = p;
-                DataReceivedEventHandler collect = (o, a) => { if (a.Data != null) lock (lines) lines.Add(a.Data); };
-                p.OutputDataReceived += collect;
-                p.ErrorDataReceived += collect;
-                p.Start();
-                p.BeginOutputReadLine();
-                p.BeginErrorReadLine();
-
-                var deadline = DateTime.UtcNow + StartTimeout;
-                while (DateTime.UtcNow < deadline)
-                {
-                    if (quitting) return null;
-                    string hit = FindUrl(lines);
-                    if (hit != null) return quitting ? null : hit;
-                    if (p.HasExited)
-                    {
-                        Thread.Sleep(300); // let the last output lines arrive
-                        hit = FindUrl(lines);
-                        if (hit != null) return quitting ? null : hit;
-                        break;
-                    }
-                    Thread.Sleep(100);
-                }
-                if (quitting) return null;
-                if (!p.HasExited)
-                {
-                    try { p.Kill(); } catch { }
-                    lines.Add("(等待 " + (int)StartTimeout.TotalSeconds + " 秒仍无结果，已超时)");
-                }
+                string hit = ServiceRunner.Launch(dir, lines, p => { lock (launchLock) launcherProcess = p; }, () => quitting);
+                if (hit != null) return hit;
             }
             catch (Exception ex)
             {
@@ -1414,19 +1332,6 @@ namespace Weft.Desktop
             string head;
             lock (lines) head = string.Join("\n", lines.GetRange(0, Math.Min(5, lines.Count)));
             Fail("Weft 服务启动失败。\n\n" + head);
-            return null;
-        }
-
-        private static string FindUrl(List<string> lines)
-        {
-            lock (lines)
-            {
-                for (int i = lines.Count - 1; i >= 0; i--)
-                {
-                    var m = LoginUrl.Match(lines[i]);
-                    if (m.Success) return m.Value;
-                }
-            }
             return null;
         }
 

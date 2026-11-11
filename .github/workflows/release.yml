@@ -268,6 +268,31 @@ jobs:
           Write-Host "pwsh `$PSVersionTable.PSVersion:`n$psOut"
           if ($LASTEXITCODE -ne 0 -or $psOut -notmatch '7\s+6\s+10') { throw 'bundled pwsh.exe did not run' }
 
+          # --service-check: the real Weft.exe start/stop path, with WEFT_DATA_DIR unset (the .NET 8 missing-key case).
+          # APPDATA points at a temp dir so the default data dir lands there.
+          Write-Host '--- Weft.exe --service-check (WEFT_DATA_DIR unset) ---'
+          $svcOut = Join-Path $env:RUNNER_TEMP 'service-check.txt'
+          if (Test-Path -LiteralPath $svcOut) { Remove-Item -LiteralPath $svcOut -Force }
+          $svcApp = Join-Path $env:RUNNER_TEMP 'svc-appdata'
+          if (Test-Path -LiteralPath $svcApp) { Remove-Item -LiteralPath $svcApp -Recurse -Force }
+          New-Item -ItemType Directory -Path $svcApp | Out-Null
+          $savedApp = $env:APPDATA
+          $savedData = $env:WEFT_DATA_DIR
+          Remove-Item Env:WEFT_DATA_DIR -ErrorAction SilentlyContinue
+          $env:APPDATA = $svcApp
+          try {
+            $sp = Start-Process -FilePath (Join-Path $root 'Weft.exe') -ArgumentList @('--service-check', '--out', "`"$svcOut`"") -Wait -PassThru
+          } finally {
+            $env:APPDATA = $savedApp
+            if ($savedData) { $env:WEFT_DATA_DIR = $savedData }
+          }
+          if (-not (Test-Path -LiteralPath $svcOut)) { throw 'service-check wrote no output' }
+          $svcText = Get-Content -LiteralPath $svcOut -Raw
+          Write-Host $svcText
+          if ($sp.ExitCode -ne 0) { throw "service-check exit $($sp.ExitCode)" }
+          if ($svcText -notmatch '(?m)inherited WEFT_DATA_DIR: \(unset\)') { throw 'service-check did not run with WEFT_DATA_DIR unset' }
+          if ($svcText -notmatch [regex]::Escape((Join-Path $svcApp 'Weft'))) { throw 'service-check did not default the data dir to APPDATA\Weft' }
+
           $env:Path = (($env:Path -split ';' | Where-Object { $_ -and ($_ -notmatch '(?i)node') }) -join ';')
           $data = Join-Path (Get-Location) 'smoke-data'
           if (Test-Path -LiteralPath $data) { Remove-Item -LiteralPath $data -Recurse -Force }
@@ -528,6 +553,30 @@ jobs:
             }
             Assert-True ($selfText -match '(?m)^webview2\.source: bundled\r?$') 'installed self-check should use the bundled WebView2'
             Assert-True ($selfText -match '(?m)^webview2\.permissions: ready\r?$') 'installed self-check should report permissions: ready'
+
+            # ---- 1b. Weft.exe --service-check：未设置 WEFT_DATA_DIR，APPDATA 指到临时目录 ----
+            Write-Host '=== 1b. installed Weft.exe --service-check (WEFT_DATA_DIR unset) ==='
+            $svcOut = Join-Path $env:RUNNER_TEMP 'installed-service-check.txt'
+            if (Test-Path -LiteralPath $svcOut) { Remove-Item -LiteralPath $svcOut -Force }
+            $svcApp = Join-Path $env:RUNNER_TEMP 'svc-appdata-installed'
+            if (Test-Path -LiteralPath $svcApp) { Remove-Item -LiteralPath $svcApp -Recurse -Force }
+            New-Item -ItemType Directory -Path $svcApp | Out-Null
+            $savedApp = $env:APPDATA
+            $savedData = $env:WEFT_DATA_DIR
+            Remove-Item Env:WEFT_DATA_DIR -ErrorAction SilentlyContinue
+            $env:APPDATA = $svcApp
+            try {
+              $sp = Start-Process -FilePath (Join-Path $root 'Weft.exe') -ArgumentList @('--service-check', '--out', "`"$svcOut`"") -Wait -PassThru
+            } finally {
+              $env:APPDATA = $savedApp
+              $env:WEFT_DATA_DIR = $savedData
+            }
+            Assert-True (Test-Path -LiteralPath $svcOut) 'installed service-check wrote no output'
+            $svcText = Get-Content -LiteralPath $svcOut -Raw
+            Write-Host $svcText
+            Assert-True ($sp.ExitCode -eq 0) "installed service-check exit $($sp.ExitCode)"
+            Assert-True ($svcText -match '(?m)inherited WEFT_DATA_DIR: \(unset\)') 'service-check should run with WEFT_DATA_DIR unset'
+            Assert-True ($svcText -match [regex]::Escape((Join-Path $svcApp 'Weft'))) 'service-check should default the data dir to APPDATA\Weft'
 
             # ---- 2. 起服务再停 ----
             Write-Host '=== 2. service start/stop ==='
