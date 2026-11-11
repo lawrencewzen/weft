@@ -45,16 +45,3 @@ test('conversation menu and error row open the dialog with the conversation, not
   await expect(page.getByTestId('next-report-conversation')).toBeVisible();
   expectClean(state);
 });
-
-test('desktop shell: save goes through the shell and offers reveal', async ({ page }) => {
-  const state = await openProto(page, 'shell=1');
-  await page.getByTestId('next-open-settings').click();
-  await page.getByTestId('next-settings-nav-about').click();
-  await page.getByTestId('next-about-report').click();
-  await page.getByTestId('next-report-export').click();
-  await expect(page.getByTestId('next-report-status')).toContainText('已导出');
-  await page.getByTestId('next-report-reveal').click();
-  const msgs = await page.evaluate(() => window.__protoShellMessages.map((m) => m.type));
-  expect(msgs).toEqual(['weft.saveReport', 'weft.revealInFolder']);
-  expectClean(state);
-});

@@ -3,8 +3,6 @@ import type { components } from '../../../src/v2/contract.gen';
 
 export type ReportRequest = components['schemas']['DiagnosticsReportRequest'];
 
-export const REPORT_PATH = '/api/v2/diagnostics/report';
-
 export type ReportDialogOpen = {
   /** Present when opened from a conversation; unlocks the "attach conversation" option. */
   conversationId?: string;

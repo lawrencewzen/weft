@@ -3383,7 +3383,3 @@ button.file-search-result-row:hover {
 .report-status { display: flex; align-items: center; gap: 10px; font-size: var(--fs-ui); color: var(--text-muted); min-width: 0; }
 .report-ok { color: var(--ink); }
 .report-err { color: var(--err-ink); overflow-wrap: anywhere; }
-.report-link {
-  border: none; background: transparent; padding: 0; cursor: pointer;
-  color: var(--accent); font-size: var(--fs-ui); text-decoration: underline;
-}

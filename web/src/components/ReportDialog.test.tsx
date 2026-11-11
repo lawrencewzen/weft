@@ -99,34 +99,6 @@ describe('ReportDialog', () => {
       description: 'it broke', includeLogs: true, includeDoctor: true, conversationId: 'c1',
     });
     expect(q('next-report-status')?.textContent).toContain('Exported');
-    expect(q('next-report-reveal')).toBeNull();
-  });
-
-  it('in a desktop shell: posts the message and offers reveal', async () => {
-    const posted: Array<Record<string, unknown>> = [];
-    const listeners = new Set<(ev: { data: unknown }) => void>();
-    (window as unknown as { chrome: unknown }).chrome = {
-      webview: {
-        postMessage: (m: Record<string, unknown>) => {
-          posted.push(m);
-          if (m.type === 'weft.saveReport') {
-            for (const fn of listeners) fn({ data: { type: 'weft.saveReport.result', id: m.id, ok: true, path: 'C:\\x\\r.zip' } });
-          }
-        },
-        addEventListener: (_t: string, fn: (ev: { data: unknown }) => void) => listeners.add(fn),
-        removeEventListener: (_t: string, fn: (ev: { data: unknown }) => void) => listeners.delete(fn),
-      },
-    };
-    await render(<ReportDialog lang="zh" open={{}} />);
-    await click(q('next-report-export'));
-    expect(createReport).not.toHaveBeenCalled();
-    expect(posted[0]).toMatchObject({
-      type: 'weft.saveReport',
-      url: '/api/v2/diagnostics/report',
-      body: { description: '', includeLogs: true, includeDoctor: true },
-    });
-    await click(q('next-report-reveal'));
-    expect(posted[1]).toEqual({ type: 'weft.revealInFolder', path: 'C:\\x\\r.zip' });
   });
 
   it('shows the error when the export fails', async () => {

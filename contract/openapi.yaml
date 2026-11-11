@@ -44,7 +44,9 @@ paths:
         把现场信息打成一个 zip 返回，用户自己通过聊天或邮件交给开发者。不联网、不上传。
         zip 里固定有 report.txt（用户描述、版本、时间）、system.txt（系统与运行环境）、settings.json（已去除密钥）。
         includeDoctor 为 true 时加 doctor.txt（环境检查结果）；includeLogs 为 true 时加 logs/service.log、
-        轮转文件 service.log.1 至 .5 和 service-stdio.log（存在才加）；带 conversationId 时加 conversation-<id>.json（该对话记录）。
+        轮转文件 service.log.1 至 .5（合计最多取最近 20MB，超出从旧到新截掉）和 service-stdio.log（最后 2MB，存在才加）；
+        带 conversationId 时加 conversation-<id>.json（该对话记录，单条工具输出截断到 20KB）。
+        所有文本写入前去除密钥；settings.json 只导出白名单字段。整个 zip 不超过 50MB，超出返回 413。
         将要包含的文件列表由前端按这四个参数本地推算，没有单独的 preview 接口。
         响应头 Content-Disposition 给出建议文件名 weft-report-<日期时间>.zip。
       security:

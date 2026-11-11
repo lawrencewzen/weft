@@ -1,9 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createDiagnosticsReport } from '../data/api';
-import { hasDesktopShell, shellRevealInFolder, shellSaveReport } from '../data/desktopShell';
 import type { Lang } from '../data/lang';
 import {
-  REPORT_PATH,
   closeReportDialog,
   reportFileList,
   reportFileName,
@@ -15,7 +13,7 @@ import { t } from '../i18n';
 type Status =
   | { kind: 'idle' }
   | { kind: 'busy' }
-  | { kind: 'done'; path?: string }
+  | { kind: 'done' }
   | { kind: 'error'; message: string };
 
 function triggerDownload(blob: Blob, name: string) {
@@ -55,21 +53,13 @@ export function ReportDialog({ lang, open }: { lang: Lang; open: ReportDialogOpe
     ...(conversationId && includeConversation ? { conversationId } : {}),
   }), [conversationId, description, includeConversation, includeDoctor, includeLogs]);
   const files = useMemo(() => reportFileList(request), [request]);
-  const shell = hasDesktopShell();
 
   const doExport = async () => {
     setStatus({ kind: 'busy' });
     const name = reportFileName();
     try {
-      if (shell) {
-        const res = await shellSaveReport({ suggestedName: name, url: REPORT_PATH, body: request });
-        if (res.canceled) setStatus({ kind: 'idle' });
-        else if (res.ok) setStatus({ kind: 'done', path: res.path });
-        else setStatus({ kind: 'error', message: res.error || '' });
-      } else {
-        triggerDownload(await createDiagnosticsReport(request), name);
-        setStatus({ kind: 'done' });
-      }
+      triggerDownload(await createDiagnosticsReport(request), name);
+      setStatus({ kind: 'done' });
     } catch (err) {
       setStatus({ kind: 'error', message: err instanceof Error ? err.message : '' });
     }
@@ -153,21 +143,7 @@ export function ReportDialog({ lang, open }: { lang: Lang; open: ReportDialogOpe
         <div className="report-foot">
           <div className="report-status" data-testid="next-report-status" role="status">
             {status.kind === 'busy' ? t(lang, 'report_exporting') : null}
-            {status.kind === 'done' ? (
-              <>
-                <span className="report-ok">{t(lang, 'report_exported')}</span>
-                {status.path ? (
-                  <button
-                    type="button"
-                    className="report-link"
-                    data-testid="next-report-reveal"
-                    onClick={() => shellRevealInFolder(status.path!)}
-                  >
-                    {t(lang, 'report_reveal')}
-                  </button>
-                ) : null}
-              </>
-            ) : null}
+            {status.kind === 'done' ? <span className="report-ok">{t(lang, 'report_exported')}</span> : null}
             {status.kind === 'error' ? (
               <span className="report-err">{t(lang, 'report_failed', { error: status.message })}</span>
             ) : null}
