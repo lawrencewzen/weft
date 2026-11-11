@@ -469,6 +469,14 @@ test('bash hints use the last nonempty line, empty output, and skip the official
   assert.equal(enFail.text, 'exit 1 · Tests: 12 passed, 1 failed');
 });
 
+test('read and grep hints ignore harness notice blocks and count hashline rows', () => {
+  const notice = '\n<harness>\n[info] Showing lines 1-2 of 9. Use offset=3 to continue.\n</harness>';
+  const read = tool('read', { output: `1#ZPM:a\n2#QVR:b${notice}` });
+  assert.equal(toolResultHint(read, 'zh').text, '2 行');
+  const grep = tool('grep', { output: `a.js:1#ZPM:foo\nb.js:2#QVR:foo${notice}` });
+  assert.equal(toolResultHint(grep, 'zh').text, '2 处匹配');
+});
+
 test('harness diagnostic wrapping is stripped from failed hints; plain output is unchanged', () => {
   const wrapped = '<harness>\n[error] ENOENT: no such file or directory, open \'missing.txt\'\n</harness>';
   const failed = toolResultHint(tool('read', { status: 'error', output: wrapped }), 'zh');

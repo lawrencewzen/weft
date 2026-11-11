@@ -65,6 +65,7 @@ flowchart LR
 
 对话状态、消息和 diff 都从 Harness 读。应用库只保留对话索引（工作区、标题、时间、harness id、可选的对话模型），外加一列 `last_submission_id`：每次 `submit` 返回的提交 id。读状态时用 `harness.submission(id).status()`。`queued` / `placed` 是运行中，`done` 是完成，`unanswered` 且 `reason` 为 `aborted` 是已停止，其它 `unanswered` 是失败（错误文案用这条记录的 `reason` / `detail`）。没有这个指针的对话是空闲。启动时丢掉 `events`、`messages`、`tool_calls`、`changes`、`pipelines`、`roles` 表。`conversations` 上的 `pipeline_id` / `pipeline_step` 列还在，但不再读写。
 
+- 文件工具（T137-1）：`read` / `edit` 是 hashline 版（`src/kernel/hashline-tools.mjs`，锚点内核在 `src/vendor/hashline/`，来自 `@deathbeam/pi-hashline` 0.0.12，MIT）。`read` 每行输出 `行号#哈希:内容`，`edit` 用锚点定位并校验哈希，对不上报 `E_STALE_ANCHOR` 让模型重读；图片仍走官方 `read`，旧的 `oldText/newText` 参数按原语义交给官方 `edit`。`grep`（`src/kernel/grep-tool.mjs`）用 ripgrep 找位置（`WEFT_RG_PATH` → 应用目录 `tools/rg/` → PATH），结果每行带锚点、最多 200 条、20 秒超时；找不到 rg 时退回 JS 扫描。文件读写都走对话的 `ExecutionEnv`，rg 子进程只拿 bash 环境变量白名单。
 - `read` / `ls` / `grep` 可以安全重放。`write` / `edit` / `bash` 标成 unsafe：中断后不重放，模型看到 interrupted。
 - 进程重启时，带 harness id 且未结束的对话由 `harness.resume()` 接着跑。状态仍是该提交重新取回的记录：还在 `placed` 就是运行中。没有 harness id 的旧行不列出、不恢复。
 - 运行中发消息使用 `submit({ whenBusy: 'steer' })`，插进当前运行，模型在下一个工具回合读到。停止中止这次运行，并停掉后台子 Agent。

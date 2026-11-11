@@ -199,15 +199,15 @@ const STORE_GREP: MockTool = tool({
   title: hint('applySnapshot', 'applySnapshot'),
   hint: hint('3 处匹配', '3 matches'),
   preview: [
-    'web/src/data/store.ts:241:  applySnapshot(event) {',
-    'web/src/data/store.test.ts:18:    store.applySnapshot(snapshot)',
-    'web/src/data/store.test.ts:44:    store.applySnapshot(empty)',
+    'web/src/data/store.ts:241#QVR:  applySnapshot(event) {',
+    'web/src/data/store.test.ts:18#MKT:    store.applySnapshot(snapshot)',
+    'web/src/data/store.test.ts:44#XJB:    store.applySnapshot(empty)',
   ].join('\n'),
   totalLines: 3,
   output: [
-    'web/src/data/store.ts:241:  applySnapshot(event) {',
-    'web/src/data/store.test.ts:18:    store.applySnapshot(snapshot)',
-    'web/src/data/store.test.ts:44:    store.applySnapshot(empty)',
+    'web/src/data/store.ts:241#QVR:  applySnapshot(event) {',
+    'web/src/data/store.test.ts:18#MKT:    store.applySnapshot(snapshot)',
+    'web/src/data/store.test.ts:44#XJB:    store.applySnapshot(empty)',
   ].join('\n'),
 });
 
@@ -276,6 +276,20 @@ const STORE_EDIT: MockTool = tool({
     '+    const topic = conversationTopic(cid);',
   ].join('\n'),
   totalLines: 9,
+  // hashline edit result: summary line, then the anchors of the changed region
+  output: [
+    'Edited web/src/data/store.ts (+8 \u22123)',
+    '',
+    '--- Anchors 239-246 ---',
+    '239#ZPM:  applySnapshot(event) {',
+    '240#QVR:    const topic = conversationTopic(cid);',
+    '241#RWS:    const out: ThreadItem[] = [];',
+    '242#NKT:    for (const id of conv.itemIds) {',
+    '243#XJB:      const rec = get(topic, \'item\', id);',
+    '244#YHZ:      if (rec) out.push(rec.value);',
+    '245#PMQ:    }',
+    '246#VRW:    return out;',
+  ].join('\n'),
 });
 
 const EDIT_TEST_RUN: MockTool = tool({
