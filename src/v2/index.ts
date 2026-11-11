@@ -36,6 +36,7 @@ import { handleSchedulesApi, lazySchedulesHost, type SchedulesHost } from './htt
 import { handleExtensionsApi, loadExtensionsSnapshot, type ExtensionsHost } from './http/extensions.ts';
 import { handleOpenTerminalApi } from './http/open-terminal.ts';
 import { handleDiagnosticsApi } from './http/diagnostics.ts';
+import { createClientLogLimiter, handleClientLogApi } from './http/client-log.ts';
 import {
   diffView,
   findKernelChange,
@@ -675,6 +676,7 @@ export function createV2Handler(opts: {
   const { serviceVersion, startedAt, auth, hub } = opts;
   const pid = opts.pid ?? process.pid;
   const demo = Boolean(opts.demo);
+  const clientLogLimiter = createClientLogLimiter();
   const hasActiveWork = opts.hasActiveWork ?? (() => false);
   return async (req, res, url) => {
     if (url.pathname !== '/api/v2' && !url.pathname.startsWith('/api/v2/')) return false;
@@ -708,6 +710,18 @@ export function createV2Handler(opts: {
       unauthorized(res, pathname, method);
       return true;
     }
+
+    if (await handleClientLogApi({
+      req,
+      res,
+      pathname,
+      method,
+      sendV2: (response, requestPath, requestMethod, status, body) => {
+        sendV2(response, requestPath, requestMethod, status, body as V2JsonBody);
+      },
+      readObjectBody,
+      limiter: clientLogLimiter,
+    })) return true;
 
     if (method === 'GET' && pathname === '/api/v2/service') {
       sendV2(res, pathname, method, 200, serviceInfo({ serviceVersion, startedAt, pid, demo }));

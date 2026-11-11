@@ -136,6 +136,50 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/V2Error"
+  /api/v2/client-log:
+    post:
+      operationId: postClientLog
+      summary: 前端把报错写进服务端日志
+      description: |
+        页面崩溃、window.onerror、未处理的 Promise 拒绝、React 错误边界时由前端上报，服务端写入 service.log（标签 WEFT_CLIENT）。
+        url 只保留 pathname 和 hash，不要带 query。不要上报对话正文或输入框内容。
+        服务端截断：message 最多 2KB，stack 最多 8KB。每个会话每分钟最多 30 条，超出的丢弃，并每分钟记一条「dropped N」。被丢弃时仍返回 204。
+      security:
+        - bearerAuth: []
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ClientLogRequest"
+      responses:
+        "204":
+          description: 已接收（含被限流丢弃的）
+        "400":
+          description: 请求体不合法
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        "401":
+          description: 未授权
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        4XX:
+          description: 客户端错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
+        5XX:
+          description: 服务端错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/V2Error"
   /api/v2/settings:
     get:
       operationId: getSettings
@@ -6298,6 +6342,40 @@ components:
           type: boolean
           const: true
       description: DELETE /api/v2/workspaces/{id} 成功。
+    ClientLogRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - level
+        - message
+      properties:
+        level:
+          type: string
+          enum:
+            - error
+            - warn
+        message:
+          type: string
+          minLength: 1
+          description: 服务端截断到 2KB。
+        stack:
+          type: string
+          description: 服务端截断到 8KB。
+        source:
+          type: string
+          enum:
+            - window.onerror
+            - unhandledrejection
+            - error-boundary
+            - console
+        url:
+          type: string
+          description: 只要 pathname 加 hash，不要 query。
+        userAgent:
+          type: string
+        appVersion:
+          type: string
+      description: POST /api/v2/client-log 的请求体。
     OpenTerminalRequest:
       type: object
       additionalProperties: false

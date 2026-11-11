@@ -2346,6 +2346,8 @@ export function handleMockRequest(
     return ok(diff);
   }
 
+  if (path === '/api/v2/client-log' && method === 'POST') return noContent();
+
   if (path === '/api/v2/events') return fail(400, '事件流要走 EventSource');
 
   return fail(404, `原型没有这个接口：${method} ${path}`);
