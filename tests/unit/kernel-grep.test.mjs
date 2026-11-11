@@ -182,3 +182,79 @@ test('js fallback: sensitive root refused, sensitive files dropped', async (t) =
   const out = await run(withoutRg(), { pattern: 'SECRETVALUE', path: f.base }, f.api);
   assert.deepEqual(linesOf(out).map((l) => ANCHOR.exec(l)[1].replaceAll('\\', '/').split('/').pop()), ['ok.txt']);
 });
+
+// --- GBK (intranet): rg matches bytes, so Chinese patterns need a gbk pass ---
+
+async function gbkFixture(t) {
+  const { default: iconv } = await import('iconv-lite');
+  const f = await fixture(t);
+  const putGbk = async (rel, text) => {
+    const file = path.join(f.ws, rel);
+    await mkdir(path.dirname(file), { recursive: true });
+    await writeFile(file, iconv.encode(text, 'gbk'));
+  };
+  const previous = process.env.WEFT_TEXT_ENCODING_DETECT;
+  process.env.WEFT_TEXT_ENCODING_DETECT = '1';
+  t.after(() => {
+    if (previous === undefined) delete process.env.WEFT_TEXT_ENCODING_DETECT;
+    else process.env.WEFT_TEXT_ENCODING_DETECT = previous;
+  });
+  return { ...f, putGbk };
+}
+
+/** A rg wrapper script that logs one line per invocation, then runs the real rg. */
+async function countingRg(f) {
+  const log = path.join(f.base, 'rg-calls.log');
+  const script = path.join(f.base, 'rg-count.sh');
+  await writeFile(script, `#!/bin/sh\necho call >> "${log}"\nexec "${rg}" "$@"\n`);
+  await chmod(script, 0o755);
+  const calls = async () => {
+    const { readFile } = await import('node:fs/promises');
+    return (await readFile(log, 'utf8').catch(() => '')).split('\n').filter(Boolean).length;
+  };
+  return { script, calls };
+}
+
+test('gbk: a Chinese pattern finds hits in GBK and UTF-8 files, each once', needRg, async (t) => {
+  const f = await gbkFixture(t);
+  await f.putGbk('old.py', '第一行\n打印("你好世界")\n第三行\n');
+  await f.put('new.py', '# 你好世界\nprint(1)\n');
+  const out = await run(createGrepTool({ gbkSearch: () => true }), { pattern: '你好世界' }, f.api);
+  const rows = linesOf(out).map((l) => ANCHOR.exec(l));
+  assert.deepEqual(rows.map((m) => [m[1], m[2], m[4]]), [
+    ['new.py', '1', '# 你好世界'],
+    ['old.py', '2', '打印("你好世界")'],
+  ]);
+});
+
+test('gbk: the gbk pass does not mis-hit UTF-8 files', needRg, async (t) => {
+  const f = await gbkFixture(t);
+  // UTF-8 bytes of 你 are E4 BD A0; read as GBK they decode to other characters.
+  const { default: iconv } = await import('iconv-lite');
+  const garbled = iconv.decode(Buffer.from('你好', 'utf8'), 'gbk');
+  await f.put('utf8.txt', '你好\n');
+  const out = await run(createGrepTool({ gbkSearch: () => true }), { pattern: garbled }, f.api);
+  assert.equal(linesOf(out).length, 0);
+});
+
+test('gbk: an ASCII pattern runs ripgrep once; a Chinese one twice', needRg, async (t) => {
+  const f = await gbkFixture(t);
+  await f.putGbk('a.txt', 'hello 世界\n');
+  const counter = await countingRg(f);
+  const tool = createGrepTool({ ripgrep: () => counter.script, gbkSearch: () => true });
+  await run(tool, { pattern: 'hello' }, f.api);
+  assert.equal(await counter.calls(), 1);
+  await run(tool, { pattern: '世界' }, f.api);
+  assert.equal(await counter.calls(), 3);
+  const off = createGrepTool({ ripgrep: () => counter.script, gbkSearch: () => false });
+  await run(off, { pattern: '世界' }, f.api);
+  assert.equal(await counter.calls(), 4);
+});
+
+test('gbk: the JS fallback finds Chinese in a GBK file through the env decoding', async (t) => {
+  const f = await gbkFixture(t);
+  await f.putGbk('a.txt', '第一行\n你好世界\n');
+  const out = await run(withoutRg(), { pattern: '你好' }, f.api);
+  const rows = linesOf(out).map((l) => ANCHOR.exec(l));
+  assert.deepEqual(rows.map((m) => [m[1], m[2], m[4]]), [['a.txt', '2', '你好世界']]);
+});
