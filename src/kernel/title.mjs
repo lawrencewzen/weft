@@ -3,6 +3,7 @@
 import { contentText } from '@earendil-works/pi-ai';
 import { clampThinkingLevel } from '@earendil-works/pi-ai/models';
 import { isAutoContinueText, isPromptUserMessage } from './continuation.mjs';
+import { log } from '../core/log.mjs';
 
 export const TITLE_PROMPT_MARKER = 'Write a short conversation title.';
 export const TITLE_PROMPT = `${TITLE_PROMPT_MARKER}
@@ -177,7 +178,7 @@ export async function maybeGenerateConversationTitle(cid, {
       : { messages: [] };
     const { userText, assistantText } = firstTurnTexts(transcript.messages || []);
     if (!userText || !assistantText) {
-      console.debug(`WEFT_TITLE ${cid} missing first turn`);
+      log.debug('WEFT_TITLE', 'missing first turn', { cid });
       return null;
     }
     if (isAutoContinueText(userText)) return null;
@@ -185,17 +186,17 @@ export async function maybeGenerateConversationTitle(cid, {
     try {
       model = typeof resolveModel === 'function' ? await resolveModel(conv) : null;
     } catch (err) {
-      console.debug(`WEFT_TITLE ${cid} model ${err instanceof Error ? err.message : err}`);
+      log.debug('WEFT_TITLE', '', { cid }, err);
       return null;
     }
     if (!model) {
-      console.debug(`WEFT_TITLE ${cid} no model`);
+      log.debug('WEFT_TITLE', 'no model', { cid });
       return null;
     }
     const raw = await completeTitle({ models, model, userText, assistantText });
     const title = sanitizeGeneratedTitle(raw);
     if (!title) {
-      console.debug(`WEFT_TITLE ${cid} empty result`);
+      log.debug('WEFT_TITLE', 'empty result', { cid });
       return null;
     }
     const latest = await store.getConversation(cid);
@@ -208,12 +209,12 @@ export async function maybeGenerateConversationTitle(cid, {
       try {
         await onConversationMeta(cid);
       } catch (err) {
-        console.debug(`WEFT_TITLE ${cid} notify ${err instanceof Error ? err.message : err}`);
+        log.debug('WEFT_TITLE', '', { cid }, err);
       }
     }
     return next;
   } catch (err) {
-    console.debug(`WEFT_TITLE ${cid} ${err instanceof Error ? err.message : err}`);
+    log.debug('WEFT_TITLE', '', { cid }, err);
     return null;
   } finally {
     inflight.delete(cid);

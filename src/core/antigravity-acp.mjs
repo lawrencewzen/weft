@@ -2,6 +2,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { readFileSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import path from 'node:path';
+import { log } from './log.mjs';
 
 export const ANTIGRAVITY_ACP_ID = 'antigravity-acp';
 export const ANTIGRAVITY_ACP_MARKER = 'pi-antigravity-acp:managed-by-antigravity';
@@ -182,7 +183,7 @@ export async function loadAntigravityAcp() {
     captureAntigravityWorkspaceOnStream(bundle?.provider);
     return bundle;
   } catch (err) {
-    console.error(`WEFT_WARN antigravity-acp ${err instanceof Error ? err.message : err}`);
+    log.warn('WEFT_WARN', 'antigravity-acp', err);
     return null;
   }
 }

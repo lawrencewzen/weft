@@ -1,4 +1,5 @@
 import { PROTOCOL_VERSION } from '../version.ts';
+import { log } from '../../core/log.mjs';
 
 export const DEFAULT_BUFFER_SIZE = 1000;
 export const DEFAULT_HEARTBEAT_MS = 15_000;
@@ -277,7 +278,7 @@ export function createEventHub(opts: {
             const result = await item.result;
             return { topic: item.topic, ...normalizeSnapshotResult(item.topic, result, Boolean(item.isPattern)) };
           } catch (err) {
-            console.error(`WEFT_V2_SNAPSHOT ${item.topic}`, err);
+            log.error('WEFT_V2_SNAPSHOT', `${item.topic}`, err);
             return {
               topic: item.topic,
               entities: [],
@@ -359,7 +360,7 @@ export function createEventHub(opts: {
     try {
       resolved.handler.onFirstSubscribe?.(topic);
     } catch (err) {
-      console.error(`WEFT_V2_TOPIC_SUB ${topic}`, err);
+      log.error('WEFT_V2_TOPIC_SUB', `${topic}`, err);
     }
   }
 
@@ -375,7 +376,7 @@ export function createEventHub(opts: {
     try {
       resolved.handler.onLastUnsubscribe?.(topic);
     } catch (err) {
-      console.error(`WEFT_V2_TOPIC_UNSUB ${topic}`, err);
+      log.error('WEFT_V2_TOPIC_UNSUB', `${topic}`, err);
     }
   }
 
@@ -509,7 +510,7 @@ export function createEventHub(opts: {
             sendSnapshot(conn, topicList, parts);
             finish();
           }).catch((err) => {
-            console.error('WEFT_V2_SNAPSHOT', err);
+            log.error('WEFT_V2_SNAPSHOT', '', err);
             sendSnapshot(conn, topicList, topicList.map((topic) => ({
               topic,
               entities: [],

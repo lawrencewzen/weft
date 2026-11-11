@@ -87,6 +87,20 @@ ENABLE_CRASH_DEMO=0
 
 本地/内网按 [DEPLOYMENT.md](DEPLOYMENT.md) 用 `npm ci` 和 `npm start` 部署。服务只绑定 `127.0.0.1`。
 
+### 日志
+
+| 变量 | 默认 | 说明 |
+| --- | --- | --- |
+| `WEFT_LOG_LEVEL` | `info` | `debug` / `info` / `warn` / `error`。低于这个级别的不写。`debug` 会多出订阅/退订和 4xx 请求。 |
+| `WEFT_LOG_SLOW_MS` | `2000` | HTTP 请求超过这个毫秒数记一条 `warn`。5xx 一律记 `error`。 |
+| `WEFT_LOG_CONSOLE` | 空 | 设为 `1` 时服务模式下也把日志打到控制台。开发时（stdout 是终端，或没有数据目录）本来就会同时输出到控制台。 |
+
+服务直接写 `<数据目录>/logs/service.log`，每行 `2026-11-10 14:03:22.517 ERROR [标签] key=value ... 消息`，本地时间，毫秒；错误会附带缩进的 stack。单个文件到 10MB 切分，保留 5 份（`service.log.1` 到 `service.log.5`，数字越大越旧）。写入前统一脱敏：`sk-` 开头的 key、JWT、`Bearer xxx`、`Authorization:`、`api_key=` / `token=` / `password=`、URL 里的 `user:pass@`。
+
+记录的内容：启动（版本、git 提交、Node 版本、平台、数据目录、端口、启动耗时）和退出原因；模型调用（会话 id、provider、model、耗时、输入/输出 token、stopReason，出错和重试各一条）；失败或超过 10 秒的工具调用；压缩、交接、分叉、定时任务触发/跳过/失败；5xx 和慢请求；未捕获异常与未处理的 Promise 拒绝。不记录对话正文、提示词、工具参数和输出。
+
+`weft open` 拉起服务时，进程的原始 stdout/stderr 单独进 `logs/service-stdio.log`，只用来兜底原生崩溃和日志模块启动前的输出；启动前超过 10MB 会轮转成 `service-stdio.log.1`。出问题先看 `service.log`。
+
 ## 运行模式与可选通道
 
 **通知：**不配置 `NOTIFY_WEBHOOK_URL` 时后台任务照常进行，只是不会主动向手机或飞书群发送事件。主分支的 Webhook / 飞书仍是尽力发送：**没有持久通用 Outbox**；出错可能丢失消息。Webhook 对端应按 `X-Pi-Event-ID` 去重。

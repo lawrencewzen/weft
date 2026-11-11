@@ -170,7 +170,7 @@ test('server startup renames pi-work.sqlite and keeps conversations', async () =
   try {
     assert.equal(existsSync(path.join(dataDir, APP_DB_FILE)), true);
     assert.equal(existsSync(path.join(dataDir, LEGACY_APP_DB_FILE)), false);
-    assert.match(second.logs(), new RegExp(`WEFT_DB renamed ${LEGACY_APP_DB_FILE}`));
+    assert.match(second.logs(), new RegExp(`\\[WEFT_DB\\] renamed ${LEGACY_APP_DB_FILE}`));
     const listed = await request(second.base, 'GET', `/api/workspaces/${wid}/conversations`, undefined, TOKEN);
     assert.equal(listed.status, 200, listed.text);
     assert.equal(listed.body.some((item) => item.id === cid), true);

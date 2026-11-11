@@ -15,6 +15,7 @@ import { diffStats, splitLines } from '../core/diff.mjs';
 import { applyBashEnvAllowlist } from './bash-env.mjs';
 import { createHandoffTool } from './handoff.mjs';
 import { EXT_WORKSPACE } from './ids.mjs';
+import { log } from '../core/log.mjs';
 
 const DETAIL_CAP = 1024 * 1024;
 const SKIP_DIR_NAMES = new Set(['.git', 'node_modules']);
@@ -387,7 +388,7 @@ export function createWorkspaceExtension(hooks = {}) {
           try {
             await bridge.beforeRequest(api, hookContext);
           } catch (err) {
-            console.error(`WEFT_TURN_CHANGES ${err instanceof Error ? err.message : err}`);
+            log.error('WEFT_TURN_CHANGES', '', err);
           }
           return undefined;
         },
@@ -396,7 +397,7 @@ export function createWorkspaceExtension(hooks = {}) {
           try {
             await bridge.afterRun(api.conversationId, run?.answer);
           } catch (err) {
-            console.error(`WEFT_TURN_CHANGES ${err instanceof Error ? err.message : err}`);
+            log.error('WEFT_TURN_CHANGES', '', err);
           }
           return undefined;
         },

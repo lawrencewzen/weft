@@ -239,6 +239,7 @@ test('http api creates skills, rejects dead plugin metadata, and runs echo', asy
       ...process.env,
       PORT: '0',
       WEFT_DATA_DIR: dataDir,
+    WEFT_LOG_CONSOLE: '1',
       WEFT_TOKEN: token,
       WEFT_LLM: 'faux',
       WEFT_FAUX_SCRIPT: scriptPath,

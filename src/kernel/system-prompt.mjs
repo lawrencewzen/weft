@@ -14,6 +14,7 @@ import path from 'node:path';
 import { realpathSync } from 'node:fs';
 import { section } from '@earendil-works/pi-durable';
 import { decodeWorkspaceBytes } from './workspace-text.mjs';
+import { log } from '../core/log.mjs';
 
 export const PREAMBLE_TEXT = 'You are a coding assistant running inside Weft. Help users inspect files, run commands, and modify code.';
 export const RULES_TEXT = [
@@ -142,7 +143,7 @@ export function renderAgentsBody(bytes, truncated) {
 /** A refused path is not a missing file: say so instead of dropping the section silently. */
 function noteRefused(result) {
   const message = String(result?.error?.message ?? '');
-  if (message.includes('E_SENSITIVE')) console.error(`WEFT_KERNEL_AGENT AGENTS.md not loaded: ${message}`);
+  if (message.includes('E_SENSITIVE')) log.error('WEFT_KERNEL_AGENT', `AGENTS.md not loaded: ${message}`);
 }
 
 async function loadAgentsBytes(env, context) {
@@ -184,7 +185,7 @@ async function projectContext(input, context, options) {
     if (!loaded) return undefined;
     return renderAgentsBody(loaded.bytes, loaded.truncated);
   } catch (err) {
-    console.error(`WEFT_KERNEL_AGENT ${err instanceof Error ? err.message : err}`);
+    log.error('WEFT_KERNEL_AGENT', '', err);
     return undefined;
   }
 }
