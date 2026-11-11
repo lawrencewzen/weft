@@ -6,7 +6,7 @@ namespace Weft.Setup.Ui;
 public abstract class FlatControl : Control
 {
     protected bool Hover, Down;
-    protected float S => DeviceDpi / 96f;
+    protected float S => Dpi.Of(this);
 
     protected FlatControl()
     {
@@ -18,6 +18,7 @@ public abstract class FlatControl : Control
 
     /// <summary>用过 Tab 之后才画焦点环，鼠标点击和刚打开时不画。</summary>
     public static bool KeyboardMode;
+    protected override void OnEnabledChanged(EventArgs e) { Hover = Down = false; Invalidate(); base.OnEnabledChanged(e); }
     protected override void OnMouseEnter(EventArgs e) { Hover = true; Invalidate(); base.OnMouseEnter(e); }
     protected override void OnMouseLeave(EventArgs e) { Hover = false; Down = false; Invalidate(); base.OnMouseLeave(e); }
     protected override void OnMouseDown(MouseEventArgs e) { KeyboardMode = false; Down = true; Invalidate(); base.OnMouseDown(e); }
@@ -71,7 +72,7 @@ public sealed class FlatButton : FlatControl
         switch (Kind)
         {
             case BtnKind.Primary:
-                fill = Theme.Btn; border = Theme.Btn; text = Theme.OnBtn;
+                fill = Theme.Accent; border = Theme.Accent; text = Theme.OnAccent;
                 if (Hover || Down) fill = Theme.Mix(fill, Theme.Win, .12);
                 break;
             case BtnKind.Danger:
@@ -82,6 +83,7 @@ public sealed class FlatButton : FlatControl
                 fill = Hover || Down ? Theme.Hover : Theme.Win; border = Theme.Line; text = Theme.Ink;
                 break;
         }
+        if (!Enabled) { fill = Theme.Off; border = Theme.Off; text = Theme.OffText; }
         using (var path = Theme.Round(r, 6 * S))
         {
             using var b = new SolidBrush(fill);
@@ -183,7 +185,7 @@ public sealed class ProgressTrack : Control
 {
     double _v;
     public double Value { get => _v; set { _v = Math.Clamp(value, 0, 100); Invalidate(); } }
-    float S => DeviceDpi / 96f;
+    float S => Dpi.Of(this);
 
     public ProgressTrack()
     {
@@ -270,7 +272,7 @@ public sealed class Badge : Control
 public sealed class VersionLine : Control
 {
     public string Old = "", New = "";
-    float S => DeviceDpi / 96f;
+    float S => Dpi.Of(this);
     public VersionLine()
     {
         SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer, true);
@@ -315,7 +317,7 @@ public sealed class CaptionButton : Control
 {
     public CaptionKind Kind;
     bool _hover;
-    float S => DeviceDpi / 96f;
+    float S => Dpi.Of(this);
 
     public CaptionButton(CaptionKind kind)
     {

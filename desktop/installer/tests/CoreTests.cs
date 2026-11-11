@@ -397,4 +397,22 @@ public class NodeInteropTests
         Assert.Equal(m.Files.Count, st2.Skipped);
         Assert.Equal(0, st2.Written);
     }
+
+    [Fact]
+    public void RenderPreviewArgsParse()
+    {
+        var o = CliOptions.Parse(new[] { "--render-preview", "out", "--scale", "1,1.5", "--theme", "dark" });
+        Assert.Null(o.Error);
+        Assert.Equal("out", o.PreviewDir);
+        Assert.Equal(new[] { 1.0, 1.5 }, o.PreviewScales);
+        Assert.Equal("dark", o.PreviewTheme);
+
+        var d = CliOptions.Parse(new[] { "--render-preview", "out" });
+        Assert.Equal(new[] { 1.0, 1.25, 1.5, 2.0 }, d.PreviewScales);
+        Assert.Null(d.PreviewTheme);
+
+        Assert.NotNull(CliOptions.Parse(new[] { "--render-preview" }).Error);
+        Assert.NotNull(CliOptions.Parse(new[] { "--render-preview", "o", "--scale", "abc" }).Error);
+        Assert.NotNull(CliOptions.Parse(new[] { "--render-preview", "o", "--theme", "blue" }).Error);
+    }
 }

@@ -56,14 +56,18 @@ public sealed class MainForm : Form
 
     public int ResultCode { get; private set; } = 1;
 
-    float S => DeviceDpi / 96f;
+    float S => Dpi.Of(this);
     int Sc(double v) => (int)Math.Round(v * S);
 
-    public MainForm(SetupContext? ctx, string? fatal)
+    readonly bool _preview;
+
+    public MainForm(SetupContext? ctx, string? fatal, bool preview = false)
     {
         _ctx = ctx;
         _fatal = fatal;
-        Theme.Apply(Registration.SystemIsDark());
+        _preview = preview;
+        if (!preview) Theme.Apply(Registration.SystemIsDark());
+        SetStyle(ControlStyles.ResizeRedraw | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.UserPaint, true);
         SuspendLayout();
         FormBorderStyle = FormBorderStyle.None;
         StartPosition = FormStartPosition.CenterScreen;
@@ -91,6 +95,7 @@ public sealed class MainForm : Form
         _tick.Tick += (_, _) => PaintProgress();
         ResumeLayout(false);
         ApplyLayout();
+        if (_preview) return;
         SystemEvents.UserPreferenceChanged += OnUserPref;
         Start();
     }
@@ -277,7 +282,7 @@ public sealed class MainForm : Form
         if (_eRetry.Visible) Foot(_eCancel, _eRetry); else Foot(_eCancel);
 
         _mask.Bounds = ClientRectangle;
-        Invalidate();
+        Invalidate(true);
     }
 
     void LayoutCenter(Badge b, Label h, Label p)
@@ -295,8 +300,49 @@ public sealed class MainForm : Form
         p.AutoEllipsis = false;
     }
 
-    protected override void OnHandleCreated(EventArgs e) { base.OnHandleCreated(e); TryRoundCorners(); }
-    protected override void OnDpiChanged(DpiChangedEventArgs e) { base.OnDpiChanged(e); ApplyLayout(); }
+    protected override void OnHandleCreated(EventArgs e)
+    {
+        base.OnHandleCreated(e);
+        TryRoundCorners();
+        ApplyLayout(); // 构造时句柄还没有，DeviceDpi 不可靠；这里按真实 DPI 重算
+    }
+
+    protected override void OnLoad(EventArgs e) { base.OnLoad(e); ApplyLayout(); }
+
+    protected override void OnDpiChanged(DpiChangedEventArgs e)
+    {
+        base.OnDpiChanged(e);
+        // 先采用系统建议的位置/尺寸，再按新 DPI 重排，避免两边来回覆盖
+        Bounds = e.SuggestedRectangle;
+        ApplyLayout();
+        foreach (var c in AllControls(this)) c.Invalidate();
+    }
+
+    // ---------- 预览（--render-preview） ----------
+
+    internal void ShowPreviewState(string state)
+    {
+        var c = _ctx!;
+        switch (state)
+        {
+            case "install": c.Mode = InstallMode.Install; Start(); break;
+            case "upgrade": c.Mode = InstallMode.Upgrade; Start(); break;
+            case "uninstall": c.Mode = InstallMode.Uninstall; Start(); break;
+            case "progress":
+                c.Mode = InstallMode.Install;
+                _title = "Weft 安装程序"; Text = _title;
+                _pH1.Text = "正在安装"; _pSub.Text = "";
+                _step = "正在写入文件"; _pBar.Value = 42; _pStep.Text = _step; _pPct.Text = "42%";
+                Show(_vProg);
+                break;
+            case "done": c.Mode = InstallMode.Install; ShowDone(); break;
+            case "done-upgrade": c.Mode = InstallMode.Upgrade; ShowDone(); break;
+            case "error-running": ShowError("无法停止 Weft", "Weft 正在运行。请先退出，再重试。", true); break;
+            case "error-disk": ShowError("磁盘空间不足", $"安装位置 {c.Dir} 需要约 {DiskSpace.FormatMb(900L << 20)} 可用空间。", true); break;
+            case "quit-confirm": c.Mode = InstallMode.Install; _busy = true; Start(); ShowMask(); _busy = false; break;
+        }
+        ApplyLayout();
+    }
 
     [DllImport("dwmapi.dll")]
     static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int value, int size);
@@ -615,7 +661,7 @@ public sealed class PathBox : Control
 {
     public readonly LinkButton Change = new("更改");
     string _text = "";
-    float S => DeviceDpi / 96f;
+    float S => Dpi.Of(this);
 
     public string PathText { get => _text; set { _text = value; Invalidate(); } }
 
@@ -662,7 +708,7 @@ public sealed class ConfirmMask : Control
     public readonly FlatButton Keep = new("继续", BtnKind.Primary, 96);
     Bitmap? _snap;
     string _title = "", _msg = "";
-    float S => DeviceDpi / 96f;
+    float S => Dpi.Of(this);
 
     public ConfirmMask()
     {
