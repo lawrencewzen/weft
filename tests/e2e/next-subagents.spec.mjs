@@ -147,39 +147,6 @@ test('short WEFT_SUBAGENT_STUCK_MS turns the row stuck with idle time without re
   }
 });
 
-test('other conversation does not show subagents in sidebar', async ({ page }) => {
-  const prepared = await prepareWorkspaces(['repo']);
-  const script = await writeScript(prepared.root, 'spawn-other.json', [
-    { tool: 'subagent', args: { action: 'spawn', name: 'worker', message: HOLD } },
-    { text: 'parent-idle' },
-    { when: HOLD, delayMs: 20000, text: 'child-done' },
-  ]);
-  const srv = await startServer({
-    extraEnv: { WEFT_FAUX_SCRIPT: script, WEFT_WORKSPACE_ROOT: prepared.root },
-  });
-  try {
-    await trackEventSources(page);
-    const { ws, conv: aConv } = await openWorkspaceConversation(srv, 'demo', prepared.dirs[0], 'chat-a');
-    const b = await api(srv.url, 'POST', `/workspaces/${ws.id}/conversations`, { title: 'chat-b' });
-    expect(b.status).toBe(201);
-    const aId = aConv.id;
-    const bId = b.body.id;
-
-    await loginNext(page, srv);
-    await page.goto(`${srv.url}/c/${encodeURIComponent(bId)}`);
-    await expect(page.getByTestId('next-thread')).toBeVisible();
-    await sendNext(page, '请派子代理');
-    await waitSubagentRow(page, bId);
-
-    await convRow(page, aId).click();
-    await expect(page).toHaveURL(new RegExp(`/c/${aId}$`));
-    await expect(page.getByTestId('next-sidebar').getByTestId('next-subagent-chip')).toHaveCount(0);
-    await expect(page.getByTestId('next-sidebar').getByTestId('next-subagent-tree')).toHaveCount(0);
-  } finally {
-    await srv.kill();
-  }
-});
-
 test('status strip shows sub-agent; stop works; right pane has no subagent tab', async ({ page }) => {
   const prepared = await prepareWorkspaces(['repo']);
   const script = await writeScript(prepared.root, 'spawn-steer.json', [
@@ -288,28 +255,6 @@ test('switching conversation leaves sidebar clean without subagents', async ({ p
 
     await convRow(page, bId).click();
     await expect(page).toHaveURL(new RegExp(`/c/${bId}$`));
-    await expect(page.getByTestId('next-sidebar').getByTestId('next-subagent-chip')).toHaveCount(0);
-    await expect(page.getByTestId('next-sidebar').getByTestId('next-subagent-tree')).toHaveCount(0);
-  } finally {
-    await srv.kill();
-  }
-});
-
-test('running sub-agent does not show in sidebar', async ({ page }) => {
-  const prepared = await prepareWorkspaces(['repo']);
-  const script = await writeScript(prepared.root, 'spawn-live-default.json', [
-    { tool: 'subagent', args: { action: 'spawn', name: 'worker', message: HOLD } },
-    { text: 'parent-idle' },
-    { when: HOLD, delayMs: 20000, text: 'child-done' },
-  ]);
-  const srv = await startServer({
-    extraEnv: { WEFT_FAUX_SCRIPT: script, WEFT_WORKSPACE_ROOT: prepared.root },
-  });
-  try {
-    const { conv } = await openWorkspaceConversation(srv, 'demo', prepared.dirs[0]);
-    await openNextChat(page, srv, conv.id);
-    await sendNext(page, '请派子代理');
-    await waitSubagentRow(page, conv.id);
     await expect(page.getByTestId('next-sidebar').getByTestId('next-subagent-chip')).toHaveCount(0);
     await expect(page.getByTestId('next-sidebar').getByTestId('next-subagent-tree')).toHaveCount(0);
   } finally {

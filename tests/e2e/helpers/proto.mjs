@@ -65,3 +65,20 @@ export async function openProto(page, query = '') {
   await expect(page.getByTestId('next-app')).toBeVisible();
   return state;
 }
+
+// Resolves once the page layout has stopped moving: the main columns and the
+// document scroll width are unchanged for several consecutive animation
+// frames. Replaces fixed waitForTimeout() after resize / toggle / maximize.
+export async function layoutSettled(page, { frames = 4, timeout = 5000 } = {}) {
+  await page.waitForFunction((need) => {
+    const sel = '.col-left, .col-center, .col-right, [data-testid="next-sidebar"]';
+    const sig = [...document.querySelectorAll(sel)].map((el) => {
+      const r = el.getBoundingClientRect();
+      return [el.className, r.x, r.y, r.width, r.height].join(':');
+    }).join('|') + `|${document.documentElement.scrollWidth}|${window.innerWidth}`;
+    const st = window.__layoutSettle || (window.__layoutSettle = { sig: '', n: 0 });
+    if (st.sig === sig) st.n += 1; else { st.sig = sig; st.n = 0; }
+    if (st.n >= need) { window.__layoutSettle = null; return true; }
+    return false;
+  }, frames, { polling: 'raf', timeout });
+}

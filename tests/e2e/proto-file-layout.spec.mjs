@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { expectClean, openProto } from './helpers/proto.mjs';
+import { expectClean, layoutSettled, openProto } from './helpers/proto.mjs';
 
 test.use({ locale: 'zh-CN', viewport: { width: 1440, height: 900 } });
 test.describe.configure({ timeout: 60_000 });
@@ -146,7 +146,7 @@ test('3. Maximize: left edge equals middle column, chat hidden, draft preserved,
 
   // 2. Click maximize button
   await maxBtn.click();
-  await page.waitForTimeout(300);
+  await layoutSettled(page);
 
   // Right pane left edge equals center column's previous left edge
   const rightBoxMaximized = await page.locator('.col-right').boundingBox();
@@ -159,16 +159,16 @@ test('3. Maximize: left edge equals middle column, chat hidden, draft preserved,
 
   // 3. Restore via button
   await maxBtn.click();
-  await page.waitForTimeout(300);
+  await layoutSettled(page);
   await expect(page.locator('.col-center')).toBeVisible();
   await expect(composerInput).toHaveValue('草稿测试输入不丢失');
 
   // 4. Maximize again -> Esc restores
   await maxBtn.click();
-  await page.waitForTimeout(300);
+  await layoutSettled(page);
   await expect(page.locator('.col-center')).not.toBeVisible();
   await page.keyboard.press('Escape');
-  await page.waitForTimeout(300);
+  await layoutSettled(page);
   await expect(page.locator('.col-center')).toBeVisible();
   await expect(composerInput).toHaveValue('草稿测试输入不丢失');
 
@@ -178,7 +178,7 @@ test('3. Maximize: left edge equals middle column, chat hidden, draft preserved,
   await expect(page.getByTestId('next-file-editor')).toBeVisible();
 
   await maxBtn.click();
-  await page.waitForTimeout(300);
+  await layoutSettled(page);
   await expect(page.locator('.col-center')).not.toBeVisible();
 
   // Focus editor and open search panel
@@ -196,30 +196,30 @@ test('3. Maximize: left edge equals middle column, chat hidden, draft preserved,
 
   // Second Esc restores maximize
   await page.keyboard.press('Escape');
-  await page.waitForTimeout(300);
+  await layoutSettled(page);
   await expect(page.locator('.col-center')).toBeVisible();
 
   // 6. Switching conversation restores automatically
   await page.getByTestId('next-right-tab-files').click();
   await maxBtn.click();
-  await page.waitForTimeout(300);
+  await layoutSettled(page);
   await expect(page.locator('.col-center')).not.toBeVisible();
 
   // Click another conversation in sidebar (e.g. c-docs)
   const docsConv = page.locator('[data-testid=next-conv-row][data-id="c-docs"]');
   await expect(docsConv).toBeVisible();
   await docsConv.click();
-  await page.waitForTimeout(300);
+  await layoutSettled(page);
   await expect(page.locator('.col-center')).toBeVisible();
 
   // 7. Switching to Changes tab restores automatically
   await page.getByTestId('next-right-tab-files').click();
   await maxBtn.click();
-  await page.waitForTimeout(300);
+  await layoutSettled(page);
   await expect(page.locator('.col-center')).not.toBeVisible();
 
   await page.getByTestId('next-right-tab-changes').click();
-  await page.waitForTimeout(300);
+  await layoutSettled(page);
   await expect(page.locator('.col-center')).toBeVisible();
   // Maximize button does not exist on Changes tab
   await expect(page.getByTestId('next-file-maximize')).toHaveCount(0);
@@ -227,11 +227,11 @@ test('3. Maximize: left edge equals middle column, chat hidden, draft preserved,
   // 8. Collapse right pane while maximized restores and collapses without blank space
   await page.getByTestId('next-right-tab-files').click();
   await maxBtn.click();
-  await page.waitForTimeout(300);
+  await layoutSettled(page);
   await expect(page.locator('.col-center')).not.toBeVisible();
 
   await page.getByTestId('next-right-collapse').click();
-  await page.waitForTimeout(300);
+  await layoutSettled(page);
   await expect(page.locator('.col-center')).toBeVisible();
   await expect(page.locator('.col-right')).not.toBeVisible();
 
@@ -245,7 +245,7 @@ test('3. Maximize: left edge equals middle column, chat hidden, draft preserved,
 test('4. 774px viewport has no horizontal scrolling in normal and maximized layouts', async ({ page }) => {
   const state = await openProto(page);
   await page.setViewportSize({ width: 774, height: 900 });
-  await page.waitForTimeout(300);
+  await layoutSettled(page);
 
   const hasHScrollNormal = await page.evaluate(
     () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
@@ -255,7 +255,7 @@ test('4. 774px viewport has no horizontal scrolling in normal and maximized layo
   // Open right panel and switch to files
   await page.getByTestId('next-right-toggle').click();
   await page.getByTestId('next-right-tab-files').click();
-  await page.waitForTimeout(300);
+  await layoutSettled(page);
 
   const hasHScrollOpen = await page.evaluate(
     () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
@@ -264,7 +264,7 @@ test('4. 774px viewport has no horizontal scrolling in normal and maximized layo
 
   // Maximize in 774px viewport
   await page.getByTestId('next-file-maximize').click();
-  await page.waitForTimeout(300);
+  await layoutSettled(page);
 
   const hasHScrollMax = await page.evaluate(
     () => document.documentElement.scrollWidth > document.documentElement.clientWidth,

@@ -58,13 +58,20 @@ export async function waitRunDone(page, timeout = 30000) {
   if (await row.count() > 0) {
     await expect(row).not.toHaveAttribute('data-status', 'running', { timeout });
   }
-  // 避免断流重试期间短暂变为 done 又变回 running 的抖动
-  await page.waitForTimeout(300);
-  await expect(page.getByTestId('next-stop')).toHaveCount(0);
+  // 避免断流重试期间短暂变为 done 又变回 running 的抖动：
+  // 不是固定睡 300ms，而是要求「已完成」状态连续保持一小段时间。
+  await expect.poll(async () => {
+    const t0 = Date.now();
+    let steady = true;
+    while (Date.now() - t0 < 250) {
+      const stop = await page.getByTestId('next-stop').count();
+      const running = await row.count() > 0 && (await row.getAttribute('data-status')) === 'running';
+      if (stop > 0 || running) { steady = false; break; }
+      await page.waitForTimeout(50);
+    }
+    return steady;
+  }, { timeout }).toBe(true);
   await expect(page.getByTestId('next-send')).toBeVisible();
-  if (await row.count() > 0) {
-    await expect(row).not.toHaveAttribute('data-status', 'running');
-  }
 }
 
 export async function waitRunStopped(page, timeout = 20000) {
