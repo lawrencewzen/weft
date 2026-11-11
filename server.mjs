@@ -21,6 +21,7 @@ import {
   updateGitConnection,
 } from './src/core/git-connections.mjs';
 import { listGitlabBranches, listGitlabProjects, testGitlabConnection } from './src/core/gitlab-api.mjs';
+import { registerWinDoctor } from './src/platform/win/doctor-register.mjs';
 import { createExtensionHost } from './src/core/extensions.mjs';
 import { describePlugins, installPlugin, PLUGIN_ID } from './src/core/plugins.mjs';
 import { listSkills, listSkillRecords, createSkill, updateSkill, deleteSkill, SKILL_ID } from './src/core/skills.mjs';
@@ -65,6 +66,7 @@ const PLUGIN_DIRS = [path.join(ROOT, 'plugins'), path.join(DATA_DIR, 'plugins')]
 const USER_SKILLS = path.join(DATA_DIR, 'skills');
 const USER_PLUGINS = path.join(DATA_DIR, 'plugins');
 log.configure({ dataDir: DATA_DIR });
+registerWinDoctor();
 installProcessHandlers();
 
 // 内置 fetch 默认不读 HTTP(S)_PROXY；配置了代理时让模型请求也走它（遵守 NO_PROXY）

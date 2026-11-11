@@ -1293,8 +1293,45 @@ namespace Weft.Desktop
                 if (IsExternal(a.Uri)) OpenExternal(a.Uri);
                 else core.Navigate(a.Uri);
             };
+            core.DownloadStarting += OnDownloadStarting;
             await TryEnableCustomFrame(core);
             core.Navigate(url);
+        }
+
+        /// Downloads from this service (the problem report zip) get a Save As window instead of the
+        /// WebView2 download bubble; the saved file is then selected in Explorer. Other origins keep the default.
+        private void OnDownloadStarting(object sender, CoreWebView2DownloadStartingEventArgs a)
+        {
+            Uri u;
+            if (!Uri.TryCreate(a.DownloadOperation.Uri, UriKind.Absolute, out u)
+                || !string.Equals(u.GetLeftPart(UriPartial.Authority), origin, StringComparison.OrdinalIgnoreCase)
+                || !string.Equals(u.Host, "127.0.0.1", StringComparison.Ordinal))
+            {
+                // blob: downloads are created by the page itself; treat them as ours too.
+                if (!a.DownloadOperation.Uri.StartsWith("blob:http://127.0.0.1", StringComparison.OrdinalIgnoreCase)) return;
+            }
+            var op = a.DownloadOperation;
+            string suggested = Path.GetFileName(a.ResultFilePath ?? "");
+            if (string.IsNullOrEmpty(suggested)) suggested = "weft-report.zip";
+            string chosen = null;
+            using (var dlg = new SaveFileDialog())
+            {
+                dlg.FileName = suggested;
+                dlg.Filter = "zip (*.zip)|*.zip";
+                dlg.DefaultExt = "zip";
+                dlg.AddExtension = true;
+                dlg.OverwritePrompt = true;
+                try { dlg.InitialDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads"); } catch { }
+                if (dlg.ShowDialog(this) == DialogResult.OK) chosen = dlg.FileName;
+            }
+            if (chosen == null) { a.Cancel = true; return; }
+            a.ResultFilePath = chosen;
+            a.Handled = true;
+            op.StateChanged += (o, e) =>
+            {
+                if (op.State != CoreWebView2DownloadState.Completed) return;
+                try { Process.Start(new ProcessStartInfo("explorer.exe", "/select,\"" + chosen + "\"") { UseShellExecute = true }); } catch { }
+            };
         }
 
         private bool IsExternal(string uri)
