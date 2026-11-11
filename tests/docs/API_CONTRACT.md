@@ -70,7 +70,7 @@ status 取值：`idle | running | waiting | failed | done | stopped`。应用库
 
 ### 旧对话
 
-应用库里没有 harness id 的对话不出现在 `GET /workspaces/:wid/conversations`。升级前、在新版本启动并删表之前，用 `node scripts/export-legacy-conversations.mjs <dataDir> <outDir>` 把这些对话（`conversations` + `messages`）各导出成一个 Markdown 文件。脚本只读，不改数据库。
+应用库里没有 harness id 的对话不出现在 `GET /workspaces/:wid/conversations`。
 
 ## 4. SSE：`GET /api/conversations/:cid/events`
 不落库，不使用 `Last-Event-ID`。连接后先推一条当前 `status`，之后只推这次连接上新发生的事件。前端在连接或重连时重新 `GET /conversations/:cid`。事件：

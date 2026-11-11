@@ -89,14 +89,7 @@
 
 登录 cookie `pi_work_token` 改为 `weft_token`。浏览器 `localStorage` 键由 `piwork_` 改为 `weft_`（主题、侧栏宽度等本地偏好会回到默认值）。
 
-### 数据文件
-
-应用库文件由 `data/pi-work.sqlite`（含 `-wal` / `-shm`）改为 `data/weft.sqlite`。这是文件改名，不是两套库并行读取：
-
-- 启动时若只有旧文件，就连同 WAL/SHM 重命名为 `weft.sqlite`，旧对话仍在。
-- 两个都存在时使用 `weft.sqlite`，并打一条日志说明旧文件未改名。
-
-Harness 的 `data/harness/session.sqlite` 文件名没有改。包名由 `pi-work` 改为 `weft`。
+Harness 的 `data/harness/session.sqlite` 文件名没有改。包名由 `pi-work` 改为 `weft`。不再迁移 pi-work 时代的数据文件（`pi-work.sqlite`、旧存储标识）。
 
 ## License
 MIT，保留原作者版权声明。
