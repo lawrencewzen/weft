@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
-import { listZipEntries, extractZipEntry } from '../../scripts/pack-release.mjs';
+import { listZipEntries, extractZipEntry, zipDirectory } from '../../scripts/pack-release.mjs';
 import {
   MANIFEST_NAME,
   TRAILER_SIZE,
@@ -123,6 +123,35 @@ test('appendPayload 流式追加', async () => {
     const info = await appendPayload(path.join(work, 'h'), path.join(work, 'p'), path.join(work, 'o'));
     assert.equal(info.total, 4 + 7 + TRAILER_SIZE);
     assert.equal((await stat(path.join(work, 'o'))).size, info.total);
+  } finally {
+    await rm(work, { recursive: true, force: true });
+  }
+});
+
+test('buildInstaller 吃便携 zip：复用原 zip 的条目，只追加清单，哈希与目录方案一致', async () => {
+  const work = await mkdtemp(path.join(tmpdir(), 'weft-bi-'));
+  try {
+    const pkg = path.join(work, 'pkg');
+    await fakePackage(pkg);
+    const zip = path.join(work, 'weft-0.1.3-win-x64.zip');
+    await zipDirectory(pkg, zip);
+    const zipBefore = await readFile(zip);
+    const installer = path.join(work, 'WeftSetup.exe');
+    await writeFile(installer, Buffer.alloc(5000, 1));
+    const res = await buildInstaller({ pkg: zip, installer, out: path.join(work, 'dist') });
+    assert.equal(path.basename(res.outPath), 'Weft-Setup-0.1.3.exe');
+    assert.deepEqual(await readFile(zip), zipBefore, '不改动原 zip');
+
+    const buf = await readFile(res.outPath);
+    const info = parseTrailer(buf.subarray(buf.length - TRAILER_SIZE), buf.length);
+    const payload = buf.subarray(info.offset, info.offset + info.length);
+    assert.equal(sha(payload), info.sha256);
+    const entries = listZipEntries(payload);
+    assert.deepEqual(entries.map((e) => e.name).sort(), [MANIFEST_NAME, 'README.txt', 'Weft.exe', 'app/bin/weft.mjs', 'node/node.exe'].sort());
+    const manifest = JSON.parse(extractZipEntry(payload, MANIFEST_NAME).toString('utf8'));
+    const expected = await buildManifest(pkg, '0.1.3');
+    assert.deepEqual(manifest, expected);
+    for (const f of manifest.files) assert.equal(sha(extractZipEntry(payload, f.path)), f.sha256, f.path);
   } finally {
     await rm(work, { recursive: true, force: true });
   }

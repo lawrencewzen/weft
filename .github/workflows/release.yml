@@ -53,6 +53,13 @@ jobs:
       - name: Publish desktop shell (.NET 8, self-contained, single file)
         run: dotnet publish desktop/win -c Release -o desktop/win/publish
 
+      - name: Cache WebView2 cab
+        uses: actions/cache@v5
+        with:
+          path: ${{ runner.temp }}/webview2.cab
+          # The cab is pinned by SHA256 below; bump the key together with WEBVIEW2_SHA256.
+          key: webview2-cab-0ac7317a08c3f3beebbb9b6d90f5b77352569f0a33a54a15ef6aaabc82899b7c
+
       - name: Add WebView2 Fixed Version Runtime
         shell: pwsh
         env:
@@ -62,7 +69,8 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $cab = Join-Path $env:RUNNER_TEMP 'webview2.cab'
-          Invoke-WebRequest -Uri $env:WEBVIEW2_URL -OutFile $cab -UseBasicParsing
+          # A restored cache hit is still verified against the pinned SHA256 below.
+          if (-not (Test-Path -LiteralPath $cab)) { Invoke-WebRequest -Uri $env:WEBVIEW2_URL -OutFile $cab -UseBasicParsing }
           $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $cab).Hash.ToLower()
           Write-Host "webview2 cab bytes=$((Get-Item $cab).Length) sha256=$hash"
           if ($hash -ne $env:WEBVIEW2_SHA256) { throw "WebView2 cab sha256 mismatch: $hash" }

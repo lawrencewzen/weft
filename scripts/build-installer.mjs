@@ -7,12 +7,12 @@
 // 安装器运行时读尾部标记，流式校验 SHA256，再按清单安装。格式见 desktop/installer/Core/Payload.cs。
 import { createHash } from 'node:crypto';
 import { createReadStream, createWriteStream } from 'node:fs';
-import { cp, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
+import { copyFile, cp, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import { fileURLToPath } from 'node:url';
-import { extractZipEntry, listZipEntries, zipDirectory } from './pack-release.mjs';
+import { appendZipEntry, extractZipEntryData, listZipEntries, zipDirectory } from './pack-release.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -127,21 +127,38 @@ export async function appendPayload(installerPath, payloadPath, outPath) {
   return { offset: head.size, length: payload.size, sha256: sha, total: head.size + payload.size + TRAILER_SIZE };
 }
 
-async function stagePackage(pkg, stage) {
-  const st = await stat(pkg);
-  if (st.isDirectory()) {
-    await cp(pkg, stage, { recursive: true });
-    return;
+function sha256Buf(buf) {
+  return createHash('sha256').update(buf).digest('hex');
+}
+
+function assertSafeName(name) {
+  if (name.split('/').some((p) => p === '..' || p === '') || /^[A-Za-z]:/.test(name)) {
+    throw new Error(`包里有不安全的路径：${name}`);
   }
-  const buf = await readFile(pkg);
+}
+
+const REQUIRED = ['Weft.exe', 'node/node.exe', 'app/bin/weft.mjs'];
+
+/** 便携 zip → 清单。不落盘解压：逐条目内存解压算 sha256（同时校验 CRC），载荷直接复用这个 zip。 */
+export async function manifestFromZip(zipPath, version) {
+  assertVersion(version);
+  const buf = await readFile(zipPath);
+  const files = [];
   for (const entry of listZipEntries(buf)) {
     if (entry.name.endsWith('/')) continue;
-    if (entry.name.split('/').some((p) => p === '..' || p === '') || /^[A-Za-z]:/.test(entry.name)) {
-      throw new Error(`包里有不安全的路径：${entry.name}`);
-    }
-    const dest = path.join(stage, ...entry.name.split('/'));
-    await mkdir(path.dirname(dest), { recursive: true });
-    await writeFile(dest, extractZipEntry(buf, entry.name));
+    assertSafeName(entry.name);
+    if (entry.name === MANIFEST_NAME) continue;
+    const data = extractZipEntryData(buf, entry);
+    files.push({ path: entry.name, size: data.length, sha256: sha256Buf(data) });
+  }
+  files.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+  return { schema: 1, name: 'Weft', version, files };
+}
+
+function assertComplete(paths) {
+  const have = new Set(paths);
+  for (const need of REQUIRED) {
+    if (!have.has(need)) throw new Error(`包里缺少 ${need.replace(/\//g, path.sep)}，安装程序要装的是完整的 Windows 包`);
   }
 }
 
@@ -154,19 +171,24 @@ export async function buildInstaller({ pkg, installer, out, version }) {
   });
   const work = await mkdtemp(path.join(tmpdir(), 'weft-setup-'));
   try {
-    const stage = path.join(work, 'stage');
-    await mkdir(stage, { recursive: true });
-    console.log(`准备载荷（${pkgAbs}）`);
-    await stagePackage(pkgAbs, stage);
-    for (const need of ['Weft.exe', path.join('node', 'node.exe'), path.join('app', 'bin', 'weft.mjs')]) {
-      await stat(path.join(stage, need)).catch(() => {
-        throw new Error(`包里缺少 ${need}，安装程序要装的是完整的 Windows 包`);
-      });
-    }
-    const manifest = await buildManifest(stage, ver);
-    await writeFile(path.join(stage, MANIFEST_NAME), JSON.stringify(manifest));
     const payloadZip = path.join(work, 'payload.zip');
-    await zipDirectory(stage, payloadZip);
+    let manifest;
+    if ((await stat(pkgAbs)).isDirectory()) {
+      console.log(`准备载荷（目录 ${pkgAbs}）`);
+      manifest = await buildManifest(pkgAbs, ver);
+      assertComplete(manifest.files.map((f) => f.path));
+      const stage = path.join(work, 'stage');
+      await cp(pkgAbs, stage, { recursive: true });
+      await writeFile(path.join(stage, MANIFEST_NAME), JSON.stringify(manifest));
+      await zipDirectory(stage, payloadZip);
+    } else {
+      // 直接复用已经压好的便携 zip，只在末尾追加清单，不重新压缩。
+      console.log(`准备载荷（复用 ${pkgAbs}）`);
+      manifest = await manifestFromZip(pkgAbs, ver);
+      assertComplete(manifest.files.map((f) => f.path));
+      await copyFile(pkgAbs, payloadZip);
+      await appendZipEntry(payloadZip, MANIFEST_NAME, Buffer.from(JSON.stringify(manifest)));
+    }
 
     const outPath = path.join(path.resolve(out), `Weft-Setup-${ver}.exe`);
     const info = await appendPayload(installer, payloadZip, outPath);
