@@ -581,6 +581,28 @@ test('copyShell puts Weft.exe and webview2 at the stage root, drops pdb/xml, no 
   }
 });
 
+test('copyShell strips WebView2 Copilot exes and empty Installer\\, keeps other files', async () => {
+  const tmp = await mkdtemp(path.join(tmpdir(), 'weft-shell-'));
+  try {
+    const shell = path.join(tmp, 'shell out');
+    const wv = path.join(shell, 'webview2');
+    await mkdir(path.join(wv, 'Installer'), { recursive: true });
+    await mkdir(path.join(wv, 'Other'), { recursive: true });
+    await writeFile(path.join(shell, 'Weft.exe'), 'x');
+    for (const f of ['msedgewebview2.exe', 'copilotapp.exe', 'mscopilot.exe', 'Copilot.dat', 'resources.pak', 'Installer/copilot_setup.exe', 'Other/copilot_setup.exe']) {
+      await writeFile(path.join(wv, f), 'x');
+    }
+    const stage = path.join(tmp, 'stage');
+    await mkdir(stage);
+    await copyShell(shell, stage);
+    const out = path.join(stage, 'webview2');
+    assert.deepEqual((await readdir(out)).sort(), ['Copilot.dat', 'Other', 'msedgewebview2.exe', 'resources.pak']);
+    await access(path.join(out, 'Other', 'copilot_setup.exe'));
+  } finally {
+    await rm(tmp, { recursive: true, force: true });
+  }
+});
+
 test('copyShell keeps tools\\ untouched, including .xml files', async () => {
   const tmp = await mkdtemp(path.join(tmpdir(), 'weft-shell-'));
   try {

@@ -808,6 +808,9 @@ async function stripPostinstall(appDir) {
   return pkg;
 }
 
+/** WebView2 固定版自带、Weft 用不到的独立程序（相对包根，小写、正斜杠）。 */
+export const WEBVIEW2_STRIP = ['webview2/copilotapp.exe', 'webview2/mscopilot.exe', 'webview2/installer/copilot_setup.exe'];
+
 /** Copy the dotnet build output of desktop/win into the zip root (Weft.exe must sit there). */
 export async function copyShell(shellDir, stage) {
   const src = path.resolve(shellDir);
@@ -821,8 +824,15 @@ export async function copyShell(shellDir, stage) {
   await cp(src, stage, {
     recursive: true,
     // Drop .pdb/.xml from the shell build only; tools\ (ripgrep, PowerShell 7) is copied as is.
-    filter: (from) => from.startsWith(toolsDir) || !/\.(pdb|xml)$/i.test(from),
+    filter: (from) => {
+      const rel = path.relative(src, from).split(path.sep).join('/').toLowerCase();
+      if (WEBVIEW2_STRIP.includes(rel)) return false;
+      return from.startsWith(toolsDir) || !/\.(pdb|xml)$/i.test(from);
+    },
   });
+  // Installer\ 只剩 copilot_setup.exe 时删后为空，一并去掉
+  const inst = path.join(stage, 'webview2', 'Installer');
+  if ((await readdir(inst).catch(() => null))?.length === 0) await rm(inst, { recursive: true });
 }
 
 export async function packRelease({

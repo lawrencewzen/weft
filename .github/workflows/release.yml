@@ -190,6 +190,9 @@ jobs:
             if (-not (Test-Path -LiteralPath (Join-Path $root $launcher))) { throw "missing $launcher" }
           }
           # No .NET Framework leftovers and no loose managed dlls: the shell is one self-contained exe.
+          foreach ($copilot in @('webview2\copilotapp.exe', 'webview2\mscopilot.exe', 'webview2\Installer\copilot_setup.exe')) {
+            if (Test-Path -LiteralPath (Join-Path $root $copilot)) { throw "unexpected $copilot in package (WebView2 Copilot programs must be stripped)" }
+          }
           foreach ($gone in @('Weft.exe.config', 'Microsoft.Web.WebView2.Core.dll', 'runtimes')) {
             if (Test-Path -LiteralPath (Join-Path $root $gone)) { throw "unexpected $gone in package root" }
           }
@@ -520,6 +523,9 @@ jobs:
             Write-Host '--- installed Weft.exe --self-check ---'
             Write-Host $selfText
             Assert-True ($sp.ExitCode -eq 0) "self-check exit $($sp.ExitCode)"
+            foreach ($c in @('copilotapp.exe', 'mscopilot.exe', 'Installer\copilot_setup.exe')) {
+              Assert-True (-not (Test-Path -LiteralPath (Join-Path $wvDir $c))) "installed webview2 should not contain $c"
+            }
             Assert-True ($selfText -match '(?m)^webview2\.source: bundled\r?$') 'installed self-check should use the bundled WebView2'
             Assert-True ($selfText -match '(?m)^webview2\.permissions: ready\r?$') 'installed self-check should report permissions: ready'
 
