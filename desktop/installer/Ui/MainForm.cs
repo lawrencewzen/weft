@@ -33,6 +33,11 @@ public sealed class MainForm : Form
     Panel _vProg = null!;
     LogoBox _pLogo = null!; Label _pH1 = null!, _pSub = null!, _pStep = null!, _pPct = null!, _pFile = null!, _pWarn = null!; ProgressTrack _pBar = null!;
     FlatButton _pWait = null!, _pCancel = null!;
+    MiniLink _pTog = null!, _pOpen = null!, _eTog = null!, _eOpen = null!;
+    LogPane _pLog = null!, _eLog = null!;
+    bool _details;
+    int _extra, _tickN;
+    const int DetailsExtra = 140;
     bool _stallShown;
     string _fileFull = "";
 
@@ -95,7 +100,7 @@ public sealed class MainForm : Form
         _mask.Keep.Click += (_, _) => HideMask();
         Controls.Add(_mask);
 
-        _tick.Tick += (_, _) => { PaintProgress(); CheckStall(); };
+        _tick.Tick += (_, _) => { PaintProgress(); CheckStall(); if (_details && (_tickN++ & 1) == 0) SyncLogs(); };
         ResumeLayout(false);
         ApplyLayout();
         if (_preview) return;
@@ -180,6 +185,11 @@ public sealed class MainForm : Form
         _pCancel = new FlatButton("取消") { Visible = false };
         _pWait = new FlatButton("继续等待", BtnKind.Primary, 96) { Visible = false };
         _vProg.Controls.Add(_pCancel); _vProg.Controls.Add(_pWait);
+        _pTog = new MiniLink("详细信息", true); _pOpen = new MiniLink("打开日志文件", false) { Visible = false };
+        _pLog = new LogPane();
+        _vProg.Controls.Add(_pTog); _vProg.Controls.Add(_pOpen); _vProg.Controls.Add(_pLog);
+        _pTog.Click += (_, _) => ToggleDetails();
+        _pOpen.Click += (_, _) => OpenLog();
         _pWait.Click += (_, _) =>
         {
             if (_ctx != null) Interlocked.Exchange(ref _ctx.LastProgressTick, Environment.TickCount64);
@@ -208,9 +218,36 @@ public sealed class MainForm : Form
         _pFile.Text = (cut ? "…" : "") + p + suffix;
     }
 
+    void ToggleDetails() { _details = !_details; UpdateDetails(); }
+
+    /// <summary>展开/收起日志：窗口按需加高，按钮行跟着下移，日志区占加出来的高度。</summary>
+    void UpdateDetails()
+    {
+        var has = _current == _vProg || _current == _vErr;
+        _extra = _details && has ? DetailsExtra : 0;
+        _pTog.Expanded = _eTog.Expanded = _details;
+        _pLog.Visible = _eLog.Visible = _details;
+        _pOpen.Visible = _details || _stallShown;
+        ApplyLayout();
+        if (_details) SyncLogs();
+    }
+
+    void SyncLogs()
+    {
+        if (_current == _vProg) _pLog.Sync(); else if (_current == _vErr) _eLog.Sync();
+    }
+
+    static void OpenLog()
+    {
+        try { Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{Log.Path}\"") { UseShellExecute = false })?.Dispose(); }
+        catch (Exception e) { Log.Write("打开日志文件失败: " + e.Message); }
+    }
+
     void SetStall(bool on, string file)
     {
         _stallShown = on;
+        _pFile.Visible = !on;
+        _pOpen.Visible = on || _details;
         _pWarn.Visible = _pWait.Visible = _pCancel.Visible = on;
         if (on) _pWarn.Text = $"写入 {file.Replace('/', '\\')} 超过 1 分钟没有进展，可能被安全软件拦截。日志：%TEMP%\\Weft-Setup.log";
     }
@@ -244,6 +281,11 @@ public sealed class MainForm : Form
         _eP = L(_vErr, 12.5f, false, () => Theme.Mute, ContentAlignment.TopCenter);
         _eCancel = new FlatButton("取消"); _eRetry = new FlatButton("重试", BtnKind.Primary, 96);
         _vErr.Controls.Add(_eCancel); _vErr.Controls.Add(_eRetry);
+        _eTog = new MiniLink("详细信息", true); _eOpen = new MiniLink("打开日志文件", false);
+        _eLog = new LogPane();
+        _vErr.Controls.Add(_eTog); _vErr.Controls.Add(_eOpen); _vErr.Controls.Add(_eLog);
+        _eTog.Click += (_, _) => ToggleDetails();
+        _eOpen.Click += (_, _) => OpenLog();
         _eCancel.Click += (_, _) => { _forceClose = true; Close(); };
         _eRetry.Click += (_, _) => StartRun();
     }
@@ -281,7 +323,7 @@ public sealed class MainForm : Form
             var w = b.PreferredWidth();
             x -= w;
             var pr = b.Parent!.Bounds;
-            b.Bounds = new Rectangle(x - pr.X, Sc(338) - pr.Y, w, Sc(34));
+            b.Bounds = new Rectangle(x - pr.X, Sc(338 + _extra) - pr.Y, w, Sc(34));
             x -= Sc(10);
         }
     }
@@ -295,7 +337,7 @@ public sealed class MainForm : Form
 
     void ApplyLayout()
     {
-        ClientSize = new Size(Sc(W), Sc(H));
+        ClientSize = new Size(Sc(W), Sc(H + _extra));
         var tb = Sc(TitleH);
         foreach (var v in _views) v.Bounds = new Rectangle(1, tb, ClientSize.Width - 2, ClientSize.Height - tb - 1);
         foreach (var (l, px, bold, color) in _labels) { l.Font = Theme.Font(px * S, bold); l.ForeColor = color(); l.BackColor = Theme.Win; }
@@ -321,7 +363,11 @@ public sealed class MainForm : Form
         P(_pStep, 36, 220, 400, 20);
         P(_pPct, 424, 220, 100, 20);
         P(_pFile, 36, 244, 488, 18);
-        P(_pWarn, 36, 274, 488, 40);
+        P(_pWarn, 36, 244, 488, 36);
+        P(_pTog, 36, 284, 10, 20); _pTog.Width = _pTog.PreferredWidth();
+        P(_pOpen, 0, 284, 10, 20); _pOpen.Left = _pTog.Right + Sc(14); _pOpen.Width = _pOpen.PreferredWidth();
+        P(_pLog, 36, 310, 488, 20 + _extra);
+        _pLog.Relayout();
         Foot(_pCancel, _pWait);
 
         Head(_nLogo, _nH1, _nSub);
@@ -329,6 +375,11 @@ public sealed class MainForm : Form
         _nDel.Width = _nDel.PreferredWidth();
         P(_nHint, 36, 231, 488, 18);
         Foot(_nCancel, _nGo);
+
+        P(_eTog, 36, 338 + _extra + 7, 10, 20); _eTog.Width = _eTog.PreferredWidth();
+        P(_eOpen, 0, 338 + _extra + 7, 10, 20); _eOpen.Left = _eTog.Right + Sc(14); _eOpen.Width = _eOpen.PreferredWidth();
+        P(_eLog, 36, 346, 488, Math.Max(10, _extra - 16));
+        _eLog.Relayout();
 
         LayoutCenter(_dBadge, _dH, _dP);
         LayoutCenter(_eBadge, _eH, _eP);
@@ -374,6 +425,18 @@ public sealed class MainForm : Form
 
     // ---------- 预览（--render-preview） ----------
 
+    static void SeedPreviewLog()
+    {
+        Log.ResetRing();
+        Log.AddToRing("20:14:02.101 启动 --render-preview");
+        for (var i = 1; i <= 36; i++)
+        {
+            var f = i % 3 == 0 ? "node/node.exe" : $"app/chunk-{i:000}.js";
+            Log.AddToRing($"20:14:{2 + i / 4:00}.{i * 23 % 1000:000} 写入 {f} ({i * 48213} B) [{i}/20368]");
+            Log.AddToRing($"20:14:{2 + i / 4:00}.{i * 23 % 1000 + 1:000} {(i == 30 ? "SLOW " : "")}写入完成 {f} {(i == 30 ? 7312 : 12 + i)} ms");
+        }
+    }
+
     internal void ShowPreviewState(string state)
     {
         var c = _ctx!;
@@ -389,6 +452,12 @@ public sealed class MainForm : Form
                 _step = "正在写入文件"; _pBar.Value = 42; _pStep.Text = _step; _pPct.Text = "42%";
                 Show(_vProg);
                 break;
+            case "progress-log":
+            case "error-log":
+                SeedPreviewLog();
+                _details = true;
+                if (state == "error-log") { c.Mode = InstallMode.Install; ShowError("磁盘空间不足", $"安装位置 {c.Dir} 需要约 {DiskSpace.FormatMb(900L << 20)} 可用空间。", true); break; }
+                goto case "progress-files";
             case "progress-files":
             case "progress-stalled":
                 c.Mode = InstallMode.Install;
@@ -484,6 +553,7 @@ public sealed class MainForm : Form
         v.BringToFront();
         _min.BringToFront(); _close.BringToFront();
         ActiveControl = DefaultButton();
+        UpdateDetails();
     }
 
     /// <summary>每页回车触发的按钮。卸载页默认「取消」，避免手滑。</summary>

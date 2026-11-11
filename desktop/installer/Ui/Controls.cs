@@ -354,3 +354,111 @@ public sealed class CaptionButton : Control
         }
     }
 }
+
+/// <summary>小号次要文字链接；Chevron 为真时右侧带展开/收起小箭头。</summary>
+public sealed class MiniLink : FlatControl
+{
+    public bool Chevron;
+    bool _expanded;
+    public bool Expanded { get => _expanded; set { if (_expanded != value) { _expanded = value; Invalidate(); } } }
+
+    public MiniLink(string text, bool chevron) { Text = text; Chevron = chevron; }
+
+    public int PreferredWidth() =>
+        TextRenderer.MeasureText(Text, Theme.Font(12 * S), new Size(1000, 100), TextFormatFlags.NoPadding).Width
+        + (Chevron ? (int)(18 * S) : (int)(2 * S));
+
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        var g = e.Graphics;
+        g.Clear(Theme.Win);
+        g.SmoothingMode = SmoothingMode.AntiAlias;
+        var col = Hover || Down ? Theme.Ink : Theme.Mute;
+        var f = Theme.Font(12 * S);
+        var sz = TextRenderer.MeasureText(Text, f, new Size(1000, 100), TextFormatFlags.NoPadding);
+        var y = (Height - sz.Height) / 2;
+        TextRenderer.DrawText(g, Text, f, new Point(0, y), col, TextFormatFlags.NoPadding);
+        if (Chevron)
+        {
+            var cx = sz.Width + 10 * S; var cy = Height / 2f; var k = 3.2f * S;
+            using var pen = new Pen(col, Math.Max(1f, 1.4f * S)) { StartCap = LineCap.Round, EndCap = LineCap.Round, LineJoin = LineJoin.Round };
+            var dir = _expanded ? -1 : 1;
+            g.DrawLines(pen, new[] { new PointF(cx - k, cy - dir * k / 2), new PointF(cx, cy + dir * k / 2), new PointF(cx + k, cy - dir * k / 2) });
+        }
+        else
+        {
+            using var pen = new Pen(col, Math.Max(1f, S));
+            g.DrawLine(pen, 0, y + sz.Height + 1 * S, sz.Width, y + sz.Height + 1 * S);
+        }
+        FocusRing(g, new RectangleF(0, 0, Width, Height), 4 * S);
+    }
+}
+
+/// <summary>只读日志区：圆角浅底 + 等宽字体，最近 200 行，新行自动滚到底，可选中复制。</summary>
+public sealed class LogPane : Control
+{
+    readonly TextBox _tb = new()
+    {
+        Multiline = true, ReadOnly = true, BorderStyle = BorderStyle.None, ScrollBars = ScrollBars.Vertical,
+        WordWrap = true, TabStop = false, ShortcutsEnabled = true,
+    };
+    long _seq;
+    int _count;
+    Font? _font;
+    float S => Dpi.Of(this);
+
+    public LogPane()
+    {
+        SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
+        TabStop = false;
+        Controls.Add(_tb);
+        Visible = false;
+    }
+
+    public void Relayout()
+    {
+        var old = _font;
+        _font = new Font("Consolas", 11.5f * S, FontStyle.Regular, GraphicsUnit.Pixel);
+        _tb.Font = _font;
+        old?.Dispose();
+        _tb.BackColor = Theme.Sub; _tb.ForeColor = Theme.Mute;
+        var pad = (int)(8 * S);
+        _tb.Bounds = new Rectangle(pad, (int)(6 * S), Math.Max(10, Width - 2 * pad), Math.Max(10, Height - (int)(12 * S)));
+        Invalidate();
+    }
+
+    protected override void OnResize(EventArgs e) { base.OnResize(e); Relayout(); }
+
+    /// <summary>把日志环形缓冲里的新行并进来；调用方做节流。</summary>
+    public void Sync()
+    {
+        var lines = Log.Since(ref _seq);
+        if (lines.Length == 0) return;
+        if (_count + lines.Length > Log.RingSize)
+        {
+            lines = Log.Snapshot(out _seq);
+            _tb.Text = string.Join("\r\n", lines) + "\r\n";
+            _count = lines.Length;
+        }
+        else
+        {
+            _tb.AppendText(string.Join("\r\n", lines) + "\r\n");
+            _count += lines.Length;
+        }
+        _tb.SelectionStart = _tb.TextLength;
+        _tb.ScrollToCaret();
+    }
+
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        var g = e.Graphics;
+        g.Clear(Theme.Win);
+        g.SmoothingMode = SmoothingMode.AntiAlias;
+        var r = new RectangleF(0.5f, 0.5f, Width - 1, Height - 1);
+        using var p = Theme.Round(r, 6 * S);
+        using var b = new SolidBrush(Theme.Sub);
+        g.FillPath(b, p);
+        using var pen = new Pen(Theme.Line, 1f);
+        g.DrawPath(pen, p);
+    }
+}

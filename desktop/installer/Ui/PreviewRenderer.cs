@@ -5,7 +5,7 @@ public static class PreviewRenderer
 {
     public static readonly string[] States =
     {
-        "install", "progress", "progress-files", "progress-stalled", "done", "upgrade", "done-upgrade", "error-running", "error-disk", "uninstall", "quit-confirm",
+        "install", "progress", "progress-files", "progress-stalled", "progress-log", "error-log", "done", "upgrade", "done-upgrade", "error-running", "error-disk", "uninstall", "quit-confirm",
     };
 
     public static int Run(CliOptions cli)

@@ -399,6 +399,24 @@ public class NodeInteropTests
     }
 
     [Fact]
+    public void LogRingKeepsLast200AndSinceWorks()
+    {
+        Log.Path = Path.Combine(H.Tmp(), "t.log");
+        Log.ResetRing();
+        long seq = 0;
+        for (var i = 0; i < 250; i++) Log.Write("line " + i);
+        var all = Log.Snapshot(out var s2);
+        Assert.Equal(200, all.Length);
+        Assert.EndsWith("line 249", all[^1]);
+        Assert.EndsWith("line 50", all[0]);
+        Log.Write("more");
+        var more = Log.Since(ref s2);
+        Assert.Single(more);
+        Assert.Empty(Log.Since(ref s2));
+        Assert.Equal(200, Log.Since(ref seq).Length);
+    }
+
+    [Fact]
     public void RenderPreviewArgsParse()
     {
         var o = CliOptions.Parse(new[] { "--render-preview", "out", "--scale", "1,1.5", "--theme", "dark" });
