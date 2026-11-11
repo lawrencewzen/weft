@@ -90,7 +90,7 @@ public sealed class CliOptions
 
     /// <summary>隐藏命令行 --render-preview &lt;目录&gt;：把各界面状态渲染成 PNG，不安装任何东西。</summary>
     public string? PreviewDir { get; set; }
-    public double[] PreviewScales { get; set; } = { 1.0, 1.25, 1.5, 2.0 };
+    public double[] PreviewScales { get; set; } = { 1.0, 1.25, 1.5, 1.75 };
     /// <summary>"dark" / "light"；null 表示两个都出。</summary>
     public string? PreviewTheme { get; set; }
 

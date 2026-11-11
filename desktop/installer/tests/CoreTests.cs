@@ -408,7 +408,7 @@ public class NodeInteropTests
         Assert.Equal("dark", o.PreviewTheme);
 
         var d = CliOptions.Parse(new[] { "--render-preview", "out" });
-        Assert.Equal(new[] { 1.0, 1.25, 1.5, 2.0 }, d.PreviewScales);
+        Assert.Equal(new[] { 1.0, 1.25, 1.5, 1.75 }, d.PreviewScales);
         Assert.Null(d.PreviewTheme);
 
         Assert.NotNull(CliOptions.Parse(new[] { "--render-preview" }).Error);

@@ -31,7 +31,10 @@ public sealed class MainForm : Form
 
     // 进度
     Panel _vProg = null!;
-    LogoBox _pLogo = null!; Label _pH1 = null!, _pSub = null!, _pStep = null!, _pPct = null!; ProgressTrack _pBar = null!;
+    LogoBox _pLogo = null!; Label _pH1 = null!, _pSub = null!, _pStep = null!, _pPct = null!, _pFile = null!, _pWarn = null!; ProgressTrack _pBar = null!;
+    FlatButton _pWait = null!, _pCancel = null!;
+    bool _stallShown;
+    string _fileFull = "";
 
     // 完成 / 出错
     Panel _vDone = null!, _vErr = null!;
@@ -92,7 +95,7 @@ public sealed class MainForm : Form
         _mask.Keep.Click += (_, _) => HideMask();
         Controls.Add(_mask);
 
-        _tick.Tick += (_, _) => PaintProgress();
+        _tick.Tick += (_, _) => { PaintProgress(); CheckStall(); };
         ResumeLayout(false);
         ApplyLayout();
         if (_preview) return;
@@ -171,6 +174,54 @@ public sealed class MainForm : Form
         _pStep = L(_vProg, 12.5f, false, () => Theme.Mute);
         _pPct = L(_vProg, 12.5f, false, () => Theme.Mute, ContentAlignment.TopRight);
         _pPct.Text = "0%";
+        _pFile = L(_vProg, 12, false, () => Theme.Mute);
+        _pWarn = L(_vProg, 12.5f, false, () => Theme.Err);
+        _pWarn.AutoEllipsis = false; _pWarn.Visible = false;
+        _pCancel = new FlatButton("取消") { Visible = false };
+        _pWait = new FlatButton("继续等待", BtnKind.Primary, 96) { Visible = false };
+        _vProg.Controls.Add(_pCancel); _vProg.Controls.Add(_pWait);
+        _pWait.Click += (_, _) =>
+        {
+            if (_ctx != null) Interlocked.Exchange(ref _ctx.LastProgressTick, Environment.TickCount64);
+            SetStall(false, "");
+        };
+        _pCancel.Click += (_, _) =>
+        {
+            _pStep.Text = "正在取消，回滚已写入的文件…";
+            _pCancel.Enabled = false; _pWait.Enabled = false;
+            ConfirmQuit();
+        };
+    }
+
+    /// <summary>当前文件行：「node\node.exe（3 / 20368）」，路径太长时从左边截断。</summary>
+    void SetFileLine(string path, int i, int n)
+    {
+        _fileFull = path;
+        if (string.IsNullOrEmpty(path)) { _pFile.Text = ""; return; }
+        var suffix = $"（{i} / {n}）";
+        var f = Theme.Font(12 * S);
+        var max = _pFile.Width > 0 ? _pFile.Width : Sc(488);
+        var p = path.Replace('/', '\\');
+        var cut = false;
+        while (p.Length > 4 && TextRenderer.MeasureText((cut ? "…" : "") + p + suffix, f, new Size(10000, 100), TextFormatFlags.NoPadding).Width > max)
+        { p = p[1..]; cut = true; }
+        _pFile.Text = (cut ? "…" : "") + p + suffix;
+    }
+
+    void SetStall(bool on, string file)
+    {
+        _stallShown = on;
+        _pWarn.Visible = _pWait.Visible = _pCancel.Visible = on;
+        if (on) _pWarn.Text = $"写入 {file.Replace('/', '\\')} 超过 1 分钟没有进展，可能被安全软件拦截。日志：%TEMP%\\Weft-Setup.log";
+    }
+
+    void CheckStall()
+    {
+        if (_ctx == null || !_busy || _quitting) return;
+        var t = Interlocked.Read(ref _ctx.LastProgressTick);
+        var stalled = t != 0 && Environment.TickCount64 - t > SetupContext.StallMs;
+        if (stalled && !_stallShown) SetStall(true, _ctx.CurrentFile);
+        else if (!stalled && _stallShown) SetStall(false, "");
     }
 
     void BuildDone()
@@ -269,6 +320,9 @@ public sealed class MainForm : Form
         P(_pBar, 36, 203, 488, 6);
         P(_pStep, 36, 220, 400, 20);
         P(_pPct, 424, 220, 100, 20);
+        P(_pFile, 36, 244, 488, 18);
+        P(_pWarn, 36, 274, 488, 40);
+        Foot(_pCancel, _pWait);
 
         Head(_nLogo, _nH1, _nSub);
         P(_nDel, 36, 197, 488, 20);
@@ -334,6 +388,17 @@ public sealed class MainForm : Form
                 _pH1.Text = "正在安装"; _pSub.Text = "";
                 _step = "正在写入文件"; _pBar.Value = 42; _pStep.Text = _step; _pPct.Text = "42%";
                 Show(_vProg);
+                break;
+            case "progress-files":
+            case "progress-stalled":
+                c.Mode = InstallMode.Install;
+                _title = "Weft 安装程序"; Text = _title;
+                _pH1.Text = "正在安装"; _pSub.Text = "";
+                _step = "正在复制文件"; _pBar.Value = 9; _pStep.Text = _step; _pPct.Text = "9%";
+                Show(_vProg);
+                ApplyLayout();
+                SetFileLine(@"node/node.exe", 3, 20368);
+                SetStall(state == "progress-stalled", @"node\node.exe");
                 break;
             case "done": c.Mode = InstallMode.Install; ShowDone(); break;
             case "done-upgrade": c.Mode = InstallMode.Upgrade; ShowDone(); break;
@@ -502,6 +567,10 @@ public sealed class MainForm : Form
         var un = c.Mode == InstallMode.Uninstall;
         _pH1.Text = un ? "正在卸载" : c.Mode == InstallMode.Upgrade ? "正在更新" : "正在安装";
         _pSub.Text = c.Mode == InstallMode.Upgrade ? $"{c.OldVersion} → {c.NewVersion}" : "";
+        Interlocked.Exchange(ref c.LastProgressTick, 0);
+        c.CurrentFile = ""; c.FileIndex = c.FileTotal = 0;
+        _pCancel.Enabled = _pWait.Enabled = true;
+        SetStall(false, ""); SetFileLine("", 0, 0);
         _step = un ? "正在停止 Weft" : "正在校验安装包";
         Interlocked.Exchange(ref _pctBits, BitConverter.DoubleToInt64Bits(0));
         PaintProgress();
@@ -530,6 +599,8 @@ public sealed class MainForm : Form
         var p = BitConverter.Int64BitsToDouble(Interlocked.Read(ref _pctBits));
         _pBar.Value = p;
         _pStep.Text = _step;
+        if (_ctx != null && _ctx.FileTotal > 0 && _step == "正在复制文件") SetFileLine(_ctx.CurrentFile, _ctx.FileIndex, _ctx.FileTotal);
+        else if (_step != "正在复制文件" && _pFile.Text.Length > 0 && !_preview) SetFileLine("", 0, 0);
         _pPct.Text = (int)Math.Floor(p) + "%";
     }
 

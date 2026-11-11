@@ -13,6 +13,13 @@ public sealed class SetupContext
     public bool DeleteData;
     public string ExePath = Environment.ProcessPath ?? "";
     public PayloadInfo? Payload;
+
+    // 写入阶段的实时状态，供界面显示当前文件和做「卡住」看门狗（跨线程读写）
+    public volatile string CurrentFile = "";
+    public volatile int FileIndex, FileTotal;
+    /// <summary>最近一次写入有进展的时刻（Environment.TickCount64）；0 表示当前不在写入阶段。</summary>
+    public long LastProgressTick;
+    public const int StallMs = 60_000;
 }
 
 public delegate void ProgressFn(string step, double pct);
@@ -88,9 +95,18 @@ public static class Engine
         }
         report(upgrade ? "正在复制文件" : "正在复制文件", stopEnd);
 
+        Interlocked.Exchange(ref c.LastProgressTick, Environment.TickCount64);
         var swApply = Stopwatch.StartNew();
         var stats = FileInstaller.Apply(zip, next, prev, dir, (done, total) =>
-            report("正在复制文件", stopEnd + (copyEnd - stopEnd) * done / total), ct, diff);
+            {
+                Interlocked.Exchange(ref c.LastProgressTick, Environment.TickCount64);
+                report("正在复制文件", stopEnd + (copyEnd - stopEnd) * done / total);
+            }, ct, diff, (path, i, n) =>
+            {
+                c.CurrentFile = path; c.FileIndex = i; c.FileTotal = n;
+                Interlocked.Exchange(ref c.LastProgressTick, Environment.TickCount64);
+            });
+        Interlocked.Exchange(ref c.LastProgressTick, 0);
         Log.Write($"文件写入完成 {stats} 耗时 {swApply.ElapsedMilliseconds} ms");
 
         report("正在准备运行环境", copyEnd);
