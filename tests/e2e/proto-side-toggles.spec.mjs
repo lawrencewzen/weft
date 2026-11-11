@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { expectClean, openProto } from './helpers/proto.mjs';
+import { expectClean, layoutSettled, openProto } from './helpers/proto.mjs';
 
 test.use({ locale: 'zh-CN', viewport: { width: 1440, height: 900 } });
 test.describe.configure({ timeout: 60_000 });
@@ -424,7 +424,7 @@ test('774px viewport collapses to 54px narrow strip without horizontal scroll', 
   const state = await openProto(page);
 
   await page.setViewportSize({ width: 774, height: 800 });
-  await page.waitForTimeout(100);
+  await layoutSettled(page);
 
   const leftBtn = page.locator('.side-toggle-left');
   const rightBtn = page.locator('.side-toggle-right');
@@ -434,18 +434,13 @@ test('774px viewport collapses to 54px narrow strip without horizontal scroll', 
   await expect(sidebar).toBeVisible();
 
   // 1. Auto-collapsed to 54px strip (~48.6 visual px)
-  const sbBox = await sidebar.boundingBox();
-  expect(Math.abs(sbBox.width - 54 * 0.9)).toBeLessThanOrEqual(1.5);
+  await expect.poll(async () => Math.abs((await sidebar.boundingBox()).width - 54 * 0.9)).toBeLessThanOrEqual(1.5);
 
   // 2. No horizontal scroll
-  const scrollInfo = await page.evaluate(() => ({
-    scrollWidth: document.body.scrollWidth,
-    clientWidth: document.body.clientWidth,
-    htmlScroll: document.documentElement.scrollWidth,
-    htmlClient: document.documentElement.clientWidth,
-  }));
-  expect(scrollInfo.scrollWidth).toBeLessThanOrEqual(scrollInfo.clientWidth + 1);
-  expect(scrollInfo.htmlScroll).toBeLessThanOrEqual(scrollInfo.htmlClient + 1);
+  await expect.poll(() => page.evaluate(() => ({
+    body: document.body.scrollWidth - document.body.clientWidth <= 1,
+    html: document.documentElement.scrollWidth - document.documentElement.clientWidth <= 1,
+  }))).toEqual({ body: true, html: true });
 
   // 3. Buttons z-index >= 40
   const leftZ = await leftBtn.evaluate((el) => Number.parseInt(getComputedStyle(el).zIndex, 10));
@@ -455,9 +450,8 @@ test('774px viewport collapses to 54px narrow strip without horizontal scroll', 
 
   // 4. Open overlay sidebar: expands over CenterPane
   await leftBtn.click();
-  await page.waitForTimeout(300);
-  const openBox = await sidebar.boundingBox();
-  expect(openBox.width).toBeGreaterThan(150);
+  await expect.poll(async () => (await sidebar.boundingBox()).width).toBeGreaterThan(150);
+  await layoutSettled(page);
 
   // Still no horizontal scroll with overlay open
   const openScroll = await page.evaluate(() => document.body.scrollWidth <= document.body.clientWidth + 1);
@@ -465,16 +459,12 @@ test('774px viewport collapses to 54px narrow strip without horizontal scroll', 
 
   // Close back to narrow strip
   await leftBtn.click();
-  await page.waitForTimeout(300);
-  const closedBox = await sidebar.boundingBox();
-  expect(Math.abs(closedBox.width - 54 * 0.9)).toBeLessThanOrEqual(1.5);
+  await expect.poll(async () => Math.abs((await sidebar.boundingBox()).width - 54 * 0.9)).toBeLessThanOrEqual(1.5);
 
   // Open and close right overlay
   await rightBtn.click();
-  await page.waitForTimeout(300);
   await expect(page.getByTestId('next-right')).toBeVisible();
   await rightBtn.click();
-  await page.waitForTimeout(300);
   await expect(page.getByTestId('next-right')).toBeHidden();
 
   expectClean(state);
@@ -681,9 +671,8 @@ test('sidebar collapse and expand without projects does not throw error', async 
 
   // Expand back
   await leftBtn.click();
-  await page.waitForTimeout(300);
-  const openBox = await sidebar.boundingBox();
-  expect(openBox.width).toBeGreaterThan(150);
+  await expect.poll(async () => (await sidebar.boundingBox()).width).toBeGreaterThan(150);
+  await layoutSettled(page);
 
   expectClean(state);
 });

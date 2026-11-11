@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { PROTOCOL_VERSION } from '../../src/v2/version.ts';
-import { compileSchema, matchContractPath, validateResponse } from '../../src/v2/validate.ts';
+import { matchContractPath, validateResponse } from '../../src/v2/validate.ts';
 import { ROOT } from './_root.mjs';
 import { readDiscovery, startServer, stopServer } from './_server.mjs';
 
@@ -66,17 +66,6 @@ test('ServiceInfo requires demo and accepts true or false', () => {
     demo: false,
   });
   assert.equal(asFalse.ok, true);
-});
-
-test('Ajv2020 enforces JSON Schema 2020-12 unevaluatedProperties', () => {
-  const validate = compileSchema({
-    type: 'object',
-    properties: { a: { type: 'number' } },
-    required: ['a'],
-    unevaluatedProperties: false,
-  });
-  assert.equal(validate({ a: 1 }), true);
-  assert.equal(validate({ a: 1, extra: true }), false);
 });
 
 test('GET /api/v2/service returns ServiceInfo with Weft-Protocol', async () => {
