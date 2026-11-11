@@ -9,7 +9,7 @@
 | 状态 | 链接 |
 |---|---|
 | 首次安装 → 进度 → 完成 | [index.html](index.html) |
-| 升级（0.1.2 → 0.1.3，先停止 Weft） | [?mode=upgrade](index.html?mode=upgrade) |
+| 升级（0.1.2 → 0.1.3，下面一行灰字显示识别到的安装位置，先停止 Weft） | [?mode=upgrade](index.html?mode=upgrade) |
 | 卸载（确认 → 进度 → 完成） | [?mode=uninstall](index.html?mode=uninstall) |
 | 出错：Weft 正在运行，无法停止（升级时） | [?fail=running](index.html?fail=running) |
 | 出错：卸载时 Weft 正在运行 | [?mode=uninstall&fail=running](index.html?mode=uninstall&fail=running) |
