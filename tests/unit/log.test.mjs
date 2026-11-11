@@ -6,6 +6,7 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { createLogger, formatLine, parseLevel, trackHttp, lineLog, logLine } from '../../src/core/log.mjs';
 import { redactSecrets } from '../../src/core/redact.mjs';
 import { ROOT } from './_root.mjs';
@@ -220,13 +221,15 @@ test('uncaught exception: logged with stack, process still exits non-zero', asyn
   const dir = await tmp();
   try {
     const script = `
-      import { log, installProcessHandlers } from ${JSON.stringify(path.join(ROOT, 'src/core/log.mjs'))};
+      import { log, installProcessHandlers } from ${JSON.stringify(pathToFileURL(path.join(ROOT, 'src/core/log.mjs')).href)};
       log.configure({ dataDir: ${JSON.stringify(dir)}, console: false });
       installProcessHandlers();
       setTimeout(() => { throw new Error('kaboom'); }, 5);
     `;
     const r = spawnSync(process.execPath, ['--input-type=module', '-e', script], { encoding: 'utf8' });
-    assert.notEqual(r.status, 0);
+    const out = `status=${r.status}\nstdout=${r.stdout}\nstderr=${r.stderr}`;
+    assert.notEqual(r.status, 0, out);
+    assert.ok(existsSync(path.join(dir, 'logs', 'service.log')), out);
     const text = read(dir);
     assert.match(text, /ERROR \[WEFT_FATAL\] origin=uncaughtException uncaught exception/);
     assert.match(text, /Error: kaboom/);
@@ -235,7 +238,9 @@ test('uncaught exception: logged with stack, process still exits non-zero', asyn
     const dir2 = await tmp();
     const script2 = script.replace(JSON.stringify(dir), JSON.stringify(dir2)).replace("throw new Error('kaboom')", "Promise.reject(new Error('nobody-caught'))");
     const r2 = spawnSync(process.execPath, ['--input-type=module', '-e', script2], { encoding: 'utf8' });
-    assert.notEqual(r2.status, 0);
+    const out2 = `status=${r2.status}\nstdout=${r2.stdout}\nstderr=${r2.stderr}`;
+    assert.notEqual(r2.status, 0, out2);
+    assert.ok(existsSync(path.join(dir2, 'logs', 'service.log')), out2);
     const text2 = read(dir2);
     assert.match(text2, /origin=unhandledRejection unhandled rejection/);
     assert.match(text2, /Error: nobody-caught/);
