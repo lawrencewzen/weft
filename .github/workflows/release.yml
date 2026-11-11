@@ -125,9 +125,9 @@ jobs:
           Write-Host $selfText
           if ($p.ExitCode -ne 0) { throw "self-check exit $($p.ExitCode)" }
           if ($selfText -notmatch '(?m)^dotnet: 8\.') { throw 'self-check is not running on .NET 8' }
-          if ($selfText -notmatch '(?m)^webview2\.source: bundled$') { throw 'self-check did not pick the bundled WebView2' }
+          if ($selfText -notmatch '(?m)^webview2\.source: bundled\r?$') { throw 'self-check did not pick the bundled WebView2' }
           if ($selfText -notmatch '(?m)^webview2\.version: 157\.') { throw 'unexpected bundled WebView2 version' }
-          if ($selfText -notmatch '(?m)^webview2\.permissions: ready$') { throw 'WebView2 folder permissions are not ready' }
+          if ($selfText -notmatch '(?m)^webview2\.permissions: ready\r?$') { throw 'WebView2 folder permissions are not ready' }
 
           Write-Host '--- app/node_modules ---'
           $nm = Join-Path $root 'app\node_modules'
