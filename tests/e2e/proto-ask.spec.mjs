@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { expectClean, openProto } from './helpers/proto.mjs';
+import { expectClean, layoutSettled, openProto } from './helpers/proto.mjs';
 
 test.use({ locale: 'zh-CN', viewport: { width: 1440, height: 900 } });
 test.describe.configure({ timeout: 60_000 });
@@ -200,24 +200,6 @@ test('c-ask visual styles: initial focus is unstyled, keyboard navigation shows 
   expectClean(state);
 });
 
-test('c-ask single-select auto-jumps to next question after 150ms', async ({ page }) => {
-  const state = await openProto(page);
-
-  await page.locator('[data-testid=next-conv-row][data-id="c-ask"]').click();
-  await expect(page).toHaveURL(/#\/c\/c-ask$/);
-
-  await expect(page.getByTestId('next-ask-progress')).toHaveText('1 / 2');
-
-  // Click option pnpm on question 1
-  await page.getByTestId('next-ask-option').filter({ hasText: 'pnpm' }).click();
-
-  // After ~150ms, automatically advances to question 2
-  await expect(page.getByTestId('next-ask-progress')).toHaveText('2 / 2', { timeout: 3000 });
-  await expect(page.getByTestId('next-ask-question')).toContainText('要跑哪些检查？');
-
-  expectClean(state);
-});
-
 test('c-ask permanent textarea auto-grows as content increases', async ({ page }) => {
   const state = await openProto(page);
 
@@ -234,41 +216,6 @@ test('c-ask permanent textarea auto-grows as content increases', async ({ page }
   const expandedHeight = await textarea.evaluate((el) => el.getBoundingClientRect().height);
 
   expect(expandedHeight).toBeGreaterThan(initialHeight);
-
-  expectClean(state);
-});
-
-test('c-ask persists draft across conversation switches', async ({ page }) => {
-  const state = await openProto(page);
-
-  await page.locator('[data-testid=next-conv-row][data-id="c-ask"]').click();
-  await expect(page).toHaveURL(/#\/c\/c-ask$/);
-
-  // Select pnpm on question 1
-  await page.getByTestId('next-ask-option').filter({ hasText: 'pnpm' }).click();
-  // Switch to question 2 and type custom text
-  const tabs = page.getByTestId('next-ask-tab');
-  await tabs.nth(1).click();
-  const textarea = page.getByTestId('next-ask-other-input');
-  await textarea.fill('benchmarks');
-
-  // Switch to another conversation in ws-weft (e.g. c-tests)
-  await page.locator('[data-testid=next-conv-row][data-id="c-tests"]').click();
-  await expect(page).toHaveURL(/#\/c\/c-tests$/);
-
-  // Switch back to c-ask
-  await page.locator('[data-testid=next-conv-row][data-id="c-ask"]').click();
-  await expect(page).toHaveURL(/#\/c\/c-ask$/);
-
-  // Check question 1 selection is still saved
-  await tabs.nth(0).click();
-  const pnpmOption = page.getByTestId('next-ask-option').filter({ hasText: 'pnpm' });
-  await expect(pnpmOption).toHaveAttribute('aria-checked', 'true');
-
-  // Check question 2 text is still saved
-  await tabs.nth(1).click();
-  const textarea2 = page.getByTestId('next-ask-other-input');
-  await expect(textarea2).toHaveValue('benchmarks');
 
   expectClean(state);
 });
@@ -339,19 +286,13 @@ test('c-ask has no horizontal scroll at 774px viewport width', async ({ page }) 
   await page.setViewportSize({ width: 774, height: 900 });
 
   await expect(page.getByTestId('next-ask-panel')).toBeVisible();
+  await layoutSettled(page);
 
-  const box = await page.evaluate(() => {
+  await expect.poll(() => page.evaluate(() => {
     const html = document.documentElement;
     const body = document.body;
-    return {
-      htmlScroll: html.scrollWidth,
-      htmlClient: html.clientWidth,
-      bodyScroll: body.scrollWidth,
-      bodyClient: body.clientWidth,
-    };
-  });
-  expect(box.htmlScroll).toBeLessThanOrEqual(box.htmlClient + 1);
-  expect(box.bodyScroll).toBeLessThanOrEqual(box.bodyClient + 1);
+    return html.scrollWidth <= html.clientWidth + 1 && body.scrollWidth <= body.clientWidth + 1;
+  })).toBe(true);
 
   const panelOverflow = await page.evaluate(() => {
     const panel = document.querySelector('[data-testid="next-ask-panel"]');

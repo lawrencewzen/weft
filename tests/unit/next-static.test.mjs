@@ -80,9 +80,14 @@ test('GET / is SPA html when built, or the not-built message', async () => {
   }
 });
 
-test('the production bundle ships no prototype mock code', () => {
-  const assets = path.join(ROOT, 'public-next', 'assets');
-  if (!existsSync(assets)) return; // not built in this checkout
+// Needs a built frontend. The unit jobs never build; the CI `check` job runs
+// build:web and then this test by name, so it is a real assertion there and an
+// honest skip everywhere else.
+const BUNDLE_ASSETS = path.join(ROOT, 'public-next', 'assets');
+test('the production bundle ships no prototype mock code', {
+  skip: existsSync(BUNDLE_ASSETS) ? false : 'public-next is not built (checked in the CI check job after build:web)',
+}, () => {
+  const assets = BUNDLE_ASSETS;
   const bundles = readdirSync(assets).filter((name) => name.endsWith('.js'));
   assert.ok(bundles.length > 0, 'expected a JS bundle in public-next/assets');
   const markers = ['重置原型数据', '__protoRequests', 'installMockBackend', '原型不联网'];

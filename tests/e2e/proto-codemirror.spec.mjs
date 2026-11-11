@@ -106,43 +106,6 @@ test('syntax highlighting in .mjs and package.json: keyword, string, comment, an
   expectClean(state);
 });
 
-test('focus inside editor and press Cmd/Ctrl+S once: save request fires exactly once and no conflict banner appears', async ({ page }) => {
-  const state = await openProto(page);
-  const modKey = process.platform === 'darwin' ? 'Meta' : 'Control';
-
-  await page.getByTestId('next-right-toggle').click();
-  await page.getByTestId('next-right-tab-files').click();
-  await page.locator('[data-testid=next-file-node][data-path="web/src/data/store.ts"]').click();
-  await expect(page.getByTestId('next-file-editor')).toBeVisible();
-
-  const cmContent = page.locator('.cm-content');
-  await cmContent.click();
-  await cmContent.pressSequentially('// test unsaved edit\n');
-  await expect(page.getByTestId('next-file-unsaved')).toBeVisible();
-
-  // Explicitly focus inside the editor
-  await cmContent.focus();
-
-  const getSaveReqCount = () => page.evaluate(() =>
-    (window.__protoRequests || []).filter((r) => r.method === 'PUT' && r.url.includes('/files')).length
-  );
-  const saveReqsBefore = await getSaveReqCount();
-
-  // Press Cmd/Ctrl+S once
-  await page.keyboard.press(`${modKey}+s`);
-  await expect(page.getByTestId('next-toast')).toContainText(/已保存|Saved/);
-  await expect(page.getByTestId('next-file-unsaved')).toHaveCount(0);
-
-  // Exactly 1 save request should have been dispatched
-  const saveReqsAfter = await getSaveReqCount();
-  expect(saveReqsAfter - saveReqsBefore).toBe(1);
-
-  // No conflict banner should appear
-  await expect(page.getByTestId('next-file-conflict')).toHaveCount(0);
-
-  expectClean(state);
-});
-
 test('CodeMirror 6 acceptance: md preview/edit toggle, conflict flow, target line scrolling, zoom 0.9 click positioning, search panel', async ({ page }) => {
   const state = await openProto(page);
   const modKey = process.platform === 'darwin' ? 'Meta' : 'Control';

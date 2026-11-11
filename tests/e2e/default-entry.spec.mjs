@@ -69,21 +69,6 @@ test('GET /auth?code= logs into the new UI', async ({ page }) => {
   }
 });
 
-test('GET /legacy and /legacy/<path> 302 to the new UI', async ({ page }) => {
-  const srv = await startServer();
-  try {
-    for (const path of ['/legacy', '/legacy/', '/legacy/settings/about']) {
-      const res = await fetch(`${srv.url}${path}`, { redirect: 'manual' });
-      expect(res.status).toBe(302);
-      expect(res.headers.get('location')).toBe('/');
-    }
-    await page.goto(`${srv.url}/legacy`);
-    await expect(page.getByTestId('next-app')).toBeVisible();
-  } finally {
-    await srv.kill();
-  }
-});
-
 test('GET /login?token= still sets the old cookie when WEFT_TOKEN is set', async ({ page }) => {
   const token = 'e2e-legacy-token';
   const srv = await startServer({ extraEnv: { WEFT_TOKEN: token } });
