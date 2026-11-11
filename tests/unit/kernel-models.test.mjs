@@ -17,7 +17,7 @@ import {
 } from '../../src/kernel/models.mjs';
 import { chatCompletionHits, rewriteDeepseekFetch, startFakeModel } from './kernel-models-fake.mjs';
 import { makeTempDir, removeTempDir } from './_tmp.mjs';
-import { readDiscovery, request as serverRequest, startServer, stopServer } from './_server.mjs';
+import { request as serverRequest, startServer, stopServer } from './_server.mjs';
 import { ROOT } from './_root.mjs';
 
 const TOKEN = 'unit-kernel-models-token';
@@ -771,82 +771,6 @@ test('kernel models call each custom provider and hide keys', { timeout: 60000 }
     await stopServer(srv);
     await defaultFake.close();
     await coderFake.close();
-    await removeTempDir(dataDir);
-  }
-});
-
-test('real-shape v2 DeepSeek settings migrate then send uses the first enabled model', { timeout: 60000 }, async () => {
-  const dataDir = await makeTempDir('weft-kmodels-v2-fallback-');
-  const fake = await startFakeModel({ mode: 'openai', text: 'from-flash' });
-  const seed = createSqliteStore(dataDir);
-  await seed.putSettingsRaw('app', {
-    version: 2,
-    language: 'zh',
-    theme: 'white',
-    appearance: 'light',
-    sources: [{
-      id: 'src-ds',
-      kind: 'api',
-      vendor: 'deepseek',
-      name: 'DeepSeek',
-      baseUrl: 'https://api.deepseek.com/v1',
-      apiKey: KEY_DS,
-      models: ['deepseek-flash', 'deepseek-chat'],
-    }],
-    models: {},
-  });
-  seed.close();
-
-  const preload = pathToFileURL(path.join(ROOT, 'tests/unit/kernel-models-fake.mjs')).href;
-  let srv = null;
-  try {
-    srv = await startServer({
-      dataDir,
-      token: TOKEN,
-      formatLog: scrub,
-      nodeArgs: ['--import', preload],
-      env: { WEFT_FAKE_DEEPSEEK_ORIGIN: fake.baseUrl },
-    });
-    const { base } = srv;
-
-    const settings = await request(base, 'GET', '/api/settings');
-    assert.equal(settings.status, 200);
-    assert.equal(settings.body.version, 3);
-    assert.equal(settings.body.defaultModel, null);
-    assert.deepEqual(settings.body.providers[0].enabled, ['deepseek-flash', 'deepseek-chat']);
-
-    const discovery = await readDiscovery(dataDir);
-    const listed = await serverRequest(base, 'GET', '/api/v2/providers', undefined, discovery.token);
-    assertClean(listed.text, 'GET /api/v2/providers');
-    assert.equal(listed.status, 200, listed.text);
-    assert.deepEqual(listed.body.defaultModel, {
-      providerId: 'deepseek',
-      modelId: 'deepseek-flash',
-    });
-
-    const ws = await request(base, 'POST', '/api/workspaces', { name: 'v2-fallback' });
-    assert.equal(ws.status, 201);
-    const conv = await request(base, 'POST', `/api/workspaces/${ws.body.id}/conversations`, {
-      title: 'unbound',
-    });
-    assert.equal(conv.status, 201);
-    assert.equal(conv.body.modelSourceId, null);
-    assert.equal(conv.body.modelId, null);
-
-    const sent = await request(base, 'POST', `/api/conversations/${conv.body.id}/messages`, {
-      text: 'ping-flash',
-    });
-    assert.equal(sent.status, 202, sent.text);
-    const done = await waitTurn(base, conv.body.id, (body) => assistantTexts(body).includes('from-flash'));
-    assert.equal(done.status, 'done', JSON.stringify(done?.llmError || done));
-    const hit = fake.seen.find((item) => item.path.endsWith('/chat/completions'));
-    assert.ok(hit, JSON.stringify(fake.seen));
-    assert.equal(hit.body.model, 'deepseek-flash');
-    assert.equal(hit.keyTail, KEY_DS.slice(-4));
-    assertClean(srv.logs(), 'server log');
-  } finally {
-    await stopServer(srv);
-    await fake.close();
     await removeTempDir(dataDir);
   }
 });

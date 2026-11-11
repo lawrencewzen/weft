@@ -1,5 +1,3 @@
-import { randomBytes } from 'node:crypto';
-
 /** OpenAI-compatible vendors. Ollama is the only preset that does not need a key. */
 export const VENDOR_PRESETS = [
   { id: 'deepseek', name: 'DeepSeek', baseUrl: 'https://api.deepseek.com/v1', needsKey: true },
@@ -15,17 +13,8 @@ export const VENDOR_PRESETS = [
   { id: 'custom', name: '自定义 API', baseUrl: '', needsKey: true },
 ];
 
-/** Legacy subscription source id; leftover rows with this id or kind are dropped. */
-const DROPPED_SOURCE_ID = 'grok';
-export const SETTINGS_VERSION = 2;
-
-const SOURCE_ID = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,31}$/;
 export const CONTEXT_WINDOW_MIN = 1000;
 export const CONTEXT_WINDOW_MAX = 10_000_000;
-
-export function createSourceId() {
-  return randomBytes(4).toString('hex');
-}
 
 export function vendorPreset(id) {
   const key = String(id || '').trim().toLowerCase();
@@ -54,74 +43,4 @@ export function vendorForBaseUrl(baseUrl) {
 
 export function isValidContextWindow(value) {
   return Number.isInteger(value) && value >= CONTEXT_WINDOW_MIN && value <= CONTEXT_WINDOW_MAX;
-}
-
-function legacyDefaultModel(models) {
-  if (!models || typeof models !== 'object' || Array.isArray(models)) return '';
-  if (typeof models.default !== 'string') return '';
-  return models.default.trim().slice(0, 200);
-}
-
-/**
- * A leftover provider row becomes an API source only when it was actually configured:
- * a key, an Ollama base URL, or a base URL that is not that vendor's preset.
- */
-function wantsLegacyApiSource(provider, baseUrl, apiKey) {
-  if (String(apiKey || '').trim()) return true;
-  const url = normalizeHttpUrl(baseUrl);
-  if (String(provider || '').trim().toLowerCase() === 'ollama' && url) return true;
-  if (!url) return false;
-  const presetUrl = normalizeHttpUrl(vendorPreset(provider)?.baseUrl);
-  return url !== presetUrl;
-}
-
-/**
- * One-shot upgrade from the single provider/baseUrl/apiKey record.
- * Already-versioned settings are returned unchanged.
- * Pass `createId` to keep the function deterministic.
- */
-export function migrateLegacySettings(raw, { createId = createSourceId } = {}) {
-  const input = raw && typeof raw === 'object' && !Array.isArray(raw) ? { ...raw } : {};
-  if (input.version === SETTINGS_VERSION || input.version === 3) return input;
-  delete input.grok;
-
-  const provider = typeof input.provider === 'string' ? input.provider.trim() : '';
-  const baseUrl = typeof input.baseUrl === 'string' ? input.baseUrl.trim() : '';
-  const apiKey = typeof input.apiKey === 'string' ? input.apiKey : '';
-  const sources = [];
-  let apiSource = null;
-  if (wantsLegacyApiSource(provider, baseUrl, apiKey)) {
-    const preset = vendorPreset(provider);
-    const vendor = preset?.id || (provider ? provider.toLowerCase().slice(0, 32) : 'custom');
-    let id = createId();
-    if (!SOURCE_ID.test(id) || id === DROPPED_SOURCE_ID) id = createSourceId();
-    const storedUrl = normalizeHttpUrl(baseUrl) || (preset && preset.id !== 'custom' ? preset.baseUrl : '');
-    apiSource = {
-      id,
-      kind: 'api',
-      vendor,
-      name: preset?.name || provider || '自定义 API',
-      baseUrl: storedUrl,
-      apiKey,
-      models: [],
-    };
-    sources.push(apiSource);
-  }
-  const models = {};
-  if (apiSource) {
-    const model = legacyDefaultModel(input.models);
-    if (model) {
-      if (!apiSource.models.includes(model)) apiSource.models.push(model);
-      models.default = { sourceId: apiSource.id, model };
-    }
-  }
-  return {
-    ...input,
-    version: SETTINGS_VERSION,
-    provider: 'openai',
-    baseUrl: '',
-    apiKey: '',
-    sources,
-    models,
-  };
 }

@@ -17,7 +17,6 @@ import {
   validateAskArgs,
 } from '../../src/kernel/ask.mjs';
 import { messagesFromEntries } from '../../src/kernel/events.mjs';
-import { harnessSqlitePath } from '../../src/kernel/migrate-weft-ids.mjs';
 import { createPluginHost, mapPluginResult } from '../../src/kernel/plugins.mjs';
 import { AUTO_CONTINUE_PREFIX } from '../../src/kernel/continuation-text.mjs';
 import { formatSubagentReport } from '../../src/kernel/subagent-report.mjs';
@@ -518,7 +517,7 @@ async function waitTopic(session, ready, timeoutMs = 10000) {
 }
 
 function entryKinds(dataDir) {
-  const db = new DatabaseSync(harnessSqlitePath(dataDir), { readOnly: true, timeout: 5000 });
+  const db = new DatabaseSync(path.join(path.resolve(dataDir), 'harness', 'session.sqlite'), { readOnly: true, timeout: 5000 });
   try {
     return db.prepare("SELECT json_extract(record, '$.kind') AS kind FROM entries").all().map((row) => row.kind);
   } finally {

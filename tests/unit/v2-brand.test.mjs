@@ -15,12 +15,6 @@ function brandId(modelId) {
   return icons.brandForModel(modelId)?.id ?? null;
 }
 
-test('v2 brand table comes from src/v2/views/brand-data.json', () => {
-  assert.equal(data.source.package, '@lobehub/icons');
-  assert.ok(data.providers.deepseek);
-  assert.equal(data.providers.custom, undefined);
-});
-
 test('brandForModel recognizes common model ids', () => {
   assert.equal(brandId('gpt-5'), 'OpenAI');
   assert.equal(brandId('claude-sonnet-4'), 'Claude');

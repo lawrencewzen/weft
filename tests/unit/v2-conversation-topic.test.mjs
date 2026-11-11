@@ -467,6 +467,15 @@ test('GET /api/v2/events conversation snapshot matches GET /api/v2/conversations
     assert.equal(sent.status, 202, JSON.stringify(sent.body));
     const done = await waitFinished(srv.base, conv.id);
     assert.equal(done.status, 'done', JSON.stringify(done));
+    // Status turns done before the per-turn file card (T114) is settled into
+    // the TurnChanges doc; wait for it so the two reads see the same state.
+    const settledAt = Date.now();
+    for (;;) {
+      const probe = await getV2(srv.base, `/api/v2/conversations/${conv.id}`, discovery.token);
+      if ((probe.body?.items || []).some((item) => item?.kind === 'turn_changes')) break;
+      if (Date.now() - settledAt > 15000) throw new Error('turn_changes card never settled');
+      await sleep(50);
+    }
 
     const session = await openEvents({
       port: srv.port,

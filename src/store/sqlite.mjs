@@ -1,9 +1,8 @@
 import { DatabaseSync } from 'node:sqlite';
-import { mkdirSync, chmodSync, existsSync, renameSync } from 'node:fs';
+import { mkdirSync, chmodSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { DEFAULT_SETTINGS, mergeSettings, normalizeSettings } from '../core/settings.mjs';
-import { lineLog } from '../core/log.mjs';
 
 const SCHEMA_VERSION = 12;
 /** Execution records kept per schedule. */
@@ -11,32 +10,11 @@ export const SCHEDULE_RUNS_KEPT = 50;
 const SCHEDULE_REQUESTS_KEPT = 500;
 const MESSAGE_META_KEYS = ['kind', 'fromAgent', 'toAgent', 'agentId'];
 export const APP_DB_FILE = 'weft.sqlite';
-export const LEGACY_APP_DB_FILE = 'pi-work.sqlite';
-const SQLITE_SIDECARS = Object.freeze(['', '-wal', '-shm']);
 
-/**
- * App database path. If only the old filename exists, rename it (and WAL/SHM)
- * onto the new name. If both exist, keep the new file and leave the old one.
- */
-export function resolveAppDatabasePath(dir, { log = lineLog } = {}) {
+/** App database path; creates the data directory when missing. */
+export function resolveAppDatabasePath(dir) {
   mkdirSync(dir, { recursive: true });
-  const nextPath = path.join(dir, APP_DB_FILE);
-  const legacyPath = path.join(dir, LEGACY_APP_DB_FILE);
-  const nextExists = existsSync(nextPath);
-  const legacyExists = existsSync(legacyPath);
-  if (nextExists && legacyExists) {
-    log.log?.(`WEFT_DB using ${APP_DB_FILE}; leftover ${LEGACY_APP_DB_FILE} was not renamed`);
-    return nextPath;
-  }
-  if (!nextExists && legacyExists) {
-    for (const suffix of SQLITE_SIDECARS) {
-      const from = `${legacyPath}${suffix}`;
-      const to = `${nextPath}${suffix}`;
-      if (existsSync(from)) renameSync(from, to);
-    }
-    log.log?.(`WEFT_DB renamed ${LEGACY_APP_DB_FILE} -> ${APP_DB_FILE}`);
-  }
-  return nextPath;
+  return path.join(dir, APP_DB_FILE);
 }
 
 function chmodSecret(p) {
@@ -117,9 +95,9 @@ function convFromRow(row) {
   };
 }
 
-export function createSqliteStore(dir, { log = lineLog } = {}) {
+export function createSqliteStore(dir) {
   const deletedIds = new Set();
-  const dbPath = resolveAppDatabasePath(dir, { log });
+  const dbPath = resolveAppDatabasePath(dir);
   const db = new DatabaseSync(dbPath);
   db.exec('PRAGMA journal_mode = WAL');
   db.exec('PRAGMA synchronous = NORMAL');
@@ -312,8 +290,7 @@ export function createSqliteStore(dir, { log = lineLog } = {}) {
   }
 
   // Dialogue state lives in the Harness. These tables only served the old shell,
-  // the pre-harness archive, or the removed pipeline. Export legacy chats before
-  // starting this build.
+  // the pre-harness archive, or the removed pipeline.
   db.exec(`
     DROP TABLE IF EXISTS events;
     DROP TABLE IF EXISTS messages;
@@ -332,8 +309,6 @@ export function createSqliteStore(dir, { log = lineLog } = {}) {
     getWs: db.prepare('SELECT * FROM workspaces WHERE id = ?'),
     getSettings: db.prepare('SELECT json FROM settings WHERE id = ?'),
     putSettings: db.prepare('INSERT INTO settings (id, json) VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET json = excluded.json'),
-    listAllConv: db.prepare('SELECT id, model_source_id, model_id FROM conversations'),
-    updConvModel: db.prepare('UPDATE conversations SET model_source_id=?, model_id=? WHERE id=?'),
     insConv: db.prepare(`INSERT INTO conversations (
       id, workspace_id, title, status, auto_continues, retries, last_checkpoint_at,
       current_step, updated_at, created_at,
@@ -681,17 +656,6 @@ export function createSqliteStore(dir, { log = lineLog } = {}) {
       const normalized = normalizeSettings(next);
       q.putSettings.run('app', j(normalized));
       return normalized;
-    },
-    async remapConversationModelSources(idMap) {
-      if (!idMap || typeof idMap !== 'object') return;
-      const rows = q.listAllConv.all();
-      for (const row of rows) {
-        const oldId = row.model_source_id;
-        if (!oldId || !Object.prototype.hasOwnProperty.call(idMap, oldId)) continue;
-        const mapped = idMap[oldId];
-        if (mapped) q.updConvModel.run(mapped, row.model_id, row.id);
-        else q.updConvModel.run(null, null, row.id);
-      }
     },
     /** Schedule configuration. What runs when is the Durable task's job; `taskId` only points at it. */
     async createSchedule({ id, name, message, target, rule, enabled, createdBy, taskId, now } = {}) {

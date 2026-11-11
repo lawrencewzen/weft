@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { COMMAND_TOOL_NAMES, TOOLS, isCommandToolName, reservedBuiltinToolNames, workspaceToolNames } from '../../src/core/config.mjs';
 import { applyBashEnvAllowlist } from '../../src/kernel/bash-env.mjs';
 import {
   PI_DURABLE_UTF8_OUTPUT,
@@ -147,4 +148,17 @@ test('findWindowsExecutable walks multiple PATH entries', async () => {
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+});
+
+test('TOOLS lists every builtin workspace tool for this process', () => {
+  assert.deepEqual(TOOLS, ['read', 'write', 'edit', 'ls', 'grep', agentShellKind()]);
+  assert.deepEqual(workspaceToolNames(), TOOLS);
+});
+
+test('reservedBuiltinToolNames keeps both command shells', () => {
+  assert.deepEqual(COMMAND_TOOL_NAMES, ['bash', 'powershell']);
+  assert.deepEqual(reservedBuiltinToolNames(), ['read', 'write', 'edit', 'ls', 'grep', 'bash', 'powershell']);
+  assert.equal(isCommandToolName('bash'), true);
+  assert.equal(isCommandToolName('PowerShell'), true);
+  assert.equal(isCommandToolName('read'), false);
 });

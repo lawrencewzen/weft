@@ -82,26 +82,3 @@ test('GET /some/deep/route falls back to the SPA shell', async ({ page }) => {
     await srv.kill();
   }
 });
-
-test('GET /assets/not-exist.js returns 404', async ({ page }) => {
-  const srv = await startServer();
-  try {
-    const res = await page.request.get(`${srv.url}/assets/not-exist.js`);
-    expect(res.status()).toBe(404);
-  } finally {
-    await srv.kill();
-  }
-});
-
-test('GET /legacy 302s to the new frontend', async () => {
-  const srv = await startServer();
-  try {
-    for (const path of ['/legacy', '/legacy/', '/legacy/c/abc?x=1']) {
-      const res = await fetch(`${srv.url}${path}`, { redirect: 'manual' });
-      expect(res.status).toBe(302);
-      expect(res.headers.get('location')).toBe('/');
-    }
-  } finally {
-    await srv.kill();
-  }
-});

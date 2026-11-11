@@ -4,7 +4,6 @@ import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
 import { fauxProvider } from '@earendil-works/pi-ai/providers/faux';
 import { Harness } from '@earendil-works/pi-durable';
 import { openNodeSqliteStorage } from '@earendil-works/pi-durable/storage/sqlite/node';
-import { migrateWeftIds } from './migrate-weft-ids.mjs';
 import { log } from '../core/log.mjs';
 
 const context = BACKGROUND_CONTEXT;
@@ -74,7 +73,6 @@ export async function openKernel({ dataDir, models, registry, settings, env, now
   const storagePath = path.join(path.resolve(dataDir), 'harness', 'session.sqlite');
   let storage;
   try {
-    await migrateWeftIds(dataDir);
     storage = await openNodeSqliteStorage(storagePath);
     const harness = await Harness.open(storage, {
       models,
