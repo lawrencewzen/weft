@@ -45,7 +45,8 @@ function windowsShellFallback(dir, env) {
     args: ['/c', 'start', '', exe, '-NoExit', '-Command', location],
   });
   const launches = [];
-  if (windowsPwshExecutable(env)) launches.push(launch('pwsh.exe'));
+  const pwsh = windowsPwshExecutable(env);
+  if (pwsh) launches.push(launch(pwsh));
   launches.push(launch('powershell.exe'));
   return launches;
 }
