@@ -50,6 +50,7 @@ import {
   toolValue,
 } from './views';
 import { mockPathname } from './mockPath';
+import { buildMockReport } from './report';
 import { MOCK_AVAILABLE_PROVIDERS, MOCK_CATALOG_MODELS } from './piCatalog';
 import { sortAvailableProviders } from '../../src/data/providerFormat';
 import { clampThinkingLevel, THINKING_LEVEL_ORDER, type ThinkingLevel } from '../../src/data/composerModel';
@@ -1480,6 +1481,21 @@ export function handleMockRequest(
       startedAt: STARTED_AT,
       demo: false,
     });
+  }
+
+  if (path === '/api/v2/diagnostics/report' && method === 'POST') {
+    const req = body as unknown as components['schemas']['DiagnosticsReportRequest'];
+    if (req.conversationId && !getConv(db, req.conversationId)) {
+      return fail(404, lang === 'en' ? 'Conversation not found' : '对话不存在', 'E_NOT_FOUND');
+    }
+    return {
+      status: 200,
+      bytes: buildMockReport(db, req, SERVICE_VERSION),
+      headers: {
+        'content-type': 'application/zip',
+        'content-disposition': 'attachment; filename="weft-report.zip"',
+      },
+    };
   }
 
   /* ---- providers ---- */

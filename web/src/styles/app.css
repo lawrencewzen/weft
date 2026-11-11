@@ -3358,3 +3358,32 @@ button.file-search-result-row:hover {
   pointer-events: none;
 }
 
+
+/* 导出问题报告 */
+.llm-error-report {
+  align-self: flex-start;
+  border: none; background: transparent; padding: 0; cursor: pointer;
+  font-size: var(--fs-xs); color: inherit; opacity: .65; text-decoration: underline;
+}
+.llm-error-report:hover { opacity: 1; }
+.report-dialog { width: 520px; gap: 14px; }
+.report-field { display: flex; flex-direction: column; gap: 6px; font-size: var(--fs-ui); color: var(--text-muted); }
+.report-text { min-height: 84px; color: var(--ink); }
+.report-checks { display: flex; flex-direction: column; gap: 8px; font-size: var(--fs-ui); }
+.report-checks label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.report-files { font-size: var(--fs-sm); color: var(--text-muted); }
+.report-files-title { margin-bottom: 4px; }
+.report-files ul {
+  margin: 0; padding: 8px 10px; list-style: none; max-height: 132px; overflow: auto;
+  border: 1px solid var(--line); border-radius: 8px; background: var(--panel);
+  font-family: var(--mono); font-size: var(--fs-xs); color: var(--ink);
+  display: flex; flex-direction: column; gap: 2px;
+}
+.report-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.report-status { display: flex; align-items: center; gap: 10px; font-size: var(--fs-ui); color: var(--text-muted); min-width: 0; }
+.report-ok { color: var(--ink); }
+.report-err { color: var(--err-ink); overflow-wrap: anywhere; }
+.report-link {
+  border: none; background: transparent; padding: 0; cursor: pointer;
+  color: var(--accent); font-size: var(--fs-ui); text-decoration: underline;
+}

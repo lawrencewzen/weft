@@ -16,6 +16,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/diagnostics/report": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 导出问题报告（zip）
+         * @description 把现场信息打成一个 zip 返回，用户自己通过聊天或邮件交给开发者。不联网、不上传。
+         *     zip 里固定有 report.txt（用户描述、版本、时间）、system.txt（系统与运行环境）、settings.json（已去除密钥）。
+         *     includeDoctor 为 true 时加 doctor.txt（环境检查结果）；includeLogs 为 true 时加 logs/service.log、
+         *     轮转文件 service.log.1 至 .5 和 service-stdio.log（存在才加）；带 conversationId 时加 conversation-<id>.json（该对话记录）。
+         *     将要包含的文件列表由前端按这四个参数本地推算，没有单独的 preview 接口。
+         *     响应头 Content-Disposition 给出建议文件名 weft-report-<日期时间>.zip。
+         */
+        post: operations["createDiagnosticsReport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/service/restart": {
         parameters: {
             query?: never;
@@ -1368,6 +1393,16 @@ export interface components {
             startedAt: number;
             /** @description 走本地剧本（WEFT_LLM=faux / LLM_API=faux / WEFT_FAUX_SCRIPT）时为 true，界面要标出「演示模型」 */
             demo: boolean;
+        };
+        DiagnosticsReportRequest: {
+            /** @description 用户描述「发生了什么」，可为空串 */
+            description: string;
+            /** @description 是否附带服务日志 */
+            includeLogs: boolean;
+            /** @description 是否附带环境检查结果 */
+            includeDoctor: boolean;
+            /** @description 给出时附带该对话的记录（conversation-<id>.json）；不给则不附带 */
+            conversationId?: string;
         };
         RestartAccepted: {
             /** @description 始终为 true。服务即将退出，由客户端重新拉起。 */
@@ -2861,6 +2896,68 @@ export interface operations {
             };
             /** @description 未授权 */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 客户端错误 */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description 服务端错误 */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+        };
+    };
+    createDiagnosticsReport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DiagnosticsReportRequest"];
+            };
+        };
+        responses: {
+            /** @description 问题报告 zip */
+            200: {
+                headers: {
+                    /** @description attachment; filename="weft-report-<日期时间>.zip" */
+                    "Content-Disposition"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/zip": string;
+                };
+            };
+            /** @description 未授权 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["V2Error"];
+                };
+            };
+            /** @description conversationId 对应的对话不存在 */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

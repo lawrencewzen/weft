@@ -62,6 +62,92 @@
         }
       }
     },
+    "/api/v2/diagnostics/report": {
+      "post": {
+        "operationId": "createDiagnosticsReport",
+        "summary": "导出问题报告（zip）",
+        "description": "把现场信息打成一个 zip 返回，用户自己通过聊天或邮件交给开发者。不联网、不上传。\nzip 里固定有 report.txt（用户描述、版本、时间）、system.txt（系统与运行环境）、settings.json（已去除密钥）。\nincludeDoctor 为 true 时加 doctor.txt（环境检查结果）；includeLogs 为 true 时加 logs/service.log、\n轮转文件 service.log.1 至 .5 和 service-stdio.log（存在才加）；带 conversationId 时加 conversation-<id>.json（该对话记录）。\n将要包含的文件列表由前端按这四个参数本地推算，没有单独的 preview 接口。\n响应头 Content-Disposition 给出建议文件名 weft-report-<日期时间>.zip。\n",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DiagnosticsReportRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "问题报告 zip",
+            "headers": {
+              "Content-Disposition": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "attachment; filename=\"weft-report-<日期时间>.zip\""
+              }
+            },
+            "content": {
+              "application/zip": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "未授权",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "conversationId 对应的对话不存在",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "客户端错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          },
+          "5XX": {
+            "description": "服务端错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v2/service/restart": {
       "post": {
         "operationId": "restartService",
@@ -6627,6 +6713,34 @@
           "demo": {
             "type": "boolean",
             "description": "走本地剧本（WEFT_LLM=faux / LLM_API=faux / WEFT_FAUX_SCRIPT）时为 true，界面要标出「演示模型」"
+          }
+        }
+      },
+      "DiagnosticsReportRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "description",
+          "includeLogs",
+          "includeDoctor"
+        ],
+        "properties": {
+          "description": {
+            "type": "string",
+            "maxLength": 20000,
+            "description": "用户描述「发生了什么」，可为空串"
+          },
+          "includeLogs": {
+            "type": "boolean",
+            "description": "是否附带服务日志"
+          },
+          "includeDoctor": {
+            "type": "boolean",
+            "description": "是否附带环境检查结果"
+          },
+          "conversationId": {
+            "type": "string",
+            "description": "给出时附带该对话的记录（conversation-<id>.json）；不给则不附带"
           }
         }
       },

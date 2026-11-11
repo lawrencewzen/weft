@@ -6,6 +6,7 @@ import { setAddressMode } from '../src/data/nav';
 import { applyDocumentPrefs } from '../src/data/prefs';
 import { installBrandIcons } from './brand-icons';
 import { installMockBackend } from './mock';
+import { installMockShell } from './mock/shell';
 import '../src/styles/themes.css';
 import '../src/styles/app.css';
 import '../src/styles/settings.css';
@@ -15,6 +16,7 @@ import '../src/styles/schedules.css';
 setAddressMode('hash');
 installBrandIcons();
 installMockBackend();
+installMockShell();
 applyDocumentPrefs({ lang: getPreferredLang() });
 
 document.documentElement.setAttribute('data-proto', '1');
