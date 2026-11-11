@@ -35,6 +35,8 @@ import { attachSchedulesTopic } from './stream/schedules-topic.ts';
 import { handleSchedulesApi, lazySchedulesHost, type SchedulesHost } from './http/schedules.ts';
 import { handleExtensionsApi, loadExtensionsSnapshot, type ExtensionsHost } from './http/extensions.ts';
 import { handleOpenTerminalApi } from './http/open-terminal.ts';
+import { handleDiagnosticsApi } from './http/diagnostics.ts';
+import { createClientLogLimiter, handleClientLogApi } from './http/client-log.ts';
 import {
   diffView,
   findKernelChange,
@@ -83,6 +85,7 @@ import {
 } from './views/sidebar.ts';
 import { createGitStatusCache, type GitStatusCache } from './views/git-status.ts';
 import { subagentSnapshot } from './views/subagents.ts';
+import { log, logLine } from '../core/log.mjs';
 
 type ServiceInfo = components['schemas']['ServiceInfo'];
 type V2Error = components['schemas']['V2Error'];
@@ -323,7 +326,7 @@ function sendV2(
   if (process.env.WEFT_V2_VALIDATE === '1') {
     const result = validateResponse(requestPath, method, status, body);
     if (!result.ok) {
-      console.error(contractMismatchLog(requestPath, method, status, result.errors));
+      logLine('error', contractMismatchLog(requestPath, method, status, result.errors));
       const errorBody: V2Error = { error: 'contract mismatch', code: 'E_CONTRACT' };
       writeJson(res, 500, errorBody);
       return;
@@ -624,6 +627,8 @@ function serviceInfo(opts: { serviceVersion: string; startedAt: number; pid: num
 export function createV2Handler(opts: {
   serviceVersion: string;
   startedAt: number;
+  dataDir?: string;
+  commit?: string;
   auth: V2Auth;
   hub: EventHub;
   pid?: number;
@@ -676,6 +681,7 @@ export function createV2Handler(opts: {
   const { serviceVersion, startedAt, auth, hub } = opts;
   const pid = opts.pid ?? process.pid;
   const demo = Boolean(opts.demo);
+  const clientLogLimiter = createClientLogLimiter();
   const hasActiveWork = opts.hasActiveWork ?? (() => false);
   return async (req, res, url) => {
     if (url.pathname !== '/api/v2' && !url.pathname.startsWith('/api/v2/')) return false;
@@ -710,6 +716,18 @@ export function createV2Handler(opts: {
       return true;
     }
 
+    if (await handleClientLogApi({
+      req,
+      res,
+      pathname,
+      method,
+      sendV2: (response, requestPath, requestMethod, status, body) => {
+        sendV2(response, requestPath, requestMethod, status, body as V2JsonBody);
+      },
+      readObjectBody,
+      limiter: clientLogLimiter,
+    })) return true;
+
     if (method === 'GET' && pathname === '/api/v2/service') {
       sendV2(res, pathname, method, 200, serviceInfo({ serviceVersion, startedAt, pid, demo }));
       return true;
@@ -727,6 +745,25 @@ export function createV2Handler(opts: {
       return true;
     }
 
+    if (await handleDiagnosticsApi({
+      req,
+      res,
+      pathname,
+      method,
+      sendV2: (response, requestPath, requestMethod, status, body) => {
+        sendV2(response, requestPath, requestMethod, status, body as V2JsonBody);
+      },
+      readObjectBody,
+      host: {
+        version: serviceVersion,
+        commit: opts.commit,
+        dataDir: opts.dataDir,
+        startedAt,
+        getSettings: opts.getSettings,
+        loadConversation: opts.loadConversation,
+      },
+    })) return true;
+
     if (method === 'POST' && pathname === '/api/v2/service/restart') {
       let busy = false;
       try {
@@ -741,7 +778,7 @@ export function createV2Handler(opts: {
         return true;
       }
       sendV2(res, pathname, method, 202, { exiting: true } satisfies RestartAccepted, () => {
-        console.log('WEFT_SERVICE_RESTART');
+        log.info('WEFT_SERVICE_RESTART', 'restart requested');
         opts.onRestart?.();
       });
       return true;
@@ -1219,7 +1256,7 @@ export function createV2Handler(opts: {
             if (cid) opts.notifyConversation?.(cid);
           }
         } catch (err) {
-          console.error('WEFT_V2_FILE_NOTIFY', err);
+          log.error('WEFT_V2_FILE_NOTIFY', '', err);
         }
         sendV2(res, pathname, method, 200, saved);
       } catch (err) {
@@ -1966,7 +2003,7 @@ export function createV2Handler(opts: {
             const child = await opts.loadSubagent(id, agentId);
             tool = findPresentedTool({ messages: child?.messages }, toolId);
           } catch (err) {
-            console.error(`WEFT_V2_TOOL_OUTPUT ${id} ${agentId}`, err);
+            log.error('WEFT_V2_TOOL_OUTPUT', `${id} ${agentId}`, err);
             continue;
           }
           if (tool) break;
@@ -2151,6 +2188,7 @@ export function createV2Runtime(opts: {
   serviceVersion: string;
   startedAt: number;
   dataDir: string;
+  commit?: string;
   pid?: number;
   now?: () => number;
   webCodeTtlMs?: number;
@@ -2266,7 +2304,7 @@ export function createV2Runtime(opts: {
         }
       }
     } catch (err) {
-      console.error('WEFT_V2_PROVIDERS_CONV_NOTIFY', err);
+      log.error('WEFT_V2_PROVIDERS_CONV_NOTIFY', '', err);
     }
   }
   function notifyProvidersChanged(): void {
@@ -2281,6 +2319,8 @@ export function createV2Runtime(opts: {
   const handleApi = createV2Handler({
     serviceVersion: opts.serviceVersion,
     startedAt: opts.startedAt,
+    dataDir: opts.dataDir,
+    commit: opts.commit,
     auth,
     hub,
     pid,

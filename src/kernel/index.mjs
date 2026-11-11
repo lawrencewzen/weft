@@ -5,6 +5,7 @@ import { fauxProvider } from '@earendil-works/pi-ai/providers/faux';
 import { Harness } from '@earendil-works/pi-durable';
 import { openNodeSqliteStorage } from '@earendil-works/pi-durable/storage/sqlite/node';
 import { migrateWeftIds } from './migrate-weft-ids.mjs';
+import { log } from '../core/log.mjs';
 
 const context = BACKGROUND_CONTEXT;
 
@@ -38,7 +39,7 @@ export function watchHarnessClosed(harness) {
   if (!harness || typeof harness.closed?.then !== 'function') return;
   harness.closed.then((end) => {
     if (end?.kind !== 'failed') return;
-    console.error(`WEFT_HARNESS_CLOSED ${formatClosedError(end.error)}`);
+    log.error('WEFT_HARNESS_CLOSED', formatClosedError(end.error), end.error instanceof Error ? end.error : undefined);
     process.exit(1);
   });
 }

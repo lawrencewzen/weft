@@ -4,6 +4,11 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { AboutPage } from './AboutPage';
+import { closeReportDialog, useReportDialog } from '../../data/reportDialog';
+
+function Probe() {
+  return <span data-testid="probe">{useReportDialog() ? 'open' : 'closed'}</span>;
+}
 
 let root: Root | null = null;
 let host: HTMLDivElement | null = null;
@@ -87,5 +92,20 @@ describe('AboutPage', () => {
 
     const links = Array.from(host?.querySelectorAll('a') ?? []).map((a) => a.getAttribute('href'));
     expect(links).toEqual(['https://github.com/lawrencewzen/weft']);
+  });
+
+  it('report button opens the report dialog without a conversation', async () => {
+    await render(
+      <>
+        <AboutPage lang="zh" service={{ serviceVersion: '0.2.0' }} />
+        <Probe />
+      </>,
+    );
+    expect(host?.querySelector('[data-testid="probe"]')?.textContent).toBe('closed');
+    await act(async () => {
+      (host?.querySelector('[data-testid="next-about-report"]') as HTMLElement).click();
+    });
+    expect(host?.querySelector('[data-testid="probe"]')?.textContent).toBe('open');
+    await act(async () => { closeReportDialog(); });
   });
 });

@@ -1,6 +1,8 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from '../src/App';
+import { ErrorBoundary } from '../src/components/ErrorBoundary';
+import { installClientLog } from '../src/data/clientLog';
 import { getPreferredLang } from '../src/data/lang';
 import { setAddressMode } from '../src/data/nav';
 import { applyDocumentPrefs } from '../src/data/prefs';
@@ -18,6 +20,7 @@ installBrandIcons();
 installMockBackend();
 installMockShell();
 applyDocumentPrefs({ lang: getPreferredLang() });
+installClientLog();
 
 document.documentElement.setAttribute('data-proto', '1');
 // `?shell=1` previews the desktop-shell layout (window buttons, drag regions). The buttons do nothing here.
@@ -30,6 +33,8 @@ if (!root) throw new Error('#root missing');
 
 createRoot(root).render(
   <StrictMode>
-    <App />
+    <ErrorBoundary>
+      <App />
+    </ErrorBoundary>
   </StrictMode>,
 );

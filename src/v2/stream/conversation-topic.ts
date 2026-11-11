@@ -49,6 +49,7 @@ import {
   TEXT_DELTA_MS,
   type TextLive,
 } from './text-delta.ts';
+import { log as serverLog, logLine } from '../../core/log.mjs';
 
 export const CONVERSATION_PREFIX = 'conversation:';
 export const COALESCE_MS = 50;
@@ -267,7 +268,7 @@ export function attachConversationTopic(hub: EventHub, opts: ConversationTopicOp
   const stuckAfterMs = opts.stuckAfterMs ?? resolveStuckAfterMs();
   const stallAfterMs = opts.stallAfterMs ?? resolveStallAfterMs();
   const log = opts.log ?? ((line: string) => {
-    console.log(line);
+    logLine('debug', line);
   });
   const states = new Map<string, TopicState>();
   const kernelUnsubs = new Map<string, () => void>();
@@ -528,7 +529,7 @@ export function attachConversationTopic(hub: EventHub, opts: ConversationTopicOp
       try {
         changeRows = changeViews(await opts.loadChanges(cid));
       } catch (err) {
-        console.error(`WEFT_V2_CONV_CHANGES ${cid}`, err);
+        serverLog.error('WEFT_V2_CONV_CHANGES', `${cid}`, err);
         changeRows = [];
       }
     }
@@ -653,7 +654,7 @@ export function attachConversationTopic(hub: EventHub, opts: ConversationTopicOp
     try {
       pair = await snapshotsFor(cid, state);
     } catch (err) {
-      console.error(`WEFT_V2_CONV_SNAPSHOT ${cid}`, err);
+      serverLog.error('WEFT_V2_CONV_SNAPSHOT', `${cid}`, err);
       return;
     }
     if (disposed || !kernelUnsubs.has(cid)) return;
@@ -926,7 +927,7 @@ export function attachConversationTopic(hub: EventHub, opts: ConversationTopicOp
     try {
       unsub?.();
     } catch (err) {
-      console.error(`WEFT_V2_CONV_UNSUB ${cid}`, err);
+      serverLog.error('WEFT_V2_CONV_UNSUB', `${cid}`, err);
     }
     opts.stuck?.release(cid);
     opts.stall?.release(cid);

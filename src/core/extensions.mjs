@@ -1,5 +1,6 @@
 import { buildSkillPrompt, loadSkillBody, unknownSkillError } from './skills.mjs';
 import { pluginHandlers } from './plugins.mjs';
+import { log } from './log.mjs';
 
 export function createExtensionHost({ skillDirs = [], pluginDirs = [], getSettings } = {}) {
   async function settings() {
@@ -14,7 +15,7 @@ export function createExtensionHost({ skillDirs = [], pluginDirs = [], getSettin
         const current = await settings();
         return await buildSkillPrompt(skillDirs, current.skills || {});
       } catch (err) {
-        console.error(`WEFT_EXTENSION ${err?.message || err}`);
+        log.error('WEFT_EXTENSION', '', err);
         return '';
       }
     },
@@ -23,7 +24,7 @@ export function createExtensionHost({ skillDirs = [], pluginDirs = [], getSettin
         const current = await settings();
         return await loadSkillBody(skillDirs, current.skills || {}, name);
       } catch (err) {
-        console.error(`WEFT_EXTENSION ${err?.message || err}`);
+        log.error('WEFT_EXTENSION', '', err);
         return { error: unknownSkillError(name, []) };
       }
     },
@@ -32,7 +33,7 @@ export function createExtensionHost({ skillDirs = [], pluginDirs = [], getSettin
         const current = await settings();
         return await pluginHandlers(pluginDirs, current.plugins || {});
       } catch (err) {
-        console.error(`WEFT_EXTENSION ${err?.message || err}`);
+        log.error('WEFT_EXTENSION', '', err);
         return [];
       }
     },

@@ -501,16 +501,15 @@ test('stop returns 2 when busy and 0 when idle; open busy-incompatible returns 2
   }
 });
 
-test('service.log ready line is UTF-8 Chinese, not GBK', { timeout: 60000 }, async () => {
+test('service.log is written as UTF-8 and has the ready line', { timeout: 60000 }, async () => {
   const dataDir = await mkdtemp(path.join(tmpdir(), 'weft-cli-utf8-log-'));
   try {
     const opened = await runWeft(['open', '--print', '--data-dir', dataDir]);
     assert.equal(opened.code, 0, opened.stderr);
     const log = readFileSync(path.join(dataDir, 'logs', 'service.log'));
-    const utf8 = Buffer.from('打开新版界面', 'utf8');
-    assert.equal(log.includes(utf8), true, log.toString('hex'));
-    assert.equal(log.toString('utf8').includes('打开新版界面'), true);
-    assert.equal(new TextDecoder('utf-8', { fatal: true }).decode(utf8).length, 6);
+    // The ready line is now the structured log line from src/core/log.mjs (T136), no longer Chinese prose.
+    const text = new TextDecoder('utf-8', { fatal: true }).decode(log);
+    assert.match(text, /\[WEFT_START\].*listening/, text);
   } finally {
     await forceStop(dataDir);
   }

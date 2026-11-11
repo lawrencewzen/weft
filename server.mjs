@@ -51,13 +51,8 @@ import { NOT_BUILT_HINT } from './src/v2/auth.ts';
 import { loadSubagentFromStore } from './src/v2/load-subagent.ts';
 import { phrase } from './src/v2/phrases/index.ts';
 import fs from 'node:fs/promises';
-
-// 内置 fetch 默认不读 HTTP(S)_PROXY；配置了代理时让模型请求也走它（遵守 NO_PROXY）
-const PROXY_ENV = ['HTTPS_PROXY', 'https_proxy', 'HTTP_PROXY', 'http_proxy'].some((k) => String(process.env[k] || '').trim());
-if (PROXY_ENV && process.env.NODE_USE_ENV_PROXY !== '1') {
-  if (typeof http.setGlobalProxyFromEnv === 'function') http.setGlobalProxyFromEnv();
-  else console.warn('WEFT_WARN 检测到代理环境变量，但当前 Node 不支持 http.setGlobalProxyFromEnv，请以 NODE_USE_ENV_PROXY=1 启动');
-}
+import { log, installProcessHandlers, trackHttp } from './src/core/log.mjs';
+import { readGitCommit } from './src/core/git-commit.mjs';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_NEXT = path.join(ROOT, 'public-next');
@@ -69,14 +64,25 @@ const SKILL_DIRS = [path.join(ROOT, 'skills'), path.join(DATA_DIR, 'skills')];
 const PLUGIN_DIRS = [path.join(ROOT, 'plugins'), path.join(DATA_DIR, 'plugins')];
 const USER_SKILLS = path.join(DATA_DIR, 'skills');
 const USER_PLUGINS = path.join(DATA_DIR, 'plugins');
+log.configure({ dataDir: DATA_DIR });
+installProcessHandlers();
+
+// 内置 fetch 默认不读 HTTP(S)_PROXY；配置了代理时让模型请求也走它（遵守 NO_PROXY）
+const PROXY_ENV = ['HTTPS_PROXY', 'https_proxy', 'HTTP_PROXY', 'http_proxy'].some((k) => String(process.env[k] || '').trim());
+if (PROXY_ENV && process.env.NODE_USE_ENV_PROXY !== '1') {
+  if (typeof http.setGlobalProxyFromEnv === 'function') http.setGlobalProxyFromEnv();
+  else log.warn('WEFT_WARN', '检测到代理环境变量，但当前 Node 不支持 http.setGlobalProxyFromEnv，请以 NODE_USE_ENV_PROXY=1 启动');
+}
+
 await fs.mkdir(DATA_DIR, { recursive: true });
 const v2Opts = {
   serviceVersion: String(pkg.version || '0.0.0'),
   startedAt,
   dataDir: DATA_DIR,
+  commit: gitCommit(),
   demo: envRequestsFaux(),
   hasActiveWork: () => kernelApi?.hasActiveWork?.() ?? false,
-  onRestart: () => shutdown(),
+  onRestart: () => shutdown('restart'),
   async loadConversation(id) {
     if (!kernelApi) return null;
     const conv = await store.getConversation(id);
@@ -88,7 +94,7 @@ const v2Opts = {
     try {
       turnChanges = kernelApi.turnChanges ? await kernelApi.turnChanges(id) : [];
     } catch (err) {
-      console.error(`WEFT_TURN_CHANGES ${err instanceof Error ? err.message : err}`);
+      log.error('WEFT_TURN_CHANGES', '', err);
       turnChanges = [];
     }
     return {
@@ -292,7 +298,7 @@ let dataLock;
 try {
   dataLock = await acquireDataDirLock(DATA_DIR);
 } catch (err) {
-  console.error(`WEFT_ERROR ${err.message || err}`);
+  log.error('WEFT_ERROR', '', err);
   process.exit(1);
 }
 
@@ -504,14 +510,16 @@ async function reloadKernelPlugins() {
   try {
     await kernelApi.reloadPlugins();
   } catch (err) {
-    console.error(`WEFT_KERNEL_PLUGIN ${err instanceof Error ? err.message : err}`);
+    log.error('WEFT_KERNEL_PLUGIN', '', err);
   }
 }
 
 let shuttingDown = false;
-function shutdown() {
+let stopReason = '';
+function shutdown(reason = 'stop') {
   if (shuttingDown) return;
   shuttingDown = true;
+  stopReason = typeof reason === 'string' && reason ? reason : 'stop';
   try { v2.removeDiscoveryFile(); } catch { /* ignore */ }
   try { v2.dispose(); } catch { /* ignore */ }
   try { store.close(); } catch { /* ignore */ }
@@ -523,7 +531,8 @@ function shutdown() {
   }
   kernelApi.close().finally(() => process.exit(0));
 }
-process.on('exit', () => {
+process.on('exit', (code) => {
+  log.info('WEFT_STOP', 'exit', { reason: stopReason || 'exit', code, uptimeSec: Math.round(process.uptime()) });
   try { v2.removeDiscoveryFile(); } catch { /* ignore */ }
   try { dataLock?.release?.(); } catch { /* ignore */ }
 });
@@ -533,10 +542,10 @@ for (const sig of ['SIGINT', 'SIGTERM']) {
 // Tests spawn with a pipe on stdin (Windows cannot deliver SIGTERM). Closing
 // that pipe is the portable graceful-exit path; interactive TTY is unchanged.
 if (String(process.env.WEFT_STDIN_EXIT || '').trim() === '1') {
-  process.stdin.on('end', shutdown);
+  process.stdin.on('end', () => shutdown('stdin-closed'));
   process.stdin.on('error', () => {});
   process.stdin.resume();
-  if (process.stdin.readableEnded) shutdown();
+  if (process.stdin.readableEnded) shutdown('stdin-closed');
 }
 
 await ensureSettings();
@@ -575,11 +584,12 @@ try {
     },
   });
 } catch (err) {
-  console.error(`WEFT_KERNEL_OPEN_FAILED ${err instanceof Error ? err.message : err}`);
+  log.error('WEFT_KERNEL_OPEN_FAILED', '', err);
   process.exit(1);
 }
 
 const server = createServer(async (req, res) => {
+  trackHttp(req, res);
   try {
     const port = boundPort();
     if (!hostAllowed(req.headers.host, port)) {
@@ -649,6 +659,7 @@ const server = createServer(async (req, res) => {
     sendJson(res, 404, { error: 'not found' });
   } catch (err) {
     const status = err.status || (err.code === 'E_SANDBOX' ? 403 : 500);
+    if (status >= 500) log.error('WEFT_HTTP', 'unhandled request error', { method: req.method, path: String(req.url || '/').split('?')[0] }, err);
     if (!res.headersSent) {
       if (err.code === 'E_SANDBOX') sendJson(res, 403, { error: 'E_SANDBOX' });
       else sendJson(res, status, { error: err.message || 'server error' });
@@ -1364,12 +1375,30 @@ async function routeApi(req, res, url) {
   sendJson(res, 404, { error: 'not found' });
 }
 
+function gitCommit() {
+  return readGitCommit(ROOT);
+}
+
+function logStartup(port) {
+  log.info('WEFT_START', 'listening', {
+    version: String(pkg.version || '0.0.0'),
+    commit: gitCommit(),
+    node: process.version,
+    platform: `${process.platform}-${process.arch}`,
+    pid: process.pid,
+    port,
+    dataDir: DATA_DIR,
+    level: log.level,
+    startupMs: Math.round(process.uptime() * 1000),
+  });
+}
+
 server.on('error', (err) => {
   const code = err && typeof err === 'object' && 'code' in err ? err.code : '';
   if (code === 'EADDRINUSE') {
-    console.error(`WEFT_ERROR EADDRINUSE 127.0.0.1:${PORT}`);
+    log.error('WEFT_ERROR', `EADDRINUSE 127.0.0.1:${PORT}`);
   } else {
-    console.error(`WEFT_ERROR ${err instanceof Error ? err.message : err}`);
+    log.error('WEFT_ERROR', '', err);
   }
   process.exit(1);
 });
@@ -1379,11 +1408,12 @@ server.listen(PORT, '127.0.0.1', () => {
   try {
     v2.writeDiscoveryFile(port);
   } catch (err) {
-    console.error(`WEFT_ERROR discovery write failed: ${err instanceof Error ? err.message : err}`);
+    log.error('WEFT_ERROR', 'discovery write failed', err);
     process.exit(1);
   }
   const hostWarning = unauthenticatedHostsWarning();
-  if (hostWarning) console.warn(hostWarning);
+  if (hostWarning) log.warn('WEFT_WARN', hostWarning.replace(/^WEFT_WARN /, ''));
+  logStartup(port);
   const loginUrl = v2.issueStartupLoginUrl(port);
   process.stdout.write(`WEFT_READY http://127.0.0.1:${port}\n打开新版界面：${loginUrl}\n`);
 });

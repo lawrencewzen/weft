@@ -15,6 +15,7 @@ import { ChangeSummary } from './ChangeSummary';
 import { DispatchCard } from './DispatchCard';
 import { SubagentReport } from './SubagentReport';
 import { ContextDividerPending } from './ContextDivider';
+import { openReportDialog } from '../data/reportDialog';
 import { SystemNote } from './SystemNote';
 import { ToolGroup } from './ToolGroup';
 import { UserMessage } from './UserMessage';
@@ -428,6 +429,16 @@ export function Thread({
           >
             <div className="llm-error-text">
               <span>{error.message}</span>
+              {conversationId ? (
+                <button
+                  type="button"
+                  className="llm-error-report"
+                  data-testid="next-run-report"
+                  onClick={() => openReportDialog({ conversationId })}
+                >
+                  {t(lang, 'report_link')}
+                </button>
+              ) : null}
               {continueError ? <span className="llm-error-inline-err">{continueError}</span> : null}
             </div>
             {error.canContinue ? (

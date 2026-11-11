@@ -28,6 +28,7 @@ import {
   TOOL_DELTA_MS,
   type ToolLive,
 } from './tool-delta.ts';
+import { log as serverLog, logLine } from '../../core/log.mjs';
 
 export const SUBAGENT_PREFIX = 'subagent:';
 
@@ -144,7 +145,7 @@ export function attachSubagentTopic(hub: EventHub, opts: SubagentTopicOpts = {})
   const now = opts.now ?? Date.now;
   const stuckAfterMs = opts.stuckAfterMs ?? resolveStuckAfterMs();
   const log = opts.log ?? ((line: string) => {
-    console.log(line);
+    logLine('debug', line);
   });
   const states = new Map<TopicKey, TopicState>();
   const kernelUnsubs = new Map<string, { count: number; unsub: () => void }>();
@@ -330,7 +331,7 @@ export function attachSubagentTopic(hub: EventHub, opts: SubagentTopicOpts = {})
     try {
       pair = await snapshotsFor(cid, agentId);
     } catch (err) {
-      console.error(`WEFT_V2_SUBAGENT_SNAPSHOT ${cid} ${agentId}`, err);
+      serverLog.error('WEFT_V2_SUBAGENT_SNAPSHOT', `${cid} ${agentId}`, err);
       return;
     }
     if (disposed || !kernelUnsubs.has(cid)) return;
@@ -517,7 +518,7 @@ export function attachSubagentTopic(hub: EventHub, opts: SubagentTopicOpts = {})
     try {
       existing.unsub();
     } catch (err) {
-      console.error(`WEFT_V2_SUBAGENT_UNSUB ${cid}`, err);
+      serverLog.error('WEFT_V2_SUBAGENT_UNSUB', `${cid}`, err);
     }
     opts.stuck?.release(cid);
     log(`WEFT_V2_SUBAGENT_UNSUB ${cid}`);

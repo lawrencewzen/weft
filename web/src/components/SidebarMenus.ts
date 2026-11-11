@@ -49,10 +49,11 @@ export interface ConversationMenuOpts {
   copy: (text: string) => Promise<void>;
   onArchive: (conv: ConversationSummary, archived: boolean) => void | Promise<void>;
   onDelete: (conv: ConversationSummary) => void | Promise<void>;
+  onReport?: (conv: ConversationSummary) => void;
 }
 
 export function buildConversationItems(opts: ConversationMenuOpts): CtxMenuItem[] {
-  const { lang, wsId, conv, openConversation, copy, onArchive, onDelete } = opts;
+  const { lang, wsId, conv, openConversation, copy, onArchive, onDelete, onReport } = opts;
   const items: CtxMenuItem[] = [];
   const isRunning = conv.status === 'running';
   const disabledHint = isRunning ? t(lang, 'stop_conversation_first') : undefined;
@@ -75,6 +76,13 @@ export function buildConversationItems(opts: ConversationMenuOpts): CtxMenuItem[
     action: 'copy-id',
     run: () => { void copy(conv.id); },
   });
+  if (onReport) {
+    items.push({
+      label: t(lang, 'report_conversation'),
+      action: 'report',
+      run: () => onReport(conv),
+    });
+  }
   items.push({ sep: true });
   items.push({
     label: conv.archived ? t(lang, 'unarchive_conversation') : t(lang, 'archive_conversation'),

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
 import { ApiError, archiveConversation, deleteConversation } from '../data/api';
 import { copyText } from '../data/copyText';
+import { openReportDialog } from '../data/reportDialog';
 import type { Lang } from '../data/lang';
 import { readActiveWorkspace, readWorkspaceOpen, writeActiveWorkspace, writeWorkspaceOpen } from '../data/layout';
 import { conversationPath, draftPath, navigate, newChatPath, openSettings, schedulesPath } from '../data/nav';
@@ -283,6 +284,7 @@ export function Sidebar({
       copy,
       onArchive: handleArchive,
       onDelete: handleDelete,
+      onReport: (c) => openReportDialog({ conversationId: c.id }),
     })
   ), [copy, handleArchive, handleDelete, lang, openConversation]);
 
