@@ -207,7 +207,7 @@ export function createGrepTool({ ripgrep = () => resolveRipgrep(), limit = GREP_
         const rel = path.relative(env.cwd, root);
         const target = rel === '' ? '.' : (rel.startsWith('..') || path.isAbsolute(rel) ? root : rel);
         const rgArgs = [
-          '--json', '--no-config', '--hidden', '--no-require-git', '--sort', 'path',
+          '--json', '--no-config', '--hidden', '--no-require-git',
           '--glob', '!.git',
           ...(args.glob ? ['--glob', args.glob] : []),
           ...(args.ignoreCase ? ['-i'] : []),
@@ -229,6 +229,8 @@ export function createGrepTool({ ripgrep = () => resolveRipgrep(), limit = GREP_
       }
       if (!found) found = await scanWithoutRipgrep({ env, root, args, context, limit, deadline });
 
+      // rg runs multi-threaded, so hits arrive in any order: sort them for a stable result.
+      found.hits.sort((a, b) => (a.file < b.file ? -1 : a.file > b.file ? 1 : a.line - b.line));
       const byFile = new Map();
       for (const hit of found.hits) {
         const file = path.resolve(env.cwd, hit.file);

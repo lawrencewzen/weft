@@ -85,6 +85,16 @@ test('rg: honours .gitignore, skips binaries and .git, supports glob/ignoreCase/
   await assert.rejects(run(tool, { pattern: '(unclosed', path: 'keep.txt' }, f.api), /ripgrep:.*literal/s);
 });
 
+test('rg: results come back sorted by path and line', needRg, async (t) => {
+  const f = await fixture(t);
+  for (const name of ['z.txt', 'm.txt', 'a.txt', 'k.txt']) await f.put(name, Array.from({ length: 20 }, () => 'hit').join('\n') + '\n');
+  const rows = linesOf(await run(createGrepTool(), { pattern: 'hit' }, f.api)).map((l) => ANCHOR.exec(l));
+  const keys = rows.map((m) => [m[1], Number(m[2])]);
+  const sorted = [...keys].sort((x, y) => (x[0] < y[0] ? -1 : x[0] > y[0] ? 1 : x[1] - y[1]));
+  assert.deepEqual(keys, sorted);
+  assert.equal(keys.length, 80);
+});
+
 test('rg: result count is capped and the notice says to narrow', needRg, async (t) => {
   const f = await fixture(t);
   await f.put('many.txt', Array.from({ length: 500 }, (_, i) => `hit ${i}`).join('\n') + '\n');
