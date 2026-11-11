@@ -3,6 +3,7 @@
 // stay small. Not a scheduler; createPowerShellTool still owns execution.
 import { existsSync } from 'node:fs';
 import path from 'node:path';
+import { bundledToolDirs, bundledToolPath, prependPath } from './bundled-tools.mjs';
 
 /**
  * Must match `@earendil-works/pi-durable` `createPowerShellTool` (`UTF8_OUTPUT`
@@ -86,8 +87,17 @@ function setEnv(out, name, value) {
  * @param {Record<string, string>} [env]
  * @returns {Record<string, string>}
  */
-export function windowsChildEnv(env = {}) {
+export function windowsChildEnv(env = {}, options = {}) {
   const out = { ...env };
+  // Bundled rg / pwsh first on PATH, so `rg` and `pwsh` in a command resolve to them.
+  const toolDirs = options.toolDirs ?? bundledToolDirs();
+  if (toolDirs.length) {
+    prependPath(out, toolDirs);
+    if (toolDirs.some((dir) => path.basename(dir).toLowerCase() === 'pwsh')) {
+      setEnv(out, 'POWERSHELL_UPDATECHECK', 'Off');
+      setEnv(out, 'POWERSHELL_TELEMETRY_OPTOUT', '1');
+    }
+  }
   setEnv(out, 'PYTHONUTF8', '1');
   setEnv(out, 'PYTHONIOENCODING', 'utf-8');
   setEnv(out, 'LESSCHARSET', 'utf-8');
@@ -149,7 +159,22 @@ export function findWindowsExecutable(name, env = process.env, options = {}) {
   return null;
 }
 
-/** `pwsh.exe` when it exists on PATH; otherwise null. */
+/**
+ * pwsh to spawn: the bundled tools\\pwsh\\pwsh.exe (absolute path) first, then
+ * `pwsh.exe` when it is on PATH, otherwise null.
+ * `options.platform` / `appRoot` / `exists` are for tests.
+ */
 export function windowsPwshExecutable(env = process.env, options = {}) {
+  const bundled = bundledToolPath('pwsh', options);
+  if (bundled) return bundled;
   return findWindowsExecutable('pwsh', env, options);
+}
+
+/**
+ * Programs the Agent powershell tool tries in order: bundled pwsh by absolute
+ * path (when present), then the library defaults `pwsh` and `powershell`.
+ */
+export function agentPowerShellPrograms(options = {}) {
+  const bundled = bundledToolPath('pwsh', options);
+  return bundled ? [bundled, 'pwsh', 'powershell'] : ['pwsh', 'powershell'];
 }

@@ -14,6 +14,7 @@ import {
 } from '@earendil-works/pi-durable/tools';
 import { diffStats, splitLines } from '../core/diff.mjs';
 import {
+  agentPowerShellPrograms,
   agentShellKind,
   powershellCommandPrefix,
   windowsChildEnv,
@@ -320,6 +321,7 @@ export function createAgentShellTool(kind = agentShellKind()) {
   if (cached) return cached;
   const tool = kind === 'powershell'
     ? wrapCommandTool(createPowerShellTool({
+      programs: agentPowerShellPrograms(),
       commandPrefix: powershellCommandPrefix,
       prepare(execution) {
         applyBashEnvAllowlist(execution);

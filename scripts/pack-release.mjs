@@ -178,7 +178,7 @@ export function readmeText(version) {
     '',
     '四、升级',
     '1. 双击 Weft-stop.cmd，确认服务已经停掉。',
-    '2. 用新的压缩包解压，替换整个程序文件夹（Weft.exe、webview2、Weft.cmd、Weft-stop.cmd、README.txt、node、app 一起换）。',
+    '2. 用新的压缩包解压，替换整个程序文件夹（Weft.exe、webview2、tools、Weft.cmd、Weft-stop.cmd、README.txt、node、app 一起换）。',
     '数据在 %APPDATA%\\Weft，不在程序文件夹里。替换程序不会改动已有数据。',
     '',
     '五、地址和端口',
@@ -191,6 +191,7 @@ export function readmeText(version) {
     '',
     '六、说明',
     '随包的 node\\node.exe 是 Node.js 官方 Windows x64 程序。',
+    '随包的 tools\\rg\\rg.exe（ripgrep）和 tools\\pwsh\\pwsh.exe（PowerShell 7）供 Weft 自己和 Agent 命令使用，优先于系统里装的同名程序；许可证在 tools\\licenses。',
     '本包不包含 Git。使用「导入 Git 仓库」需要本机另外安装 Git（Git for Windows 会提供 git.exe）。',
     '',
   ];
@@ -816,9 +817,11 @@ export async function copyShell(shellDir, stage) {
   if (!(await stat(path.join(src, 'webview2', 'msedgewebview2.exe')).catch(() => null))) {
     throw new Error(`壳产物目录里没有 webview2\\msedgewebview2.exe（WebView2 固定版运行库）：${src}`);
   }
+  const toolsDir = path.join(src, 'tools') + path.sep;
   await cp(src, stage, {
     recursive: true,
-    filter: (from) => !/\.(pdb|xml)$/i.test(from),
+    // Drop .pdb/.xml from the shell build only; tools\ (ripgrep, PowerShell 7) is copied as is.
+    filter: (from) => from.startsWith(toolsDir) || !/\.(pdb|xml)$/i.test(from),
   });
 }
 

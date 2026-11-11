@@ -97,6 +97,59 @@ jobs:
           if (-not (Test-Path -LiteralPath (Join-Path $dest 'msedgewebview2.exe'))) { throw 'msedgewebview2.exe missing after expand' }
           Write-Host "webview2 expanded: $dest"
 
+      - name: Add bundled tools (ripgrep, PowerShell 7)
+        shell: pwsh
+        env:
+          # ripgrep: latest stable at the time of writing. URL and SHA256 are pinned; bump both together.
+          RG_VERSION: "15.2.0"
+          RG_URL: "https://github.com/BurntSushi/ripgrep/releases/download/15.2.0/ripgrep-15.2.0-x86_64-pc-windows-msvc.zip"
+          RG_SHA256: "71b2fef860abe467217a538ff31de02f5258807c0129f771846f87bd029aafc5"
+          # PowerShell 7.6.x is the current LTS line (.NET 10, supported to Nov 2028; 7.4 LTS is .NET 8 and reaches
+          # end of support in Nov 2026). 7.6.10 is the latest stable 7.6 patch release. Windows 10 1607+ is supported.
+          PWSH_VERSION: "7.6.10"
+          PWSH_URL: "https://github.com/PowerShell/PowerShell/releases/download/v7.6.10/PowerShell-7.6.10-win-x64.zip"
+          PWSH_SHA256: "7d871531806eb1646264e4bbabd9f0c30c23355591bc756bb9909448c29ae166"
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $tools = 'desktop/win/publish/tools'
+          if (Test-Path -LiteralPath $tools) { Remove-Item -LiteralPath $tools -Recurse -Force }
+          New-Item -ItemType Directory -Path $tools, "$tools/licenses" | Out-Null
+
+          function Get-Verified([string]$url, [string]$sha, [string]$name) {
+            $file = Join-Path $env:RUNNER_TEMP $name
+            Invoke-WebRequest -Uri $url -OutFile $file -UseBasicParsing
+            $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $file).Hash.ToLower()
+            Write-Host "$name bytes=$((Get-Item $file).Length) sha256=$hash"
+            if ($hash -ne $sha) { throw "$name sha256 mismatch: $hash (expected $sha)" }
+            return $file
+          }
+
+          # ripgrep: rg.exe + licenses
+          $rgZip = Get-Verified $env:RG_URL $env:RG_SHA256 'ripgrep.zip'
+          $rgTmp = Join-Path $env:RUNNER_TEMP 'ripgrep-expand'
+          if (Test-Path -LiteralPath $rgTmp) { Remove-Item -LiteralPath $rgTmp -Recurse -Force }
+          Expand-Archive -LiteralPath $rgZip -DestinationPath $rgTmp
+          $rgInner = Get-ChildItem -LiteralPath $rgTmp -Directory | Select-Object -First 1
+          New-Item -ItemType Directory -Path "$tools/rg" | Out-Null
+          Copy-Item -LiteralPath (Join-Path $rgInner.FullName 'rg.exe') -Destination "$tools/rg/rg.exe"
+          foreach ($lic in @('COPYING', 'LICENSE-MIT', 'UNLICENSE')) {
+            Copy-Item -LiteralPath (Join-Path $rgInner.FullName $lic) -Destination "$tools/licenses/ripgrep-$lic.txt"
+          }
+
+          # PowerShell 7: the whole zip goes to tools\pwsh
+          $psZip = Get-Verified $env:PWSH_URL $env:PWSH_SHA256 'powershell.zip'
+          Expand-Archive -LiteralPath $psZip -DestinationPath "$tools/pwsh"
+          foreach ($f in @('LICENSE.txt', 'ThirdPartyNotices.txt')) {
+            Copy-Item -LiteralPath (Join-Path "$tools/pwsh" $f) -Destination "$tools/licenses/powershell-$f"
+          }
+
+          foreach ($need in @('rg/rg.exe', 'pwsh/pwsh.exe', 'licenses/ripgrep-LICENSE-MIT.txt', 'licenses/powershell-LICENSE.txt')) {
+            if (-not (Test-Path -LiteralPath (Join-Path $tools $need))) { throw "tools/$need missing" }
+          }
+          $rgSize = (Get-ChildItem -LiteralPath "$tools/rg" -Recurse -File | Measure-Object Length -Sum).Sum
+          $psSize = (Get-ChildItem -LiteralPath "$tools/pwsh" -Recurse -File | Measure-Object Length -Sum).Sum
+          Write-Host ("tools unpacked: rg {0:N1} MB, pwsh {1:N1} MB" -f ($rgSize / 1MB), ($psSize / 1MB))
+
       - name: Pack portable zip
         run: node scripts/pack-release.mjs --platform win-x64 --shell desktop/win/publish --out dist
 
@@ -190,11 +243,29 @@ jobs:
             throw "execPath $execFull is outside $rootFull"
           }
 
+          # Bundled tools: present, runnable from a path with spaces and Chinese, and picked up by doctor.
+          foreach ($tool in @('tools\rg\rg.exe', 'tools\pwsh\pwsh.exe', 'tools\licenses\ripgrep-LICENSE-MIT.txt', 'tools\licenses\powershell-LICENSE.txt')) {
+            if (-not (Test-Path -LiteralPath (Join-Path $root $tool))) { throw "missing $tool" }
+          }
+          Write-Host '--- bundled tools ---'
+          $rgOut = (& (Join-Path $root 'tools\rg\rg.exe') --version 2>&1 | ForEach-Object { "$_" }) -join "`n"
+          Write-Host "rg --version:`n$rgOut"
+          if ($LASTEXITCODE -ne 0 -or $rgOut -notmatch 'ripgrep 15\.2\.0') { throw 'bundled rg.exe did not run' }
+          $psOut = (& (Join-Path $root 'tools\pwsh\pwsh.exe') -NoProfile -Command '$PSVersionTable.PSVersion' 2>&1 | ForEach-Object { "$_" }) -join "`n"
+          Write-Host "pwsh `$PSVersionTable.PSVersion:`n$psOut"
+          if ($LASTEXITCODE -ne 0 -or $psOut -notmatch '7\s+6\s+10') { throw 'bundled pwsh.exe did not run' }
+
           $env:Path = (($env:Path -split ';' | Where-Object { $_ -and ($_ -notmatch '(?i)node') }) -join ';')
           $data = Join-Path (Get-Location) 'smoke-data'
           if (Test-Path -LiteralPath $data) { Remove-Item -LiteralPath $data -Recurse -Force }
           New-Item -ItemType Directory -Path $data | Out-Null
           $env:WEFT_DATA_DIR = $data
+
+          Write-Host '--- weft doctor (bundled tools) ---'
+          $docText = (& $node (Join-Path $root 'app\bin\weft.mjs') doctor 2>&1 | ForEach-Object { "$_" }) -join "`n"
+          Write-Host $docText
+          if ($docText -notmatch '(?m)^rg: 来源 bundled，.*ripgrep 15\.2\.0') { throw 'doctor did not report the bundled rg' }
+          if ($docText -notmatch '(?m)^pwsh: 来源 bundled，.*7\.6\.10') { throw 'doctor did not report the bundled pwsh' }
 
           function Show-ServiceLog {
             $log = Join-Path $env:WEFT_DATA_DIR 'logs\service.log'
@@ -383,7 +454,7 @@ jobs:
             try { & .\node\node.exe .\app\bin\weft.mjs status 2>&1 | Out-Null; return ($LASTEXITCODE -eq 0) } finally { Pop-Location }
           }
           function Assert-Installed([string]$dir) {
-            foreach ($f in @('Weft.exe', 'node\node.exe', 'app\bin\weft.mjs', 'Weft.cmd', 'Weft-stop.cmd', 'uninstall.exe', 'install-manifest.json')) {
+            foreach ($f in @('Weft.exe', 'node\node.exe', 'app\bin\weft.mjs', 'Weft.cmd', 'Weft-stop.cmd', 'uninstall.exe', 'install-manifest.json', 'tools\rg\rg.exe', 'tools\pwsh\pwsh.exe', 'tools\licenses\ripgrep-LICENSE-MIT.txt', 'tools\licenses\powershell-LICENSE.txt')) {
               Assert-True (Test-Path -LiteralPath (Join-Path $dir $f)) "missing $f"
             }
             $m = Get-Content -LiteralPath (Join-Path $dir 'install-manifest.json') -Raw -Encoding UTF8 | ConvertFrom-Json
@@ -393,7 +464,7 @@ jobs:
               Assert-True ((Get-Item -LiteralPath $p).Length -eq $f.size) "size differs: $($f.path)"
             }
             # 抽查哈希：node.exe 和入口脚本
-            foreach ($f in @($m.files | Where-Object { $_.path -in @('node/node.exe', 'app/bin/weft.mjs', 'Weft.exe') })) {
+            foreach ($f in @($m.files | Where-Object { $_.path -in @('node/node.exe', 'app/bin/weft.mjs', 'Weft.exe', 'tools/rg/rg.exe', 'tools/pwsh/pwsh.exe') })) {
               $h = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $dir ($f.path -replace '/', '\'))).Hash.ToLower()
               Assert-True ($h -eq $f.sha256) "sha256 differs: $($f.path)"
             }
