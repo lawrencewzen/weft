@@ -740,18 +740,34 @@ export function toolResultHint(
   if (bucket === 'running') return { text: '', failed: false };
 
   if (kind === 'read') {
-    return { text: t('tool_hint_lines', { n: outputLineCount(parsed.text) }), failed: false };
+    return { text: t('tool_hint_lines', { n: outputLineCount(withoutHarnessBlocks(parsed.text)) }), failed: false };
   }
   if (kind === 'ls') {
     return { text: t('tool_hint_items', { n: nonemptyLines(parsed.text).length }), failed: false };
   }
   if (kind === 'grep') {
-    return { text: t('tool_hint_matches', { n: nonemptyLines(parsed.text).length }), failed: false };
+    return { text: t('tool_hint_matches', { n: nonemptyLines(withoutHarnessBlocks(parsed.text)).length }), failed: false };
   }
   if (kind === 'bash') {
     return bashSuccessHint(tool, t);
   }
   return { text: '', failed: false };
+}
+
+/** Text without Pi Durable's `<harness>…</harness>` notice blocks (paging and truncation notes). */
+function withoutHarnessBlocks(text: unknown): string {
+  const out: string[] = [];
+  let inside = false;
+  for (const line of String(text ?? '').split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (HARNESS_TAG.test(trimmed)) {
+      inside = trimmed === '<harness>';
+      continue;
+    }
+    if (!inside) out.push(line);
+  }
+  while (out.length && out[out.length - 1] === '') out.pop();
+  return out.join('\n');
 }
 
 /** Keep the first `limit` lines unless the caller asked for the full text. */

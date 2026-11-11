@@ -62,10 +62,16 @@ jobs:
         shell: bash
         run: node bin/weft.mjs doctor
 
-  e2e:
-    name: e2e
+  # e2e 按文件分 5 片并行（workers 仍是 1，每片一台机器）。
+  # 必需检查名是 e2e，由下面的汇总 job 提供，分片 job 的名字不进分支保护。
+  e2e-shard:
+    name: e2e-shard (${{ matrix.shard }}/5)
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5]
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -73,18 +79,47 @@ jobs:
           node-version: "22"
           cache: npm
       - run: npm ci
-      - run: npx playwright install --with-deps chromium
+      - name: Resolve Playwright version
+        id: pw
+        run: |
+          v=$(node -p "require('@playwright/test/package.json').version")
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+      - name: Cache Playwright browsers
+        id: pw-cache
+        uses: actions/cache@v5
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}-chromium
+      - name: Install Playwright chromium
+        if: steps.pw-cache.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps chromium
+      - name: Install Playwright system deps
+        if: steps.pw-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
       - name: Build interactive prototype
         run: npm run build:proto
-      - name: Playwright e2e
-        run: npm run test:e2e
+      - name: Playwright e2e (shard ${{ matrix.shard }}/5)
+        run: npm run test:e2e -- --shard=${{ matrix.shard }}/5
       - name: Upload Playwright report
         if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: e2e-artifacts
+          name: e2e-artifacts-shard-${{ matrix.shard }}
           path: |
             playwright-report/
             test-results/
           if-no-files-found: ignore
           retention-days: 7
+
+  # 汇总：保持必需检查名 e2e 不变。分片全部成功才成功。
+  e2e:
+    name: e2e
+    runs-on: ubuntu-latest
+    needs: e2e-shard
+    if: always()
+    timeout-minutes: 5
+    steps:
+      - name: Check shard results
+        run: |
+          echo "e2e-shard result: ${{ needs.e2e-shard.result }}"
+          [ "${{ needs.e2e-shard.result }}" = "success" ]
