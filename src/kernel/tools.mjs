@@ -1,24 +1,21 @@
 // Workspace tools for the Pi Durable kernel.
-// read/write/edit/bash are official Pi Durable tools. ls and grep use the
+// write/bash are official Pi Durable tools. read/edit are hashline versions
+// (hashline-tools.mjs) and grep is ripgrep-backed (grep-tool.mjs); ls uses the
 // conversation ExecutionEnv. Path checks live only in workspace-env.mjs.
 import path from 'node:path';
 import { obj, opt, str } from '@earendil-works/pi-schema';
 import { defineExtension, defineTool, GenerationTask, hook, ToolTask } from '@earendil-works/pi-durable';
 import { FileError, getOrThrow } from '@earendil-works/pi-durable/env';
-import {
-  createBashTool,
-  createEditTool,
-  createReadTool,
-  createWriteTool,
-} from '@earendil-works/pi-durable/tools';
+import { createBashTool, createWriteTool } from '@earendil-works/pi-durable/tools';
 import { diffStats, splitLines } from '../core/diff.mjs';
 import { applyBashEnvAllowlist } from './bash-env.mjs';
+import { createGrepTool } from './grep-tool.mjs';
 import { createHandoffTool } from './handoff.mjs';
+import { createHashlineEditTool, createHashlineReadTool } from './hashline-tools.mjs';
 import { EXT_WORKSPACE } from './ids.mjs';
 import { log } from '../core/log.mjs';
 
 const DETAIL_CAP = 1024 * 1024;
-const SKIP_DIR_NAMES = new Set(['.git', 'node_modules']);
 
 export const DEFAULT_BASH_TIMEOUT_SECONDS = 600;
 /** The official bash tool refuses anything above 2_147_483_647 ms. */
@@ -203,37 +200,6 @@ function requireEnv(api) {
   return api.env;
 }
 
-function displayPath(cwd, filePath) {
-  const rel = path.relative(cwd, filePath);
-  const text = (!rel || rel.startsWith('..') || path.isAbsolute(rel)) ? filePath : rel;
-  return String(text).replaceAll('\\', '/');
-}
-
-function matchGlob(file, glob) {
-  if (!glob) return true;
-  const escaped = glob.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*\*/g, '::DS::').replace(/\*/g, '[^/]*').replace(/::DS::/g, '.*');
-  return new RegExp(`^${escaped}$`).test(file) || new RegExp(`${escaped}$`).test(file);
-}
-
-async function collectFiles(env, start, context, acc) {
-  const info = getOrThrow(await env.fileInfo(start, context));
-  if (info.kind === 'directory') {
-    const listing = getOrThrow(await env.listDir(start, context));
-    for (const entry of listing) {
-      if (SKIP_DIR_NAMES.has(entry.name)) continue;
-      const child = await env.joinPath([start, entry.name], context);
-      if (!child.ok) continue;
-      try {
-        await collectFiles(env, child.value, context, acc);
-      } catch {
-        continue;
-      }
-    }
-    return;
-  }
-  acc.push(start);
-}
-
 function createLsTool() {
   return defineTool({
     name: 'ls',
@@ -256,47 +222,10 @@ function createLsTool() {
   });
 }
 
-function createGrepTool() {
-  return defineTool({
-    name: 'grep',
-    description: 'Search file contents. Paths outside the workspace are readable except sensitive locations (credentials).',
-    parameters: obj({
-      pattern: str(),
-      path: opt(str()),
-      glob: opt(str()),
-    }),
-    replay: 'safe',
-    async execute(args, api, context) {
-      const env = requireEnv(api);
-      const rel = args.path || '.';
-      const files = [];
-      await collectFiles(env, rel, context, files);
-      let re;
-      try {
-        re = new RegExp(args.pattern);
-      } catch {
-        re = new RegExp(String(args.pattern).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
-      }
-      const hits = [];
-      for (const file of files) {
-        const shown = displayPath(env.cwd, file);
-        if (args.glob && !matchGlob(shown, args.glob) && !matchGlob(path.basename(file), args.glob)) continue;
-        const text = await env.readTextFile(file, context);
-        if (!text.ok) continue;
-        const lines = text.value.split('\n');
-        for (let i = 0; i < lines.length; i++) {
-          if (re.test(lines[i])) hits.push(`${shown}:${i + 1}:${lines[i]}`);
-        }
-      }
-      return { output: [{ type: 'text', text: hits.join('\n') }] };
-    },
-  });
-}
-
 const workspaceToolList = [
-  withIntent(withReplay(createReadTool(), 'safe')),
+  withIntent(withReplay(createHashlineReadTool(), 'safe')),
   withIntent(withReplay(withWorkspaceOnly(withFileChangeDetails(createWriteTool())), 'unsafe')),
-  withIntent(withReplay(withWorkspaceOnly(withFileChangeDetails(withLegacyEditArgs(createEditTool()))), 'unsafe')),
+  withIntent(withReplay(withWorkspaceOnly(withFileChangeDetails(withLegacyEditArgs(createHashlineEditTool()))), 'unsafe')),
   withIntent(createLsTool()),
   withIntent(createGrepTool()),
   withIntent(withReplay(withDefaultTimeout(createBashTool({

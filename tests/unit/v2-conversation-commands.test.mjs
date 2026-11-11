@@ -495,7 +495,7 @@ test('GET tool output returns the full text when the snapshot preview is truncat
     assert.ok(full.body.totalLines > 20);
     assert.equal(full.body.text.split('\n').slice(0, 20).join('\n'), tool.output.preview);
     assert.equal(full.body.text.includes(ws.path), false, full.body.text);
-    assert.match(full.body.text, /^src\/a\.js/m);
+    assert.match(full.body.text, /^\s*1#[A-Z]{3}:src\/a\.js/m);
   } finally {
     await stopServer(srv);
   }
