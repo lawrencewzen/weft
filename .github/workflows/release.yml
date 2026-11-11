@@ -289,7 +289,15 @@ jobs:
           }
           function Log-Text { if (Test-Path -LiteralPath $log) { return (Get-Content -LiteralPath $log -Raw) } else { return '' } }
           function Assert-True($cond, [string]$msg) { if (-not $cond) { throw "FAILED: $msg" } }
-          function Lnk-Target([string]$lnk) { return (New-Object -ComObject WScript.Shell).CreateShortcut($lnk).TargetPath }
+          # WScript.Shell 返回的 TargetPath 会把中文转成 ?，直接在 .lnk 的二进制里找 UTF-16 路径
+          function Lnk-Has([string]$lnk, [string]$text) {
+            $b = [System.IO.File]::ReadAllBytes($lnk)
+            $needle = [System.Text.Encoding]::Unicode.GetString([System.Text.Encoding]::Unicode.GetBytes($text))
+            foreach ($off in 0, 1) {
+              if ([System.Text.Encoding]::Unicode.GetString($b, $off, $b.Length - $off - (($b.Length - $off) % 2)).Contains($needle)) { return $true }
+            }
+            return $false
+          }
           function Start-Weft {
             Push-Location -LiteralPath $root
             try {
@@ -346,7 +354,7 @@ jobs:
             Assert-True ($reg.NoModify -eq 1 -and $reg.NoRepair -eq 1) 'NoModify/NoRepair'
             Assert-True (Test-Path -LiteralPath $startLnk) 'start menu shortcut'
             Assert-True (Test-Path -LiteralPath $deskLnk) 'desktop shortcut'
-            Assert-True ((Lnk-Target $startLnk) -eq (Join-Path $root 'Weft.exe')) "start lnk target $(Lnk-Target $startLnk)"
+            Assert-True (Lnk-Has $startLnk (Join-Path $root 'Weft.exe')) 'start lnk should point at Weft.exe in the install dir'
             Assert-True ((Log-Text) -match "total=$count written=$count skipped=0") 'first install should write every file'
 
             # ---- 2. 起服务再停 ----
