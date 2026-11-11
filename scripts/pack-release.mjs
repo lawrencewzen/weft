@@ -10,7 +10,15 @@ import { cp, mkdtemp, open, mkdir, readFile, readdir, rm, stat, writeFile, realp
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { crc32, deflateRawSync, inflateRawSync } from 'node:zlib';
+import { promisify } from 'node:util';
+import { crc32, deflateRaw, inflateRawSync } from 'node:zlib';
+
+const deflateRawAsync = promisify(deflateRaw);
+/** Level 4 is ~2x faster than 6 for ~5% more size; the zip is a transport format. */
+const DEFLATE_LEVEL = 4;
+/** Files in flight at once (zlib runs on the libuv thread pool). */
+const DEFLATE_PARALLEL = 4;
+const STORE_EXT = new Set(['.zip', '.gz', '.br', '.7z', '.png', '.jpg', '.jpeg', '.webp', '.woff', '.woff2', '.mp3', '.mp4']);
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -240,6 +248,12 @@ export function extractZipEntry(buf, name) {
   const want = String(name).replace(/\\/g, '/');
   const entry = listZipEntries(buf).find((item) => item.name === want);
   if (!entry) throw new Error(`ZIP 里没有 ${want}`);
+  return extractZipEntryData(buf, entry);
+}
+
+/** Inflate one already-listed entry (no directory re-scan). Verifies size and CRC. */
+export function extractZipEntryData(buf, entry) {
+  const want = entry.name;
   const local = entry.localOffset;
   if (local + 30 > buf.length || buf.readUInt32LE(local) !== 0x04034b50) {
     throw new Error(`ZIP 本地文件头损坏：${want}`);
@@ -327,20 +341,36 @@ export async function zipDirectory(dir, zipPath) {
   let offset = 0;
   try {
     let longest = 0;
-    for (const file of files) {
-      if (file.rel.length > longest) longest = file.rel.length;
+    const compress = async (file) => {
       const data = await readFile(file.abs);
-      const name = Buffer.from(file.rel, 'utf8');
       const sum = crc32(data) >>> 0;
       let method = 0;
       let payload = data;
-      if (data.length > 0) {
-        const compressed = deflateRawSync(data, { level: 6 });
+      if (data.length > 0 && !STORE_EXT.has(path.extname(file.rel).toLowerCase())) {
+        const compressed = await deflateRawAsync(data, { level: DEFLATE_LEVEL });
         if (compressed.length < data.length) {
           method = 8;
           payload = compressed;
         }
       }
+      return { data, sum, method, payload };
+    };
+    // Sliding window: keep DEFLATE_PARALLEL files compressing ahead of the (ordered) writer.
+    const pending = new Map();
+    const start = (i) => {
+      if (i >= files.length || pending.has(i)) return;
+      const job = compress(files[i]);
+      job.catch(() => {}); // the ordered loop below reports it; avoid an unhandled rejection meanwhile
+      pending.set(i, job);
+    };
+    for (let i = 0; i < DEFLATE_PARALLEL; i += 1) start(i);
+    for (let i = 0; i < files.length; i += 1) {
+      const file = files[i];
+      if (file.rel.length > longest) longest = file.rel.length;
+      const name = Buffer.from(file.rel, 'utf8');
+      const { data, sum, method, payload } = await pending.get(i);
+      pending.delete(i);
+      start(i + DEFLATE_PARALLEL);
       const local = Buffer.alloc(30);
       local.writeUInt32LE(0x04034b50, 0);
       local.writeUInt16LE(20, 4);
@@ -403,6 +433,73 @@ export async function zipDirectory(dir, zipPath) {
     throw err;
   } finally {
     await fh.close().catch(() => {});
+  }
+}
+
+/**
+ * Append one stored (uncompressed) entry to an existing zip in place: the new local record goes where the
+ * central directory started, then the old central directory is rewritten after it. Cheap for a 500MB+ zip.
+ */
+export async function appendZipEntry(zipPath, entryName, data) {
+  const fh = await open(zipPath, 'r+');
+  try {
+    const size = (await fh.stat()).size;
+    const tailLen = Math.min(size, 22 + 0xffff);
+    const tail = Buffer.alloc(tailLen);
+    await fh.read(tail, 0, tailLen, size - tailLen);
+    const eocdAt = findEocd(tail);
+    const total = tail.readUInt16LE(eocdAt + 10);
+    const cdSize = tail.readUInt32LE(eocdAt + 12);
+    const cdOffset = tail.readUInt32LE(eocdAt + 16);
+    if (total === 0xffff || total + 1 > ZIP_LIMIT) throw new Error('zip 条目数已到上限');
+    const cd = Buffer.alloc(cdSize);
+    await fh.read(cd, 0, cdSize, cdOffset);
+    const name = Buffer.from(entryName, 'utf8');
+    const sum = crc32(data) >>> 0;
+    const { time, day } = dosDateTime(new Date());
+    const local = Buffer.alloc(30);
+    local.writeUInt32LE(0x04034b50, 0);
+    local.writeUInt16LE(20, 4);
+    local.writeUInt16LE(0x0800, 6);
+    local.writeUInt16LE(0, 8);
+    local.writeUInt16LE(time, 10);
+    local.writeUInt16LE(day, 12);
+    local.writeUInt32LE(sum, 14);
+    local.writeUInt32LE(data.length, 18);
+    local.writeUInt32LE(data.length, 22);
+    local.writeUInt16LE(name.length, 26);
+    const hdr = Buffer.alloc(46);
+    hdr.writeUInt32LE(0x02014b50, 0);
+    hdr.writeUInt16LE(20, 4);
+    hdr.writeUInt16LE(20, 6);
+    hdr.writeUInt16LE(0x0800, 8);
+    hdr.writeUInt16LE(0, 10);
+    hdr.writeUInt16LE(time, 12);
+    hdr.writeUInt16LE(day, 14);
+    hdr.writeUInt32LE(sum, 16);
+    hdr.writeUInt32LE(data.length, 20);
+    hdr.writeUInt32LE(data.length, 24);
+    hdr.writeUInt16LE(name.length, 28);
+    hdr.writeUInt32LE(cdOffset, 42);
+    let pos = cdOffset;
+    pos = await writeAll(fh, local, pos);
+    pos = await writeAll(fh, name, pos);
+    pos = await writeAll(fh, data, pos);
+    const newCd = pos;
+    pos = await writeAll(fh, cd, pos);
+    pos = await writeAll(fh, hdr, pos);
+    pos = await writeAll(fh, name, pos);
+    if (newCd > 0xffffffff) throw new Error('zip 超过传统 ZIP 的 4GB 上限');
+    const eocd = Buffer.alloc(22);
+    eocd.writeUInt32LE(0x06054b50, 0);
+    eocd.writeUInt16LE(total + 1, 8);
+    eocd.writeUInt16LE(total + 1, 10);
+    eocd.writeUInt32LE(pos - newCd, 12);
+    eocd.writeUInt32LE(newCd, 16);
+    pos = await writeAll(fh, eocd, pos);
+    await fh.truncate(pos);
+  } finally {
+    await fh.close();
   }
 }
 
@@ -616,7 +713,7 @@ function npmEnv() {
 }
 
 function runNpmCi(appDir) {
-  const args = ['ci', '--omit=dev', '--ignore-scripts'];
+  const args = ['ci', '--omit=dev', '--ignore-scripts', '--prefer-offline', '--no-audit', '--no-fund'];
   const npmExec = process.env.npm_execpath;
   const result = npmExec
     ? spawnSync(process.execPath, [npmExec, ...args], {

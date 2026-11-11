@@ -37,6 +37,15 @@ jobs:
       actions: write
       contents: write
     steps:
+      # Defender real-time scanning dominates npm ci / zip time on the runner (tens of thousands of small files).
+      - name: Exclude build dirs from Defender
+        shell: pwsh
+        run: |
+          try {
+            Add-MpPreference -ExclusionPath $env:RUNNER_TEMP, $env:GITHUB_WORKSPACE, (Join-Path $env:LOCALAPPDATA 'npm-cache') -ErrorAction Stop
+            Write-Host 'defender exclusions added'
+          } catch { Write-Host "defender exclusion skipped: $_" }
+
       - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v7
@@ -53,6 +62,13 @@ jobs:
       - name: Publish desktop shell (.NET 8, self-contained, single file)
         run: dotnet publish desktop/win -c Release -o desktop/win/publish
 
+      - name: Cache WebView2 cab
+        uses: actions/cache@v5
+        with:
+          path: ${{ runner.temp }}/webview2.cab
+          # The cab is pinned by SHA256 below; bump the key together with WEBVIEW2_SHA256.
+          key: webview2-cab-0ac7317a08c3f3beebbb9b6d90f5b77352569f0a33a54a15ef6aaabc82899b7c
+
       - name: Add WebView2 Fixed Version Runtime
         shell: pwsh
         env:
@@ -62,7 +78,8 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $cab = Join-Path $env:RUNNER_TEMP 'webview2.cab'
-          Invoke-WebRequest -Uri $env:WEBVIEW2_URL -OutFile $cab -UseBasicParsing
+          # A restored cache hit is still verified against the pinned SHA256 below.
+          if (-not (Test-Path -LiteralPath $cab)) { Invoke-WebRequest -Uri $env:WEBVIEW2_URL -OutFile $cab -UseBasicParsing }
           $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $cab).Hash.ToLower()
           Write-Host "webview2 cab bytes=$((Get-Item $cab).Length) sha256=$hash"
           if ($hash -ne $env:WEBVIEW2_SHA256) { throw "WebView2 cab sha256 mismatch: $hash" }
@@ -79,6 +96,15 @@ jobs:
           Move-Item -LiteralPath $inner[0].FullName -Destination $dest
           if (-not (Test-Path -LiteralPath (Join-Path $dest 'msedgewebview2.exe'))) { throw 'msedgewebview2.exe missing after expand' }
           Write-Host "webview2 expanded: $dest"
+
+      - name: Cache bundled tool archives
+        uses: actions/cache@v5
+        with:
+          path: |
+            ${{ runner.temp }}/ripgrep.zip
+            ${{ runner.temp }}/powershell.zip
+          # Keys carry the pinned SHA256s; bump together with RG_SHA256 / PWSH_SHA256 below.
+          key: bundled-tools-71b2fef860abe467217a538ff31de02f5258807c0129f771846f87bd029aafc5-7d871531806eb1646264e4bbabd9f0c30c23355591bc756bb9909448c29ae166
 
       - name: Add bundled tools (ripgrep, PowerShell 7)
         shell: pwsh
@@ -100,7 +126,8 @@ jobs:
 
           function Get-Verified([string]$url, [string]$sha, [string]$name) {
             $file = Join-Path $env:RUNNER_TEMP $name
-            Invoke-WebRequest -Uri $url -OutFile $file -UseBasicParsing
+            # A restored cache hit is still verified against the pinned SHA256 below.
+            if (-not (Test-Path -LiteralPath $file)) { Invoke-WebRequest -Uri $url -OutFile $file -UseBasicParsing }
             $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $file).Hash.ToLower()
             Write-Host "$name bytes=$((Get-Item $file).Length) sha256=$hash"
             if ($hash -ne $sha) { throw "$name sha256 mismatch: $hash (expected $sha)" }
