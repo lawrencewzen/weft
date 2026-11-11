@@ -712,7 +712,7 @@ function npmEnv() {
 }
 
 function runNpmCi(appDir) {
-  const args = ['ci', '--omit=dev', '--ignore-scripts'];
+  const args = ['ci', '--omit=dev', '--ignore-scripts', '--prefer-offline', '--no-audit', '--no-fund'];
   const npmExec = process.env.npm_execpath;
   const result = npmExec
     ? spawnSync(process.execPath, [npmExec, ...args], {

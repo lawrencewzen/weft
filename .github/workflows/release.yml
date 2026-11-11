@@ -37,6 +37,15 @@ jobs:
       actions: write
       contents: write
     steps:
+      # Defender real-time scanning dominates npm ci / zip time on the runner (tens of thousands of small files).
+      - name: Exclude build dirs from Defender
+        shell: pwsh
+        run: |
+          try {
+            Add-MpPreference -ExclusionPath $env:RUNNER_TEMP, $env:GITHUB_WORKSPACE, (Join-Path $env:LOCALAPPDATA 'npm-cache') -ErrorAction Stop
+            Write-Host 'defender exclusions added'
+          } catch { Write-Host "defender exclusion skipped: $_" }
+
       - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v7
