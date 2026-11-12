@@ -28,7 +28,7 @@ export function SidebarArchived({
       <div className="sb-archived-list sidebar-archived-list" data-testid="next-archived-list">
         {archived.length === 0 ? (
           <div
-            className="sb-archived-empty sidebar-archived-empty ws-empty-note"
+            className="sb-archived-empty sidebar-archived-empty"
             data-testid="next-archived-empty"
           >
             {t(lang, 'no_archived_chats')}

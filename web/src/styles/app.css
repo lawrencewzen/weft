@@ -497,7 +497,7 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.65; backgrou
 
 /* Bottom archived block */
 .sidebar-archived-section, .sb-archived-section {
-  flex-shrink: 0; border-top: none; padding: 4px 0 2px;
+  flex-shrink: 0; margin: 0 -8px; padding: 4px 8px 4px; border-top: 1px solid var(--line2);
   display: flex; flex-direction: column; gap: 1px;
 }
 .sidebar-archived-header, .sb-archived-row {
@@ -516,10 +516,10 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.65; backgrou
 .sidebar-archived-icon {
   width: 14px; height: 14px; flex-shrink: 0; color: var(--mute);
 }
-.sidebar-archived-empty, .sb-archived-empty {
-  padding: 4px 8px 6px 32px; font-size: var(--fs-sm); color: var(--faint);
-}
 .ws-empty-note { padding: 4px 8px 6px 32px; font-size: var(--fs-sm); color: var(--faint); }
+.sidebar-archived-empty, .sb-archived-empty {
+  padding: 6px 8px 6px 32px; font-size: var(--fs-sm); color: var(--faint); line-height: 20px;
+}
 .left-footer, .sb-foot {
   margin: 0 -8px; padding: 6px 8px 8px; border-top: 1px solid var(--line2); display: flex; flex-direction: column;
   font-size: var(--fs-ui); color: var(--ink3); flex-shrink: 0;

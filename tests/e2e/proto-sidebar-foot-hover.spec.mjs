@@ -62,7 +62,7 @@ for (const scheme of ['light', 'dark']) {
     expectClean(state);
   });
 
-  test(`sidebar foot divider spans full width and archived drawer has single border (${scheme})`, async ({ page }) => {
+  test(`sidebar foot divider spans full width and archived section has top and bottom borders with aligned empty note (${scheme})`, async ({ page }) => {
     await page.emulateMedia({ colorScheme: scheme });
     const state = await openProto(page);
 
@@ -90,7 +90,7 @@ for (const scheme of ['light', 'dark']) {
     expect(rowBox.x).toBeGreaterThan(sideBox.x);
     expect(rowBox.x + rowBox.width).toBeLessThan(sideBox.x + sideBox.width);
 
-    // 2. 展开归档（非空）：列表中有 2 条归档对话，只有一个 border（底栏顶线），归档区本身无 border
+    // 2. 展开归档（非空）：列表中有 2 条归档对话，归档区顶线和底栏顶线均存在且撑满
     await archivedToggle.click();
     const archSection = page.getByTestId('next-sidebar-archived-section');
     await expect(archSection).toBeVisible();
@@ -99,10 +99,20 @@ for (const scheme of ['light', 'dark']) {
     const rows = archList.getByTestId('next-conv-row');
     await expect(rows).toHaveCount(2);
 
-    expect(parseFloat(await archSection.evaluate((el) => window.getComputedStyle(el).borderTopWidth))).toBe(0);
+    // 归档区顶线存在且左右撑满
+    const archBox = await archSection.boundingBox();
+    expect(archBox).toBeTruthy();
+    expect(Math.abs(archBox.x - sideBox.x)).toBeLessThanOrEqual(0.5);
+    expect(Math.abs(archBox.width - sideBox.width)).toBeLessThanOrEqual(0.5);
+    expect(parseFloat(await archSection.evaluate((el) => window.getComputedStyle(el).borderTopWidth))).toBeCloseTo(1, 0);
     expect(parseFloat(await foot.evaluate((el) => window.getComputedStyle(el).borderTopWidth))).toBeCloseTo(1, 0);
 
-    // 3. 展开归档（空）：将归档对话全部取消归档，展示空提示，依然只有一个 border
+    // 记录非空时第一个归档项标题文字左边距
+    const firstTitle = rows.first().locator('.sb-conv-title');
+    const firstTitleBox = await firstTitle.boundingBox();
+    expect(firstTitleBox).toBeTruthy();
+
+    // 3. 展开归档（空）：将归档对话全部取消归档，展示空提示，两根线依然存在
     for (const rowItem of await rows.all()) {
       await rowItem.click({ button: 'right' });
       const ctxMenu = page.getByTestId('next-ctx-menu');
@@ -114,9 +124,28 @@ for (const scheme of ['light', 'dark']) {
     await expect(emptyNote).toBeVisible();
     await expect(emptyNote).toHaveText('没有归档的对话');
 
-    // 空归档时只有一个 border，不出现两根紧挨的横线
-    expect(parseFloat(await archSection.evaluate((el) => window.getComputedStyle(el).borderTopWidth))).toBe(0);
+    // 空提示文字的左边距和归档项标题文字左边对齐
+    const emptyNoteBox = await emptyNote.boundingBox();
+    expect(emptyNoteBox).toBeTruthy();
+    const emptyTextLeft = await emptyNote.evaluate((el) => {
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      return range.getBoundingClientRect().left;
+    });
+    expect(Math.abs(emptyTextLeft - firstTitleBox.x)).toBeLessThanOrEqual(1);
+
+    // 归档区顶线与底栏顶线均保留，两根线之间竖直距离 ≥ 提示行高度
+    const archBoxEmpty = await archSection.boundingBox();
+    const footBoxEmpty = await foot.boundingBox();
+    expect(archBoxEmpty).toBeTruthy();
+    expect(footBoxEmpty).toBeTruthy();
+    expect(parseFloat(await archSection.evaluate((el) => window.getComputedStyle(el).borderTopWidth))).toBeCloseTo(1, 0);
     expect(parseFloat(await foot.evaluate((el) => window.getComputedStyle(el).borderTopWidth))).toBeCloseTo(1, 0);
+
+    const lineDistance = footBoxEmpty.y - archBoxEmpty.y;
+    expect(lineDistance).toBeGreaterThanOrEqual(emptyNoteBox.height);
+    expect(emptyNoteBox.y).toBeGreaterThanOrEqual(archBoxEmpty.y);
+    expect(emptyNoteBox.y + emptyNoteBox.height).toBeLessThanOrEqual(footBoxEmpty.y + 0.5);
 
     expectClean(state);
   });
