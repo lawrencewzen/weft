@@ -1262,29 +1262,23 @@ export async function openConversationKernel({
    * when there is nothing old enough to compact. A manual request that ends that
    * way leaves a weft.compaction-skipped entry (a write submission, so it follows
    * the history and is placed at the next boundary if a turn is running).
-   * Automatic compactions are never recorded. Best effort: a restart before the
-   * task settles loses the record.
+   * Automatic compactions are never recorded. The wait is Pi's in-memory
+   * waitForTask, so a restart before the task settles loses the record.
    */
   async function recordSkippedCompaction(conversation, taskId, instructions) {
     const focus = typeof instructions === 'string' ? instructions.trim() : '';
-    for (let tries = 0; !closing; tries++) {
-      const task = await harness.commit((tx) => tx.task(taskId), context);
-      const outcome = task?.state?.outcome;
-      if (outcome) {
-        const result = outcome.status === 'completed' ? outcome.result : undefined;
-        if (!result || result.submissionId != null || result.entryId != null) return;
-        await conversation.submit({
-          type: 'write',
-          entry: {
-            kind: COMPACTION_SKIPPED_KIND,
-            ...(focus ? { data: { instructions: focus } } : {}),
-          },
-        }, context);
-        return;
-      }
-      if (!task) return;
-      await sleep(tries < 20 ? 25 : 200);
-    }
+    // Official Harness.waitForTask: resolves with the terminal receipt, rejects if the harness closes.
+    const settled = await harness.waitForTask(taskId, context);
+    const outcome = settled?.state?.outcome;
+    const result = outcome?.status === 'completed' ? outcome.result : undefined;
+    if (!result || result.submissionId != null || result.entryId != null) return;
+    await conversation.submit({
+      type: 'write',
+      entry: {
+        kind: COMPACTION_SKIPPED_KIND,
+        ...(focus ? { data: { instructions: focus } } : {}),
+      },
+    }, context);
   }
 
   async function createConversation(fields) {
