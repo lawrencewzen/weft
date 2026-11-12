@@ -1280,6 +1280,24 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.65; backgrou
 .handoff-detail-body .msg-body {
   margin: 0;
 }
+.compaction-skipped-note {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fs-sm);
+  color: var(--faint);
+  line-height: 1.5;
+  margin: 4px 0 2px;
+  user-select: text;
+}
+.compaction-skipped-note .status-icon {
+  flex-shrink: 0;
+}
+.compaction-skipped-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
 .llm-error {
   display: flex;
   align-items: center;
