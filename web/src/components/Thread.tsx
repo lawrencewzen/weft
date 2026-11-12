@@ -1,4 +1,4 @@
-import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { components } from '../../../src/v2/contract.gen';
 import { modelAttribution, type ConversationModel } from '../data/composerModel';
 import { matchDispatchSubagents } from '../data/dispatchCard';
@@ -21,8 +21,9 @@ import { ToolGroup } from './ToolGroup';
 import { UserMessage } from './UserMessage';
 import { WorkspaceChip } from './WorkspaceChip';
 import { createSendRequest, errorMessage } from './sendRequest';
+import { computeScrollTarget, isNearBottom, STICK_PX } from './threadScroll';
 
-const STICK_PX = 80;
+export { STICK_PX, computeScrollTarget, isNearBottom } from './threadScroll';
 
 /** Right-edge classic scrollbar strip, in CSS px. Overlay scrollbars are 0.
  *  `scrollbar-gutter: stable both-edges` makes offsetWidth-clientWidth the
@@ -219,7 +220,14 @@ export function Thread({
 }: Props) {
   const { providers } = useProviders();
   const scroller = useRef<HTMLDivElement>(null);
+  const innerRef = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
+  const programmaticScrollRef = useRef(false);
+  const programmaticRafRef = useRef<number | null>(null);
+  const lastProgrammaticTargetRef = useRef<number | null>(null);
+  const lastHeightRef = useRef(0);
+  const prevStickNonce = useRef(stickNonce);
+  const prevConversationId = useRef(conversationId);
   const empty = items.length === 0;
   const compacting = compaction?.state === 'running';
   // A blocking compaction failure also lands as the run error with the same sentence: show it once.
@@ -235,6 +243,14 @@ export function Thread({
   useEffect(() => {
     setContinueError(null);
   }, [conversationId, failed]);
+
+  useEffect(() => {
+    return () => {
+      if (programmaticRafRef.current !== null && typeof cancelAnimationFrame !== 'undefined') {
+        cancelAnimationFrame(programmaticRafRef.current);
+      }
+    };
+  }, []);
 
   async function handleContinue() {
     if (continueBusy) return;
@@ -253,31 +269,142 @@ export function Thread({
     }
   }
 
+  const scrollToBottom = useCallback((el: HTMLElement) => {
+    const inner = innerRef.current || el.querySelector<HTMLElement>('.thread-inner');
+    const padBottom = inner ? parseFloat(getComputedStyle(inner).paddingBottom) || 0 : 0;
+    const target = computeScrollTarget(el.scrollHeight, el.clientHeight, padBottom);
+
+    lastProgrammaticTargetRef.current = target;
+
+    if (Math.abs(el.scrollTop - target) > 1) {
+      programmaticScrollRef.current = true;
+      el.scrollTop = target;
+
+      if (programmaticRafRef.current !== null && typeof cancelAnimationFrame !== 'undefined') {
+        cancelAnimationFrame(programmaticRafRef.current);
+      }
+      if (typeof requestAnimationFrame !== 'undefined') {
+        programmaticRafRef.current = requestAnimationFrame(() => {
+          programmaticRafRef.current = requestAnimationFrame(() => {
+            programmaticScrollRef.current = false;
+            programmaticRafRef.current = null;
+          });
+        });
+      } else {
+        setTimeout(() => {
+          programmaticScrollRef.current = false;
+        }, 50);
+      }
+    }
+  }, []);
+
   useLayoutEffect(() => {
+    if (prevStickNonce.current !== stickNonce) {
+      prevStickNonce.current = stickNonce;
+      stick.current = true;
+    }
+    if (prevConversationId.current !== conversationId) {
+      prevConversationId.current = conversationId;
+      stick.current = true;
+      lastHeightRef.current = 0;
+    }
+
     const el = scroller.current;
     if (!el) return;
     if (!stick.current) return;
-    const inner = el.querySelector('.thread-inner');
-    const padBottom = inner ? parseFloat(getComputedStyle(inner).paddingBottom) || 0 : 0;
-    const maxScroll = Math.max(0, el.scrollHeight - el.clientHeight);
-    el.scrollTop = maxScroll <= padBottom + 1 ? 0 : maxScroll;
-  }, [items, pending, stickNonce, failed, error?.message, compacting, compactionError]);
+    scrollToBottom(el);
+    if (innerRef.current) {
+      lastHeightRef.current = Math.max(innerRef.current.offsetHeight, innerRef.current.scrollHeight);
+    }
+  }, [
+    conversationId,
+    items,
+    pending,
+    stickNonce,
+    failed,
+    error?.message,
+    compacting,
+    compactionError,
+    scrollToBottom,
+  ]);
 
   useLayoutEffect(() => {
     const el = scroller.current;
     if (!el) return;
-    const sync = () => syncThreadScrollbarGutter(el);
+    const sync = () => {
+      syncThreadScrollbarGutter(el);
+      if (stick.current) {
+        scrollToBottom(el);
+      }
+    };
     sync();
     if (typeof ResizeObserver === 'undefined') return;
     const ro = new ResizeObserver(sync);
     ro.observe(el);
     return () => ro.disconnect();
-  }, []);
+  }, [scrollToBottom]);
+
+  useLayoutEffect(() => {
+    const el = scroller.current;
+    const inner = innerRef.current;
+    if (!el || !inner) return;
+
+    lastHeightRef.current = Math.max(inner.offsetHeight, inner.scrollHeight);
+
+    function checkAndFollow() {
+      if (!stick.current) return;
+      const targetEl = scroller.current;
+      const targetInner = innerRef.current;
+      if (!targetEl || !targetInner) return;
+      const currentHeight = Math.max(targetInner.offsetHeight, targetInner.scrollHeight);
+      if (currentHeight > lastHeightRef.current) {
+        lastHeightRef.current = currentHeight;
+        scrollToBottom(targetEl);
+      } else {
+        lastHeightRef.current = currentHeight;
+      }
+    }
+
+    let ro: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== 'undefined') {
+      ro = new ResizeObserver(() => {
+        checkAndFollow();
+      });
+      ro.observe(inner);
+    }
+
+    let mo: MutationObserver | null = null;
+    if (typeof MutationObserver !== 'undefined') {
+      mo = new MutationObserver(() => {
+        checkAndFollow();
+      });
+      mo.observe(inner, { childList: true, subtree: true, characterData: true });
+    }
+
+    return () => {
+      ro?.disconnect();
+      mo?.disconnect();
+    };
+  }, [conversationId, scrollToBottom]);
 
   function onScroll() {
     const el = scroller.current;
     if (!el) return;
-    stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < STICK_PX;
+    if (isNearBottom(el.scrollHeight, el.scrollTop, el.clientHeight, STICK_PX)) {
+      stick.current = true;
+      return;
+    }
+    // Distance from bottom is >= STICK_PX:
+    // If scrollTop matches our programmatic target (content expanded before/during this scroll event),
+    // do NOT treat it as the user scrolling up.
+    if (
+      programmaticScrollRef.current &&
+      lastProgrammaticTargetRef.current !== null &&
+      Math.abs(el.scrollTop - lastProgrammaticTargetRef.current) <= 2
+    ) {
+      return;
+    }
+    stick.current = false;
   }
 
   const [expandedEarlier, setExpandedEarlier] = useState(false);
@@ -363,7 +490,7 @@ export function Thread({
       ref={scroller}
       onScroll={onScroll}
     >
-      <div className={innerClass}>
+      <div className={innerClass} ref={innerRef}>
         {forkedFrom ? (
           <div className="thread-forked-from" data-testid="next-forked-from">
             <span className="thread-forked-label">{t(lang, 'forked_from')}</span>

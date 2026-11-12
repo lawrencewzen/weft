@@ -96,6 +96,17 @@ function clip(text: string, max: number): string {
 
 function planFor(text: string): Plan {
   const body = clip(text, 60);
+  if (/(长回复|long\s*reply|long-reply)/i.test(text)) {
+    const lines: string[] = ['### 长回复测试', ''];
+    for (let i = 1; i <= 60; i++) {
+      lines.push(`第 ${i} 段：这是一段长回复的模拟内容，用于验证流式输出时对话区域是否会自动跟随滚动到底部。`);
+      lines.push('');
+    }
+    return {
+      tools: [],
+      reply: lines.join('\n'),
+    };
+  }
   if (/^(继续|continue)/i.test(text)) {
     return {
       tools: [],
