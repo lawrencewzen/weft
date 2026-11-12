@@ -42,7 +42,7 @@ test('new chat defaults to 选择项目 and sending creates a chat in the 对话
     await expect(page.getByTestId('next-chats-list').locator(`[data-id="${cid}"]`)).toHaveCount(1);
     await expect(page.getByTestId('next-ws-node').locator(`[data-id="${cid}"]`)).toHaveCount(0);
     await expect(page.getByTestId('next-chats-section')).toContainText('对话');
-    await expect(page.getByTestId('next-ws-chip')).toContainText('选择项目');
+    await expect(page.getByTestId('next-ws-chip')).toHaveCount(0);
     await expect(page.getByTestId('next-composer-git')).toHaveCount(0);
 
     const listed = await apiV2(srv, 'GET', '/api/v2/workspaces');
@@ -110,7 +110,7 @@ test('English UI uses Chats and Choose project', async ({ page }) => {
     await expect(page).toHaveURL(/\/c\/[^/]+$/, { timeout: 20000 });
     await waitRunDone(page);
     await expect(page.getByTestId('next-chats-section')).toContainText('Chats');
-    await expect(page.getByTestId('next-ws-chip')).toContainText('Choose project');
+    await expect(page.getByTestId('next-ws-chip')).toHaveCount(0);
     await expect(page.getByTestId('next-composer-git')).toHaveCount(0);
     await expect(page.getByTestId('next-item-user')).toContainText('hello without a project');
   } finally {

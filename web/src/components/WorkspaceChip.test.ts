@@ -97,7 +97,7 @@ describe('WorkspaceChip', () => {
     expect(onNew).toHaveBeenCalledTimes(1);
   });
 
-  it('does not switch on an existing conversation and shows the bound hint', async () => {
+  it('renders a readonly non-button chip in an existing project conversation and does not open a menu on click', async () => {
     const onPick = vi.fn();
     const onNew = vi.fn();
     await render(createElement(WorkspaceChip, {
@@ -107,14 +107,52 @@ describe('WorkspaceChip', () => {
       onPick,
       onNew,
     }));
-    expect(host!.querySelector('[data-testid=next-ws-chip]')?.getAttribute('data-bound')).toBe('true');
+    const chip = host!.querySelector('[data-testid=next-ws-chip]');
+    expect(chip).not.toBeNull();
+    expect(chip?.tagName).toBe('SPAN');
+    expect(chip?.classList.contains('is-readonly')).toBe(true);
+    expect(chip?.textContent).toContain('beta');
+    expect(chip?.getAttribute('title')).toBe('/tmp/beta');
+    expect(host!.querySelector('.model-chip-caret')).toBeNull();
     await act(async () => {
-      host!.querySelector<HTMLButtonElement>('[data-testid=next-ws-chip]')?.click();
+      chip?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
     expect(host!.querySelector('[data-testid=next-ws-chip-menu]')).toBeNull();
-    expect(host!.querySelector('[data-testid=next-ws-chip-bound-hint]')?.textContent).toContain('已绑定');
+    expect(host!.querySelector('[data-testid=next-ws-chip-bound-hint]')).toBeNull();
     expect(onPick).not.toHaveBeenCalled();
     expect(onNew).not.toHaveBeenCalled();
+  });
+
+  it('does not render the workspace chip in an existing pure conversation (no project)', async () => {
+    const onPick = vi.fn();
+    const onNew = vi.fn();
+    await render(createElement(WorkspaceChip, {
+      lang: 'zh',
+      selectedId: null,
+      canSwitch: false,
+      onPick,
+      onNew,
+    }));
+    expect(host!.querySelector('[data-testid=next-ws-chip]')).toBeNull();
+    expect(host!.querySelector('.chip-selector-wrap')).toBeNull();
+  });
+
+  it('does not render the workspace chip in an existing chat workspace conversation', async () => {
+    mockState.list = [
+      ...workspaces,
+      {
+        id: 'ws-chat', name: '代码咨询', path: 'D:\\data\\chats\\c-consult', source: 'local',
+        gitUrl: null, branch: null, git: null, conversationCount: 1, runningCount: 0, kind: 'chat',
+      },
+    ];
+    await render(createElement(WorkspaceChip, {
+      lang: 'zh',
+      selectedId: 'ws-chat',
+      canSwitch: false,
+      onPick: vi.fn(),
+      onNew: vi.fn(),
+    }));
+    expect(host!.querySelector('[data-testid=next-ws-chip]')).toBeNull();
   });
 
   it('shows muted 选择项目 when none is selected and hides 不选项目 from the menu', async () => {
@@ -266,7 +304,7 @@ describe('WorkspaceChip', () => {
       onOpenTerminal,
       onCopyPath,
     }));
-    const trigger = host!.querySelector<HTMLButtonElement>('[data-testid=next-ws-chip]');
+    const trigger = host!.querySelector<HTMLElement>('[data-testid=next-ws-chip]');
     await act(async () => {
       trigger?.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 40, clientY: 80 }));
     });
