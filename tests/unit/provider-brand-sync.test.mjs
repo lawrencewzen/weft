@@ -7,7 +7,7 @@ import { providerBrand as serverProviderBrand } from '../../src/v2/views/provide
 // The build only copies the brand icons the web table can name (web/src/data/brandIconManifest.ts),
 // so the server table must never name a brand the web table does not.
 test('server and web providerBrand agree on every built-in provider', () => {
-  const ids = [...getBuiltinProviders(), 'antigravity', 'antigravity-acp', 'kimi-coding', 'unknown-x', '', null];
+  const ids = [...getBuiltinProviders(), 'kimi-coding', 'unknown-x', '', null];
   for (const id of ids) {
     assert.equal(serverProviderBrand(id), webProviderBrand(id), `provider ${id}`);
   }

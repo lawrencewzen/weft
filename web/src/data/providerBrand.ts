@@ -32,7 +32,6 @@ const PROVIDER_BRAND_RULES: ReadonlyArray<readonly [(id: string) => boolean, str
   [(id) => id === 'google', 'google'],
   [(id) => id === 'openrouter', 'openrouter'],
   [(id) => id === 'xai', 'xai'],
-  [(id) => id === 'antigravity-acp' || id === 'antigravity', 'antigravity'],
 ];
 
 /** Every brand id providerBrand() can return. */
