@@ -212,6 +212,9 @@ export async function openConversationKernel({
   // Submission ids admitted by handoff(). The entry kind is the durable mark;
   // this set covers the moment before that entry is visible to present().
   const handoffSubmissions = new Set();
+  // Immutable task input / resolved note requests, cached by task and entry id.
+  const compactionFocus = new Map();
+  const compactionRequests = new Map();
   const forkInflight = new Map();
   const changeCache = new Map();
   const changeGen = new Map();
@@ -467,6 +470,7 @@ export async function openConversationKernel({
   async function readTranscript(harnessId) {
     const entries = await readHistory(harnessId);
     const mapped = messagesFromEntries(entries);
+    await attachCompactionRequests(harnessId, mapped.messages, entries);
     // `usage` here is the newest reported call in the stored history. The context
     // chip must not use it: a call from before the compaction head is not the
     // context the model sees. present() reads that from readView().
@@ -1171,17 +1175,76 @@ export async function openConversationKernel({
     return legacyDiff(await workspacePathFor(cid), baseline);
   }
 
-  async function isHandoffRunning(conv, status) {
-    if (status !== 'running' && status !== 'recovering' && status !== 'resuming') return false;
+  /** Handoff in flight: `{ running, instructions? }`. The focus text is on the request entry. */
+  async function handoffState(conv, status) {
+    const none = { running: false };
+    if (status !== 'running' && status !== 'recovering' && status !== 'resuming') return none;
     const sid = conv?.lastSubmissionId == null ? '' : String(conv.lastSubmissionId);
-    if (sid && handoffSubmissions.has(sid)) return true;
-    if (!sid || !conv?.harnessId) return false;
+    if (!sid || !conv?.harnessId) return none;
     const handle = await harness.submission(conv.lastSubmissionId, context);
-    if (!handle) return false;
+    if (!handle) return { running: handoffSubmissions.has(sid) };
     const record = await handle.status(context);
-    if (record?.entry == null || record.entry === '') return false;
+    if (record?.entry == null || record.entry === '') return { running: handoffSubmissions.has(sid) };
     const entry = await harness.commit((tx) => tx.entry(record.entry), context);
-    return entry?.kind === HANDOFF_REQUEST_KIND;
+    if (entry?.kind !== HANDOFF_REQUEST_KIND) return { running: handoffSubmissions.has(sid) };
+    const focus = typeof entry.data?.instructions === 'string' ? entry.data.instructions.trim() : '';
+    return focus ? { running: true, instructions: focus } : { running: true };
+  }
+
+  /** Focus text of compaction tasks, by task id. It is immutable task input, so it is cached. */
+  async function compactionInstructions(taskId) {
+    const key = String(taskId);
+    if (compactionFocus.has(key)) return compactionFocus.get(key);
+    const task = await harness.commit((tx) => tx.task(taskId), context);
+    if (!task) return undefined;
+    const focus = typeof task.input?.instructions === 'string' ? task.input.instructions.trim() : '';
+    const value = focus || undefined;
+    compactionFocus.set(key, value);
+    return value;
+  }
+
+  /**
+   * Join the focus text of manual compactions into their notes. The summary entry
+   * carries only reason; the text is the input of the task whose write submission
+   * (requestId compaction:<taskId>) placed it. A task from a forked-from
+   * conversation is not found, and the note then has no instructions.
+   */
+  async function attachCompactionRequests(harnessId, messages, entries) {
+    const manual = messages.filter((m) => m?.role === 'note' && m.kind === 'compaction' && m.request?.by === 'user');
+    if (!manual.length) return;
+    const need = manual.filter((m) => !compactionRequests.has(String(m.id)));
+    if (need.length) {
+      const wanted = new Set(need.map((m) => String(m.id)));
+      const found = new Map();
+      try {
+        const tasks = await harness.commit(async (tx) => {
+          const out = [];
+          let cursor;
+          for (;;) {
+            const page = await tx.scanTasks({ conversationId: harnessId, kind: 'pi.compaction' }, 200, cursor);
+            for (const task of page.items) {
+              if (typeof task.input?.instructions !== 'string') continue;
+              const sub = await tx.submissionByRequest(harnessId, `compaction:${task.id}`);
+              if (sub?.entry != null && wanted.has(String(sub.entry))) {
+                out.push({ entry: String(sub.entry), instructions: task.input.instructions.trim() });
+              }
+            }
+            if (!page.next) break;
+            cursor = page.next;
+          }
+          return out;
+        }, context);
+        for (const row of tasks) if (row.instructions) found.set(row.entry, row.instructions);
+      } catch (err) {
+        log.error('WEFT_COMPACTION', 'focus lookup failed', { harnessId }, err);
+        return;
+      }
+      for (const m of need) compactionRequests.set(String(m.id), found.get(String(m.id)));
+    }
+    for (const m of manual) {
+      const focus = compactionRequests.get(String(m.id));
+      if (focus) m.request = { by: 'user', instructions: focus };
+    }
   }
 
   async function createConversation(fields) {
@@ -1420,7 +1483,14 @@ export async function openConversationKernel({
       // With no later call, estimate the messages the model will see.
       const harnessView = await readView(conv.harnessId);
       const usage = presentContext(activeContextUsage(harnessView)).usage;
-      const handoffRunning = await isHandoffRunning(conv, status);
+      const handoff = await handoffState(conv, status);
+      const handoffRunning = handoff.running;
+      const liveState = this.liveStateFor(conv.id);
+      const running = Array.isArray(liveState?.compactions) ? liveState.compactions : [];
+      const latest = running[running.length - 1];
+      const compactionFocusText = latest && latest.trigger === 'manual'
+        ? await compactionInstructions(latest.taskId)
+        : undefined;
       if (includeMessages) {
         messages = (await readTranscript(conv.harnessId)).messages;
       }
@@ -1433,6 +1503,8 @@ export async function openConversationKernel({
         retryMaxAttempts,
         handoffRunning,
       };
+      if (handoff.instructions) out.handoffInstructions = handoff.instructions;
+      if (compactionFocusText) out.compactionInstructions = compactionFocusText;
       if (view.llmError) out.llmError = view.llmError;
       if (includeMessages) out.messages = messages;
       return out;

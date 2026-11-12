@@ -410,7 +410,7 @@ function forkConversation(
 
   const newId = nextId(db, 'c');
   const now = Date.now();
-  const title = `${conv.view.title}（分叉）`;
+  const title = `${conv.view.title} (fork)`;
 
   const newConv: MockConv = {
     view: {
@@ -752,8 +752,12 @@ function handlePatchProvider(
         if (ov.contextWindow === null) {
           m.overridden = { ...m.overridden, contextWindow: false };
           const cat = MOCK_CATALOG_MODELS[provider.id]?.find((x) => x.id === mid);
-          m.contextWindow = cat ? cat.contextWindow : (mid === 'glm-5.2-fp8' ? null : 128_000);
+          m.contextWindow = m.defaultContextWindow ?? (cat ? cat.contextWindow : (mid === 'glm-5.2-fp8' ? null : 128_000));
         } else if (Number.isFinite(ov.contextWindow)) {
+          if (m.defaultContextWindow === undefined) {
+            const cat = MOCK_CATALOG_MODELS[provider.id]?.find((x) => x.id === mid);
+            m.defaultContextWindow = cat ? cat.contextWindow : m.contextWindow;
+          }
           m.contextWindow = Number(ov.contextWindow);
           m.overridden = { ...m.overridden, contextWindow: true };
         }
@@ -1385,6 +1389,9 @@ function validateScheduleInput(
       if (isNaN(at) || at <= 0) {
         fields.push('rule.at');
         errors.push(lang === 'en' ? 'Invalid timestamp' : '时间戳无效');
+      } else if (at <= Date.now()) {
+        fields.push('rule.at');
+        errors.push(lang === 'en' ? 'The time must be in the future' : '执行时间必须在未来');
       }
     } else {
       fields.push('rule.kind');
@@ -2408,7 +2415,10 @@ export function handleMockRequest(
     if (body.instructions !== undefined && typeof body.instructions !== 'string') {
       return fail(400, 'instructions must be a string', 'E_BAD_REQUEST');
     }
-    const result = compactConversation(db, conv, hub);
+    const instructions = typeof body.instructions === 'string' && body.instructions.trim()
+      ? body.instructions.trim()
+      : undefined;
+    const result = compactConversation(db, conv, hub, instructions);
     if (!result.ok) return fail(result.status, result.error, result.code);
     return accepted({ taskId: result.taskId });
   }

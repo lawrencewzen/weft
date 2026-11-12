@@ -28,6 +28,7 @@ async function renderComposer(
   lang: 'zh' | 'en' = 'zh',
   run: Parameters<typeof Composer>[0]['run'] = idleRun,
   store: ReturnType<typeof createEntityStore> = createEntityStore(),
+  composerProps: Partial<Parameters<typeof Composer>[0]> = {},
 ) {
   host = document.createElement('div');
   document.body.appendChild(host);
@@ -55,6 +56,7 @@ async function renderComposer(
             conversationId="c1"
             onSend={vi.fn()}
             onStop={vi.fn()}
+            {...composerProps}
           />
         </RightPaneProvider>
       </SessionContext.Provider>,
@@ -121,7 +123,7 @@ describe('Composer send button title', () => {
   });
 
   it('places workspace chip in where-bar above composer-box, not inside composer-bar bottom row', async () => {
-    await renderComposer('zh');
+    await renderComposer('zh', idleRun, undefined, { isDraft: true });
     const whereBar = host?.querySelector<HTMLDivElement>('[data-testid="next-composer-where"]');
     expect(whereBar).not.toBeNull();
     const wsChip = whereBar?.querySelector('[data-testid="next-ws-chip"]');
@@ -131,6 +133,14 @@ describe('Composer send button title', () => {
     expect(composerBox).not.toBeNull();
     const insideWsChip = composerBox?.querySelector('.composer-bar [data-testid="next-ws-chip"]');
     expect(insideWsChip).toBeNull();
+  });
+
+  it('omits workspace chip from where-bar in an existing pure conversation (no project)', async () => {
+    await renderComposer('zh');
+    const whereBar = host?.querySelector<HTMLDivElement>('[data-testid="next-composer-where"]');
+    expect(whereBar).not.toBeNull();
+    const wsChip = whereBar?.querySelector('[data-testid="next-ws-chip"]');
+    expect(wsChip).toBeNull();
   });
 
   describe('stack DOM ordering and card composition', () => {

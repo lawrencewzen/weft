@@ -1958,6 +1958,18 @@ export interface components {
             text: string;
             /** @description handoff 是交接说明全文，也用于 compaction 摘要。 */
             detail?: string;
+            /**
+             * @description 谁发起的这次交接或压缩，仅 handoff 与 compaction 可能有。
+             *     用户通过 POST /handoff 或 /compact 发起的为 by=user，instructions 是请求体里的补充说明（没写则省略）。
+             *     模型调用 handoff 工具、自动压缩（threshold / overflow）触发的不带这个字段。
+             *     前端据此在分隔线前画一个用户气泡。信息跟着对话历史持久化，重启后仍在。
+             */
+            request?: {
+                /** @enum {string} */
+                by: "user" | "model";
+                /** @description 用户给的补充说明，去掉首尾空白。没有则省略。 */
+                instructions?: string;
+            };
         };
         /**
          * @description 这一轮的文件变更，插在该轮最后一条助手回复后面。
@@ -2053,11 +2065,15 @@ export interface components {
                 trigger?: "manual" | "threshold" | "overflow";
                 /** @description failed 时的人话。中文为「压缩失败：原因」，英文为 Compaction failed 加原因。 */
                 error?: string;
+                /** @description 手动压缩运行中（state=running 且 trigger=manual）时，用户给的补充说明。没写则省略。 */
+                instructions?: string;
             };
             /** @description 交接中的状态。运行中且模型正在写交接说明时为 running，否则为 null。 */
             handoff?: null | {
                 /** @constant */
                 state: "running";
+                /** @description 用户发起交接时给的补充说明，去掉首尾空白。没写或由模型自己发起时省略。 */
+                instructions?: string;
             };
         };
         /** @description 对话当前模型。取对话自己选的或默认模型。 */
@@ -2114,6 +2130,8 @@ export interface components {
             enabled: boolean;
             /** @description 已应用用户覆盖；null = 未知（运行时按 128000 算） */
             contextWindow: null | number;
+            /** @description 模型不带用户覆盖时的上下文上限（目录值或自定义端点配置的值）；null = 完全没有。用于标出「默认」行和「恢复默认」的目标值 */
+            defaultContextWindow?: null | number;
             /** @description 已应用用户覆盖；null = 未知 */
             maxTokens: null | number;
             images: boolean;

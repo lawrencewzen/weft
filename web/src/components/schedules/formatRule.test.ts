@@ -199,6 +199,11 @@ describe('computeNextRunPreview', () => {
     expect(resZh).toBe('下次运行：明天 14:00');
   });
 
+  it('returns empty string when onceAt is in the past', () => {
+    const past = new Date(2026, 10, 9, 14, 0, 0).getTime();
+    expect(computeNextRunPreview({ ...mockData, ruleKind: 'once', onceAt: past }, 'zh', base)).toBe('');
+  });
+
   it('returns empty string when rule is invalid', () => {
     expect(computeNextRunPreview({ ...mockData, ruleKind: 'interval', intervalValue: 2, intervalUnit: 'minutes' }, 'zh', base)).toBe('');
   });

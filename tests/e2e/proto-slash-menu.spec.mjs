@@ -23,7 +23,7 @@ test('slash menu opens on a leading slash only, filters, and closes on Esc', asy
 
   await input.fill('/');
   await expect(menu).toBeVisible();
-  await expect(menu.locator('[data-kind=command]')).toHaveCount(5);
+  await expect(menu.locator('[data-kind=command]')).toHaveCount(4);
   await expect(menu.locator('[data-kind=skill]')).toHaveCount(4);
 
   await input.fill('/rev');
@@ -39,7 +39,7 @@ test('slash menu opens on a leading slash only, filters, and closes on Esc', asy
   expectClean(state);
 });
 
-test('/compact runs the existing compaction; draft hides it', async ({ page }) => {
+test('/compact becomes chip, supports instructions, and triggers compaction on Enter; draft hides it', async ({ page }) => {
   const state = await openProto(page);
   await openConv(page, 'c-docs');
   const input = page.getByTestId('next-composer-input');
@@ -47,8 +47,29 @@ test('/compact runs the existing compaction; draft hides it', async ({ page }) =
   await input.fill('/comp');
   await expect(page.getByTestId('next-slash-item')).toHaveAttribute('data-id', 'compact');
   await input.press('Enter');
+  await expect(page.getByTestId('next-composer-chip')).toHaveText('压缩');
   await expect(input).toHaveValue('');
+  await input.type('只保留核心架构说明');
+  await input.press('Enter');
   await expect.poll(async () => (await state.requests()).some((r) => /\/compact$/.test(r.url) && r.method === 'POST')).toBe(true);
+  await expect(input).toHaveValue('');
+  await expect(page.getByTestId('next-composer-chip')).toHaveCount(0);
+
+  // User bubble and pending line immediately appear, then land divider
+  const compactBubble = page.getByTestId('next-item-user').filter({ has: page.locator('[data-testid=next-user-chip][data-kind="compaction"]') });
+  await expect(compactBubble).toBeVisible();
+  await expect(compactBubble.getByTestId('next-user-chip')).toHaveText('压缩');
+  await expect(compactBubble).toContainText('只保留核心架构说明');
+  const compactChipBox = await compactBubble.getByTestId('next-user-chip').boundingBox();
+  const compactTextBox = await compactBubble.getByTestId('next-user-cmd-text').boundingBox();
+  const compactBubbleBox = await compactBubble.boundingBox();
+  expect(Math.abs(compactChipBox.y - compactTextBox.y)).toBeLessThanOrEqual(1);
+  expect(compactBubbleBox.height).toBeLessThanOrEqual(50);
+  await expect(page.getByTestId('next-thread-compacting')).toContainText('正在压缩上下文…');
+  await expect(page.getByTestId('next-thread-compacting')).toHaveCount(0, { timeout: 10_000 });
+  await expect(compactBubble).toBeVisible();
+  await expect(compactBubble).toContainText('只保留核心架构说明');
+  await expect(page.getByTestId('next-compaction-divider')).toBeVisible();
 
   await page.getByTestId('next-new-chat').click();
   const draftInput = page.getByTestId('next-composer-input');
@@ -60,7 +81,7 @@ test('/compact runs the existing compaction; draft hides it', async ({ page }) =
   expectClean(state);
 });
 
-test('/handoff, /schedule, /model and /new', async ({ page }) => {
+test('/handoff, /schedule, and /new (no /model in menu)', async ({ page }) => {
   const state = await openProto(page);
   await openConv(page, 'c-docs');
   const input = page.getByTestId('next-composer-input');
@@ -73,6 +94,22 @@ test('/handoff, /schedule, /model and /new', async ({ page }) => {
   await input.type('只留下迁移进度');
   await input.press('Enter');
   await expect.poll(async () => (await state.requests()).some((r) => /\/handoff$/.test(r.url) && r.method === 'POST')).toBe(true);
+
+  // User bubble and pending line immediately appear, then land divider
+  const handoffBubble = page.getByTestId('next-item-user').filter({ has: page.locator('[data-testid=next-user-chip][data-kind="handoff"]') });
+  await expect(handoffBubble).toBeVisible();
+  await expect(handoffBubble.getByTestId('next-user-chip')).toHaveText('交接');
+  await expect(handoffBubble).toContainText('只留下迁移进度');
+  const handoffChipBox = await handoffBubble.getByTestId('next-user-chip').boundingBox();
+  const handoffTextBox = await handoffBubble.getByTestId('next-user-cmd-text').boundingBox();
+  const handoffBubbleBox = await handoffBubble.boundingBox();
+  expect(Math.abs(handoffChipBox.y - handoffTextBox.y)).toBeLessThanOrEqual(1);
+  expect(handoffBubbleBox.height).toBeLessThanOrEqual(50);
+  await expect(page.getByTestId('next-thread-pending')).toContainText('正在整理交接…');
+  await expect(page.getByTestId('next-thread-pending')).toHaveCount(0, { timeout: 10_000 });
+  await expect(handoffBubble).toBeVisible();
+  await expect(page.getByTestId('next-handoff-divider')).toBeVisible();
+
   await expect(input).toHaveValue('');
   await expect(page.getByTestId('next-composer-chip')).toHaveCount(0);
   await expect(input).toBeEnabled();
@@ -90,15 +127,47 @@ test('/handoff, /schedule, /model and /new', async ({ page }) => {
   await expect(input).toHaveValue('');
   await expect(page.getByTestId('next-composer-chip')).toHaveCount(0);
 
+  // /model does not exist in slash menu
   await input.fill('/mod');
-  await input.press('Enter');
-  await expect(page.getByTestId('next-composer-chip')).toHaveCount(0);
-  await expect(page.getByTestId('next-menu-model')).toBeVisible();
-  await page.keyboard.press('Escape');
+  await expect(page.locator('[data-testid=next-slash-item][data-id="model"]')).toHaveCount(0);
+  await input.fill('');
 
   await input.fill('/new');
   await input.press('Enter');
   await expect(page).toHaveURL(/#\/(w\/[^/]+\/)?new$/);
+  expectClean(state);
+});
+
+test('running conversation: /compact and /handoff show disabled reason, flash on click/Enter, and sending with chip does not clear input', async ({ page }) => {
+  const state = await openProto(page);
+  await openConv(page, 'c-rich');
+  const input = page.getByTestId('next-composer-input');
+  await input.click();
+  await input.fill('请开始分析');
+  await input.press('Enter');
+  await expect(page.getByTestId('next-stop')).toBeVisible();
+
+  await input.fill('/comp');
+  const compactRow = page.locator('[data-testid=next-slash-item][data-id="compact"]');
+  await expect(compactRow).toBeVisible();
+  await expect(compactRow).toHaveAttribute('aria-disabled', 'true');
+  await expect(compactRow.locator('.composer-at-dir')).toHaveText('运行中，结束后可用');
+
+  await input.press('Enter');
+  await expect(compactRow).toHaveAttribute('data-flash', 'true');
+  await expect(page.getByTestId('next-composer-chip')).toHaveCount(0);
+  await expect(input).toHaveValue('/comp');
+
+  await compactRow.click({ force: true });
+  await expect(compactRow).toHaveAttribute('data-flash', 'true');
+  await expect(page.getByTestId('next-composer-chip')).toHaveCount(0);
+
+  await input.fill('/hand');
+  const handoffRow = page.locator('[data-testid=next-slash-item][data-id="handoff"]');
+  await expect(handoffRow).toBeVisible();
+  await expect(handoffRow).toHaveAttribute('aria-disabled', 'true');
+  await expect(handoffRow.locator('.composer-at-dir')).toHaveText('运行中，结束后可用');
+
   expectClean(state);
 });
 

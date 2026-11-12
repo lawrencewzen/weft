@@ -38,10 +38,12 @@ test('lists models by provider and switches the conversation model', async ({ pa
     await openNextChat(page, srv, conv.id);
 
     await expect(page.getByTestId('next-model-chip')).toContainText('Grok 4.6');
-    await expect(page.getByTestId('next-context-chip')).toHaveAttribute('title', /0%/);
+    await expect(page.getByTestId('next-context-chip')).toHaveAttribute('title', '0 / 200k');
 
     await openModelMenu(page);
-    await expect(page.getByTestId('next-model-menu')).toContainText('只对这个对话生效 · 管理模型');
+    await expect(page.getByTestId('next-model-menu')).not.toContainText('只对这个对话生效');
+    await expect(page.getByTestId('next-model-menu')).not.toContainText('管理模型');
+    await expect(page.getByTestId('next-menu-context')).toContainText('200k · 自定义');
     await expect(page.getByTestId('next-model-menu')).toContainText('Chip');
     await expect(page.getByTestId('next-model-menu')).toContainText('Grok 4.6');
     await expect(page.getByTestId('next-model-menu')).toContainText('grok-4.6');
@@ -138,12 +140,12 @@ test('context chip shows reported usage and stays at 0% without usage', async ({
     const { conv } = await openWorkspaceConversation(usageSrv, 'usage', prepared.dirs[0]);
     await createProviderModels(usageSrv, { contextWindow: 200000 });
     await openNextChat(page, usageSrv, conv.id);
-    await expect(page.getByTestId('next-context-chip')).toHaveAttribute('title', /0%/);
+    await expect(page.getByTestId('next-context-chip')).toHaveAttribute('title', '0 / 200k');
     await sendNext(page, 'count tokens');
-    await expect(page.getByTestId('next-context-chip')).toHaveAttribute('title', /8%/, { timeout: 20000 });
+    await expect(page.getByTestId('next-context-chip')).toHaveAttribute('title', '16.4k / 200k', { timeout: 20000 });
     await waitRunDone(page);
     await page.reload();
-    await expect(page.getByTestId('next-context-chip')).toHaveAttribute('title', /8%/);
+    await expect(page.getByTestId('next-context-chip')).toHaveAttribute('title', '16.4k / 200k');
   } finally {
     await usageSrv.kill();
   }
@@ -161,9 +163,9 @@ test('context chip shows reported usage and stays at 0% without usage', async ({
     await openNextChat(page, plain, conv.id);
     await sendNext(page, 'hello');
     await waitRunDone(page);
-    await expect(page.getByTestId('next-context-chip')).toHaveAttribute('title', /0%/);
+    await expect(page.getByTestId('next-context-chip')).toHaveAttribute('title', '0 / 200k');
     await page.reload();
-    await expect(page.getByTestId('next-context-chip')).toHaveAttribute('title', /0%/);
+    await expect(page.getByTestId('next-context-chip')).toHaveAttribute('title', '0 / 200k');
   } finally {
     await plain.kill();
   }
@@ -192,17 +194,14 @@ test('context menu sets the model window and keeps it after refresh', async ({ p
       }
     });
     await openNextChat(page, srv, conv.id);
-    await expect(page.getByTestId('next-context-chip')).toHaveAttribute('title', /0%/);
+    await expect(page.getByTestId('next-context-chip')).toHaveAttribute('title', '0 / 200k');
 
     await sendNext(page, 'count tokens');
-    await expect(page.getByTestId('next-context-chip')).toHaveAttribute('title', /8%/, { timeout: 20000 });
+    await expect(page.getByTestId('next-context-chip')).toHaveAttribute('title', '16.4k / 200k', { timeout: 20000 });
     await waitRunDone(page);
 
     await page.getByTestId('next-context-chip').click();
-    await expect(page.getByTestId('next-context-pop')).toBeVisible();
-    await expect(page.getByTestId('next-menu-compact')).toHaveText('立即压缩');
-    await page.getByTestId('next-context-chip').click();
-    await expect(page.getByTestId('next-context-pop')).toBeHidden();
+    await expect(page.getByTestId('next-context-pop')).toHaveCount(0);
 
     await page.getByTestId('next-model-chip').click();
     await expect(page.getByTestId('next-model-menu')).toBeVisible();
@@ -224,7 +223,7 @@ test('context menu sets the model window and keeps it after refresh', async ({ p
     await sub.locator('[data-testid=next-context-option][data-tokens="256000"]').click();
     await patchDone;
     await expect(page.getByTestId('next-model-menu')).toBeHidden();
-    await expect(page.getByTestId('next-context-chip')).toHaveAttribute('title', /6%/);
+    await expect(page.getByTestId('next-context-chip')).toHaveAttribute('title', '16.4k / 256k');
     expect(patches).toHaveLength(1);
     expect(patches[0].body).toEqual({
       overrides: {
@@ -246,7 +245,7 @@ test('context menu sets the model window and keeps it after refresh', async ({ p
     await page.getByTestId('next-context-restore').click();
     await restoreDone;
     await expect(page.getByTestId('next-model-menu')).toBeHidden();
-    await expect(page.getByTestId('next-context-chip')).toHaveAttribute('title', /8%/);
+    await expect(page.getByTestId('next-context-chip')).toHaveAttribute('title', '16.4k / 200k');
     expect(patches).toHaveLength(2);
     expect(patches[1].body).toEqual({
       overrides: {
@@ -255,7 +254,7 @@ test('context menu sets the model window and keeps it after refresh', async ({ p
     });
 
     await page.reload();
-    await expect(page.getByTestId('next-context-chip')).toHaveAttribute('title', /8%/);
+    await expect(page.getByTestId('next-context-chip')).toHaveAttribute('title', '16.4k / 200k');
     const listed = await apiV2(srv, 'GET', '/api/v2/providers');
     const saved = (listed.body.providers || []).find((item) => item.id === sourceId);
     const row = (saved?.models || []).find((item) => item.id === 'grok-4.6');
@@ -324,7 +323,7 @@ test('composer is disabled with a connect-model prompt when no model is availabl
   }
 });
 
-test('manage models opens the Provider settings overlay', async ({ page }) => {
+test('manage models footer is removed; settings overlay opens from sidebar', async ({ page }) => {
   const prepared = await prepareWorkspaces(['manage']);
   const srv = await startServer({
     script: 'no-usage.json',
@@ -336,8 +335,17 @@ test('manage models opens the Provider settings overlay', async ({ page }) => {
     await openNextChat(page, srv, conv.id);
 
     await openModelMenu(page);
-    await page.getByTestId('next-model-manage').click();
+    await expect(page.getByTestId('next-model-manage')).toHaveCount(0);
+    await expect(page.getByTestId('next-model-menu')).not.toContainText('只对这个对话生效');
+
+    // First Escape closes the opened models submenu, second Escape closes the primary menu
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('next-sub-models')).toBeHidden();
+    await page.keyboard.press('Escape');
     await expect(page.getByTestId('next-model-menu')).toBeHidden();
+
+    await page.getByTestId('next-open-settings').click();
+    await page.getByTestId('next-settings-nav-providers').click();
     await expect(page.getByTestId('next-settings')).toBeVisible();
     await expect(page.getByTestId('next-settings-nav-providers')).toHaveClass(/is-on/);
     await expect(page).toHaveURL(/\/settings\/providers$/);

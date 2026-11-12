@@ -110,6 +110,9 @@ export type RunStateInput = {
   retryMaxAttempts?: unknown;
   /** True while the in-flight submission is a manual or model handoff. */
   handoffRunning?: boolean;
+  /** Focus text of the running handoff / manual compaction, when the user gave one. */
+  handoffInstructions?: string;
+  compactionInstructions?: string;
 };
 
 function isRealSubagent(agent: ThreadSubagent | null | undefined): boolean {
@@ -254,6 +257,8 @@ export function runStateView({
   live = null,
   retryMaxAttempts,
   handoffRunning = false,
+  handoffInstructions,
+  compactionInstructions,
 }: RunStateInput = {}): RunState {
   const runStatus = normalizeRunStatus(status);
   const running = runStatus === 'running';
@@ -277,8 +282,10 @@ export function runStateView({
     lastActivityAt: last,
     stalledSince: stalledSinceOf(running, last, t, threshold),
     activeTool: running ? activeTool : null,
-    compaction: compactionView(live, lang),
-    handoff: handingOff ? { state: 'running' } : null,
+    compaction: compactionView(live, lang, compactionInstructions),
+    handoff: handingOff
+      ? { state: 'running', ...(handoffInstructions ? { instructions: handoffInstructions } : {}) }
+      : null,
   };
   if (retry) out.retry = retry;
   return out;

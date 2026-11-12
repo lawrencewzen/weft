@@ -96,6 +96,17 @@ function clip(text: string, max: number): string {
 
 function planFor(text: string): Plan {
   const body = clip(text, 60);
+  if (/(长回复|long\s*reply|long-reply)/i.test(text)) {
+    const lines: string[] = ['### 长回复测试', ''];
+    for (let i = 1; i <= 60; i++) {
+      lines.push(`第 ${i} 段：这是一段长回复的模拟内容，用于验证流式输出时对话区域是否会自动跟随滚动到底部。`);
+      lines.push('');
+    }
+    return {
+      tools: [],
+      reply: lines.join('\n'),
+    };
+  }
   if (/^(继续|continue)/i.test(text)) {
     return {
       tools: [],
@@ -1164,9 +1175,13 @@ const COMPACT_MS = 1800;
 export type CompactResult = { ok: true; taskId: string } | { ok: false; status: number; error: string; code?: string };
 
 /** POST /compact: always accepted. Running conversations place the summary at the next boundary. */
-export function compactConversation(db: MockDb, conv: MockConv, hub: MockHub): CompactResult {
+export function compactConversation(db: MockDb, conv: MockConv, hub: MockHub, instructions?: string): CompactResult {
   const taskId = nextId(db, 'compact');
-  conv.compaction = { state: 'running', trigger: 'manual' };
+  conv.compaction = {
+    state: 'running',
+    trigger: 'manual',
+    ...(instructions ? { instructions } : {}),
+  };
   publishConversationView(conv, hub);
   const settle = (): void => {
     if (conv.run) {
@@ -1178,6 +1193,7 @@ export function compactConversation(db: MockDb, conv: MockConv, hub: MockHub): C
       conv.compaction = {
         state: 'failed',
         trigger: 'manual',
+        ...(instructions ? { instructions } : {}),
         error: {
           zh: '压缩失败：模型请求超时',
           en: 'Compaction failed: model request timed out',
@@ -1185,7 +1201,8 @@ export function compactConversation(db: MockDb, conv: MockConv, hub: MockHub): C
       };
     } else {
       conv.compaction = { state: 'idle' };
-      const note: MockNote = compactionNote(nextId(db, 'note'), conv.items.length);
+      const note: MockNote = compactionNote(nextId(db, 'note'), conv.items.length, instructions);
+      note.request = { by: 'user', ...(instructions ? { instructions } : {}) };
       conv.items.push(note);
       conv.view.itemIds.push(note.id);
       conv.view.context = {
@@ -1229,7 +1246,7 @@ export function handoffConversation(
   conv.view.run = {
     status: 'running',
     startedAt: Date.now(),
-    pendingText: lang === 'en' ? 'Handoff to new context in progress...' : '正在交接到新上下文',
+    pendingText: lang === 'en' ? 'Organizing handoff…' : '正在整理交接…',
     canSend: true,
     canStop: true,
     lockedReason: null,
@@ -1237,11 +1254,11 @@ export function handoffConversation(
     lastActivityAt: Date.now(),
     stalledSince: null,
     activeTool: null,
-    handoff: { state: 'running' },
+    handoff: { state: 'running', ...(instructions ? { instructions } : {}) },
   };
   conv.pending = {
-    zh: '正在交接到新上下文',
-    en: 'Handoff to new context in progress...',
+    zh: '正在整理交接…',
+    en: 'Organizing handoff…',
   };
   touch(conv);
   publishConversationView(conv, hub);
@@ -1324,9 +1341,11 @@ async function executeHandoff(
     i18n: { zh: '新上下文', en: 'New context' },
     detail: detailZh,
     detailI18n: { zh: detailZh, en: detailEn },
+    request: { by: 'user', ...(instructions ? { instructions } : {}) },
   };
   conv.items.push(note);
   conv.view.itemIds.push(noteId);
+  touch(conv);
   publishItem(conv, hub, note);
 
   await sleep(400);

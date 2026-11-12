@@ -1,8 +1,12 @@
 import type { components } from '../../../src/v2/contract.gen';
 
-export type Provider = components['schemas']['Provider'];
-export type ProviderModel = components['schemas']['ProviderModel'];
+export type ProviderModel = components['schemas']['ProviderModel'] & {
+  defaultContextWindow?: number | null;
+};
 export type Model = ProviderModel;
+export type Provider = Omit<components['schemas']['Provider'], 'models'> & {
+  models: ProviderModel[];
+};
 export type ProviderKind = components['schemas']['ProviderKind'];
 export type ProviderAuth = components['schemas']['ProviderAuth'];
 export type ProviderAuthType = components['schemas']['ProviderAuthType'];

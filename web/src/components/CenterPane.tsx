@@ -283,6 +283,7 @@ export function CenterPane({
         failed={conversation.run.status === 'failed'}
         error={conversation.run.error}
         compaction={conversation.run.compaction}
+        handoff={conversation.run.handoff}
         onContinue={actions.continueRun}
         pending={waitingForAgent(shownItems, {
           running: conversation.run.status === 'running',

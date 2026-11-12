@@ -26,39 +26,48 @@ export function SidebarArchived({
   return (
     <div className="sb-archived-section sidebar-archived-section" data-testid="next-sidebar-archived-section">
       <div className="sb-archived-list sidebar-archived-list" data-testid="next-archived-list">
-        {archived.map((conv) => {
-          const isCurrent = conv.id === activeConversationId;
-          return (
-            <div
-              key={conv.id}
-              className={`sb-row row sb-conv conv conv-node-header sidebar-archived-row${isCurrent ? ' sel conv-active' : ''}`}
-              data-testid="next-conv-row"
-              data-id={conv.id}
-              data-status={conv.status || 'idle'}
-              data-ws-id={conv.workspaceId}
-              aria-current={isCurrent ? 'page' : undefined}
-              onClick={() => onOpenConversation(conv.workspaceId, conv.id)}
-              onContextMenu={(ev) => onOpenMenu(ev, conversationItems(conv.workspaceId, conv), conv.title || '')}
-            >
-              <span className="sb-st st v2 conv-status-slot" />
-              <span className="sb-conv-title t conv-node-title">
-                {conv.title || t(lang, 'default_conversation_title')}
-              </span>
-              <span className="sb-conv-meta meta conv-node-meta">
-                {formatRelativeTime(lang, conv.updatedAt)}
-              </span>
-              <button
-                type="button"
-                className="sb-act act sb-conv-more more"
-                title={t(lang, 'more_actions')}
-                aria-label={t(lang, 'more_actions')}
-                onClick={(ev) => onOpenMenu(ev, conversationItems(conv.workspaceId, conv), conv.title || '')}
+        {archived.length === 0 ? (
+          <div
+            className="sb-archived-empty sidebar-archived-empty"
+            data-testid="next-archived-empty"
+          >
+            {t(lang, 'no_archived_chats')}
+          </div>
+        ) : (
+          archived.map((conv) => {
+            const isCurrent = conv.id === activeConversationId;
+            return (
+              <div
+                key={conv.id}
+                className={`sb-row row sb-conv conv conv-node-header sidebar-archived-row${isCurrent ? ' sel conv-active' : ''}`}
+                data-testid="next-conv-row"
+                data-id={conv.id}
+                data-status={conv.status || 'idle'}
+                data-ws-id={conv.workspaceId}
+                aria-current={isCurrent ? 'page' : undefined}
+                onClick={() => onOpenConversation(conv.workspaceId, conv.id)}
+                onContextMenu={(ev) => onOpenMenu(ev, conversationItems(conv.workspaceId, conv), conv.title || '')}
               >
-                {MORE_ICON}
-              </button>
-            </div>
-          );
-        })}
+                <span className="sb-st st v2 conv-status-slot" />
+                <span className="sb-conv-title t conv-node-title">
+                  {conv.title || t(lang, 'default_conversation_title')}
+                </span>
+                <span className="sb-conv-meta meta conv-node-meta">
+                  {formatRelativeTime(lang, conv.updatedAt)}
+                </span>
+                <button
+                  type="button"
+                  className="sb-act act sb-conv-more more"
+                  title={t(lang, 'more_actions')}
+                  aria-label={t(lang, 'more_actions')}
+                  onClick={(ev) => onOpenMenu(ev, conversationItems(conv.workspaceId, conv), conv.title || '')}
+                >
+                  {MORE_ICON}
+                </button>
+              </div>
+            );
+          })
+        )}
       </div>
     </div>
   );

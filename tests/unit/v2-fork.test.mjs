@@ -163,7 +163,7 @@ test('POST /fork copies history with Pi Durable, prefill, idempotency, and error
     const child = await sendV2(srv.base, 'GET', `/api/v2/conversations/${assistantForkId}`, token);
     assert.equal(child.status, 200, child.text);
     assertChecked(`/api/v2/conversations/${assistantForkId}`, 'GET', 200, child.body);
-    assert.equal(child.body.conversation.title, 'Plan review（分叉）');
+    assert.equal(child.body.conversation.title, 'Plan review (fork)');
     assert.equal(child.body.conversation.workspaceId, parent.body.conversation.workspaceId);
     assert.deepEqual(child.body.conversation.forkedFrom, {
       conversationId: parentId,
@@ -236,7 +236,7 @@ test('POST /fork copies history with Pi Durable, prefill, idempotency, and error
     assert.deepEqual(empty.body.items, []);
     assert.deepEqual(empty.body.conversation.itemIds, []);
     assert.equal(empty.body.conversation.workspaceId, parent.body.conversation.workspaceId);
-    assert.equal(empty.body.conversation.title, 'Plan review（分叉）');
+    assert.equal(empty.body.conversation.title, 'Plan review (fork)');
     assert.deepEqual(empty.body.conversation.forkedFrom, {
       conversationId: parentId,
       title: 'Plan review',
@@ -246,7 +246,7 @@ test('POST /fork copies history with Pi Durable, prefill, idempotency, and error
     const recalled = await waitFor(srv.base, assistantForkId, token, (body) => (
       body?.conversation?.run?.status === 'idle' && itemText(body, 'assistant', 'REMEMBERS')
     ));
-    assert.equal(recalled.body.conversation.title, 'Plan review（分叉）');
+    assert.equal(recalled.body.conversation.title, 'Plan review (fork)');
     assert.ok(itemText(recalled.body, 'user', 'TOKEN-APPLE'));
     assert.ok(itemText(recalled.body, 'assistant', 'APPLE-SEEN'));
     const recorded = (await readFile(record, 'utf8')).trim().split('\n').filter(Boolean).map((line) => JSON.parse(line));
@@ -299,7 +299,7 @@ test('POST /fork copies history with Pi Durable, prefill, idempotency, and error
       conversationId: parentId,
       title: 'Plan review',
     });
-    assert.equal(snap.body.conversation.title, 'Plan review（分叉）');
+    assert.equal(snap.body.conversation.title, 'Plan review (fork)');
     assert.ok(itemText(snap.body, 'assistant', 'APPLE-SEEN'));
     assert.ok(itemText(snap.body, 'assistant', 'REMEMBERS'));
     const side = await sendV2(srv.base, 'GET', '/api/v2/workspaces', token);
