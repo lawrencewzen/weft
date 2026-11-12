@@ -2090,6 +2090,8 @@ export interface components {
             enabled: boolean;
             /** @description 已应用用户覆盖；null = 未知（运行时按 128000 算） */
             contextWindow: null | number;
+            /** @description 模型不带用户覆盖时的上下文上限（目录值或自定义端点配置的值）；null = 完全没有。用于标出「默认」行和「恢复默认」的目标值 */
+            defaultContextWindow?: null | number;
             /** @description 已应用用户覆盖；null = 未知 */
             maxTokens: null | number;
             images: boolean;

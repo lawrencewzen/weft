@@ -246,6 +246,7 @@ function modelRow(model, { enabled, overridden }) {
     name: model.name || model.id,
     enabled: enabled === true,
     contextWindow: over.contextWindow ?? displayWindow(model.contextWindow),
+    defaultContextWindow: displayWindow(model.contextWindow),
     maxTokens: over.maxTokens ?? displayWindow(model.maxTokens),
     images: input.includes('image'),
     reasoning: model.reasoning === true,
