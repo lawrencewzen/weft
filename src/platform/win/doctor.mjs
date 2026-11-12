@@ -9,7 +9,7 @@ import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import iconv from 'iconv-lite';
 import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 import { wrapPwshCommand } from './output-transcode.mjs';
 import { agentPowerShellScript } from './shell.mjs';
 import { DEFAULT_APP_ROOT, resolveTool } from './bundled-tools.mjs';
@@ -567,9 +567,8 @@ function isModuleNotFound(err) {
 }
 
 async function defaultLoadShellModule() {
-  const href = pathToFileURL(path.join(path.dirname(fileURLToPath(import.meta.url)), 'shell.mjs')).href;
   try {
-    return await import(href);
+    return await import('./shell.mjs');
   } catch (err) {
     if (isModuleNotFound(err)) return null;
     return { __loadError: err };

@@ -11,6 +11,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
+import { bundleServer } from './bundle-server.mjs';
 import { crc32, deflateRaw, inflateRawSync } from 'node:zlib';
 
 const deflateRawAsync = promisify(deflateRaw);
@@ -57,9 +58,11 @@ const BANNED_PACKAGE_NAMES = new Set([
 const ZIP_LIMIT = 0xffff;
 
 function usageText() {
-  return `用法: node scripts/pack-release.mjs --platform win-x64 [--node-version ${NODE_VERSION}] [--shell <壳产物目录>] --out <目录>
+  return `用法: node scripts/pack-release.mjs --platform win-x64 [--node-version ${NODE_VERSION}] [--shell <壳产物目录>] [--no-bundle] --out <目录>
 
 先构建前端（npm run build:web）。只支持 Windows x64。
+默认把服务端用 esbuild 打成少数几个文件（scripts/bundle-server.mjs），包里不放 src/ 和完整 node_modules；
+--no-bundle（或环境变量 WEFT_PACK_BUNDLE=0）退回老方式：源码 + npm ci 的 node_modules，便于出问题时对比。
 桌面壳产物目录是 dotnet publish desktop/win -c Release -o <目录> 的输出（单文件 Weft.exe，自带 .NET 8），并已把 WebView2 固定版解到其中的 webview2\\；不传则跳过，包里没有 Weft.exe。`;
 }
 
@@ -78,8 +81,13 @@ export function parsePackArgs(argv) {
   let nodeVersion = NODE_VERSION;
   let out;
   let shell;
+  let bundle;
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
+    if (arg === '--no-bundle' || arg === '--bundle') {
+      bundle = arg === '--bundle';
+      continue;
+    }
     if (arg === '--shell') {
       shell = argv[i + 1];
       i += 1;
@@ -112,7 +120,9 @@ export function parsePackArgs(argv) {
   }
   if (!out) throw new Error(`缺少 --out\n${usageText()}`);
   assertNodeVersion(nodeVersion);
-  return shell ? { platform, nodeVersion, out, shell } : { platform, nodeVersion, out };
+  const parsed = shell ? { platform, nodeVersion, out, shell } : { platform, nodeVersion, out };
+  if (bundle !== undefined) parsed.bundle = bundle;
+  return parsed;
 }
 
 export function sha256Hex(buf) {
@@ -949,6 +959,10 @@ async function copyApp(root, appDir) {
       },
     });
   }
+  await assertFrontendBuilt(appDir);
+}
+
+async function assertFrontendBuilt(appDir) {
   const indexPath = path.join(appDir, 'public-next', 'index.html');
   if (!await pathExists(indexPath)) {
     throw new Error('public-next/index.html 不存在。请先运行 npm run build:web');
@@ -957,6 +971,101 @@ async function copyApp(root, appDir) {
   if (!html.includes('id="root"') || html.includes('/src/main.tsx')) {
     throw new Error('public-next/index.html 不是构建产物。请先运行 npm run build:web');
   }
+}
+
+/** 打包模式下 app/package.json 只留运行时读的字段（server.mjs 读 name / version / description；type 决定 .js 的模块类型）。 */
+export function bundledPackageJson(pkg) {
+  const out = {};
+  for (const key of ['name', 'version', 'private', 'description', 'type', 'engines']) {
+    if (pkg[key] !== undefined) out[key] = pkg[key];
+  }
+  return out;
+}
+
+/** 从 names 出发，沿 dependencies / optionalDependencies 在 node_modules 里找出要保留的顶层包目录名（含 @scope/name）。 */
+export async function dependencyClosure(nodeModulesDir, names) {
+  const keep = new Set();
+  const queue = [...names];
+  while (queue.length) {
+    const name = queue.pop();
+    if (keep.has(name)) continue;
+    let pkg;
+    try {
+      pkg = JSON.parse(await readFile(path.join(nodeModulesDir, name, 'package.json'), 'utf8'));
+    } catch {
+      continue; // 可选依赖没装，或者在嵌套 node_modules 里
+    }
+    keep.add(name);
+    for (const dep of Object.keys({ ...pkg.dependencies, ...pkg.optionalDependencies })) queue.push(dep);
+  }
+  return keep;
+}
+
+/** 只留 keep 里的顶层包（含 scope 下的包），其余整个删掉。返回删除前后的文件数。 */
+export async function keepOnlyPackages(nodeModulesDir, keep) {
+  const before = await treeStats(nodeModulesDir);
+  for (const entry of await readdir(nodeModulesDir, { withFileTypes: true })) {
+    const abs = path.join(nodeModulesDir, entry.name);
+    if (entry.name === '.bin' || entry.name.startsWith('.')) {
+      await rm(abs, { recursive: true, force: true });
+    } else if (entry.name.startsWith('@')) {
+      for (const child of await readdir(abs, { withFileTypes: true })) {
+        if (!keep.has(`${entry.name}/${child.name}`)) await rm(path.join(abs, child.name), { recursive: true, force: true });
+      }
+      if ((await readdir(abs)).length === 0) await rm(abs, { recursive: true, force: true });
+    } else if (!keep.has(entry.name)) {
+      await rm(abs, { recursive: true, force: true });
+    }
+  }
+  return { before, after: await treeStats(nodeModulesDir) };
+}
+
+/** 包内文件按大类统计（相对包根的顶层目录；app/ 再往下分一层），给 PR 和日志看分布。 */
+export async function categoryStats(stage) {
+  const buckets = new Map();
+  async function walk(dir, rel) {
+    for (const entry of await readdir(dir, { withFileTypes: true })) {
+      const abs = path.join(dir, entry.name);
+      const childRel = rel ? `${rel}/${entry.name}` : entry.name;
+      if (entry.isDirectory()) {
+        await walk(abs, childRel);
+      } else if (entry.isFile()) {
+        const segs = childRel.split('/');
+        const key = segs.length === 1 ? '(根目录文件)' : segs[0] === 'app' && segs.length > 2 ? `app/${segs[1]}` : segs[0];
+        buckets.set(key, (buckets.get(key) || 0) + 1);
+      }
+    }
+  }
+  await walk(stage, '');
+  return [...buckets.entries()].sort((a, b) => b[1] - a[1]);
+}
+
+/** 打包模式：app/ 里放 esbuild 的 bundle、前端、技能和必要数据文件；只有打不进 bundle 的包才装 node_modules。 */
+async function prepareBundledApp(root, appDir, pkg) {
+  const { files, externals } = await bundleServer({ root, outDir: appDir });
+  console.log(`esbuild bundle：${files.length} 个文件`);
+  await cp(path.join(root, 'public-next'), path.join(appDir, 'public-next'), { recursive: true });
+  await assertFrontendBuilt(appDir);
+  for (const rel of OPTIONAL_APP_PATHS) {
+    const from = path.join(root, rel);
+    // plugins 已经由 bundle 产出；skills 原样带上
+    if (rel === 'plugins' || !await pathExists(from)) continue;
+    await cp(from, path.join(appDir, rel), { recursive: true });
+  }
+  await writeFile(path.join(appDir, 'package.json'), `${JSON.stringify(bundledPackageJson(pkg), null, 2)}\n`);
+  let prune = null;
+  if (externals.length) {
+    const deps = { ...pkg.dependencies };
+    const wanted = Object.fromEntries(externals.map((name) => [name, deps[name]]).filter(([, v]) => v));
+    await writeFile(path.join(appDir, 'package.json'), `${JSON.stringify({ ...bundledPackageJson(pkg), dependencies: wanted }, null, 2)}\n`);
+    await cp(path.join(root, 'package-lock.json'), path.join(appDir, 'package-lock.json'));
+    console.log('npm ci --omit=dev --ignore-scripts（只为 external 包）');
+    runNpmCi(appDir);
+    const nodeModulesDir = path.join(appDir, 'node_modules');
+    prune = await keepOnlyPackages(nodeModulesDir, await dependencyClosure(nodeModulesDir, externals));
+    await rm(path.join(appDir, 'package-lock.json'), { force: true });
+  }
+  return { externals, prune };
 }
 
 async function stripPostinstall(appDir) {
@@ -1007,6 +1116,7 @@ export async function packRelease({
   out,
   root = ROOT,
   shell,
+  bundle = process.env.WEFT_PACK_BUNDLE !== '0',
 } = {}) {
   assertNodeVersion(nodeVersion);
   if (!out) throw new Error('缺少输出目录');
@@ -1018,23 +1128,37 @@ export async function packRelease({
   const stage = await mkdtemp(path.join(tmpdir(), 'weft-pack-'));
   const appDir = path.join(stage, 'app');
   try {
-    console.log(`准备 app/（Node ${nodeVersion}）`);
-    await copyApp(root, appDir);
-    console.log('npm ci --omit=dev --ignore-scripts');
-    runNpmCi(appDir);
-    const banned = await findBannedPackages(path.join(appDir, 'node_modules'));
-    if (banned.length) {
-      throw new Error(`运行时依赖里出现了开发包：${banned.join(', ')}`);
+    console.log(`准备 app/（Node ${nodeVersion}，${bundle ? 'esbuild 打包' : '不打包：源码 + 完整 node_modules'}）`);
+    let prune = null;
+    let packages = [];
+    if (bundle) {
+      const prepared = await prepareBundledApp(root, appDir, pkg);
+      prune = prepared.prune;
+      if (prepared.externals.length) packages = await listTopPackages(path.join(appDir, 'node_modules'));
+    } else {
+      await copyApp(root, appDir);
+      console.log('npm ci --omit=dev --ignore-scripts');
+      runNpmCi(appDir);
+      // esbuild 是 chord 的可选 peer，又是我们打包用的 devDependency，npm 会把它装进 --omit=dev 的树里；运行时用不到。
+      await rm(path.join(appDir, 'node_modules', 'esbuild'), { recursive: true, force: true });
+      await rm(path.join(appDir, 'node_modules', '@esbuild'), { recursive: true, force: true });
+      const banned = await findBannedPackages(path.join(appDir, 'node_modules'));
+      if (banned.length) {
+        throw new Error(`运行时依赖里出现了开发包：${banned.join(', ')}`);
+      }
+      const nodeModulesDir = path.join(appDir, 'node_modules');
+      const missingBefore = new Set(await findMissingEntryPoints(nodeModulesDir)); // 上游自己就缺的不算
+      prune = await pruneNodeModules(nodeModulesDir);
+      const missingEntries = (await findMissingEntryPoints(nodeModulesDir)).filter((item) => !missingBefore.has(item));
+      if (missingEntries.length) {
+        throw new Error(`裁剪后缺少包入口文件：\n  ${missingEntries.join('\n  ')}`);
+      }
+      await stripPostinstall(appDir);
+      packages = await listTopPackages(path.join(appDir, 'node_modules'));
     }
-    const nodeModulesDir = path.join(appDir, 'node_modules');
-    const missingBefore = new Set(await findMissingEntryPoints(nodeModulesDir)); // 上游自己就缺的不算
-    const prune = await pruneNodeModules(nodeModulesDir);
-    const missingEntries = (await findMissingEntryPoints(nodeModulesDir)).filter((item) => !missingBefore.has(item));
-    if (missingEntries.length) {
-      throw new Error(`裁剪后缺少包入口文件：\n  ${missingEntries.join('\n  ')}`);
+    for (const rel of ['server.mjs', 'bin/weft.mjs']) {
+      if (!await pathExists(path.join(appDir, rel))) throw new Error(`app/ 缺少入口 ${rel}`);
     }
-    await stripPostinstall(appDir);
-    const packages = await listTopPackages(path.join(appDir, 'node_modules'));
 
     const { exe, exeHash } = await acquireNodeExe({ nodeVersion, outDir, root });
     await mkdir(path.join(stage, 'node'), { recursive: true });
@@ -1064,8 +1188,15 @@ export async function packRelease({
     console.log(`zip: ${zipPath}`);
     console.log(`zip bytes: ${zipBuf.length}`);
     const total = await treeStats(stage);
-    console.log(`app/node_modules 裁剪前：${prune.before.files} 个文件，${formatMB(prune.before.bytes)}`);
-    console.log(`app/node_modules 裁剪后：${prune.after.files} 个文件，${formatMB(prune.after.bytes)}`);
+    console.log(`服务端：${bundle ? 'esbuild bundle' : '源码 + 完整 node_modules（--no-bundle）'}`);
+    if (prune) {
+      console.log(`app/node_modules 裁剪前：${prune.before.files} 个文件，${formatMB(prune.before.bytes)}`);
+      console.log(`app/node_modules 裁剪后：${prune.after.files} 个文件，${formatMB(prune.after.bytes)}`);
+    } else {
+      console.log('app/node_modules：无（全部打进 bundle）');
+    }
+    console.log('文件分布（个数）：');
+    for (const [name, count] of await categoryStats(stage)) console.log(`  ${name}: ${count}`);
     console.log(`WebView2 语言包裁掉：${shellPruned} 个`);
     console.log(`包内文件总数（zip 条目）：${total.files}，解压后 ${formatMB(total.bytes)}`);
     console.log(`zip sha256: ${zipHash}`);
