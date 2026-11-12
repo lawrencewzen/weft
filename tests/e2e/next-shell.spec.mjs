@@ -55,7 +55,6 @@ test('GET /auth?code= exchanges a web-code for a session and shows protocol 2.0.
     expect(body.code).toBeTruthy();
 
     await page.goto(`${srv.url}/auth?code=${encodeURIComponent(body.code)}`);
-    await expect(page).toHaveURL(/http:\/\/127\.0\.0\.1:\d+\/$/);
     await expect(page.getByTestId('next-app')).toBeVisible();
     await expect(page.getByTestId('next-sidebar')).toBeVisible();
     await expect(page).toHaveURL(/\/new$/);

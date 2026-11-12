@@ -113,8 +113,13 @@ test('forking at an assistant message keeps its tool calls with their results', 
       const groups = snap.items.filter((x) => x.kind === 'tool_group');
       assert.equal(groups.length, 1, JSON.stringify(shape(snap)));
       assert.equal(snap.items.indexOf(groups[0]), 2, JSON.stringify(shape(snap)));
-      assert.deepEqual(groups[0].toolIds, ['sp-1', 'sp-2', 'ask-1']);
-      assert.deepEqual(snap.tools.map((t) => [t.id, t.status]), [['sp-1', 'done'], ['sp-2', 'done'], ['ask-1', 'done']]);
+      // Results are placed as they finish, so the order inside a group is not the call order.
+      assert.deepEqual([...groups[0].toolIds].sort(), ['ask-1', 'sp-1', 'sp-2']);
+      assert.deepEqual(
+        snap.tools.map((t) => [t.id, t.status]).sort(),
+        [['ask-1', 'done'], ['sp-1', 'done'], ['sp-2', 'done']],
+      );
+      assert.deepEqual(snap.tools.map((t) => t.id), groups[0].toolIds);
       assert.equal(snap.items.at(-1).kind, 'assistant');
     }
     assert.equal(snapC.tools.find((t) => t.id === 'ask-1').kind, 'ask');
