@@ -524,6 +524,8 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.65; backgrou
 .sb-foot-row {
   display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 11px; border-radius: 8px;
 }
+/* 底栏一行装着三个独立控件，整行不跟随悬停变亮，只有各按钮自己亮 */
+.sb-row.sb-foot-row:hover, .row.sb-foot-row:hover { background: transparent; cursor: default; }
 .sb-foot-link span:not(.sb-ic),
 .sb-svc,
 .sb-end {
@@ -540,7 +542,9 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.65; backgrou
   border: none; background: transparent; color: var(--ink3); cursor: pointer; padding: 0; border-radius: 5px; font-size: var(--fs-ui);
   display: flex; align-items: center; gap: 8px; font-family: inherit;
 }
+.sb-foot-link { height: 24px; padding: 0 8px; margin-left: -8px; border-radius: 6px; }
 .foot-link:hover, .sb-foot-link:hover { color: var(--ink); }
+.sb-foot-link:hover { background: var(--hover); }
 .foot-right, .sb-end { display: flex; align-items: center; gap: 2px; min-width: 0; margin-left: auto; }
 .foot-status-dot, .sb-svc {
   width: 6px; height: 6px; border-radius: 50%; background: var(--bd3); flex-shrink: 0; margin-left: 2px;
