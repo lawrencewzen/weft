@@ -760,3 +760,59 @@ test('findMissingEntryPoints reports declared runtime entries that are gone, ign
     await rm(tmp, { recursive: true, force: true });
   }
 });
+
+test('parsePackArgs: --no-bundle 退回老方式，默认不带 bundle 字段', () => {
+  const base = ['--platform', 'win-x64', '--out', 'dist'];
+  assert.equal(parsePackArgs(base).bundle, undefined);
+  assert.equal(parsePackArgs([...base, '--no-bundle']).bundle, false);
+  assert.equal(parsePackArgs([...base, '--bundle']).bundle, true);
+});
+
+test('bundledPackageJson 只留运行时读的字段', () => {
+  const out = packRelease.bundledPackageJson({
+    name: 'weft', version: '1.2.3', type: 'module', private: true, description: 'd',
+    engines: { node: '>=22' }, scripts: { postinstall: 'x' }, dependencies: { a: '1' }, devDependencies: { b: '1' }, bin: { weft: 'x' },
+  });
+  assert.deepEqual(out, { name: 'weft', version: '1.2.3', private: true, description: 'd', type: 'module', engines: { node: '>=22' } });
+});
+
+test('dependencyClosure / keepOnlyPackages 只留 external 包和它们的依赖', async () => {
+  const tmp = await mkdtemp(path.join(tmpdir(), 'weft-closure-'));
+  try {
+    const put = async (name, deps = {}) => {
+      const dir = path.join(tmp, name);
+      await mkdir(dir, { recursive: true });
+      await writeFile(path.join(dir, 'package.json'), JSON.stringify({ name, dependencies: deps }));
+      await writeFile(path.join(dir, 'index.js'), 'x');
+    };
+    await put('a', { b: '1', '@s/c': '1', missing: '1' });
+    await put('b');
+    await put('@s/c', { b: '1' });
+    await put('@s/other');
+    await put('unrelated');
+    await mkdir(path.join(tmp, '.bin'));
+    await writeFile(path.join(tmp, '.bin', 'x'), 'x');
+    const keep = await packRelease.dependencyClosure(tmp, ['a']);
+    assert.deepEqual([...keep].sort(), ['@s/c', 'a', 'b']);
+    const { before, after } = await packRelease.keepOnlyPackages(tmp, keep);
+    assert.equal(before.files > after.files, true);
+    assert.deepEqual((await readdir(tmp)).sort(), ['@s', 'a', 'b']);
+    assert.deepEqual(await readdir(path.join(tmp, '@s')), ['c']);
+  } finally {
+    await rm(tmp, { recursive: true, force: true });
+  }
+});
+
+test('categoryStats 按顶层目录统计文件数，app/ 再分一层', async () => {
+  const tmp = await mkdtemp(path.join(tmpdir(), 'weft-cats-'));
+  try {
+    for (const rel of ['Weft.cmd', 'node/node.exe', 'app/server.mjs', 'app/public-next/a.js', 'app/public-next/b.js', 'tools/rg/rg.exe']) {
+      await mkdir(path.dirname(path.join(tmp, rel)), { recursive: true });
+      await writeFile(path.join(tmp, rel), 'x');
+    }
+    const stats = Object.fromEntries(await packRelease.categoryStats(tmp));
+    assert.deepEqual(stats, { '(根目录文件)': 1, node: 1, app: 1, 'app/public-next': 2, tools: 1 });
+  } finally {
+    await rm(tmp, { recursive: true, force: true });
+  }
+});
