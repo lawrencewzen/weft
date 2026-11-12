@@ -324,7 +324,7 @@ test('composer is disabled with a connect-model prompt when no model is availabl
   }
 });
 
-test('manage models opens the Provider settings overlay', async ({ page }) => {
+test('manage models footer is removed; settings overlay opens from sidebar', async ({ page }) => {
   const prepared = await prepareWorkspaces(['manage']);
   const srv = await startServer({
     script: 'no-usage.json',
@@ -336,8 +336,14 @@ test('manage models opens the Provider settings overlay', async ({ page }) => {
     await openNextChat(page, srv, conv.id);
 
     await openModelMenu(page);
-    await page.getByTestId('next-model-manage').click();
+    await expect(page.getByTestId('next-model-manage')).toHaveCount(0);
+    await expect(page.getByTestId('next-model-menu')).not.toContainText('只对这个对话生效');
+
+    await page.keyboard.press('Escape');
     await expect(page.getByTestId('next-model-menu')).toBeHidden();
+
+    await page.getByTestId('next-open-settings').click();
+    await page.getByTestId('next-settings-nav-providers').click();
     await expect(page.getByTestId('next-settings')).toBeVisible();
     await expect(page.getByTestId('next-settings-nav-providers')).toHaveClass(/is-on/);
     await expect(page).toHaveURL(/\/settings\/providers$/);

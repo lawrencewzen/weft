@@ -45,12 +45,23 @@ test('prototype context window UI: context in model menu, presets, custom input,
   const ctxRow = page.getByTestId('next-menu-context');
   await expect(ctxRow).toBeVisible();
   await expect(ctxRow).toContainText('上下文');
-  await expect(ctxRow).toContainText('1M');
+  await expect(ctxRow).toContainText('1,048,576 · 默认');
 
   await ctxRow.hover();
   const ctxSub = page.getByTestId('next-sub-context');
   await expect(ctxSub).toBeVisible();
-  await expect(ctxSub).toContainText('DeepSeek V4.1 Flash 的上下文上限');
+  await expect(ctxSub).toContainText('上下文上限');
+  await expect(ctxSub).not.toContainText('DeepSeek V4.1 Flash 的上下文上限');
+  await expect(ctxSub).not.toContainText('按模型保存');
+  await expect(page.getByTestId('next-context-restore')).toHaveCount(0);
+
+  // Check 1M preset vs 1,048,576 default
+  const opt1M = ctxSub.locator('[data-testid=next-context-option][data-tokens="1000000"]');
+  await expect(opt1M).toContainText('1M');
+  await expect(opt1M).not.toContainText('默认');
+  const optDefault = ctxSub.locator('[data-testid=next-context-option][data-tokens="1048576"]');
+  await expect(optDefault).toContainText('1,048,576');
+  await expect(optDefault).toContainText('默认');
 
   // 3. Pick 64K preset -> menu closes, ring and percent update to 75%
   await page.locator('[data-testid=next-context-option][data-tokens="64000"]').click();
@@ -59,10 +70,13 @@ test('prototype context window UI: context in model menu, presets, custom input,
   await expect(contextChip).toHaveAttribute('title', /48\.2k \/ 64k/);
   await expect(contextChip).toHaveAttribute('title', /已用 75%/);
 
-  // Re-open model menu, context row now shows 64k
+  // Re-open model menu, context row now shows 64k · 自定义
   await modelChip.click();
   await expect(menu).toBeVisible();
-  await expect(page.getByTestId('next-menu-context')).toContainText('64k');
+  await expect(page.getByTestId('next-menu-context')).toContainText('64k · 自定义');
+  await page.getByTestId('next-menu-context').hover();
+  await expect(ctxSub).toBeVisible();
+  await expect(page.getByTestId('next-context-restore')).toBeVisible();
 
   // 4. Custom input: enter 50000 -> 48.2k / 50k is 96%, triggers warn banner
   await page.getByTestId('next-menu-context').hover();

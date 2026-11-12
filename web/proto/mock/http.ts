@@ -743,8 +743,12 @@ function handlePatchProvider(
         if (ov.contextWindow === null) {
           m.overridden = { ...m.overridden, contextWindow: false };
           const cat = MOCK_CATALOG_MODELS[provider.id]?.find((x) => x.id === mid);
-          m.contextWindow = cat ? cat.contextWindow : (mid === 'glm-5.2-fp8' ? null : 128_000);
+          m.contextWindow = m.defaultContextWindow ?? (cat ? cat.contextWindow : (mid === 'glm-5.2-fp8' ? null : 128_000));
         } else if (Number.isFinite(ov.contextWindow)) {
+          if (m.defaultContextWindow === undefined) {
+            const cat = MOCK_CATALOG_MODELS[provider.id]?.find((x) => x.id === mid);
+            m.defaultContextWindow = cat ? cat.contextWindow : m.contextWindow;
+          }
           m.contextWindow = Number(ov.contextWindow);
           m.overridden = { ...m.overridden, contextWindow: true };
         }
