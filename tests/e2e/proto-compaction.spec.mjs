@@ -298,8 +298,7 @@ test('10. a draft conversation shows usage tooltip on context chip and clicking 
 test('11. user compaction bubble and divider persist across page reload', async ({ page }) => {
   const state = await openProto(page);
   await openConv(page, 'c-docs');
-  await openMenu(page);
-  await page.getByTestId('next-menu-compact').click();
+  await triggerCompact(page);
   await expect(page.getByTestId('next-thread-compacting')).toHaveCount(0, { timeout: 10_000 });
 
   const bubble = page.getByTestId('next-item-user').filter({ has: page.getByTestId('next-user-chip') });

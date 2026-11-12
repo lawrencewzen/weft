@@ -243,8 +243,12 @@ test('5. English labels for handoff divider, toggle, earlier context, and slash 
 test('6. handoff user bubble and divider persist across page reload', async ({ page }) => {
   const state = await openProto(page);
   await openConv(page, 'c-docs');
-  await openMenu(page);
-  await page.getByTestId('next-menu-handoff').click();
+  const input = page.getByTestId('next-composer-input');
+  await input.click();
+  await input.fill('/hand');
+  await input.press('Enter');
+  await expect(page.locator('.slash-chip[data-kind="handoff"]')).toBeVisible();
+  await input.press('Enter');
   await expect(page.getByTestId('next-thread-pending')).toHaveCount(0, { timeout: 10_000 });
 
   const bubble = page.getByTestId('next-item-user').filter({ has: page.getByTestId('next-user-chip') });

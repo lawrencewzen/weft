@@ -1340,6 +1340,7 @@ async function executeHandoff(
   };
   conv.items.push(note);
   conv.view.itemIds.push(noteId);
+  touch(conv);
   publishItem(conv, hub, note);
 
   await sleep(400);
