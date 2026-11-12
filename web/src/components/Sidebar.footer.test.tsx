@@ -156,4 +156,30 @@ describe('Sidebar footer layout (T119-2)', () => {
     });
     expect(host?.querySelector('[data-testid="next-archived-list"]')).toBeNull();
   });
+
+  it('displays empty note when opening archived list with no archived conversations', async () => {
+    await renderSidebar({ archived: [], lang: 'zh' });
+
+    const archivedBtn = host?.querySelector<HTMLButtonElement>('[data-testid="next-archived-toggle"]');
+    expect(archivedBtn).not.toBeNull();
+    expect(host?.querySelector('[data-testid="next-archived-empty"]')).toBeNull();
+
+    await act(async () => {
+      archivedBtn?.click();
+    });
+
+    const emptyNote = host?.querySelector('[data-testid="next-archived-empty"]');
+    expect(emptyNote).not.toBeNull();
+    expect(emptyNote?.textContent).toBe('没有归档的对话');
+
+    // Switch to English
+    await cleanup();
+    await renderSidebar({ archived: [], lang: 'en' });
+    const enArchivedBtn = host?.querySelector<HTMLButtonElement>('[data-testid="next-archived-toggle"]');
+    await act(async () => {
+      enArchivedBtn?.click();
+    });
+    const enEmptyNote = host?.querySelector('[data-testid="next-archived-empty"]');
+    expect(enEmptyNote?.textContent).toBe('No archived chats');
+  });
 });
