@@ -73,6 +73,18 @@ test('archive, unarchive, undo, auto-unarchive on send, delete confirmation, and
   await expect(archivedCount).toHaveCount(0);
   await expect(page.locator('[data-testid=next-conv-row][data-id="c-arch-1"]')).toBeVisible();
 
+  // All archived conversations unarchived: empty prompt is displayed between top and bottom borders
+  await expect(page.getByTestId('next-archived-empty')).toBeVisible();
+  await expect(page.getByTestId('next-archived-empty')).toHaveText('没有归档的对话');
+  const archSec = page.getByTestId('next-sidebar-archived-section');
+  const archSecBox = await archSec.boundingBox();
+  const sideBox = await page.getByTestId('next-sidebar').boundingBox();
+  expect(archSecBox).toBeTruthy();
+  expect(sideBox).toBeTruthy();
+  expect(Math.abs(archSecBox.x - sideBox.x)).toBeLessThanOrEqual(0.5);
+  expect(Math.abs(archSecBox.width - sideBox.width)).toBeLessThanOrEqual(0.5);
+  expect(parseFloat(await archSec.evaluate((el) => window.getComputedStyle(el).borderTopWidth))).toBeCloseTo(1, 0);
+
   // 3. Delete flow: cancel leaves conversation unchanged; confirm deletes it;
   // deleting current conversation jumps to draft page
   const delTarget = page.locator('[data-testid=next-conv-row][data-id="c-truncated"]');
