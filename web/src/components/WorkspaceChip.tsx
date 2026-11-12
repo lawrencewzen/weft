@@ -50,7 +50,6 @@ export function WorkspaceChip({
 }: Props) {
   const { workspaces } = useWorkspaces();
   const [open, setOpen] = useState(false);
-  const [boundHint, setBoundHint] = useState(false);
   const [ctx, setCtx] = useState<{ x: number; y: number } | null>(null);
   const wrap = useRef<HTMLDivElement>(null);
   const projects = workspaces.filter(isProjectWorkspace);
@@ -65,17 +64,15 @@ export function WorkspaceChip({
   const menuId = hero ? 'next-draft-hero-menu' : 'next-ws-chip-menu';
 
   useEffect(() => {
-    if (!open && !boundHint) return;
+    if (!open) return;
     const onKey = (ev: KeyboardEvent) => {
       if (ev.key === 'Escape') {
         setOpen(false);
-        setBoundHint(false);
       }
     };
     const onDown = (ev: MouseEvent) => {
       if (!wrap.current?.contains(ev.target as Node)) {
         setOpen(false);
-        setBoundHint(false);
       }
     };
     window.addEventListener('keydown', onKey);
@@ -84,21 +81,14 @@ export function WorkspaceChip({
       window.removeEventListener('keydown', onKey);
       window.removeEventListener('mousedown', onDown);
     };
-  }, [open, boundHint]);
+  }, [open]);
 
-  useEffect(() => {
-    if (!boundHint) return;
-    const timer = window.setTimeout(() => setBoundHint(false), 2200);
-    return () => window.clearTimeout(timer);
-  }, [boundHint]);
+  if (!canSwitch && !selected) {
+    return null;
+  }
 
   function onClick() {
-    if (!canSwitch) {
-      setOpen(false);
-      setBoundHint(true);
-      return;
-    }
-    setBoundHint(false);
+    if (!canSwitch) return;
     setOpen((value) => !value);
   }
 
@@ -107,7 +97,6 @@ export function WorkspaceChip({
     ev.preventDefault();
     ev.stopPropagation();
     setOpen(false);
-    setBoundHint(false);
     setCtx({ x: ev.clientX, y: ev.clientY });
   }
 
@@ -128,26 +117,32 @@ export function WorkspaceChip({
 
   return (
     <div className={`chip-selector-wrap${hero ? ' is-hero' : ''}`} ref={wrap}>
-      <button
-        type="button"
-        className={`model-chip ws-chip${hero ? ' ws-chip-hero' : ''}${open || boundHint ? ' is-open' : ''}${noneSelected ? ' is-empty' : ''}`}
-        data-testid={triggerId}
-        data-bound={canSwitch ? undefined : 'true'}
-        aria-haspopup={canSwitch ? 'listbox' : undefined}
-        aria-expanded={open}
-        title={title}
-        onClick={onClick}
-        onContextMenu={onContextMenu}
-      >
-        {hero ? null : FOLDER_ICON}
-        <span className="model-chip-name">{label}</span>
-        {canSwitch ? <span className="model-chip-caret" aria-hidden="true">▾</span> : null}
-      </button>
-      {boundHint ? (
-        <div className="model-menu ws-chip-hint" data-testid="next-ws-chip-bound-hint" role="status">
-          {t(lang, 'ws_chip_bound')}
-        </div>
-      ) : null}
+      {canSwitch ? (
+        <button
+          type="button"
+          className={`model-chip ws-chip${hero ? ' ws-chip-hero' : ''}${open ? ' is-open' : ''}${noneSelected ? ' is-empty' : ''}`}
+          data-testid={triggerId}
+          aria-haspopup="listbox"
+          aria-expanded={open}
+          title={title}
+          onClick={onClick}
+          onContextMenu={onContextMenu}
+        >
+          {hero ? null : FOLDER_ICON}
+          <span className="model-chip-name">{label}</span>
+          <span className="model-chip-caret" aria-hidden="true">▾</span>
+        </button>
+      ) : (
+        <span
+          className={`model-chip ws-chip is-readonly${hero ? ' ws-chip-hero' : ''}`}
+          data-testid={triggerId}
+          title={title}
+          onContextMenu={onContextMenu}
+        >
+          {hero ? null : FOLDER_ICON}
+          <span className="model-chip-name">{label}</span>
+        </span>
+      )}
       {open && canSwitch ? (
         <div className="model-menu ws-chip-menu" data-testid={menuId} role="listbox">
           {projects.length === 0 ? (

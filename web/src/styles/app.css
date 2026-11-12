@@ -2411,6 +2411,8 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.65; backgrou
 }
 .model-chip { font-size: var(--fs-ui); gap: 7px; min-width: 0; }
 .ws-chip { color: var(--ink3); gap: 6px; }
+.ws-chip.is-readonly { cursor: default; }
+.ws-chip.is-readonly:hover { background: transparent; }
 .ws-chip svg { width: 15px; height: 15px; color: var(--mute); flex-shrink: 0; }
 .ws-chip .model-chip-caret { font-size: 9px; color: var(--faint); }
 .ws-chip.is-empty .model-chip-name { color: var(--mute); }
@@ -2468,10 +2470,6 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.65; backgrou
 }
 .ws-chip-act:hover { background: var(--hover); color: var(--ink); }
 .ws-chip-act svg { width: 15px; height: 15px; color: var(--mute); flex-shrink: 0; }
-.ws-chip-hint {
-  width: auto; max-width: min(280px, calc(100vw - 24px)); padding: 10px 12px;
-  font-size: var(--fs-sm); color: var(--ink3); line-height: 1.45;
-}
 .model-menu {
   position: absolute; bottom: calc(100% + 6px); left: 0; z-index: 60;
   width: 400px; max-width: min(400px, calc(100vw - 24px)); max-height: 360px; overflow: auto;
@@ -3297,6 +3295,9 @@ button.file-search-result-row:hover {
   min-width: 0;
   flex-wrap: wrap;
 }
+.composer-where-bar:empty {
+  display: none;
+}
 .composer-where-bar .chip-selector-wrap {
   display: inline-flex;
   min-width: 0;
@@ -3315,6 +3316,11 @@ button.file-search-result-row:hover {
 .composer-where-bar .composer-git-chip:hover {
   background: var(--sel);
   color: var(--ink);
+}
+.composer-where-bar .ws-chip.is-readonly:hover {
+  background: var(--line2);
+  color: var(--ink3);
+  cursor: default;
 }
 
 /* 2. 上下文占用圆环：默认仅圆环，>=70% 显示数字 */
