@@ -124,6 +124,7 @@ function installResetButton(): void {
   button.addEventListener('click', () => {
     try {
       localStorage.removeItem('weft_conv_last_opened');
+      sessionStorage.clear();
     } catch { /* ignore */ }
     const url = new URL(window.location.href);
     url.searchParams.delete('empty');

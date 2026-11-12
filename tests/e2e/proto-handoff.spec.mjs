@@ -89,11 +89,20 @@ test('2. trigger handoff via /handoff command: shows pending text, lands divider
   await expect(page.locator('.slash-chip[data-kind="handoff"]')).toBeVisible();
   await input.press('Enter');
 
+  // User bubble with chip is visible during running
+  const userBubble = page.getByTestId('next-item-user').filter({ has: page.getByTestId('next-user-chip') });
+  await expect(userBubble).toBeVisible();
+  await expect(userBubble.getByTestId('next-user-chip')).toHaveText('交接');
+
   // Thread pending displays waiting text
-  await expect(page.getByTestId('next-thread-pending')).toContainText('正在交接到新上下文');
+  await expect(page.getByTestId('next-thread-pending')).toContainText('正在整理交接…');
 
   // Wait for run to finish
   await expect(page.getByTestId('next-thread-pending')).toHaveCount(0, { timeout: 10_000 });
+
+  // User bubble remains visible above divider
+  await expect(userBubble).toBeVisible();
+  await expect(userBubble.getByTestId('next-user-chip')).toHaveText('交接');
 
   // New divider line appeared
   const newNote = page.getByTestId('next-item-system-note').filter({ has: page.getByTestId('next-handoff-divider') });
@@ -137,9 +146,19 @@ test('3. multiple handoffs only produce a single earlier-context toggle, and win
   const focusText = '重点关注 packages/server 的配置';
   await page.evaluate((text) => window.__protoHandoff(text), focusText);
 
+  // User bubble with chip and instructions is visible during running
+  const userBubble = page.getByTestId('next-item-user').filter({ has: page.getByTestId('next-user-chip') });
+  await expect(userBubble).toBeVisible();
+  await expect(userBubble.getByTestId('next-user-chip')).toHaveText('交接');
+  await expect(userBubble).toContainText(focusText);
+
   // Wait for run to complete
-  await expect(page.getByTestId('next-thread-pending')).toContainText('正在交接到新上下文');
+  await expect(page.getByTestId('next-thread-pending')).toContainText('正在整理交接…');
   await expect(page.getByTestId('next-thread-pending')).toHaveCount(0, { timeout: 10_000 });
+
+  // Bubble persists after run finishes
+  await expect(userBubble).toBeVisible();
+  await expect(userBubble).toContainText(focusText);
 
   // Now there are 2 handoffs: the first one is folded into the earlier context,
   // so only the latest divider shows and there is still ONLY ONE toggle row
@@ -200,5 +219,25 @@ test('5. English labels for handoff divider, toggle, earlier context, and slash 
   await expect(item.locator('.composer-at-dir')).toHaveText('Hand off to new context');
   await input.press('Enter');
   await expect(page.locator('.slash-chip[data-kind="handoff"]')).toHaveText('Handoff');
+  await expectClean(state);
+});
+
+test('6. handoff user bubble and divider persist across page reload', async ({ page }) => {
+  const state = await openProto(page);
+  await openConv(page, 'c-docs');
+  await openMenu(page);
+  await page.getByTestId('next-menu-handoff').click();
+  await expect(page.getByTestId('next-thread-pending')).toHaveCount(0, { timeout: 10_000 });
+
+  const bubble = page.getByTestId('next-item-user').filter({ has: page.getByTestId('next-user-chip') });
+  await expect(bubble).toBeVisible();
+  await expect(bubble.getByTestId('next-user-chip')).toHaveText('交接');
+  await expect(page.getByTestId('next-handoff-divider')).toBeVisible();
+
+  // Reload page
+  await page.reload();
+  await expect(bubble).toBeVisible();
+  await expect(bubble.getByTestId('next-user-chip')).toHaveText('交接');
+  await expect(page.getByTestId('next-handoff-divider')).toBeVisible();
   await expectClean(state);
 });

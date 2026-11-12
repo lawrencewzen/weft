@@ -2,9 +2,9 @@ import type { Lang } from '../../data/lang';
 import type { SlashChip } from '../../data/slashCommand';
 import { t } from '../../i18n';
 
-export function chipLabel(lang: Lang, chip: SlashChip): string {
+export function chipLabel(lang: Lang, chip: SlashChip | { kind: 'compaction' }): string {
   if (chip.kind === 'skill') return chip.name;
-  if (chip.kind === 'compact') return t(lang, 'slash_chip_compact');
+  if (chip.kind === 'compact' || chip.kind === 'compaction') return t(lang, 'slash_chip_compact');
   return t(lang, chip.kind === 'handoff' ? 'slash_chip_handoff' : 'slash_chip_schedule');
 }
 
@@ -17,7 +17,7 @@ export function InlineChip({
   title,
 }: {
   label: string;
-  kind: SlashChip['kind'];
+  kind: SlashChip['kind'] | 'compaction';
   testId: string;
   flash?: boolean;
   title?: string;

@@ -56,7 +56,7 @@ export function Markdown({ text, pathRefs, copyLabel, copiedLabel, leading }: Pr
     return (
       <div className="msg-body has-lead" data-testid="next-markdown" onClick={onClick}>
         {leading}
-        <div dangerouslySetInnerHTML={{ __html: html }} />
+        {html ? <div dangerouslySetInnerHTML={{ __html: html }} /> : null}
       </div>
     );
   }

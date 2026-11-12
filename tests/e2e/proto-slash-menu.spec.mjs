@@ -55,6 +55,15 @@ test('/compact becomes chip, supports instructions, and triggers compaction on E
   await expect(input).toHaveValue('');
   await expect(page.getByTestId('next-composer-chip')).toHaveCount(0);
 
+  // User bubble and pending line immediately appear, then land divider
+  const compactBubble = page.getByTestId('next-item-user').filter({ has: page.locator('[data-testid=next-user-chip][data-kind="compaction"]') });
+  await expect(compactBubble).toBeVisible();
+  await expect(compactBubble.getByTestId('next-user-chip')).toHaveText('压缩');
+  await expect(page.getByTestId('next-thread-compacting')).toContainText('正在压缩上下文…');
+  await expect(page.getByTestId('next-thread-compacting')).toHaveCount(0, { timeout: 10_000 });
+  await expect(compactBubble).toBeVisible();
+  await expect(page.getByTestId('next-compaction-divider')).toBeVisible();
+
   await page.getByTestId('next-new-chat').click();
   const draftInput = page.getByTestId('next-composer-input');
   await draftInput.click();
@@ -78,6 +87,17 @@ test('/handoff, /schedule, and /new (no /model in menu)', async ({ page }) => {
   await input.type('只留下迁移进度');
   await input.press('Enter');
   await expect.poll(async () => (await state.requests()).some((r) => /\/handoff$/.test(r.url) && r.method === 'POST')).toBe(true);
+
+  // User bubble and pending line immediately appear, then land divider
+  const handoffBubble = page.getByTestId('next-item-user').filter({ has: page.locator('[data-testid=next-user-chip][data-kind="handoff"]') });
+  await expect(handoffBubble).toBeVisible();
+  await expect(handoffBubble.getByTestId('next-user-chip')).toHaveText('交接');
+  await expect(handoffBubble).toContainText('只留下迁移进度');
+  await expect(page.getByTestId('next-thread-pending')).toContainText('正在整理交接…');
+  await expect(page.getByTestId('next-thread-pending')).toHaveCount(0, { timeout: 10_000 });
+  await expect(handoffBubble).toBeVisible();
+  await expect(page.getByTestId('next-handoff-divider')).toBeVisible();
+
   await expect(input).toHaveValue('');
   await expect(page.getByTestId('next-composer-chip')).toHaveCount(0);
   await expect(input).toBeEnabled();

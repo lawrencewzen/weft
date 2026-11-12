@@ -1953,6 +1953,7 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.65; backgrou
   100% { transform: scale(1); }
 }
 .msg-body.has-lead > .slash-chip { float: left; margin: 1px 8px 0 0; height: 1.6em; background: var(--line); }
+.msg-body.has-lead > .slash-chip:only-child { float: none; margin: 0; }
 .composer-at-empty {
   padding: 8px 10px; font-size: var(--fs-sm); color: var(--mute);
 }

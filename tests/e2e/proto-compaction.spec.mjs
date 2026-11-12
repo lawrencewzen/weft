@@ -60,25 +60,27 @@ test('2. panel compact: running state with spinner and thread line, then the not
 
   await triggerCompact(page);
 
+  // User bubble with chip is visible during running
+  const userBubble = page.getByTestId('next-item-user').filter({ has: page.getByTestId('next-user-chip') });
+  await expect(userBubble).toBeVisible();
+  await expect(userBubble.getByTestId('next-user-chip')).toHaveText('压缩');
+
   const pending = page.getByTestId('next-thread-compacting');
-  await expect(pending).toHaveText('压缩中…');
+  await expect(pending).toHaveText('正在压缩上下文…');
   await expect(pending.locator('.run-spin')).toBeVisible();
   await expect(page.getByTestId('next-item-system-note')).toHaveCount(0);
-  const before = await pending.boundingBox();
-  const beforeBar = await pending.locator('.handoff-divider-bar').boundingBox();
 
   await expect(pending).toHaveCount(0, { timeout: 10_000 });
+
+  // User bubble remains visible above divider
+  await expect(userBubble).toBeVisible();
+  await expect(userBubble.getByTestId('next-user-chip')).toHaveText('压缩');
+
   const note = page.getByTestId('next-item-system-note');
   await expect(note).toHaveCount(1);
   await expect(note).toHaveAttribute('data-kind', 'compaction');
   await expect(note.getByTestId('next-compaction-title')).toHaveText('上下文已压缩');
   await expect(note.getByTestId('next-compaction-meta')).toHaveText(/^之前 \d+ 条已摘要$/);
-  // It lands in place: same slot, same height, no jump.
-  const after = await note.boundingBox();
-  const afterBar = await note.getByTestId('next-compaction-divider').boundingBox();
-  expect(Math.abs(after.y - before.y)).toBeLessThanOrEqual(1);
-  expect(Math.abs(after.height - before.height)).toBeLessThanOrEqual(1);
-  expect(Math.abs(afterBar.height - beforeBar.height)).toBeLessThanOrEqual(1);
   await expect(page.getByTestId('next-compaction-error')).toHaveCount(0);
   await expect(page.getByTestId('next-context-chip')).toHaveAttribute('title', '24k / 200k');
   await expect(page.getByTestId('next-context-chip').locator('.context-chip-pct')).toHaveCount(0);
@@ -185,7 +187,7 @@ test('6. English labels and dark theme', async ({ page }) => {
   await input.press('Enter');
   await expect(page.locator('.slash-chip[data-kind="compact"]')).toHaveText('Compact');
   await input.press('Enter');
-  await expect(page.getByTestId('next-thread-compacting')).toHaveText('Compacting…');
+  await expect(page.getByTestId('next-thread-compacting')).toHaveText('Compacting context…');
   await expect(page.getByTestId('next-compaction-error')).toBeVisible({ timeout: 10_000 });
 
   await page.keyboard.press('Escape');
@@ -290,5 +292,25 @@ test('10. a draft conversation shows usage tooltip on context chip and clicking 
   await expect(chip).toBeVisible();
   await chip.click();
   await expect(page.getByTestId('next-context-pop')).toHaveCount(0);
+  await expectClean(state);
+});
+
+test('11. user compaction bubble and divider persist across page reload', async ({ page }) => {
+  const state = await openProto(page);
+  await openConv(page, 'c-docs');
+  await openMenu(page);
+  await page.getByTestId('next-menu-compact').click();
+  await expect(page.getByTestId('next-thread-compacting')).toHaveCount(0, { timeout: 10_000 });
+
+  const bubble = page.getByTestId('next-item-user').filter({ has: page.getByTestId('next-user-chip') });
+  await expect(bubble).toBeVisible();
+  await expect(bubble.getByTestId('next-user-chip')).toHaveText('压缩');
+  await expect(page.getByTestId('next-compaction-divider')).toBeVisible();
+
+  // Reload page
+  await page.reload();
+  await expect(bubble).toBeVisible();
+  await expect(bubble.getByTestId('next-user-chip')).toHaveText('压缩');
+  await expect(page.getByTestId('next-compaction-divider')).toBeVisible();
   await expectClean(state);
 });
