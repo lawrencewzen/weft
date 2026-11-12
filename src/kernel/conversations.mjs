@@ -66,7 +66,7 @@ import {
 import { activeContextUsage, installUsageExtension } from './usage.mjs';
 import { createAntigravityCwdExtension } from './antigravity-cwd.mjs';
 import { createWorkspaceEnv } from './workspace-env.mjs';
-import { createCompactionControl, effectiveTriggers, selectableModelKeys } from './compaction-settings.mjs';
+import { COMPACTION_SKIPPED_KIND, createCompactionControl, effectiveTriggers, selectableModelKeys } from './compaction-settings.mjs';
 import { readTriggerPercent } from '../core/settings.mjs';
 import {
   describeForkPoint,
@@ -1218,7 +1218,7 @@ export async function openConversationKernel({
    * conversation is not found, and the note then has no instructions.
    */
   async function attachCompactionRequests(harnessId, messages, entries) {
-    const manual = messages.filter((m) => m?.role === 'note' && m.kind === 'compaction' && m.request?.by === 'user');
+    const manual = messages.filter((m) => m?.role === 'note' && m.kind === 'compaction' && !m.skipped && m.request?.by === 'user');
     if (!manual.length) return;
     const need = manual.filter((m) => !compactionRequests.has(String(m.id)));
     if (need.length) {
@@ -1252,6 +1252,38 @@ export async function openConversationKernel({
     for (const m of manual) {
       const focus = compactionRequests.get(String(m.id));
       if (focus) m.request = { by: 'user', instructions: focus };
+    }
+  }
+
+  let closing = false;
+
+  /**
+   * Official compaction completes with an empty result (no summary, no failure)
+   * when there is nothing old enough to compact. A manual request that ends that
+   * way leaves a weft.compaction-skipped entry (a write submission, so it follows
+   * the history and is placed at the next boundary if a turn is running).
+   * Automatic compactions are never recorded. Best effort: a restart before the
+   * task settles loses the record.
+   */
+  async function recordSkippedCompaction(conversation, taskId, instructions) {
+    const focus = typeof instructions === 'string' ? instructions.trim() : '';
+    for (let tries = 0; !closing; tries++) {
+      const task = await harness.commit((tx) => tx.task(taskId), context);
+      const outcome = task?.state?.outcome;
+      if (outcome) {
+        const result = outcome.status === 'completed' ? outcome.result : undefined;
+        if (!result || result.submissionId != null || result.entryId != null) return;
+        await conversation.submit({
+          type: 'write',
+          entry: {
+            kind: COMPACTION_SKIPPED_KIND,
+            ...(focus ? { data: { instructions: focus } } : {}),
+          },
+        }, context);
+        return;
+      }
+      if (!task) return;
+      await sleep(tries < 20 ? 25 : 200);
     }
   }
 
@@ -1410,6 +1442,7 @@ export async function openConversationKernel({
     },
     schedules,
     async close() {
+      closing = true;
       schedules.close();
       for (const watch of watches.values()) {
         try { await watch.stream.stop(); } catch { /* already stopped */ }
@@ -1538,6 +1571,9 @@ export async function openConversationKernel({
       try {
         const taskId = await conversation.compact(instructions, context);
         log.info('WEFT_COMPACTION', 'compaction requested', { cid, taskId: String(taskId), trigger: 'manual' });
+        recordSkippedCompaction(conversation, taskId, instructions).catch((err) => {
+          if (!closing) log.error('WEFT_COMPACTION', 'skipped record failed', { cid, taskId: String(taskId) }, err);
+        });
         return { status: 202, body: { taskId: String(taskId) } };
       } catch (err) {
         if (err?.name === 'ConversationBusy') {

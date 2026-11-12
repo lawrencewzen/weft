@@ -147,3 +147,10 @@ export function createCompactionControl(models) {
     rebuild,
   };
 }
+
+/**
+ * A manual compaction that finished without placing a summary (nothing old enough
+ * to compact). Stored as a write-submission entry with no model contribution, so
+ * it follows the conversation history and never reaches the model.
+ */
+export const COMPACTION_SKIPPED_KIND = 'weft.compaction-skipped';

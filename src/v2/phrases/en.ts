@@ -4,6 +4,7 @@ export const en: Record<string, string> = {
   pending_handoff: 'Handoff to new context in progress...',
   pending_subagents: '· {n} sub-agents',
   compaction_note: 'Earlier context was compacted',
+  compaction_skipped: 'Context is still short; nothing to compact',
   handoff_new_context: 'New context',
   compaction_failed: 'Compaction failed: {reason}',
   compaction_failed_length: "Compaction failed: the summary hit the length limit. Raise the model's max output in Settings › Models, or lower the thinking level, then retry.",

@@ -1937,6 +1937,12 @@ export interface components {
             /** @description handoff 是交接说明全文，也用于 compaction 摘要。 */
             detail?: string;
             /**
+             * @description 仅 compaction 可能有。为 true 表示这是一次手动压缩（POST /compact），但上下文还很短、没有可压缩的内容，Pi 没有生成摘要。
+             *     此时 text 是「上下文还很短，暂不需要压缩」一类的提示，没有 detail，request 是发起人和补充说明。
+             *     正常压缩不带这个字段（或为 false）。信息跟着对话历史持久化，重启后仍在。自动压缩跳过不记录。
+             */
+            skipped?: boolean;
+            /**
              * @description 谁发起的这次交接或压缩，仅 handoff 与 compaction 可能有。
              *     用户通过 POST /handoff 或 /compact 发起的为 by=user，instructions 是请求体里的补充说明（没写则省略）。
              *     模型调用 handoff 工具、自动压缩（threshold / overflow）触发的不带这个字段。

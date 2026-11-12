@@ -26,6 +26,7 @@ export type ThreadMessage = {
   model?: unknown;
   stopReason?: unknown;
   request?: unknown;
+  skipped?: unknown;
   streaming?: unknown;
   tool?: ToolLike;
   images?: Array<{
@@ -242,12 +243,14 @@ export async function buildThread(
 
     if (m?.role === 'note' && m.kind === 'compaction') {
       const detail = String(m.text || '').trim();
+      const skipped = m.skipped === true;
       const note: components['schemas']['ThreadItemSystemNote'] = {
         kind: 'system_note',
         id: messageId(m),
         noteKind: 'compaction',
-        text: phrase(lang, 'compaction_note'),
+        text: phrase(lang, skipped ? 'compaction_skipped' : 'compaction_note'),
       };
+      if (skipped) note.skipped = true;
       if (detail) note.detail = detail;
       const request = noteRequest(m);
       if (request) note.request = request;

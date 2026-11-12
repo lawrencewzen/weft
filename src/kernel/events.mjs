@@ -7,6 +7,7 @@ import { redactAuthText } from '../core/redact.mjs';
 import { extractPasteTexts, parseUserMessageParts } from '../core/user-message-parts.mjs';
 import { overlayContextWindow, presentContext } from '../core/usage.mjs';
 import { askByToolCall } from './ask.mjs';
+import { COMPACTION_SKIPPED_KIND } from './compaction-settings.mjs';
 import { HANDOFF_REQUEST_KIND } from './handoff.mjs';
 import { isAutoContinueText } from './continuation.mjs';
 import { parentNoteText, USER_TO_SUBAGENT_KIND } from './subagent-control.mjs';
@@ -491,7 +492,7 @@ export function projectViewUpdate(projector, view, mapCtx) {
     projector.seen.add(key);
     // Not a user or assistant bubble. The summary stays out of message.done.
     // The thread note is rebuilt from this entry; the event only refreshes SSE.
-    if (entry.kind === 'pi.compaction') {
+    if (entry.kind === 'pi.compaction' || entry.kind === COMPACTION_SKIPPED_KIND) {
       if (!snapshot) events.push({ event: 'compaction', data: { entryId: key } });
       continue;
     }
@@ -651,6 +652,18 @@ export function messagesFromEntries(entries) {
       continue;
     }
     if (entry?.kind === 'pi.user') handoffRequest = null;
+    // A manual compaction that had nothing to compact: a note at the request time.
+    if (entry?.kind === COMPACTION_SKIPPED_KIND) {
+      const focus = typeof entry.data?.instructions === 'string' ? entry.data.instructions.trim() : '';
+      messages.push({
+        id: String(entry.id),
+        role: 'note',
+        kind: 'compaction',
+        skipped: true,
+        request: { by: 'user', ...(focus ? { instructions: focus } : {}) },
+      });
+      continue;
+    }
     // The model sees this entry as a user summary. The thread gets a system note,
     // not a user or assistant bubble. The summary body (inside <summary>…</summary>,
     // without the model-facing preamble) becomes the note text, shown on expand.
