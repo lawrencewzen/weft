@@ -8,6 +8,7 @@ import { SessionContext, type SessionValue } from '../data/session';
 import { conversationTopic, createEntityStore, subagentTopic, type Subagent, type ToolCall } from '../data/store';
 import { AgentsStrip } from './AgentsStrip';
 import {
+  agentsStripStatusIcon,
   countByIconStatus,
   extractSubagentSteps,
   formatAgentDoing,
@@ -16,6 +17,7 @@ import {
   hasUnendedAgents,
   isAllEndedAgents,
   stripMarkdownInline,
+  stripStatusHeader,
 } from './agentsStripUtils';
 
 function makeAgent(overrides: Partial<Subagent>): Subagent {
@@ -57,15 +59,24 @@ describe('agentsStripUtils', () => {
       ]);
     });
 
-    it('prioritizes running/queued over completed/failed in headlines', () => {
+    it('lists all status counts in headline when live and ended coexist', () => {
       const liveAndEnded: Subagent[] = [
         makeAgent({ id: '1', status: 'running' }),
         makeAgent({ id: '2', status: 'waiting' }),
         makeAgent({ id: '3', status: 'done' }),
         makeAgent({ id: '4', status: 'failed' }),
       ];
-      expect(formatAgentsHeadline(liveAndEnded, 'zh')).toBe('1 个运行中 · 1 个排队');
-      expect(formatAgentsHeadline(liveAndEnded, 'en')).toBe('1 running · 1 queued');
+      expect(formatAgentsHeadline(liveAndEnded, 'zh')).toBe('1 个运行中 · 1 个排队 · 1 个已完成 · 1 个失败');
+      expect(formatAgentsHeadline(liveAndEnded, 'en')).toBe('1 running · 1 queued · 1 completed · 1 failed');
+    });
+
+    it('formats mixed running and completed headline', () => {
+      const agents: Subagent[] = [
+        makeAgent({ id: '1', status: 'running' }),
+        makeAgent({ id: '2', status: 'done' }),
+      ];
+      expect(formatAgentsHeadline(agents, 'zh')).toBe('1 个运行中 · 1 个已完成');
+      expect(formatAgentsHeadline(agents, 'en')).toBe('1 running · 1 completed');
     });
 
     it('formats running-only headline', () => {
@@ -102,8 +113,8 @@ describe('agentsStripUtils', () => {
         makeAgent({ id: '2', status: 'done' }),
         makeAgent({ id: '3', status: 'failed' }),
       ];
-      expect(formatAgentsHeadline(agents, 'zh')).toBe('2 个已完成 · 1 个没完成');
-      expect(formatAgentsHeadline(agents, 'en')).toBe('2 completed · 1 unfinished');
+      expect(formatAgentsHeadline(agents, 'zh')).toBe('2 个已完成 · 1 个失败');
+      expect(formatAgentsHeadline(agents, 'en')).toBe('2 completed · 1 failed');
     });
 
     it('formats all-done headline', () => {
@@ -119,8 +130,46 @@ describe('agentsStripUtils', () => {
       const agents: Subagent[] = [
         makeAgent({ id: '1', status: 'failed' }),
       ];
-      expect(formatAgentsHeadline(agents, 'zh')).toBe('1 个没完成');
-      expect(formatAgentsHeadline(agents, 'en')).toBe('1 unfinished');
+      expect(formatAgentsHeadline(agents, 'zh')).toBe('1 个失败');
+      expect(formatAgentsHeadline(agents, 'en')).toBe('1 failed');
+    });
+
+    it('selects status icon correctly based on unended and failure states', () => {
+      // Live subagents present -> running
+      expect(agentsStripStatusIcon([
+        makeAgent({ status: 'running' }),
+        makeAgent({ status: 'done' }),
+      ])).toBe('running');
+      expect(agentsStripStatusIcon([
+        makeAgent({ status: 'stuck' }),
+        makeAgent({ status: 'done' }),
+      ])).toBe('running');
+      expect(agentsStripStatusIcon([
+        makeAgent({ status: 'waiting' }),
+        makeAgent({ status: 'done' }),
+      ])).toBe('running');
+      expect(agentsStripStatusIcon([
+        makeAgent({ status: 'running' }),
+        makeAgent({ status: 'failed' }),
+      ])).toBe('running');
+
+      // All ended with failures -> failed
+      expect(agentsStripStatusIcon([
+        makeAgent({ status: 'done' }),
+        makeAgent({ status: 'failed' }),
+      ])).toBe('failed');
+      expect(agentsStripStatusIcon([
+        makeAgent({ status: 'failed' }),
+      ])).toBe('failed');
+
+      // All ended without failures -> done
+      expect(agentsStripStatusIcon([
+        makeAgent({ status: 'done' }),
+        makeAgent({ status: 'done' }),
+      ])).toBe('done');
+      expect(agentsStripStatusIcon([
+        makeAgent({ status: 'stopped' }),
+      ])).toBe('done');
     });
   });
 
@@ -137,6 +186,51 @@ describe('agentsStripUtils', () => {
 
       const running = makeAgent({ status: 'running', currentAction: '正在读取 `store.ts`' });
       expect(formatAgentDoing(running, { lang: 'zh' })).toBe('正在读取 store.ts');
+    });
+
+    it('strips leading STATUS: done or STATUS: incomplete line and following blank lines', () => {
+      const doneText = 'STATUS: done\n\n补好了 `text.delta` 偏移的两条用例\n第二行';
+      expect(stripStatusHeader(doneText)).toBe('补好了 `text.delta` 偏移的两条用例\n第二行');
+
+      const incompleteText = 'STATUS: incomplete\n\nPowerShell 找不到 npm';
+      expect(stripStatusHeader(incompleteText)).toBe('PowerShell 找不到 npm');
+
+      const statusOnly = 'STATUS: done\n\n';
+      expect(stripStatusHeader(statusOnly)).toBe('');
+
+      const plain = '普通汇报内容\n第二行';
+      expect(stripStatusHeader(plain)).toBe('普通汇报内容\n第二行');
+    });
+
+    it('formatAgentDoing skips STATUS: done line and falls back to completed label when empty', () => {
+      const doneWithStatus = makeAgent({ status: 'done' });
+      expect(
+        formatAgentDoing(doneWithStatus, {
+          lang: 'zh',
+          resText: 'STATUS: done\n\n补好了 `text.delta` 偏移的两条用例\n第二行',
+        }),
+      ).toBe('补好了 text.delta 偏移的两条用例');
+
+      expect(
+        formatAgentDoing(doneWithStatus, {
+          lang: 'zh',
+          resText: 'STATUS: done',
+        }),
+      ).toBe('已完成');
+
+      expect(
+        formatAgentDoing(doneWithStatus, {
+          lang: 'en',
+          resText: 'STATUS: done\n\nFixed two cases',
+        }),
+      ).toBe('Fixed two cases');
+
+      expect(
+        formatAgentDoing(doneWithStatus, {
+          lang: 'en',
+          resText: 'STATUS: done',
+        }),
+      ).toBe('Completed');
     });
 
     it('strips inline markdown from plain text summaries', () => {
@@ -498,6 +592,80 @@ describe('AgentsStrip component', () => {
 
     expect(strip!.classList.contains('open')).toBe(true);
     expect(host!.querySelector('[data-testid="next-agents-strip-detail"]')).toBeTruthy();
+  });
+
+  it('header renders a single status icon, no count badges, and lists counts in headline', () => {
+    const store = createEntityStore();
+    const cid = 'c1';
+    const convTop = conversationTopic(cid);
+    store.applySnapshot({
+      protocolVersion: '2.0.0',
+      topics: [convTop],
+      entities: [
+        {
+          topic: convTop,
+          entity: 'subagent',
+          id: 'sa1',
+          value: makeAgent({ id: 'sa1', title: 'Task 1', name: 'a1', status: 'running' }),
+        },
+        {
+          topic: convTop,
+          entity: 'subagent',
+          id: 'sa2',
+          value: makeAgent({ id: 'sa2', title: 'Task 2', name: 'a2', status: 'done' }),
+        },
+      ],
+    });
+
+    // Subagent sa2 topic with STATUS: done in assistant message
+    const doneTop = subagentTopic(cid, 'sa2');
+    store.applySnapshot({
+      protocolVersion: '2.0.0',
+      topics: [doneTop],
+      entities: [
+        {
+          topic: doneTop,
+          entity: 'item',
+          id: 'item-d1',
+          value: { kind: 'assistant', id: 'a1', text: 'STATUS: done\n\n核对完成，无异常。' },
+        },
+      ],
+    });
+
+    renderStrip(store, cid);
+
+    // Header has single running icon
+    const toggle = host!.querySelector('[data-testid="next-agents-strip-toggle"]');
+    expect(toggle).toBeTruthy();
+    const icons = toggle!.querySelectorAll('[data-testid="status-icon"]');
+    expect(icons.length).toBe(1);
+    expect(icons[0]?.getAttribute('data-status')).toBe('running');
+
+    // No .agents-strip-counts or .agents-strip-count
+    expect(toggle!.querySelector('.agents-strip-counts')).toBeNull();
+    expect(toggle!.querySelector('[data-testid="next-agents-strip-count"]')).toBeNull();
+
+    // Headline shows both statuses without duplicate numbers
+    const headline = host!.querySelector('[data-testid="next-agents-strip-headline"]');
+    expect(headline?.textContent).toBe('1 个运行中 · 1 个已完成');
+
+    // Expand strip and verify row doing and detail
+    act(() => {
+      toggle!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    const doneRow = host!.querySelector('[data-row="sa2"]');
+    expect(doneRow).toBeTruthy();
+    const doing = doneRow!.querySelector('[data-testid="next-agents-strip-doing"]');
+    expect(doing?.textContent).toBe('核对完成，无异常。');
+    expect(doing?.textContent).not.toContain('STATUS:');
+
+    // Expand done detail
+    act(() => {
+      doneRow!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    const detail = host!.querySelector('[data-testid="next-agents-strip-detail-text"]');
+    expect(detail?.textContent).toBe('核对完成，无异常。');
+    expect(detail?.textContent).not.toContain('STATUS:');
   });
 
   it('transitions to all-ended: waits 6s, then fades out, then disappears', () => {

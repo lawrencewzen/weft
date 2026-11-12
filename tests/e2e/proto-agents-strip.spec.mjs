@@ -25,12 +25,20 @@ test('status strip appearance, collapsed counts, expand, in-place details, and s
   await page.getByTestId('next-right-toggle').click();
   await expect(page.getByTestId('next-right-tab-changes')).toBeVisible();
 
-  // Collapsed strip displays summary counts and headline
+  // Collapsed strip displays single status icon and headline with all statuses
   const toggle = page.getByTestId('next-agents-strip-toggle');
   await expect(toggle).toBeVisible();
   await expect(strip).toHaveAttribute('data-open', 'false');
+
+  // Left side shows only a single status icon (running while unended subagents exist)
+  const headerIcons = toggle.locator('.status-icon');
+  await expect(headerIcons).toHaveCount(1);
+  await expect(headerIcons).toHaveAttribute('data-status', 'running');
+  await expect(toggle.locator('.agents-strip-counts')).toHaveCount(0);
+  await expect(toggle.locator('[data-testid="next-agents-strip-count"]')).toHaveCount(0);
+
   const headline = page.getByTestId('next-agents-strip-headline');
-  await expect(headline).toContainText('2 个运行中 · 1 个卡住 · 1 个排队');
+  await expect(headline).toHaveText('2 个运行中 · 1 个卡住 · 1 个排队 · 1 个已完成 · 1 个失败');
 
   const expandBtn = page.getByTestId('next-agents-strip-expand');
   await expect(expandBtn).toContainText('展开');
@@ -55,6 +63,8 @@ test('status strip appearance, collapsed counts, expand, in-place details, and s
   await expect(doneRow).toBeVisible();
   await expect(doneRow.getByTestId('next-agents-strip-time')).toHaveText('');
   await expect(doneRow.getByTestId('next-agents-strip-stop')).toHaveCount(0);
+  await expect(doneRow.getByTestId('next-agents-strip-doing')).not.toContainText('STATUS:');
+  await expect(doneRow.getByTestId('next-agents-strip-doing')).toContainText('text.delta');
 
   const failedRow = page.locator('[data-testid="next-agents-strip-row"][data-agent-id="c-rich:sub:sa-4"]');
   await expect(failedRow).toBeVisible();
@@ -72,9 +82,10 @@ test('status strip appearance, collapsed counts, expand, in-place details, and s
   const waitItem = page.locator('.agents-strip-item[data-agent-id="c-rich:sub:sa-3"]');
   await expect(waitItem.getByTestId('next-agents-strip-detail-text')).toContainText('还没开始');
 
-  // (b) Done row: shows result summary
+  // (b) Done row: shows result summary without STATUS: line
   await doneRow.click();
   const doneItem = page.locator('.agents-strip-item[data-agent-id="c-rich:sub:sa-2"]');
+  await expect(doneItem.getByTestId('next-agents-strip-detail-text')).not.toContainText('STATUS:');
   await expect(doneItem.getByTestId('next-agents-strip-detail-text')).toContainText('text.delta');
 
   // (c) Failed row: shows failure reason read-only
@@ -200,6 +211,47 @@ test('switching between conversations never flashes loading or empty thread', as
     await gitRow.click();
     await expect(page).toHaveURL(/#\/c\/c-git$/);
   }
+
+  expectClean(state);
+});
+
+test('c-site-1 with 1 running and 1 done subagent shows single running icon and headline with no duplicate counts', async ({ page }) => {
+  const state = await openProto(page);
+
+  // Visit c-site-1: expand website workspace if needed
+  const websiteNode = page.locator('[data-testid=next-ws-node][data-id="ws-website"]');
+  if (await websiteNode.locator('.sb-conv-list').isHidden()) {
+    await websiteNode.getByTestId('next-ws-toggle').click();
+  }
+  await page.locator('[data-testid=next-conv-row][data-id="c-site-1"]').click();
+  await expect(page).toHaveURL(/#\/c\/c-site-1$/);
+
+  const strip = page.getByTestId('next-agents-strip');
+  await expect(strip).toBeVisible();
+
+  const toggle = page.getByTestId('next-agents-strip-toggle');
+  const headerIcons = toggle.locator('.status-icon');
+  await expect(headerIcons).toHaveCount(1);
+  await expect(headerIcons).toHaveAttribute('data-status', 'running');
+  await expect(toggle.locator('.agents-strip-counts')).toHaveCount(0);
+  await expect(toggle.locator('[data-testid="next-agents-strip-count"]')).toHaveCount(0);
+
+  // Headline is exactly "1 个运行中 · 1 个已完成"
+  const headline = page.getByTestId('next-agents-strip-headline');
+  await expect(headline).toHaveText('1 个运行中 · 1 个已完成');
+
+  // Expand strip and check completed subagent summary and detail
+  await toggle.click();
+  const doneRow = page.locator('[data-testid="next-agents-strip-row"][data-agent-id="c-site-1:sub:sa-2"]');
+  await expect(doneRow).toBeVisible();
+  const doing = doneRow.getByTestId('next-agents-strip-doing');
+  await expect(doing).not.toContainText('STATUS:');
+  await expect(doing).toContainText('已核对字重');
+
+  await doneRow.click();
+  const doneDetail = page.locator('.agents-strip-item[data-agent-id="c-site-1:sub:sa-2"] [data-testid="next-agents-strip-detail-text"]');
+  await expect(doneDetail).not.toContainText('STATUS:');
+  await expect(doneDetail).toContainText('已核对字重');
 
   expectClean(state);
 });
