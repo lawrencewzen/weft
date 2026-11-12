@@ -171,9 +171,11 @@ export async function openConversationKernel({
   extraProviders = [],
   onConversationMeta,
   onSchedulesChanged,
+  onPhase, // optional startup timing hook: onPhase(name, detail); never changes behaviour
   clock,
   env = process.env,
 } = {}) {
+  const phase = (name, detail) => { try { onPhase?.(name, detail); } catch { /* timing only */ } };
   if (!dataDir) throw new Error('dataDir is required');
   if (!store) throw new Error('store is required');
   const faux = demo === true || explicitDemo(env);
@@ -274,6 +276,7 @@ export async function openConversationKernel({
     ...(clock?.setTimer ? { setTimer: clock.setTimer } : {}),
     env: async ({ cwd }) => (cwd ? createWorkspaceEnv({ cwd, dataDir }) : undefined), // main Agent and sub-agents; bash env allow-list lives here
   });
+  phase('harness');
   const { harness, context } = kernel;
   antigravityCwd.harness = harness;
   antigravityCwd.context = context;
@@ -628,7 +631,9 @@ export async function openConversationKernel({
   await agentHost.seed(stored);
   await subagents.seed(stored);
   for (const row of stored) await attach(row);
+  phase('recover', { conversations: stored.length });
   await modelRoutes.warm();
+  phase('models');
   const schedules = createScheduleService({
     store,
     harness,
