@@ -10,6 +10,12 @@ static class Program
         var cli = CliOptions.Parse(args);
         Log.Write("启动 " + string.Join(' ', args));
 
+        if (cli.PreviewDir != null && cli.Error == null)
+        {
+            ApplicationConfiguration.Initialize();
+            return PreviewRenderer.Run(cli);
+        }
+
         using var mutex = new Mutex(true, @"Local\Weft-Setup-Instance", out var first);
         if (!first)
         {

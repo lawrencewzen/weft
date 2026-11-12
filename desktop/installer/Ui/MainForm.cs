@@ -31,7 +31,15 @@ public sealed class MainForm : Form
 
     // 进度
     Panel _vProg = null!;
-    LogoBox _pLogo = null!; Label _pH1 = null!, _pSub = null!, _pStep = null!, _pPct = null!; ProgressTrack _pBar = null!;
+    LogoBox _pLogo = null!; Label _pH1 = null!, _pSub = null!, _pStep = null!, _pPct = null!, _pFile = null!, _pWarn = null!; ProgressTrack _pBar = null!;
+    FlatButton _pWait = null!, _pCancel = null!;
+    MiniLink _pTog = null!, _pOpen = null!, _eTog = null!, _eOpen = null!;
+    LogPane _pLog = null!, _eLog = null!;
+    bool _details;
+    int _extra, _tickN;
+    const int DetailsExtra = 140;
+    bool _stallShown;
+    string _fileFull = "";
 
     // 完成 / 出错
     Panel _vDone = null!, _vErr = null!;
@@ -56,14 +64,18 @@ public sealed class MainForm : Form
 
     public int ResultCode { get; private set; } = 1;
 
-    float S => DeviceDpi / 96f;
+    float S => Dpi.Of(this);
     int Sc(double v) => (int)Math.Round(v * S);
 
-    public MainForm(SetupContext? ctx, string? fatal)
+    readonly bool _preview;
+
+    public MainForm(SetupContext? ctx, string? fatal, bool preview = false)
     {
         _ctx = ctx;
         _fatal = fatal;
-        Theme.Apply(Registration.SystemIsDark());
+        _preview = preview;
+        if (!preview) Theme.Apply(Registration.SystemIsDark());
+        SetStyle(ControlStyles.ResizeRedraw | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.UserPaint, true);
         SuspendLayout();
         FormBorderStyle = FormBorderStyle.None;
         StartPosition = FormStartPosition.CenterScreen;
@@ -88,9 +100,10 @@ public sealed class MainForm : Form
         _mask.Keep.Click += (_, _) => HideMask();
         Controls.Add(_mask);
 
-        _tick.Tick += (_, _) => PaintProgress();
+        _tick.Tick += (_, _) => { PaintProgress(); CheckStall(); if (_details && (_tickN++ & 1) == 0) SyncLogs(); };
         ResumeLayout(false);
         ApplyLayout();
+        if (_preview) return;
         SystemEvents.UserPreferenceChanged += OnUserPref;
         Start();
     }
@@ -166,6 +179,86 @@ public sealed class MainForm : Form
         _pStep = L(_vProg, 12.5f, false, () => Theme.Mute);
         _pPct = L(_vProg, 12.5f, false, () => Theme.Mute, ContentAlignment.TopRight);
         _pPct.Text = "0%";
+        _pFile = L(_vProg, 12, false, () => Theme.Mute);
+        _pWarn = L(_vProg, 12.5f, false, () => Theme.Err);
+        _pWarn.AutoEllipsis = false; _pWarn.Visible = false;
+        _pCancel = new FlatButton("取消") { Visible = false };
+        _pWait = new FlatButton("继续等待", BtnKind.Primary, 96) { Visible = false };
+        _vProg.Controls.Add(_pCancel); _vProg.Controls.Add(_pWait);
+        _pTog = new MiniLink("详细信息", true); _pOpen = new MiniLink("打开日志文件", false) { Visible = false };
+        _pLog = new LogPane();
+        _vProg.Controls.Add(_pTog); _vProg.Controls.Add(_pOpen); _vProg.Controls.Add(_pLog);
+        _pTog.Click += (_, _) => ToggleDetails();
+        _pOpen.Click += (_, _) => OpenLog();
+        _pWait.Click += (_, _) =>
+        {
+            if (_ctx != null) Interlocked.Exchange(ref _ctx.LastProgressTick, Environment.TickCount64);
+            SetStall(false, "");
+        };
+        _pCancel.Click += (_, _) =>
+        {
+            _pStep.Text = "正在取消，回滚已写入的文件…";
+            _pCancel.Enabled = false; _pWait.Enabled = false;
+            ConfirmQuit();
+        };
+    }
+
+    /// <summary>当前文件行：「node\node.exe（3 / 20368）」，路径太长时从左边截断。</summary>
+    void SetFileLine(string path, int i, int n)
+    {
+        _fileFull = path;
+        if (string.IsNullOrEmpty(path)) { _pFile.Text = ""; return; }
+        var suffix = $"（{i} / {n}）";
+        var f = Theme.Font(12 * S);
+        var max = _pFile.Width > 0 ? _pFile.Width : Sc(488);
+        var p = path.Replace('/', '\\');
+        var cut = false;
+        while (p.Length > 4 && TextRenderer.MeasureText((cut ? "…" : "") + p + suffix, f, new Size(10000, 100), TextFormatFlags.NoPadding).Width > max)
+        { p = p[1..]; cut = true; }
+        _pFile.Text = (cut ? "…" : "") + p + suffix;
+    }
+
+    void ToggleDetails() { _details = !_details; UpdateDetails(); }
+
+    /// <summary>展开/收起日志：窗口按需加高，按钮行跟着下移，日志区占加出来的高度。</summary>
+    void UpdateDetails()
+    {
+        var has = _current == _vProg || _current == _vErr;
+        _extra = _details && has ? DetailsExtra : 0;
+        _pTog.Expanded = _eTog.Expanded = _details;
+        _pLog.Visible = _eLog.Visible = _details;
+        _pOpen.Visible = _details || _stallShown;
+        ApplyLayout();
+        if (_details) SyncLogs();
+    }
+
+    void SyncLogs()
+    {
+        if (_current == _vProg) _pLog.Sync(); else if (_current == _vErr) _eLog.Sync();
+    }
+
+    static void OpenLog()
+    {
+        try { Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{Log.Path}\"") { UseShellExecute = false })?.Dispose(); }
+        catch (Exception e) { Log.Write("打开日志文件失败: " + e.Message); }
+    }
+
+    void SetStall(bool on, string file)
+    {
+        _stallShown = on;
+        _pFile.Visible = !on;
+        _pOpen.Visible = on || _details;
+        _pWarn.Visible = _pWait.Visible = _pCancel.Visible = on;
+        if (on) _pWarn.Text = $"写入 {file.Replace('/', '\\')} 超过 1 分钟没有进展，可能被安全软件拦截。日志：%TEMP%\\Weft-Setup.log";
+    }
+
+    void CheckStall()
+    {
+        if (_ctx == null || !_busy || _quitting) return;
+        var t = Interlocked.Read(ref _ctx.LastProgressTick);
+        var stalled = t != 0 && Environment.TickCount64 - t > SetupContext.StallMs;
+        if (stalled && !_stallShown) SetStall(true, _ctx.CurrentFile);
+        else if (!stalled && _stallShown) SetStall(false, "");
     }
 
     void BuildDone()
@@ -188,6 +281,11 @@ public sealed class MainForm : Form
         _eP = L(_vErr, 12.5f, false, () => Theme.Mute, ContentAlignment.TopCenter);
         _eCancel = new FlatButton("取消"); _eRetry = new FlatButton("重试", BtnKind.Primary, 96);
         _vErr.Controls.Add(_eCancel); _vErr.Controls.Add(_eRetry);
+        _eTog = new MiniLink("详细信息", true); _eOpen = new MiniLink("打开日志文件", false);
+        _eLog = new LogPane();
+        _vErr.Controls.Add(_eTog); _vErr.Controls.Add(_eOpen); _vErr.Controls.Add(_eLog);
+        _eTog.Click += (_, _) => ToggleDetails();
+        _eOpen.Click += (_, _) => OpenLog();
         _eCancel.Click += (_, _) => { _forceClose = true; Close(); };
         _eRetry.Click += (_, _) => StartRun();
     }
@@ -225,7 +323,7 @@ public sealed class MainForm : Form
             var w = b.PreferredWidth();
             x -= w;
             var pr = b.Parent!.Bounds;
-            b.Bounds = new Rectangle(x - pr.X, Sc(338) - pr.Y, w, Sc(34));
+            b.Bounds = new Rectangle(x - pr.X, Sc(338 + _extra) - pr.Y, w, Sc(34));
             x -= Sc(10);
         }
     }
@@ -237,15 +335,40 @@ public sealed class MainForm : Form
         P(sub, 116, 82, 408, 20);
     }
 
+    /// <summary>展开日志后窗口若超出当前屏幕工作区，就压缩日志区（有下限），保证整窗可见。</summary>
+    void FitExtra()
+    {
+        if (_extra == 0) return;
+        _extra = DetailsExtra;
+        Rectangle wa;
+        try { wa = Screen.FromControl(this).WorkingArea; } catch { return; }
+        var nc = IsHandleCreated ? Height - ClientSize.Height : 0;
+        var maxH = wa.Height - nc;
+        while (_extra > 24 && Sc(H + _extra) > maxH) _extra--;
+    }
+
+    /// <summary>窗口下沿超出工作区时上移（预览窗口在屏幕外，不动）。</summary>
+    void KeepOnScreen()
+    {
+        if (_preview || !IsHandleCreated || WindowState != FormWindowState.Normal) return;
+        var wa = Screen.FromControl(this).WorkingArea;
+        if (Bottom > wa.Bottom) Top = Math.Max(wa.Top, wa.Bottom - Height);
+    }
+
     void ApplyLayout()
     {
-        ClientSize = new Size(Sc(W), Sc(H));
+        FitExtra();
+        ClientSize = new Size(Sc(W), Sc(H + _extra));
+        KeepOnScreen();
         var tb = Sc(TitleH);
         foreach (var v in _views) v.Bounds = new Rectangle(1, tb, ClientSize.Width - 2, ClientSize.Height - tb - 1);
         foreach (var (l, px, bold, color) in _labels) { l.Font = Theme.Font(px * S, bold); l.ForeColor = color(); l.BackColor = Theme.Win; }
 
-        _close.Bounds = new Rectangle(ClientSize.Width - 1 - Sc(46), 1, Sc(46), tb - 1);
-        _min.Bounds = new Rectangle(_close.Left - Sc(46), 1, Sc(46), tb - 1);
+        // 按钮从渐变条下沿开始，渐变条全宽可见
+        var gb = Math.Max(1, Sc(3)) + 1; // 渐变条抗锯齿会多占一行像素
+        _close.TopInset = _min.TopInset = gb;
+        _close.Bounds = new Rectangle(ClientSize.Width - 1 - Sc(46), 1 + gb, Sc(46), tb - 1 - gb);
+        _min.Bounds = new Rectangle(_close.Left - Sc(46), 1 + gb, Sc(46), tb - 1 - gb);
 
         Head(_iLogo, _iH1, _iSub);
         P(_iLbl, 36, 176, 488, 17);
@@ -261,9 +384,20 @@ public sealed class MainForm : Form
         Foot(_uGo);
 
         Head(_pLogo, _pH1, _pSub);
-        P(_pBar, 36, 203, 488, 6);
-        P(_pStep, 36, 220, 400, 20);
-        P(_pPct, 424, 220, 100, 20);
+        // 屏幕矮导致 _extra 被压缩时：先把进度区整体上移（压缩标题与进度条之间的留白），日志框向下用满到按钮行/底边距
+        var squeezed = _extra > 0 && _extra < DetailsExtra;
+        var pBottom = !squeezed || _pWait.Visible ? 330 + _extra : H + _extra - 24;
+        var up = squeezed ? Math.Clamp(310 + 92 - pBottom, 0, 73) : 0;
+        P(_pBar, 36, 203 - up, 488, 6);
+        P(_pStep, 36, 220 - up, 400, 20);
+        P(_pPct, 424, 220 - up, 100, 20);
+        P(_pFile, 36, 244 - up, 488, 18);
+        P(_pWarn, 36, 244 - up, 488, 36);
+        P(_pTog, 36, 284 - up, 10, 20); _pTog.Width = _pTog.PreferredWidth();
+        P(_pOpen, 0, 284 - up, 10, 20); _pOpen.Left = _pTog.Right + Sc(14); _pOpen.Width = _pOpen.PreferredWidth();
+        P(_pLog, 36, 310 - up, 488, pBottom - (310 - up));
+        _pLog.Relayout();
+        Foot(_pCancel, _pWait);
 
         Head(_nLogo, _nH1, _nSub);
         P(_nDel, 36, 197, 488, 20);
@@ -271,23 +405,30 @@ public sealed class MainForm : Form
         P(_nHint, 36, 231, 488, 18);
         Foot(_nCancel, _nGo);
 
+        P(_eTog, 36, 338 + _extra + 7, 10, 20); _eTog.Width = _eTog.PreferredWidth();
+        P(_eOpen, 0, 338 + _extra + 7, 10, 20); _eOpen.Left = _eTog.Right + Sc(14); _eOpen.Width = _eOpen.PreferredWidth();
+        // 屏幕矮时 _extra 被压缩，日志框保底 92（约 5 行），上移占用原先居中内容的下方空白
+        var eLogH = _extra > 0 && _extra < DetailsExtra ? Math.Max(92, _extra - 16) : Math.Max(56, _extra - 16);
+        P(_eLog, 36, 330 + _extra - eLogH, 488, eLogH);
+        _eLog.Relayout();
+
         LayoutCenter(_dBadge, _dH, _dP);
-        LayoutCenter(_eBadge, _eH, _eP);
+        LayoutCenter(_eBadge, _eH, _eP, _extra > 0 ? Math.Min(338, 322 + _extra - eLogH) : 338);
         if (_dOpen.Visible) Foot(_dFin, _dOpen); else Foot(_dFin);
         if (_eRetry.Visible) Foot(_eCancel, _eRetry); else Foot(_eCancel);
 
         _mask.Bounds = ClientRectangle;
-        Invalidate();
+        Invalidate(true);
     }
 
-    void LayoutCenter(Badge b, Label h, Label p)
+    void LayoutCenter(Badge b, Label h, Label p, int areaBottom = 338)
     {
         var pw = Sc(380);
         var ph = 0;
         if (!string.IsNullOrEmpty(p.Text))
-            ph = TextRenderer.MeasureText(p.Text, p.Font, new Size(pw, 1000), TextFormatFlags.WordBreak | TextFormatFlags.NoPadding).Height + Sc(4);
+            ph = TextRenderer.MeasureText(p.Text, p.Font, new Size(pw - Sc(10), 1000), TextFormatFlags.WordBreak | TextFormatFlags.NoPadding).Height + Sc(4);
         var content = Sc(56) + Sc(12) + Sc(28) + (ph > 0 ? Sc(12) + ph : 0);
-        var top = Sc(TitleH) + (Sc(338 - TitleH) - content) / 2;
+        var top = Sc(TitleH) + Math.Max(Sc(4), (Sc(areaBottom - TitleH) - content) / 2);
         var parent = b.Parent!.Bounds;
         b.Bounds = new Rectangle(Sc(280) - Sc(28) - parent.X, top - parent.Y, Sc(56), Sc(56));
         h.Bounds = new Rectangle(Sc(36) - parent.X, top + Sc(68) - parent.Y, Sc(488), Sc(28));
@@ -295,8 +436,78 @@ public sealed class MainForm : Form
         p.AutoEllipsis = false;
     }
 
-    protected override void OnHandleCreated(EventArgs e) { base.OnHandleCreated(e); TryRoundCorners(); }
-    protected override void OnDpiChanged(DpiChangedEventArgs e) { base.OnDpiChanged(e); ApplyLayout(); }
+    protected override void OnHandleCreated(EventArgs e)
+    {
+        base.OnHandleCreated(e);
+        TryRoundCorners();
+        ApplyLayout(); // 构造时句柄还没有，DeviceDpi 不可靠；这里按真实 DPI 重算
+    }
+
+    protected override void OnLoad(EventArgs e) { base.OnLoad(e); ApplyLayout(); }
+
+    protected override void OnDpiChanged(DpiChangedEventArgs e)
+    {
+        base.OnDpiChanged(e);
+        // 先采用系统建议的位置/尺寸，再按新 DPI 重排，避免两边来回覆盖
+        Bounds = e.SuggestedRectangle;
+        ApplyLayout();
+        foreach (var c in AllControls(this)) c.Invalidate();
+    }
+
+    // ---------- 预览（--render-preview） ----------
+
+    static void SeedPreviewLog()
+    {
+        Log.ResetRing();
+        Log.AddToRing("20:14:02.101 启动 --render-preview");
+        for (var i = 1; i <= 36; i++)
+        {
+            var f = i % 3 == 0 ? "node/node.exe" : $"app/chunk-{i:000}.js";
+            Log.AddToRing($"20:14:{2 + i / 4:00}.{i * 23 % 1000:000} 写入 {f} ({i * 48213} B) [{i}/20368]");
+            Log.AddToRing($"20:14:{2 + i / 4:00}.{i * 23 % 1000 + 1:000} {(i == 30 ? "SLOW " : "")}写入完成 {f} {(i == 30 ? 7312 : 12 + i)} ms");
+        }
+    }
+
+    internal void ShowPreviewState(string state)
+    {
+        var c = _ctx!;
+        switch (state)
+        {
+            case "install": c.Mode = InstallMode.Install; Start(); break;
+            case "upgrade": c.Mode = InstallMode.Upgrade; Start(); break;
+            case "uninstall": c.Mode = InstallMode.Uninstall; Start(); break;
+            case "progress":
+                c.Mode = InstallMode.Install;
+                _title = "Weft 安装程序"; Text = _title;
+                _pH1.Text = "正在安装"; _pSub.Text = "";
+                _step = "正在写入文件"; _pBar.Value = 42; _pStep.Text = _step; _pPct.Text = "42%";
+                Show(_vProg);
+                break;
+            case "progress-log":
+            case "error-log":
+                SeedPreviewLog();
+                _details = true;
+                if (state == "error-log") { c.Mode = InstallMode.Install; ShowError("磁盘空间不足", $"安装位置 {c.Dir} 需要约 {DiskSpace.FormatMb(900L << 20)} 可用空间。", true); break; }
+                goto case "progress-files";
+            case "progress-files":
+            case "progress-stalled":
+                c.Mode = InstallMode.Install;
+                _title = "Weft 安装程序"; Text = _title;
+                _pH1.Text = "正在安装"; _pSub.Text = "";
+                _step = "正在复制文件"; _pBar.Value = 9; _pStep.Text = _step; _pPct.Text = "9%";
+                Show(_vProg);
+                ApplyLayout();
+                SetFileLine(@"node/node.exe", 3, 20368);
+                SetStall(state == "progress-stalled", @"node\node.exe");
+                break;
+            case "done": c.Mode = InstallMode.Install; ShowDone(); break;
+            case "done-upgrade": c.Mode = InstallMode.Upgrade; ShowDone(); break;
+            case "error-running": ShowError("无法停止 Weft", "Weft 正在运行。请先退出，再重试。", true); break;
+            case "error-disk": ShowError("磁盘空间不足", $"安装位置 {c.Dir} 需要约 {DiskSpace.FormatMb(900L << 20)} 可用空间。", true); break;
+            case "quit-confirm": c.Mode = InstallMode.Install; _busy = true; Start(); ShowMask(); _busy = false; break;
+        }
+        ApplyLayout();
+    }
 
     [DllImport("dwmapi.dll")]
     static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int value, int size);
@@ -326,7 +537,7 @@ public sealed class MainForm : Form
         if (m.Msg == WM_NCHITTEST && (int)m.Result == HTCLIENT)
         {
             var pt = PointToClient(new Point((short)(m.LParam.ToInt64() & 0xffff), (short)((m.LParam.ToInt64() >> 16) & 0xffff)));
-            if (pt.Y < Sc(TitleH) && pt.X < _min.Left) m.Result = (IntPtr)HTCAPTION;
+            if (pt.Y < Sc(TitleH) && (pt.X < _min.Left || pt.Y < _min.Top)) m.Result = (IntPtr)HTCAPTION;
         }
     }
 
@@ -373,6 +584,7 @@ public sealed class MainForm : Form
         v.BringToFront();
         _min.BringToFront(); _close.BringToFront();
         ActiveControl = DefaultButton();
+        UpdateDetails();
     }
 
     /// <summary>每页回车触发的按钮。卸载页默认「取消」，避免手滑。</summary>
@@ -456,6 +668,10 @@ public sealed class MainForm : Form
         var un = c.Mode == InstallMode.Uninstall;
         _pH1.Text = un ? "正在卸载" : c.Mode == InstallMode.Upgrade ? "正在更新" : "正在安装";
         _pSub.Text = c.Mode == InstallMode.Upgrade ? $"{c.OldVersion} → {c.NewVersion}" : "";
+        Interlocked.Exchange(ref c.LastProgressTick, 0);
+        c.CurrentFile = ""; c.FileIndex = c.FileTotal = 0;
+        _pCancel.Enabled = _pWait.Enabled = true;
+        SetStall(false, ""); SetFileLine("", 0, 0);
         _step = un ? "正在停止 Weft" : "正在校验安装包";
         Interlocked.Exchange(ref _pctBits, BitConverter.DoubleToInt64Bits(0));
         PaintProgress();
@@ -484,6 +700,8 @@ public sealed class MainForm : Form
         var p = BitConverter.Int64BitsToDouble(Interlocked.Read(ref _pctBits));
         _pBar.Value = p;
         _pStep.Text = _step;
+        if (_ctx != null && _ctx.FileTotal > 0 && _step == "正在复制文件") SetFileLine(_ctx.CurrentFile, _ctx.FileIndex, _ctx.FileTotal);
+        else if (_step != "正在复制文件" && _pFile.Text.Length > 0 && !_preview) SetFileLine("", 0, 0);
         _pPct.Text = (int)Math.Floor(p) + "%";
     }
 
@@ -615,7 +833,7 @@ public sealed class PathBox : Control
 {
     public readonly LinkButton Change = new("更改");
     string _text = "";
-    float S => DeviceDpi / 96f;
+    float S => Dpi.Of(this);
 
     public string PathText { get => _text; set { _text = value; Invalidate(); } }
 
@@ -662,7 +880,7 @@ public sealed class ConfirmMask : Control
     public readonly FlatButton Keep = new("继续", BtnKind.Primary, 96);
     Bitmap? _snap;
     string _title = "", _msg = "";
-    float S => DeviceDpi / 96f;
+    float S => Dpi.Of(this);
 
     public ConfirmMask()
     {

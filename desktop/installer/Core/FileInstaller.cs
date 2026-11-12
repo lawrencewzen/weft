@@ -17,6 +17,7 @@ public sealed class ApplyStats
 /// </summary>
 public static class FileInstaller
 {
+    public const long SlowMs = 5000;
     const string NewSuffix = ".weft-new";
     const string OldSuffix = ".weft-old";
 
@@ -39,7 +40,8 @@ public static class FileInstaller
     }
 
     public static ApplyStats Apply(ZipArchive zip, Manifest next, Manifest? prev, string dir,
-        Action<long, long>? bytes, CancellationToken ct, DiffResult? precomputed = null)
+        Action<long, long>? bytes, CancellationToken ct, DiffResult? precomputed = null,
+        Action<string, int, int>? onFile = null)
     {
         var entries = IndexEntries(zip);
         var diff = precomputed ?? ManifestDiff.Compute(prev, next, rel => DiskSize(dir, rel));
@@ -50,9 +52,14 @@ public static class FileInstaller
         try
         {
             Directory.CreateDirectory(dir);
+            var fileNo = 0;
             foreach (var f in diff.Write)
             {
                 ct.ThrowIfCancellationRequested();
+                fileNo++;
+                onFile?.Invoke(f.Path, fileNo, diff.Write.Count);
+                Log.Write($"写入 {f.Path} ({f.Size} B) [{fileNo}/{diff.Write.Count}]");
+                var swFile = System.Diagnostics.Stopwatch.StartNew();
                 if (!entries.TryGetValue(f.Path, out var entry))
                     throw new SetupException(FailKind.Payload, "安装包缺少文件: " + f.Path);
                 var dest = Path.Combine(dir, PathUtil.ToLocal(f.Path));
@@ -73,6 +80,8 @@ public static class FileInstaller
                 }
                 stats.Written++;
                 stats.BytesWritten += f.Size;
+                var ms = swFile.ElapsedMilliseconds;
+                Log.Write($"{(ms > SlowMs ? "SLOW " : "")}写入完成 {f.Path} {ms} ms");
             }
 
             foreach (var f in diff.Remove)

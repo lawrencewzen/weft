@@ -88,6 +88,24 @@ public sealed class CliOptions
     public string? Dir { get; set; }
     public string? Error { get; set; }
 
+    /// <summary>隐藏命令行 --render-preview &lt;目录&gt;：把各界面状态渲染成 PNG，不安装任何东西。</summary>
+    public string? PreviewDir { get; set; }
+    public double[] PreviewScales { get; set; } = { 1.0, 1.25, 1.5, 1.75 };
+    /// <summary>"dark" / "light"；null 表示两个都出。</summary>
+    public string? PreviewTheme { get; set; }
+
+    public static double[]? ParseScales(string s)
+    {
+        var list = new List<double>();
+        foreach (var part in s.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            if (!double.TryParse(part, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var v)
+                || v < 0.5 || v > 4) return null;
+            list.Add(v);
+        }
+        return list.Count == 0 ? null : list.ToArray();
+    }
+
     /// <summary>
     /// /S 静默；/D=路径（可带空格，也可被引号包住）；/uninstall；/deletedata；/nodesktop。
     /// 大小写不敏感，/ 和 - 开头都认。
@@ -114,6 +132,17 @@ public sealed class CliOptions
             }
             switch (key.ToLowerInvariant())
             {
+                case "render-preview":
+                    if (i + 1 < args.Count) o.PreviewDir = args[++i]; else o.Error = "--render-preview 缺少输出目录";
+                    break;
+                case "scale":
+                    if (i + 1 < args.Count && ParseScales(args[i + 1]) is { } sc) { o.PreviewScales = sc; i++; }
+                    else o.Error = "--scale 参数无效";
+                    break;
+                case "theme":
+                    if (i + 1 < args.Count && args[i + 1].ToLowerInvariant() is "dark" or "light") o.PreviewTheme = args[++i].ToLowerInvariant();
+                    else o.Error = "--theme 参数无效";
+                    break;
                 case "s": case "silent": o.Silent = true; break;
                 case "uninstall": o.Uninstall = true; break;
                 case "deletedata": o.DeleteData = true; break;

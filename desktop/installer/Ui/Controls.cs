@@ -6,7 +6,7 @@ namespace Weft.Setup.Ui;
 public abstract class FlatControl : Control
 {
     protected bool Hover, Down;
-    protected float S => DeviceDpi / 96f;
+    protected float S => Dpi.Of(this);
 
     protected FlatControl()
     {
@@ -18,6 +18,7 @@ public abstract class FlatControl : Control
 
     /// <summary>用过 Tab 之后才画焦点环，鼠标点击和刚打开时不画。</summary>
     public static bool KeyboardMode;
+    protected override void OnEnabledChanged(EventArgs e) { Hover = Down = false; Invalidate(); base.OnEnabledChanged(e); }
     protected override void OnMouseEnter(EventArgs e) { Hover = true; Invalidate(); base.OnMouseEnter(e); }
     protected override void OnMouseLeave(EventArgs e) { Hover = false; Down = false; Invalidate(); base.OnMouseLeave(e); }
     protected override void OnMouseDown(MouseEventArgs e) { KeyboardMode = false; Down = true; Invalidate(); base.OnMouseDown(e); }
@@ -71,7 +72,7 @@ public sealed class FlatButton : FlatControl
         switch (Kind)
         {
             case BtnKind.Primary:
-                fill = Theme.Btn; border = Theme.Btn; text = Theme.OnBtn;
+                fill = Theme.Accent; border = Theme.Accent; text = Theme.OnAccent;
                 if (Hover || Down) fill = Theme.Mix(fill, Theme.Win, .12);
                 break;
             case BtnKind.Danger:
@@ -82,6 +83,7 @@ public sealed class FlatButton : FlatControl
                 fill = Hover || Down ? Theme.Hover : Theme.Win; border = Theme.Line; text = Theme.Ink;
                 break;
         }
+        if (!Enabled) { fill = Theme.Off; border = Theme.Off; text = Theme.OffText; }
         using (var path = Theme.Round(r, 6 * S))
         {
             using var b = new SolidBrush(fill);
@@ -183,7 +185,7 @@ public sealed class ProgressTrack : Control
 {
     double _v;
     public double Value { get => _v; set { _v = Math.Clamp(value, 0, 100); Invalidate(); } }
-    float S => DeviceDpi / 96f;
+    float S => Dpi.Of(this);
 
     public ProgressTrack()
     {
@@ -270,7 +272,7 @@ public sealed class Badge : Control
 public sealed class VersionLine : Control
 {
     public string Old = "", New = "";
-    float S => DeviceDpi / 96f;
+    float S => Dpi.Of(this);
     public VersionLine()
     {
         SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer, true);
@@ -314,8 +316,10 @@ public enum CaptionKind { Minimize, Close }
 public sealed class CaptionButton : Control
 {
     public CaptionKind Kind;
+    /// <summary>按钮顶部让出给窗口渐变条的高度；图标仍按让出之前的整块区域居中。</summary>
+    public int TopInset;
     bool _hover;
-    float S => DeviceDpi / 96f;
+    float S => Dpi.Of(this);
 
     public CaptionButton(CaptionKind kind)
     {
@@ -337,7 +341,7 @@ public sealed class CaptionButton : Control
         using var pen = new Pen(fg, Math.Max(1f, 1.1f * S));
         var sz = 10 * S;
         var x = (Width - sz) / 2f;
-        var y = (Height - sz) / 2f;
+        var y = (Height + TopInset) / 2f - TopInset - sz / 2f;
         if (close)
         {
             g.SmoothingMode = SmoothingMode.AntiAlias;
@@ -350,5 +354,137 @@ public sealed class CaptionButton : Control
             var yy = (float)Math.Round(y + sz / 2);
             g.DrawLine(pen, x, yy, x + sz, yy);
         }
+    }
+}
+
+/// <summary>小号次要文字链接；Chevron 为真时右侧带展开/收起小箭头。</summary>
+public sealed class MiniLink : FlatControl
+{
+    public bool Chevron;
+    bool _expanded;
+    public bool Expanded { get => _expanded; set { if (_expanded != value) { _expanded = value; Invalidate(); } } }
+
+    public MiniLink(string text, bool chevron) { Text = text; Chevron = chevron; }
+
+    public int PreferredWidth() =>
+        TextRenderer.MeasureText(Text, Theme.Font(12 * S), new Size(1000, 100), TextFormatFlags.NoPadding).Width
+        + (Chevron ? (int)(18 * S) : (int)(2 * S));
+
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        var g = e.Graphics;
+        g.Clear(Theme.Win);
+        g.SmoothingMode = SmoothingMode.AntiAlias;
+        var col = Hover || Down ? Theme.Ink : Theme.Mute;
+        var f = Theme.Font(12 * S);
+        var sz = TextRenderer.MeasureText(Text, f, new Size(1000, 100), TextFormatFlags.NoPadding);
+        var y = (Height - sz.Height) / 2;
+        TextRenderer.DrawText(g, Text, f, new Point(0, y), col, TextFormatFlags.NoPadding);
+        if (Chevron)
+        {
+            var cx = sz.Width + 10 * S; var cy = Height / 2f; var k = 3.2f * S;
+            using var pen = new Pen(col, Math.Max(1f, 1.4f * S)) { StartCap = LineCap.Round, EndCap = LineCap.Round, LineJoin = LineJoin.Round };
+            var dir = _expanded ? -1 : 1;
+            g.DrawLines(pen, new[] { new PointF(cx - k, cy - dir * k / 2), new PointF(cx, cy + dir * k / 2), new PointF(cx + k, cy - dir * k / 2) });
+        }
+        else
+        {
+            using var pen = new Pen(col, Math.Max(1f, S));
+            g.DrawLine(pen, 0, y + sz.Height + 1 * S, sz.Width, y + sz.Height + 1 * S);
+        }
+        FocusRing(g, new RectangleF(0, 0, Width, Height), 4 * S);
+    }
+}
+
+/// <summary>只读日志区：圆角浅底 + 等宽字体，最近 200 行，新行自动滚到底，可选中复制。</summary>
+public sealed class LogPane : Control
+{
+    /// <summary>--render-preview 用：不创建真正的 TextBox，改为自绘文字（纯离屏渲染时 DrawToBitmap 一个 Edit 控件会卡住）。</summary>
+    public static bool Offscreen;
+    readonly List<string> _lines = new();
+    readonly TextBox _tb = new()
+    {
+        Multiline = true, ReadOnly = true, BorderStyle = BorderStyle.None, ScrollBars = ScrollBars.Vertical,
+        WordWrap = true, TabStop = false, ShortcutsEnabled = true,
+    };
+    long _seq;
+    int _count;
+    Font? _font;
+    float S => Dpi.Of(this);
+
+    public LogPane()
+    {
+        SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
+        TabStop = false;
+        if (!Offscreen) Controls.Add(_tb);
+        Visible = false;
+    }
+
+    public void Relayout()
+    {
+        if (Offscreen) { Invalidate(); return; }
+        var old = _font;
+        _font = new Font("Consolas", 11.5f * S, FontStyle.Regular, GraphicsUnit.Pixel);
+        _tb.Font = _font;
+        old?.Dispose();
+        _tb.BackColor = Theme.Sub; _tb.ForeColor = Theme.Mute;
+        var pad = (int)(8 * S);
+        _tb.Bounds = new Rectangle(pad, (int)(6 * S), Math.Max(10, Width - 2 * pad), Math.Max(10, Height - (int)(12 * S)));
+        Invalidate();
+    }
+
+    protected override void OnResize(EventArgs e) { base.OnResize(e); Relayout(); }
+
+    /// <summary>把日志环形缓冲里的新行并进来；调用方做节流。</summary>
+    public void Sync()
+    {
+        var lines = Log.Since(ref _seq);
+        if (lines.Length == 0) return;
+        if (Offscreen)
+        {
+            _lines.AddRange(lines);
+            if (_lines.Count > Log.RingSize) _lines.RemoveRange(0, _lines.Count - Log.RingSize);
+            Invalidate();
+            return;
+        }
+        if (_count + lines.Length > Log.RingSize)
+        {
+            lines = Log.Snapshot(out _seq);
+            _tb.Text = string.Join("\r\n", lines) + "\r\n";
+            _count = lines.Length;
+        }
+        else
+        {
+            _tb.AppendText(string.Join("\r\n", lines) + "\r\n");
+            _count += lines.Length;
+        }
+        _tb.SelectionStart = _tb.TextLength;
+        _tb.ScrollToCaret();
+    }
+
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        var g = e.Graphics;
+        g.Clear(Theme.Win);
+        g.SmoothingMode = SmoothingMode.AntiAlias;
+        var r = new RectangleF(0.5f, 0.5f, Width - 1, Height - 1);
+        using var p = Theme.Round(r, 6 * S);
+        using var b = new SolidBrush(Theme.Sub);
+        g.FillPath(b, p);
+        using var pen = new Pen(Theme.Line, 1f);
+        g.DrawPath(pen, p);
+        if (!Offscreen) return;
+        var f = new Font("Consolas", 11.5f * S, FontStyle.Regular, GraphicsUnit.Pixel);
+        try
+        {
+            var lh = (int)Math.Ceiling(f.Height * 1.05);
+            var pad = (int)(8 * S);
+            var rows = Math.Max(1, (Height - (int)(12 * S)) / lh);
+            var start = Math.Max(0, _lines.Count - rows);
+            for (var i = start; i < _lines.Count; i++)
+                TextRenderer.DrawText(g, _lines[i], f, new Rectangle(pad, (int)(6 * S) + (i - start) * lh, Width - 2 * pad, lh), Theme.Mute,
+                    TextFormatFlags.NoPadding | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis);
+        }
+        finally { f.Dispose(); }
     }
 }
