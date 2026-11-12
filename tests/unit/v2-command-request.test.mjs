@@ -124,6 +124,19 @@ async function openKernel(dataDir, env) {
   return { store, kernel };
 }
 
+// Close the kernel first (harness, watches), then the store; either may already
+// be closed. Windows cannot unlink weft.sqlite while a handle is open, so the
+// directory removal also retries.
+async function closeOpened(opened) {
+  if (!opened) return;
+  try { await opened.kernel.close(); } catch { /* already closed */ }
+  try { opened.store.close(); } catch { /* already closed */ }
+}
+
+async function removeDir(dir) {
+  await rm(dir, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 });
+}
+
 async function waitFor(fn, what) {
   for (let i = 0; i < 200; i += 1) {
     const value = await fn();
@@ -184,14 +197,14 @@ test('manual compaction request survives reopening the kernel', { timeout: 120_0
     };
     await check();
 
-    await kernel.close();
+    await closeOpened(opened);
+    opened = null;
     opened = await openKernel(dataDir, { WEFT_FAUX_TEXT: 'ok' });
     ({ store, kernel } = opened);
     await check();
   } finally {
-    if (opened?.kernel) await opened.kernel.close();
-    if (opened?.store) opened.store.close();
-    await rm(dataDir, { recursive: true, force: true });
+    await closeOpened(opened);
+    await removeDir(dataDir);
   }
 });
 
@@ -219,8 +232,7 @@ test('a handoff the model starts has no request in the snapshot', { timeout: 120
     }, 'handoff note');
     assert.equal('request' in notes(snap, 'handoff')[0], false);
   } finally {
-    if (opened?.kernel) await opened.kernel.close();
-    if (opened?.store) opened.store.close();
-    await rm(dataDir, { recursive: true, force: true });
+    await closeOpened(opened);
+    await removeDir(dataDir);
   }
 });
