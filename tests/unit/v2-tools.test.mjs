@@ -707,3 +707,97 @@ test('a failed ask that is also the last call still titles a failure', () => {
   assert.match(summary.text, /失败/);
   assert.equal(summary.failed, 1);
 });
+
+test('delegate: title wins, else first line of task, heading and summary are localized', () => {
+  const titled = tool('delegate', { id: 'd1', input: { task: 'SUBTASK 写 sub.txt', title: '写文件子任务' } });
+  assert.equal(toolRowHeading(titled).title, '写文件子任务');
+  assert.equal(toolRowHeading(titled).detail, '');
+  const view = toolCallView(titled, [titled], { lang: 'zh' });
+  assert.equal(view.kind, 'other');
+  assert.equal(view.heading.title, '写文件子任务');
+  assert.equal(validateToolCall(view), true);
+  assert.equal(summarizeToolGroup([titled], 'zh').text, '派出子 Agent：写文件子任务');
+  assert.equal(summarizeToolGroup([titled], 'en').text, 'Dispatched sub-agent: 写文件子任务');
+  const bare = tool('delegate', { id: 'd2', input: { task: '  检查依赖\n然后升级\n' } });
+  assert.equal(toolCallView(bare, [bare], { lang: 'zh' }).heading.title, '检查依赖');
+  assert.equal(summarizeToolGroup([bare], 'zh').text, '派出子 Agent：检查依赖');
+  assert.equal(summarizeToolGroup([tool('delegate', { input: {} })], 'zh').text, '派出子 Agent');
+});
+
+test('delegate: several in one group are counted, mixed groups join with other clauses', () => {
+  const ds = [
+    tool('delegate', { id: 'd1', input: { task: 'a', title: 'A' } }),
+    tool('delegate', { id: 'd2', input: { task: 'b', title: 'B' } }),
+  ];
+  assert.equal(summarizeToolGroup(ds, 'zh').text, '派出 2 个子 Agent');
+  assert.equal(summarizeToolGroup(ds, 'en').text, 'Dispatched 2 sub-agents');
+  const mixed = [
+    tool('read', { id: 'r1', path: 'a.js' }),
+    ...ds,
+    tool('edit', { id: 'e1', path: 'src/x.ts' }),
+  ];
+  assert.equal(summarizeToolGroup(mixed, 'zh').text, '改了 x.ts · 派出 2 个子 Agent · 读了 a.js');
+  const single = [tool('read', { id: 'r1', path: 'a.js' }), ds[0]];
+  assert.equal(summarizeToolGroup(single, 'zh').text, '派出子 Agent：A · 读了 a.js');
+});
+
+test('delegate: running and failed phrases', () => {
+  const running = tool('delegate', { status: 'running', input: { task: 'x', title: '写文件子任务' } });
+  assert.deepEqual(summarizeToolGroup([running], 'zh'), { text: '子 Agent 正在处理：写文件子任务', failed: 0, running: true });
+  assert.equal(summarizeToolGroup([tool('delegate', { status: 'running', input: {} })], 'zh').text, '子 Agent 正在处理…');
+  const failed = tool('delegate', { status: 'error', input: { task: 'x', title: 'T' } });
+  assert.equal(summarizeToolGroup([failed], 'zh').text, '派出子 Agent T 失败');
+  assert.equal(summarizeToolGroup([tool('delegate', { status: 'error', input: {} })], 'zh').text, '派出子 Agent 失败');
+  assert.equal(
+    summarizeToolGroup([tool('subagent', { status: 'error', input: { action: 'stop' } })], 'zh').text,
+    '停止子 Agent 失败',
+  );
+  assert.equal(
+    summarizeToolGroup([tool('subagent', { status: 'error', input: { action: 'list' } })], 'en').text,
+    'Listing sub-agents failed',
+  );
+});
+
+test('subagent: each action has its own phrase and heading', () => {
+  const cases = [
+    [{ action: 'spawn', name: 'w1', title: '后台任务' }, '启动后台子 Agent 后台任务', '正在启动后台子 Agent 后台任务…'],
+    [{ action: 'spawn', name: 'w1' }, '启动后台子 Agent w1', '正在启动后台子 Agent w1…'],
+    [{ action: 'send', name: 'w1', message: 'hi' }, '给子 Agent w1 发消息', '正在给子 Agent w1 发消息…'],
+    [{ action: 'wait', name: 'w1' }, '等待子 Agent w1', '正在等待子 Agent w1…'],
+    [{ action: 'stop', name: 'w1' }, '停止子 Agent w1', '正在停止子 Agent w1…'],
+    [{ action: 'list' }, '查看子 Agent 列表', '正在查看子 Agent 列表…'],
+    [{ action: 'wait' }, '等待子 Agent', '正在等待子 Agent…'],
+  ];
+  for (const [input, done, run] of cases) {
+    const t = tool('subagent', { input });
+    assert.equal(summarizeToolGroup([t], 'zh').text, done);
+    assert.equal(summarizeToolGroup([{ ...t, status: 'running' }], 'zh').text, run);
+    const view = toolCallView(t, [t], { lang: 'zh' });
+    assert.equal(view.kind, 'other');
+    assert.equal(view.heading.title, input.title || input.name || '');
+    assert.equal(validateToolCall(view), true);
+  }
+  assert.equal(
+    summarizeToolGroup([tool('subagent', { status: 'error', input: { action: 'stop', name: 'w1' } })], 'zh').text,
+    '停止子 Agent w1 失败',
+  );
+  assert.equal(
+    summarizeToolGroup([
+      tool('subagent', { id: 's1', input: { action: 'spawn', name: 'w1' } }),
+      tool('subagent', { id: 's2', input: { action: 'wait', name: 'w1' } }),
+    ], 'zh').text,
+    '启动后台子 Agent w1 · 等待子 Agent w1',
+  );
+  assert.equal(
+    summarizeToolGroup([tool('subagent', { input: { action: 'send', name: 'w1' } })], 'en').text,
+    'Messaged sub-agent w1',
+  );
+});
+
+test('other non-core tools keep their generic summary and empty heading', () => {
+  const mcp = tool('mcp__demo__lookup', { id: 'm1', input: { q: 'x' } });
+  assert.equal(summarizeToolGroup([mcp], 'zh').text, '调用了 mcp__demo__lookup');
+  assert.equal(summarizeToolGroup([mcp, { ...mcp, id: 'm2' }], 'zh').text, '调用了 2 次 mcp__demo__lookup');
+  assert.equal(summarizeToolGroup([{ ...mcp, status: 'running' }], 'zh').text, '正在调用 mcp__demo__lookup');
+  assert.equal(toolCallView(mcp, [mcp], { lang: 'zh' }).heading.title, '');
+});

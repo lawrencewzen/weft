@@ -28,6 +28,9 @@ type ToolCall = components['schemas']['ToolCall'];
 type AskCall = components['schemas']['AskCall'];
 const ASK_TOOL_NAME = 'ask_user_question';
 const SCHEDULE_TOOL_NAME = 'schedule';
+const DELEGATE_TOOL_NAME = 'delegate';
+const SUBAGENT_TOOL_NAME = 'subagent';
+const SUBAGENT_ACTIONS = new Set<string>(['spawn', 'send', 'wait', 'stop', 'list']);
 type ToolGroupSummary = components['schemas']['ToolGroupSummary'];
 type Translate = (key: string, params?: Record<string, unknown>) => string;
 type JsonObject = Record<string, unknown>;
@@ -186,6 +189,7 @@ export function toolFocus(tool: ToolLike | null | undefined): ToolFocus {
   if (kind === 'bash') {
     return { mode: 'text', text: oneLine(input.command || input.cmd || '') };
   }
+  if (isDispatchTool(tool)) return { mode: 'text', text: dispatchLabel(tool) };
   if (kind === 'grep') {
     const pattern = oneLine(input.pattern || input.query || '');
     const file = oneLine(tool?.path || input.path || '');
@@ -250,7 +254,78 @@ function presentSummary(text: string): string {
   return text;
 }
 
+function isDelegateTool(tool: ToolLike | null | undefined): boolean {
+  return String(tool?.name || '') === DELEGATE_TOOL_NAME;
+}
+
+function isSubagentTool(tool: ToolLike | null | undefined): boolean {
+  return String(tool?.name || '') === SUBAGENT_TOOL_NAME;
+}
+
+/** delegate (sync sub-agent) and subagent (background sub-agent) tools. */
+function isDispatchTool(tool: ToolLike | null | undefined): boolean {
+  return isDelegateTool(tool) || isSubagentTool(tool);
+}
+
+function subagentAction(tool: ToolLike): string {
+  const input = tool?.input && typeof tool.input === 'object' ? asRecord(tool.input) : {};
+  const action = String(input.action || '');
+  return SUBAGENT_ACTIONS.has(action) ? action : 'other';
+}
+
+/** delegate: title, else first line of task. subagent: title, else name (empty for list). */
+function dispatchLabel(tool: ToolLike | null | undefined): string {
+  const input = tool?.input && typeof tool.input === 'object' && !Array.isArray(tool.input)
+    ? asRecord(tool.input)
+    : {};
+  const str = (value: unknown) => (typeof value === 'string' ? oneLine(value) : '');
+  const title = str(input.title);
+  if (title) return title;
+  if (isDelegateTool(tool)) {
+    const task = typeof input.task === 'string' ? input.task.trim().split(/\r?\n/)[0] : '';
+    return oneLine(task);
+  }
+  return str(input.name);
+}
+
+/** Completed (`one`) or in-progress (`run`) phrase for a delegate / subagent call. */
+function dispatchPhrase(tool: ToolLike, t: Translate, mode: 'one' | 'run'): string {
+  const label = dispatchLabel(tool);
+  if (isDelegateTool(tool)) {
+    return label ? t(`tool_${mode}_delegate`, { name: label }) : t(`tool_${mode}_delegate_bare`);
+  }
+  const action = subagentAction(tool);
+  if (action === 'list' || action === 'other') return t(`tool_${mode}_subagent_${action}`);
+  return label
+    ? t(`tool_${mode}_subagent_${action}`, { name: label })
+    : t(`tool_${mode}_subagent_${action}_bare`);
+}
+
+function dispatchActionLabel(tool: ToolLike, t: Translate): string {
+  if (isDelegateTool(tool)) return t('tool_act_delegate');
+  return t(`tool_act_subagent_${subagentAction(tool)}`);
+}
+
+function dispatchClause(tools: ToolLike[], t: Translate): string {
+  const ok = tools.filter((tool) => isDispatchTool(tool) && !isCallFailed(tool));
+  const delegates = ok.filter(isDelegateTool);
+  const parts: string[] = [];
+  if (delegates.length === 1) parts.push(dispatchPhrase(delegates[0], t, 'one'));
+  else if (delegates.length > 1) parts.push(t('tool_sum_delegate', { n: delegates.length }));
+  const seen = new Set<string>();
+  for (const tool of ok.filter(isSubagentTool)) {
+    const text = dispatchPhrase(tool, t, 'one');
+    if (seen.has(text)) continue;
+    seen.add(text);
+    parts.push(text);
+    if (seen.size >= 2) break;
+  }
+  return parts.join(t('tool_sum_join'));
+}
+
 function countClause(kind: string, n: number, name: unknown, t: Translate): string {
+  if (name === DELEGATE_TOOL_NAME) return t('tool_sum_delegate', { n });
+  if (name === SUBAGENT_TOOL_NAME) return t('tool_sum_subagent', { n });
   if (kind === 'other') {
     return t(n === 1 ? 'tool_sum_other_one' : 'tool_sum_other', { n, name: name || 'tool' });
   }
@@ -289,6 +364,7 @@ function shortFocus(tool: ToolLike): string {
 }
 
 function singlePhrase(tool: ToolLike, t: Translate): string {
+  if (isDispatchTool(tool)) return dispatchPhrase(tool, t, 'one');
   const intent = toolIntent(tool);
   if (intent) return intent;
   const kind = toolKind(tool?.name);
@@ -305,6 +381,7 @@ function singlePhrase(tool: ToolLike, t: Translate): string {
 
 function runningPhrase(tool: ToolLike, t: Translate): string {
   if (isScheduleTool(tool)) return t('tool_run_schedule');
+  if (isDispatchTool(tool)) return dispatchPhrase(tool, t, 'run');
   const intent = toolIntent(tool);
   if (intent) return intent;
   const kind = toolKind(tool?.name);
@@ -320,6 +397,7 @@ function runningPhrase(tool: ToolLike, t: Translate): string {
 }
 
 function actionLabel(tool: ToolLike, t: Translate): string {
+  if (isDispatchTool(tool)) return dispatchActionLabel(tool, t);
   const kind = toolKind(tool?.name);
   if (kind === 'other') return String(tool?.name || 'tool');
   return t(`tool_act_${kind}`);
@@ -328,7 +406,7 @@ function actionLabel(tool: ToolLike, t: Translate): string {
 function failedPhrase(tool: ToolLike, t: Translate): string {
   const action = actionLabel(tool, t);
   const target = shortFocus(tool);
-  if (!target) return t('tool_fail_bare', { action });
+  if (!target) return t(isDispatchTool(tool) ? 'tool_fail_dispatch_bare' : 'tool_fail_bare', { action });
   return t('tool_fail_named', { action, target });
 }
 
@@ -410,6 +488,7 @@ function namedKindPhrase(kind: string, tools: ToolLike[], t: Translate): string 
 function namedCountClause(tools: ToolLike[], t: Translate): string {
   const rest = tools.filter((tool) => {
     if (isCallFailed(tool) && !isSupersededFailure(tool, tools)) return false;
+    if (isDispatchTool(tool)) return false;
     return COUNT_KINDS.has(toolKind(tool?.name));
   });
   if (!rest.length) return '';
@@ -475,6 +554,7 @@ function richSummary(list: ToolLike[], t: Translate): string {
   if (list.length === 1) {
     const tool = list[0];
     if (toolStatusBucket(tool.status) === 'failed') return failedPhrase(tool, t);
+    if (isDispatchTool(tool)) return singlePhrase(tool, t);
     const intent = toolIntent(tool);
     if (intent) return intent;
     const kind = toolKind(tool?.name);
@@ -482,7 +562,7 @@ function richSummary(list: ToolLike[], t: Translate): string {
     if (kind === 'bash') return commandClause(list, t) || singlePhrase(tool, t);
     return singlePhrase(tool, t);
   }
-  const clauses = [changedClause(list, t), failedClause(list, t), commandClause(list, t), namedCountClause(list, t)]
+  const clauses = [changedClause(list, t), failedClause(list, t), commandClause(list, t), dispatchClause(list, t), namedCountClause(list, t)]
     .filter(Boolean);
   if (!clauses.length) return countPhrase(list, t);
   return clauses.join(t('tool_sum_join'));
