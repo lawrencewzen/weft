@@ -71,6 +71,7 @@ export const zh: Record<string, string> = {
   tool_run_other_target: '正在调用 {name} `{target}`…',
   tool_fail_named: '{action} {target} 失败',
   tool_fail_bare: '{action}失败',
+  tool_fail_dispatch_bare: '{action} 失败',
   tool_hint_lines: '{n} 行',
   tool_hint_items: '{n} 项',
   tool_hint_matches: '{n} 处匹配',

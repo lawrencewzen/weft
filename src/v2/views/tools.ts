@@ -406,7 +406,7 @@ function actionLabel(tool: ToolLike, t: Translate): string {
 function failedPhrase(tool: ToolLike, t: Translate): string {
   const action = actionLabel(tool, t);
   const target = shortFocus(tool);
-  if (!target) return t('tool_fail_bare', { action });
+  if (!target) return t(isDispatchTool(tool) ? 'tool_fail_dispatch_bare' : 'tool_fail_bare', { action });
   return t('tool_fail_named', { action, target });
 }
 

@@ -747,7 +747,15 @@ test('delegate: running and failed phrases', () => {
   assert.equal(summarizeToolGroup([tool('delegate', { status: 'running', input: {} })], 'zh').text, '子 Agent 正在处理…');
   const failed = tool('delegate', { status: 'error', input: { task: 'x', title: 'T' } });
   assert.equal(summarizeToolGroup([failed], 'zh').text, '派出子 Agent T 失败');
-  assert.equal(summarizeToolGroup([tool('delegate', { status: 'error', input: {} })], 'zh').text, '派出子 Agent失败');
+  assert.equal(summarizeToolGroup([tool('delegate', { status: 'error', input: {} })], 'zh').text, '派出子 Agent 失败');
+  assert.equal(
+    summarizeToolGroup([tool('subagent', { status: 'error', input: { action: 'stop' } })], 'zh').text,
+    '停止子 Agent 失败',
+  );
+  assert.equal(
+    summarizeToolGroup([tool('subagent', { status: 'error', input: { action: 'list' } })], 'en').text,
+    'Listing sub-agents failed',
+  );
 });
 
 test('subagent: each action has its own phrase and heading', () => {

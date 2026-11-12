@@ -71,6 +71,7 @@ export const en: Record<string, string> = {
   tool_run_other_target: 'Calling {name} `{target}`…',
   tool_fail_named: '{action} {target} failed',
   tool_fail_bare: '{action} failed',
+  tool_fail_dispatch_bare: '{action} failed',
   tool_hint_lines: '{n} lines',
   tool_hint_items: '{n} items',
   tool_hint_matches: '{n} matches',
