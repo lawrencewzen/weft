@@ -23,14 +23,18 @@ namespace Weft.Desktop
         [STAThread]
         private static int Main(string[] args)
         {
+            StartupTimer.Begin();
             if (args.Length > 0 && args[0] == "--self-check") return SelfCheck.Run(args);
             if (args.Length > 0 && args[0] == "--service-check") return ServiceCheck.Run(args);
             bool first;
             using (var mutex = new Mutex(true, @"Local\Weft.Desktop.Shell", out first))
             {
                 var activate = new EventWaitHandle(false, EventResetMode.AutoReset, @"Local\Weft.Desktop.Activate");
+                StartupTimer.Mark("single_instance_checked");
                 if (!first)
                 {
+                    StartupTimer.Note("second instance, woke the running one and exit");
+                    StartupTimer.Flush(false);
                     // Wake the window of the running instance, then leave.
                     activate.Set();
                     return 0;
@@ -43,6 +47,84 @@ namespace Weft.Desktop
                 GC.KeepAlive(mutex);
             }
             return 0;
+        }
+    }
+
+    // Startup timing for the desktop shell (T133-2). Measures only; no behaviour depends on it.
+    // Each phase is logged to %LOCALAPPDATA%\Weft\shell.log as "STARTUP-PHASE name=... at_ms=...",
+    // and one "STARTUP key=value ..." summary line is written after the first page finished loading.
+    internal static class StartupTimer
+    {
+        private static readonly object gate = new object();
+        private static readonly Stopwatch sw = new Stopwatch();
+        private static readonly List<KeyValuePair<string, long>> marks = new List<KeyValuePair<string, long>>();
+        private static readonly List<string> extras = new List<string>();
+        private static long preMainMs = -1;
+        private static bool flushed;
+
+        public static string LogPath()
+        {
+            return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Weft", "shell.log");
+        }
+
+        public static void Begin()
+        {
+            sw.Start();
+            try { preMainMs = (long)Math.Max(0, (DateTime.Now - Process.GetCurrentProcess().StartTime).TotalMilliseconds); } catch { }
+            Mark("process_start");
+        }
+
+        public static void Mark(string name)
+        {
+            long t = sw.ElapsedMilliseconds;
+            lock (gate)
+            {
+                foreach (var m in marks) if (m.Key == name) return; // first hit only
+                marks.Add(new KeyValuePair<string, long>(name, t));
+            }
+            Append("STARTUP-PHASE name=" + name + " at_ms=" + t);
+        }
+
+        public static void Note(string kv)
+        {
+            lock (gate) extras.Add(kv);
+            Append("STARTUP-NOTE " + kv);
+        }
+
+        private static void Append(string line)
+        {
+            try
+            {
+                string path = LogPath();
+                Directory.CreateDirectory(Path.GetDirectoryName(path));
+                lock (gate) File.AppendAllText(path, DateTime.Now.ToString("s") + " " + line + "\r\n");
+            }
+            catch { }
+        }
+
+        /// Writes the one-line summary (once). Phase values are ms since Main; "d_<name>" is the gap to the previous phase.
+        public static void Flush(bool complete)
+        {
+            string line;
+            lock (gate)
+            {
+                if (flushed) return;
+                flushed = true;
+                var sb = new StringBuilder("STARTUP");
+                sb.Append(" complete=").Append(complete ? "1" : "0");
+                sb.Append(" total_ms=").Append(sw.ElapsedMilliseconds);
+                if (preMainMs >= 0) sb.Append(" pre_main_ms=").Append(preMainMs);
+                long prev = 0;
+                foreach (var m in marks)
+                {
+                    sb.Append(' ').Append(m.Key).Append("_ms=").Append(m.Value);
+                    sb.Append(' ').Append("d_").Append(m.Key).Append("_ms=").Append(m.Value - prev);
+                    prev = m.Value;
+                }
+                foreach (var e in extras) sb.Append(' ').Append(e);
+                line = sb.ToString();
+            }
+            Append(line);
         }
     }
 
@@ -1196,14 +1278,17 @@ namespace Weft.Desktop
         protected override async void OnShown(EventArgs e)
         {
             base.OnShown(e);
+            StartupTimer.Mark("window_shown");
             try { await Start(); }
             catch (Exception ex) { Fail("启动失败：" + ex.Message); }
         }
 
         private async Task Start()
         {
+            StartupTimer.Mark("service_launch_begin");
             string url = await Task.Run(() => LaunchService());
             if (quitting || url == null) return;
+            StartupTimer.Mark("service_ready");
             origin = new Uri(url).GetLeftPart(UriPartial.Authority);
 
             if (runtimeMissing)
@@ -1217,6 +1302,9 @@ namespace Weft.Desktop
             }
 
             string userData = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Weft", "WebView2");
+            StartupTimer.Note("webview2_userdata=" + userData);
+            StartupTimer.Note("webview2_userdata_first_run=" + (Directory.Exists(userData) ? "0" : "1"));
+            StartupTimer.Note("webview2_source=" + (choice == null ? "none" : choice.Source.ToString().ToLowerInvariant()));
             string browserDir = null;
             if (choice != null && choice.Source == RuntimeSource.Bundled)
             {
@@ -1234,8 +1322,11 @@ namespace Weft.Desktop
                     catch { }
                 }
             }
+            StartupTimer.Mark("webview2_env_begin");
             var env = await CoreWebView2Environment.CreateAsync(browserDir, userData);
+            StartupTimer.Mark("webview2_env_created");
             await web.EnsureCoreWebView2Async(env);
+            StartupTimer.Mark("webview2_core_ready");
 
             var core = web.CoreWebView2;
             var s = core.Settings;
@@ -1256,6 +1347,13 @@ namespace Weft.Desktop
             };
             core.DownloadStarting += OnDownloadStarting;
             await TryEnableCustomFrame(core);
+            core.NavigationCompleted += (o, a) =>
+            {
+                StartupTimer.Mark("first_navigation_completed");
+                StartupTimer.Note("first_navigation_success=" + (a.IsSuccess ? "1" : "0"));
+                StartupTimer.Flush(true);
+            };
+            StartupTimer.Mark("navigate_start");
             core.Navigate(url);
         }
 
@@ -1321,6 +1419,8 @@ namespace Weft.Desktop
             try
             {
                 string hit = ServiceRunner.Launch(dir, lines, p => { lock (launchLock) launcherProcess = p; }, () => quitting);
+                // The shell always runs `weft open --print`; whether that started a new service or reused a running one is decided by node.
+                StartupTimer.Note("service_path=weft-open-print");
                 if (hit != null) return hit;
             }
             catch (Exception ex)
