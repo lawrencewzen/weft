@@ -4,6 +4,7 @@ export const zh: Record<string, string> = {
   pending_handoff: '正在交接到新上下文',
   pending_subagents: '· {n} 个子 Agent',
   compaction_note: '已压缩较早的上下文',
+  compaction_skipped: '上下文还很短，暂不需要压缩',
   handoff_new_context: '新上下文',
   compaction_failed: '压缩失败：{reason}',
   compaction_failed_length: '压缩失败：摘要超出长度上限。可在 设置 › 模型 中调大最大输出，或降低思考强度后重试。',

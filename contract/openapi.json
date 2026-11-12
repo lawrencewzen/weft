@@ -8294,6 +8294,10 @@
             "type": "string",
             "description": "handoff 是交接说明全文，也用于 compaction 摘要。"
           },
+          "skipped": {
+            "type": "boolean",
+            "description": "仅 compaction 可能有。为 true 表示这是一次手动压缩（POST /compact），但上下文还很短、没有可压缩的内容，Pi 没有生成摘要。\n此时 text 是「上下文还很短，暂不需要压缩」一类的提示，没有 detail，request 是发起人和补充说明。\n正常压缩不带这个字段（或为 false）。信息跟着对话历史持久化，重启后仍在。自动压缩跳过不记录。\n"
+          },
           "request": {
             "type": "object",
             "additionalProperties": false,
