@@ -137,6 +137,40 @@ test('2b. panel compact with instructions: user bubble shows chip and instructio
   await expectClean(state);
 });
 
+test('2c. short conversation compact with instructions: skipped notice with bubble, no divider', async ({ page }) => {
+  const state = await openProto(page);
+  await openConv(page, 'c-consult');
+  await expect(page.getByTestId('next-item-system-note')).toHaveCount(0);
+
+  await triggerCompact(page, '保留要点');
+
+  const userBubble = page.getByTestId('next-item-user').filter({ has: page.getByTestId('next-user-chip') });
+  await expect(userBubble).toBeVisible();
+  await expect(userBubble.getByTestId('next-user-chip')).toHaveText('压缩');
+  await expect(userBubble).toContainText('保留要点');
+
+  const pending = page.getByTestId('next-thread-compacting');
+  await expect(pending).toHaveCount(0, { timeout: 10_000 });
+
+  await expect(userBubble).toBeVisible();
+  await expect(userBubble.getByTestId('next-user-chip')).toHaveText('压缩');
+  await expect(userBubble).toContainText('保留要点');
+
+  const note = page.getByTestId('next-item-system-note');
+  await expect(note).toHaveCount(1);
+  await expect(note).toHaveAttribute('data-kind', 'compaction');
+  await expect(note).toHaveAttribute('data-skipped', 'true');
+  await expect(note).toContainText('上下文还很短，暂不需要压缩');
+
+  await expect(page.getByTestId('next-compaction-divider')).toHaveCount(0);
+  await expect(page.getByTestId('next-compaction-toggle')).toHaveCount(0);
+  await expect(page.getByTestId('next-compaction-error')).toHaveCount(0);
+
+  const calls = (await state.requests()).filter((r) => r.method === 'POST' && /\/compact$/.test(r.url));
+  expect(calls).toHaveLength(1);
+  await expectClean(state);
+});
+
 test('3. compact is disabled with explanation when conversation is running', async ({ page }) => {
   const state = await openProto(page);
   await openConv(page, 'c-rich');

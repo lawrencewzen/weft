@@ -2,6 +2,7 @@ import type { components } from '../../../src/v2/contract.gen';
 import type { Lang } from '../data/lang';
 import { t } from '../i18n';
 import { ContextDivider } from './ContextDivider';
+import { StatusIcon } from './StatusIcon';
 import { UserCommandBubble } from './UserCommandBubble';
 
 export type SystemNoteRequest = {
@@ -11,6 +12,7 @@ export type SystemNoteRequest = {
 
 export type SystemNoteItem = components['schemas']['ThreadItemSystemNote'] & {
   request?: SystemNoteRequest;
+  skipped?: boolean;
 };
 
 export function SystemNote({ item, lang }: { item: SystemNoteItem; lang: Lang }) {
@@ -41,6 +43,27 @@ export function SystemNote({ item, lang }: { item: SystemNoteItem; lang: Lang })
   }
 
   if (item.noteKind === 'compaction') {
+    if (item.skipped) {
+      return (
+        <>
+          {userBubble}
+          <div
+            className="compaction-skipped-note msg-side-agent"
+            data-testid="next-item-system-note"
+            data-role="system"
+            data-kind="compaction"
+            data-skipped="true"
+            data-id={item.id}
+          >
+            <StatusIcon status="done" size={14} lang={lang} aria-hidden="true" />
+            <span className="compaction-skipped-text" data-testid="next-compaction-skipped-text">
+              {item.text || t(lang, 'compaction_skipped')}
+            </span>
+          </div>
+        </>
+      );
+    }
+
     return (
       <>
         {userBubble}

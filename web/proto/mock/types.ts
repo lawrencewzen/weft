@@ -107,6 +107,7 @@ export type MockNote = SystemNoteItem & {
   i18n?: Bilingual;
   detailI18n?: Bilingual;
   request?: { by?: 'user' | 'model'; instructions?: string };
+  skipped?: boolean;
 };
 
 export type MockItem = Exclude<PlainItem, SystemNoteItem> | MockNote | MockGroup | MockTurnChanges;

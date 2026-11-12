@@ -13,7 +13,7 @@ import {
   touch,
 } from './db';
 import { mockDiff } from './repo';
-import { compactionNote } from './compaction';
+import { compactionNote, compactionSkippedNote } from './compaction';
 import { SPAWN_TITLE, appendReport, createSubThread, runSubagent } from './subagents';
 import { conversationGroupId } from './views';
 import { decodedBase64Bytes, imageDataUrl } from '../../../src/v2/views/message-images';
@@ -1171,12 +1171,14 @@ export function continueConversation(db: MockDb, conv: MockConv, hub: MockHub, l
 }
 
 const COMPACT_MS = 1800;
+const SHORT_CONVERSATION_THRESHOLD = 4;
 
 export type CompactResult = { ok: true; taskId: string } | { ok: false; status: number; error: string; code?: string };
 
 /** POST /compact: always accepted. Running conversations place the summary at the next boundary. */
 export function compactConversation(db: MockDb, conv: MockConv, hub: MockHub, instructions?: string): CompactResult {
   const taskId = nextId(db, 'compact');
+  const isShort = conv.items.length < SHORT_CONVERSATION_THRESHOLD;
   conv.compaction = {
     state: 'running',
     trigger: 'manual',
@@ -1199,6 +1201,12 @@ export function compactConversation(db: MockDb, conv: MockConv, hub: MockHub, in
           en: 'Compaction failed: model request timed out',
         },
       };
+    } else if (isShort) {
+      conv.compaction = { state: 'idle' };
+      const note: MockNote = compactionSkippedNote(nextId(db, 'note'), instructions);
+      conv.items.push(note);
+      conv.view.itemIds.push(note.id);
+      publishItem(conv, hub, note);
     } else {
       conv.compaction = { state: 'idle' };
       const note: MockNote = compactionNote(nextId(db, 'note'), conv.items.length, instructions);
@@ -1217,7 +1225,7 @@ export function compactConversation(db: MockDb, conv: MockConv, hub: MockHub, in
     publishConversationView(conv, hub);
   };
   if (conv.compactTimer) window.clearTimeout(conv.compactTimer);
-  conv.compactTimer = window.setTimeout(settle, COMPACT_MS);
+  conv.compactTimer = window.setTimeout(settle, isShort ? 250 : COMPACT_MS);
   return { ok: true, taskId };
 }
 
