@@ -3505,24 +3505,30 @@ button.file-search-result-row:hover {
 .wc-btn.icon-btn.is-close:hover { background: var(--fail); color: var(--term); }
 .wc-btn svg { stroke-linecap: round; stroke-linejoin: round; }
 
-/* Draggable top row: left header, center status bar, right tab bar. */
-:root[data-desktop-shell="1"] :is(.sb-hd, .next-status, .right-tabs-bar) {
+/* Draggable top row: left header, center status bar, schedules header, right tab bar. */
+:root[data-desktop-shell="1"] :is(.sb-hd, .next-status, .right-tabs-bar, .schedules-header) {
   -webkit-app-region: drag;
   app-region: drag;
   user-select: none;
 }
-:root[data-desktop-shell="1"] :is(.sb-hd, .next-status, .right-tabs-bar)
+:root[data-desktop-shell="1"] :is(.sb-hd, .next-status, .right-tabs-bar, .schedules-header)
   :is(button, input, select, textarea, a, label, [role="button"], [role="tab"], [contenteditable="true"]),
 :root[data-desktop-shell="1"] .side-toggle {
   -webkit-app-region: no-drag;
   app-region: no-drag;
 }
 
+/* Align top titles start distance to match sidebar header (.sb-hd has 50px left padding). */
+:root[data-desktop-shell="1"] :is(.next-status, .schedules-header) { padding-left: 50px; }
+
 /* Keep clear of the window buttons. */
 :root[data-desktop-shell="1"] .side-toggle-right { right: calc(var(--wc-edge) + var(--wc-total)); }
 :root[data-desktop-shell="1"] .right-tabs-bar { padding-right: calc(50px + var(--wc-total)); }
 :root[data-desktop-shell="1"] .next-shell.right-closed .next-status { padding-right: calc(50px + var(--wc-total)); }
+:root[data-desktop-shell="1"] .next-shell.right-closed .schedules-header { padding-right: calc(52px + var(--wc-total)); }
 :root[data-desktop-shell="1"] .next-settings-ov { padding-top: calc(var(--wc-bar) + 8px); }
+:root[data-desktop-shell="1"] .search-palette-overlay { padding-top: max(14vh, calc(var(--wc-bar) + 8px)); }
+:root[data-desktop-shell="1"] .mp-mask { padding-top: max(8vh, calc(var(--wc-bar) + 8px)); }
 
 /* Fixed overlays stay clickable at the top edge instead of dragging the window. */
 :root[data-desktop-shell="1"] :is(.next-settings-ov, .search-palette-overlay, .modal-overlay, .mp-mask, .img-lightbox) {
