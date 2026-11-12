@@ -365,7 +365,7 @@ public sealed class MainForm : Form
         foreach (var (l, px, bold, color) in _labels) { l.Font = Theme.Font(px * S, bold); l.ForeColor = color(); l.BackColor = Theme.Win; }
 
         // 按钮从渐变条下沿开始，渐变条全宽可见
-        var gb = Math.Max(1, Sc(3));
+        var gb = Math.Max(1, Sc(3)) + 1; // 渐变条抗锯齿会多占一行像素
         _close.TopInset = _min.TopInset = gb;
         _close.Bounds = new Rectangle(ClientSize.Width - 1 - Sc(46), 1 + gb, Sc(46), tb - 1 - gb);
         _min.Bounds = new Rectangle(_close.Left - Sc(46), 1 + gb, Sc(46), tb - 1 - gb);
@@ -403,11 +403,13 @@ public sealed class MainForm : Form
 
         P(_eTog, 36, 338 + _extra + 7, 10, 20); _eTog.Width = _eTog.PreferredWidth();
         P(_eOpen, 0, 338 + _extra + 7, 10, 20); _eOpen.Left = _eTog.Right + Sc(14); _eOpen.Width = _eOpen.PreferredWidth();
-        P(_eLog, 36, 346, 488, Math.Max(10, _extra - 16));
+        // 屏幕矮时 _extra 被压缩，日志框保底 56（约 3 行），上移占用原先居中内容的下方空白
+        var eLogH = Math.Max(56, _extra - 16);
+        P(_eLog, 36, 330 + _extra - eLogH, 488, eLogH);
         _eLog.Relayout();
 
         LayoutCenter(_dBadge, _dH, _dP);
-        LayoutCenter(_eBadge, _eH, _eP);
+        LayoutCenter(_eBadge, _eH, _eP, _extra > 0 ? Math.Min(338, 322 + _extra - eLogH) : 338);
         if (_dOpen.Visible) Foot(_dFin, _dOpen); else Foot(_dFin);
         if (_eRetry.Visible) Foot(_eCancel, _eRetry); else Foot(_eCancel);
 
@@ -415,14 +417,14 @@ public sealed class MainForm : Form
         Invalidate(true);
     }
 
-    void LayoutCenter(Badge b, Label h, Label p)
+    void LayoutCenter(Badge b, Label h, Label p, int areaBottom = 338)
     {
         var pw = Sc(380);
         var ph = 0;
         if (!string.IsNullOrEmpty(p.Text))
             ph = TextRenderer.MeasureText(p.Text, p.Font, new Size(pw, 1000), TextFormatFlags.WordBreak | TextFormatFlags.NoPadding).Height + Sc(4);
         var content = Sc(56) + Sc(12) + Sc(28) + (ph > 0 ? Sc(12) + ph : 0);
-        var top = Sc(TitleH) + (Sc(338 - TitleH) - content) / 2;
+        var top = Sc(TitleH) + (Sc(areaBottom - TitleH) - content) / 2;
         var parent = b.Parent!.Bounds;
         b.Bounds = new Rectangle(Sc(280) - Sc(28) - parent.X, top - parent.Y, Sc(56), Sc(56));
         h.Bounds = new Rectangle(Sc(36) - parent.X, top + Sc(68) - parent.Y, Sc(488), Sc(28));
