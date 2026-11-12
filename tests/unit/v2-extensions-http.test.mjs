@@ -396,6 +396,13 @@ test('skills create, patch, delete, and builtin cannot be removed', { timeout: 4
     assert.equal(oldDup.body.code, v2Dup.body.code);
     assert.equal(v2Dup.body.code, 'err_skill_exists');
 
+    for (const id of ['compact', 'handoff', 'schedule', 'model', 'new']) {
+      const reserved = await sendV2(srv.base, 'POST', '/api/v2/skills', discovery.token, { name: id, id, body: 'x' });
+      assert.equal(reserved.status, 400, id);
+      assert.equal(reserved.body.code, 'err_skill_reserved', id);
+      assert.ok(reserved.body.error || reserved.body.message, id);
+    }
+
     const off = await sendV2(srv.base, 'PATCH', `/api/v2/skills/${created.body.id}`, discovery.token, { enabled: false });
     assert.equal(off.status, 200);
     assert.equal(off.body.enabled, false);
