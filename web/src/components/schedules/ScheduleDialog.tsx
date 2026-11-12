@@ -9,6 +9,7 @@ import { DatePicker } from '../pickers/DatePicker';
 import { TimePicker } from '../pickers/TimePicker';
 import { getTodayDateString } from '../pickers/pickerUtils';
 import {
+  computeDefaultOnceAt,
   formDataToPayload,
   validateScheduleForm,
   type ScheduleFormData,
@@ -81,7 +82,7 @@ export function ScheduleDialog({ lang, schedule, onClose, onToast }: Props) {
   // Once Date & Time
   const defaultOnceAt = schedule?.rule.kind === 'once'
     ? schedule.rule.at
-    : Date.now() + 86400000;
+    : computeDefaultOnceAt();
   const initialOnce = parseTimestampToDateAndTime(defaultOnceAt);
   const [onceDate, setOnceDate] = useState(initialOnce.date);
   const [onceTime, setOnceTime] = useState(initialOnce.time);
@@ -113,7 +114,6 @@ export function ScheduleDialog({ lang, schedule, onClose, onToast }: Props) {
 
   const [errors, setErrors] = useState<ScheduleFormErrors>({});
   const [busy, setBusy] = useState(false);
-  const [serverError, setServerError] = useState('');
 
   // Close on Escape
   useEffect(() => {
@@ -195,10 +195,12 @@ export function ScheduleDialog({ lang, schedule, onClose, onToast }: Props) {
     const val = validateScheduleForm(currentFormData, lang);
     if (!val.valid) {
       setErrors(val.errors);
+      if (ruleKind === 'once' && val.errors.onceAt) {
+        document.getElementById('sched-once-time')?.focus();
+      }
       return;
     }
     setBusy(true);
-    setServerError('');
     try {
       const payload = formDataToPayload(currentFormData, schedule?.enabled ?? true);
       if (isEditing && schedule) {
@@ -209,7 +211,7 @@ export function ScheduleDialog({ lang, schedule, onClose, onToast }: Props) {
       onToast(t(lang, 'schedule_saved'));
       onClose();
     } catch (err) {
-      setServerError(err instanceof Error ? err.message : String(err));
+      onToast(err instanceof Error ? err.message : String(err));
     } finally {
       setBusy(false);
     }
@@ -217,7 +219,7 @@ export function ScheduleDialog({ lang, schedule, onClose, onToast }: Props) {
 
   // Determine current rule error or preview
   let currentRuleError: string | undefined;
-  if (ruleKind === 'once') currentRuleError = errors.onceAt;
+  if (ruleKind === 'once') currentRuleError = validation.errors.onceAt || errors.onceAt;
   else if (ruleKind === 'daily') currentRuleError = errors.dailyTime;
   else if (ruleKind === 'weekly') currentRuleError = errors.weeklyDays || errors.weeklyTime;
   else if (ruleKind === 'interval') currentRuleError = errors.interval;
@@ -450,7 +452,7 @@ export function ScheduleDialog({ lang, schedule, onClose, onToast }: Props) {
                       value={onceDate}
                       min={getTodayDateString()}
                       lang={lang}
-                      isError={Boolean(errors.onceAt)}
+                      isError={Boolean(currentRuleError)}
                       onChange={(val) => {
                         setOnceDate(val);
                         if (errors.onceAt) setErrors((errs) => ({ ...errs, onceAt: undefined }));
@@ -466,7 +468,7 @@ export function ScheduleDialog({ lang, schedule, onClose, onToast }: Props) {
                       testId="next-schedule-once-time"
                       value={onceTime}
                       lang={lang}
-                      isError={Boolean(errors.onceAt)}
+                      isError={Boolean(currentRuleError)}
                       onChange={(val) => {
                         setOnceTime(val);
                         if (errors.onceAt) setErrors((errs) => ({ ...errs, onceAt: undefined }));
@@ -566,25 +568,19 @@ export function ScheduleDialog({ lang, schedule, onClose, onToast }: Props) {
               ) : null}
 
               {/* Next run preview / Error hint */}
-              {currentRuleError ? (
-                <div
-                  className="schedule-rule-hint is-error"
-                  data-testid={ruleKind === 'interval' ? 'next-schedule-err-interval' : 'next-schedule-rule-err'}
-                >
-                  {currentRuleError}
-                </div>
-              ) : nextRunPreview ? (
-                <div className="schedule-rule-hint" data-testid="next-schedule-next-run-hint">
-                  {nextRunPreview}
-                </div>
-              ) : null}
-            </div>
-
-            {serverError ? (
-              <div className="ns-inline-err" data-testid="next-schedule-server-err">
-                {serverError}
+              <div
+                className={`schedule-rule-hint${currentRuleError ? ' is-error' : ''}`}
+                data-testid={
+                  ruleKind === 'interval' && currentRuleError
+                    ? 'next-schedule-err-interval'
+                    : currentRuleError
+                      ? 'next-schedule-rule-err'
+                      : 'next-schedule-next-run-hint'
+                }
+              >
+                {currentRuleError || nextRunPreview || ''}
               </div>
-            ) : null}
+            </div>
           </div>
 
           {/* Fixed Footer */}

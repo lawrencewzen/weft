@@ -601,3 +601,101 @@ for (const theme of ['light', 'dark']) {
     expectClean(state);
   });
 }
+
+test('schedule dialog: once task default time is today later, changing time to past turns hint red without moving buttons or showing extra block', async ({ page }) => {
+  const state = await openProto(page);
+  await page.getByTestId('next-schedules').click();
+  await page.getByTestId('next-schedules-new').click();
+  const dialog = page.getByTestId('next-schedule-dialog');
+  await expect(dialog).toBeVisible();
+
+  // Switch to once rule
+  await page.getByTestId('next-schedule-rule-once').click();
+
+  const dateInput = page.getByTestId('next-schedule-once-date');
+  const timeInput = page.getByTestId('next-schedule-once-time');
+  const dateTrigger = dateInput.locator('xpath=ancestor::div[contains(@class,"picker-trigger")][1]');
+  const timeTrigger = timeInput.locator('xpath=ancestor::div[contains(@class,"picker-trigger")][1]');
+
+  // 1. Verify default date is today (or tomorrow if crossed midnight) and time is rounded to 5 minutes
+  const now = new Date();
+  const pad = (n) => String(n).padStart(2, '0');
+  const defaultDateVal = await dateInput.inputValue();
+  expect(defaultDateVal.startsWith(`${now.getFullYear()}-`)).toBe(true);
+
+  const defaultTimeVal = await timeInput.inputValue();
+  const [, mm] = defaultTimeVal.split(':').map(Number);
+  expect(mm % 5).toBe(0);
+
+  // Default hint shows "下次运行：" in normal color (not is-error)
+  const hintEl = page.getByTestId('next-schedule-next-run-hint');
+  await expect(hintEl).toBeVisible();
+  await expect(hintEl).toContainText('下次运行：');
+  await expect(hintEl).not.toHaveClass(/is-error/);
+  await expect(dateTrigger).not.toHaveClass(/is-error/);
+  await expect(timeTrigger).not.toHaveClass(/is-error/);
+
+  // Measure initial button bounding box
+  const submitBtn = page.getByTestId('next-schedule-submit');
+  const initialBtnBox = await submitBtn.boundingBox();
+  expect(initialBtnBox).not.toBeNull();
+
+  // 2. Change time to a past time (00:00 earlier today)
+  await timeInput.click();
+  await timeInput.fill('00:00');
+  await timeInput.press('Enter');
+
+  // Hint turns into red small text "这个时间已经过去了"
+  const errHint = page.getByTestId('next-schedule-rule-err');
+  await expect(errHint).toBeVisible();
+  await expect(errHint).toHaveText('这个时间已经过去了');
+  await expect(errHint).toHaveClass(/is-error/);
+
+  // Date and Time input triggers have red border (is-error)
+  await expect(dateTrigger).toHaveClass(/is-error/);
+  await expect(timeTrigger).toHaveClass(/is-error/);
+
+  // Submit button is disabled
+  await expect(submitBtn).toBeDisabled();
+
+  // Button position is unchanged (fixed height hint line, no layout shift)
+  const pastBtnBox = await submitBtn.boundingBox();
+  expect(pastBtnBox).not.toBeNull();
+  expect(Math.abs(pastBtnBox.y - initialBtnBox.y)).toBeLessThanOrEqual(1);
+
+  // No extra error block inserted in the modal
+  await expect(page.locator('.ns-inline-err')).toHaveCount(0);
+  await expect(page.getByTestId('next-schedule-server-err')).toHaveCount(0);
+
+  // 3. Try to submit: should focus the time input and not insert an extra block
+  await page.getByTestId('next-schedule-name-input').fill('一次性自检');
+  await page.getByTestId('next-schedule-message-input').fill('运行检查');
+  await timeInput.focus();
+  await page.keyboard.press('Enter');
+  await expect(dialog).toBeVisible();
+  await expect(page.locator('.ns-inline-err')).toHaveCount(0);
+  await expect(timeInput).toBeFocused();
+
+  // 4. Change date to tomorrow -> valid again
+  const tomorrow = new Date(Date.now() + 86400000);
+  const tomorrowStr = `${tomorrow.getFullYear()}-${pad(tomorrow.getMonth() + 1)}-${pad(tomorrow.getDate())}`;
+  await dateInput.fill(tomorrowStr);
+  await dateInput.blur();
+
+  // Hint turns back to "下次运行：", inputs no longer have is-error
+  await expect(page.getByTestId('next-schedule-next-run-hint')).toBeVisible();
+  await expect(page.getByTestId('next-schedule-next-run-hint')).toContainText('下次运行：');
+  await expect(dateTrigger).not.toHaveClass(/is-error/);
+  await expect(timeTrigger).not.toHaveClass(/is-error/);
+  await expect(submitBtn).toBeEnabled();
+
+  // Button position remains stable
+  const restoredBtnBox = await submitBtn.boundingBox();
+  expect(restoredBtnBox).not.toBeNull();
+  expect(Math.abs(restoredBtnBox.y - initialBtnBox.y)).toBeLessThanOrEqual(1);
+
+  await page.getByTestId('next-schedule-cancel').click();
+  await expect(dialog).toHaveCount(0);
+
+  expectClean(state);
+});

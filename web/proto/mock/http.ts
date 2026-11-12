@@ -1317,6 +1317,9 @@ function validateScheduleInput(
       if (isNaN(at) || at <= 0) {
         fields.push('rule.at');
         errors.push(lang === 'en' ? 'Invalid timestamp' : '时间戳无效');
+      } else if (at <= Date.now()) {
+        fields.push('rule.at');
+        errors.push(lang === 'en' ? 'The time must be in the future' : '执行时间必须在未来');
       }
     } else {
       fields.push('rule.kind');

@@ -2,7 +2,7 @@ import type { Schedule } from '../../data/api';
 import type { Lang } from '../../data/lang';
 import type { ScheduleRule, ScheduleTarget } from '../../data/store';
 import { t, type I18nKey } from '../../i18n';
-import type { ScheduleFormData } from './scheduleValidation';
+import { isOnceTimeInFuture, type ScheduleFormData } from './scheduleValidation';
 
 export function formatTarget(target: ScheduleTarget, lang: Lang): string {
   if (target.kind === 'conversation') {
@@ -104,6 +104,7 @@ export function computeNextRunPreview(
 ): string {
   if (data.ruleKind === 'once') {
     if (!data.onceAt || isNaN(data.onceAt)) return '';
+    if (!isOnceTimeInFuture(data.onceAt, now)) return '';
     const timeStr = formatScheduleTimeToast(data.onceAt, lang, now);
     return t(lang, 'sched_next_run', { when: timeStr });
   }
