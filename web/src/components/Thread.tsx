@@ -14,10 +14,10 @@ import { AssistantMessage } from './AssistantMessage';
 import { ChangeSummary } from './ChangeSummary';
 import { DispatchCard } from './DispatchCard';
 import { SubagentReport } from './SubagentReport';
-import { ContextDividerPending } from './ContextDivider';
 import { openReportDialog } from '../data/reportDialog';
 import { SystemNote } from './SystemNote';
 import { ToolGroup } from './ToolGroup';
+import { UserCommandBubble } from './UserCommandBubble';
 import { UserMessage } from './UserMessage';
 import { WorkspaceChip } from './WorkspaceChip';
 import { createSendRequest, errorMessage } from './sendRequest';
@@ -64,7 +64,8 @@ type Props = {
   failed?: boolean;
   error?: components['schemas']['RunState']['error'];
   onContinue?: (requestId?: string) => Promise<unknown>;
-  compaction?: components['schemas']['RunState']['compaction'];
+  compaction?: (components['schemas']['RunState']['compaction'] & { instructions?: string }) | null;
+  handoff?: { state: 'running' | 'failed'; instructions?: string; error?: string } | null;
   forkedFrom?: components['schemas']['ForkedFrom'] | null;
   onFork?: (entryId: string) => void;
 };
@@ -215,6 +216,7 @@ export function Thread({
   error = null,
   onContinue,
   compaction,
+  handoff = null,
   forkedFrom = null,
   onFork,
 }: Props) {
@@ -230,6 +232,9 @@ export function Thread({
   const prevConversationId = useRef(conversationId);
   const empty = items.length === 0;
   const compacting = compaction?.state === 'running';
+  const manualCompacting = compacting && compaction?.trigger === 'manual';
+  const handoffRunning = handoff?.state === 'running';
+  const handoffFailed = handoff?.state === 'failed';
   // A blocking compaction failure also lands as the run error with the same sentence: show it once.
   const compactionError = !compacting && compaction?.state === 'failed' && compaction.error
     && !(failed && error?.message === compaction.error)
@@ -325,6 +330,7 @@ export function Thread({
     error?.message,
     compacting,
     compactionError,
+    handoffRunning,
     scrollToBottom,
   ]);
 
@@ -537,7 +543,43 @@ export function Thread({
               : items.map(renderItem)}
           </>
         )}
-        {compacting ? <ContextDividerPending lang={lang} /> : pending ? (
+        {handoffRunning ? (
+          <>
+            <UserCommandBubble
+              kind="handoff"
+              instructions={handoff?.instructions}
+              lang={lang}
+            />
+            <div
+              className="thread-pending"
+              data-testid="next-thread-pending"
+              data-kind="handoff"
+              role="status"
+            >
+              <span className="run-spin" aria-hidden="true"><span /></span>
+              <span className="thread-pending-text">{t(lang, 'pending_handoff_organizing')}</span>
+            </div>
+          </>
+        ) : compacting ? (
+          <>
+            {manualCompacting ? (
+              <UserCommandBubble
+                kind="compaction"
+                lang={lang}
+                instructions={(compaction as { instructions?: string } | null | undefined)?.instructions}
+              />
+            ) : null}
+            <div
+              className="thread-pending"
+              data-testid="next-thread-compacting"
+              data-kind="compaction"
+              role="status"
+            >
+              <span className="run-spin" aria-hidden="true"><span /></span>
+              <span className="thread-pending-text">{t(lang, 'pending_compaction_running')}</span>
+            </div>
+          </>
+        ) : pending ? (
           <div
             className={retrying ? 'thread-pending is-retrying' : 'thread-pending'}
             data-testid="next-thread-pending"
@@ -546,6 +588,20 @@ export function Thread({
             <span className="run-spin" aria-hidden="true"><span /></span>
             <span className="thread-pending-text">{pendingText || t(lang, 'pending_thinking')}</span>
           </div>
+        ) : null}
+        {handoffFailed ? (
+          <>
+            <UserCommandBubble
+              kind="handoff"
+              instructions={handoff?.instructions}
+              lang={lang}
+            />
+            <div className="llm-error" data-testid="next-handoff-error" role="alert">
+              <div className="llm-error-text">
+                <span>{handoff?.error || t(lang, 'pending_handoff_failed')}</span>
+              </div>
+            </div>
+          </>
         ) : null}
         {!running && failed && error?.message ? (
           <div
@@ -582,11 +638,20 @@ export function Thread({
           </div>
         ) : null}
         {compactionError ? (
-          <div className="llm-error" data-testid="next-compaction-error" role="alert">
-            <div className="llm-error-text">
-              <span>{compactionError}</span>
+          <>
+            {compaction?.trigger === 'manual' ? (
+              <UserCommandBubble
+                kind="compaction"
+                lang={lang}
+                instructions={(compaction as { instructions?: string } | null | undefined)?.instructions}
+              />
+            ) : null}
+            <div className="llm-error" data-testid="next-compaction-error" role="alert">
+              <div className="llm-error-text">
+                <span>{compactionError}</span>
+              </div>
             </div>
-          </div>
+          </>
         ) : null}
       </div>
     </div>

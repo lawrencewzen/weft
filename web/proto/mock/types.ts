@@ -103,7 +103,11 @@ type PlainItem = Exclude<ThreadItem, { kind: 'tool_group' }>;
 
 type SystemNoteItem = Extract<ThreadItem, { kind: 'system_note' }>;
 /** compaction note: the server writes the sentence in the client's language. */
-export type MockNote = SystemNoteItem & { i18n?: Bilingual; detailI18n?: Bilingual };
+export type MockNote = SystemNoteItem & {
+  i18n?: Bilingual;
+  detailI18n?: Bilingual;
+  request?: { by?: 'user' | 'model'; instructions?: string };
+};
 
 export type MockItem = Exclude<PlainItem, SystemNoteItem> | MockNote | MockGroup | MockTurnChanges;
 
@@ -111,6 +115,7 @@ export type MockCompaction = {
   state: 'idle' | 'running' | 'failed';
   trigger?: 'manual' | 'threshold' | 'overflow';
   error?: Bilingual;
+  instructions?: string;
 };
 
 export type Steer = {

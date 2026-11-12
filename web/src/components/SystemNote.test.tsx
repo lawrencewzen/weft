@@ -184,5 +184,111 @@ describe('SystemNote (T105-2)', () => {
 
     expect(host!.querySelector('.handoff-divider-icon')).toBeNull();
     expect(host!.querySelector('[data-testid="next-handoff-meta"]')).toBeNull();
+    // Model-initiated (no request): no user bubble
+    expect(host!.querySelector('[data-testid="next-item-user"]')).toBeNull();
+  });
+
+  it('renders a user bubble with handoff chip and instructions when requested by user', async () => {
+    const item = {
+      kind: 'system_note' as const,
+      id: 'sn-user-handoff',
+      text: '新上下文',
+      noteKind: 'handoff' as const,
+      detail: '交接说明全文',
+      request: { by: 'user' as const, instructions: '重点测试权限' },
+    };
+
+    await act(async () => {
+      root!.render(<SystemNote item={item} lang="zh" />);
+    });
+
+    const userBubble = host!.querySelector('[data-testid="next-item-user"]');
+    expect(userBubble).not.toBeNull();
+    expect(userBubble?.getAttribute('data-command')).toBe('handoff');
+    const chip = userBubble?.querySelector('[data-testid="next-user-chip"]');
+    expect(chip?.textContent).toBe('交接');
+    expect(chip?.getAttribute('data-kind')).toBe('handoff');
+    expect(userBubble?.textContent).toContain('重点测试权限');
+
+    const divider = host!.querySelector('[data-testid="next-handoff-divider"]');
+    expect(divider).not.toBeNull();
+  });
+
+  it('renders a user bubble with handoff chip only when requested by user without instructions', async () => {
+    const item = {
+      kind: 'system_note' as const,
+      id: 'sn-user-handoff-no-inst',
+      text: '新上下文',
+      noteKind: 'handoff' as const,
+      detail: '交接说明全文',
+      request: { by: 'user' as const },
+    };
+
+    await act(async () => {
+      root!.render(<SystemNote item={item} lang="zh" />);
+    });
+
+    const userBubble = host!.querySelector('[data-testid="next-item-user"]');
+    expect(userBubble).not.toBeNull();
+    const chip = userBubble?.querySelector('[data-testid="next-user-chip"]');
+    expect(chip?.textContent).toBe('交接');
+
+    const divider = host!.querySelector('[data-testid="next-handoff-divider"]');
+    expect(divider).not.toBeNull();
+  });
+
+  it('renders a user bubble with compaction chip when compaction was requested by user', async () => {
+    const item = {
+      kind: 'system_note' as const,
+      id: 'sn-user-compaction',
+      text: '之前 5 条已摘要',
+      noteKind: 'compaction' as const,
+      detail: '压缩摘要',
+      request: { by: 'user' as const },
+    };
+
+    await act(async () => {
+      root!.render(<SystemNote item={item} lang="zh" />);
+    });
+
+    const userBubble = host!.querySelector('[data-testid="next-item-user"]');
+    expect(userBubble).not.toBeNull();
+    expect(userBubble?.getAttribute('data-command')).toBe('compaction');
+    const chip = userBubble?.querySelector('[data-testid="next-user-chip"]');
+    expect(chip?.textContent).toBe('压缩');
+    expect(chip?.getAttribute('data-kind')).toBe('compaction');
+
+    const divider = host!.querySelector('[data-testid="next-compaction-divider"]');
+    expect(divider).not.toBeNull();
+  });
+
+  it('does not render a user bubble for model-initiated compaction or handoff', async () => {
+    const handoffItem = {
+      kind: 'system_note' as const,
+      id: 'sn-model-handoff',
+      text: '新上下文',
+      noteKind: 'handoff' as const,
+      request: { by: 'model' as const },
+    };
+
+    await act(async () => {
+      root!.render(<SystemNote item={handoffItem} lang="zh" />);
+    });
+    expect(host!.querySelector('[data-testid="next-item-user"]')).toBeNull();
+    expect(host!.querySelector('[data-testid="next-handoff-divider"]')).not.toBeNull();
+
+    const compactionItem = {
+      kind: 'system_note' as const,
+      id: 'sn-model-compaction',
+      text: '之前 5 条已摘要',
+      noteKind: 'compaction' as const,
+      request: { by: 'model' as const },
+    };
+
+    await act(async () => {
+      root!.render(<SystemNote item={compactionItem} lang="zh" />);
+    });
+    expect(host!.querySelector('[data-testid="next-item-user"]')).toBeNull();
+    expect(host!.querySelector('[data-testid="next-compaction-divider"]')).not.toBeNull();
   });
 });
