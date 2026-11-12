@@ -72,6 +72,8 @@ test('/handoff, /schedule, /model and /new', async ({ page }) => {
   await input.type('只留下迁移进度');
   await input.press('Enter');
   await expect.poll(async () => (await state.requests()).some((r) => /\/handoff$/.test(r.url) && r.method === 'POST')).toBe(true);
+  await expect(input).toHaveValue('');
+  await expect(input).toBeEnabled();
 
   await input.fill('/sch');
   await input.press('Enter');
