@@ -40,12 +40,17 @@ type LiveLike = {
  * failed from the retained compactionFailure until a later summary clears it.
  * idle otherwise.
  */
-export function compactionView(live: LiveLike | null | undefined, lang: Lang = 'zh'): CompactionState {
+export function compactionView(
+  live: LiveLike | null | undefined,
+  lang: Lang = 'zh',
+  instructions?: string,
+): CompactionState {
   const running = Array.isArray(live?.compactions) ? live.compactions : [];
   if (running.length) {
     const latest = running[running.length - 1];
     const trigger = compactionTrigger(latest?.trigger);
-    return trigger ? { state: 'running', trigger } : { state: 'running' };
+    const focus = instructions && trigger === 'manual' ? { instructions } : {};
+    return trigger ? { state: 'running', trigger, ...focus } : { state: 'running' };
   }
   const failure = live?.compactionFailure;
   if (failure && (failure.error != null || failure.trigger != null)) {

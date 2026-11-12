@@ -25,6 +25,7 @@ export type ThreadMessage = {
   text?: unknown;
   model?: unknown;
   stopReason?: unknown;
+  request?: unknown;
   streaming?: unknown;
   tool?: ToolLike;
   images?: Array<{
@@ -175,6 +176,13 @@ async function pathRefsFor(
  * consecutive tools form one group; empty assistants are skipped (and do not split a group);
  * subagent reports are not user bubbles. Legacy auto-continue user messages are omitted.
  */
+function noteRequest(m: { request?: unknown }): components['schemas']['ThreadItemSystemNote']['request'] | undefined {
+  const raw = m?.request as { by?: unknown; instructions?: unknown } | undefined;
+  if (!raw || raw.by !== 'user') return undefined;
+  const instructions = typeof raw.instructions === 'string' ? raw.instructions.trim() : '';
+  return instructions ? { by: 'user', instructions } : { by: 'user' };
+}
+
 export async function buildThread(
   messages: ThreadMessage[] | null | undefined,
   {
@@ -241,6 +249,8 @@ export async function buildThread(
         text: phrase(lang, 'compaction_note'),
       };
       if (detail) note.detail = detail;
+      const request = noteRequest(m);
+      if (request) note.request = request;
       items.push(note);
       continue;
     }
@@ -254,6 +264,8 @@ export async function buildThread(
         text: phrase(lang, 'handoff_new_context'),
       };
       if (detail) note.detail = detail;
+      const request = noteRequest(m);
+      if (request) note.request = request;
       items.push(note);
       continue;
     }
