@@ -259,18 +259,18 @@ test('composer scheduled send creates once task, displays strip, cancel confirms
   await page.locator('[data-testid="next-conv-row"][data-id="c-tests"]').click();
   await expect(page.getByTestId('next-conversation-schedule-strip')).toHaveCount(0);
 
-  // 2. Schedule button in composer is disabled when empty
-  const schedBtn = page.getByTestId('next-composer-schedule');
-  await expect(schedBtn).toBeVisible();
-  await expect(schedBtn).toBeDisabled();
+  // 2. Schedule button in composer is removed
+  await expect(page.getByTestId('next-composer-schedule')).toHaveCount(0);
 
-  // 3. Type message into composer
+  // 3. Type message via /schedule command into composer
   const input = page.locator('[data-testid="next-composer"] textarea');
+  await input.fill('/schedule');
+  await input.press('Enter');
+  await expect(page.getByTestId('next-composer-chip')).toHaveText('定时');
   await input.fill('请在明天九点运行单测并汇报结果');
-  await expect(schedBtn).toBeEnabled();
+  await input.press('Enter');
 
-  // 4. Click schedule button to open quick menu
-  await schedBtn.click();
+  // 4. Schedule quick menu popover opens
   const popover = page.getByTestId('next-composer-schedule-popover');
   await expect(popover).toBeVisible();
   await expect(page.getByTestId('next-schedule-opt-30m')).toBeVisible();
@@ -373,8 +373,10 @@ test('composer clock custom: DatePicker + TimePicker create once task and show s
   await expect(page.getByTestId('next-conversation-schedule-strip')).toHaveCount(0);
 
   const input = page.locator('[data-testid="next-composer"] textarea');
+  await input.fill('/schedule');
+  await input.press('Enter');
   await input.fill('按计划在明天下午两点半执行回归测试');
-  await page.getByTestId('next-composer-schedule').click();
+  await input.press('Enter');
   await page.getByTestId('next-schedule-opt-custom').click();
   await expect(page.getByTestId('next-schedule-custom-view')).toBeVisible();
 
@@ -463,8 +465,11 @@ test('schedule dialog: time and date popups anchor below their trigger, 09 cente
 test('composer custom pickers: popups anchor to their triggers', async ({ page }) => {
   const state = await openProto(page);
   await page.locator('[data-testid="next-conv-row"][data-id="c-tests"]').click();
-  await page.locator('[data-testid="next-composer"] textarea').fill('定位测试');
-  await page.getByTestId('next-composer-schedule').click();
+  const input = page.locator('[data-testid="next-composer"] textarea');
+  await input.fill('/schedule');
+  await input.press('Enter');
+  await input.fill('定位测试');
+  await input.press('Enter');
   await page.getByTestId('next-schedule-opt-custom').click();
 
   const timeTrigger = page.getByTestId('next-schedule-custom-time').locator('xpath=ancestor::div[contains(@class,"picker-trigger")][1]');

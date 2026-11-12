@@ -30,7 +30,7 @@ export type UseSlashCommandOptions = {
   textareaRef: RefObject<HTMLTextAreaElement | null>;
   onResize: () => void;
   context: SlashContext;
-  onCommand: (id: Exclude<SlashCommandId, 'handoff' | 'schedule'>) => void;
+  onCommand: (id: Exclude<SlashCommandId, 'compact' | 'handoff' | 'schedule'>) => void;
 };
 
 export type UseSlashCommandResult = ReturnType<typeof useSlashCommand>;
@@ -50,6 +50,22 @@ export function useSlashCommand({
   const activeRef = useRef(0);
   activeRef.current = activeIndex;
   const [chip, setChip] = useState<SlashChip | null>(null);
+  const [flashId, setFlashId] = useState<string | null>(null);
+  const flashTimer = useRef<number | undefined>(undefined);
+
+  useEffect(() => {
+    return () => {
+      if (flashTimer.current) window.clearTimeout(flashTimer.current);
+    };
+  }, []);
+
+  const triggerFlash = useCallback((id: string) => {
+    if (flashTimer.current) window.clearTimeout(flashTimer.current);
+    setFlashId(id);
+    flashTimer.current = window.setTimeout(() => {
+      setFlashId(null);
+    }, 800);
+  }, []);
 
   const trigger = useMemo(() => matchSlashTrigger(draft), [draft]);
   const wantOpen = Boolean(trigger && focused && !locked && !dismissed);
@@ -91,14 +107,17 @@ export function useSlashCommand({
   }, [onResize, textareaRef]);
 
   const pick = useCallback((item: SlashItem) => {
-    if (item.disabled) return;
+    if (item.disabled) {
+      triggerFlash(item.id);
+      return;
+    }
     if (item.kind === 'skill') {
       setChip({ kind: 'skill', id: item.id, name: item.name });
       setDraft('');
       focusEnd('');
       return;
     }
-    if (item.id === 'handoff' || item.id === 'schedule') {
+    if (item.id === 'compact' || item.id === 'handoff' || item.id === 'schedule') {
       setChip({ kind: item.id });
       setDraft('');
       focusEnd('');
@@ -107,7 +126,7 @@ export function useSlashCommand({
     setDraft('');
     focusEnd('');
     onCommand(item.id);
-  }, [focusEnd, onCommand, setDraft]);
+  }, [focusEnd, onCommand, setDraft, triggerFlash]);
 
   /** Backspace with the caret at the very start removes the block. */
   function handleBackspace(event: KeyboardEvent<HTMLTextAreaElement>): boolean {
@@ -151,6 +170,8 @@ export function useSlashCommand({
     activeIndex,
     chip,
     setChip,
+    flashId,
+    triggerFlash,
     pick,
     handleKeyDown,
     handleBackspace,

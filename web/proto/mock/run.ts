@@ -1164,7 +1164,7 @@ const COMPACT_MS = 1800;
 export type CompactResult = { ok: true; taskId: string } | { ok: false; status: number; error: string; code?: string };
 
 /** POST /compact: always accepted. Running conversations place the summary at the next boundary. */
-export function compactConversation(db: MockDb, conv: MockConv, hub: MockHub): CompactResult {
+export function compactConversation(db: MockDb, conv: MockConv, hub: MockHub, _instructions?: string): CompactResult {
   const taskId = nextId(db, 'compact');
   conv.compaction = { state: 'running', trigger: 'manual' };
   publishConversationView(conv, hub);

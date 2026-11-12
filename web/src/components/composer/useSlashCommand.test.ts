@@ -48,7 +48,7 @@ function Host(props: { context?: Partial<SlashContext>; locked?: boolean }) {
     'div',
     null,
     slash.open
-      ? createElement(SlashCommandMenu, { lang: 'zh', items: slash.items, activeIndex: slash.activeIndex, onPick: slash.pick })
+      ? createElement(SlashCommandMenu, { lang: 'zh', items: slash.items, activeIndex: slash.activeIndex, flashId: slash.flashId, onPick: slash.pick })
       : null,
     slash.chip
       ? createElement(InlineChip, { label: chipLabel('zh', slash.chip), kind: slash.chip.kind, testId: 'next-composer-chip' })
@@ -121,7 +121,7 @@ describe('useSlashCommand', () => {
     expect(latest!.slash.open).toBe(false);
     await type('/');
     expect(latest!.slash.open).toBe(true);
-    expect(ids()).toEqual(['compact', 'handoff', 'schedule', 'model', 'new', 'code-review', 'release-notes']);
+    expect(ids()).toEqual(['compact', 'handoff', 'schedule', 'new', 'code-review', 'release-notes']);
     const headers = [...document.querySelectorAll('.composer-at-header')].map((e) => e.textContent);
     expect(headers).toEqual(['命令', '技能']);
   });
@@ -141,21 +141,21 @@ describe('useSlashCommand', () => {
     expect(latest!.slash.activeIndex).toBe(1);
     await press('ArrowUp');
     await press('ArrowUp');
-    expect(latest!.slash.activeIndex).toBe(6);
+    expect(latest!.slash.activeIndex).toBe(5);
     await press('ArrowDown');
     await press('ArrowDown');
     await press('ArrowDown');
     await press('ArrowDown');
     expect(latest!.slash.activeIndex).toBe(3);
     await press('Tab');
-    expect(latest!.commands).toEqual(['model']);
+    expect(latest!.commands).toEqual(['new']);
   });
 
-  it('Enter on /model runs the command and clears the draft', async () => {
+  it('Enter on /new runs the command and clears the draft', async () => {
     await renderHost();
-    await type('/mod');
+    await type('/new');
     await press('Enter');
-    expect(latest!.commands).toEqual(['model']);
+    expect(latest!.commands).toEqual(['new']);
     expect(latest!.draft).toBe('');
   });
 
@@ -189,18 +189,22 @@ describe('useSlashCommand', () => {
   it('draft: compact and handoff are absent', async () => {
     await renderHost({ context: { hasConversation: false } });
     await type('/');
-    expect(ids().slice(0, 3)).toEqual(['schedule', 'model', 'new']);
+    expect(ids().slice(0, 2)).toEqual(['schedule', 'new']);
     expect(ids()).not.toContain('compact');
   });
 
-  it('running: compact is greyed and does nothing on Enter', async () => {
+  it('running: compact is greyed with explanation, flashes on Enter and does not pick', async () => {
     await renderHost({ context: { running: true } });
     await type('/comp');
-    const row = document.querySelector('[data-id="compact"]');
+    const row = document.querySelector('[data-id="compact"]') as HTMLElement;
     expect(row?.getAttribute('aria-disabled')).toBe('true');
+    expect(row?.querySelector('.composer-at-dir')?.textContent).toBe('运行中，结束后可用');
     await press('Enter');
     expect(latest!.commands).toEqual([]);
-    expect(latest!.draft).toBe('/comp');
+    expect(latest!.slash.chip).toBeNull();
+    expect(latest!.slash.flashId).toBe('compact');
+    expect(row?.getAttribute('data-flash')).toBe('true');
+    expect(row?.querySelector('.composer-at-dir')?.classList.contains('is-flash')).toBe(true);
   });
 
   it('picking a skill shows a block with the skill name, clears the draft; Backspace at the start removes it', async () => {
@@ -224,8 +228,13 @@ describe('useSlashCommand', () => {
     expect(document.querySelector('[data-testid="next-composer-chip"]')).toBeNull();
   });
 
-  it('/handoff and /schedule become blocks named 交接 / 定时, with no slash text in the draft', async () => {
+  it('/compact, /handoff and /schedule become blocks named 压缩 / 交接 / 定时, with no slash text in the draft', async () => {
     await renderHost();
+    await type('/comp');
+    await press('Enter');
+    expect(latest!.slash.chip).toEqual({ kind: 'compact' });
+    expect(latest!.draft).toBe('');
+    expect(document.querySelector('[data-testid="next-composer-chip"]')?.textContent).toBe('压缩');
     await type('/hand');
     await press('Enter');
     expect(latest!.slash.chip).toEqual({ kind: 'handoff' });
@@ -237,13 +246,11 @@ describe('useSlashCommand', () => {
     expect(document.querySelector('[data-testid="next-composer-chip"]')?.textContent).toBe('定时');
   });
 
-  it('/compact, /model and /new run at once and leave no block', async () => {
+  it('/new runs at once and leaves no block', async () => {
     await renderHost();
-    await type('/comp');
-    await press('Enter');
     await type('/new');
     await press('Enter');
-    expect(latest!.commands).toEqual(['compact', 'new']);
+    expect(latest!.commands).toEqual(['new']);
     expect(latest!.slash.chip).toBeNull();
   });
 
@@ -260,6 +267,6 @@ describe('useSlashCommand', () => {
     vi.mocked(listSkills).mockRejectedValue(new Error('x'));
     await renderHost();
     await type('/');
-    expect(ids()).toEqual(['compact', 'handoff', 'schedule', 'model', 'new']);
+    expect(ids()).toEqual(['compact', 'handoff', 'schedule', 'new']);
   });
 });

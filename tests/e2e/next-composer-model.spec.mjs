@@ -199,10 +199,7 @@ test('context menu sets the model window and keeps it after refresh', async ({ p
     await waitRunDone(page);
 
     await page.getByTestId('next-context-chip').click();
-    await expect(page.getByTestId('next-context-pop')).toBeVisible();
-    await expect(page.getByTestId('next-menu-compact')).toHaveText('立即压缩');
-    await page.getByTestId('next-context-chip').click();
-    await expect(page.getByTestId('next-context-pop')).toBeHidden();
+    await expect(page.getByTestId('next-context-pop')).toHaveCount(0);
 
     await page.getByTestId('next-model-chip').click();
     await expect(page.getByTestId('next-model-menu')).toBeVisible();

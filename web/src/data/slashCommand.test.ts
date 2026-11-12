@@ -41,14 +41,13 @@ describe('matchSlashTrigger', () => {
 describe('slashCommands availability', () => {
   it('hides compact and handoff in a draft', () => {
     const ids = slashCommands({ ...idle, hasConversation: false }).map((c) => c.id);
-    expect(ids).toEqual(['schedule', 'model', 'new']);
+    expect(ids).toEqual(['schedule', 'new']);
   });
 
   it('disables compact and handoff while running', () => {
     const cmds = slashCommands({ ...idle, running: true });
     expect(cmds.find((c) => c.id === 'compact')?.disabled).toBe(true);
     expect(cmds.find((c) => c.id === 'handoff')?.disabled).toBe(true);
-    expect(cmds.find((c) => c.id === 'model')?.disabled).toBe(false);
   });
 
   it('disables only the busy one when compacting or handing off', () => {
@@ -78,7 +77,7 @@ describe('filterSlashItems', () => {
   it('returns everything for an empty query, skipping disabled skills', () => {
     const all = filterSlashItems(items, '');
     expect(all.map((i) => i.id)).toEqual([
-      'compact', 'handoff', 'schedule', 'model', 'new', 'code-review', 'compact-notes',
+      'compact', 'handoff', 'schedule', 'new', 'code-review', 'compact-notes',
     ]);
   });
 
@@ -93,7 +92,7 @@ describe('filterSlashItems', () => {
   });
 
   it('is case-insensitive', () => {
-    expect(filterSlashItems(items, 'MOD').map((i) => i.id)).toEqual(['model']);
+    expect(filterSlashItems(items, 'SCH').map((i) => i.id)).toEqual(['schedule']);
   });
 });
 
@@ -111,11 +110,11 @@ describe('reserved skill ids', () => {
       slashCommands({ ...idle }).map((c) => c.id).sort(),
     );
     const skills = [
-      { id: 'model', name: '模型', description: '', enabled: true },
+      { id: 'compact', name: '压缩', description: '', enabled: true },
       { id: 'code-review', name: '代码审查', description: '', enabled: true },
     ];
     expect(slashSkillItems(skills).map((i) => i.id)).toEqual(['code-review']);
-    expect(parseSkillMessage('/model 看一下', skills)).toBeNull();
+    expect(parseSkillMessage('/compact 看一下', skills)).toBeNull();
     expect(parseSkillMessage('/code-review 看一下', skills)?.skill.id).toBe('code-review');
   });
 });

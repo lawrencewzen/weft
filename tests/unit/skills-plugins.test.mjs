@@ -164,7 +164,7 @@ test('slash command recognition: enabled, disabled, unknown, reserved, no body',
   assert.equal(findCommandSkill('/test-writer 正文', []), null);
   assert.equal(findCommandSkill('/usr/bin/env', enabled), null);
   for (const id of RESERVED_SKILL_IDS) assert.equal(findCommandSkill(`/${id} x`, [{ id, body: 'b' }]), null, id);
-  assert.deepEqual([...RESERVED_SKILL_IDS].sort(), ['compact', 'handoff', 'model', 'new', 'schedule']);
+  assert.deepEqual([...RESERVED_SKILL_IDS].sort(), ['compact', 'handoff', 'new', 'schedule']);
 });
 
 test('reserved command names cannot be skill ids', async () => {
@@ -178,9 +178,10 @@ test('reserved command names cannot be skill ids', async () => {
   }
   assert.equal(skillIdFromName('New'), 'new-skill');
   assert.equal(skillIdFromName('Compact'), 'compact-skill');
+  assert.equal(skillIdFromName('Handoff'), 'handoff-skill');
   assert.equal(skillIdFromName('review'), 'review');
-  const made = await createSkill(user, { name: 'Model', body: 'b' }, new Set());
-  assert.equal(made.id, 'model-skill');
+  const made = await createSkill(user, { name: 'Handoff', body: 'b' }, new Set());
+  assert.equal(made.id, 'handoff-skill');
 });
 
 test('bundled echo plugin loads and a disabled plugin contributes no tool', async () => {

@@ -2308,7 +2308,7 @@ export function handleMockRequest(
     if (body.instructions !== undefined && typeof body.instructions !== 'string') {
       return fail(400, 'instructions must be a string', 'E_BAD_REQUEST');
     }
-    const result = compactConversation(db, conv, hub);
+    const result = compactConversation(db, conv, hub, body.instructions);
     if (!result.ok) return fail(result.status, result.error, result.code);
     return accepted({ taskId: result.taskId });
   }
