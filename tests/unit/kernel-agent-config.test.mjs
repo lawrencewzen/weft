@@ -183,6 +183,7 @@ test('main agent skill tool loads body; disabled or unknown skills error', { tim
 
 test('/<skill id> message attaches the skill body to that request only', { timeout: 40000 }, async () => {
   const dataDir = await mkdtemp(path.join(tmpdir(), 'piw-kcmd-'));
+  await writeSampleSkills(path.join(dataDir, 'skills'));
   const record = path.join(dataDir, 'requests.jsonl');
   const srv = await startServer({
     token: TOKEN,
