@@ -4,6 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
+import { optionalBrandIconFiles, requiredBrandIconFiles } from './src/data/brandIconManifest';
 
 const webRoot = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(webRoot, '..');
@@ -41,8 +42,13 @@ export default defineConfig({
         if (!existsSync(src)) return;
         rmSync(dest, { recursive: true, force: true });
         mkdirSync(dest, { recursive: true });
-        for (const name of readdirSync(src)) {
-          if (!name.endsWith('.svg')) continue;
+        const available = new Set(readdirSync(src));
+        const missing = requiredBrandIconFiles().filter((name) => !available.has(name));
+        if (missing.length) {
+          throw new Error(`brand icons missing from @lobehub/icons-static-svg: ${missing.join(', ')}`);
+        }
+        const wanted = [...requiredBrandIconFiles(), ...optionalBrandIconFiles().filter((name) => available.has(name))];
+        for (const name of new Set(wanted)) {
           copyFileSync(path.join(src, name), path.join(dest, name));
         }
       },

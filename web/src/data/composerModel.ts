@@ -187,12 +187,12 @@ export function contextWindowOptions(current: number): ContextWindowOption[] {
   return rows;
 }
 
-const BRAND_ICON_FILE: Record<string, string> = {
+export const BRAND_ICON_FILE: Record<string, string> = {
   claude: 'anthropic',
   xiaomi: 'xiaomimimo',
 };
 
-const BAKED_COLOR_BRANDS = new Set([
+export const BAKED_COLOR_BRANDS = new Set([
   'amdradeoncloud',
   'cogvideo',
   'cogview',
