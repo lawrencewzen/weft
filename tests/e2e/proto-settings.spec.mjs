@@ -328,7 +328,7 @@ test('git connections, plugins, skills and about', async ({ page }) => {
 
   // Skills: add, toggle, delete; the bundled one is read-only.
   await page.getByTestId('next-settings-nav-skills').click();
-  await expect(page.getByTestId('next-skill-row')).toHaveCount(2);
+  await expect(page.getByTestId('next-skill-row')).toHaveCount(4);
   await expect(page.locator('[data-testid=next-skill-row][data-id="code-review"]').getByTestId('next-skill-delete')).toHaveCount(0);
   await page.getByTestId('next-skill-add').click();
   await page.getByTestId('next-skill-name').fill('提交信息整理');
@@ -337,12 +337,12 @@ test('git connections, plugins, skills and about', async ({ page }) => {
   await page.getByTestId('next-skill-save').click();
   const created = page.locator('[data-testid=next-skill-row][data-id="提交信息整理"]');
   await expect(created).toBeVisible();
-  await expect(page.getByTestId('next-skill-row')).toHaveCount(3);
+  await expect(page.getByTestId('next-skill-row')).toHaveCount(5);
   await created.getByTestId('next-skill-toggle').click();
   await expect(created.getByTestId('next-skill-toggle')).toHaveAttribute('aria-pressed', 'false');
   await created.getByTestId('next-skill-delete').click();
   await page.getByTestId('next-confirm-ok').click();
-  await expect(page.getByTestId('next-skill-row')).toHaveCount(2);
+  await expect(page.getByTestId('next-skill-row')).toHaveCount(4);
 
   // About.
   await page.getByTestId('next-settings-nav-about').click();

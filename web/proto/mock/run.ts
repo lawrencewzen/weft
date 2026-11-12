@@ -793,7 +793,11 @@ async function execute(db: MockDb, conv: MockConv, hub: MockHub, run: RunHandle,
       : '\n\n### 子 Agent\n\n派出去的 `' + spawned.thread.view.title + '` 已经交回结果，卡片在上面。';
     setPending(conv, hub, THINKING);
   }
-  const plan = planFor(text);
+  // `/<skill-id> body` from the composer's skill tag: plan from the body, say which skill ran.
+  const skillMatch = /^\/([a-z0-9][\w-]*)(?:\s+([\s\S]*))?$/i.exec(text.trim());
+  const usedSkill = skillMatch ? db.skills.find((row) => row.id === skillMatch[1] && row.enabled) : undefined;
+  const plan = planFor(usedSkill ? (skillMatch?.[2] ?? '') : text);
+  const skillNote = usedSkill ? `用了技能「${usedSkill.name}」（/${usedSkill.id}）。\n\n` : '';
   const newGroup = (): MockGroup => ({
     kind: 'tool_group',
     id: nextId(db, 'g'),
@@ -827,7 +831,7 @@ async function execute(db: MockDb, conv: MockConv, hub: MockHub, run: RunHandle,
   const ack = interjections.length
     ? `收到插话：${interjections.map((item) => `「${clip(item, 36)}」`).join('、')}。我把当前这一步做完后一起看了。\n\n`
     : '';
-  const ok = await streamAssistant(db, conv, hub, run, `${ack}${plan.reply}${spawnNote}`);
+  const ok = await streamAssistant(db, conv, hub, run, `${skillNote}${ack}${plan.reply}${spawnNote}`);
   if (!ok || run.cancelled) return;
   finishRun(db, conv, hub);
 }
