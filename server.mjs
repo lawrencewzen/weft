@@ -54,6 +54,12 @@ import fs from 'node:fs/promises';
 import { log, installProcessHandlers, trackHttp } from './src/core/log.mjs';
 import { readGitCommit } from './src/core/git-commit.mjs';
 import { applyBundledRgEnv } from './src/platform/win/bundled-tools.mjs';
+import { createStartupTimer, logStartupSummary } from './src/core/startup-timing.mjs';
+
+// All static imports above are evaluated before this line: the first phase is node boot + imports.
+const startupTimer = createStartupTimer();
+startupTimer.mark('imports');
+const startupScale = {};
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 // Windows package: tools\rg\rg.exe next to app\ (no-op elsewhere, and when WEFT_RG_PATH is already set).
@@ -305,6 +311,7 @@ try {
   log.error('WEFT_ERROR', '', err);
   process.exit(1);
 }
+startupTimer.mark('dataDir');
 
 const { token: AUTH_TOKEN, enabled: AUTH_ENABLED } = resolveAuthToken();
 
@@ -497,6 +504,7 @@ function isSsePath(p) {
 const store = createSqliteStore(DATA_DIR);
 const credentialStore = createCredentialStore(store);
 const modelsStore = createModelsStore(store);
+startupTimer.mark('store');
 const providerService = createProviderService({
   store,
   credentials: credentialStore,
@@ -552,6 +560,7 @@ if (String(process.env.WEFT_STDIN_EXIT || '').trim() === '1') {
 }
 
 await ensureSettings();
+startupTimer.mark('settings');
 {
   const baseUrl = String(process.env.LLM_BASE_URL || '').trim();
   const apiKey = String(process.env.LLM_API_KEY || '').trim();
@@ -566,6 +575,7 @@ const extensionHost = createExtensionHost({
   pluginDirs: PLUGIN_DIRS,
   getSettings: () => store.getSettings(),
 });
+startupTimer.mark('providers');
 
 try {
   kernelApi = await openConversationKernel({
@@ -578,6 +588,10 @@ try {
     credentials: credentialStore,
     modelsStore,
     providerService,
+    onPhase(name, detail) {
+      startupTimer.mark(`kernel${name[0].toUpperCase()}${name.slice(1)}`);
+      if (detail?.conversations !== undefined) startupScale.conversations = detail.conversations;
+    },
     onConversationMeta(cid) {
       v2.notifyConversation(cid);
       v2.notifySidebarChanged();
@@ -590,6 +604,7 @@ try {
   log.error('WEFT_KERNEL_OPEN_FAILED', '', err);
   process.exit(1);
 }
+startupTimer.mark('kernelRest');
 
 const server = createServer(async (req, res) => {
   trackHttp(req, res);
@@ -1396,6 +1411,17 @@ function logStartup(port) {
   });
 }
 
+// Runs after the last mark, so counting workspaces does not change the phase times.
+async function reportStartup() {
+  try {
+    const snapshot = startupTimer.snapshot();
+    startupScale.workspaces = (await store.listWorkspaces()).length;
+    logStartupSummary(log, snapshot, startupScale);
+  } catch (err) {
+    log.warn('WEFT_STARTUP', 'summary failed', err);
+  }
+}
+
 server.on('error', (err) => {
   const code = err && typeof err === 'object' && 'code' in err ? err.code : '';
   if (code === 'EADDRINUSE') {
@@ -1406,6 +1432,7 @@ server.on('error', (err) => {
   process.exit(1);
 });
 server.listen(PORT, '127.0.0.1', () => {
+  startupTimer.mark('listen');
   const addr = server.address();
   const port = typeof addr === 'object' && addr ? addr.port : PORT;
   try {
@@ -1418,5 +1445,7 @@ server.listen(PORT, '127.0.0.1', () => {
   if (hostWarning) log.warn('WEFT_WARN', hostWarning.replace(/^WEFT_WARN /, ''));
   logStartup(port);
   const loginUrl = v2.issueStartupLoginUrl(port);
+  startupTimer.mark('ready');
+  reportStartup();
   process.stdout.write(`WEFT_READY http://127.0.0.1:${port}\n打开新版界面：${loginUrl}\n`);
 });
