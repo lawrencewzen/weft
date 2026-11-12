@@ -1139,6 +1139,9 @@ export async function packRelease({
       await copyApp(root, appDir);
       console.log('npm ci --omit=dev --ignore-scripts');
       runNpmCi(appDir);
+      // esbuild 是 chord 的可选 peer，又是我们打包用的 devDependency，npm 会把它装进 --omit=dev 的树里；运行时用不到。
+      await rm(path.join(appDir, 'node_modules', 'esbuild'), { recursive: true, force: true });
+      await rm(path.join(appDir, 'node_modules', '@esbuild'), { recursive: true, force: true });
       const banned = await findBannedPackages(path.join(appDir, 'node_modules'));
       if (banned.length) {
         throw new Error(`运行时依赖里出现了开发包：${banned.join(', ')}`);

@@ -96,8 +96,13 @@ export async function runSmoke({ app, label = 'packaged' }) {
   proc.removeAllListeners('exit');
 
   try {
-    const serviceLog = await readFile(path.join(dataDir, 'logs', 'service.log'), 'utf8').catch(() => '');
-    const startup = `${serviceLog}\n${log}`.split(/\r?\n/).find((line) => line.includes('WEFT_STARTUP')) || '';
+    // 日志是异步落盘的，给它几秒。
+    let startup = '';
+    for (let i = 0; i < 50 && !startup; i += 1) {
+      const serviceLog = await readFile(path.join(dataDir, 'logs', 'service.log'), 'utf8').catch(() => '');
+      startup = `${serviceLog}\n${log}`.split(/\r?\n/).find((line) => line.includes('WEFT_STARTUP')) || '';
+      if (!startup) await sleep(200);
+    }
     console.log(`[${label}] ${startup.trim() || 'WEFT_STARTUP 日志没出现'}`);
     assert(startup, '服务日志里没有 WEFT_STARTUP');
     const importsMs = Number(/importsMs=(\d+)/.exec(startup)?.[1]);
