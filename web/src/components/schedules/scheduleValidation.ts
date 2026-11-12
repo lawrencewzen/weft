@@ -32,9 +32,28 @@ export type ScheduleFormErrors = {
   interval?: string;
 };
 
+export function isOnceTimeInFuture(onceAt: number, now = Date.now()): boolean {
+  return typeof onceAt === 'number' && Number.isFinite(onceAt) && onceAt > now;
+}
+
+export function computeDefaultOnceAt(now = Date.now()): number {
+  const minTime = now + 60_000;
+  const d = new Date(minTime);
+  const rem = d.getMinutes() % 5;
+  const sec = d.getSeconds();
+  const ms = d.getMilliseconds();
+  if (rem === 0 && sec === 0 && ms === 0) {
+    return d.getTime();
+  }
+  const addMinutes = 5 - rem;
+  d.setMinutes(d.getMinutes() + addMinutes, 0, 0);
+  return d.getTime();
+}
+
 export function validateScheduleForm(
   data: ScheduleFormData,
   lang: Lang = 'zh',
+  now = Date.now(),
 ): { valid: boolean; errors: ScheduleFormErrors } {
   const errors: ScheduleFormErrors = {};
 
@@ -59,6 +78,8 @@ export function validateScheduleForm(
   if (data.ruleKind === 'once') {
     if (!data.onceAt || isNaN(data.onceAt)) {
       errors.onceAt = t(lang, 'sched_err_once');
+    } else if (!isOnceTimeInFuture(data.onceAt, now)) {
+      errors.onceAt = t(lang, 'sched_err_once_past');
     }
   } else if (data.ruleKind === 'daily') {
     if (!data.dailyTime || !/^\d{2}:\d{2}$/.test(data.dailyTime)) {
