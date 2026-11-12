@@ -201,6 +201,7 @@ export const zh: Record<string, string> = {
   err_skill_body_required: '请填写 Skill 说明',
   err_skill_invalid: 'Skill 内容无效',
   err_skill_exists: '同名 Skill 已存在',
+  err_skill_reserved: '该名称是保留命令名，请换一个 id',
   err_skill_not_found: '找不到该 Skill',
   err_skill_builtin: '内置 Skill 不能删除',
   term_err_path: '路径超出工作区',

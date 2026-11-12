@@ -2,6 +2,13 @@
 
 export type SlashCommandId = 'compact' | 'handoff' | 'schedule' | 'model' | 'new';
 
+/**
+ * Command names of the menu. A skill with one of these ids (only possible when it already sits on
+ * disk) is neither offered in the menu nor shown as a block: the backend does not call it either.
+ * Keep in step with RESERVED_SKILL_IDS in src/core/skills.mjs.
+ */
+export const RESERVED_SKILL_IDS: readonly string[] = ['compact', 'handoff', 'schedule', 'model', 'new'];
+
 export type SlashSkillRef = { id: string; name: string };
 
 /** The block at the start of the input: set by `/handoff`, `/schedule` or a skill. */
@@ -21,6 +28,7 @@ export function parseSkillMessage(
   if (!skills?.length) return null;
   const m = /^\/([^\s/]+)(?:\s+([\s\S]*))?$/.exec(String(text ?? '').trim());
   if (!m) return null;
+  if (RESERVED_SKILL_IDS.includes(m[1])) return null;
   const hit = skills.find((sk) => sk.id === m[1]);
   return hit ? { skill: { id: hit.id, name: hit.name }, body: (m[2] ?? '').trim() } : null;
 }
@@ -62,7 +70,7 @@ type SkillLike = { id: string; name: string; description: string; enabled?: bool
 
 export function slashSkillItems(skills: readonly SkillLike[]): Extract<SlashItem, { kind: 'skill' }>[] {
   return skills
-    .filter((s) => s.enabled !== false)
+    .filter((s) => s.enabled !== false && !RESERVED_SKILL_IDS.includes(s.id))
     .map((s) => ({
       kind: 'skill' as const,
       id: s.id,

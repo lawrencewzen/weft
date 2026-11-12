@@ -3,6 +3,7 @@ import {
   composeSkillMessage,
   filterSlashItems,
   matchSlashTrigger,
+  RESERVED_SKILL_IDS,
   parseSkillMessage,
   slashCommands,
   slashSkillItems,
@@ -101,6 +102,21 @@ describe('stepSlashIndex', () => {
     expect(stepSlashIndex(0, 3, 'up')).toBe(2);
     expect(stepSlashIndex(2, 3, 'down')).toBe(0);
     expect(stepSlashIndex(0, 0, 'down')).toBe(0);
+  });
+});
+
+describe('reserved skill ids', () => {
+  it('matches the command names and keeps a same-named skill off the menu and out of bubbles', () => {
+    expect([...RESERVED_SKILL_IDS].sort()).toEqual(
+      slashCommands({ ...idle }).map((c) => c.id).sort(),
+    );
+    const skills = [
+      { id: 'model', name: '模型', description: '', enabled: true },
+      { id: 'code-review', name: '代码审查', description: '', enabled: true },
+    ];
+    expect(slashSkillItems(skills).map((i) => i.id)).toEqual(['code-review']);
+    expect(parseSkillMessage('/model 看一下', skills)).toBeNull();
+    expect(parseSkillMessage('/code-review 看一下', skills)?.skill.id).toBe('code-review');
   });
 });
 

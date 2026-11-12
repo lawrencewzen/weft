@@ -5,6 +5,11 @@ import { catalogError, scanSkills } from './catalog.mjs';
 
 export const SKILL_ID = /^[a-z0-9][a-z0-9-]{0,63}$/;
 export const SKILL_LIST_INTRO = 'Skills you can load with the skill tool when a request matches:';
+/** Names of the composer's `/` commands. A skill with one of these ids is never a `/<id>` skill call. */
+export const RESERVED_SKILL_IDS = Object.freeze(['compact', 'handoff', 'schedule', 'model', 'new']);
+export function isReservedSkillId(id) {
+  return RESERVED_SKILL_IDS.includes(String(id ?? '').trim().toLowerCase());
+}
 const NAME_MAX = 80;
 const DESC_MAX = 240;
 const BODY_MAX = 8000;
@@ -24,7 +29,7 @@ export function skillIdFromName(name, explicit) {
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .slice(0, 48);
-  if (SKILL_ID.test(slug)) return slug;
+  if (SKILL_ID.test(slug)) return isReservedSkillId(slug) ? `${slug}-skill` : slug;
   return `skill-${randomBytes(3).toString('hex')}`;
 }
 
@@ -119,6 +124,20 @@ export function unknownSkillError(name, skills) {
   return `unknown skill ${String(name ?? '').trim()}，可用：${available}`;
 }
 
+/** Text of a user message that starts with `/<id>` or is exactly `/<id>`; null otherwise. */
+export function parseSkillCommand(text) {
+  const m = /^\/([a-z0-9][a-z0-9-]{0,63})(?:\s+([\s\S]*))?$/.exec(String(text ?? '').trim());
+  return m ? { id: m[1], body: (m[2] ?? '').trim() } : null;
+}
+
+/** The enabled skill a message calls with `/<id>`. Reserved command names and unknown ids give null. */
+export function findCommandSkill(text, skills) {
+  const cmd = parseSkillCommand(text);
+  if (!cmd || isReservedSkillId(cmd.id)) return null;
+  const skill = (skills || []).find((row) => row.id === cmd.id);
+  return skill ? { id: skill.id, body: String(skill.body || '').trim() } : null;
+}
+
 export async function loadSkillBody(dirs, enabledMap, name) {
   const enabled = await listEnabledSkillRecords(dirs, enabledMap);
   const found = findEnabledSkill(enabled, name);
@@ -142,6 +161,7 @@ function cleanSkillFields({ name, description, body }) {
 export async function createSkill(userDir, input, existingIds = new Set()) {
   const id = skillIdFromName(input?.name, input?.id);
   if (!SKILL_ID.test(id)) throw catalogError(400, 'err_skill_invalid', 'invalid skill id');
+  if (isReservedSkillId(id)) throw catalogError(400, 'err_skill_reserved', 'skill id is a reserved command name');
   if (existingIds.has(id)) throw catalogError(409, 'err_skill_exists', 'skill already exists');
   const fields = cleanSkillFields({
     name: input?.name,

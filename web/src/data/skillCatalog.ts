@@ -25,6 +25,11 @@ export function loadSkills(): Promise<Skill[]> {
   return inflight;
 }
 
+/** Warm the shared list at startup so a skill bubble never shows the raw `/<id>` first. Failures are ignored. */
+export function preloadSkillCatalog(): void {
+  void loadSkills().catch(() => undefined);
+}
+
 /** `null` until loaded; `[]` when loading failed. Only fetches while `enabled`. */
 export function useSkillCatalog(enabled: boolean): Skill[] | null {
   const [skills, setSkills] = useState<Skill[] | null>(() => cache?.skills ?? null);
