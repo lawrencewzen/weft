@@ -29,6 +29,11 @@ test('scheduled tasks: sidebar navigation, badge count, and empty footer note', 
   await expect(pane).toBeVisible();
   await expect(page.getByTestId('next-schedules-title')).toHaveText('定时任务');
 
+  const header = page.getByTestId('next-schedules-header');
+  await expect(header).toBeVisible();
+  const borderBottomWidth = await header.evaluate((el) => window.getComputedStyle(el).borderBottomWidth);
+  expect(borderBottomWidth).toBe('0px');
+
   const newBtn = page.getByTestId('next-schedules-new');
   await expect(newBtn).toBeVisible();
 
@@ -550,6 +555,48 @@ for (const theme of ['white-light', 'white-dark', 'claude-dark']) {
     const selected = page.getByTestId('next-schedule-once-date-popup').locator('.date-picker-cell.is-selected');
     await expect(selected).toBeVisible();
     expect(await contrastOf(selected)).toBeGreaterThanOrEqual(4.5);
+
+    expectClean(state);
+  });
+}
+
+for (const theme of ['light', 'dark']) {
+  test(`schedules header has no bottom border and content does not stick to top (${theme}, populated and empty)`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme: theme });
+    const state = await openProto(page);
+    await page.getByTestId('next-schedules').click();
+
+    const header = page.getByTestId('next-schedules-header');
+    await expect(header).toBeVisible();
+    const borderBottomWidth = await header.evaluate((el) => window.getComputedStyle(el).borderBottomWidth);
+    expect(borderBottomWidth).toBe('0px');
+
+    const headerBox = await header.boundingBox();
+    expect(headerBox).not.toBeNull();
+
+    // 1. Populated state: first card is visible and spaced below header
+    const firstRow = page.getByTestId('next-schedule-row').first();
+    await expect(firstRow).toBeVisible();
+    const rowBox = await firstRow.boundingBox();
+    expect(rowBox).not.toBeNull();
+    expect(rowBox.y - (headerBox.y + headerBox.height)).toBeGreaterThanOrEqual(16);
+
+    // 2. Empty state: delete all schedules, empty placeholder is visible, header still has no border, and content does not stick to top
+    await page.evaluate(async () => {
+      const res = await fetch('/api/v2/schedules');
+      const data = await res.json();
+      for (const s of data.schedules) {
+        await fetch(`/api/v2/schedules/${s.id}`, { method: 'DELETE' });
+      }
+    });
+
+    const empty = page.getByTestId('next-schedules-empty');
+    await expect(empty).toBeVisible();
+    const emptyBorder = await header.evaluate((el) => window.getComputedStyle(el).borderBottomWidth);
+    expect(emptyBorder).toBe('0px');
+    const emptyBox = await empty.boundingBox();
+    expect(emptyBox).not.toBeNull();
+    expect(emptyBox.y).toBeGreaterThan(headerBox.y + headerBox.height + 20);
 
     expectClean(state);
   });
