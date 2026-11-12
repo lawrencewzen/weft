@@ -26,10 +26,24 @@ namespace Weft.Desktop
             StartupTimer.Begin();
             if (args.Length > 0 && args[0] == "--self-check") return SelfCheck.Run(args);
             if (args.Length > 0 && args[0] == "--service-check") return ServiceCheck.Run(args);
+            // Installer hook: ask the running instance to quit now (no confirm, no tray), then return.
+            // No running instance: return at once. The marker string below is also what the installer
+            // looks for in Weft.exe to know this build understands --quit.
+            if (args.Length > 0 && args[0] == "--quit")
+            {
+                EventWaitHandle quitEvent;
+                if (EventWaitHandle.TryOpenExisting(@"Local\Weft.Desktop.Quit", out quitEvent))
+                {
+                    quitEvent.Set();
+                    quitEvent.Dispose();
+                }
+                return 0;
+            }
             bool first;
             using (var mutex = new Mutex(true, @"Local\Weft.Desktop.Shell", out first))
             {
                 var activate = new EventWaitHandle(false, EventResetMode.AutoReset, @"Local\Weft.Desktop.Activate");
+                var quitEvt = new EventWaitHandle(false, EventResetMode.AutoReset, @"Local\Weft.Desktop.Quit");
                 StartupTimer.Mark("single_instance_checked");
                 if (!first)
                 {
@@ -43,7 +57,7 @@ namespace Weft.Desktop
                 Application.SetHighDpiMode(HighDpiMode.PerMonitorV2);
                 Application.EnableVisualStyles();
                 Application.SetCompatibleTextRenderingDefault(false);
-                Application.Run(new MainForm(activate));
+                Application.Run(new MainForm(activate, quitEvt));
                 GC.KeepAlive(mutex);
             }
             return 0;
@@ -946,6 +960,7 @@ namespace Weft.Desktop
                             tray.Visible = true;
                         }
                         ShowFromTray();
+                        if (silentQuit) { silentQuit = false; return; }
                         string text = code == 2
                             ? "服务正在运行任务，没有停止"
                             : "停止服务失败。" + (string.IsNullOrWhiteSpace(detail) ? "" : "\n\n" + detail);
@@ -958,6 +973,8 @@ namespace Weft.Desktop
                 }
             });
         }
+
+        private volatile bool silentQuit;
 
         private void FinishQuit()
         {
@@ -1187,7 +1204,7 @@ namespace Weft.Desktop
             }
         }
 
-        internal MainForm(EventWaitHandle activate)
+        internal MainForm(EventWaitHandle activate, EventWaitHandle quitEvt)
         {
             this.activate = activate;
             Text = "Weft";
@@ -1231,6 +1248,22 @@ namespace Weft.Desktop
                 }
             }) { IsBackground = true };
             waiter.Start();
+
+            // Installer asked for an immediate, silent quit (Weft.exe --quit): same flow as the tray "退出 Weft", minus the confirm.
+            var quitWaiter = new Thread(() =>
+            {
+                while (quitEvt.WaitOne())
+                {
+                    try { BeginInvoke(new Action(QuitFromInstaller)); } catch { return; }
+                }
+            }) { IsBackground = true };
+            quitWaiter.Start();
+        }
+
+        private void QuitFromInstaller()
+        {
+            silentQuit = true;
+            QuitProcess();
         }
 
         private void Bring()
