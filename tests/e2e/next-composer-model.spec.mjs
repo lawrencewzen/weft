@@ -41,7 +41,9 @@ test('lists models by provider and switches the conversation model', async ({ pa
     await expect(page.getByTestId('next-context-chip')).toHaveAttribute('title', /0%/);
 
     await openModelMenu(page);
-    await expect(page.getByTestId('next-model-menu')).toContainText('只对这个对话生效 · 管理模型');
+    await expect(page.getByTestId('next-model-menu')).not.toContainText('只对这个对话生效');
+    await expect(page.getByTestId('next-model-menu')).not.toContainText('管理模型');
+    await expect(page.getByTestId('next-menu-context')).toContainText('200k · 自定义');
     await expect(page.getByTestId('next-model-menu')).toContainText('Chip');
     await expect(page.getByTestId('next-model-menu')).toContainText('Grok 4.6');
     await expect(page.getByTestId('next-model-menu')).toContainText('grok-4.6');
@@ -339,6 +341,9 @@ test('manage models footer is removed; settings overlay opens from sidebar', asy
     await expect(page.getByTestId('next-model-manage')).toHaveCount(0);
     await expect(page.getByTestId('next-model-menu')).not.toContainText('只对这个对话生效');
 
+    // First Escape closes the opened models submenu, second Escape closes the primary menu
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('next-sub-models')).toBeHidden();
     await page.keyboard.press('Escape');
     await expect(page.getByTestId('next-model-menu')).toBeHidden();
 
