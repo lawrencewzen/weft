@@ -55,25 +55,48 @@ test('picking 不选项目 and sending creates a chat, not a project conversatio
   await expect(row).toBeVisible();
   await expect(page.getByTestId('next-chats-list').locator(`[data-id="${cid}"]`)).toHaveCount(1);
   await expect(page.getByTestId('next-ws-node').locator(`[data-id="${cid}"]`)).toHaveCount(0);
-  await expect(page.getByTestId('next-ws-chip')).toContainText('选择项目');
+  await expect(page.getByTestId('next-ws-chip')).toHaveCount(0);
+  await expect(page.getByTestId('next-composer-where')).toBeHidden();
   await expect(page.getByTestId('next-composer-git')).toHaveCount(0);
 
   expectClean(state);
 });
 
-test('seeded no-project conversation hides git chip and still has a right pane', async ({ page }) => {
+test('seeded no-project conversation hides git chip, workspace chip, and where bar', async ({ page }) => {
   const state = await openProto(page);
 
   await page.locator('[data-testid=next-conv-row][data-id="c-regex"]').click();
   await expect(page).toHaveURL(/#\/c\/c-regex$/);
   await expect(page.getByTestId('next-status')).toContainText('正则怎么写');
-  await expect(page.getByTestId('next-ws-chip')).toContainText('选择项目');
+  await expect(page.getByTestId('next-ws-chip')).toHaveCount(0);
+  await expect(page.getByTestId('next-composer-where')).toBeHidden();
   await expect(page.getByTestId('next-composer-git')).toHaveCount(0);
   await expect(page.getByTestId('next-tool-group')).toHaveCount(1);
   await page.getByTestId('next-right-toggle').click();
   await page.getByTestId('next-right-tab-files').click();
   await expect(page.locator('[data-testid=next-file-node][data-path="README.md"]')).toBeVisible();
   await expect(page.getByTestId('next-right-tab-term')).toHaveCount(0);
+
+  expectClean(state);
+});
+
+test('started project conversation shows readonly non-button chip with title path and no popup', async ({ page }) => {
+  const state = await openProto(page);
+
+  await page.locator('[data-testid=next-conv-row][data-id="c-rich"]').click();
+  await expect(page).toHaveURL(/#\/c\/c-rich$/);
+  const chip = page.getByTestId('next-ws-chip');
+  await expect(chip).toBeVisible();
+  await expect(chip).toContainText('weft');
+  await expect(chip).toHaveClass(/is-readonly/);
+  await expect(page.locator('button[data-testid=next-ws-chip]')).toHaveCount(0);
+  await expect(page.locator('span[data-testid=next-ws-chip]')).toBeVisible();
+  const title = await chip.getAttribute('title');
+  expect(title).toBeTruthy();
+  expect(title).toContain('weft');
+  await chip.click();
+  await expect(page.getByTestId('next-ws-chip-menu')).toHaveCount(0);
+  await expect(page.getByTestId('next-ws-chip-bound-hint')).toHaveCount(0);
 
   expectClean(state);
 });

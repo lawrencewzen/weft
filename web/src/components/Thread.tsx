@@ -1,4 +1,4 @@
-import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { components } from '../../../src/v2/contract.gen';
 import { modelAttribution, type ConversationModel } from '../data/composerModel';
 import { matchDispatchSubagents } from '../data/dispatchCard';
@@ -14,15 +14,16 @@ import { AssistantMessage } from './AssistantMessage';
 import { ChangeSummary } from './ChangeSummary';
 import { DispatchCard } from './DispatchCard';
 import { SubagentReport } from './SubagentReport';
-import { ContextDividerPending } from './ContextDivider';
 import { openReportDialog } from '../data/reportDialog';
 import { SystemNote } from './SystemNote';
 import { ToolGroup } from './ToolGroup';
+import { UserCommandBubble } from './UserCommandBubble';
 import { UserMessage } from './UserMessage';
 import { WorkspaceChip } from './WorkspaceChip';
 import { createSendRequest, errorMessage } from './sendRequest';
+import { computeScrollTarget, isNearBottom, STICK_PX } from './threadScroll';
 
-const STICK_PX = 80;
+export { STICK_PX, computeScrollTarget, isNearBottom } from './threadScroll';
 
 /** Right-edge classic scrollbar strip, in CSS px. Overlay scrollbars are 0.
  *  `scrollbar-gutter: stable both-edges` makes offsetWidth-clientWidth the
@@ -63,7 +64,8 @@ type Props = {
   failed?: boolean;
   error?: components['schemas']['RunState']['error'];
   onContinue?: (requestId?: string) => Promise<unknown>;
-  compaction?: components['schemas']['RunState']['compaction'];
+  compaction?: (components['schemas']['RunState']['compaction'] & { instructions?: string }) | null;
+  handoff?: { state: 'running' | 'failed'; instructions?: string; error?: string } | null;
   forkedFrom?: components['schemas']['ForkedFrom'] | null;
   onFork?: (entryId: string) => void;
 };
@@ -214,14 +216,25 @@ export function Thread({
   error = null,
   onContinue,
   compaction,
+  handoff = null,
   forkedFrom = null,
   onFork,
 }: Props) {
   const { providers } = useProviders();
   const scroller = useRef<HTMLDivElement>(null);
+  const innerRef = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
+  const programmaticScrollRef = useRef(false);
+  const programmaticRafRef = useRef<number | null>(null);
+  const lastProgrammaticTargetRef = useRef<number | null>(null);
+  const lastHeightRef = useRef(0);
+  const prevStickNonce = useRef(stickNonce);
+  const prevConversationId = useRef(conversationId);
   const empty = items.length === 0;
   const compacting = compaction?.state === 'running';
+  const manualCompacting = compacting && compaction?.trigger === 'manual';
+  const handoffRunning = handoff?.state === 'running';
+  const handoffFailed = handoff?.state === 'failed';
   // A blocking compaction failure also lands as the run error with the same sentence: show it once.
   const compactionError = !compacting && compaction?.state === 'failed' && compaction.error
     && !(failed && error?.message === compaction.error)
@@ -235,6 +248,14 @@ export function Thread({
   useEffect(() => {
     setContinueError(null);
   }, [conversationId, failed]);
+
+  useEffect(() => {
+    return () => {
+      if (programmaticRafRef.current !== null && typeof cancelAnimationFrame !== 'undefined') {
+        cancelAnimationFrame(programmaticRafRef.current);
+      }
+    };
+  }, []);
 
   async function handleContinue() {
     if (continueBusy) return;
@@ -253,31 +274,143 @@ export function Thread({
     }
   }
 
+  const scrollToBottom = useCallback((el: HTMLElement) => {
+    const inner = innerRef.current || el.querySelector<HTMLElement>('.thread-inner');
+    const padBottom = inner ? parseFloat(getComputedStyle(inner).paddingBottom) || 0 : 0;
+    const target = computeScrollTarget(el.scrollHeight, el.clientHeight, padBottom);
+
+    lastProgrammaticTargetRef.current = target;
+
+    if (Math.abs(el.scrollTop - target) > 1) {
+      programmaticScrollRef.current = true;
+      el.scrollTop = target;
+
+      if (programmaticRafRef.current !== null && typeof cancelAnimationFrame !== 'undefined') {
+        cancelAnimationFrame(programmaticRafRef.current);
+      }
+      if (typeof requestAnimationFrame !== 'undefined') {
+        programmaticRafRef.current = requestAnimationFrame(() => {
+          programmaticRafRef.current = requestAnimationFrame(() => {
+            programmaticScrollRef.current = false;
+            programmaticRafRef.current = null;
+          });
+        });
+      } else {
+        setTimeout(() => {
+          programmaticScrollRef.current = false;
+        }, 50);
+      }
+    }
+  }, []);
+
   useLayoutEffect(() => {
+    if (prevStickNonce.current !== stickNonce) {
+      prevStickNonce.current = stickNonce;
+      stick.current = true;
+    }
+    if (prevConversationId.current !== conversationId) {
+      prevConversationId.current = conversationId;
+      stick.current = true;
+      lastHeightRef.current = 0;
+    }
+
     const el = scroller.current;
     if (!el) return;
     if (!stick.current) return;
-    const inner = el.querySelector('.thread-inner');
-    const padBottom = inner ? parseFloat(getComputedStyle(inner).paddingBottom) || 0 : 0;
-    const maxScroll = Math.max(0, el.scrollHeight - el.clientHeight);
-    el.scrollTop = maxScroll <= padBottom + 1 ? 0 : maxScroll;
-  }, [items, pending, stickNonce, failed, error?.message, compacting, compactionError]);
+    scrollToBottom(el);
+    if (innerRef.current) {
+      lastHeightRef.current = Math.max(innerRef.current.offsetHeight, innerRef.current.scrollHeight);
+    }
+  }, [
+    conversationId,
+    items,
+    pending,
+    stickNonce,
+    failed,
+    error?.message,
+    compacting,
+    compactionError,
+    handoffRunning,
+    scrollToBottom,
+  ]);
 
   useLayoutEffect(() => {
     const el = scroller.current;
     if (!el) return;
-    const sync = () => syncThreadScrollbarGutter(el);
+    const sync = () => {
+      syncThreadScrollbarGutter(el);
+      if (stick.current) {
+        scrollToBottom(el);
+      }
+    };
     sync();
     if (typeof ResizeObserver === 'undefined') return;
     const ro = new ResizeObserver(sync);
     ro.observe(el);
     return () => ro.disconnect();
-  }, []);
+  }, [scrollToBottom]);
+
+  useLayoutEffect(() => {
+    const el = scroller.current;
+    const inner = innerRef.current;
+    if (!el || !inner) return;
+
+    lastHeightRef.current = Math.max(inner.offsetHeight, inner.scrollHeight);
+
+    function checkAndFollow() {
+      if (!stick.current) return;
+      const targetEl = scroller.current;
+      const targetInner = innerRef.current;
+      if (!targetEl || !targetInner) return;
+      const currentHeight = Math.max(targetInner.offsetHeight, targetInner.scrollHeight);
+      if (currentHeight > lastHeightRef.current) {
+        lastHeightRef.current = currentHeight;
+        scrollToBottom(targetEl);
+      } else {
+        lastHeightRef.current = currentHeight;
+      }
+    }
+
+    let ro: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== 'undefined') {
+      ro = new ResizeObserver(() => {
+        checkAndFollow();
+      });
+      ro.observe(inner);
+    }
+
+    let mo: MutationObserver | null = null;
+    if (typeof MutationObserver !== 'undefined') {
+      mo = new MutationObserver(() => {
+        checkAndFollow();
+      });
+      mo.observe(inner, { childList: true, subtree: true, characterData: true });
+    }
+
+    return () => {
+      ro?.disconnect();
+      mo?.disconnect();
+    };
+  }, [conversationId, scrollToBottom]);
 
   function onScroll() {
     const el = scroller.current;
     if (!el) return;
-    stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < STICK_PX;
+    if (isNearBottom(el.scrollHeight, el.scrollTop, el.clientHeight, STICK_PX)) {
+      stick.current = true;
+      return;
+    }
+    // Distance from bottom is >= STICK_PX:
+    // If scrollTop matches our programmatic target (content expanded before/during this scroll event),
+    // do NOT treat it as the user scrolling up.
+    if (
+      programmaticScrollRef.current &&
+      lastProgrammaticTargetRef.current !== null &&
+      Math.abs(el.scrollTop - lastProgrammaticTargetRef.current) <= 2
+    ) {
+      return;
+    }
+    stick.current = false;
   }
 
   const [expandedEarlier, setExpandedEarlier] = useState(false);
@@ -363,7 +496,7 @@ export function Thread({
       ref={scroller}
       onScroll={onScroll}
     >
-      <div className={innerClass}>
+      <div className={innerClass} ref={innerRef}>
         {forkedFrom ? (
           <div className="thread-forked-from" data-testid="next-forked-from">
             <span className="thread-forked-label">{t(lang, 'forked_from')}</span>
@@ -410,7 +543,43 @@ export function Thread({
               : items.map(renderItem)}
           </>
         )}
-        {compacting ? <ContextDividerPending lang={lang} /> : pending ? (
+        {handoffRunning ? (
+          <>
+            <UserCommandBubble
+              kind="handoff"
+              instructions={handoff?.instructions}
+              lang={lang}
+            />
+            <div
+              className="thread-pending"
+              data-testid="next-thread-pending"
+              data-kind="handoff"
+              role="status"
+            >
+              <span className="run-spin" aria-hidden="true"><span /></span>
+              <span className="thread-pending-text">{t(lang, 'pending_handoff_organizing')}</span>
+            </div>
+          </>
+        ) : compacting ? (
+          <>
+            {manualCompacting ? (
+              <UserCommandBubble
+                kind="compaction"
+                lang={lang}
+                instructions={(compaction as { instructions?: string } | null | undefined)?.instructions}
+              />
+            ) : null}
+            <div
+              className="thread-pending"
+              data-testid="next-thread-compacting"
+              data-kind="compaction"
+              role="status"
+            >
+              <span className="run-spin" aria-hidden="true"><span /></span>
+              <span className="thread-pending-text">{t(lang, 'pending_compaction_running')}</span>
+            </div>
+          </>
+        ) : pending ? (
           <div
             className={retrying ? 'thread-pending is-retrying' : 'thread-pending'}
             data-testid="next-thread-pending"
@@ -419,6 +588,20 @@ export function Thread({
             <span className="run-spin" aria-hidden="true"><span /></span>
             <span className="thread-pending-text">{pendingText || t(lang, 'pending_thinking')}</span>
           </div>
+        ) : null}
+        {handoffFailed ? (
+          <>
+            <UserCommandBubble
+              kind="handoff"
+              instructions={handoff?.instructions}
+              lang={lang}
+            />
+            <div className="llm-error" data-testid="next-handoff-error" role="alert">
+              <div className="llm-error-text">
+                <span>{handoff?.error || t(lang, 'pending_handoff_failed')}</span>
+              </div>
+            </div>
+          </>
         ) : null}
         {!running && failed && error?.message ? (
           <div
@@ -455,11 +638,20 @@ export function Thread({
           </div>
         ) : null}
         {compactionError ? (
-          <div className="llm-error" data-testid="next-compaction-error" role="alert">
-            <div className="llm-error-text">
-              <span>{compactionError}</span>
+          <>
+            {compaction?.trigger === 'manual' ? (
+              <UserCommandBubble
+                kind="compaction"
+                lang={lang}
+                instructions={(compaction as { instructions?: string } | null | undefined)?.instructions}
+              />
+            ) : null}
+            <div className="llm-error" data-testid="next-compaction-error" role="alert">
+              <div className="llm-error-text">
+                <span>{compactionError}</span>
+              </div>
             </div>
-          </div>
+          </>
         ) : null}
       </div>
     </div>

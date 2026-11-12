@@ -10,6 +10,7 @@ import {
   contextWindowOptions,
   conversationToResolved,
   findComposerModel,
+  formatContextTokens,
   getRecentModelEntries,
   isColorBrand,
   groupComposerModels,
@@ -175,6 +176,77 @@ describe('context window range', () => {
     expect(contextIsWarn('ok')).toBe(false);
     expect(contextIsWarn('warn')).toBe(true);
     expect(contextIsWarn('full')).toBe(true);
+  });
+
+  it('formats context tokens avoiding collision with presets', () => {
+    expect(formatContextTokens(1000000)).toBe('1M');
+    expect(formatContextTokens(1048576)).toBe('1,048,576');
+    expect(formatContextTokens(128000)).toBe('128k');
+    expect(formatContextTokens(50000)).toBe('50k');
+  });
+
+  it('distinguishes default and custom and prevents duplicate display text', () => {
+    // Model with 1048576 default, not overridden
+    const optsDefault = contextWindowOptions(1048576, 1048576, false);
+    const row1M = optsDefault.find((r) => r.tokens === 1000000);
+    const row1048576 = optsDefault.find((r) => r.tokens === 1048576);
+
+    expect(row1M?.label).toBe('1M');
+    expect(row1M?.selected).toBe(false);
+    expect(row1M?.isDefault).toBeFalsy();
+    expect(row1M?.custom).toBeFalsy();
+
+    expect(row1048576?.label).toBe('1,048,576');
+    expect(row1048576?.selected).toBe(true);
+    expect(row1048576?.isDefault).toBe(true);
+    expect(row1048576?.custom).toBeFalsy();
+
+    // No two rows have the same display text
+    const labels = optsDefault.map((r) => r.label);
+    expect(new Set(labels).size).toBe(labels.length);
+
+    // Sorted order: 1048576 is after 1000000
+    const tokens = optsDefault.map((r) => r.tokens);
+    expect(tokens).toEqual([...CONTEXT_WINDOW_PRESETS, 1048576]);
+
+    // Model with 1048576 default, overridden to 128000
+    const optsCustom = contextWindowOptions(128000, 1048576, true);
+    const row128k = optsCustom.find((r) => r.tokens === 128000);
+    const rowDef = optsCustom.find((r) => r.tokens === 1048576);
+
+    expect(row128k?.label).toBe('128k');
+    expect(row128k?.selected).toBe(true);
+    expect(row128k?.custom).toBe(true);
+    expect(row128k?.isDefault).toBeFalsy();
+
+    expect(rowDef?.label).toBe('1,048,576');
+    expect(rowDef?.selected).toBe(false);
+    expect(rowDef?.isDefault).toBe(true);
+    expect(rowDef?.custom).toBeFalsy();
+
+    // Model with preset default (128000), not overridden
+    const optsPresetDefault = contextWindowOptions(128000, 128000, false);
+    expect(optsPresetDefault).toHaveLength(CONTEXT_WINDOW_PRESETS.length);
+    const rowPresetDef = optsPresetDefault.find((r) => r.tokens === 128000);
+    expect(rowPresetDef?.isDefault).toBe(true);
+    expect(rowPresetDef?.selected).toBe(true);
+    expect(rowPresetDef?.custom).toBeFalsy();
+
+    // Model with preset default (128000), overridden to 200000 (preset)
+    const optsPresetToPreset = contextWindowOptions(200000, 128000, true);
+    expect(optsPresetToPreset).toHaveLength(CONTEXT_WINDOW_PRESETS.length);
+    expect(optsPresetToPreset.find((r) => r.tokens === 128000)?.isDefault).toBe(true);
+    expect(optsPresetToPreset.find((r) => r.tokens === 200000)?.custom).toBe(true);
+    expect(optsPresetToPreset.find((r) => r.tokens === 200000)?.selected).toBe(true);
+
+    // Model with preset default (128000), overridden to 50000 (not preset)
+    const optsPresetToNonPreset = contextWindowOptions(50000, 128000, true);
+    expect(optsPresetToNonPreset.find((r) => r.tokens === 50000)?.custom).toBe(true);
+    expect(optsPresetToNonPreset.find((r) => r.tokens === 50000)?.selected).toBe(true);
+    expect(optsPresetToNonPreset.find((r) => r.tokens === 128000)?.isDefault).toBe(true);
+    // 50000 should be between 32000 and 64000
+    const nonPresetTokens = optsPresetToNonPreset.map((r) => r.tokens);
+    expect(nonPresetTokens.indexOf(50000)).toBe(1);
   });
 });
 

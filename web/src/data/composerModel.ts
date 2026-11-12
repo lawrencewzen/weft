@@ -1,4 +1,5 @@
 import type { components } from '../../../src/v2/contract.gen';
+import { formatTokenCount } from '../i18n';
 import type { Model, Provider } from './providerTypes';
 
 export type { Provider, Model };
@@ -30,6 +31,7 @@ export type ComposerModelOption = {
   brand: string | null;
   contextWindow: number;
   contextWindowCustom: boolean;
+  defaultContextWindow?: number | null;
   isDefault: boolean;
   images: boolean;
   thinkingLevels: ThinkingLevel[];
@@ -64,6 +66,8 @@ function optionOf(
   model: Model,
   defaultModel: ResolvedModel | null,
 ): ComposerModelOption {
+  const isCustom = Boolean(model.overridden?.contextWindow);
+  const defaultTokens = model.defaultContextWindow ?? (isCustom ? 128_000 : (model.contextWindow ?? 128_000));
   return {
     providerId: provider.id,
     providerName: provider.name,
@@ -72,7 +76,8 @@ function optionOf(
     displayName: model.name || model.id,
     brand: model.brand,
     contextWindow: model.contextWindow ?? 128_000,
-    contextWindowCustom: Boolean(model.overridden?.contextWindow),
+    contextWindowCustom: isCustom,
+    defaultContextWindow: defaultTokens,
     isDefault: sameModel(defaultModel, { providerId: provider.id, modelId: model.id }),
     images: Boolean(model.images),
     thinkingLevels: Array.isArray(model.thinkingLevels) ? model.thinkingLevels : [],
@@ -141,6 +146,7 @@ export function resolveComposerSelection(opts: {
     brand: null,
     contextWindow: 0,
     contextWindowCustom: false,
+    defaultContextWindow: null,
     isDefault: sameModel(opts.defaultModel, ref),
     images: false,
     thinkingLevels: [],
@@ -171,20 +177,68 @@ export function parseContextWindowInput(raw: string): number | null {
 
 export type ContextWindowOption = {
   tokens: number;
+  label: string;
   selected: boolean;
+  isDefault?: boolean;
   custom?: boolean;
 };
 
-export function contextWindowOptions(current: number): ContextWindowOption[] {
-  const n = Number.isFinite(current) ? Math.trunc(current) : 0;
-  const rows: ContextWindowOption[] = CONTEXT_WINDOW_PRESETS.map((tokens) => ({
-    tokens,
-    selected: n === tokens,
-  }));
-  if (n > 0 && !CONTEXT_WINDOW_PRESETS.includes(n)) {
-    rows.push({ tokens: n, selected: true, custom: true });
+export function isExactRoundTokens(tokens: number, short: string): boolean {
+  if (short.endsWith('M')) {
+    const num = parseFloat(short.slice(0, -1));
+    return Number.isFinite(num) && Math.round(num * 1_000_000) === tokens;
   }
-  return rows;
+  if (short.endsWith('k')) {
+    const num = parseFloat(short.slice(0, -1));
+    return Number.isFinite(num) && Math.round(num * 1_000) === tokens;
+  }
+  const num = parseFloat(short);
+  return Number.isFinite(num) && Math.round(num) === tokens;
+}
+
+export function formatContextTokens(
+  tokens: number,
+  siblings: readonly number[] = CONTEXT_WINDOW_PRESETS,
+): string {
+  const short = formatTokenCount(tokens);
+  const collides = siblings.some((other) => other !== tokens && formatTokenCount(other) === short);
+  if (collides && !isExactRoundTokens(tokens, short)) {
+    return tokens.toLocaleString('en-US');
+  }
+  return short;
+}
+
+export function contextWindowOptions(
+  current: number,
+  defaultTokens?: number | null,
+  isCustom?: boolean,
+): ContextWindowOption[] {
+  const cur = Number.isFinite(current) ? Math.trunc(current) : 0;
+  const def = typeof defaultTokens === 'number' && Number.isFinite(defaultTokens) && defaultTokens > 0
+    ? Math.trunc(defaultTokens)
+    : null;
+
+  const hasCustom = typeof isCustom === 'boolean'
+    ? isCustom
+    : (def !== null ? cur !== def : (cur > 0 && !CONTEXT_WINDOW_PRESETS.includes(cur)));
+
+  const tokenSet = new Set<number>(CONTEXT_WINDOW_PRESETS);
+  if (def !== null && def > 0) tokenSet.add(def);
+  if (cur > 0 && hasCustom) tokenSet.add(cur);
+
+  const sortedTokens = Array.from(tokenSet).sort((a, b) => a - b);
+
+  return sortedTokens.map((tokens) => {
+    const isCust = hasCustom && tokens === cur;
+    const isDef = !isCust && (def !== null ? tokens === def : false);
+    return {
+      tokens,
+      label: formatContextTokens(tokens, sortedTokens),
+      selected: tokens === cur,
+      ...(isDef ? { isDefault: true } : {}),
+      ...(isCust ? { custom: true } : {}),
+    };
+  });
 }
 
 export const BRAND_ICON_FILE: Record<string, string> = {

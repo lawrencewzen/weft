@@ -9,7 +9,7 @@ const protoFile = path.join(root, 'design', 'prototype', 'index.html');
 test.use({ locale: 'zh-CN', viewport: { width: 1440, height: 900 } });
 test.describe.configure({ timeout: 120_000 });
 
-test('prototype context window UI: context in model menu, presets, custom input, warn chip without banner, and clickable chip', async ({ page }) => {
+test('prototype context window UI: context in model menu, presets, custom input, warn chip without banner, and context chip', async ({ page }) => {
   expect(
     fs.existsSync(protoFile),
     'prototype build missing: run `npm run build:proto` first',
@@ -30,11 +30,13 @@ test('prototype context window UI: context in model menu, presets, custom input,
   await page.goto(pathToFileURL(protoFile).href);
   await expect(page.getByTestId('next-app')).toBeVisible();
 
-  // 1. Context chip shows ring only when < 70% (click behavior is covered in proto-compaction)
+  // 1. Context chip shows ring only when < 70% and tooltip displays usage (clicking is a no-op)
   const contextChip = page.getByTestId('next-context-chip');
   await expect(contextChip).toBeVisible();
   await expect(contextChip.locator('.context-chip-pct')).toHaveCount(0);
-  await expect(contextChip).toHaveAttribute('title', /已用 24%/);
+  await expect(contextChip).toHaveAttribute('title', '48.2k / 200k');
+  await contextChip.click();
+  await expect(page.getByTestId('next-context-pop')).toHaveCount(0);
 
   // 2. Open model menu, hover context row reveals submenu
   const modelChip = page.getByTestId('next-model-chip');
@@ -45,24 +47,37 @@ test('prototype context window UI: context in model menu, presets, custom input,
   const ctxRow = page.getByTestId('next-menu-context');
   await expect(ctxRow).toBeVisible();
   await expect(ctxRow).toContainText('上下文');
-  await expect(ctxRow).toContainText('1M');
+  await expect(ctxRow).toContainText('1,048,576 · 默认');
 
   await ctxRow.hover();
   const ctxSub = page.getByTestId('next-sub-context');
   await expect(ctxSub).toBeVisible();
-  await expect(ctxSub).toContainText('DeepSeek V4.1 Flash 的上下文上限');
+  await expect(ctxSub).toContainText('上下文上限');
+  await expect(ctxSub).not.toContainText('DeepSeek V4.1 Flash 的上下文上限');
+  await expect(ctxSub).not.toContainText('按模型保存');
+  await expect(page.getByTestId('next-context-restore')).toHaveCount(0);
+
+  // Check 1M preset vs 1,048,576 default
+  const opt1M = ctxSub.locator('[data-testid=next-context-option][data-tokens="1000000"]');
+  await expect(opt1M).toContainText('1M');
+  await expect(opt1M).not.toContainText('默认');
+  const optDefault = ctxSub.locator('[data-testid=next-context-option][data-tokens="1048576"]');
+  await expect(optDefault).toContainText('1,048,576');
+  await expect(optDefault).toContainText('默认');
 
   // 3. Pick 64K preset -> menu closes, ring and percent update to 75%
   await page.locator('[data-testid=next-context-option][data-tokens="64000"]').click();
   await expect(menu).toBeHidden();
   await expect(contextChip).toHaveText('75%');
-  await expect(contextChip).toHaveAttribute('title', /48\.2k \/ 64k/);
-  await expect(contextChip).toHaveAttribute('title', /已用 75%/);
+  await expect(contextChip).toHaveAttribute('title', '48.2k / 64k');
 
-  // Re-open model menu, context row now shows 64k
+  // Re-open model menu, context row now shows 64k · 自定义
   await modelChip.click();
   await expect(menu).toBeVisible();
-  await expect(page.getByTestId('next-menu-context')).toContainText('64k');
+  await expect(page.getByTestId('next-menu-context')).toContainText('64k · 自定义');
+  await page.getByTestId('next-menu-context').hover();
+  await expect(ctxSub).toBeVisible();
+  await expect(page.getByTestId('next-context-restore')).toBeVisible();
 
   // 4. Custom input: enter 50000 -> 48.2k / 50k is 96%, triggers warn banner
   await page.getByTestId('next-menu-context').hover();
@@ -88,7 +103,7 @@ test('prototype context window UI: context in model menu, presets, custom input,
   await expect(menu).toBeHidden();
 
   await expect(contextChip.locator('.context-chip-pct')).toHaveCount(0);
-  await expect(contextChip).toHaveAttribute('title', /已用 5%/);
+  await expect(contextChip).toHaveAttribute('title', '48.2k / 1M');
   await expect(contextChip).not.toHaveClass(/is-warn/);
   await expect(page.getByTestId('next-context-banner')).toHaveCount(0);
 

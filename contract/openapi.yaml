@@ -5416,6 +5416,25 @@ components:
         detail:
           type: string
           description: handoff 是交接说明全文，也用于 compaction 摘要。
+        request:
+          type: object
+          additionalProperties: false
+          required:
+            - by
+          description: |
+            谁发起的这次交接或压缩，仅 handoff 与 compaction 可能有。
+            用户通过 POST /handoff 或 /compact 发起的为 by=user，instructions 是请求体里的补充说明（没写则省略）。
+            模型调用 handoff 工具、自动压缩（threshold / overflow）触发的不带这个字段。
+            前端据此在分隔线前画一个用户气泡。信息跟着对话历史持久化，重启后仍在。
+          properties:
+            by:
+              type: string
+              enum:
+                - user
+                - model
+            instructions:
+              type: string
+              description: 用户给的补充说明，去掉首尾空白。没有则省略。
       description: |
         系统提示。correction 是交接，note 是给子 Agent 插话后的通知。
         compaction 的 text 是服务端按语言出成的句子，对应一条 pi.compaction 条目，放在该条目的时间位置。
@@ -5623,6 +5642,9 @@ components:
             error:
               type: string
               description: "failed 时的人话。中文为「压缩失败：原因」，英文为 Compaction failed 加原因。"
+            instructions:
+              type: string
+              description: 手动压缩运行中（state=running 且 trigger=manual）时，用户给的补充说明。没写则省略。
         handoff:
           description: |
             交接中的状态。运行中且模型正在写交接说明时为 running，否则为 null。
@@ -5636,6 +5658,9 @@ components:
                 state:
                   type: string
                   const: running
+                instructions:
+                  type: string
+                  description: 用户发起交接时给的补充说明，去掉首尾空白。没写或由模型自己发起时省略。
       description: 当前运行状态。供输入框、停止按钮、等待提示和主对话卡住判定使用。
     ConversationModel:
       type: object
@@ -5762,6 +5787,11 @@ components:
           type: boolean
         contextWindow:
           description: 已应用用户覆盖；null = 未知（运行时按 128000 算）
+          oneOf:
+            - type: "null"
+            - type: integer
+        defaultContextWindow:
+          description: 模型不带用户覆盖时的上下文上限（目录值或自定义端点配置的值）；null = 完全没有。用于标出「默认」行和「恢复默认」的目标值
           oneOf:
             - type: "null"
             - type: integer

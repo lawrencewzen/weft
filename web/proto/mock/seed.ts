@@ -1317,7 +1317,11 @@ function seedProviders(now: number): Provider[] {
       name: 'DeepSeek',
       auth: { type: 'api_key', keyTail: '75e2' },
       status: { state: 'ok', testedAt: now - 180_000 },
-      models: (MOCK_CATALOG_MODELS.deepseek || []).map((m) => ({ ...m, enabled: true })),
+      models: (MOCK_CATALOG_MODELS.deepseek || []).map((m) => ({
+        ...m,
+        defaultContextWindow: m.defaultContextWindow ?? m.contextWindow,
+        enabled: true,
+      })),
     },
     {
       id: 'anthropic',

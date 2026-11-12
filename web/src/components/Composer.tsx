@@ -47,6 +47,7 @@ import { useProviders } from '../data/useProviders';
 import { useSession } from '../data/session';
 import type { components } from '../../../src/v2/contract.gen';
 import { t } from '../i18n';
+import { compactCommandOf } from '../data/compactCommand';
 import { handoffCommandOf } from '../data/handoffCommand';
 import { composeSkillMessage } from '../data/slashCommand';
 import { writeActiveWorkspace } from '../data/layout';
@@ -56,7 +57,6 @@ import { ContextChip } from './ContextChip';
 import { DemoModelBadge } from './DemoModelBadge';
 import { ModelChip } from './ModelChip';
 import { WorkspaceChip } from './WorkspaceChip';
-import { CLOCK_ICON } from './SidebarIcons';
 import { formatScheduleTimeToast } from './schedules/formatRule';
 import { DatePicker } from './pickers/DatePicker';
 import { TimePicker } from './pickers/TimePicker';
@@ -166,10 +166,23 @@ export function Composer({
   onWithdrawQueue,
 }: Props) {
   const [draft, setDraft] = useState(() => consumeConversationPrefill(conversationId) || '');
-  const [compactBusy, setCompactBusy] = useState(false);
-  const [compactRequestError, setCompactRequestError] = useState<string | null>(null);
-  const [handoffBusy, setHandoffBusy] = useState(false);
-  const [handoffRequestError, setHandoffRequestError] = useState<string | null>(null);
+  const [chipFlash, setChipFlash] = useState(false);
+  const [actionHint, setActionHint] = useState<string | null>(null);
+  const flashTimeoutRef = useRef<number | undefined>(undefined);
+  useEffect(() => {
+    return () => {
+      if (flashTimeoutRef.current) window.clearTimeout(flashTimeoutRef.current);
+    };
+  }, []);
+  const triggerDisabledActionFlash = useCallback(() => {
+    if (flashTimeoutRef.current) window.clearTimeout(flashTimeoutRef.current);
+    setChipFlash(true);
+    setActionHint(t(lang, 'slash_cmd_disabled_running'));
+    flashTimeoutRef.current = window.setTimeout(() => {
+      setChipFlash(false);
+      setActionHint(null);
+    }, 1200);
+  }, [lang]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hint, setHint] = useState<ComposerHint | null>(null);
@@ -180,7 +193,6 @@ export function Composer({
   const { openInTerminal, copyPath, onToast: actionToast } = useRightActions();
   const { store } = useSession();
   const [scheduleOpen, setScheduleOpen] = useState(false);
-  const [modelOpenSignal, setModelOpenSignal] = useState(0);
   const [customMode, setCustomMode] = useState(false);
   const [customDate, setCustomDate] = useState('');
   const [customTime, setCustomTime] = useState('09:00');
@@ -248,9 +260,9 @@ export function Composer({
   });
 
   const compactionState = run.compaction?.state ?? 'idle';
-  const compactRunning = compactBusy || compactionState === 'running';
+  const compactRunning = compactionState === 'running';
   const handoffState = run.handoff?.state ?? 'idle';
-  const handoffRunning = handoffBusy || handoffState === 'running';
+  const handoffRunning = handoffState === 'running';
 
   const slash = useSlashCommand({
     draft,
@@ -266,9 +278,7 @@ export function Composer({
       handoffRunning,
     },
     onCommand: (id) => {
-      if (id === 'compact') void requestCompact();
-      else if (id === 'model') setModelOpenSignal((n) => n + 1);
-      else if (id === 'new') startNewChat();
+      if (id === 'new') startNewChat();
     },
   });
 
@@ -287,6 +297,7 @@ export function Composer({
   const hasPayload =
     Boolean(draft.trim()) ||
     slash.chip?.kind === 'skill' ||
+    slash.chip?.kind === 'compact' ||
     slash.chip?.kind === 'handoff' ||
     att.images.length > 0 ||
     att.visibleFileRefs.length > 0 ||
@@ -404,9 +415,11 @@ export function Composer({
     const typed = text.trim();
     const chip = slash.chip;
     const skill = chip?.kind === 'skill' ? chip : null;
-    const payload = chip?.kind === 'handoff'
-      ? (typed ? `/handoff ${typed}` : '/handoff')
-      : composeSkillMessage(skill, typed);
+    const payload = chip?.kind === 'compact'
+      ? (typed ? `/compact ${typed}` : '/compact')
+      : chip?.kind === 'handoff'
+        ? (typed ? `/handoff ${typed}` : '/handoff')
+        : composeSkillMessage(skill, typed);
     const { imagePayload, sentFiles, sentPastes, extraKey } = att.buildSendPayload();
 
     if (
@@ -423,14 +436,27 @@ export function Composer({
       if (typed) openSchedule();
       return;
     }
-    const command = !skill && !imagePayload.length && !sentFiles.length && !sentPastes.length
+    const compactCmd = !skill && !imagePayload.length && !sentFiles.length && !sentPastes.length
+      ? compactCommandOf(payload)
+      : null;
+    const handoffCmd = !skill && !imagePayload.length && !sentFiles.length && !sentPastes.length
       ? handoffCommandOf(payload)
       : null;
+
+    if (compactCmd && (running || compactRunning)) {
+      triggerDisabledActionFlash();
+      return;
+    }
+    if (handoffCmd && (running || handoffRunning)) {
+      triggerDisabledActionFlash();
+      return;
+    }
+
     const requestId = req.current.begin(payload, extraKey);
     setBusy(true);
     setError(null);
     setHint(null);
-      const sentText = payload;
+    const sentText = payload;
     const snapshot = att.takeAndClear();
 
     setDraft('');
@@ -439,9 +465,12 @@ export function Composer({
     at.setAtDismissed(false);
     requestAnimationFrame(resize);
     try {
-      if (command) {
+      if (compactCmd) {
         if (!conversationId) throw new Error(t(lang, 'send_failed'));
-        await handoffConversation(conversationId, requestId, command.instructions);
+        await compactConversation(conversationId, compactCmd.instructions);
+      } else if (handoffCmd) {
+        if (!conversationId) throw new Error(t(lang, 'send_failed'));
+        await handoffConversation(conversationId, requestId, handoffCmd.instructions);
       } else {
         await onSend(
           sentText,
@@ -548,9 +577,6 @@ export function Composer({
     openSettings('providers');
   }
 
-  const compactError = compactRequestError
-    || (compactionState === 'failed' ? run.compaction?.error || null : null);
-
   function startNewChat() {
     if (workspaceId) {
       writeActiveWorkspace(workspaceId);
@@ -558,32 +584,6 @@ export function Composer({
     } else {
       writeActiveWorkspace(NO_PROJECT_ID);
       navigate(newChatPath());
-    }
-  }
-
-  async function requestCompact() {
-    if (!conversationId || compactRunning) return;
-    setCompactBusy(true);
-    setCompactRequestError(null);
-    try {
-      await compactConversation(conversationId);
-    } catch (err) {
-      setCompactRequestError(errorMessage(err, t(lang, 'send_failed')));
-    } finally {
-      setCompactBusy(false);
-    }
-  }
-
-  async function requestHandoff() {
-    if (!conversationId || handoffRunning) return;
-    setHandoffBusy(true);
-    setHandoffRequestError(null);
-    try {
-      await handoffConversation(conversationId);
-    } catch (err) {
-      setHandoffRequestError(errorMessage(err, t(lang, 'send_failed')));
-    } finally {
-      setHandoffBusy(false);
     }
   }
 
@@ -687,6 +687,7 @@ export function Composer({
                 lang={lang}
                 items={slash.items}
                 activeIndex={slash.activeIndex}
+                flashId={slash.flashId}
                 onPick={slash.pick}
               />
             ) : null}
@@ -707,6 +708,8 @@ export function Composer({
                   label={chipLabel(lang, slash.chip)}
                   kind={slash.chip.kind}
                   testId="next-composer-chip"
+                  flash={chipFlash}
+                  title={chipFlash ? t(lang, 'slash_cmd_disabled_running') : undefined}
                 />
               </span>
             ) : null}
@@ -788,7 +791,6 @@ export function Composer({
                       onPickThinkingLevel={(lvl) => { void pickThinkingLevel(lvl); }}
                       onPickRecent={(option, lvl) => { void pickRecent(option, lvl); }}
                       onManage={openManage}
-                      openSignal={modelOpenSignal}
                       contextWindow={selected?.contextWindow || context.window}
                       onSetContextWindow={(w) => { void setWindow(w); }}
                     />
@@ -799,7 +801,9 @@ export function Composer({
               {locked && !noModel && run.lockedReason === 'no_workspace' ? (
                 <span className="composer-lock">{t(lang, 'locked_no_workspace')}</span>
               ) : null}
-              {hint ? (
+              {actionHint ? (
+                <span className="composer-hint" data-testid="next-composer-hint">{actionHint}</span>
+              ) : hint ? (
                 <span className="composer-hint" data-testid="next-composer-hint">{hintText(lang, hint)}</span>
               ) : null}
               {error ? (
@@ -821,37 +825,9 @@ export function Composer({
                     lang={lang}
                     context={context}
                     selected={selected}
-                    compact={conversationId && !isDraft ? {
-                      state: compactRunning ? 'running' : compactionState,
-                      error: compactError,
-                      onCompact: () => { void requestCompact(); },
-                    } : undefined}
-                    handoff={conversationId && !isDraft ? {
-                      state: handoffRunning ? 'running' : 'idle',
-                      error: handoffRequestError,
-                      onHandoff: () => { void requestHandoff(); },
-                    } : undefined}
                   />
                 ) : null}
                 <div className="composer-schedule-wrapper" ref={scheduleWrapRef}>
-                  <button
-                    type="button"
-                    className={`composer-schedule-btn${scheduleOpen ? ' is-open' : ''}`}
-                    data-testid="next-composer-schedule"
-                    title={t(lang, 'composer_schedule_send')}
-                    aria-label={t(lang, 'composer_schedule_send')}
-                    disabled={!draft.trim() || locked || busy}
-                    onClick={() => {
-                      if (scheduleOpen) {
-                        setScheduleOpen(false);
-                        setCustomMode(false);
-                      } else {
-                        openSchedule();
-                      }
-                    }}
-                  >
-                    {CLOCK_ICON}
-                  </button>
                   {scheduleOpen ? (
                     <div className="composer-schedule-popover" data-testid="next-composer-schedule-popover">
                       {!customMode ? (

@@ -3,8 +3,10 @@ import type { Lang } from '../data/lang';
 import {
   CONTEXT_WINDOW_MAX,
   CONTEXT_WINDOW_MIN,
+  CONTEXT_WINDOW_PRESETS,
   clampThinkingLevel,
   contextWindowOptions,
+  formatContextTokens,
   parseContextWindowInput,
   getRecentModelEntries,
   isSelectedOption,
@@ -15,7 +17,7 @@ import {
   type ThinkingLevel,
 } from '../data/composerModel';
 import { cssViewportWidth, visualToCss } from '../data/uiZoom';
-import { formatTokenCount, t } from '../i18n';
+import { t } from '../i18n';
 import { BrandIcon } from './BrandIcon';
 import { GaugeIcon } from './GaugeIcon';
 
@@ -33,7 +35,7 @@ type Props = {
   onPick: (option: ComposerModelOption) => void;
   onPickThinkingLevel?: (level: ThinkingLevel) => void;
   onPickRecent?: (option: ComposerModelOption, level: ThinkingLevel | null) => void;
-  onManage: () => void;
+  onManage?: () => void;
   contextWindow?: number;
   onSetContextWindow?: (window: number | null) => void;
   /** Bump to open the menu from outside (the `/model` command). */
@@ -48,7 +50,7 @@ export function ModelChip({
   onPick,
   onPickThinkingLevel,
   onPickRecent,
-  onManage,
+  onManage: _onManage,
   contextWindow = 0,
   onSetContextWindow,
   openSignal = 0,
@@ -69,8 +71,13 @@ export function ModelChip({
     : null;
 
   const canSetContext = Boolean(selected?.providerId && selected.modelId && onSetContextWindow);
-  const ctxOptions = contextWindowOptions(contextWindow);
-  const ctxIsCustom = ctxOptions.some((o) => o.selected && o.custom);
+  const defaultTokens = selected?.defaultContextWindow ?? (selected?.contextWindowCustom ? 128_000 : (selected?.contextWindow || contextWindow || 128_000));
+  const isCustom = Boolean(
+    selected?.contextWindowCustom ||
+    (defaultTokens && contextWindow && contextWindow !== defaultTokens)
+  );
+  const ctxOptions = contextWindowOptions(contextWindow, defaultTokens, isCustom);
+  const ctxIsCustom = isCustom;
 
   const checkFit = useCallback(() => {
     if (!wrap.current) return;
@@ -252,7 +259,7 @@ export function ModelChip({
                   <small className="model-menu-id">{option.modelId}</small>
                 </span>
                 <span className="model-menu-meta meta">
-                  {formatTokenCount(option.contextWindow)}
+                  {formatContextTokens(option.contextWindow)}
                   {option.isDefault ? ` · ${t(lang, 'ctx_default_mark')}` : ''}
                 </span>
                 <span className="model-menu-check-slot">
@@ -308,7 +315,7 @@ export function ModelChip({
   const contextListContent = selected && canSetContext ? (
     <div className="context-menu-list">
       <div className="model-menu-label dmenu-label">
-        {t(lang, 'ctx_sub_title', { model: selected.displayName })}
+        {t(lang, 'ctx_sub_title')}
       </div>
       {ctxOptions.map((option) => (
         <button
@@ -322,9 +329,13 @@ export function ModelChip({
           onClick={() => handlePickContext(option.tokens)}
         >
           <span className="tt">
-            <b>{formatTokenCount(option.tokens)}</b>
+            <b>{option.label}</b>
           </span>
-          {option.custom ? <span className="meta">{t(lang, 'ctx_custom_mark')}</span> : null}
+          {option.custom ? (
+            <span className="meta">{t(lang, 'ctx_custom_mark')}</span>
+          ) : option.isDefault ? (
+            <span className="meta">{t(lang, 'ctx_default_mark')}</span>
+          ) : null}
           <span className="model-menu-check-slot">
             {option.selected ? CHECK_ICON : null}
           </span>
@@ -347,18 +358,18 @@ export function ModelChip({
         </button>
       </form>
       {ctxError ? <div className="context-custom-error">{ctxError}</div> : null}
-      <div className="mfoot">
-        <button
-          type="button"
-          className="model-menu-manage"
-          data-testid="next-context-restore"
-          onClick={() => handlePickContext(null)}
-        >
-          {t(lang, 'ctx_restore')}
-        </button>
-        <span className="model-menu-dot" aria-hidden="true">{' · '}</span>
-        <span>{t(lang, 'ctx_foot_per_model')}</span>
-      </div>
+      {ctxIsCustom ? (
+        <div className="mfoot">
+          <button
+            type="button"
+            className="model-menu-manage"
+            data-testid="next-context-restore"
+            onClick={() => handlePickContext(null)}
+          >
+            {t(lang, 'ctx_restore')}
+          </button>
+        </div>
+      ) : null}
     </div>
   ) : null;
 
@@ -533,8 +544,8 @@ export function ModelChip({
                 >
                   <span className="k">{t(lang, 'ctx_menu_title')}</span>
                   <span className="v">
-                    {formatTokenCount(contextWindow)}
-                    {ctxIsCustom ? ` · ${t(lang, 'ctx_custom_mark')}` : ''}
+                    {formatContextTokens(contextWindow, [defaultTokens, ...CONTEXT_WINDOW_PRESETS])}
+                    {` · ${ctxIsCustom ? t(lang, 'ctx_custom_mark') : t(lang, 'ctx_default_mark')}`}
                   </span>
                   <span className="chev">›</span>
                   {!isInline && subMenu === 'context' ? (
@@ -550,26 +561,9 @@ export function ModelChip({
               ) : (
                 <div className="dr dis" data-testid="next-menu-context" aria-disabled="true">
                   <span className="k">{t(lang, 'ctx_menu_title')}</span>
-                  <span className="v">{contextWindow ? formatTokenCount(contextWindow) : ''}</span>
+                  <span className="v">{contextWindow ? formatContextTokens(contextWindow) : ''}</span>
                 </div>
               )}
-
-              <div className="mfoot">
-                <span>{t(lang, 'model_only_this_chat')}</span>
-                <span className="model-menu-dot" aria-hidden="true">{' · '}</span>
-                <button
-                  type="button"
-                  className="model-menu-manage"
-                  data-testid="next-model-manage"
-                  onClick={() => {
-                    setOpen(false);
-                    setSubMenu(null);
-                    onManage();
-                  }}
-                >
-                  {t(lang, 'model_manage')}
-                </button>
-              </div>
             </>
           )}
         </div>

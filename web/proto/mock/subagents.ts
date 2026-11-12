@@ -227,6 +227,8 @@ export function seedSubThreads(now: number): Map<string, MockSubThread> {
       assistant(
         'sa2-a1',
         [
+          'STATUS: done',
+          '',
           '补好了，在 `web/src/data/store.test.ts` 里加了两条：',
           '',
           '- 偏移等于当前长度时追加',
@@ -371,6 +373,34 @@ export function seedSubThreads(now: number): Map<string, MockSubThread> {
     run: null,
   });
 
+  const siteDone = agent({
+    cid: siteCid,
+    agentId: 'sa-2',
+    title: '核对首屏标题字重',
+    name: 'sub-title-weight',
+    status: 'done',
+    startedAt: now - 10 * MINUTE,
+    lastActivityAt: now - 6 * MINUTE,
+    endedAt: now - 6 * MINUTE,
+    toolCallId: 'site-sa-2',
+  });
+  out.set(subagentKey(siteCid, siteDone.id), {
+    view: siteDone,
+    items: [
+      user('site-sa2-u1', '看一下首屏标题字重是不是合适。'),
+      assistant(
+        'site-sa2-a1',
+        [
+          'STATUS: done',
+          '',
+          '已核对字重，首屏标题保持 600，副标题 400，视觉层级清晰。',
+        ].join('\n'),
+      ),
+    ],
+    tools: {},
+    run: null,
+  });
+
   return out;
 }
 
@@ -383,6 +413,8 @@ export function seedSubagentReports(): MockItem[] {
       name: 'sub-delta-test',
       reportKind: 'answered',
       body: [
+        'STATUS: done',
+        '',
         '补好了 `text.delta` 偏移的两条用例，`npm run test:web` 全绿。',
         '',
         '- 偏移等于当前长度：追加',

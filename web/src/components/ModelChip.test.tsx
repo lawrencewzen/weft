@@ -264,7 +264,7 @@ describe('ModelChip component', () => {
     const ctxRow = host?.querySelector('[data-testid="next-menu-context"]');
     expect(ctxRow).not.toBeNull();
     expect(ctxRow?.textContent).toContain('上下文');
-    expect(ctxRow?.textContent).toContain('1M');
+    expect(ctxRow?.textContent).toContain('1M · 默认');
     expect(ctxRow?.textContent).not.toContain('自定义');
   });
 
@@ -316,7 +316,8 @@ describe('ModelChip component', () => {
 
     const sub = host?.querySelector('[data-testid="next-sub-context"]');
     expect(sub).not.toBeNull();
-    expect(sub?.textContent).toContain('DeepSeek V4.1 Flash 的上下文上限');
+    expect(sub?.textContent).toContain('上下文上限');
+    expect(sub?.textContent).not.toContain('DeepSeek V4.1 Flash 的上下文上限');
 
     const opt128 = host?.querySelector('[data-testid="next-context-option"][data-tokens="128000"]') as HTMLButtonElement;
     expect(opt128).not.toBeNull();
@@ -432,5 +433,124 @@ describe('ModelChip component', () => {
     const ctxRow = host?.querySelector('[data-testid="next-menu-context"]');
     expect(ctxRow?.classList.contains('dis')).toBe(true);
     expect(ctxRow?.getAttribute('aria-disabled')).toBe('true');
+  });
+
+  it('separates default and custom for a model with 1048576 context window', async () => {
+    const v4Option: ComposerModelOption = {
+      providerId: 'deepseek',
+      providerName: 'DeepSeek',
+      providerBrand: 'deepseek',
+      modelId: 'deepseek-v4-flash',
+      displayName: 'DeepSeek-V4.1-Flash',
+      brand: 'deepseek',
+      contextWindow: 1048576,
+      contextWindowCustom: false,
+      defaultContextWindow: 1048576,
+      isDefault: false,
+      images: false,
+      thinkingLevels: [],
+      defaultThinkingLevel: null,
+    };
+
+    // 1. Default state: 1048576 not overridden
+    await render(
+      <ModelChip
+        lang="zh"
+        selected={v4Option}
+        groups={groups}
+        contextWindow={1048576}
+        onPick={vi.fn()}
+        onSetContextWindow={vi.fn()}
+      />
+    );
+
+    const chip = host?.querySelector('[data-testid="next-model-chip"]') as HTMLButtonElement;
+    await act(async () => {
+      chip.click();
+    });
+
+    // Main menu context row shows 1,048,576 · 默认
+    const ctxRow = host?.querySelector('[data-testid="next-menu-context"]') as HTMLDivElement;
+    expect(ctxRow?.textContent).toContain('1,048,576 · 默认');
+    // Footer with "只对这个对话生效 · 管理模型" must be gone
+    expect(host?.querySelector('[data-testid="next-model-manage"]')).toBeNull();
+    expect(host?.textContent).not.toContain('只对这个对话生效');
+
+    // Open context submenu
+    await act(async () => {
+      ctxRow.click();
+    });
+
+    const sub = host?.querySelector('[data-testid="next-sub-context"]');
+    expect(sub).not.toBeNull();
+    expect(sub?.textContent).toContain('上下文上限');
+    // Should NOT show "按模型保存"
+    expect(sub?.textContent).not.toContain('按模型保存');
+    // Value is default, so "恢复默认" must NOT be rendered
+    expect(host?.querySelector('[data-testid="next-context-restore"]')).toBeNull();
+
+    // Context options list:
+    // Only one '1M' (the 1,000,000 preset)
+    const opt1M = host?.querySelector('[data-testid="next-context-option"][data-tokens="1000000"]');
+    expect(opt1M?.textContent).toContain('1M');
+    expect(opt1M?.textContent).not.toContain('默认');
+    expect(opt1M?.textContent).not.toContain('自定义');
+
+    // Exactly one '1,048,576' line marked 默认
+    const opt1048576 = host?.querySelector('[data-testid="next-context-option"][data-tokens="1048576"]');
+    expect(opt1048576?.textContent).toContain('1,048,576');
+    expect(opt1048576?.textContent).toContain('默认');
+    expect(opt1048576?.getAttribute('aria-selected')).toBe('true');
+
+    await cleanup();
+
+    // 2. Overridden to 128k
+    const overriddenOption: ComposerModelOption = {
+      ...v4Option,
+      contextWindow: 128000,
+      contextWindowCustom: true,
+      defaultContextWindow: 1048576,
+    };
+
+    await render(
+      <ModelChip
+        lang="zh"
+        selected={overriddenOption}
+        groups={groups}
+        contextWindow={128000}
+        onPick={vi.fn()}
+        onSetContextWindow={vi.fn()}
+      />
+    );
+
+    const chip2 = host?.querySelector('[data-testid="next-model-chip"]') as HTMLButtonElement;
+    await act(async () => {
+      chip2.click();
+    });
+
+    // Main menu shows 128k · 自定义
+    const ctxRow2 = host?.querySelector('[data-testid="next-menu-context"]') as HTMLDivElement;
+    expect(ctxRow2?.textContent).toContain('128k · 自定义');
+
+    await act(async () => {
+      ctxRow2.click();
+    });
+
+    // In submenu, 128k is marked 自定义
+    const opt128 = host?.querySelector('[data-testid="next-context-option"][data-tokens="128000"]');
+    expect(opt128?.textContent).toContain('128k');
+    expect(opt128?.textContent).toContain('自定义');
+    expect(opt128?.getAttribute('aria-selected')).toBe('true');
+
+    // 1,048,576 is still listed and marked 默认
+    const optDefault = host?.querySelector('[data-testid="next-context-option"][data-tokens="1048576"]');
+    expect(optDefault?.textContent).toContain('1,048,576');
+    expect(optDefault?.textContent).toContain('默认');
+    expect(optDefault?.getAttribute('aria-selected')).toBe('false');
+
+    // "恢复默认" IS available
+    const restoreBtn = host?.querySelector('[data-testid="next-context-restore"]');
+    expect(restoreBtn).not.toBeNull();
+    expect(restoreBtn?.textContent).toContain('恢复默认');
   });
 });

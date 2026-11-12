@@ -54,6 +54,7 @@ describe('Thread failure and continue (T105-2)', () => {
       lang?: 'zh' | 'en';
       actions?: ConversationActions;
       compaction?: components['schemas']['RunState']['compaction'];
+      handoff?: Parameters<typeof Thread>[0]['handoff'];
     } = {},
   ) {
     const sessionValue: SessionValue = {
@@ -82,6 +83,7 @@ describe('Thread failure and continue (T105-2)', () => {
             stickNonce={0}
             onContinue={props.onContinue}
             compaction={props.compaction}
+            handoff={props.handoff}
           />
         </RightPaneProvider>
       </SessionContext.Provider>
@@ -230,13 +232,34 @@ describe('Thread failure and continue (T105-2)', () => {
     await act(async () => {
       root!.render(renderThread({ failed: false, compaction: { state: 'running', trigger: 'manual' } }));
     });
+    const bubble = host!.querySelector('[data-testid="next-item-user"][data-command="compaction"]');
+    expect(bubble).not.toBeNull();
+    expect(bubble?.querySelector('[data-testid="next-user-chip"]')?.textContent).toBe('压缩');
     const pending = host!.querySelector('[data-testid="next-thread-compacting"]');
-    expect(pending?.textContent).toBe('压缩中…');
-    // Same divider shell as the final compaction line, with a spinner instead of the icon.
-    expect(pending?.classList.contains('handoff-divider-container')).toBe(true);
-    expect(pending?.querySelector('.handoff-divider-line')).not.toBeNull();
+    expect(pending?.textContent).toBe('正在压缩上下文…');
+    expect(pending?.classList.contains('thread-pending')).toBe(true);
     expect(pending?.querySelector('.run-spin')).not.toBeNull();
     expect(host!.querySelector('[data-testid="next-compaction-error"]')).toBeNull();
+  });
+
+  it('shows user bubble and pending line while handoff runs', async () => {
+    await act(async () => {
+      root!.render(
+        renderThread({
+          failed: false,
+          handoff: { state: 'running', instructions: '重点看迁移' },
+        }),
+      );
+    });
+    const bubble = host!.querySelector('[data-testid="next-item-user"][data-command="handoff"]');
+    expect(bubble).not.toBeNull();
+    expect(bubble?.querySelector('[data-testid="next-user-chip"]')?.textContent).toBe('交接');
+    expect(bubble?.textContent).toContain('重点看迁移');
+
+    const pending = host!.querySelector('[data-testid="next-thread-pending"]');
+    expect(pending?.textContent).toBe('正在整理交接…');
+    expect(pending?.classList.contains('thread-pending')).toBe(true);
+    expect(pending?.querySelector('.run-spin')).not.toBeNull();
   });
 
   it('does not fold anything before a compaction divider', async () => {

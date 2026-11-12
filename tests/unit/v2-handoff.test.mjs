@@ -151,6 +151,7 @@ test('POST /handoff writes a divider, keeps the focus, and survives a restart', 
     assert.ok(handing, 'handoff run was not visible');
     assert.equal(handing.conversation.run.status, 'running');
     assert.match(handing.conversation.run.pendingText, /交接/);
+    assert.deepEqual(handing.conversation.run.handoff, { state: 'running', instructions: FOCUS });
 
     const replay = await v2(srv.base, 'POST', handoffPath, token, {
       requestId: 'hand-1',
@@ -178,6 +179,8 @@ test('POST /handoff writes a divider, keeps the focus, and survives a restart', 
     const note = handoffNotes(done)[0];
     assert.equal(note.detail, NOTE);
     assert.equal(note.text, '新上下文');
+    assert.deepEqual(note.request, { by: 'user', instructions: FOCUS });
+    assert.equal(validateResponse(`/api/v2/conversations/${cid}`, 'GET', 200, done).ok, true);
     assert.equal(done.tools.some((tool) => tool.kind === 'handoff'), true);
     assert.equal(done.items.some((item) => (
       item.kind === 'user' && String(item.text || '').includes('开启新上下文')
@@ -205,6 +208,7 @@ test('POST /handoff writes a divider, keeps the focus, and survives a restart', 
     assert.equal(reopenedNotes.length, 1);
     assert.equal(reopenedNotes[0].id, noteId);
     assert.equal(reopenedNotes[0].detail, NOTE);
+    assert.deepEqual(reopenedNotes[0].request, { by: 'user', instructions: FOCUS });
     assert.equal(reopened.body.conversation.context.used, 1800);
     const replayAfterRestart = await v2(srv.base, 'POST', handoffPath, againToken, { requestId: 'hand-1' });
     assert.equal(replayAfterRestart.status, 202, replayAfterRestart.text);

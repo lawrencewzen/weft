@@ -30,6 +30,16 @@ export function createDb(): MockDb {
           if (!chatIds.has(id)) db.repos.delete(id);
         }
       }
+      if (typeof sessionStorage !== 'undefined') {
+        for (const [id, conv] of db.conversations) {
+          const raw = sessionStorage.getItem(`weft_proto_items_${id}`);
+          const rawIds = sessionStorage.getItem(`weft_proto_item_ids_${id}`);
+          if (raw && rawIds) {
+            conv.items = JSON.parse(raw);
+            conv.view.itemIds = JSON.parse(rawIds);
+          }
+        }
+      }
     } catch {
       // ignore
     }
@@ -47,6 +57,14 @@ export function getConv(db: MockDb, cid: string): MockConv | undefined {
 
 export function touch(conv: MockConv): void {
   conv.view.updatedAt = Date.now();
+  if (typeof sessionStorage !== 'undefined') {
+    try {
+      sessionStorage.setItem(`weft_proto_items_${conv.view.id}`, JSON.stringify(conv.items));
+      sessionStorage.setItem(`weft_proto_item_ids_${conv.view.id}`, JSON.stringify(conv.view.itemIds));
+    } catch {
+      // ignore
+    }
+  }
 }
 
 export function refreshCounts(db: MockDb): void {

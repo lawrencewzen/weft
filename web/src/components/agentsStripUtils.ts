@@ -25,6 +25,16 @@ export function isAllEndedAgents(agents: readonly Subagent[]): boolean {
   return agents.length > 0 && agents.every((a) => isSubagentEnded(a.status));
 }
 
+export function agentsStripStatusIcon(agents: readonly Subagent[]): StatusIconType {
+  if (hasUnendedAgents(agents)) {
+    return 'running';
+  }
+  if (agents.some((a) => statusIconFor(a.status, 'subagent') === 'failed')) {
+    return statusIconFor('failed', 'subagent') ?? 'failed';
+  }
+  return statusIconFor('done', 'subagent') ?? 'done';
+}
+
 export function countByIconStatus(agents: readonly Subagent[]): Array<{ status: StatusIconType; count: number }> {
   const counts = new Map<StatusIconType, number>();
   for (const agent of agents) {
@@ -54,23 +64,32 @@ export function stripMarkdownInline(text: string): string {
     .trim();
 }
 
+export function stripStatusHeader(text: string): string {
+  if (!text) return '';
+  const lines = text.split(/\r?\n/);
+  let start = 0;
+  while (start < lines.length && lines[start].trim() === '') start += 1;
+  if (start >= lines.length) return '';
+  if (/^STATUS:\s*(done|incomplete)\s*$/i.test(lines[start].trim())) {
+    let from = start + 1;
+    while (from < lines.length && lines[from].trim() === '') from += 1;
+    return lines.slice(from).join('\n').trim();
+  }
+  return text.trim();
+}
+
 export function formatAgentsHeadline(agents: readonly Subagent[], lang: Lang): string {
   if (!agents.length) return '';
   const r = agents.filter((a) => a.status === 'running').length;
   const k = agents.filter((a) => a.status === 'stuck').length;
   const q = agents.filter((a) => a.status === 'waiting' || (a.status as string) === 'queued').length;
-
-  if (r > 0 || k > 0 || q > 0) {
-    const parts: string[] = [];
-    if (r > 0) parts.push(t(lang, 'agents_strip_running', { count: r }));
-    if (k > 0) parts.push(t(lang, 'agents_strip_stuck', { count: k }));
-    if (q > 0) parts.push(t(lang, 'agents_strip_queued', { count: q }));
-    return parts.join(' · ');
-  }
-
   const d = agents.filter((a) => a.status === 'done' || a.status === 'stopped').length;
-  const f = agents.filter((a) => a.status === 'failed').length;
+  const f = agents.filter((a) => a.status === 'failed' || (a.status as string) === 'error').length;
+
   const parts: string[] = [];
+  if (r > 0) parts.push(t(lang, 'agents_strip_running', { count: r }));
+  if (k > 0) parts.push(t(lang, 'agents_strip_stuck', { count: k }));
+  if (q > 0) parts.push(t(lang, 'agents_strip_queued', { count: q }));
   if (d > 0) parts.push(t(lang, 'agents_strip_done', { count: d }));
   if (f > 0) parts.push(t(lang, 'agents_strip_failed', { count: f }));
   return parts.join(' · ');
@@ -86,10 +105,13 @@ export function formatAgentDoing(
   const { lang, resText } = options;
   if (agent.status === 'done') {
     if (resText) {
-      const firstLine = resText.trim().split('\n')[0].trim();
-      if (firstLine) return stripMarkdownInline(firstLine);
+      const cleaned = stripStatusHeader(resText);
+      if (cleaned) {
+        const firstLine = cleaned.split('\n')[0].trim();
+        if (firstLine) return stripMarkdownInline(firstLine);
+      }
     }
-    return t(lang, 'status_done');
+    return t(lang, 'agents_strip_done_summary');
   }
   if (agent.status === 'waiting' || (agent.status as string) === 'queued') {
     return t(lang, 'status_queued');

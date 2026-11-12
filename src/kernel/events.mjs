@@ -7,6 +7,7 @@ import { redactAuthText } from '../core/redact.mjs';
 import { extractPasteTexts, parseUserMessageParts } from '../core/user-message-parts.mjs';
 import { overlayContextWindow, presentContext } from '../core/usage.mjs';
 import { askByToolCall } from './ask.mjs';
+import { HANDOFF_REQUEST_KIND } from './handoff.mjs';
 import { isAutoContinueText } from './continuation.mjs';
 import { parentNoteText, USER_TO_SUBAGENT_KIND } from './subagent-control.mjs';
 import { isSubagentReportText } from './subagent-report.mjs';
@@ -640,7 +641,16 @@ export function messagesFromEntries(entries) {
   }
   const answered = new Set();
   const messages = [];
+  // A user-requested handoff leaves a weft.handoff-request entry (with the focus
+  // text) before the model's reset. Pending until that reset or a later user turn.
+  let handoffRequest = null;
   for (const entry of entries || []) {
+    if (entry?.kind === HANDOFF_REQUEST_KIND) {
+      const focus = typeof entry.data?.instructions === 'string' ? entry.data.instructions.trim() : '';
+      handoffRequest = { by: 'user', ...(focus ? { instructions: focus } : {}) };
+      continue;
+    }
+    if (entry?.kind === 'pi.user') handoffRequest = null;
     // The model sees this entry as a user summary. The thread gets a system note,
     // not a user or assistant bubble. The summary body (inside <summary>…</summary>,
     // without the model-facing preamble) becomes the note text, shown on expand.
@@ -654,6 +664,9 @@ export function messagesFromEntries(entries) {
         kind: 'compaction',
       };
       if (detail) note.text = detail;
+      // Manual compaction is the POST /compact path (Conversation.compact); the
+      // focus text lives on the task input and is joined in by the kernel.
+      if (entry.data?.reason === 'manual') note.request = { by: 'user' };
       messages.push(note);
       continue;
     }
@@ -667,6 +680,8 @@ export function messagesFromEntries(entries) {
         kind: 'handoff',
       };
       if (detail) note.text = detail;
+      if (handoffRequest) note.request = handoffRequest;
+      handoffRequest = null;
       messages.push(note);
       continue;
     }

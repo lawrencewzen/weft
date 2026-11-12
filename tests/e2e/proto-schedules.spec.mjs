@@ -29,6 +29,11 @@ test('scheduled tasks: sidebar navigation, badge count, and empty footer note', 
   await expect(pane).toBeVisible();
   await expect(page.getByTestId('next-schedules-title')).toHaveText('定时任务');
 
+  const header = page.getByTestId('next-schedules-header');
+  await expect(header).toBeVisible();
+  const borderBottomWidth = await header.evaluate((el) => window.getComputedStyle(el).borderBottomWidth);
+  expect(borderBottomWidth).toBe('0px');
+
   const newBtn = page.getByTestId('next-schedules-new');
   await expect(newBtn).toBeVisible();
 
@@ -254,18 +259,18 @@ test('composer scheduled send creates once task, displays strip, cancel confirms
   await page.locator('[data-testid="next-conv-row"][data-id="c-tests"]').click();
   await expect(page.getByTestId('next-conversation-schedule-strip')).toHaveCount(0);
 
-  // 2. Schedule button in composer is disabled when empty
-  const schedBtn = page.getByTestId('next-composer-schedule');
-  await expect(schedBtn).toBeVisible();
-  await expect(schedBtn).toBeDisabled();
+  // 2. Schedule button in composer is removed
+  await expect(page.getByTestId('next-composer-schedule')).toHaveCount(0);
 
-  // 3. Type message into composer
+  // 3. Type message via /schedule command into composer
   const input = page.locator('[data-testid="next-composer"] textarea');
+  await input.fill('/schedule');
+  await input.press('Enter');
+  await expect(page.getByTestId('next-composer-chip')).toHaveText('定时');
   await input.fill('请在明天九点运行单测并汇报结果');
-  await expect(schedBtn).toBeEnabled();
+  await input.press('Enter');
 
-  // 4. Click schedule button to open quick menu
-  await schedBtn.click();
+  // 4. Schedule quick menu popover opens
   const popover = page.getByTestId('next-composer-schedule-popover');
   await expect(popover).toBeVisible();
   await expect(page.getByTestId('next-schedule-opt-30m')).toBeVisible();
@@ -368,8 +373,10 @@ test('composer clock custom: DatePicker + TimePicker create once task and show s
   await expect(page.getByTestId('next-conversation-schedule-strip')).toHaveCount(0);
 
   const input = page.locator('[data-testid="next-composer"] textarea');
+  await input.fill('/schedule');
+  await input.press('Enter');
   await input.fill('按计划在明天下午两点半执行回归测试');
-  await page.getByTestId('next-composer-schedule').click();
+  await input.press('Enter');
   await page.getByTestId('next-schedule-opt-custom').click();
   await expect(page.getByTestId('next-schedule-custom-view')).toBeVisible();
 
@@ -458,8 +465,11 @@ test('schedule dialog: time and date popups anchor below their trigger, 09 cente
 test('composer custom pickers: popups anchor to their triggers', async ({ page }) => {
   const state = await openProto(page);
   await page.locator('[data-testid="next-conv-row"][data-id="c-tests"]').click();
-  await page.locator('[data-testid="next-composer"] textarea').fill('定位测试');
-  await page.getByTestId('next-composer-schedule').click();
+  const input = page.locator('[data-testid="next-composer"] textarea');
+  await input.fill('/schedule');
+  await input.press('Enter');
+  await input.fill('定位测试');
+  await input.press('Enter');
   await page.getByTestId('next-schedule-opt-custom').click();
 
   const timeTrigger = page.getByTestId('next-schedule-custom-time').locator('xpath=ancestor::div[contains(@class,"picker-trigger")][1]');
@@ -554,3 +564,143 @@ for (const theme of ['white-light', 'white-dark', 'claude-dark']) {
     expectClean(state);
   });
 }
+
+for (const theme of ['light', 'dark']) {
+  test(`schedules header has no bottom border and content does not stick to top (${theme}, populated and empty)`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme: theme });
+    const state = await openProto(page);
+    await page.getByTestId('next-schedules').click();
+
+    const header = page.getByTestId('next-schedules-header');
+    await expect(header).toBeVisible();
+    const borderBottomWidth = await header.evaluate((el) => window.getComputedStyle(el).borderBottomWidth);
+    expect(borderBottomWidth).toBe('0px');
+
+    const headerBox = await header.boundingBox();
+    expect(headerBox).not.toBeNull();
+
+    // 1. Populated state: first card is visible and spaced below header
+    const firstRow = page.getByTestId('next-schedule-row').first();
+    await expect(firstRow).toBeVisible();
+    const rowBox = await firstRow.boundingBox();
+    expect(rowBox).not.toBeNull();
+    expect(rowBox.y - (headerBox.y + headerBox.height)).toBeGreaterThanOrEqual(16);
+
+    // 2. Empty state: delete all schedules, empty placeholder is visible, header still has no border, and content does not stick to top
+    await page.evaluate(async () => {
+      const res = await fetch('/api/v2/schedules');
+      const data = await res.json();
+      for (const s of data.schedules) {
+        await fetch(`/api/v2/schedules/${s.id}`, { method: 'DELETE' });
+      }
+    });
+
+    const empty = page.getByTestId('next-schedules-empty');
+    await expect(empty).toBeVisible();
+    const emptyBorder = await header.evaluate((el) => window.getComputedStyle(el).borderBottomWidth);
+    expect(emptyBorder).toBe('0px');
+    const emptyBox = await empty.boundingBox();
+    expect(emptyBox).not.toBeNull();
+    expect(emptyBox.y).toBeGreaterThan(headerBox.y + headerBox.height + 20);
+
+    expectClean(state);
+  });
+}
+
+test('schedule dialog: once task default time is today later, changing time to past turns hint red without moving buttons or showing extra block', async ({ page }) => {
+  const state = await openProto(page);
+  await page.getByTestId('next-schedules').click();
+  await page.getByTestId('next-schedules-new').click();
+  const dialog = page.getByTestId('next-schedule-dialog');
+  await expect(dialog).toBeVisible();
+
+  // Switch to once rule
+  await page.getByTestId('next-schedule-rule-once').click();
+
+  const dateInput = page.getByTestId('next-schedule-once-date');
+  const timeInput = page.getByTestId('next-schedule-once-time');
+  const dateTrigger = dateInput.locator('xpath=ancestor::div[contains(@class,"picker-trigger")][1]');
+  const timeTrigger = timeInput.locator('xpath=ancestor::div[contains(@class,"picker-trigger")][1]');
+
+  // 1. Verify default date is today (or tomorrow if crossed midnight) and time is rounded to 5 minutes
+  const now = new Date();
+  const pad = (n) => String(n).padStart(2, '0');
+  const defaultDateVal = await dateInput.inputValue();
+  expect(defaultDateVal.startsWith(`${now.getFullYear()}-`)).toBe(true);
+
+  const defaultTimeVal = await timeInput.inputValue();
+  const [, mm] = defaultTimeVal.split(':').map(Number);
+  expect(mm % 5).toBe(0);
+
+  // Default hint shows "下次运行：" in normal color (not is-error)
+  const hintEl = page.getByTestId('next-schedule-next-run-hint');
+  await expect(hintEl).toBeVisible();
+  await expect(hintEl).toContainText('下次运行：');
+  await expect(hintEl).not.toHaveClass(/is-error/);
+  await expect(dateTrigger).not.toHaveClass(/is-error/);
+  await expect(timeTrigger).not.toHaveClass(/is-error/);
+
+  // Measure initial button bounding box
+  const submitBtn = page.getByTestId('next-schedule-submit');
+  const initialBtnBox = await submitBtn.boundingBox();
+  expect(initialBtnBox).not.toBeNull();
+
+  // 2. Change time to a past time (00:00 earlier today)
+  await timeInput.click();
+  await timeInput.fill('00:00');
+  await timeInput.press('Enter');
+
+  // Hint turns into red small text "这个时间已经过去了"
+  const errHint = page.getByTestId('next-schedule-rule-err');
+  await expect(errHint).toBeVisible();
+  await expect(errHint).toHaveText('这个时间已经过去了');
+  await expect(errHint).toHaveClass(/is-error/);
+
+  // Date and Time input triggers have red border (is-error)
+  await expect(dateTrigger).toHaveClass(/is-error/);
+  await expect(timeTrigger).toHaveClass(/is-error/);
+
+  // Submit button is disabled
+  await expect(submitBtn).toBeDisabled();
+
+  // Button position is unchanged (fixed height hint line, no layout shift)
+  const pastBtnBox = await submitBtn.boundingBox();
+  expect(pastBtnBox).not.toBeNull();
+  expect(Math.abs(pastBtnBox.y - initialBtnBox.y)).toBeLessThanOrEqual(1);
+
+  // No extra error block inserted in the modal
+  await expect(page.locator('.ns-inline-err')).toHaveCount(0);
+  await expect(page.getByTestId('next-schedule-server-err')).toHaveCount(0);
+
+  // 3. Try to submit: should focus the time input and not insert an extra block
+  await page.getByTestId('next-schedule-name-input').fill('一次性自检');
+  await page.getByTestId('next-schedule-message-input').fill('运行检查');
+  await timeInput.focus();
+  await page.keyboard.press('Enter');
+  await expect(dialog).toBeVisible();
+  await expect(page.locator('.ns-inline-err')).toHaveCount(0);
+  await expect(timeInput).toBeFocused();
+
+  // 4. Change date to tomorrow -> valid again
+  const tomorrow = new Date(Date.now() + 86400000);
+  const tomorrowStr = `${tomorrow.getFullYear()}-${pad(tomorrow.getMonth() + 1)}-${pad(tomorrow.getDate())}`;
+  await dateInput.fill(tomorrowStr);
+  await dateInput.blur();
+
+  // Hint turns back to "下次运行：", inputs no longer have is-error
+  await expect(page.getByTestId('next-schedule-next-run-hint')).toBeVisible();
+  await expect(page.getByTestId('next-schedule-next-run-hint')).toContainText('下次运行：');
+  await expect(dateTrigger).not.toHaveClass(/is-error/);
+  await expect(timeTrigger).not.toHaveClass(/is-error/);
+  await expect(submitBtn).toBeEnabled();
+
+  // Button position remains stable
+  const restoredBtnBox = await submitBtn.boundingBox();
+  expect(restoredBtnBox).not.toBeNull();
+  expect(Math.abs(restoredBtnBox.y - initialBtnBox.y)).toBeLessThanOrEqual(1);
+
+  await page.getByTestId('next-schedule-cancel').click();
+  await expect(dialog).toHaveCount(0);
+
+  expectClean(state);
+});

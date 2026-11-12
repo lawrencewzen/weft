@@ -5,12 +5,13 @@ import type { MockNote } from './types';
  * next to the title) and the full summary (`detail`, shown on expand) in the client's
  * language; the client only adds the fixed title.
  */
-export function compactionNote(id: string, before: number): MockNote {
+export function compactionNote(id: string, before: number, instructions?: string): MockNote {
   const textZh = `之前 ${before} 条已摘要`;
   const textEn = `Previous ${before} ${before === 1 ? 'item' : 'items'} summarized`;
   const detailZh = [
     '### 对话摘要',
     '',
+    ...(instructions ? [`> **压缩重点**：${instructions}`, ''] : []),
     '- **目标**：把 store 里的订阅逻辑拆成独立模块，并补齐单测。',
     '- **已完成**：订阅逻辑已拆到 `subscribe.ts`，store 只保留数据读写。',
     '- **待办**：补充订阅取消的边界用例；检查调用方的导入路径。',
@@ -19,6 +20,7 @@ export function compactionNote(id: string, before: number): MockNote {
   const detailEn = [
     '### Conversation summary',
     '',
+    ...(instructions ? [`> **Focus**: ${instructions}`, ''] : []),
     '- **Goal**: Split the subscription logic out of the store into its own module and cover it with tests.',
     '- **Done**: Subscription logic moved to `subscribe.ts`; the store keeps only data reads and writes.',
     '- **To do**: Add edge cases for unsubscribe; check import paths in callers.',
@@ -32,6 +34,7 @@ export function compactionNote(id: string, before: number): MockNote {
     i18n: { zh: textZh, en: textEn },
     detail: detailZh,
     detailI18n: { zh: detailZh, en: detailEn },
+    ...(instructions ? { request: { by: 'user', instructions } } : {}),
   };
 }
 

@@ -42,6 +42,8 @@ export type PresentedConversation = {
   sends?: unknown;
   /** True while the current submission is asking the model to hand off. */
   handoffRunning?: boolean;
+  handoffInstructions?: string;
+  compactionInstructions?: string;
   /** Stored fork source. Null when this conversation was not forked. */
   forkedFrom?: unknown;
 };
@@ -145,6 +147,8 @@ export async function conversationSnapshot({
     live: presented?.live,
     retryMaxAttempts: presented?.retryMaxAttempts,
     handoffRunning: presented?.handoffRunning === true,
+    handoffInstructions: presented?.handoffInstructions,
+    compactionInstructions: presented?.compactionInstructions,
   });
   const thread = await buildThread(messages, {
     lang,
