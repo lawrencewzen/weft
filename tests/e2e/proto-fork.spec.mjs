@@ -26,11 +26,11 @@ test('fork conversation from assistant message and user message (T123-1)', async
   // URL navigates to new conversation
   await expect(page).toHaveURL(/#\/c\/c-\d+$/);
 
-  // Title in status bar is "<原标题>（分叉）"
-  await expect(page.getByTestId('next-status')).toContainText('重构会话列表的加载逻辑（分叉）');
+  // Title in status bar is "<原标题> (fork)"
+  await expect(page.getByTestId('next-status')).toContainText('重构会话列表的加载逻辑 (fork)');
 
   // Sidebar shows the new forked conversation
-  const sidebarConv = page.locator('[data-testid="next-conv-row"]').filter({ hasText: '重构会话列表的加载逻辑（分叉）' });
+  const sidebarConv = page.locator('[data-testid="next-conv-row"]').filter({ hasText: '重构会话列表的加载逻辑 (fork)' });
   await expect(sidebarConv.first()).toBeVisible();
 
   // Top of thread shows forkedFrom row: "分叉自 重构会话列表的加载逻辑 与原对话共用工作区文件"
@@ -66,8 +66,8 @@ test('fork conversation from assistant message and user message (T123-1)', async
   // URL navigates to another new conversation
   await expect(page).toHaveURL(/#\/c\/c-\d+$/);
 
-  // Title in status bar is "<原标题>（分叉）"
-  await expect(page.getByTestId('next-status')).toContainText('重构会话列表的加载逻辑（分叉）');
+  // Title in status bar is "<原标题> (fork)"
+  await expect(page.getByTestId('next-status')).toContainText('重构会话列表的加载逻辑 (fork)');
 
   // The input box is filled with the user message text!
   await expect(composerInput).toHaveValue(/看一下 `web\/src\/data\/store\.ts` 里 items 的加载顺序/);

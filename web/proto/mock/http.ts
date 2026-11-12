@@ -409,7 +409,7 @@ function forkConversation(
 
   const newId = nextId(db, 'c');
   const now = Date.now();
-  const title = `${conv.view.title}（分叉）`;
+  const title = `${conv.view.title} (fork)`;
 
   const newConv: MockConv = {
     view: {
