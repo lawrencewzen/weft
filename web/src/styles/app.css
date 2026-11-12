@@ -3518,6 +3518,9 @@ button.file-search-result-row:hover {
   app-region: no-drag;
 }
 
+/* Align top titles start distance to match sidebar header (.sb-hd has 50px left padding). */
+:root[data-desktop-shell="1"] :is(.next-status, .schedules-header) { padding-left: 50px; }
+
 /* Keep clear of the window buttons. */
 :root[data-desktop-shell="1"] .side-toggle-right { right: calc(var(--wc-edge) + var(--wc-total)); }
 :root[data-desktop-shell="1"] .right-tabs-bar { padding-right: calc(50px + var(--wc-total)); }

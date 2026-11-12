@@ -14,9 +14,15 @@ async function box(locator) {
   return b;
 }
 
+const centerY = (b) => b.y + b.height / 2;
+
 async function setRight(page, open) {
-  const isOpen = async () => (await page.getByTestId('next-right-collapse').count()) > 0;
-  if ((await isOpen()) !== open) await page.locator('.side-toggle-right').click();
+  const toggle = page.getByTestId(open ? 'next-right-collapse' : 'next-right-toggle');
+  if (await toggle.count() === 0) {
+    await page.locator('.side-toggle-right').click();
+  }
+  const isOpen = (await page.getByTestId('next-right-collapse').count()) > 0;
+  if (isOpen !== open) await page.locator('.side-toggle-right').click();
   await page.waitForTimeout(400);
 }
 
@@ -142,7 +148,42 @@ test('schedules-header has drag region, text is not selectable, and button is no
   expectClean(state);
 });
 
-test('without ?shell=1, schedules-header padding-right matches pre-change behavior and has no window controls', async ({ page }) => {
+test('title alignment under ?shell=1: .top-title and .schedules-title left offset matches .sb-hd first element, vertical centers align with .wc-btns within 1px', async ({ page }) => {
+  const state = await openProto(page, '?shell=1');
+  await page.locator('.col-center').waitFor();
+
+  const sbBox = await box(page.locator('.col-left'));
+  const sbFirstBox = await box(page.locator('.sb-hd').locator(':scope > *').first());
+  const centerBox = await box(page.locator('.col-center'));
+  const topTitleBox = await box(page.locator('.top-title'));
+  const wcBox = await box(page.getByTestId('window-controls'));
+
+  // 1. Conversation page title alignment
+  const sbLeft = sbFirstBox.x - sbBox.x;
+  const titleLeft = topTitleBox.x - centerBox.x;
+  expect(Math.abs(titleLeft - sbLeft), 'conversation title left vs sb-hd first element left').toBeLessThanOrEqual(1);
+
+  expect(Math.abs(centerY(topTitleBox) - centerY(sbFirstBox)), 'top-title centerY vs sb-hd title centerY').toBeLessThanOrEqual(1);
+  expect(Math.abs(centerY(topTitleBox) - centerY(wcBox)), 'top-title centerY vs wc-btns centerY').toBeLessThanOrEqual(1);
+  expect(Math.abs(centerY(sbFirstBox) - centerY(wcBox)), 'sb-hd title centerY vs wc-btns centerY').toBeLessThanOrEqual(1);
+
+  // 2. Schedules page title alignment
+  await page.getByTestId('next-schedules').click();
+  await page.locator('.schedules-title').waitFor();
+  const schedCenterBox = await box(page.locator('.col-center'));
+  const schedTitleBox = await box(page.locator('.schedules-title'));
+
+  const schedLeft = schedTitleBox.x - schedCenterBox.x;
+  expect(Math.abs(schedLeft - sbLeft), 'schedules title left vs sb-hd first element left').toBeLessThanOrEqual(1);
+  expect(Math.abs(schedLeft - titleLeft), 'schedules title left vs conversation title left (no jump on switch)').toBeLessThanOrEqual(1);
+
+  expect(Math.abs(centerY(schedTitleBox) - centerY(sbFirstBox)), 'schedules title centerY vs sb-hd title centerY').toBeLessThanOrEqual(1);
+  expect(Math.abs(centerY(schedTitleBox) - centerY(wcBox)), 'schedules title centerY vs wc-btns centerY').toBeLessThanOrEqual(1);
+
+  expectClean(state);
+});
+
+test('without ?shell=1, schedules-header padding matches pre-change behavior and has no window controls', async ({ page }) => {
   const state = await openProto(page);
   await page.getByTestId('next-schedules').click();
   await expect(page).toHaveURL(/#\/schedules$/);
@@ -156,15 +197,23 @@ test('without ?shell=1, schedules-header padding-right matches pre-change behavi
     const getUserSelect = (s) => (s.getPropertyValue('user-select') || s.getPropertyValue('-webkit-user-select')).trim();
 
     return {
+      paddingLeft: style.paddingLeft,
       paddingRight: style.paddingRight,
       region: getRegion(style),
       userSelect: getUserSelect(style),
     };
   });
 
+  expect(headerInfo.paddingLeft).toBe('28px');
   expect(headerInfo.paddingRight).toBe('52px');
   expect(headerInfo.region).not.toBe('drag');
   expect(headerInfo.userSelect).not.toBe('none');
+
+  // Verify conversation status padding-left without ?shell=1 is also untouched (12px)
+  await page.getByTestId('next-sidebar').locator('.sb-top-row').first().click();
+  await page.locator('.next-status').waitFor();
+  const statusPaddingLeft = await page.evaluate(() => getComputedStyle(document.querySelector('.next-status')).paddingLeft);
+  expect(statusPaddingLeft).toBe('12px');
 
   expectClean(state);
 });
