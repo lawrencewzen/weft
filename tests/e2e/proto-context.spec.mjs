@@ -9,7 +9,7 @@ const protoFile = path.join(root, 'design', 'prototype', 'index.html');
 test.use({ locale: 'zh-CN', viewport: { width: 1440, height: 900 } });
 test.describe.configure({ timeout: 120_000 });
 
-test('prototype context window UI: context in model menu, presets, custom input, warn chip without banner, and clickable chip', async ({ page }) => {
+test('prototype context window UI: context in model menu, presets, custom input, warn chip without banner, and context chip', async ({ page }) => {
   expect(
     fs.existsSync(protoFile),
     'prototype build missing: run `npm run build:proto` first',
@@ -30,11 +30,13 @@ test('prototype context window UI: context in model menu, presets, custom input,
   await page.goto(pathToFileURL(protoFile).href);
   await expect(page.getByTestId('next-app')).toBeVisible();
 
-  // 1. Context chip shows ring only when < 70% (click behavior is covered in proto-compaction)
+  // 1. Context chip shows ring only when < 70% and tooltip displays usage (clicking is a no-op)
   const contextChip = page.getByTestId('next-context-chip');
   await expect(contextChip).toBeVisible();
   await expect(contextChip.locator('.context-chip-pct')).toHaveCount(0);
-  await expect(contextChip).toHaveAttribute('title', /已用 24%/);
+  await expect(contextChip).toHaveAttribute('title', '48.2k / 200k');
+  await contextChip.click();
+  await expect(page.getByTestId('next-context-pop')).toHaveCount(0);
 
   // 2. Open model menu, hover context row reveals submenu
   const modelChip = page.getByTestId('next-model-chip');
@@ -67,8 +69,7 @@ test('prototype context window UI: context in model menu, presets, custom input,
   await page.locator('[data-testid=next-context-option][data-tokens="64000"]').click();
   await expect(menu).toBeHidden();
   await expect(contextChip).toHaveText('75%');
-  await expect(contextChip).toHaveAttribute('title', /48\.2k \/ 64k/);
-  await expect(contextChip).toHaveAttribute('title', /已用 75%/);
+  await expect(contextChip).toHaveAttribute('title', '48.2k / 64k');
 
   // Re-open model menu, context row now shows 64k · 自定义
   await modelChip.click();
@@ -102,7 +103,7 @@ test('prototype context window UI: context in model menu, presets, custom input,
   await expect(menu).toBeHidden();
 
   await expect(contextChip.locator('.context-chip-pct')).toHaveCount(0);
-  await expect(contextChip).toHaveAttribute('title', /已用 5%/);
+  await expect(contextChip).toHaveAttribute('title', '48.2k / 1M');
   await expect(contextChip).not.toHaveClass(/is-warn/);
   await expect(page.getByTestId('next-context-banner')).toHaveCount(0);
 

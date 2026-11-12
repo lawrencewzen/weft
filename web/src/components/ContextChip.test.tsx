@@ -2,7 +2,7 @@
 
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { ContextChip } from './ContextChip';
 import type { ContextUsage } from '../data/composerModel';
 
@@ -38,11 +38,11 @@ describe('ContextChip component', () => {
     await cleanup();
   });
 
-  it('renders only the ring below 70% with percent in title tooltip, and shows number at 70% and above', async () => {
+  it('renders only the ring below 70% with usage in title tooltip, and shows number at 70% and above', async () => {
     const lowContext: ContextUsage = {
-      used: 12_000,
-      window: 100_000,
-      percent: 12,
+      used: 6_800,
+      window: 1_000_000,
+      percent: 1,
       level: 'ok',
     };
     await render(<ContextChip lang="zh" context={lowContext} />);
@@ -50,7 +50,7 @@ describe('ContextChip component', () => {
     expect(chipLow).not.toBeNull();
     expect(chipLow.querySelector('.context-chip-pct')).toBeNull();
     expect(chipLow.classList.contains('has-num')).toBe(false);
-    expect(chipLow.getAttribute('title')).toContain('已用 12%');
+    expect(chipLow.getAttribute('title')).toBe('6.8k / 1M');
 
     await cleanup();
 
@@ -66,100 +66,20 @@ describe('ContextChip component', () => {
     expect(chipThresh.querySelector('.context-chip-pct')).not.toBeNull();
     expect(chipThresh.textContent).toContain('70%');
     expect(chipThresh.classList.contains('has-num')).toBe(true);
+    expect(chipThresh.getAttribute('title')).toBe('70k / 100k');
   });
 
-  async function openPanel(
-    compact?: Parameters<typeof ContextChip>[0]['compact'],
-    handoff?: Parameters<typeof ContextChip>[0]['handoff'],
-  ) {
+  it('does not open any popup menu on click; click is a no-op', async () => {
     const context: ContextUsage = { used: 12_000, window: 500_000, percent: 2, level: 'ok' };
-    await render(<ContextChip lang="zh" context={context} compact={compact} handoff={handoff} />);
+    await render(<ContextChip lang="zh" context={context} />);
     const chip = host?.querySelector('[data-testid="next-context-chip"]') as HTMLButtonElement;
-    await act(async () => { chip.click(); });
-    return chip;
-  }
-
-  it('opens a panel with used / window and compact, focusing the action', async () => {
-    const onCompact = vi.fn();
-    const chip = await openPanel({ state: 'idle', onCompact });
-    const pop = host?.querySelector('[data-testid="next-context-pop"]') as HTMLElement;
-    expect(pop.getAttribute('role')).toBe('dialog');
-    expect(chip.getAttribute('aria-expanded')).toBe('true');
-    expect(chip.getAttribute('aria-controls')).toBe(pop.id);
-    expect(host?.querySelector('[data-testid="next-context-pop-usage"]')?.textContent).toBe('12k / 500k');
-    const act1 = host?.querySelector('[data-testid="next-menu-compact"]') as HTMLButtonElement;
-    expect(act1.textContent).toBe('立即压缩');
-    expect(document.activeElement).toBe(act1);
-    await act(async () => { act1.click(); });
-    expect(onCompact).toHaveBeenCalledTimes(1);
-  });
-
-  it('renders handoff action and calls onHandoff on click', async () => {
-    const onHandoff = vi.fn();
-    await openPanel(undefined, { state: 'idle', onHandoff });
-    const handoffBtn = host?.querySelector('[data-testid="next-menu-handoff"]') as HTMLButtonElement;
-    expect(handoffBtn).not.toBeNull();
-    expect(handoffBtn.textContent).toBe('交接到新上下文');
-    expect(handoffBtn.disabled).toBe(false);
-    await act(async () => { handoffBtn.click(); });
-    expect(onHandoff).toHaveBeenCalledTimes(1);
-  });
-
-  it('disables handoff while running and shows spinner, and disables when unavailable', async () => {
-    await openPanel(undefined, { state: 'running', onHandoff: vi.fn() });
-    const btn = host?.querySelector('[data-testid="next-menu-handoff"]') as HTMLButtonElement;
-    expect(btn.disabled).toBe(true);
-    expect(btn.getAttribute('aria-busy')).toBe('true');
-    expect(host?.querySelector('[data-testid="next-handoff-spin"]')).not.toBeNull();
-
-    await cleanup();
-    await openPanel(undefined, undefined);
-    const none = host?.querySelector('[data-testid="next-menu-handoff"]') as HTMLButtonElement;
-    expect(none.disabled).toBe(true);
-    expect(none.getAttribute('data-state')).toBe('unavailable');
-  });
-
-  it('shows error on handoff action when provided', async () => {
-    await openPanel(undefined, { state: 'idle', error: '交接失败', onHandoff: vi.fn() });
-    expect(host?.querySelector('[data-testid="next-menu-handoff"]')?.textContent).toContain('交接失败');
-  });
-
-  it('disables compact while running and when unavailable', async () => {
-    await openPanel({ state: 'running', onCompact: vi.fn() });
-    const btn = host?.querySelector('[data-testid="next-menu-compact"]') as HTMLButtonElement;
-    expect(btn.disabled).toBe(true);
-    expect(btn.getAttribute('aria-busy')).toBe('true');
-    expect(host?.querySelector('[data-testid="next-compact-spin"]')).not.toBeNull();
-    await cleanup();
-    await openPanel(undefined);
-    const none = host?.querySelector('[data-testid="next-menu-compact"]') as HTMLButtonElement;
-    expect(none.disabled).toBe(true);
-  });
-
-  it('shows the failure message on the action', async () => {
-    await openPanel({ state: 'failed', error: '压缩失败', onCompact: vi.fn() });
-    expect(host?.querySelector('[data-testid="next-menu-compact"]')?.textContent).toContain('压缩失败');
-  });
-
-  it('closes on Escape (focus back to the chip) and on outside mousedown', async () => {
-    const chip = await openPanel({ state: 'idle', onCompact: vi.fn() });
+    expect(chip).not.toBeNull();
     await act(async () => {
-      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      chip.click();
     });
     expect(host?.querySelector('[data-testid="next-context-pop"]')).toBeNull();
-    expect(document.activeElement).toBe(chip);
-    await act(async () => { chip.click(); });
-    expect(host?.querySelector('[data-testid="next-context-pop"]')).not.toBeNull();
-    await act(async () => {
-      document.body.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
-    });
-    expect(host?.querySelector('[data-testid="next-context-pop"]')).toBeNull();
-  });
-
-  it('toggles closed when the chip is clicked again', async () => {
-    const chip = await openPanel({ state: 'idle', onCompact: vi.fn() });
-    await act(async () => { chip.click(); });
-    expect(host?.querySelector('[data-testid="next-context-pop"]')).toBeNull();
+    expect(host?.querySelector('[data-testid="next-menu-compact"]')).toBeNull();
+    expect(host?.querySelector('[data-testid="next-menu-handoff"]')).toBeNull();
   });
 
   it('adds is-warn class when context level is warn or full', async () => {

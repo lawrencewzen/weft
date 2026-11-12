@@ -6,7 +6,7 @@ import { catalogError, scanSkills } from './catalog.mjs';
 export const SKILL_ID = /^[a-z0-9][a-z0-9-]{0,63}$/;
 export const SKILL_LIST_INTRO = 'Skills you can load with the skill tool when a request matches:';
 /** Names of the composer's `/` commands. A skill with one of these ids is never a `/<id>` skill call. */
-export const RESERVED_SKILL_IDS = Object.freeze(['compact', 'handoff', 'schedule', 'model', 'new']);
+export const RESERVED_SKILL_IDS = Object.freeze(['compact', 'handoff', 'schedule', 'new']);
 export function isReservedSkillId(id) {
   return RESERVED_SKILL_IDS.includes(String(id ?? '').trim().toLowerCase());
 }

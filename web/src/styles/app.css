@@ -1889,6 +1889,7 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.65; backgrou
   width: 420px; max-width: calc(100% - 24px); background: var(--panel); border: 1px solid var(--line);
   border-radius: 12px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.09); padding: 6px;
   display: flex; flex-direction: column; font-size: var(--fs-ui); box-sizing: border-box;
+  overflow: hidden;
 }
 .composer-at-header {
   padding: 6px 8px 4px; font-size: var(--fs-xs); color: var(--mute); user-select: none;
@@ -1919,6 +1920,17 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.65; backgrou
 }
 .composer-slash-item .composer-at-name { flex-shrink: 0; }
 .composer-slash-item.is-disabled { opacity: .45; cursor: not-allowed; }
+.composer-slash-item.is-disabled.is-flash { opacity: 1; }
+.composer-slash-item.is-disabled .composer-at-dir.is-flash {
+  color: var(--warn-ink);
+  font-weight: 500;
+  animation: composer-slash-flash 0.8s ease forwards;
+}
+@keyframes composer-slash-flash {
+  0% { color: var(--warn-ink); opacity: 1; }
+  60% { color: var(--warn-ink); opacity: 1; }
+  100% { color: var(--mute); opacity: inherit; }
+}
 .composer-slash-menu .composer-at-header + .composer-at-list + .composer-at-header { margin-top: 2px; }
 /* Block at the start of the composer input / a chat bubble. */
 .composer-input-wrap { position: relative; display: flex; flex-direction: column; }
@@ -1928,6 +1940,17 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.65; backgrou
   height: calc(var(--fs-input) * 1.65); padding: 0 8px; border-radius: 7px;
   background: var(--line2); color: var(--ink2); font-size: var(--fs-sm); line-height: 1;
   white-space: nowrap; user-select: none; max-width: 100%;
+}
+.slash-chip.is-flash {
+  background: var(--warn-line, #fef3c7);
+  color: var(--warn-ink, #b45309);
+  animation: composer-chip-flash 0.8s ease;
+}
+@keyframes composer-chip-flash {
+  0% { transform: scale(1); }
+  30% { transform: scale(1.05); }
+  60% { transform: scale(0.98); }
+  100% { transform: scale(1); }
 }
 .msg-body.has-lead > .slash-chip { float: left; margin: 1px 8px 0 0; height: 1.6em; background: var(--line); }
 .composer-at-empty {
@@ -2417,7 +2440,7 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.65; backgrou
 .ws-chip .model-chip-caret { font-size: 9px; color: var(--faint); }
 .ws-chip.is-empty .model-chip-name { color: var(--mute); }
 .ws-chip.ws-chip-hero, .ws-chip.ws-chip-hero.is-empty .model-chip-name { color: var(--ink); }
-.context-chip { flex-shrink: 0; cursor: pointer; }
+.context-chip { flex-shrink: 0; cursor: default; }
 .context-chip-wrap { position: relative; flex-shrink: 0; display: inline-flex; }
 .context-chip[aria-expanded="true"] { background: var(--hover); }
 .context-pop {

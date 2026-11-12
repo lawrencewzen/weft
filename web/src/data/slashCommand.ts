@@ -1,18 +1,19 @@
 /** `/` command menu: pure helpers (trigger, filter, availability). */
 
-export type SlashCommandId = 'compact' | 'handoff' | 'schedule' | 'model' | 'new';
+export type SlashCommandId = 'compact' | 'handoff' | 'schedule' | 'new';
 
 /**
  * Command names of the menu. A skill with one of these ids (only possible when it already sits on
  * disk) is neither offered in the menu nor shown as a block: the backend does not call it either.
  * Keep in step with RESERVED_SKILL_IDS in src/core/skills.mjs.
  */
-export const RESERVED_SKILL_IDS: readonly string[] = ['compact', 'handoff', 'schedule', 'model', 'new'];
+export const RESERVED_SKILL_IDS: readonly string[] = ['compact', 'handoff', 'schedule', 'new'];
 
 export type SlashSkillRef = { id: string; name: string };
 
-/** The block at the start of the input: set by `/handoff`, `/schedule` or a skill. */
+/** The block at the start of the input: set by `/compact`, `/handoff`, `/schedule` or a skill. */
 export type SlashChip =
+  | { kind: 'compact' }
   | { kind: 'handoff' }
   | { kind: 'schedule' }
   | { kind: 'skill'; id: string; name: string };
@@ -61,7 +62,6 @@ export function slashCommands(ctx: SlashContext): Extract<SlashItem, { kind: 'co
     out.push({ kind: 'command', id: 'handoff', label: '/handoff', disabled: ctx.running || ctx.handoffRunning });
   }
   out.push({ kind: 'command', id: 'schedule', label: '/schedule', disabled: false });
-  out.push({ kind: 'command', id: 'model', label: '/model', disabled: false });
   out.push({ kind: 'command', id: 'new', label: '/new', disabled: false });
   return out;
 }

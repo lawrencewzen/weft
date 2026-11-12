@@ -816,10 +816,10 @@ export function deleteSkill(id: string): Promise<OkId> {
   });
 }
 
-export function compactConversation(cid: string): Promise<CompactAccepted> {
+export function compactConversation(cid: string, instructions?: string): Promise<CompactAccepted> {
   return requestJson<CompactAccepted>(conversationPath(cid, '/compact'), {
     method: 'POST',
-    body: '{}',
+    body: JSON.stringify(instructions ? { instructions } : {}),
   });
 }
 

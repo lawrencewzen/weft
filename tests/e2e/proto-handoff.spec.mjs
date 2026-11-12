@@ -9,10 +9,6 @@ async function openConv(page, id) {
   await expect(page).toHaveURL(new RegExp(`#/c/${id}$`));
 }
 
-async function openMenu(page) {
-  await page.getByTestId('next-context-chip').click();
-  await expect(page.getByTestId('next-context-pop')).toBeVisible();
-}
 
 test('1. c-handoff defaults to collapsed earlier context; click expands and collapses; divider and notes work', async ({ page }) => {
   const state = await openProto(page);
@@ -37,8 +33,8 @@ test('1. c-handoff defaults to collapsed earlier context; click expands and coll
   await expect(divider).toBeVisible();
   await expect(divider.getByTestId('next-handoff-title')).toHaveText('新上下文');
 
-  // Context usage reflects lower percentage after handoff
-  await expect(page.getByTestId('next-context-chip')).toHaveAttribute('title', /已用 14%/);
+  // Context usage reflects lower tokens after handoff
+  await expect(page.getByTestId('next-context-chip')).toHaveAttribute('title', '28k / 200k');
 
   // Expand earlier context
   await toggleEarlier.click();
@@ -77,7 +73,7 @@ test('1. c-handoff defaults to collapsed earlier context; click expands and coll
   await expectClean(state);
 });
 
-test('2. click handoff in context panel: shows spinner, pending text, lands divider, and folds earlier items', async ({ page }) => {
+test('2. trigger handoff via /handoff command: shows pending text, lands divider, and folds earlier items', async ({ page }) => {
   const state = await openProto(page);
   await openConv(page, 'c-docs');
   await expect(page.getByTestId('next-context-chip')).toHaveText('86%');
@@ -86,16 +82,12 @@ test('2. click handoff in context panel: shows spinner, pending text, lands divi
   expect(initialNotes).toBe(0);
   await expect(page.getByTestId('next-thread-earlier-toggle')).toHaveCount(0);
 
-  await openMenu(page);
-  const row = page.getByTestId('next-menu-handoff');
-  await expect(row).toHaveText('交接到新上下文');
-  await expect(row).toBeEnabled();
-  await row.click();
-
-  // Button becomes disabled with running spinner
-  await expect(row).toBeDisabled();
-  await expect(row).toHaveAttribute('data-state', 'running');
-  await expect(page.getByTestId('next-handoff-spin')).toBeVisible();
+  const input = page.getByTestId('next-composer-input');
+  await input.click();
+  await input.fill('/hand');
+  await input.press('Enter');
+  await expect(page.locator('.slash-chip[data-kind="handoff"]')).toBeVisible();
+  await input.press('Enter');
 
   // Thread pending displays waiting text
   await expect(page.getByTestId('next-thread-pending')).toContainText('正在交接到新上下文');
@@ -113,10 +105,13 @@ test('2. click handoff in context panel: shows spinner, pending text, lands divi
   await expect(earlierToggle).toBeVisible();
   await expect(earlierToggle).toHaveAttribute('aria-expanded', 'false');
 
-  // Context percentage decreased
-  await expect(page.getByTestId('next-context-chip')).toHaveAttribute('title', /已用 14%/);
+  // Context usage reflects lower tokens after handoff
+  await expect(page.getByTestId('next-context-chip')).toHaveAttribute('title', '28k / 200k');
   await expect(page.getByTestId('next-context-chip').locator('.context-chip-pct')).toHaveCount(0);
-  await expect(row).toBeEnabled();
+
+  // Context chip click is no-op
+  await page.getByTestId('next-context-chip').click();
+  await expect(page.getByTestId('next-context-pop')).toHaveCount(0);
 
   // Expanding the newly created handoff detail works
   const toggle = newNote.getByTestId('next-handoff-toggle');
@@ -172,17 +167,17 @@ test('3. multiple handoffs only produce a single earlier-context toggle, and win
   await expectClean(state);
 });
 
-test('4. draft conversation disables handoff in context pop', async ({ page }) => {
+test('4. draft conversation context chip has usage tooltip and clicking is a no-op', async ({ page }) => {
   const state = await openProto(page);
   await page.getByTestId('next-new-chat').click();
-  await openMenu(page);
-  const row = page.getByTestId('next-menu-handoff');
-  await expect(row).toBeDisabled();
-  await expect(row).toHaveAttribute('data-state', 'unavailable');
+  const chip = page.getByTestId('next-context-chip');
+  await expect(chip).toBeVisible();
+  await chip.click();
+  await expect(page.getByTestId('next-context-pop')).toHaveCount(0);
   await expectClean(state);
 });
 
-test('5. English labels for handoff divider, toggle, earlier context, and menu', async ({ page }) => {
+test('5. English labels for handoff divider, toggle, earlier context, and slash command', async ({ page }) => {
   const state = await openProto(page);
   await page.getByTestId('next-open-settings').click();
   await page.getByTestId('next-pref-lang').locator('[data-lang=en]').click();
@@ -197,7 +192,13 @@ test('5. English labels for handoff divider, toggle, earlier context, and menu',
   await expect(divider.getByTestId('next-handoff-title')).toHaveText('New context');
   await expect(divider.getByTestId('next-handoff-toggle')).toContainText('Handoff notes');
 
-  await openMenu(page);
-  await expect(page.getByTestId('next-menu-handoff')).toHaveText('Handoff to new context');
+  const input = page.getByTestId('next-composer-input');
+  await input.click();
+  await input.fill('/hand');
+  const item = page.locator('.composer-slash-item[data-id="handoff"]');
+  await expect(item.locator('.composer-at-name')).toHaveText('/handoff');
+  await expect(item.locator('.composer-at-dir')).toHaveText('Hand off to new context');
+  await input.press('Enter');
+  await expect(page.locator('.slash-chip[data-kind="handoff"]')).toHaveText('Handoff');
   await expectClean(state);
 });
