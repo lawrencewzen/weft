@@ -165,10 +165,12 @@ namespace Weft.Desktop
                 var lines = new List<string>();
                 var step = Stopwatch.StartNew();
                 started = true;
+                long launchBeginMs = total.ElapsedMilliseconds;
                 string url = ServiceRunner.Launch(dir, lines, null, () => false);
                 lock (lines) foreach (var l in lines) log("open> " + l);
                 if (url == null) throw new InvalidOperationException("service did not report a login url");
                 log("login url ready in " + step.ElapsedMilliseconds + " ms");
+                long urlReadyMs = total.ElapsedMilliseconds;
 
                 step.Restart();
                 string home = Regex.Replace(url, @"/auth\?code=.*$", "/");
@@ -177,6 +179,7 @@ namespace Weft.Desktop
                     var resp = http.GetAsync(home).GetAwaiter().GetResult();
                     string html = resp.Content.ReadAsStringAsync().GetAwaiter().GetResult();
                     log("GET " + home + " -> " + (int)resp.StatusCode + " (" + step.ElapsedMilliseconds + " ms)");
+                    log("STARTUP service_check service_launch_to_url_ms=" + (urlReadyMs - launchBeginMs) + " health_check_ms=" + step.ElapsedMilliseconds + " total_to_healthy_ms=" + total.ElapsedMilliseconds);
                     if (!resp.IsSuccessStatusCode) throw new InvalidOperationException("health check HTTP " + (int)resp.StatusCode);
                     if (html.IndexOf("<title>Weft</title>", StringComparison.Ordinal) < 0) throw new InvalidOperationException("homepage is not the Weft frontend");
                 }
