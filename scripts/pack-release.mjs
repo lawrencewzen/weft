@@ -703,6 +703,167 @@ export async function acquireNodeExe({
   return { exe, exeHash, sumsNote, zipSource };
 }
 
+/**
+ * 裁剪规则（全部集中在这一段）。目的：内网安装时安全软件逐个扫描文件，文件数越少越快。
+ * 只删运行时用不到的东西；.js/.mjs/.cjs/.json/.node/.wasm、package.json、许可文件一律保留。
+ * Node 不会从 node_modules 里加载 .ts（也不会读 .d.ts / .map），所以这些可以安全删除。
+ */
+
+/** 只给前端（vite 构建时已打进 public-next）用、服务端不 import 的依赖。相对 node_modules，正斜杠。
+ *  marked 不在其中：src/v2/views/path-refs.ts 服务端要用。 */
+export const PRUNE_PACKAGES = [
+  'codemirror',
+  'dompurify',
+  '@lobehub/icons-static-svg',
+  '@codemirror', // 整个 scope：lang-*、view、state、…
+  '@lezer', // codemirror 语法解析器
+  '@marijn', // codemirror 的依赖
+  'crelt',
+  'style-mod',
+  'w3c-keyname',
+  '@types', // 纯类型包
+];
+
+/** 包内这些目录名是测试 / 示例 / 文档，运行时不加载。 */
+export const PRUNE_DIR_NAMES = new Set([
+  'test', 'tests', '__tests__', 'example', 'examples', 'docs', 'doc', '.github', 'benchmark', 'benchmarks',
+]);
+
+const KEEP_RUNTIME_FILE = /\.(?:[cm]?js|json|node|wasm)$/i;
+const KEEP_LICENSE_FILE = /^(?:licen[cs]e|notice|copying|unlicense|patents)(?:[-_.].*)?$/i;
+const PRUNE_FILE_PATTERNS = [
+  /\.d\.[cm]?ts$/i, // 类型声明
+  /\.map$/i, // source map
+  /\.[cm]?tsx?$/i, // .ts 源码（.d.ts 已在上面）
+  /\.(?:md|markdown)$/i, // 文档
+  /\.tsbuildinfo$/i,
+  /^(?:readme|changelog|changes|history|contributing|authors|code_of_conduct)$/i, // 无扩展名的文档
+  /^\.(?:npmignore|eslintrc(?:\..+)?|prettierrc(?:\..+)?|editorconfig|travis\.yml|gitattributes|babelrc)$/i,
+];
+
+/** rel：相对 node_modules 的路径，正斜杠。 */
+export function shouldPruneFile(rel) {
+  const base = rel.split('/').pop();
+  if (base === 'package.json') return false;
+  if (KEEP_LICENSE_FILE.test(base)) return false;
+  if (KEEP_RUNTIME_FILE.test(base)) return false;
+  return PRUNE_FILE_PATTERNS.some((re) => re.test(base));
+}
+
+/** 目录要不要整个删。只对包内的子目录生效，不会删包根目录本身（比如一个叫 test 的包）。 */
+export function shouldPruneDir(rel) {
+  const segs = rel.split('/');
+  const nm = segs.lastIndexOf('node_modules');
+  if (nm < 0 && PRUNE_PACKAGES.includes(rel)) return true; // 顶层按包名整包删
+  const pkg = segs.slice(nm + 1);
+  if (pkg.length === 0) return false;
+  const rootLen = pkg[0].startsWith('@') ? 2 : 1;
+  if (pkg.length <= rootLen) return false; // 包根目录或 scope 目录，不按目录名删
+  return PRUNE_DIR_NAMES.has(pkg[pkg.length - 1]);
+}
+
+/** WebView2 固定版只留这些语言包；缺了的语言 Chromium 回落到 en-US。相对包根，小写。 */
+export const WEBVIEW2_KEEP_LOCALES = new Set(['en-us', 'zh-cn']);
+
+export function shouldPruneShellPath(relPosixLower) {
+  const m = /^webview2\/(?:[^/]+\/)?locales\/([^/]+)\.pak$/.exec(relPosixLower);
+  return Boolean(m) && !WEBVIEW2_KEEP_LOCALES.has(m[1]);
+}
+
+export async function treeStats(dir) {
+  let files = 0;
+  let bytes = 0;
+  async function walk(current) {
+    for (const entry of await readdir(current, { withFileTypes: true })) {
+      const abs = path.join(current, entry.name);
+      if (entry.isDirectory()) await walk(abs);
+      else if (entry.isFile()) {
+        files += 1;
+        bytes += (await stat(abs)).size;
+      }
+    }
+  }
+  await walk(dir);
+  return { files, bytes };
+}
+
+/** 裁剪 node_modules，返回裁剪前后的文件数和字节数。 */
+export async function pruneNodeModules(nodeModulesDir) {
+  const before = await treeStats(nodeModulesDir);
+  async function walk(dir, rel) {
+    for (const entry of await readdir(dir, { withFileTypes: true })) {
+      const abs = path.join(dir, entry.name);
+      const childRel = rel ? `${rel}/${entry.name}` : entry.name;
+      if (entry.isDirectory()) {
+        if (entry.name === '.bin' && !rel) continue;
+        if (shouldPruneDir(childRel)) await rm(abs, { recursive: true, force: true });
+        else await walk(abs, childRel);
+      } else if (entry.isFile() && shouldPruneFile(childRel)) {
+        await rm(abs, { force: true });
+      }
+    }
+  }
+  await walk(nodeModulesDir, '');
+  const after = await treeStats(nodeModulesDir);
+  return { before, after };
+}
+
+/** 裁剪后，检查每个包 package.json 声明的入口文件还在（不含通配和类型）。返回缺失列表。 */
+export async function findMissingEntryPoints(nodeModulesDir) {
+  const missing = [];
+  const RUNTIME = /\.(?:[cm]?js|json|node|wasm)$/i;
+  function targets(pkg) {
+    const out = [];
+    const walkExports = (value, key) => {
+      if (typeof value === 'string') {
+        if (key !== 'types' && value.startsWith('./') && !value.includes('*') && RUNTIME.test(value)) out.push(value);
+      } else if (Array.isArray(value)) value.forEach((v) => walkExports(v, key));
+      else if (value && typeof value === 'object') {
+        for (const [k, v] of Object.entries(value)) walkExports(v, k);
+      }
+    };
+    walkExports(pkg.exports, '');
+    for (const field of ['main', 'module']) {
+      if (typeof pkg[field] === 'string' && RUNTIME.test(pkg[field])) out.push(pkg[field]);
+    }
+    if (typeof pkg.bin === 'string') out.push(pkg.bin);
+    else if (pkg.bin && typeof pkg.bin === 'object') out.push(...Object.values(pkg.bin).filter((v) => typeof v === 'string'));
+    return out;
+  }
+  async function scan(dir) {
+    let entries;
+    try {
+      entries = await readdir(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      if (!entry.isDirectory() || entry.name === '.bin') continue;
+      const abs = path.join(dir, entry.name);
+      if (entry.name.startsWith('@')) {
+        await scan(abs);
+        continue;
+      }
+      let pkg;
+      try {
+        pkg = JSON.parse(await readFile(path.join(abs, 'package.json'), 'utf8'));
+      } catch {
+        continue;
+      }
+      for (const target of new Set(targets(pkg))) {
+        if (!await pathExists(path.join(abs, target))) missing.push(`${pkg.name}: ${target}`);
+      }
+      await scan(path.join(abs, 'node_modules'));
+    }
+  }
+  await scan(nodeModulesDir);
+  return missing.sort();
+}
+
+function formatMB(bytes) {
+  return `${(bytes / 1048576).toFixed(1)} MB`;
+}
+
 function npmEnv() {
   return {
     ...process.env,
@@ -821,18 +982,24 @@ export async function copyShell(shellDir, stage) {
     throw new Error(`壳产物目录里没有 webview2\\msedgewebview2.exe（WebView2 固定版运行库）：${src}`);
   }
   const toolsDir = path.join(src, 'tools') + path.sep;
+  let prunedLocales = 0;
   await cp(src, stage, {
     recursive: true,
     // Drop .pdb/.xml from the shell build only; tools\ (ripgrep, PowerShell 7) is copied as is.
     filter: (from) => {
       const rel = path.relative(src, from).split(path.sep).join('/').toLowerCase();
       if (WEBVIEW2_STRIP.includes(rel)) return false;
+      if (shouldPruneShellPath(rel)) {
+        prunedLocales += 1;
+        return false;
+      }
       return from.startsWith(toolsDir) || !/\.(pdb|xml)$/i.test(from);
     },
   });
   // Installer\ 只剩 copilot_setup.exe 时删后为空，一并去掉
   const inst = path.join(stage, 'webview2', 'Installer');
   if ((await readdir(inst).catch(() => null))?.length === 0) await rm(inst, { recursive: true });
+  return { prunedLocales };
 }
 
 export async function packRelease({
@@ -859,6 +1026,13 @@ export async function packRelease({
     if (banned.length) {
       throw new Error(`运行时依赖里出现了开发包：${banned.join(', ')}`);
     }
+    const nodeModulesDir = path.join(appDir, 'node_modules');
+    const missingBefore = new Set(await findMissingEntryPoints(nodeModulesDir)); // 上游自己就缺的不算
+    const prune = await pruneNodeModules(nodeModulesDir);
+    const missingEntries = (await findMissingEntryPoints(nodeModulesDir)).filter((item) => !missingBefore.has(item));
+    if (missingEntries.length) {
+      throw new Error(`裁剪后缺少包入口文件：\n  ${missingEntries.join('\n  ')}`);
+    }
     await stripPostinstall(appDir);
     const packages = await listTopPackages(path.join(appDir, 'node_modules'));
 
@@ -866,8 +1040,9 @@ export async function packRelease({
     await mkdir(path.join(stage, 'node'), { recursive: true });
     await writeFile(path.join(stage, 'node', 'node.exe'), exe);
 
+    let shellPruned = 0;
     if (shell) {
-      await copyShell(shell, stage);
+      shellPruned = (await copyShell(shell, stage)).prunedLocales;
       console.log(`桌面壳：${path.resolve(shell)}`);
     } else {
       console.log('跳过桌面壳：没有传 --shell，包里不含 Weft.exe（用 Weft.cmd 启动）');
@@ -888,6 +1063,11 @@ export async function packRelease({
     console.log(`node.exe sha256: ${exeHash}`);
     console.log(`zip: ${zipPath}`);
     console.log(`zip bytes: ${zipBuf.length}`);
+    const total = await treeStats(stage);
+    console.log(`app/node_modules 裁剪前：${prune.before.files} 个文件，${formatMB(prune.before.bytes)}`);
+    console.log(`app/node_modules 裁剪后：${prune.after.files} 个文件，${formatMB(prune.after.bytes)}`);
+    console.log(`WebView2 语言包裁掉：${shellPruned} 个`);
+    console.log(`包内文件总数（zip 条目）：${total.files}，解压后 ${formatMB(total.bytes)}`);
     console.log(`zip sha256: ${zipHash}`);
     console.log(`app/node_modules packages (${packages.length}):`);
     for (const label of packages) console.log(`  ${label}`);
