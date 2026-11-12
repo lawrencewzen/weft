@@ -335,15 +335,40 @@ public sealed class MainForm : Form
         P(sub, 116, 82, 408, 20);
     }
 
+    /// <summary>展开日志后窗口若超出当前屏幕工作区，就压缩日志区（有下限），保证整窗可见。</summary>
+    void FitExtra()
+    {
+        if (_extra == 0) return;
+        _extra = DetailsExtra;
+        Rectangle wa;
+        try { wa = Screen.FromControl(this).WorkingArea; } catch { return; }
+        var nc = IsHandleCreated ? Height - ClientSize.Height : 0;
+        var maxH = wa.Height - nc;
+        while (_extra > 24 && Sc(H + _extra) > maxH) _extra--;
+    }
+
+    /// <summary>窗口下沿超出工作区时上移（预览窗口在屏幕外，不动）。</summary>
+    void KeepOnScreen()
+    {
+        if (_preview || !IsHandleCreated || WindowState != FormWindowState.Normal) return;
+        var wa = Screen.FromControl(this).WorkingArea;
+        if (Bottom > wa.Bottom) Top = Math.Max(wa.Top, wa.Bottom - Height);
+    }
+
     void ApplyLayout()
     {
+        FitExtra();
         ClientSize = new Size(Sc(W), Sc(H + _extra));
+        KeepOnScreen();
         var tb = Sc(TitleH);
         foreach (var v in _views) v.Bounds = new Rectangle(1, tb, ClientSize.Width - 2, ClientSize.Height - tb - 1);
         foreach (var (l, px, bold, color) in _labels) { l.Font = Theme.Font(px * S, bold); l.ForeColor = color(); l.BackColor = Theme.Win; }
 
-        _close.Bounds = new Rectangle(ClientSize.Width - 1 - Sc(46), 1, Sc(46), tb - 1);
-        _min.Bounds = new Rectangle(_close.Left - Sc(46), 1, Sc(46), tb - 1);
+        // 按钮从渐变条下沿开始，渐变条全宽可见
+        var gb = Math.Max(1, Sc(3));
+        _close.TopInset = _min.TopInset = gb;
+        _close.Bounds = new Rectangle(ClientSize.Width - 1 - Sc(46), 1 + gb, Sc(46), tb - 1 - gb);
+        _min.Bounds = new Rectangle(_close.Left - Sc(46), 1 + gb, Sc(46), tb - 1 - gb);
 
         Head(_iLogo, _iH1, _iSub);
         P(_iLbl, 36, 176, 488, 17);
@@ -506,7 +531,7 @@ public sealed class MainForm : Form
         if (m.Msg == WM_NCHITTEST && (int)m.Result == HTCLIENT)
         {
             var pt = PointToClient(new Point((short)(m.LParam.ToInt64() & 0xffff), (short)((m.LParam.ToInt64() >> 16) & 0xffff)));
-            if (pt.Y < Sc(TitleH) && pt.X < _min.Left) m.Result = (IntPtr)HTCAPTION;
+            if (pt.Y < Sc(TitleH) && (pt.X < _min.Left || pt.Y < _min.Top)) m.Result = (IntPtr)HTCAPTION;
         }
     }
 

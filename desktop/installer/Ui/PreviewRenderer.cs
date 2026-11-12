@@ -54,8 +54,9 @@ public static class PreviewRenderer
                 form.ShowPreviewState(state);
                 Application.DoEvents();
                 Log.Write("预览 状态就绪");
-                using var bmp = new Bitmap(form.Width, form.Height);
-                form.DrawToBitmap(bmp, new Rectangle(0, 0, form.Width, form.Height));
+                var sz = form.ClientSize;
+                using var bmp = new Bitmap(sz.Width, sz.Height);
+                form.DrawToBitmap(bmp, new Rectangle(Point.Empty, sz));
                 var name = $"{theme}-{scale.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)}x-{state}.png";
                 bmp.Save(Path.Combine(dir, name), System.Drawing.Imaging.ImageFormat.Png);
                 n++;

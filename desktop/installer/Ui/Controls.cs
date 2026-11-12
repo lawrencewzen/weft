@@ -316,6 +316,8 @@ public enum CaptionKind { Minimize, Close }
 public sealed class CaptionButton : Control
 {
     public CaptionKind Kind;
+    /// <summary>按钮顶部让出给窗口渐变条的高度；图标仍按让出之前的整块区域居中。</summary>
+    public int TopInset;
     bool _hover;
     float S => Dpi.Of(this);
 
@@ -339,7 +341,7 @@ public sealed class CaptionButton : Control
         using var pen = new Pen(fg, Math.Max(1f, 1.1f * S));
         var sz = 10 * S;
         var x = (Width - sz) / 2f;
-        var y = (Height - sz) / 2f;
+        var y = (Height + TopInset) / 2f - TopInset - sz / 2f;
         if (close)
         {
             g.SmoothingMode = SmoothingMode.AntiAlias;
