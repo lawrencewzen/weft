@@ -7,7 +7,7 @@ import { conversationTopic, subagentTopic, type Subagent } from '../data/store';
 import { useStoreTopics } from '../data/useStoreTopic';
 import { t } from '../i18n';
 import {
-  countByIconStatus,
+  agentsStripStatusIcon,
   extractSubagentSteps,
   formatAgentDoing,
   formatAgentElapsed,
@@ -16,6 +16,7 @@ import {
   isAllEndedAgents,
   isSubagentEnded,
   stripMarkdownInline,
+  stripStatusHeader,
 } from './agentsStripUtils';
 import { StatusIcon, statusIconFor } from './StatusIcon';
 
@@ -177,7 +178,7 @@ export function AgentsStrip({ cid, lang }: AgentsStripProps) {
     return null;
   }
 
-  const summaryCounts = countByIconStatus(agents);
+  const headerIcon = agentsStripStatusIcon(agents);
   const headline = formatAgentsHeadline(agents, lang);
   const parentItems = store.topicItems(conversationTopic(cid));
 
@@ -194,14 +195,7 @@ export function AgentsStrip({ cid, lang }: AgentsStripProps) {
         data-toggle
         onClick={onToggle}
       >
-        <span className="agents-strip-counts">
-          {summaryCounts.map(({ status, count }) => (
-            <span key={status} className="agents-strip-count cnt" data-testid="next-agents-strip-count">
-              <StatusIcon status={status} size={14} aria-hidden="true" />
-              <span>{count}</span>
-            </span>
-          ))}
-        </span>
+        <StatusIcon status={headerIcon} size={14} aria-hidden="true" />
         <span className="agents-strip-headline t" data-testid="next-agents-strip-headline">
           {headline}
         </span>
@@ -252,7 +246,9 @@ export function AgentsStrip({ cid, lang }: AgentsStripProps) {
               failReason = lastText || agent.currentAction || t(lang, 'status_failed');
             }
 
-            const doing = formatAgentDoing(agent, { lang, resText });
+            const cleanResText = stripStatusHeader(resText);
+            const cleanFailReason = stripStatusHeader(failReason);
+            const doing = formatAgentDoing(agent, { lang, resText: cleanResText });
             const elapsed = formatAgentElapsed(agent, now);
             const steps = extractSubagentSteps(subItems, subTools, lang);
 
@@ -304,7 +300,7 @@ export function AgentsStrip({ cid, lang }: AgentsStripProps) {
                   <div className="agents-strip-detail det" data-testid="next-agents-strip-detail">
                     {agent.status === 'done' ? (
                       <div className="agents-strip-res res" data-testid="next-agents-strip-detail-text">
-                        {stripMarkdownInline(resText || t(lang, 'agents_strip_done_summary'))}
+                        {stripMarkdownInline(cleanResText || t(lang, 'agents_strip_done_summary'))}
                       </div>
                     ) : agent.status === 'waiting' || (agent.status as string) === 'queued' ? (
                       <div className="agents-strip-res res" data-testid="next-agents-strip-detail-text">
@@ -312,7 +308,7 @@ export function AgentsStrip({ cid, lang }: AgentsStripProps) {
                       </div>
                     ) : agent.status === 'failed' ? (
                       <div className="agents-strip-res res" data-testid="next-agents-strip-detail-text">
-                        {stripMarkdownInline(t(lang, 'agents_strip_failed_desc', { reason: stripMarkdownInline(failReason) }))}
+                        {stripMarkdownInline(t(lang, 'agents_strip_failed_desc', { reason: stripMarkdownInline(cleanFailReason || failReason) }))}
                       </div>
                     ) : steps.length > 0 ? (
                       steps.map((st, idx) => (
