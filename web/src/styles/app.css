@@ -1910,6 +1910,10 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.65; backgrou
 .composer-at-dir {
   color: var(--mute); font-size: var(--fs-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+.composer-slash-item .composer-at-name { flex-shrink: 0; }
+.composer-slash-item.is-disabled { opacity: .45; cursor: not-allowed; }
+.composer-slash-menu .composer-at-header + .composer-at-list + .composer-at-header { margin-top: 2px; }
+.composer-tag.is-skill { font-family: var(--mono); }
 .composer-at-empty {
   padding: 8px 10px; font-size: var(--fs-sm); color: var(--mute);
 }
