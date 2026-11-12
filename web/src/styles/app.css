@@ -2013,6 +2013,19 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.65; backgrou
 .composer-at-dir {
   color: var(--mute); font-size: var(--fs-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+.composer-slash-item .composer-at-name { flex-shrink: 0; }
+.composer-slash-item.is-disabled { opacity: .45; cursor: not-allowed; }
+.composer-slash-menu .composer-at-header + .composer-at-list + .composer-at-header { margin-top: 2px; }
+/* Block at the start of the composer input / a chat bubble. */
+.composer-input-wrap { position: relative; display: flex; flex-direction: column; }
+.composer-input-wrap .composer-slash-chip { position: absolute; left: 0; top: 0; }
+.slash-chip {
+  display: inline-flex; align-items: center; box-sizing: border-box; vertical-align: top;
+  height: calc(var(--fs-input) * 1.65); padding: 0 8px; border-radius: 7px;
+  background: var(--line2); color: var(--ink2); font-size: var(--fs-sm); line-height: 1;
+  white-space: nowrap; user-select: none; max-width: 100%;
+}
+.msg-body.has-lead > .slash-chip { float: left; margin: 1px 8px 0 0; height: 1.6em; background: var(--line); }
 .composer-at-empty {
   padding: 8px 10px; font-size: var(--fs-sm); color: var(--mute);
 }

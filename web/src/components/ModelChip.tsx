@@ -36,6 +36,8 @@ type Props = {
   onManage: () => void;
   contextWindow?: number;
   onSetContextWindow?: (window: number | null) => void;
+  /** Bump to open the menu from outside (the `/model` command). */
+  openSignal?: number;
 };
 
 export function ModelChip({
@@ -49,6 +51,7 @@ export function ModelChip({
   onManage,
   contextWindow = 0,
   onSetContextWindow,
+  openSignal = 0,
 }: Props) {
   const [open, setOpen] = useState(false);
   const [subMenu, setSubMenu] = useState<'model' | 'thinking' | 'context' | null>(null);
@@ -86,6 +89,14 @@ export function ModelChip({
     setCtxError(null);
     setOpen((prev) => !prev);
   }, [checkFit]);
+
+  useEffect(() => {
+    if (!openSignal) return;
+    setRecentRaw(readRecentModels());
+    checkFit();
+    setSubMenu(null);
+    setOpen(true);
+  }, [openSignal, checkFit]);
 
   useEffect(() => {
     if (!open) return;

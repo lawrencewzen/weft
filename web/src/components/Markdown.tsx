@@ -1,4 +1,4 @@
-import { useMemo, type MouseEvent } from 'react';
+import { useMemo, type MouseEvent, type ReactNode } from 'react';
 import type { components } from '../../../src/v2/contract.gen';
 import { copyText } from '../data/copyText';
 import { pathChipFromEvent } from '../data/pathChip';
@@ -12,9 +12,11 @@ type Props = {
   pathRefs?: PathRef[];
   copyLabel: string;
   copiedLabel: string;
+  /** Block shown before the first line (a skill block in a user bubble). */
+  leading?: ReactNode;
 };
 
-export function Markdown({ text, pathRefs, copyLabel, copiedLabel }: Props) {
+export function Markdown({ text, pathRefs, copyLabel, copiedLabel, leading }: Props) {
   const { openFile } = useRightActions();
   const html = useMemo(
     () => renderMarkdown(text, { resolvePath: pathResolver(pathRefs), copyLabel }),
@@ -48,6 +50,15 @@ export function Markdown({ text, pathRefs, copyLabel, copiedLabel }: Props) {
         restore();
       }
     });
+  }
+
+  if (leading) {
+    return (
+      <div className="msg-body has-lead" data-testid="next-markdown" onClick={onClick}>
+        {leading}
+        <div dangerouslySetInnerHTML={{ __html: html }} />
+      </div>
+    );
   }
 
   return (

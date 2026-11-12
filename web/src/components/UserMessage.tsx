@@ -5,6 +5,9 @@ import type { components } from '../../../src/v2/contract.gen';
 import { t } from '../i18n';
 import { formatFileSize, getLocalPastes } from '../data/attachments';
 import { getMessagePaste } from '../data/api';
+import { parseSkillMessage } from '../data/slashCommand';
+import { useSkillCatalog } from '../data/skillCatalog';
+import { InlineChip } from './composer/SlashChip';
 import { Markdown } from './Markdown';
 
 type Item = components['schemas']['ThreadItemUser'];
@@ -218,6 +221,8 @@ export function UserMessage({
   const pastes = item.pastes || [];
   const [open, setOpen] = useState<ThreadUserImage | null>(null);
   const text = item.text.trim();
+  const skills = useSkillCatalog(/^\/[^\s/]/.test(text));
+  const skillMsg = parseSkillMessage(text, skills);
   const canFork = Boolean(item.entryId);
   useEffect(() => {
     if (!open) return;
@@ -276,7 +281,15 @@ export function UserMessage({
           ))}
         </div>
       ) : null}
-      {text ? (
+      {skillMsg ? (
+        <Markdown
+          text={skillMsg.body}
+          pathRefs={item.pathRefs}
+          copyLabel={t(lang, 'copy_code')}
+          copiedLabel={t(lang, 'copied')}
+          leading={<InlineChip label={skillMsg.skill.name} kind="skill" testId="next-user-chip" />}
+        />
+      ) : text ? (
         <Markdown
           text={item.text}
           pathRefs={item.pathRefs}

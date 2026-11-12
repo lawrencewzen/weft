@@ -9,13 +9,17 @@ import { readDiscovery, request as serverRequest, startServer, stopServer } from
 import { SAMPLE_COMMIT_SKILL, SAMPLE_REVIEW_SKILL, writeSampleEcho, writeSampleSkills } from './_sample-extensions.mjs';
 
 const {
+  RESERVED_SKILL_IDS,
   SKILL_LIST_INTRO,
   buildSkillPrompt,
   createSkill,
   deleteSkill,
+  findCommandSkill,
   listSkills,
   loadSkillBody,
+  parseSkillCommand,
   renderSkillList,
+  skillIdFromName,
   updateSkill,
   writeSkillFile,
 } = await load('src/core/skills.mjs');
@@ -150,6 +154,40 @@ test('settings keep skill and plugin toggles', () => {
   const normalized = normalizeSettings({ skills: { 'review-notes': 'false' }, plugins: { echo: 0 } });
   assert.equal(normalized.skills['review-notes'], false);
   assert.equal(normalized.plugins.echo, false);
+});
+
+test('slash command recognition: enabled, disabled, unknown, reserved, no body', () => {
+  const enabled = [
+    { id: 'test-writer', body: ' WRITE TESTS ' },
+    { id: 'model', body: 'RESERVED ON DISK' },
+  ];
+  assert.deepEqual(findCommandSkill('/test-writer 给 utils.ts 补测试', enabled), { id: 'test-writer', body: 'WRITE TESTS' });
+  assert.deepEqual(findCommandSkill('/test-writer', enabled), { id: 'test-writer', body: 'WRITE TESTS' });
+  assert.deepEqual(findCommandSkill('/test-writer\n多行\n正文', enabled), { id: 'test-writer', body: 'WRITE TESTS' });
+  assert.deepEqual(parseSkillCommand('/test-writer  hi'), { id: 'test-writer', body: 'hi' });
+  assert.equal(findCommandSkill('/unknown 正文', enabled), null);
+  assert.equal(findCommandSkill('/test-writerx 正文', enabled), null);
+  assert.equal(findCommandSkill('请用 /test-writer', enabled), null);
+  assert.equal(findCommandSkill('/test-writer 正文', []), null);
+  assert.equal(findCommandSkill('/usr/bin/env', enabled), null);
+  for (const id of RESERVED_SKILL_IDS) assert.equal(findCommandSkill(`/${id} x`, [{ id, body: 'b' }]), null, id);
+  assert.deepEqual([...RESERVED_SKILL_IDS].sort(), ['compact', 'handoff', 'model', 'new', 'schedule']);
+});
+
+test('reserved command names cannot be skill ids', async () => {
+  const user = await tmp();
+  for (const id of RESERVED_SKILL_IDS) {
+    await assert.rejects(
+      () => createSkill(user, { name: 'x', id, body: 'b' }, new Set()),
+      (err) => err.status === 400 && err.catalogCode === 'err_skill_reserved',
+      id,
+    );
+  }
+  assert.equal(skillIdFromName('New'), 'new-skill');
+  assert.equal(skillIdFromName('Compact'), 'compact-skill');
+  assert.equal(skillIdFromName('review'), 'review');
+  const made = await createSkill(user, { name: 'Model', body: 'b' }, new Set());
+  assert.equal(made.id, 'model-skill');
 });
 
 test('a sample echo plugin loads and a disabled plugin contributes no tool', async () => {
