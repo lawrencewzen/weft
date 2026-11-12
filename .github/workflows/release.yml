@@ -336,7 +336,8 @@ jobs:
             if ($html -match '未构建') { throw 'frontend was not built' }
             Write-Host "home HTTP $($resp.StatusCode) bytes=$($html.Length)"
 
-            $login = Invoke-WebRequest -Uri $url -UseBasicParsing -MaximumRedirection 5
+            $sess = $null
+            $login = Invoke-WebRequest -Uri $url -UseBasicParsing -MaximumRedirection 5 -SessionVariable sess
             if ([int]$login.StatusCode -ne 200) { throw "login HTTP $($login.StatusCode)" }
             $loginHtml = [string]$login.Content
             if ($loginHtml -notmatch '<title>Weft</title>' -or $loginHtml -notmatch 'id="root"') {
@@ -348,8 +349,6 @@ jobs:
             #   GET /api/v2/providers  -> provider-service -> @earendil-works/pi-ai（模型目录）
             #   GET /api/v2/settings   -> 内核 Harness（@earendil-works/pi-durable）的压缩设置
             $base = $homeUrl.TrimEnd('/')
-            $sess = $null
-            $null = Invoke-WebRequest -Uri $url -UseBasicParsing -MaximumRedirection 5 -SessionVariable sess
             foreach ($api in @('/api/v2/providers', '/api/v2/settings')) {
               $r = Invoke-WebRequest -Uri ($base + $api) -UseBasicParsing -WebSession $sess
               Write-Host "api $api HTTP $([int]$r.StatusCode) bytes=$($r.Content.Length)"
