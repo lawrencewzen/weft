@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { AgentsStrip } from './AgentsStrip';
 import { ConversationScheduleStrip } from './ConversationScheduleStrip';
 import { StallStrip } from './StallStrip';
@@ -23,7 +23,10 @@ import { AtMentionMenu } from './composer/AtMentionMenu';
 import { ComposerTags } from './composer/ComposerTags';
 import { GitChip } from './composer/GitChip';
 import { PlusMenu } from './composer/PlusMenu';
+import { InlineChip, chipLabel } from './composer/SlashChip';
+import { SlashCommandMenu } from './composer/SlashCommandMenu';
 import { useAtMention } from './composer/useAtMention';
+import { useSlashCommand } from './composer/useSlashCommand';
 import { useComposerAttachments } from './composer/useComposerAttachments';
 import {
   clampThinkingLevel,
@@ -45,6 +48,7 @@ import { useSession } from '../data/session';
 import type { components } from '../../../src/v2/contract.gen';
 import { t } from '../i18n';
 import { handoffCommandOf } from '../data/handoffCommand';
+import { composeSkillMessage } from '../data/slashCommand';
 import { writeActiveWorkspace } from '../data/layout';
 import { subscribePrefs } from '../data/prefs';
 import { useRightActions } from '../data/rightPaneContext';
@@ -176,6 +180,7 @@ export function Composer({
   const { openInTerminal, copyPath, onToast: actionToast } = useRightActions();
   const { store } = useSession();
   const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [modelOpenSignal, setModelOpenSignal] = useState(0);
   const [customMode, setCustomMode] = useState(false);
   const [customDate, setCustomDate] = useState('');
   const [customTime, setCustomTime] = useState('09:00');
@@ -242,8 +247,47 @@ export function Composer({
     addProjectFile: att.addProjectFile,
   });
 
+  const compactionState = run.compaction?.state ?? 'idle';
+  const compactRunning = compactBusy || compactionState === 'running';
+  const handoffState = run.handoff?.state ?? 'idle';
+  const handoffRunning = handoffBusy || handoffState === 'running';
+
+  const slash = useSlashCommand({
+    draft,
+    setDraft,
+    locked,
+    focused,
+    textareaRef: area,
+    onResize: resize,
+    context: {
+      hasConversation: Boolean(conversationId) && !isDraft,
+      running: run.status === 'running',
+      compacting: compactRunning,
+      handoffRunning,
+    },
+    onCommand: (id) => {
+      if (id === 'compact') void requestCompact();
+      else if (id === 'model') setModelOpenSignal((n) => n + 1);
+      else if (id === 'new') startNewChat();
+    },
+  });
+
+  const slashSkill = slash.chip?.kind === 'skill' ? slash.chip : null;
+  const chipRef = useRef<HTMLSpanElement>(null);
+  const chipKey = slash.chip ? `${slash.chip.kind}:${chipLabel(lang, slash.chip)}` : '';
+  // The block sits over the textarea's first line; text-indent makes the text start after it.
+  useLayoutEffect(() => {
+    const el = area.current;
+    if (!el) return;
+    const w = chipRef.current?.offsetWidth ?? 0;
+    el.style.textIndent = w ? `${w + 8}px` : '';
+    resize();
+  }, [chipKey]);
+
   const hasPayload =
     Boolean(draft.trim()) ||
+    slash.chip?.kind === 'skill' ||
+    slash.chip?.kind === 'handoff' ||
     att.images.length > 0 ||
     att.visibleFileRefs.length > 0 ||
     att.uploads.some((u) => u.status === 'done') ||
@@ -291,9 +335,18 @@ export function Composer({
     };
   }, [scheduleOpen]);
 
+  function openSchedule() {
+    setScheduleOpen(true);
+    setCustomMode(false);
+    const tomorrow = new Date(tomorrowNineAm());
+    setCustomDate(formatDate(tomorrow.getFullYear(), tomorrow.getMonth() + 1, tomorrow.getDate()));
+    setCustomTime('09:00');
+  }
+
   async function handleScheduleSend(targetAt: number) {
-    const text = draft.trim();
-    if (!text) return;
+    const typed = draft.trim();
+    if (!typed) return;
+    const text = composeSkillMessage(slashSkill, typed);
 
     const name = text.slice(0, 20);
     let target: ScheduleTarget;
@@ -333,6 +386,7 @@ export function Composer({
       await createSchedule(payload, lang);
       const snapshot = att.takeAndClear();
       setDraft('');
+      slash.setChip(null);
       at.setCursorPos(null);
       at.setAtDismissed(false);
       requestAnimationFrame(resize);
@@ -347,7 +401,12 @@ export function Composer({
   }
 
   async function submit(text = draft.trim(), mode?: SendMode) {
-    const payload = text.trim();
+    const typed = text.trim();
+    const chip = slash.chip;
+    const skill = chip?.kind === 'skill' ? chip : null;
+    const payload = chip?.kind === 'handoff'
+      ? (typed ? `/handoff ${typed}` : '/handoff')
+      : composeSkillMessage(skill, typed);
     const { imagePayload, sentFiles, sentPastes, extraKey } = att.buildSendPayload();
 
     if (
@@ -360,17 +419,22 @@ export function Composer({
       return;
     }
 
-    const command = !imagePayload.length && !sentFiles.length && !sentPastes.length
+    if (chip?.kind === 'schedule') {
+      if (typed) openSchedule();
+      return;
+    }
+    const command = !skill && !imagePayload.length && !sentFiles.length && !sentPastes.length
       ? handoffCommandOf(payload)
       : null;
     const requestId = req.current.begin(payload, extraKey);
     setBusy(true);
     setError(null);
     setHint(null);
-    const sentText = payload;
+      const sentText = payload;
     const snapshot = att.takeAndClear();
 
     setDraft('');
+    slash.setChip(null);
     at.setCursorPos(null);
     at.setAtDismissed(false);
     requestAnimationFrame(resize);
@@ -392,7 +456,8 @@ export function Composer({
       att.revokeSnapshot(snapshot);
       onSent?.();
     } catch (err) {
-      setDraft((current) => (current ? current : sentText));
+      setDraft((current) => (current ? current : typed));
+      if (chip) slash.setChip(chip);
       att.restore(snapshot);
       setError(errorMessage(err, t(lang, 'send_failed')));
       requestAnimationFrame(resize);
@@ -406,6 +471,8 @@ export function Composer({
   }
 
   function onKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if (slash.handleBackspace(event)) return;
+    if (slash.handleKeyDown(event)) return;
     if (at.handleKeyDown(event)) return;
     if (event.key === 'Escape') {
       if (att.pastePeekId) {
@@ -481,10 +548,18 @@ export function Composer({
     openSettings('providers');
   }
 
-  const compactionState = run.compaction?.state ?? 'idle';
-  const compactRunning = compactBusy || compactionState === 'running';
   const compactError = compactRequestError
     || (compactionState === 'failed' ? run.compaction?.error || null : null);
+
+  function startNewChat() {
+    if (workspaceId) {
+      writeActiveWorkspace(workspaceId);
+      navigate(draftPath(workspaceId));
+    } else {
+      writeActiveWorkspace(NO_PROJECT_ID);
+      navigate(newChatPath());
+    }
+  }
 
   async function requestCompact() {
     if (!conversationId || compactRunning) return;
@@ -498,9 +573,6 @@ export function Composer({
       setCompactBusy(false);
     }
   }
-
-  const handoffState = run.handoff?.state ?? 'idle';
-  const handoffRunning = handoffBusy || handoffState === 'running';
 
   async function requestHandoff() {
     if (!conversationId || handoffRunning) return;
@@ -610,6 +682,14 @@ export function Composer({
                 <ComposerTags lang={lang} {...att} />
               </div>
             ) : null}
+            {slash.open ? (
+              <SlashCommandMenu
+                lang={lang}
+                items={slash.items}
+                activeIndex={slash.activeIndex}
+                onPick={slash.pick}
+              />
+            ) : null}
             {at.atOpen ? (
               <AtMentionMenu
                 lang={lang}
@@ -619,6 +699,16 @@ export function Composer({
                 atActiveIndex={at.atActiveIndex}
                 onPick={at.pickAtFile}
               />
+            ) : null}
+            <div className="composer-input-wrap">
+            {slash.chip ? (
+              <span ref={chipRef} className="composer-slash-chip">
+                <InlineChip
+                  label={chipLabel(lang, slash.chip)}
+                  kind={slash.chip.kind}
+                  testId="next-composer-chip"
+                />
+              </span>
             ) : null}
             <textarea
               ref={area}
@@ -661,6 +751,7 @@ export function Composer({
               onKeyDown={onKeyDown}
               onPaste={att.onPaste}
             />
+            </div>
             <div className="composer-bar">
               {noModel ? (
                 <div className="composer-no-model" data-testid="next-no-model">
@@ -697,6 +788,7 @@ export function Composer({
                       onPickThinkingLevel={(lvl) => { void pickThinkingLevel(lvl); }}
                       onPickRecent={(option, lvl) => { void pickRecent(option, lvl); }}
                       onManage={openManage}
+                      openSignal={modelOpenSignal}
                       contextWindow={selected?.contextWindow || context.window}
                       onSetContextWindow={(w) => { void setWindow(w); }}
                     />
@@ -750,11 +842,12 @@ export function Composer({
                     aria-label={t(lang, 'composer_schedule_send')}
                     disabled={!draft.trim() || locked || busy}
                     onClick={() => {
-                      setScheduleOpen((open) => !open);
-                      setCustomMode(false);
-                      const tomorrow = new Date(tomorrowNineAm());
-                      setCustomDate(formatDate(tomorrow.getFullYear(), tomorrow.getMonth() + 1, tomorrow.getDate()));
-                      setCustomTime('09:00');
+                      if (scheduleOpen) {
+                        setScheduleOpen(false);
+                        setCustomMode(false);
+                      } else {
+                        openSchedule();
+                      }
                     }}
                   >
                     {CLOCK_ICON}

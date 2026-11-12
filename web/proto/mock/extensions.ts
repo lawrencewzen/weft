@@ -85,6 +85,24 @@ export function seedSkills(): Skill[] {
       enabled: true,
       deletable: false,
     },
+    {
+      id: 'test-writer',
+      name: '补测试',
+      description: '给指定改动补单元测试，先跑一遍再报结果。',
+      version: '1.0.0',
+      source: 'user',
+      enabled: true,
+      deletable: true,
+    },
+    {
+      id: 'doc-polish',
+      name: '文档润色',
+      description: '通读文档，改掉啰嗦和不通顺的句子。',
+      version: '1.0.0',
+      source: 'user',
+      enabled: true,
+      deletable: true,
+    },
   ];
 }
 

@@ -181,6 +181,65 @@ test('main agent skill tool loads body; disabled or unknown skills error', { tim
   }
 });
 
+test('/<skill id> message attaches the skill body to that request only', { timeout: 40000 }, async () => {
+  const dataDir = await mkdtemp(path.join(tmpdir(), 'piw-kcmd-'));
+  const record = path.join(dataDir, 'requests.jsonl');
+  const srv = await startServer({
+    token: TOKEN,
+    dataDir,
+    env: { WEFT_LLM: 'faux', WEFT_FAUX_TEXT: 'ok', WEFT_FAUX_RECORD: record },
+  });
+  try {
+    const ws = await request(srv.base, 'POST', '/api/workspaces', { name: 'cmd' });
+    const conv = await request(srv.base, 'POST', `/api/workspaces/${ws.body.id}/conversations`, { title: 'cmd' });
+    const send = async (text, nth) => {
+      assert.equal((await request(srv.base, 'POST', `/api/conversations/${conv.body.id}/messages`, { text })).status, 202);
+      const done = await waitFor(srv.base, conv.body.id, (body) => body.status === 'done'
+        && (body.messages || []).filter((m) => m.role === 'assistant').length >= nth);
+      assert.equal(done.status, 'done', srv.logs());
+      return done;
+    };
+    const SKILL_TEXT = 'Subject line is imperative';
+    const lastUser = async () => {
+      const calls = await readRecords(record);
+      const msgs = calls[calls.length - 1].messages.filter((m) => m.role === 'user');
+      return msgs[msgs.length - 1].text;
+    };
+
+    const first = await send('/commit-message 给这次改动写提交信息', 1);
+    const sent = await lastUser();
+    assert.ok(sent.startsWith('/commit-message 给这次改动写提交信息'));
+    assert.ok(sent.includes(SKILL_TEXT), sent);
+    const stored = (first.messages || []).filter((m) => m.role === 'user').map((m) => m.text);
+    assert.deepEqual(stored, ['/commit-message 给这次改动写提交信息']);
+
+    await send('/review-notes', 2);
+    assert.ok((await lastUser()).includes('Lead with findings'));
+
+    await send('/model gpt 随便', 3);
+    assert.equal((await lastUser()).includes('skill_invoked'), false);
+    await send('/no-such-skill 正文', 4);
+    assert.equal((await lastUser()).includes('skill_invoked'), false);
+
+    // Called again later: the body stays on its first call, not repeated.
+    await send('/commit-message 再来一次', 5);
+    let calls = await readRecords(record);
+    let texts = calls[calls.length - 1].messages.filter((m) => m.role === 'user').map((m) => m.text);
+    assert.equal(texts.filter((t) => t.includes(SKILL_TEXT)).length, 1);
+    assert.equal(texts[texts.length - 1], '/commit-message 再来一次');
+
+    // A disabled skill is not called.
+    assert.equal((await request(srv.base, 'PUT', '/api/skills/commit-message', { enabled: false })).status, 200);
+    await send('/commit-message 看看', 6);
+    calls = await readRecords(record);
+    texts = calls[calls.length - 1].messages.filter((m) => m.role === 'user').map((m) => m.text);
+    assert.equal(texts.some((t) => t.includes(SKILL_TEXT)), false);
+  } finally {
+    await stopServer(srv);
+    await rm(dataDir, { recursive: true, force: true });
+  }
+});
+
 test('PATCH while busy still accepts a model change', { timeout: 30000 }, async () => {
   const dataDir = await mkdtemp(path.join(tmpdir(), 'piw-kagent-busy-'));
   const ready = path.join(dataDir, 'hold-ready');

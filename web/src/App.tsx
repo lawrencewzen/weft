@@ -3,6 +3,7 @@ import { getPreferredLang } from './data/lang';
 import { peekSettingsBehind, readAddressPath, subscribeAddress } from './data/nav';
 import { applyDocumentPrefs, subscribePrefs, watchSystemAppearance } from './data/prefs';
 import { SessionProvider } from './data/session';
+import { preloadSkillCatalog } from './data/skillCatalog';
 import { t } from './i18n';
 import { parseRoute, viewRouteWhileSettings, type AppRoute } from './route';
 import { AppShell } from './components/AppShell';
@@ -76,6 +77,7 @@ function AppBody() {
           setService({ serviceVersion: '' });
           setDemo(false);
         }
+        preloadSkillCatalog();
         setReady(true);
       } catch (err) {
         if (ac.signal.aborted) return;

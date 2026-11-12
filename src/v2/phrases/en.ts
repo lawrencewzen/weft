@@ -199,6 +199,7 @@ export const en: Record<string, string> = {
   err_skill_body_required: 'Enter skill instructions',
   err_skill_invalid: 'Skill content is invalid',
   err_skill_exists: 'A skill with that id already exists',
+  err_skill_reserved: 'That id is a reserved command name; pick another',
   err_skill_not_found: 'Skill not found',
   err_skill_builtin: 'Built-in skills cannot be deleted',
   term_err_path: 'Path is outside the workspace',

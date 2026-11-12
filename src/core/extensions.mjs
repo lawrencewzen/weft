@@ -1,4 +1,4 @@
-import { buildSkillPrompt, loadSkillBody, unknownSkillError } from './skills.mjs';
+import { buildSkillPrompt, findCommandSkill, listEnabledSkillRecords, loadSkillBody, unknownSkillError } from './skills.mjs';
 import { pluginHandlers } from './plugins.mjs';
 import { log } from './log.mjs';
 
@@ -26,6 +26,16 @@ export function createExtensionHost({ skillDirs = [], pluginDirs = [], getSettin
       } catch (err) {
         log.error('WEFT_EXTENSION', '', err);
         return { error: unknownSkillError(name, []) };
+      }
+    },
+    /** `{ id, body }` when the text is `/<id> ...` for an enabled, non-reserved skill; else null. */
+    async commandSkill(text) {
+      try {
+        const current = await settings();
+        return findCommandSkill(text, await listEnabledSkillRecords(skillDirs, current.skills || {}));
+      } catch (err) {
+        log.error('WEFT_EXTENSION', '', err);
+        return null;
       }
     },
     async pluginTools() {

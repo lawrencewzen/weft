@@ -8,10 +8,10 @@
 // not the others, and keep their own fixed instructions.
 import { randomUUID } from 'node:crypto';
 import { obj } from '@earendil-works/pi-schema';
-import { defineExtension, defineTool, section } from '@earendil-works/pi-durable';
+import { defineExtension, defineTool, GenerationTask, hook, section } from '@earendil-works/pi-durable';
 import { agentEventData, mapConvStatusToAgent } from '../core/agents.mjs';
 import { workspaceToolNames } from '../core/config.mjs';
-import { unknownSkillError } from '../core/skills.mjs';
+import { parseSkillCommand, unknownSkillError } from '../core/skills.mjs';
 import { parseThinkingLevelPatch } from '../core/thinking-level.mjs';
 import { createPluginHost } from './plugins.mjs';
 import { isAutoContinueText } from './continuation.mjs';
@@ -32,6 +32,45 @@ export function autoTitleFromText(currentTitle, text) {
   if (isAutoContinueText(text)) return undefined;
   const title = String(text ?? '').trim().slice(0, 48);
   return title || undefined;
+}
+
+function textOfUser(message) {
+  if (typeof message?.content === 'string') return message.content;
+  if (!Array.isArray(message?.content)) return '';
+  return message.content.find((part) => part?.type === 'text' && typeof part.text === 'string')?.text || '';
+}
+
+export function skillCallBlock(id, body) {
+  return `<skill_invoked id="${id}">\nThe user called this skill with /${id}. Follow it for this request.\n\n${body}\n</skill_invoked>`;
+}
+
+/**
+ * Append the called skill's body to the user message of a `/<id> ...` call.
+ * Only the request is changed (Pi Durable beforeRequest); the stored message
+ * stays as the user typed it. Each skill is attached once, to its earliest call
+ * in the visible history, so the prefix stays stable between rounds.
+ */
+export async function attachCalledSkills(messages, commandSkill) {
+  if (typeof commandSkill !== 'function') return undefined;
+  const seen = new Set();
+  let changed = false;
+  const next = [];
+  for (const message of messages) {
+    const cmd = message?.role === 'user' ? parseSkillCommand(textOfUser(message)) : null;
+    const skill = cmd && !seen.has(cmd.id) ? await commandSkill(textOfUser(message)) : null;
+    if (!skill) {
+      next.push(message);
+      continue;
+    }
+    seen.add(skill.id);
+    changed = true;
+    const block = skillCallBlock(skill.id, skill.body);
+    const content = typeof message.content === 'string'
+      ? `${message.content}\n\n${block}`
+      : [...message.content, { type: 'text', text: block }];
+    next.push({ ...message, content });
+  }
+  return changed ? { messages: next } : undefined;
 }
 
 /**
@@ -68,6 +107,20 @@ export function installAgentExtensions(registry, bridge, { dataDir } = {}) {
       }),
     ],
     tools: [skillTool],
+    hooks: [
+      hook(GenerationTask, {
+        async beforeRequest(request) {
+          try {
+            return await attachCalledSkills(request.messages, (text) => (
+              typeof bridge?.commandSkill === 'function' ? bridge.commandSkill(text) : null
+            ));
+          } catch (err) {
+            log.error('WEFT_SKILL_COMMAND', '', err);
+            return undefined;
+          }
+        },
+      }),
+    ],
   }));
   const have = new Set(registry.snapshot().tools().map((item) => item.tool.name));
   const missing = workspaceToolNames().filter((name) => !have.has(name)).map(builtinTool);
@@ -126,6 +179,9 @@ export function createAgentHost({
   if (bridge) {
     bridge.skillPrompt = () => (
       extensions && typeof extensions.skillPrompt === 'function' ? extensions.skillPrompt() : ''
+    );
+    bridge.commandSkill = (text) => (
+      extensions && typeof extensions.commandSkill === 'function' ? extensions.commandSkill(text) : null
     );
     bridge.loadSkill = (name) => (
       extensions && typeof extensions.loadSkill === 'function'
