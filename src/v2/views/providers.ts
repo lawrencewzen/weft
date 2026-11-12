@@ -96,6 +96,7 @@ export type RawModel = {
   name: string;
   enabled: boolean;
   contextWindow: number | null;
+  defaultContextWindow?: number | null;
   maxTokens: number | null;
   images: boolean;
   reasoning: boolean;
@@ -190,6 +191,7 @@ export function modelView(model: RawModel): ProviderModel {
     brand: brandIdOf(brandIcons().brandForModel(model.id)),
     enabled: model.enabled === true,
     contextWindow: model.contextWindow,
+    defaultContextWindow: typeof model.defaultContextWindow === 'number' ? model.defaultContextWindow : null,
     maxTokens: model.maxTokens,
     images: model.images === true,
     reasoning: model.reasoning === true,

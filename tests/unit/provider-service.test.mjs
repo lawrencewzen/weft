@@ -804,3 +804,52 @@ test('patchProvider can rename a builtin provider', async () => {
 });
 
 
+
+test('defaultContextWindow keeps the pre-override value (builtin and custom)', async () => {
+  await withService(async ({ service, modelsStore }) => {
+    const find = async (pid, mid) => (await service.listProviders())
+      .find((item) => item.id === pid).models.find((item) => item.id === mid);
+
+    // builtin
+    let m = await find('deepseek', 'deepseek-flash');
+    assert.ok(m.contextWindow > 0);
+    assert.equal(m.defaultContextWindow, m.contextWindow);
+    const catalogValue = m.contextWindow;
+    await service.patchProvider('deepseek', {
+      overrides: { 'deepseek-flash': { contextWindow: 64000 } },
+    });
+    m = await find('deepseek', 'deepseek-flash');
+    assert.equal(m.contextWindow, 64000);
+    assert.equal(m.defaultContextWindow, catalogValue);
+    await service.patchProvider('deepseek', {
+      overrides: { 'deepseek-flash': { contextWindow: null } },
+    });
+    m = await find('deepseek', 'deepseek-flash');
+    assert.equal(m.contextWindow, catalogValue);
+    assert.equal(m.defaultContextWindow, catalogValue);
+
+    // custom endpoint
+    await modelsStore.write(CUSTOM_ID, { models: [{ id: 'alpha', contextWindow: 200000 }, { id: 'beta' }] });
+    m = await find(CUSTOM_ID, 'alpha');
+    assert.equal(m.defaultContextWindow, 200000);
+    await service.patchProvider(CUSTOM_ID, { overrides: { alpha: { contextWindow: 256000 } } });
+    m = await find(CUSTOM_ID, 'alpha');
+    assert.equal(m.contextWindow, 256000);
+    assert.equal(m.defaultContextWindow, 200000);
+    await service.patchProvider(CUSTOM_ID, { overrides: { alpha: { contextWindow: null } } });
+    m = await find(CUSTOM_ID, 'alpha');
+    assert.equal(m.contextWindow, 200000);
+    assert.equal(m.defaultContextWindow, 200000);
+    assert.equal((await find(CUSTOM_ID, 'beta')).defaultContextWindow, null);
+  }, {
+    env: { DEEPSEEK_API_KEY: 'sk-env' },
+    settings: {
+      version: 3,
+      providers: [
+        { id: 'deepseek', kind: 'builtin', enabled: ['deepseek-flash'], overrides: {} },
+        ...customSettings().providers,
+      ],
+      defaultModel: null,
+    },
+  });
+});
