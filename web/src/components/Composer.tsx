@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { AgentsStrip } from './AgentsStrip';
 import { ConversationScheduleStrip } from './ConversationScheduleStrip';
 import { StallStrip } from './StallStrip';
@@ -23,7 +23,8 @@ import { AtMentionMenu } from './composer/AtMentionMenu';
 import { ComposerTags } from './composer/ComposerTags';
 import { GitChip } from './composer/GitChip';
 import { PlusMenu } from './composer/PlusMenu';
-import { SkillTag, SlashCommandMenu } from './composer/SlashCommandMenu';
+import { InlineChip, chipLabel } from './composer/SlashChip';
+import { SlashCommandMenu } from './composer/SlashCommandMenu';
 import { useAtMention } from './composer/useAtMention';
 import { useSlashCommand } from './composer/useSlashCommand';
 import { useComposerAttachments } from './composer/useComposerAttachments';
@@ -47,7 +48,7 @@ import { useSession } from '../data/session';
 import type { components } from '../../../src/v2/contract.gen';
 import { t } from '../i18n';
 import { handoffCommandOf } from '../data/handoffCommand';
-import { composeSkillMessage, scheduleCommandOf } from '../data/slashCommand';
+import { composeSkillMessage } from '../data/slashCommand';
 import { writeActiveWorkspace } from '../data/layout';
 import { subscribePrefs } from '../data/prefs';
 import { useRightActions } from '../data/rightPaneContext';
@@ -252,7 +253,6 @@ export function Composer({
   const handoffRunning = handoffBusy || handoffState === 'running';
 
   const slash = useSlashCommand({
-    lang,
     draft,
     setDraft,
     locked,
@@ -272,9 +272,22 @@ export function Composer({
     },
   });
 
+  const slashSkill = slash.chip?.kind === 'skill' ? slash.chip : null;
+  const chipRef = useRef<HTMLSpanElement>(null);
+  const chipKey = slash.chip ? `${slash.chip.kind}:${chipLabel(lang, slash.chip)}` : '';
+  // The block sits over the textarea's first line; text-indent makes the text start after it.
+  useLayoutEffect(() => {
+    const el = area.current;
+    if (!el) return;
+    const w = chipRef.current?.offsetWidth ?? 0;
+    el.style.textIndent = w ? `${w + 8}px` : '';
+    resize();
+  }, [chipKey]);
+
   const hasPayload =
     Boolean(draft.trim()) ||
-    Boolean(slash.skill) ||
+    slash.chip?.kind === 'skill' ||
+    slash.chip?.kind === 'handoff' ||
     att.images.length > 0 ||
     att.visibleFileRefs.length > 0 ||
     att.uploads.some((u) => u.status === 'done') ||
@@ -322,8 +335,7 @@ export function Composer({
     };
   }, [scheduleOpen]);
 
-  function openSchedule(content?: string) {
-    if (content !== undefined) setDraft(content);
+  function openSchedule() {
     setScheduleOpen(true);
     setCustomMode(false);
     const tomorrow = new Date(tomorrowNineAm());
@@ -332,9 +344,9 @@ export function Composer({
   }
 
   async function handleScheduleSend(targetAt: number) {
-    const typed = (scheduleCommandOf(draft)?.content ?? draft).trim();
+    const typed = draft.trim();
     if (!typed) return;
-    const text = composeSkillMessage(slash.skill, typed);
+    const text = composeSkillMessage(slashSkill, typed);
 
     const name = text.slice(0, 20);
     let target: ScheduleTarget;
@@ -374,7 +386,7 @@ export function Composer({
       await createSchedule(payload, lang);
       const snapshot = att.takeAndClear();
       setDraft('');
-      slash.setSkill(null);
+      slash.setChip(null);
       at.setCursorPos(null);
       at.setAtDismissed(false);
       requestAnimationFrame(resize);
@@ -390,8 +402,11 @@ export function Composer({
 
   async function submit(text = draft.trim(), mode?: SendMode) {
     const typed = text.trim();
-    const skill = slash.skill;
-    const payload = composeSkillMessage(skill, typed);
+    const chip = slash.chip;
+    const skill = chip?.kind === 'skill' ? chip : null;
+    const payload = chip?.kind === 'handoff'
+      ? (typed ? `/handoff ${typed}` : '/handoff')
+      : composeSkillMessage(skill, typed);
     const { imagePayload, sentFiles, sentPastes, extraKey } = att.buildSendPayload();
 
     if (
@@ -404,9 +419,8 @@ export function Composer({
       return;
     }
 
-    const scheduleCmd = !skill ? scheduleCommandOf(typed) : null;
-    if (scheduleCmd) {
-      if (scheduleCmd.content) openSchedule(scheduleCmd.content);
+    if (chip?.kind === 'schedule') {
+      if (typed) openSchedule();
       return;
     }
     const command = !skill && !imagePayload.length && !sentFiles.length && !sentPastes.length
@@ -416,11 +430,11 @@ export function Composer({
     setBusy(true);
     setError(null);
     setHint(null);
-    const sentText = payload;
+      const sentText = payload;
     const snapshot = att.takeAndClear();
 
     setDraft('');
-    slash.setSkill(null);
+    slash.setChip(null);
     at.setCursorPos(null);
     at.setAtDismissed(false);
     requestAnimationFrame(resize);
@@ -442,8 +456,8 @@ export function Composer({
       att.revokeSnapshot(snapshot);
       onSent?.();
     } catch (err) {
-      setDraft((current) => (current ? current : (skill ? typed : sentText)));
-      if (skill) slash.setSkill(skill);
+      setDraft((current) => (current ? current : typed));
+      if (chip) slash.setChip(chip);
       att.restore(snapshot);
       setError(errorMessage(err, t(lang, 'send_failed')));
       requestAnimationFrame(resize);
@@ -457,6 +471,7 @@ export function Composer({
   }
 
   function onKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if (slash.handleBackspace(event)) return;
     if (slash.handleKeyDown(event)) return;
     if (at.handleKeyDown(event)) return;
     if (event.key === 'Escape') {
@@ -577,7 +592,7 @@ export function Composer({
     focused ? 'is-focused' : '',
     noModel ? 'is-no-model' : '',
     att.dragging ? 'is-drop' : '',
-    att.hasTagItems || slash.skill || queue.length ? 'is-tagged' : '',
+    att.hasTagItems || queue.length ? 'is-tagged' : '',
   ].filter(Boolean).join(' ');
 
   return (
@@ -632,7 +647,7 @@ export function Composer({
             data-testid="next-composer"
           >
             <div className="composer-body">
-            {queue.length || att.hasTagItems || slash.skill ? (
+            {queue.length || att.hasTagItems ? (
               <div className="composer-tags" data-testid="next-composer-tags">
                 {queue.map((item) => (
                   <span key={item.requestId} className="composer-queue" data-testid="next-queue-chip">
@@ -664,14 +679,6 @@ export function Composer({
                     </button>
                   </span>
                 ))}
-                {slash.skill ? (
-                  <SkillTag
-                    lang={lang}
-                    id={slash.skill.id}
-                    name={slash.skill.name}
-                    onRemove={() => { slash.setSkill(null); area.current?.focus(); }}
-                  />
-                ) : null}
                 <ComposerTags lang={lang} {...att} />
               </div>
             ) : null}
@@ -692,6 +699,16 @@ export function Composer({
                 atActiveIndex={at.atActiveIndex}
                 onPick={at.pickAtFile}
               />
+            ) : null}
+            <div className="composer-input-wrap">
+            {slash.chip ? (
+              <span ref={chipRef} className="composer-slash-chip">
+                <InlineChip
+                  label={chipLabel(lang, slash.chip)}
+                  kind={slash.chip.kind}
+                  testId="next-composer-chip"
+                />
+              </span>
             ) : null}
             <textarea
               ref={area}
@@ -734,6 +751,7 @@ export function Composer({
               onKeyDown={onKeyDown}
               onPaste={att.onPaste}
             />
+            </div>
             <div className="composer-bar">
               {noModel ? (
                 <div className="composer-no-model" data-testid="next-no-model">
@@ -822,7 +840,7 @@ export function Composer({
                     data-testid="next-composer-schedule"
                     title={t(lang, 'composer_schedule_send')}
                     aria-label={t(lang, 'composer_schedule_send')}
-                    disabled={(!(scheduleCommandOf(draft)?.content ?? draft.trim())) || locked || busy}
+                    disabled={!draft.trim() || locked || busy}
                     onClick={() => {
                       if (scheduleOpen) {
                         setScheduleOpen(false);

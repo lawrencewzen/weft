@@ -72,28 +72,3 @@ export function SlashCommandMenu({ lang, items, activeIndex, onPick }: SlashComm
     </div>
   );
 }
-
-export type SkillTagProps = {
-  lang: Lang;
-  id: string;
-  name: string;
-  onRemove: () => void;
-};
-
-export function SkillTag({ lang, id, name, onRemove }: SkillTagProps) {
-  return (
-    <span className="composer-tag is-file is-skill" data-testid="next-skill-tag" data-id={id}>
-      <span className="composer-tag-file-icon">{SKILL_ICON}</span>
-      <span className="composer-tag-name">/{id}</span>
-      <button
-        type="button"
-        className="composer-tag-x"
-        data-testid="next-skill-remove"
-        aria-label={t(lang, 'attach_remove', { name })}
-        onClick={onRemove}
-      >
-        &times;
-      </button>
-    </span>
-  );
-}

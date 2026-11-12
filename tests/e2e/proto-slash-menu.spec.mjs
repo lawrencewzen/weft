@@ -68,25 +68,31 @@ test('/handoff, /schedule, /model and /new', async ({ page }) => {
 
   await input.fill('/hand');
   await input.press('Enter');
-  await expect(input).toHaveValue('/handoff ');
+  await expect(page.getByTestId('next-composer-chip')).toHaveText('交接');
+  await expect(input).toHaveValue('');
   await input.type('只留下迁移进度');
   await input.press('Enter');
   await expect.poll(async () => (await state.requests()).some((r) => /\/handoff$/.test(r.url) && r.method === 'POST')).toBe(true);
   await expect(input).toHaveValue('');
+  await expect(page.getByTestId('next-composer-chip')).toHaveCount(0);
   await expect(input).toBeEnabled();
 
   await input.fill('/sch');
   await input.press('Enter');
-  await expect(input).toHaveValue('/schedule ');
+  await expect(page.getByTestId('next-composer-chip')).toHaveText('定时');
+  await expect(input).toHaveValue('');
   await input.type('明天检查日志');
   await input.press('Enter');
   await expect(page.getByTestId('next-composer-schedule-popover')).toBeVisible();
   await expect(input).toHaveValue('明天检查日志');
+  await expect(page.getByTestId('next-composer-chip')).toHaveText('定时');
   await page.getByTestId('next-schedule-opt-1h').click();
   await expect(input).toHaveValue('');
+  await expect(page.getByTestId('next-composer-chip')).toHaveCount(0);
 
   await input.fill('/mod');
   await input.press('Enter');
+  await expect(page.getByTestId('next-composer-chip')).toHaveCount(0);
   await expect(page.getByTestId('next-menu-model')).toBeVisible();
   await page.keyboard.press('Escape');
 
@@ -96,7 +102,7 @@ test('/handoff, /schedule, /model and /new', async ({ page }) => {
   expectClean(state);
 });
 
-test('picking a skill shows a removable tag and the reply says which skill ran', async ({ page }) => {
+test('a skill is a block inside the input, Backspace removes it, the bubble shows it too', async ({ page }) => {
   const state = await openProto(page);
   await openConv(page, 'c-docs');
   const input = page.getByTestId('next-composer-input');
@@ -105,20 +111,51 @@ test('picking a skill shows a removable tag and the reply says which skill ran',
   await expect(page.locator('[data-testid=next-slash-item][data-kind=skill]')).toHaveCount(4);
   await input.fill('/code');
   await input.press('Enter');
-  const tag = page.getByTestId('next-skill-tag');
-  await expect(tag).toContainText('/code-review');
+  const chip = page.getByTestId('next-composer-chip');
+  await expect(chip).toHaveText('代码审查');
   await expect(input).toHaveValue('');
+  // Not above the input any more.
+  await expect(page.getByTestId('next-skill-tag')).toHaveCount(0);
+  await expect(page.getByTestId('next-composer-tags')).toHaveCount(0);
 
-  await page.getByTestId('next-skill-remove').click();
-  await expect(tag).toHaveCount(0);
+  // The block sits on the first line: same vertical band as the typed text, text starts after it.
+  await input.type('x');
+  const box = await chip.boundingBox();
+  const area = await input.boundingBox();
+  expect(box.y).toBeGreaterThanOrEqual(area.y - 2);
+  expect(box.y + box.height).toBeLessThanOrEqual(area.y + 36);
+  expect(await input.evaluate((el) => parseFloat(el.style.textIndent))).toBeGreaterThan(box.width);
+  await input.press('Backspace');
+
+  // Backspace at the start removes the whole block.
+  await input.press('Backspace');
+  await expect(chip).toHaveCount(0);
+  await expect(input).toHaveValue('');
+  expect(await input.evaluate((el) => el.style.textIndent)).toBe('');
 
   await input.fill('/code');
   await input.press('Enter');
-  await expect(tag).toBeVisible();
-  await input.fill('看一下这次改动');
+  await expect(chip).toBeVisible();
+  await input.fill('看一下这次改动\n第二行');
   await input.press('Enter');
-  await expect(tag).toHaveCount(0);
-  await expect(page.getByTestId('next-item-user').last()).toContainText('/code-review 看一下这次改动');
+  await expect(chip).toHaveCount(0);
+  const bubble = page.getByTestId('next-item-user').last();
+  await expect(bubble.getByTestId('next-user-chip')).toHaveText('代码审查');
+  await expect(bubble).toContainText('看一下这次改动');
+  await expect(bubble).not.toContainText('/code-review');
   await expect(page.getByTestId('next-item-assistant').last()).toContainText('用了技能「代码审查」', { timeout: 30_000 });
+  expectClean(state);
+});
+
+test('an unknown /xxx message is shown as typed, without a block', async ({ page }) => {
+  const state = await openProto(page);
+  await openConv(page, 'c-docs');
+  const input = page.getByTestId('next-composer-input');
+  await input.click();
+  await input.fill('/nope 看一下');
+  await input.press('Enter');
+  const bubble = page.getByTestId('next-item-user').last();
+  await expect(bubble).toContainText('/nope 看一下');
+  await expect(bubble.getByTestId('next-user-chip')).toHaveCount(0);
   expectClean(state);
 });

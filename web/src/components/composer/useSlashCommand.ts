@@ -9,7 +9,7 @@ import {
   type RefObject,
   type SetStateAction,
 } from 'react';
-import { listSkills, type Skill } from '../../data/api';
+import { useSkillCatalog } from '../../data/skillCatalog';
 import {
   filterSlashItems,
   matchSlashTrigger,
@@ -19,12 +19,10 @@ import {
   type SlashCommandId,
   type SlashContext,
   type SlashItem,
-  type SlashSkillRef,
+  type SlashChip,
 } from '../../data/slashCommand';
-import type { Lang } from '../../data/lang';
 
 export type UseSlashCommandOptions = {
-  lang: Lang;
   draft: string;
   setDraft: Dispatch<SetStateAction<string>>;
   locked: boolean;
@@ -38,7 +36,6 @@ export type UseSlashCommandOptions = {
 export type UseSlashCommandResult = ReturnType<typeof useSlashCommand>;
 
 export function useSlashCommand({
-  lang,
   draft,
   setDraft,
   locked,
@@ -52,8 +49,7 @@ export function useSlashCommand({
   const [activeIndex, setActiveIndex] = useState(0);
   const activeRef = useRef(0);
   activeRef.current = activeIndex;
-  const [skills, setSkills] = useState<Skill[] | null>(null);
-  const [skill, setSkill] = useState<SlashSkillRef | null>(null);
+  const [chip, setChip] = useState<SlashChip | null>(null);
 
   const trigger = useMemo(() => matchSlashTrigger(draft), [draft]);
   const wantOpen = Boolean(trigger && focused && !locked && !dismissed);
@@ -62,15 +58,7 @@ export function useSlashCommand({
     if (!trigger) setDismissed(false);
   }, [trigger]);
 
-  useEffect(() => {
-    if (!focused || locked || skills) return;
-    let cancelled = false;
-    void listSkills(lang).then(
-      (res) => { if (!cancelled) setSkills(res.skills); },
-      () => { if (!cancelled) setSkills([]); },
-    );
-    return () => { cancelled = true; };
-  }, [focused, locked, skills, lang]);
+  const skills = useSkillCatalog(focused && !locked);
 
   const { hasConversation, running, compacting, handoffRunning } = context;
   const items = useMemo(() => {
@@ -105,21 +93,32 @@ export function useSlashCommand({
   const pick = useCallback((item: SlashItem) => {
     if (item.disabled) return;
     if (item.kind === 'skill') {
-      setSkill({ id: item.id, name: item.name });
+      setChip({ kind: 'skill', id: item.id, name: item.name });
       setDraft('');
       focusEnd('');
       return;
     }
     if (item.id === 'handoff' || item.id === 'schedule') {
-      const text = `/${item.id} `;
-      setDraft(text);
-      focusEnd(text);
+      setChip({ kind: item.id });
+      setDraft('');
+      focusEnd('');
       return;
     }
     setDraft('');
     focusEnd('');
     onCommand(item.id);
   }, [focusEnd, onCommand, setDraft]);
+
+  /** Backspace with the caret at the very start removes the block. */
+  function handleBackspace(event: KeyboardEvent<HTMLTextAreaElement>): boolean {
+    if (!chip || event.key !== 'Backspace') return false;
+    if (event.nativeEvent.isComposing || event.keyCode === 229) return false;
+    const el = textareaRef.current;
+    if (!el || el.selectionStart !== 0 || el.selectionEnd !== 0) return false;
+    event.preventDefault();
+    setChip(null);
+    return true;
+  }
 
   function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>): boolean {
     if (!open) return false;
@@ -150,9 +149,10 @@ export function useSlashCommand({
     open,
     items,
     activeIndex,
-    skill,
-    setSkill,
+    chip,
+    setChip,
     pick,
     handleKeyDown,
+    handleBackspace,
   };
 }

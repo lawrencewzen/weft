@@ -45,11 +45,13 @@ open design/prototype/index.html    # macOS；Windows 直接双击
 | 项 | 操作 |
 | --- | --- |
 | `/compact` | 选中直接压缩；草稿里不显示；对话运行中或正在压缩时置灰 |
-| `/handoff` | 选中后输入框变成 `/handoff `，补上重点回车；草稿里不显示；运行中置灰 |
-| `/schedule` | 选中后输入框变成 `/schedule `，补上内容回车，打开定时弹层（内容已预填） |
-| `/model` | 打开模型选择 |
-| `/new` | 新对话 |
-| `/<技能>` | 选中后输入框上方出现技能标签（可删除），正文照常写；发送时消息变成 `/<技能 id> 正文`，模拟回复开头写「用了技能「X」」 |
+| `/handoff` | 选中后输入框最前面出现圆角小块「交接」（不带 `/`），光标在块后，补上重点回车；草稿里不显示；运行中置灰 |
+| `/schedule` | 选中后出现小块「定时」，写内容回车，打开定时弹层（内容已预填） |
+| `/model` | 打开模型选择（选中即执行，无小块） |
+| `/new` | 新对话（选中即执行，无小块） |
+| `/<技能>` | 选中后出现以技能名命名的小块，正文照常写 |
+
+小块不可编辑：光标在正文最开头按 Backspace 整块删除；发送失败时连小块一起恢复。技能消息发给后端的仍是 `/<技能 id> 正文`，聊天记录里的用户气泡只要 id 是已知技能（技能列表里有）就显示「技能名」小块 + 正文，未知的 `/xxx` 按原文显示；模拟回复开头写「用了技能「X」」。
 
 示例技能（模拟后端）：`code-review`、`release-notes`、`test-writer`、`doc-polish`。
 
@@ -170,7 +172,7 @@ open design/prototype/index.html    # macOS；Windows 直接双击
 | `tests/e2e/proto-workspace.spec.mjs` | 本地目录浏览 + 创建 + 在里面发消息、Git 导入选项目和分支 |
 | `tests/e2e/proto-schedules.spec.mjs` | 定时任务：入口徽标、路由导航、新建/编辑/删除确认、间隔校验、立即执行与展开执行记录 |
 | `tests/e2e/proto-handoff.spec.mjs` | 交接到新上下文：c-handoff 预置交接条目展开说明、手动点击交接模拟流程与百分比下降 |
-| `tests/e2e/proto-slash-menu.spec.mjs` | 「/」命令菜单：触发条件与过滤、/compact（草稿里不显示）、/handoff、/schedule、/model、/new、技能标签与发送 |
+| `tests/e2e/proto-slash-menu.spec.mjs` | 「/」命令菜单：触发条件与过滤、/compact（草稿里不显示）、/handoff、/schedule、/model、/new、输入框内小块与 Backspace 删除、气泡小块、未知 /xxx 原文 |
 | `tests/e2e/helpers/proto.mjs` | 上面几个 spec 共用的 `file://` 打开 / 零报错 / 零网络断言 |
 
 ## 加数据、加交互

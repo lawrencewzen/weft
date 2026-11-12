@@ -4,6 +4,27 @@ export type SlashCommandId = 'compact' | 'handoff' | 'schedule' | 'model' | 'new
 
 export type SlashSkillRef = { id: string; name: string };
 
+/** The block at the start of the input: set by `/handoff`, `/schedule` or a skill. */
+export type SlashChip =
+  | { kind: 'handoff' }
+  | { kind: 'schedule' }
+  | { kind: 'skill'; id: string; name: string };
+
+/**
+ * A sent message `/<id> body` whose id is a known skill shows as a block plus the body;
+ * an unknown `/xxx` stays as typed.
+ */
+export function parseSkillMessage(
+  text: string,
+  skills: readonly { id: string; name: string }[] | null,
+): { skill: SlashSkillRef; body: string } | null {
+  if (!skills?.length) return null;
+  const m = /^\/([^\s/]+)(?:\s+([\s\S]*))?$/.exec(String(text ?? '').trim());
+  if (!m) return null;
+  const hit = skills.find((sk) => sk.id === m[1]);
+  return hit ? { skill: { id: hit.id, name: hit.name }, body: (m[2] ?? '').trim() } : null;
+}
+
 export type SlashItem =
   | { kind: 'command'; id: SlashCommandId; label: string; disabled: boolean }
   | { kind: 'skill'; id: string; label: string; name: string; description: string; disabled: false };
@@ -73,13 +94,6 @@ export function filterSlashItems(items: readonly SlashItem[], query: string): Sl
 export function stepSlashIndex(index: number, length: number, dir: 'up' | 'down'): number {
   if (length <= 0) return 0;
   return dir === 'down' ? (index + 1) % length : (index - 1 + length) % length;
-}
-
-/** `/schedule <content>`: the content becomes the scheduled message. `/schedule` alone has no content. */
-export function scheduleCommandOf(text: string): { content: string } | null {
-  const m = /^\/schedule(?:\s+([\s\S]*))?$/.exec(String(text ?? '').trim());
-  if (!m) return null;
-  return { content: (m[1] ?? '').trim() };
 }
 
 /** Message text sent for a chosen skill: `/<id> <body>`. */

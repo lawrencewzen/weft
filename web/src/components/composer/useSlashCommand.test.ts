@@ -4,8 +4,10 @@ import { act, createElement, useRef, useState, type KeyboardEvent } from 'react'
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { listSkills } from '../../data/api';
+import { resetSkillCatalog } from '../../data/skillCatalog';
 import type { SlashContext } from '../../data/slashCommand';
-import { SkillTag, SlashCommandMenu } from './SlashCommandMenu';
+import { InlineChip, chipLabel } from './SlashChip';
+import { SlashCommandMenu } from './SlashCommandMenu';
 import { useSlashCommand, type UseSlashCommandResult } from './useSlashCommand';
 
 vi.mock('../../data/api', async (importOriginal) => {
@@ -32,7 +34,6 @@ function Host(props: { context?: Partial<SlashContext>; locked?: boolean }) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const commands = useRef<string[]>([]);
   const slash = useSlashCommand({
-    lang: 'zh',
     draft,
     setDraft,
     locked: props.locked ?? false,
@@ -49,13 +50,8 @@ function Host(props: { context?: Partial<SlashContext>; locked?: boolean }) {
     slash.open
       ? createElement(SlashCommandMenu, { lang: 'zh', items: slash.items, activeIndex: slash.activeIndex, onPick: slash.pick })
       : null,
-    slash.skill
-      ? createElement(SkillTag, {
-          lang: 'zh',
-          id: slash.skill.id,
-          name: slash.skill.name,
-          onRemove: () => slash.setSkill(null),
-        })
+    slash.chip
+      ? createElement(InlineChip, { label: chipLabel('zh', slash.chip), kind: slash.chip.kind, testId: 'next-composer-chip' })
       : null,
     createElement('textarea', { ref: textareaRef, value: draft, readOnly: true }),
   );
@@ -92,6 +88,12 @@ async function type(text: string) {
   await flush();
 }
 
+async function backspace(composing = false) {
+  let handled = false;
+  await act(async () => { handled = latest!.slash.handleBackspace(keyEvent('Backspace', composing)); });
+  return handled;
+}
+
 async function press(key: string, composing = false) {
   let handled = false;
   await act(async () => { handled = latest!.slash.handleKeyDown(keyEvent(key, composing)); });
@@ -105,6 +107,7 @@ function ids() {
 describe('useSlashCommand', () => {
   beforeEach(() => {
     (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    resetSkillCatalog();
     vi.mocked(listSkills).mockReset();
     vi.mocked(listSkills).mockResolvedValue({ skills: SKILLS });
   });
@@ -156,17 +159,6 @@ describe('useSlashCommand', () => {
     expect(latest!.draft).toBe('');
   });
 
-  it('/handoff and /schedule leave the command text for the user to continue', async () => {
-    await renderHost();
-    await type('/hand');
-    await press('Enter');
-    expect(latest!.draft).toBe('/handoff ');
-    expect(latest!.slash.open).toBe(false);
-    await type('/sch');
-    await press('Tab');
-    expect(latest!.draft).toBe('/schedule ');
-  });
-
   it('Esc dismisses until the slash is gone', async () => {
     await renderHost();
     await type('/c');
@@ -211,19 +203,57 @@ describe('useSlashCommand', () => {
     expect(latest!.draft).toBe('/comp');
   });
 
-  it('picking a skill adds a tag, clears the draft, and the tag can be removed', async () => {
+  it('picking a skill shows a block with the skill name, clears the draft; Backspace at the start removes it', async () => {
     await renderHost();
     await type('/code');
     await press('Enter');
-    expect(latest!.slash.skill).toEqual({ id: 'code-review', name: '代码审查' });
+    expect(latest!.slash.chip).toEqual({ kind: 'skill', id: 'code-review', name: '代码审查' });
     expect(latest!.draft).toBe('');
-    const tag = document.querySelector('[data-testid="next-skill-tag"]');
-    expect(tag?.textContent).toContain('/code-review');
-    await act(async () => {
-      (document.querySelector('[data-testid="next-skill-remove"]') as HTMLButtonElement).click();
-    });
-    expect(latest!.slash.skill).toBeNull();
-    expect(document.querySelector('[data-testid="next-skill-tag"]')).toBeNull();
+    const chip = document.querySelector('[data-testid="next-composer-chip"]');
+    expect(chip?.textContent).toBe('代码审查');
+    // Caret not at the start: Backspace is left to the textarea.
+    await type('abc');
+    const ta = document.querySelector('textarea')!;
+    ta.setSelectionRange(2, 2);
+    expect(await backspace()).toBe(false);
+    expect(latest!.slash.chip).not.toBeNull();
+    ta.setSelectionRange(0, 0);
+    expect(await backspace()).toBe(true);
+    expect(latest!.slash.chip).toBeNull();
+    expect(latest!.draft).toBe('abc');
+    expect(document.querySelector('[data-testid="next-composer-chip"]')).toBeNull();
+  });
+
+  it('/handoff and /schedule become blocks named 交接 / 定时, with no slash text in the draft', async () => {
+    await renderHost();
+    await type('/hand');
+    await press('Enter');
+    expect(latest!.slash.chip).toEqual({ kind: 'handoff' });
+    expect(latest!.draft).toBe('');
+    expect(document.querySelector('[data-testid="next-composer-chip"]')?.textContent).toBe('交接');
+    await type('/sch');
+    await press('Tab');
+    expect(latest!.slash.chip).toEqual({ kind: 'schedule' });
+    expect(document.querySelector('[data-testid="next-composer-chip"]')?.textContent).toBe('定时');
+  });
+
+  it('/compact, /model and /new run at once and leave no block', async () => {
+    await renderHost();
+    await type('/comp');
+    await press('Enter');
+    await type('/new');
+    await press('Enter');
+    expect(latest!.commands).toEqual(['compact', 'new']);
+    expect(latest!.slash.chip).toBeNull();
+  });
+
+  it('Backspace is ignored while composing and without a block', async () => {
+    await renderHost();
+    expect(await backspace()).toBe(false);
+    await type('/code');
+    await press('Enter');
+    expect(await backspace(true)).toBe(false);
+    expect(latest!.slash.chip).not.toBeNull();
   });
 
   it('commands still work when listing skills fails', async () => {

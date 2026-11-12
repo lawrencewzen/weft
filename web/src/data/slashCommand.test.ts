@@ -3,7 +3,7 @@ import {
   composeSkillMessage,
   filterSlashItems,
   matchSlashTrigger,
-  scheduleCommandOf,
+  parseSkillMessage,
   slashCommands,
   slashSkillItems,
   stepSlashIndex,
@@ -104,17 +104,29 @@ describe('stepSlashIndex', () => {
   });
 });
 
-describe('scheduleCommandOf / composeSkillMessage', () => {
-  it('reads the content after /schedule', () => {
-    expect(scheduleCommandOf('/schedule 明天检查日志')).toEqual({ content: '明天检查日志' });
-    expect(scheduleCommandOf('/schedule ')).toEqual({ content: '' });
-    expect(scheduleCommandOf('/scheduled x')).toBeNull();
-    expect(scheduleCommandOf('hi /schedule x')).toBeNull();
-  });
+describe('composeSkillMessage / parseSkillMessage', () => {
+  const skills = [{ id: 'code-review', name: '代码审查' }];
 
   it('prefixes the skill id', () => {
     expect(composeSkillMessage({ id: 'code-review', name: '代码审查' }, ' 看一下 ')).toBe('/code-review 看一下');
     expect(composeSkillMessage({ id: 'code-review', name: '代码审查' }, '')).toBe('/code-review');
     expect(composeSkillMessage(null, ' hi ')).toBe('hi');
+  });
+
+  it('parses a known skill prefix', () => {
+    expect(parseSkillMessage('/code-review 看一下\n第二行', skills)).toEqual({
+      skill: { id: 'code-review', name: '代码审查' },
+      body: '看一下\n第二行',
+    });
+    expect(parseSkillMessage('/code-review', skills)?.body).toBe('');
+  });
+
+  it('leaves unknown ids, paths and plain text alone', () => {
+    expect(parseSkillMessage('/nope 看一下', skills)).toBeNull();
+    expect(parseSkillMessage('/code-review2 x', skills)).toBeNull();
+    expect(parseSkillMessage('/usr/bin x', skills)).toBeNull();
+    expect(parseSkillMessage('hi /code-review', skills)).toBeNull();
+    expect(parseSkillMessage('/code-review x', null)).toBeNull();
+    expect(parseSkillMessage('/code-review x', [])).toBeNull();
   });
 });
