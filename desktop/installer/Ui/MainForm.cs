@@ -384,14 +384,18 @@ public sealed class MainForm : Form
         Foot(_uGo);
 
         Head(_pLogo, _pH1, _pSub);
-        P(_pBar, 36, 203, 488, 6);
-        P(_pStep, 36, 220, 400, 20);
-        P(_pPct, 424, 220, 100, 20);
-        P(_pFile, 36, 244, 488, 18);
-        P(_pWarn, 36, 244, 488, 36);
-        P(_pTog, 36, 284, 10, 20); _pTog.Width = _pTog.PreferredWidth();
-        P(_pOpen, 0, 284, 10, 20); _pOpen.Left = _pTog.Right + Sc(14); _pOpen.Width = _pOpen.PreferredWidth();
-        P(_pLog, 36, 310, 488, 20 + _extra);
+        // 屏幕矮导致 _extra 被压缩时：先把进度区整体上移（压缩标题与进度条之间的留白），日志框向下用满到按钮行/底边距
+        var squeezed = _extra > 0 && _extra < DetailsExtra;
+        var pBottom = !squeezed || _pWait.Visible ? 330 + _extra : H + _extra - 24;
+        var up = squeezed ? Math.Clamp(310 + 92 - pBottom, 0, 73) : 0;
+        P(_pBar, 36, 203 - up, 488, 6);
+        P(_pStep, 36, 220 - up, 400, 20);
+        P(_pPct, 424, 220 - up, 100, 20);
+        P(_pFile, 36, 244 - up, 488, 18);
+        P(_pWarn, 36, 244 - up, 488, 36);
+        P(_pTog, 36, 284 - up, 10, 20); _pTog.Width = _pTog.PreferredWidth();
+        P(_pOpen, 0, 284 - up, 10, 20); _pOpen.Left = _pTog.Right + Sc(14); _pOpen.Width = _pOpen.PreferredWidth();
+        P(_pLog, 36, 310 - up, 488, pBottom - (310 - up));
         _pLog.Relayout();
         Foot(_pCancel, _pWait);
 
@@ -403,8 +407,8 @@ public sealed class MainForm : Form
 
         P(_eTog, 36, 338 + _extra + 7, 10, 20); _eTog.Width = _eTog.PreferredWidth();
         P(_eOpen, 0, 338 + _extra + 7, 10, 20); _eOpen.Left = _eTog.Right + Sc(14); _eOpen.Width = _eOpen.PreferredWidth();
-        // 屏幕矮时 _extra 被压缩，日志框保底 56（约 3 行），上移占用原先居中内容的下方空白
-        var eLogH = Math.Max(56, _extra - 16);
+        // 屏幕矮时 _extra 被压缩，日志框保底 92（约 5 行），上移占用原先居中内容的下方空白
+        var eLogH = _extra > 0 && _extra < DetailsExtra ? Math.Max(92, _extra - 16) : Math.Max(56, _extra - 16);
         P(_eLog, 36, 330 + _extra - eLogH, 488, eLogH);
         _eLog.Relayout();
 
@@ -422,9 +426,9 @@ public sealed class MainForm : Form
         var pw = Sc(380);
         var ph = 0;
         if (!string.IsNullOrEmpty(p.Text))
-            ph = TextRenderer.MeasureText(p.Text, p.Font, new Size(pw, 1000), TextFormatFlags.WordBreak | TextFormatFlags.NoPadding).Height + Sc(4);
+            ph = TextRenderer.MeasureText(p.Text, p.Font, new Size(pw - Sc(10), 1000), TextFormatFlags.WordBreak | TextFormatFlags.NoPadding).Height + Sc(4);
         var content = Sc(56) + Sc(12) + Sc(28) + (ph > 0 ? Sc(12) + ph : 0);
-        var top = Sc(TitleH) + (Sc(areaBottom - TitleH) - content) / 2;
+        var top = Sc(TitleH) + Math.Max(Sc(4), (Sc(areaBottom - TitleH) - content) / 2);
         var parent = b.Parent!.Bounds;
         b.Bounds = new Rectangle(Sc(280) - Sc(28) - parent.X, top - parent.Y, Sc(56), Sc(56));
         h.Bounds = new Rectangle(Sc(36) - parent.X, top + Sc(68) - parent.Y, Sc(488), Sc(28));
