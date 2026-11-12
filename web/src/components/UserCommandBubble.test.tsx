@@ -46,6 +46,10 @@ describe('UserCommandBubble', () => {
     expect(chip?.textContent).toBe('交接');
     expect(chip?.getAttribute('data-kind')).toBe('handoff');
     expect(bubble?.textContent).toContain('重点检查单测');
+
+    const textEl = bubble?.querySelector('[data-testid="next-user-cmd-text"]');
+    expect(textEl).not.toBeNull();
+    expect(textEl?.textContent).toBe('重点检查单测');
   });
 
   it('renders compaction chip without instructions in user bubble', async () => {
@@ -59,6 +63,9 @@ describe('UserCommandBubble', () => {
     const chip = bubble?.querySelector('[data-testid="next-user-chip"]');
     expect(chip?.textContent).toBe('压缩');
     expect(chip?.getAttribute('data-kind')).toBe('compaction');
+
+    const textEl = bubble?.querySelector('[data-testid="next-user-cmd-text"]');
+    expect(textEl).toBeNull();
   });
 
   it('renders English labels when lang is en', async () => {

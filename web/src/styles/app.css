@@ -1954,6 +1954,33 @@ body { font-family: var(--font); font-size: inherit; line-height: 1.65; backgrou
 }
 .msg-body.has-lead > .slash-chip { float: left; margin: 1px 8px 0 0; height: 1.6em; background: var(--line); }
 .msg-body.has-lead > .slash-chip:only-child { float: none; margin: 0; }
+/* User command bubble (handoff / compaction) */
+.user-cmd-group {
+  align-self: flex-end;
+  max-width: 80%;
+  width: fit-content;
+}
+.user-cmd-body {
+  width: fit-content;
+  max-width: 100%;
+}
+.user-cmd-body .slash-chip {
+  background: var(--line);
+  margin: 0 8px 0 0;
+  vertical-align: text-top;
+  flex-shrink: 0;
+}
+.user-cmd-body .slash-chip:only-child {
+  margin-right: 0;
+}
+.user-cmd-text {
+  vertical-align: top;
+  display: inline;
+}
+.user-cmd-text p {
+  display: inline;
+  margin: 0;
+}
 .composer-at-empty {
   padding: 8px 10px; font-size: var(--fs-sm); color: var(--mute);
 }

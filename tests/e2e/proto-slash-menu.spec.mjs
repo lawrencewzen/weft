@@ -59,6 +59,10 @@ test('/compact becomes chip, supports instructions, and triggers compaction on E
   const compactBubble = page.getByTestId('next-item-user').filter({ has: page.locator('[data-testid=next-user-chip][data-kind="compaction"]') });
   await expect(compactBubble).toBeVisible();
   await expect(compactBubble.getByTestId('next-user-chip')).toHaveText('压缩');
+  const compactChipBox = await compactBubble.getByTestId('next-user-chip').boundingBox();
+  const compactBubbleBox = await compactBubble.boundingBox();
+  expect(compactBubbleBox.width).toBeLessThanOrEqual(compactChipBox.width + 40);
+  expect(compactBubbleBox.height).toBeLessThanOrEqual(50);
   await expect(page.getByTestId('next-thread-compacting')).toContainText('正在压缩上下文…');
   await expect(page.getByTestId('next-thread-compacting')).toHaveCount(0, { timeout: 10_000 });
   await expect(compactBubble).toBeVisible();
@@ -93,6 +97,11 @@ test('/handoff, /schedule, and /new (no /model in menu)', async ({ page }) => {
   await expect(handoffBubble).toBeVisible();
   await expect(handoffBubble.getByTestId('next-user-chip')).toHaveText('交接');
   await expect(handoffBubble).toContainText('只留下迁移进度');
+  const handoffChipBox = await handoffBubble.getByTestId('next-user-chip').boundingBox();
+  const handoffTextBox = await handoffBubble.getByTestId('next-user-cmd-text').boundingBox();
+  const handoffBubbleBox = await handoffBubble.boundingBox();
+  expect(Math.abs(handoffChipBox.y - handoffTextBox.y)).toBeLessThanOrEqual(1);
+  expect(handoffBubbleBox.height).toBeLessThanOrEqual(50);
   await expect(page.getByTestId('next-thread-pending')).toContainText('正在整理交接…');
   await expect(page.getByTestId('next-thread-pending')).toHaveCount(0, { timeout: 10_000 });
   await expect(handoffBubble).toBeVisible();

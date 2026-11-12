@@ -94,6 +94,12 @@ test('2. trigger handoff via /handoff command: shows pending text, lands divider
   await expect(userBubble).toBeVisible();
   await expect(userBubble.getByTestId('next-user-chip')).toHaveText('交接');
 
+  // 只有小块没有正文时，气泡就是小块大小（宽度贴合小块加内边距，高度为单行）
+  const chipBox = await userBubble.getByTestId('next-user-chip').boundingBox();
+  const bubbleBox = await userBubble.boundingBox();
+  expect(bubbleBox.width).toBeLessThanOrEqual(chipBox.width + 40);
+  expect(bubbleBox.height).toBeLessThanOrEqual(50);
+
   // Thread pending displays waiting text
   await expect(page.getByTestId('next-thread-pending')).toContainText('正在整理交接…');
 
@@ -143,7 +149,7 @@ test('3. multiple handoffs only produce a single earlier-context toggle, and win
   await expect(page.getByTestId('next-thread-earlier-toggle')).toHaveCount(1);
 
   // Trigger a second handoff with instructions via window.__protoHandoff
-  const focusText = '重点关注 packages/server 的配置';
+  const focusText = '先把测试补完';
   await page.evaluate((text) => window.__protoHandoff(text), focusText);
 
   // User bubble with chip and instructions is visible during running
@@ -152,6 +158,13 @@ test('3. multiple handoffs only produce a single earlier-context toggle, and win
   await expect(userBubble.getByTestId('next-user-chip')).toHaveText('交接');
   await expect(userBubble).toContainText(focusText);
 
+  // 短正文时小块与正文在同一行，top 相同；气泡高度等于单行高度
+  const chipBox = await userBubble.getByTestId('next-user-chip').boundingBox();
+  const textBox = await userBubble.getByTestId('next-user-cmd-text').boundingBox();
+  const bubbleBox = await userBubble.boundingBox();
+  expect(Math.abs(chipBox.y - textBox.y)).toBeLessThanOrEqual(1);
+  expect(bubbleBox.height).toBeLessThanOrEqual(50);
+
   // Wait for run to complete
   await expect(page.getByTestId('next-thread-pending')).toContainText('正在整理交接…');
   await expect(page.getByTestId('next-thread-pending')).toHaveCount(0, { timeout: 10_000 });
@@ -159,6 +172,11 @@ test('3. multiple handoffs only produce a single earlier-context toggle, and win
   // Bubble persists after run finishes
   await expect(userBubble).toBeVisible();
   await expect(userBubble).toContainText(focusText);
+  const afterChipBox = await userBubble.getByTestId('next-user-chip').boundingBox();
+  const afterTextBox = await userBubble.getByTestId('next-user-cmd-text').boundingBox();
+  const afterBubbleBox = await userBubble.boundingBox();
+  expect(Math.abs(afterChipBox.y - afterTextBox.y)).toBeLessThanOrEqual(1);
+  expect(afterBubbleBox.height).toBeLessThanOrEqual(50);
 
   // Now there are 2 handoffs: the first one is folded into the earlier context,
   // so only the latest divider shows and there is still ONLY ONE toggle row
