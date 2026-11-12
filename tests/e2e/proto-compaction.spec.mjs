@@ -60,10 +60,15 @@ test('2. panel compact: running state with spinner and thread line, then the not
 
   await triggerCompact(page);
 
-  // User bubble with chip is visible during running
+  // User bubble with chip is visible during running (only chip when no instructions)
   const userBubble = page.getByTestId('next-item-user').filter({ has: page.getByTestId('next-user-chip') });
   await expect(userBubble).toBeVisible();
   await expect(userBubble.getByTestId('next-user-chip')).toHaveText('压缩');
+  await expect(userBubble.getByTestId('next-user-cmd-text')).toHaveCount(0);
+  const chipBox = await userBubble.getByTestId('next-user-chip').boundingBox();
+  const bubbleBox = await userBubble.boundingBox();
+  expect(bubbleBox.width).toBeLessThanOrEqual(chipBox.width + 40);
+  expect(bubbleBox.height).toBeLessThanOrEqual(50);
 
   const pending = page.getByTestId('next-thread-compacting');
   await expect(pending).toHaveText('正在压缩上下文…');
@@ -72,9 +77,10 @@ test('2. panel compact: running state with spinner and thread line, then the not
 
   await expect(pending).toHaveCount(0, { timeout: 10_000 });
 
-  // User bubble remains visible above divider
+  // User bubble remains visible above divider without text
   await expect(userBubble).toBeVisible();
   await expect(userBubble.getByTestId('next-user-chip')).toHaveText('压缩');
+  await expect(userBubble.getByTestId('next-user-cmd-text')).toHaveCount(0);
 
   const note = page.getByTestId('next-item-system-note');
   await expect(note).toHaveCount(1);
@@ -89,6 +95,45 @@ test('2. panel compact: running state with spinner and thread line, then the not
 
   const calls = (await state.requests()).filter((r) => r.method === 'POST' && /\/compact$/.test(r.url));
   expect(calls).toHaveLength(1);
+  await expectClean(state);
+});
+
+test('2b. panel compact with instructions: user bubble shows chip and instructions, persists on divider', async ({ page }) => {
+  const state = await openProto(page);
+  await openConv(page, 'c-docs');
+  await triggerCompact(page, '保留文件路径');
+
+  const userBubble = page.getByTestId('next-item-user').filter({ has: page.getByTestId('next-user-chip') });
+  await expect(userBubble).toBeVisible();
+  await expect(userBubble.getByTestId('next-user-chip')).toHaveText('压缩');
+  await expect(userBubble).toContainText('保留文件路径');
+
+  // 短正文时小块与正文在同一行，top 相同；气泡高度等于单行高度
+  const chipBox = await userBubble.getByTestId('next-user-chip').boundingBox();
+  const textBox = await userBubble.getByTestId('next-user-cmd-text').boundingBox();
+  const bubbleBox = await userBubble.boundingBox();
+  expect(Math.abs(chipBox.y - textBox.y)).toBeLessThanOrEqual(1);
+  expect(bubbleBox.height).toBeLessThanOrEqual(50);
+
+  const pending = page.getByTestId('next-thread-compacting');
+  await expect(pending).toHaveText('正在压缩上下文…');
+  await expect(pending).toHaveCount(0, { timeout: 10_000 });
+
+  // User bubble remains visible above divider with instructions
+  await expect(userBubble).toBeVisible();
+  await expect(userBubble.getByTestId('next-user-chip')).toHaveText('压缩');
+  await expect(userBubble).toContainText('保留文件路径');
+  const afterChipBox = await userBubble.getByTestId('next-user-chip').boundingBox();
+  const afterTextBox = await userBubble.getByTestId('next-user-cmd-text').boundingBox();
+  const afterBubbleBox = await userBubble.boundingBox();
+  expect(Math.abs(afterChipBox.y - afterTextBox.y)).toBeLessThanOrEqual(1);
+  expect(afterBubbleBox.height).toBeLessThanOrEqual(50);
+
+  const note = page.getByTestId('next-item-system-note');
+  await expect(note).toHaveCount(1);
+  await expect(note.getByTestId('next-compaction-title')).toHaveText('上下文已压缩');
+  await note.getByTestId('next-compaction-toggle').click();
+  await expect(note.getByTestId('next-compaction-detail')).toContainText('保留文件路径');
   await expectClean(state);
 });
 

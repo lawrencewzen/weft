@@ -64,7 +64,7 @@ type Props = {
   failed?: boolean;
   error?: components['schemas']['RunState']['error'];
   onContinue?: (requestId?: string) => Promise<unknown>;
-  compaction?: components['schemas']['RunState']['compaction'];
+  compaction?: (components['schemas']['RunState']['compaction'] & { instructions?: string }) | null;
   handoff?: { state: 'running' | 'failed'; instructions?: string; error?: string } | null;
   forkedFrom?: components['schemas']['ForkedFrom'] | null;
   onFork?: (entryId: string) => void;
@@ -563,7 +563,11 @@ export function Thread({
         ) : compacting ? (
           <>
             {manualCompacting ? (
-              <UserCommandBubble kind="compaction" lang={lang} />
+              <UserCommandBubble
+                kind="compaction"
+                lang={lang}
+                instructions={(compaction as { instructions?: string } | null | undefined)?.instructions}
+              />
             ) : null}
             <div
               className="thread-pending"
@@ -636,7 +640,11 @@ export function Thread({
         {compactionError ? (
           <>
             {compaction?.trigger === 'manual' ? (
-              <UserCommandBubble kind="compaction" lang={lang} />
+              <UserCommandBubble
+                kind="compaction"
+                lang={lang}
+                instructions={(compaction as { instructions?: string } | null | undefined)?.instructions}
+              />
             ) : null}
             <div className="llm-error" data-testid="next-compaction-error" role="alert">
               <div className="llm-error-text">

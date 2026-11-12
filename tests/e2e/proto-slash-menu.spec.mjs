@@ -59,13 +59,16 @@ test('/compact becomes chip, supports instructions, and triggers compaction on E
   const compactBubble = page.getByTestId('next-item-user').filter({ has: page.locator('[data-testid=next-user-chip][data-kind="compaction"]') });
   await expect(compactBubble).toBeVisible();
   await expect(compactBubble.getByTestId('next-user-chip')).toHaveText('压缩');
+  await expect(compactBubble).toContainText('只保留核心架构说明');
   const compactChipBox = await compactBubble.getByTestId('next-user-chip').boundingBox();
+  const compactTextBox = await compactBubble.getByTestId('next-user-cmd-text').boundingBox();
   const compactBubbleBox = await compactBubble.boundingBox();
-  expect(compactBubbleBox.width).toBeLessThanOrEqual(compactChipBox.width + 40);
+  expect(Math.abs(compactChipBox.y - compactTextBox.y)).toBeLessThanOrEqual(1);
   expect(compactBubbleBox.height).toBeLessThanOrEqual(50);
   await expect(page.getByTestId('next-thread-compacting')).toContainText('正在压缩上下文…');
   await expect(page.getByTestId('next-thread-compacting')).toHaveCount(0, { timeout: 10_000 });
   await expect(compactBubble).toBeVisible();
+  await expect(compactBubble).toContainText('只保留核心架构说明');
   await expect(page.getByTestId('next-compaction-divider')).toBeVisible();
 
   await page.getByTestId('next-new-chat').click();

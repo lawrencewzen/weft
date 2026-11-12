@@ -115,6 +115,7 @@ export type MockCompaction = {
   state: 'idle' | 'running' | 'failed';
   trigger?: 'manual' | 'threshold' | 'overflow';
   error?: Bilingual;
+  instructions?: string;
 };
 
 export type Steer = {

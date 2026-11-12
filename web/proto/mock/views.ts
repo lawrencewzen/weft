@@ -90,6 +90,7 @@ export function conversationValue(conv: MockConv): EntityValue {
       : {
           state: c.state,
           ...(c.trigger ? { trigger: c.trigger } : {}),
+          ...(c.instructions ? { instructions: c.instructions } : {}),
           ...(c.state === 'failed' && c.error ? { error: tr(c.error, lang) } : {}),
         };
     return {
