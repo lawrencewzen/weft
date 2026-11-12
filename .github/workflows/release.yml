@@ -344,6 +344,31 @@ jobs:
             }
             Write-Host "login HTTP $($login.StatusCode) bytes=$($loginHtml.Length)"
 
+            # 裁剪后的功能验证：用登录会话请求会加载 pi-ai / pi-durable 的接口，必须 200。
+            #   GET /api/v2/providers  -> provider-service -> @earendil-works/pi-ai（模型目录）
+            #   GET /api/v2/settings   -> 内核 Harness（@earendil-works/pi-durable）的压缩设置
+            $base = $homeUrl.TrimEnd('/')
+            $sess = $null
+            $null = Invoke-WebRequest -Uri $url -UseBasicParsing -MaximumRedirection 5 -SessionVariable sess
+            foreach ($api in @('/api/v2/providers', '/api/v2/settings')) {
+              $r = Invoke-WebRequest -Uri ($base + $api) -UseBasicParsing -WebSession $sess
+              Write-Host "api $api HTTP $([int]$r.StatusCode) bytes=$($r.Content.Length)"
+              if ([int]$r.StatusCode -ne 200) { throw "$api HTTP $($r.StatusCode)" }
+              $null = $r.Content | ConvertFrom-Json
+            }
+            # 再直接用打包的 node 加载内核包，确认裁剪没有删掉入口文件（在 app\ 下解析 node_modules）。
+            Push-Location -LiteralPath (Join-Path $root 'app')
+            try {
+              $importOut = (& $node --input-type=module -e "const a = await import('@earendil-works/pi-ai'); const d = await import('@earendil-works/pi-durable'); await import('marked'); console.log('imports ok', Object.keys(a).length, Object.keys(d).length)" 2>&1 | ForEach-Object { "$_" }) -join "`n"
+              $importCode = $LASTEXITCODE
+            } finally {
+              Pop-Location
+            }
+            Write-Host $importOut
+            if ($importCode -ne 0 -or $importOut -notmatch 'imports ok') { throw 'pi-ai / pi-durable import failed in packaged app' }
+            $zipFiles = (Get-ChildItem -LiteralPath $root -Recurse -File -Force | Measure-Object).Count
+            Write-Host "extracted file count=$zipFiles"
+
             $stopLines = @(& cmd.exe /d /c 'Weft-stop.cmd' 2>&1 | ForEach-Object { "$_" })
             $stopCode = $LASTEXITCODE
             $stopLines | ForEach-Object { Write-Host "stop> $_" }

@@ -15,12 +15,17 @@ import {
   expectedSha256,
   extractZipEntry,
   findBannedPackages,
+  findMissingEntryPoints,
   listZipEntries,
   nodeArchiveBases,
   parsePackArgs,
+  pruneNodeModules,
   readmeText,
   resolveNodeDistBase,
   sha256Hex,
+  shouldPruneDir,
+  shouldPruneFile,
+  shouldPruneShellPath,
   windowsCmd,
   zipDirectory,
 } from '../../scripts/pack-release.mjs';
@@ -629,6 +634,128 @@ test('copyShell refuses a directory without Weft.exe or the bundled WebView2', a
     await assert.rejects(copyShell(tmp, path.join(tmp, 'stage')), /Weft\.exe/);
     await writeFile(path.join(tmp, 'Weft.exe'), 'x');
     await assert.rejects(copyShell(tmp, path.join(tmp, 'stage')), /msedgewebview2/);
+  } finally {
+    await rm(tmp, { recursive: true, force: true });
+  }
+});
+
+test('shouldPruneFile keeps runtime files, package.json and licenses', () => {
+  for (const keep of [
+    'a/index.js', 'a/lib/x.mjs', 'a/y.cjs', 'a/data.json', 'a/package.json', 'a/build/x.node', 'photon/photon_rs_bg.wasm',
+    'a/LICENSE', 'a/LICENSE.md', 'a/LICENSE-MIT', 'a/licence.txt', 'a/NOTICE', 'a/NOTICE.md', 'a/COPYING', '@s/b/dist/index.js.json',
+  ]) {
+    assert.equal(shouldPruneFile(keep), false, keep);
+  }
+});
+
+test('shouldPruneFile drops declarations, source maps, .ts sources and docs', () => {
+  for (const drop of [
+    'a/index.d.ts', 'a/index.d.mts', 'a/index.d.cts', 'a/index.js.map', 'a/index.mjs.map', 'a/index.d.ts.map',
+    'a/src/x.ts', 'a/src/x.mts', 'a/src/x.tsx', 'a/README.md', 'a/CHANGELOG.md', 'a/docs/guide.md', 'a/README', 'a/CHANGELOG',
+    'a/tsconfig.tsbuildinfo', 'a/.npmignore', 'a/.eslintrc.yml',
+  ]) {
+    assert.equal(shouldPruneFile(drop), true, drop);
+  }
+});
+
+test('shouldPruneDir drops test/example/docs dirs inside packages and the frontend-only packages, never a package root', () => {
+  for (const yes of ['openai/test', 'a/dist/__tests__', 'a/node_modules/b/examples', '@s/p/docs', 'codemirror', 'dompurify', '@codemirror', '@lobehub/icons-static-svg', '@types']) {
+    assert.equal(shouldPruneDir(yes), true, yes);
+  }
+  for (const no of ['test', 'a/node_modules/test', '@s/test', 'a/lib', 'marked', 'a/node_modules', 'a/node_modules/@s', '@lobehub', 'a/node_modules/codemirror']) {
+    assert.equal(shouldPruneDir(no), false, no);
+  }
+});
+
+test('shouldPruneShellPath keeps only en-US and zh-CN WebView2 locale packs', () => {
+  assert.equal(shouldPruneShellPath('webview2/locales/fr.pak'), true);
+  assert.equal(shouldPruneShellPath('webview2/locales/zh-tw.pak'), true);
+  assert.equal(shouldPruneShellPath('webview2/157.0.1.1/locales/de.pak'), true);
+  assert.equal(shouldPruneShellPath('webview2/locales/en-us.pak'), false);
+  assert.equal(shouldPruneShellPath('webview2/locales/zh-cn.pak'), false);
+  assert.equal(shouldPruneShellPath('webview2/resources.pak'), false);
+  assert.equal(shouldPruneShellPath('tools/pwsh/locales/fr.pak'), false);
+});
+
+test('copyShell drops WebView2 locale packs except en-US and zh-CN', async () => {
+  const tmp = await mkdtemp(path.join(tmpdir(), 'weft-shell-'));
+  try {
+    const shell = path.join(tmp, 'shell out');
+    const loc = path.join(shell, 'webview2', 'Locales');
+    await mkdir(loc, { recursive: true });
+    await writeFile(path.join(shell, 'Weft.exe'), 'x');
+    await writeFile(path.join(shell, 'webview2', 'msedgewebview2.exe'), 'x');
+    for (const f of ['en-US.pak', 'zh-CN.pak', 'fr.pak', 'ja.pak']) await writeFile(path.join(loc, f), 'x');
+    const stage = path.join(tmp, 'stage');
+    await mkdir(stage);
+    const res = await copyShell(shell, stage);
+    assert.equal(res.prunedLocales, 2);
+    assert.deepEqual((await readdir(path.join(stage, 'webview2', 'Locales'))).sort(), ['en-US.pak', 'zh-CN.pak']);
+  } finally {
+    await rm(tmp, { recursive: true, force: true });
+  }
+});
+
+test('pruneNodeModules removes types, maps, docs, tests and frontend-only packages but keeps runtime files', async () => {
+  const tmp = await mkdtemp(path.join(tmpdir(), 'weft-prune-'));
+  try {
+    const nm = path.join(tmp, 'node_modules');
+    const files = {
+      'a/package.json': '{"name":"a","main":"./index.js","exports":{".":{"types":"./index.d.ts","import":"./index.js"}}}',
+      'a/index.js': 'x', 'a/index.d.ts': 'x', 'a/index.js.map': 'x', 'a/src/index.ts': 'x', 'a/README.md': 'x', 'a/LICENSE': 'x',
+      'a/test/t.js': 'x', 'a/docs/d.md': 'x', 'a/lib/data.json': '{}',
+      '@s/b/package.json': '{"name":"@s/b"}', '@s/b/x.wasm': 'x', '@s/b/NOTICE': 'x',
+      'a/node_modules/c/package.json': '{"name":"c"}', 'a/node_modules/c/c.d.mts': 'x', 'a/node_modules/c/c.mjs': 'x',
+      'test/package.json': '{"name":"test"}', 'test/index.js': 'x',
+      'marked/package.json': '{"name":"marked"}', 'marked/lib/marked.esm.js': 'x',
+      'codemirror/package.json': '{"name":"codemirror"}', 'codemirror/dist/index.js': 'x',
+      '@codemirror/view/package.json': '{"name":"@codemirror/view"}',
+      '@lobehub/icons-static-svg/icons/a.svg': 'x',
+    };
+    for (const [rel, text] of Object.entries(files)) {
+      const abs = path.join(nm, rel);
+      await mkdir(path.dirname(abs), { recursive: true });
+      await writeFile(abs, text);
+    }
+    await mkdir(path.join(nm, '.bin'));
+    await writeFile(path.join(nm, '.bin', 'a'), 'x');
+    const { before, after } = await pruneNodeModules(nm);
+    assert.equal(before.files, Object.keys(files).length + 1);
+    const left = [];
+    async function walk(dir, rel) {
+      for (const e of await readdir(dir, { withFileTypes: true })) {
+        const r = rel ? `${rel}/${e.name}` : e.name;
+        if (e.isDirectory()) await walk(path.join(dir, e.name), r);
+        else left.push(r);
+      }
+    }
+    await walk(nm, '');
+    assert.deepEqual(left.sort(), [
+      '.bin/a',
+      '@s/b/NOTICE', '@s/b/x.wasm', '@s/b/package.json',
+      'a/LICENSE', 'a/index.js', 'a/lib/data.json', 'a/node_modules/c/c.mjs', 'a/node_modules/c/package.json', 'a/package.json',
+      'marked/lib/marked.esm.js', 'marked/package.json',
+      'test/index.js', 'test/package.json',
+    ].sort());
+    assert.equal(after.files, left.length);
+    assert.deepEqual(await findMissingEntryPoints(nm), []);
+  } finally {
+    await rm(tmp, { recursive: true, force: true });
+  }
+});
+
+test('findMissingEntryPoints reports declared runtime entries that are gone, ignoring types and globs', async () => {
+  const tmp = await mkdtemp(path.join(tmpdir(), 'weft-entries-'));
+  try {
+    const dir = path.join(tmp, 'a');
+    await mkdir(dir, { recursive: true });
+    await writeFile(path.join(dir, 'package.json'), JSON.stringify({
+      name: 'a',
+      main: './gone.js',
+      exports: { '.': { types: './x.d.ts', import: './ok.js' }, './*': './dist/*.js' },
+    }));
+    await writeFile(path.join(dir, 'ok.js'), 'x');
+    assert.deepEqual(await findMissingEntryPoints(tmp), ['a: ./gone.js']);
   } finally {
     await rm(tmp, { recursive: true, force: true });
   }
