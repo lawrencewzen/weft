@@ -188,7 +188,7 @@ test('subagent inherits the parent conversation thinkingLevel', { timeout: 60_00
     const script = path.join(dataDir, 'sub.json');
     await writeFile(script, JSON.stringify({
       turns: [
-        { tool: 'delegate', args: { task } },
+        { tool: 'task', args: { description: '思考档位检查', prompt: task } },
         { text: 'parent-done' },
         { when: '请确认前台子代理', text: 'CHILD_OK' },
       ],

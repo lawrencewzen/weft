@@ -640,7 +640,7 @@ test('schedule tool in a real run: offered to the main agent only, and shown as 
       turns: [
         { when: 'SET-SCHEDULE', tool: 'schedule', args: { action: 'create', name: 'Check CI', message: 'look at CI', rule: { kind: 'daily', time: '09:00' } } },
         { when: 'SET-SCHEDULE', text: 'scheduled it' },
-        { when: 'SPAWN-CHILD', tool: 'delegate', args: { task: 'CHILD-TASK say hi' } },
+        { when: 'SPAWN-CHILD', tool: 'task', args: { description: 'Child check', prompt: 'CHILD-TASK say hi' } },
         { when: 'SPAWN-CHILD', text: 'parent done' },
         { when: 'CHILD-TASK', text: 'child done' },
       ],
@@ -676,10 +676,10 @@ test('schedule tool in a real run: offered to the main agent only, and shown as 
     assert.equal(spawned.status, 202);
     const records = await until(async () => {
       const lines = (await readFile(record, 'utf8').catch(() => '')).trim().split('\n').filter(Boolean).map((line) => JSON.parse(line));
-      return lines.some((row) => !(row.tools || []).includes('delegate') && JSON.stringify(row).includes('CHILD-TASK')) ? lines : null;
+      return lines.some((row) => !(row.tools || []).includes('task') && JSON.stringify(row).includes('CHILD-TASK')) ? lines : null;
     }, { label: 'child request' });
-    const parentCall = records.find((row) => (row.tools || []).includes('delegate'));
-    const childCall = records.find((row) => !(row.tools || []).includes('delegate'));
+    const parentCall = records.find((row) => (row.tools || []).includes('task'));
+    const childCall = records.find((row) => !(row.tools || []).includes('task'));
     assert.equal(parentCall.tools.includes('schedule'), true);
     assert.equal(childCall.tools.includes('schedule'), false);
     assert.equal(CHILD_HIDDEN_TOOLS.has('schedule'), true);
