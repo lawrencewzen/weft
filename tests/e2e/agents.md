@@ -4,7 +4,7 @@
 
 ## AG-18 侧栏出现前台子 Agent，点开能看消息
 
-主 Agent 派出一个前台子 Agent（`delegate`）。视口 1440×900，再看一次 1000×760。
+主 Agent 派出一个前台子 Agent（`task`，`run_in_background` 为 false 或缺省）。视口 1440×900，再看一次 1000×760。
 
 ### 步骤
 
@@ -26,7 +26,7 @@
 
 ## AG-19 后台子 Agent 有低调标记
 
-主 Agent 用后台方式派一个子 Agent（`subagent` spawn）。
+主 Agent 用后台方式派一个子 Agent（`task`，`run_in_background: true`）。
 
 ### 步骤
 

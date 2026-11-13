@@ -15,7 +15,7 @@ test.describe.configure({ timeout: 90_000 });
 const BACKGROUND_NAME = '巡查';
 const BACKGROUND_MESSAGE = '请在后台查看仓库。';
 const CHILD_TEXT = '仓库干净，没有未提交改动。';
-const REPORT_MARKER = '[subagent 巡查 answered, no reply needed]';
+const REPORT_MARKER = '[task 工作区检查 completed, no reply needed]';
 const CHIP_USED_200 = '8%';
 const CHIP_ZERO_200 = '0%';
 
@@ -24,7 +24,7 @@ test('background sub-agent report is a folded card, not a user bubble, including
   const scriptPath = path.join(prepared.root, 'subagent-report.json');
   await fs.writeFile(scriptPath, JSON.stringify({
     turns: [
-      { tool: 'subagent', args: { action: 'spawn', name: BACKGROUND_NAME, title: '工作区检查', message: BACKGROUND_MESSAGE } },
+      { tool: 'task', args: { description: '工作区检查', prompt: BACKGROUND_MESSAGE, run_in_background: true } },
       { text: '已派出巡查。' },
       { when: BACKGROUND_MESSAGE, text: CHILD_TEXT },
       { when: 'no reply needed', text: '已记下巡查结果。' },
@@ -47,7 +47,6 @@ test('background sub-agent report is a folded card, not a user bubble, including
     await expect(card).toHaveClass(/msg-side-agent/);
     await expect(card).not.toHaveClass(/is-open/);
     await expect(card.getByTestId('next-subagent-report-summary')).toContainText('子 Agent「工作区检查」已交回结果');
-    await expect(card.getByTestId('next-subagent-report-summary')).not.toContainText(BACKGROUND_NAME);
     await expect(card.getByTestId('next-subagent-report-body')).toBeHidden();
 
     const users = page.getByTestId('next-item-user');
@@ -87,8 +86,8 @@ test('stored answered and failed reports render as cards without a user bubble',
       { when: 'timed out', text: '失败已记下。' },
     ],
   }));
-  const answered = `[subagent 巡查 answered, no reply needed] ${CHILD_TEXT}`;
-  const failed = '[subagent 编码 failed: timed out]';
+  const answered = `[task 巡查 completed, no reply needed] ${CHILD_TEXT}`;
+  const failed = '[task 编码 failed: timed out]';
   const srv = await startServer({
     extraEnv: {
       WEFT_FAUX_SCRIPT: scriptPath,
@@ -110,7 +109,7 @@ test('stored answered and failed reports render as cards without a user bubble',
     await expect(cards.nth(0).getByTestId('next-subagent-report-summary')).toContainText(`子 Agent「${BACKGROUND_NAME}」已交回结果`);
     await expect(cards.nth(0).getByTestId('status-icon')).toHaveAttribute('data-status', 'done');
     await expect(cards.nth(1)).toHaveClass(/is-failed/);
-    await expect(cards.nth(1).getByTestId('next-subagent-report-summary')).toContainText('子 Agent「编码」没完成');
+    await expect(cards.nth(1).getByTestId('next-subagent-report-summary')).toContainText('子 Agent「编码」出错');
     await expect(cards.nth(1).getByTestId('status-icon')).toHaveAttribute('data-status', 'failed');
     await expect(cards.nth(1).getByTestId('next-subagent-report-summary')).toContainText('timed out');
 

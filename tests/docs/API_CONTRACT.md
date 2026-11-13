@@ -35,7 +35,7 @@
   - `formatSSE({id, event, data})` → `id: <id>\nevent: <event>\ndata: <JSON 单行>\n\n`；data 为对象时 JSON.stringify；多行字符串按行拆成多个 `data:`；缺 id 则省略该行。
   - `parseSSE(text)` → 事件数组 `{id, event, data}`（data 为解析后的 JSON，若可解析）。往返一致。
 - `src/core/config.mjs`
-  - `TOOLS`：内置工作区工具名 `['read','write','edit','ls','grep','bash']`。主 Agent 始终带上这份清单，再加上设置里启用的插件工具和 `delegate` / `subagent`。
+  - `TOOLS`：内置工作区工具名 `['read','write','edit','ls','grep','bash']`。主 Agent 始终带上这份清单，再加上设置里启用的插件工具和 `task`。
 - `src/core/git-import.mjs`
   - `validateGitUrl(url, { httpHosts?, env? })`：允许 `https:`、`ssh:`、`git@host:path`。`http:` 仅当主机名（不含端口，大小写不敏感）在允许列表中。列表优先用 `httpHosts`，否则用 `env.WEFT_GIT_HTTP_HOSTS`（传了 `env` 时），再否则读进程环境。逗号分隔。`file:`、`git:`、`ftp:` 等拒绝。主机或路径段以 `-` 开头则拒绝。
   - `stripGitUrlCredentials(url)`：去掉 `scheme://user:pass@` 中的 `user:pass`。
@@ -189,20 +189,25 @@ JSON：`{"turns":[ {"text":"..."} | {"text":"...","stopReason":"length"} | {"too
 
 `GET /api/skills` 返回全部 Skill：`{id, name, description, version, source, enabled, deletable}`。全局开关仍是 `settings.skills[id] === false` 表示关闭，缺省为开启。
 
-运行时：主 Agent 的系统提示词 `instructions` 为空字符串。技能 section 只列设置里启用的 Skill 清单：第一行固定为 `Skills you can load with the skill tool when a request matches:`，之后每个启用技能一行 `- <id>: <description>`（description 压成一行、截到 160 字）。没有启用技能时不渲染该 section。正文不进系统提示词；主 Agent 判断用得上时调用 `skill({ name })`（`replay: 'safe'`），按 id（其次按 name）返回该技能完整正文。找不到或未启用时 `isError`，文案 `unknown skill <name>，可用：…`。关掉一个技能后，它从清单消失，工具也读不到。工具列表是全部内置工作区工具、已启用的插件工具、`skill`，以及 `delegate` / `subagent`。模型若调用未启用的插件工具，结果是 `E_UNKNOWN_TOOL`。子 Agent 没有技能清单，也没有 `skill` 工具。
+运行时：主 Agent 的系统提示词 `instructions` 为空字符串。技能 section 只列设置里启用的 Skill 清单：第一行固定为 `Skills you can load with the skill tool when a request matches:`，之后每个启用技能一行 `- <id>: <description>`（description 压成一行、截到 160 字）。没有启用技能时不渲染该 section。正文不进系统提示词；主 Agent 判断用得上时调用 `skill({ name })`（`replay: 'safe'`），按 id（其次按 name）返回该技能完整正文。找不到或未启用时 `isError`，文案 `unknown skill <name>，可用：…`。关掉一个技能后，它从清单消失，工具也读不到。工具列表是全部内置工作区工具、已启用的插件工具、`skill`，以及 `task`。模型若调用未启用的插件工具，结果是 `E_UNKNOWN_TOOL`。子 Agent 没有技能清单，也没有 `skill` 工具。
 
 ## 10. 子 Agent
 
 主 Agent 始终可以派子 Agent。未知对话的 `GET /api/conversations/:cid/agents/:aid/messages` 是 `404 {error:'conversation not found'}`。
 
-主 Agent 多三个工具：`skill`（按需加载技能正文，参数 `{name}`）、`delegate`（前台，参数 `{task, title?}`）和 `subagent`（后台，`action` 为 `spawn` / `send` / `wait` / `stop` / `list`；spawn 参数 `{name, message, title?}`）。`title` 是可选的一句不超过 20 个字的摘要，用用户的语言说明这个子 Agent 要做什么，作为标题显示给用户，不要写路径；不传也能正常工作。写法照 Pi Durable README「Abort and Subagents」与示例 22（前台）/ 23（后台）：前台子对话由工具任务拥有，重启时 `scanConversations({ ownerTaskId })` 复用，`requestId` 为 `subagent:<taskId>`；后台子对话由 background 锚点任务拥有，答案由 reporter 以 follow-up 送回主对话。没有自写花名册、并发上限或暂停同步。两个派活工具的 `description` 都说明子 Agent 看不到本对话和主 Agent 的提示词，需要的内容全部写进 `task` / `message`。子 Agent 是自包含派活：`instructions` 为空字符串，不带角色文字、不带 Skills 清单，工具是主 Agent 的工作区工具和插件工具（没有 `delegate` / `subagent` / `skill`），模型与 `cwd` 沿用父对话。不能再派子 Agent。前台 `name` 取 `task` 第一行（压成一行，最多 30 字）；后台用 spawn 的 `name`。`name` 仍是 send / wait / stop 的句柄，不改语义。单独中止一个前台子对话时，调用方收到 `[subagent <name> was stopped by the user]`（不是错误），本轮继续；中止主 Agent 仍会停掉这一轮。
+主 Agent 多两个工具：`skill`（按需加载技能正文，参数 `{name}`）和 `task`（派活与管理后台任务）。写法照 Pi Durable README「Abort and Subagents」与示例 22（前台）/ 23（后台）：
+- 默认（派活）：参数 `{description, prompt, run_in_background}`。`description` 为 3–5 个词（使用用户语言，进工具行和子 Agent 标题），同时用于派生短标识（如 `fix-login-test`，重名时加 `-2` 后缀）；`prompt` 为自包含的完整任务提示词；`run_in_background` 可选（布尔值，默认 `false`）。前台（`false`/缺省）：等待子 Agent 跑完，最后一条 assistant 回复原样当工具结果；后台（`true`）：由 `app.weft.task-anchor` 锚点任务拥有，由 `app.weft.task-reporter` 汇报任务驱动，在 `app.weft.tasks` 登记，立即返回短任务 `id`，跑完后以 `[task <id> completed, no reply needed] <body>`（出错时 `[task <id> failed: <reason>]`）作为 follow-up 消息送回主对话。
+- 管理后台任务：`action` 为 `send` / `wait` / `stop` / `list`。`id` 为后台任务短标识；`send` 时带 `message`。
+- 彻底去除 `STATUS: done / incomplete` 约定。成败完全由子对话结束状态决定：正常结束返回回复内容；出错标 `isError: true` 并将状态记为 `failed`；用户停止返回 `[task <id> stopped]`（非错误，状态为 `stopped`），主 Agent 本轮继续。
+- 整个 `task` 工具为 `replay: 'safe'`：前台通过 `ownerTaskId: api.taskId` 索引和 `requestId: task:<taskId>` 重建与复用；后台启动与 `send` 在单个原子提交中按 `TasksDoc.calls[api.taskId]` 幂等去重；`TaskReporter` 使用 `task-input:<reporterId>` 与 `task-report:<reporterId>`。
+- 子 Agent 是自包含派活：`instructions` 设为固定 no-ask instructions，不带角色文字、不带 Skills 清单，通过 `extensions.remove` 移除 `weft-tasks` 扩展（不能再调用 `task` 或 `skill`），模型与 `cwd` 沿用父对话。
 
-`GET /api/conversations/:cid` 的 `agents` 第一项是主 Agent：`{id, name:'Agent', status, step, totalSteps, toolCalls, lastText}`，不带 `roleId` / `mode`。其后追加真实子 Agent 实例：`{id, name, status, step, totalSteps, toolCalls, lastText, mode, toolCallId}`，以及拿得到才返回的 `title`、`brief`、`startedAt`、`lastActivityAt`、`endedAt`、`currentAction`。不返回 `roleId`。名单从 Harness 读：工具调用的 `details.conversationId`、所有权索引、后台名称文档、子对话 `viewState`。`id` 形如 `<cid>:sub:<子对话 id>`。`status` 取 `waiting | running | done | stopped`。`mode` 取 `foreground | background`：前台 `delegate` 是 `foreground`，后台 `subagent` spawn 是 `background`。`toolCallId` 是派出该子 Agent 的那次 `delegate` / `subagent` 工具调用 id（与对话快照 `ToolCall.id` 一致）；从 roster 来、找不到对应工具调用时为 `null`。主 Agent 那一项没有 `mode`，也没有下面这些可选字段。没有子 Agent 时，`agents` 只有主 Agent 那一项。
+`GET /api/conversations/:cid` 的 `agents` 第一项是主 Agent：`{id, name:'Agent', status, step, totalSteps, toolCalls, lastText}`，不带 `roleId` / `mode`。其后追加真实子 Agent 实例：`{id, name, status, step, totalSteps, toolCalls, lastText, mode, toolCallId}`，以及拿得到才返回的 `title`、`brief`、`startedAt`、`lastActivityAt`、`endedAt`、`currentAction`。不返回 `roleId`。名单从 Harness 读：工具调用的 `details.conversationId`、所有权索引、后台任务文档、子对话 `viewState`。`id` 形如 `<cid>:sub:<子对话 id>`。`status` 取 `waiting | running | done | stopped`。`mode` 取 `foreground | background`：前台 `task`（`run_in_background` 缺省或 `false`）是 `foreground`，后台 `task`（`run_in_background: true`）是 `background`。`toolCallId` 是派出该子 Agent 的那次 `task` 工具调用 id（与对话快照 `ToolCall.id` 一致）；从后台任务文档来、找不到对应工具调用时为 `null`。主 Agent 那一项没有 `mode`，也没有下面这些可选字段。没有子 Agent 时，`agents` 只有主 Agent 那一项。
 
 可选字段缺数据就不返回，不编造：
 
-- `title`：派活时主 Agent 传入的短标题，存在工具 `details` 和后台 roster 里，重启后仍在；没传就不返回
-- `brief`：第一条 user 消息原文（主 Agent 派活时的 `task` / `message`）
+- `title`：派活时传入的 `description`，存在工具 `details` 和后台任务文档里，重启后仍在
+- `brief`：第一条 user 消息原文（主 Agent 派活时的 `prompt`）
 - `startedAt`：第一条消息的 `timestamp`（毫秒）
 - `lastActivityAt`：最后一条 assistant 或 tool 结果的 `timestamp`
 - `endedAt`：`status` 为 `done` / `stopped` / `failed` 时最后一条消息的 `timestamp`；运行中不返回
