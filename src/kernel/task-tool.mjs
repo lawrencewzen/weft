@@ -437,7 +437,7 @@ export function createTaskExtension({
           const pendingDelivery = await api.commit(async (tx) => {
             const page = await tx.scanTasks(
               { conversationId: api.conversationId, kind: TASK_REPORTER_KIND, order: 'descending' },
-              10,
+              100,
             );
             return page.items.some((item) => (
               item.input?.id === id

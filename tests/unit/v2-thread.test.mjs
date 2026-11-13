@@ -330,3 +330,19 @@ test('fork entryId is the harness id, and streaming or live placeholders are nul
   assert.equal(thread.items[3].entryId, null);
   assert.equal(thread.items[4].entryId, null);
 });
+
+test('findAgentForReport prefers background subagent when foreground shares the same slug name', async () => {
+  const subagents = [
+    { id: 'conv:sub:fg1', name: 'check-tests', mode: 'foreground', status: 'done' },
+    { id: 'conv:sub:bg1', name: 'check-tests', mode: 'background', status: 'done' },
+  ];
+  assert.equal(findAgentForReport('check-tests', subagents)?.id, 'conv:sub:bg1');
+
+  const reportText = formatSubagentReport({ name: 'check-tests', kind: 'answered', body: 'all green' });
+  const thread = await buildThread([
+    { id: 'r1', role: 'user', text: reportText },
+  ], { exists: none, subagents });
+  assertValidThread(thread, 'bg-collision');
+  assert.equal(thread.items[0].kind, 'subagent_report');
+  assert.equal(thread.items[0].subagentId, 'conv:sub:bg1');
+});

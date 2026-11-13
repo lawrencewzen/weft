@@ -55,6 +55,7 @@ export type ThreadSubagent = {
   id?: unknown;
   name?: unknown;
   status?: unknown;
+  mode?: unknown;
 };
 
 export type TurnChangeRecord = {
@@ -153,16 +154,18 @@ function isRealSubagent(agent: ThreadSubagent | null | undefined): boolean {
   return String(agent?.id || '').includes(':sub:');
 }
 
-/** Find a real subagent (`:sub:` in id) by exact name. */
+/** Find a real subagent (`:sub:` in id) by exact name, preferring background tasks. */
 export function findAgentForReport(
   name: unknown,
   subagents: ThreadSubagent[] | null | undefined,
 ): ThreadSubagent | null {
   const key = String(name || '');
   if (!key) return null;
-  return (subagents || []).find((agent) => (
+  const matches = (subagents || []).filter((agent) => (
     isRealSubagent(agent) && String(agent.name || '') === key
-  )) || null;
+  ));
+  if (!matches.length) return null;
+  return matches.find((agent) => agent.mode === 'background') || matches[0];
 }
 
 async function pathRefsFor(

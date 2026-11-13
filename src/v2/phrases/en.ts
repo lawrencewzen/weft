@@ -81,7 +81,6 @@ export const en: Record<string, string> = {
   tool_sum_schedule: 'Scheduled Task',
   tool_run_schedule: 'Configuring schedule',
   tool_sum_task: 'dispatched {n} sub-agents',
-  tool_sum_task_manage: 'managed background tasks {n} times',
   tool_one_task: 'dispatched sub-agent: {name}',
   tool_one_task_bare: 'dispatched a sub-agent',
   tool_run_task: 'Sub-agent working: {name}',

@@ -81,7 +81,6 @@ export const zh: Record<string, string> = {
   tool_sum_schedule: '定时任务',
   tool_run_schedule: '正在配置定时任务',
   tool_sum_task: '派出 {n} 个子 Agent',
-  tool_sum_task_manage: '操作了 {n} 次后台任务',
   tool_one_task: '派出子 Agent：{name}',
   tool_one_task_bare: '派出子 Agent',
   tool_run_task: '子 Agent 正在处理：{name}',
