@@ -1811,7 +1811,7 @@ export interface components {
              * @description 仅 ask_user_question，且参数通过插件校验时出现。kind 为 ask。
              *     questions 来自工具结果 details（插件校验后的题目）。
              *     answer 为 null：这条提问之后还没有真正的用户消息，界面继续等回答。
-             *     子 Agent 汇报（`[subagent …]`）和自动续写（`[auto-continue]`）虽是 pi.user，不算用户作答，answer 保持 null。
+             *     子 Agent 汇报（`[task …]`）和自动续写（`[auto-continue]`）虽是 pi.user，不算用户作答，answer 保持 null。
              *     之后若有 kind 为 weft.ask-answer 的条目（不以 pi. 开头），按其 data 回填 answer。
              *     用户没答就发了普通消息（之后出现普通 pi.user，且没有这条 toolCallId 的 weft.ask-answer）时，
              *     answer 为 { answers: [], skipped: true }。这时再提交 answer 返回 409 E_ASK_ANSWERED。
@@ -1915,7 +1915,7 @@ export interface components {
             subagentId: null | string;
             name: string;
             /** @enum {string} */
-            reportKind: "answered" | "failed";
+            reportKind: "answered" | "failed" | "stopped";
             body: string;
         };
         /**

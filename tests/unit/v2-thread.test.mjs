@@ -19,11 +19,6 @@ import {
   isAutoContinueText as publicIsAuto,
   isPromptUserMessage as publicIsPrompt,
 } from '../../src/kernel/continuation-text.mjs';
-import {
-  formatSubagentReport as formatFromPublic,
-  parseSubagentReport as parseFromPublic,
-  isSubagentReportText as isReportFromPublic,
-} from '../../src/kernel/subagent-report-text.mjs';
 import { buildThread, findAgentForReport, lastVisibleAssistant } from '../../src/v2/views/thread.ts';
 import { ROOT } from './_root.mjs';
 
@@ -50,21 +45,31 @@ function toolMsg(id, t) {
 
 const none = () => false;
 
-test('v2 subagent-report helpers match the kernel implementation', () => {
+test('v2 subagent-report helpers format and parse task reports (answered, failed, stopped)', () => {
   const cases = [
-    { name: 'a', kind: 'answered', body: 'SCOUT_PONG' },
-    { name: 'bg', kind: 'failed', body: 'timeout' },
-    { name: 'code review', kind: 'answered', body: 'looks good' },
-    { name: 'scout', kind: 'answered', body: 'line one\nline two\n\nline four' },
-    { name: 'code review', kind: 'failed', body: 'no conversation' },
+    { name: 'a', kind: 'answered', body: 'SCOUT_PONG', expected: '[task a completed, no reply needed] SCOUT_PONG' },
+    { name: 'bg', kind: 'failed', body: 'timeout', expected: '[task bg failed: timeout]' },
+    { name: 'worker', kind: 'stopped', body: '', expected: '[task worker stopped]' },
+    { name: 'code review', kind: 'answered', body: 'looks good', expected: '[task code review completed, no reply needed] looks good' },
+    { name: 'scout', kind: 'answered', body: 'line one\nline two\n\nline four', expected: '[task scout completed, no reply needed] line one\nline two\n\nline four' },
+    { name: 'code review', kind: 'failed', body: 'no conversation', expected: '[task code review failed: no conversation]' },
+    { name: 'bare', kind: 'answered', body: '', expected: '[task bare completed, no reply needed]' },
   ];
-  for (const args of cases) {
-    assert.equal(formatSubagentReport(args), formatFromPublic(args));
-    assert.deepEqual(parseSubagentReport(formatSubagentReport(args)), parseFromPublic(formatFromPublic(args)));
+  for (const { name, kind, body, expected } of cases) {
+    const formatted = formatSubagentReport({ name, kind, body });
+    assert.equal(formatted, expected);
+    assert.deepEqual(parseSubagentReport(formatted), {
+      name,
+      kind,
+      body: kind === 'stopped' ? '' : body,
+    });
+    assert.equal(isSubagentReportText(formatted), true);
   }
-  assert.equal(isSubagentReportText('[subagent a failed: x]'), isReportFromPublic('[subagent a failed: x]'));
-  assert.equal(isSubagentReportText('hello'), isReportFromPublic('hello'));
-  assert.equal(parseSubagentReport('please look at this'), parseFromPublic('please look at this'));
+  assert.equal(isSubagentReportText('[task a failed: x]'), true);
+  assert.equal(isSubagentReportText('[task a stopped]'), true);
+  assert.equal(isSubagentReportText('[subagent a failed: x]'), false);
+  assert.equal(isSubagentReportText('hello'), false);
+  assert.equal(parseSubagentReport('please look at this'), null);
 });
 
 const LEGACY_AUTO = `${AUTO_CONTINUE_PREFIX} 上一条回复因输出长度上限被截断`;
@@ -75,18 +80,15 @@ test('v2 continuation helpers match the kernel implementation', () => {
   for (const text of texts) {
     assert.equal(isAutoContinueText(text), publicIsAuto(text));
   }
-  const messages = [
-    { role: 'user', text: 'hello' },
-    { role: 'user', text: LEGACY_AUTO },
-    { role: 'user', kind: 'auto-continue', text: 'x' },
-    { role: 'user', kind: 'subagent-report', text: 'anything' },
-    { role: 'user', text: formatSubagentReport({ name: 'a', kind: 'answered', body: 'done' }) },
-    { role: 'assistant', text: 'hello' },
-    null,
-  ];
-  for (const message of messages) {
-    assert.equal(isPromptUserMessage(message), publicIsPrompt(message), JSON.stringify(message));
-  }
+  assert.equal(isPromptUserMessage({ role: 'user', text: 'hello' }), true);
+  assert.equal(isPromptUserMessage({ role: 'user', text: LEGACY_AUTO }), false);
+  assert.equal(isPromptUserMessage({ role: 'user', kind: 'auto-continue', text: 'x' }), false);
+  assert.equal(isPromptUserMessage({ role: 'user', kind: 'subagent-report', text: 'anything' }), false);
+  assert.equal(isPromptUserMessage({ role: 'user', text: formatSubagentReport({ name: 'a', kind: 'answered', body: 'done' }) }), false);
+  assert.equal(isPromptUserMessage({ role: 'user', text: formatSubagentReport({ name: 'a', kind: 'failed', body: 'err' }) }), false);
+  assert.equal(isPromptUserMessage({ role: 'user', text: formatSubagentReport({ name: 'a', kind: 'stopped' }) }), false);
+  assert.equal(isPromptUserMessage({ role: 'assistant', text: 'hello' }), false);
+  assert.equal(isPromptUserMessage(null), false);
 });
 
 test('each ThreadItem kind is produced and contract-valid', async () => {
@@ -260,10 +262,11 @@ test('running marks only the last tool group live', async () => {
   assert.equal(idle.items[0].live, false);
 });
 
-test('subagent report finds the child by name, or null when missing', async () => {
+test('subagent report finds the child by name, or null when missing, and handles stopped', async () => {
   const answered = formatSubagentReport({ name: 'scout', kind: 'answered', body: 'ok' });
   const failed = formatSubagentReport({ name: 'missing', kind: 'failed', body: 'timeout' });
-  const tagged = { id: 'r3', role: 'user', kind: 'subagent-report', text: 'raw body' };
+  const stopped = formatSubagentReport({ name: 'scout', kind: 'stopped' });
+  const tagged = { id: 'r4', role: 'user', kind: 'subagent-report', text: 'raw body' };
   const agents = [
     { id: 'conv:agent:0', name: 'scout', status: 'done' },
     { id: 'conv:sub:9', name: 'scout', status: 'done' },
@@ -271,6 +274,7 @@ test('subagent report finds the child by name, or null when missing', async () =
   const thread = await buildThread([
     { id: 'r1', role: 'user', text: answered },
     { id: 'r2', role: 'user', text: failed },
+    { id: 'r3', role: 'user', text: stopped },
     tagged,
   ], { exists: none, subagents: agents });
   assertValidThread(thread, 'reports');
@@ -279,10 +283,13 @@ test('subagent report finds the child by name, or null when missing', async () =
   assert.equal(thread.items[1].subagentId, null);
   assert.equal(thread.items[1].reportKind, 'failed');
   assert.equal(thread.items[1].name, 'missing');
-  assert.equal(thread.items[2].kind, 'subagent_report');
-  assert.equal(thread.items[2].subagentId, null);
-  assert.equal(thread.items[2].name, '');
-  assert.equal(thread.items[2].body, 'raw body');
+  assert.equal(thread.items[2].subagentId, 'conv:sub:9');
+  assert.equal(thread.items[2].reportKind, 'stopped');
+  assert.equal(thread.items[2].name, 'scout');
+  assert.equal(thread.items[3].kind, 'subagent_report');
+  assert.equal(thread.items[3].subagentId, null);
+  assert.equal(thread.items[3].name, '');
+  assert.equal(thread.items[3].body, 'raw body');
   assert.equal(findAgentForReport('scout', agents)?.id, 'conv:sub:9');
   assert.equal(findAgentForReport('scout', [{ id: 'conv:agent:0', name: 'scout' }]), null);
 });

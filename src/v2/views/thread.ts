@@ -297,7 +297,7 @@ export async function buildThread(
           id: messageId(m),
           subagentId: agent?.id == null || String(agent.id) === '' ? null : String(agent.id),
           name: report.name,
-          reportKind: report.kind === 'failed' ? 'failed' : 'answered',
+          reportKind: report.kind === 'failed' ? 'failed' : report.kind === 'stopped' ? 'stopped' : 'answered',
           body: report.body,
         });
         continue;

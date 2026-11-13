@@ -350,6 +350,42 @@ const RICH_ASSISTANT_TWO = [
   '```',
 ].join('\n');
 
+const TASK_MGMT_SEND: MockTool = tool({
+  id: 'rich-tm-1',
+  kind: 'other',
+  title: hint('给 sub-docs 补充', 'Follow up with sub-docs'),
+  output: 'Sent message to sub-docs.',
+  preview: 'Sent message to sub-docs.',
+  totalLines: 1,
+});
+
+const TASK_MGMT_WAIT: MockTool = tool({
+  id: 'rich-tm-2',
+  kind: 'other',
+  title: hint('等待 sub-load-order', 'Wait for sub-load-order'),
+  output: '已经把 applySnapshot 和 items(cid) 对上了。',
+  preview: '已经把 applySnapshot 和 items(cid) 对上了。',
+  totalLines: 1,
+});
+
+const TASK_MGMT_STOP: MockTool = tool({
+  id: 'rich-tm-3',
+  kind: 'other',
+  title: hint('停止 sub-win-script', 'Stop sub-win-script'),
+  output: 'Stopped sub-win-script.',
+  preview: 'Stopped sub-win-script.',
+  totalLines: 1,
+});
+
+const TASK_MGMT_LIST: MockTool = tool({
+  id: 'rich-tm-4',
+  kind: 'other',
+  title: hint('查看后台任务', 'List background tasks'),
+  output: 'sub-load-order: working (核对 store.ts 的加载顺序)\nsub-docs: idle (等主 Agent 确认文档口径)',
+  preview: 'sub-load-order: working (核对 store.ts 的加载顺序)\nsub-docs: idle (等主 Agent 确认文档口径)',
+  totalLines: 2,
+});
+
 function richConversation(now: number, threads: Map<string, MockSubThread>): MockConv {
   const spawnTools = dispatchToolsOf(threads, 'c-rich');
   const spawnIds = Object.keys(spawnTools);
@@ -360,6 +396,10 @@ function richConversation(now: number, threads: Map<string, MockSubThread>): Moc
     [TEST_RUN.id]: TEST_RUN,
     [STORE_EDIT.id]: STORE_EDIT,
     [EDIT_TEST_RUN.id]: EDIT_TEST_RUN,
+    [TASK_MGMT_SEND.id]: TASK_MGMT_SEND,
+    [TASK_MGMT_WAIT.id]: TASK_MGMT_WAIT,
+    [TASK_MGMT_STOP.id]: TASK_MGMT_STOP,
+    [TASK_MGMT_LIST.id]: TASK_MGMT_LIST,
     ...spawnTools,
   };
   const richChanges: Change[] = [
@@ -372,6 +412,7 @@ function richConversation(now: number, threads: Map<string, MockSubThread>): Moc
     { path: 'web/src/data/pendingSend.ts', added: 0, removed: 3, error: null, by: null, status: 'deleted' },
     { path: '/Users/lawrence/.config/weft/notes.md', added: 7, removed: 0, error: null, by: { kind: 'main' } },
   ];
+  const reports = seedSubagentReports();
   const rich = conversation({
     id: 'c-rich',
     workspaceId: 'ws-weft',
@@ -439,7 +480,13 @@ function richConversation(now: number, threads: Map<string, MockSubThread>): Moc
         spawnIds,
         { zh: `调用了 ${spawnIds.length} 次工具`, en: `called a tool ${spawnIds.length} times` },
       )] : []),
-      ...seedSubagentReports(),
+      reports[0],
+      group(
+        'rich-g-task-mgmt',
+        [TASK_MGMT_SEND.id, TASK_MGMT_WAIT.id, TASK_MGMT_STOP.id, TASK_MGMT_LIST.id],
+        { zh: '给 sub-docs 补充 · 等待 sub-load-order', en: 'Follow up with sub-docs · wait for sub-load-order' },
+      ),
+      reports[1],
       {
         kind: 'turn_changes',
         id: 'rich-tc1',
@@ -1078,7 +1125,7 @@ function docsConversation(now: number, threads: Map<string, MockSubThread>): Moc
       ...(spawnIds.length ? [group(
         'docs-g-sa',
         spawnIds,
-        { zh: '调用了 1 次工具', en: 'called a tool 1 time' },
+        { zh: '派出 3 个子 Agent', en: 'Dispatched 3 sub-agents' },
       )] : []),
       assistant(
         'docs-a1',

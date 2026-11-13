@@ -28,9 +28,8 @@ type ToolCall = components['schemas']['ToolCall'];
 type AskCall = components['schemas']['AskCall'];
 const ASK_TOOL_NAME = 'ask_user_question';
 const SCHEDULE_TOOL_NAME = 'schedule';
-const DELEGATE_TOOL_NAME = 'delegate';
-const SUBAGENT_TOOL_NAME = 'subagent';
-const SUBAGENT_ACTIONS = new Set<string>(['spawn', 'send', 'wait', 'stop', 'list']);
+const TASK_TOOL_NAME = 'task';
+const TASK_ACTIONS = new Set<string>(['send', 'wait', 'stop', 'list']);
 type ToolGroupSummary = components['schemas']['ToolGroupSummary'];
 type Translate = (key: string, params?: Record<string, unknown>) => string;
 type JsonObject = Record<string, unknown>;
@@ -204,6 +203,7 @@ export function toolFocus(tool: ToolLike | null | undefined): ToolFocus {
 
 /** One-line intent from `input.description`, or empty when the model omitted it. */
 export function toolIntent(tool: ToolLike | null | undefined): string {
+  if (isTaskTool(tool)) return '';
   const input = tool?.input && typeof tool.input === 'object' && !Array.isArray(tool.input)
     ? asRecord(tool.input)
     : {};
@@ -216,6 +216,18 @@ export function toolIntent(tool: ToolLike | null | undefined): string {
  * path as secondary detail so the actual call is still visible.
  */
 export function toolRowHeading(tool: ToolLike | null | undefined): ToolRowHeading {
+  if (isTaskDispatch(tool)) {
+    const input = tool?.input && typeof tool.input === 'object' && !Array.isArray(tool.input)
+      ? asRecord(tool.input)
+      : {};
+    const desc = typeof input.description === 'string' ? oneLine(input.description) : '';
+    let label = desc;
+    if (!label) {
+      const prompt = typeof input.prompt === 'string' ? input.prompt.trim().split(/\r?\n/)[0] : '';
+      label = oneLine(prompt);
+    }
+    return { title: label, detail: '', intent: false };
+  }
   const intent = toolIntent(tool);
   const focus = toolFocus(tool);
   if (intent) return { title: intent, detail: focus.text, intent: true };
@@ -254,66 +266,72 @@ function presentSummary(text: string): string {
   return text;
 }
 
-function isDelegateTool(tool: ToolLike | null | undefined): boolean {
-  return String(tool?.name || '') === DELEGATE_TOOL_NAME;
+function isTaskTool(tool: ToolLike | null | undefined): boolean {
+  return String(tool?.name || '') === TASK_TOOL_NAME;
 }
 
-function isSubagentTool(tool: ToolLike | null | undefined): boolean {
-  return String(tool?.name || '') === SUBAGENT_TOOL_NAME;
+function isTaskDispatch(tool: ToolLike | null | undefined): boolean {
+  return isTaskTool(tool) && !asRecord(tool?.input).action;
 }
 
-/** delegate (sync sub-agent) and subagent (background sub-agent) tools. */
+function isTaskManage(tool: ToolLike | null | undefined): boolean {
+  return isTaskTool(tool) && Boolean(asRecord(tool?.input).action);
+}
+
+/** task (dispatch or manage) tools. */
 function isDispatchTool(tool: ToolLike | null | undefined): boolean {
-  return isDelegateTool(tool) || isSubagentTool(tool);
+  return isTaskTool(tool);
 }
 
-function subagentAction(tool: ToolLike): string {
+function taskAction(tool: ToolLike): string {
   const input = tool?.input && typeof tool.input === 'object' ? asRecord(tool.input) : {};
   const action = String(input.action || '');
-  return SUBAGENT_ACTIONS.has(action) ? action : 'other';
+  return TASK_ACTIONS.has(action) ? action : 'other';
 }
 
-/** delegate: title, else first line of task. subagent: title, else name (empty for list). */
 function dispatchLabel(tool: ToolLike | null | undefined): string {
   const input = tool?.input && typeof tool.input === 'object' && !Array.isArray(tool.input)
     ? asRecord(tool.input)
     : {};
-  const str = (value: unknown) => (typeof value === 'string' ? oneLine(value) : '');
-  const title = str(input.title);
-  if (title) return title;
-  if (isDelegateTool(tool)) {
-    const task = typeof input.task === 'string' ? input.task.trim().split(/\r?\n/)[0] : '';
-    return oneLine(task);
+  if (isTaskDispatch(tool)) {
+    const desc = typeof input.description === 'string' ? oneLine(input.description) : '';
+    if (desc) return desc;
+    const prompt = typeof input.prompt === 'string' ? input.prompt.trim().split(/\r?\n/)[0] : '';
+    return oneLine(prompt);
   }
-  return str(input.name);
+  if (isTaskManage(tool)) {
+    return typeof input.id === 'string' ? oneLine(input.id) : '';
+  }
+  return '';
 }
 
-/** Completed (`one`) or in-progress (`run`) phrase for a delegate / subagent call. */
+/** Completed (`one`) or in-progress (`run`) phrase for a task call. */
 function dispatchPhrase(tool: ToolLike, t: Translate, mode: 'one' | 'run'): string {
   const label = dispatchLabel(tool);
-  if (isDelegateTool(tool)) {
-    return label ? t(`tool_${mode}_delegate`, { name: label }) : t(`tool_${mode}_delegate_bare`);
+  if (isTaskDispatch(tool)) {
+    return label ? t(`tool_${mode}_task`, { name: label }) : t(`tool_${mode}_task_bare`);
   }
-  const action = subagentAction(tool);
-  if (action === 'list' || action === 'other') return t(`tool_${mode}_subagent_${action}`);
+  const action = taskAction(tool);
+  if (action === 'list' || action === 'other') return t(`tool_${mode}_task_${action}`);
   return label
-    ? t(`tool_${mode}_subagent_${action}`, { name: label })
-    : t(`tool_${mode}_subagent_${action}_bare`);
+    ? t(`tool_${mode}_task_${action}`, { name: label })
+    : t(`tool_${mode}_task_${action}_bare`);
 }
 
 function dispatchActionLabel(tool: ToolLike, t: Translate): string {
-  if (isDelegateTool(tool)) return t('tool_act_delegate');
-  return t(`tool_act_subagent_${subagentAction(tool)}`);
+  if (isTaskDispatch(tool)) return t('tool_act_task');
+  return t(`tool_act_task_${taskAction(tool)}`);
 }
 
 function dispatchClause(tools: ToolLike[], t: Translate): string {
-  const ok = tools.filter((tool) => isDispatchTool(tool) && !isCallFailed(tool));
-  const delegates = ok.filter(isDelegateTool);
+  const ok = tools.filter((tool) => isTaskTool(tool) && !isCallFailed(tool));
+  const dispatches = ok.filter(isTaskDispatch);
+  const manages = ok.filter(isTaskManage);
   const parts: string[] = [];
-  if (delegates.length === 1) parts.push(dispatchPhrase(delegates[0], t, 'one'));
-  else if (delegates.length > 1) parts.push(t('tool_sum_delegate', { n: delegates.length }));
+  if (dispatches.length === 1) parts.push(dispatchPhrase(dispatches[0], t, 'one'));
+  else if (dispatches.length > 1) parts.push(t('tool_sum_task', { n: dispatches.length }));
   const seen = new Set<string>();
-  for (const tool of ok.filter(isSubagentTool)) {
+  for (const tool of manages) {
     const text = dispatchPhrase(tool, t, 'one');
     if (seen.has(text)) continue;
     seen.add(text);
@@ -324,8 +342,7 @@ function dispatchClause(tools: ToolLike[], t: Translate): string {
 }
 
 function countClause(kind: string, n: number, name: unknown, t: Translate): string {
-  if (name === DELEGATE_TOOL_NAME) return t('tool_sum_delegate', { n });
-  if (name === SUBAGENT_TOOL_NAME) return t('tool_sum_subagent', { n });
+  if (name === TASK_TOOL_NAME) return t('tool_sum_task', { n });
   if (kind === 'other') {
     return t(n === 1 ? 'tool_sum_other_one' : 'tool_sum_other', { n, name: name || 'tool' });
   }
@@ -1039,6 +1056,10 @@ export function toolCallView(
     view.heading = { title: scheduleHeading(facts, t), detail: '', fromIntent: false };
     if (status === 'done' && !failed) view.hint = scheduleHint(tool, facts, t);
     if (facts.id && status !== 'failed') view.scheduleId = facts.id;
+  }
+  if (isTaskManage(tool)) {
+    const t = translator(lang);
+    view.heading = { title: presentSummary(dispatchPhrase(tool, t, 'one')), detail: '', fromIntent: false };
   }
   if (ask) {
     view.ask = ask;
