@@ -3588,8 +3588,34 @@ button.file-search-result-row:hover {
 /* Keep clear of the window buttons. */
 :root[data-desktop-shell="1"] .side-toggle-right { right: calc(var(--wc-edge) + var(--wc-total)); }
 :root[data-desktop-shell="1"] .right-tabs-bar { padding-right: calc(50px + var(--wc-total)); }
+:root[data-desktop-shell="1"] .col-right::after { width: calc(50px + var(--wc-total)); }
 :root[data-desktop-shell="1"] .next-shell.right-closed .next-status { padding-right: calc(50px + var(--wc-total)); }
 :root[data-desktop-shell="1"] .next-shell.right-closed .schedules-header { padding-right: calc(52px + var(--wc-total)); }
+:root[data-desktop-shell="1"] .next-shell.is-ready:not(.is-dragging) :is(.next-status, .schedules-header) {
+  transition: padding-right var(--panel-slide-ms) var(--panel-slide-ease);
+}
+@media (max-width: 1061px) {
+  :root[data-desktop-shell="1"] .next-status { padding-right: calc(50px + var(--wc-total)); }
+  :root[data-desktop-shell="1"] .schedules-header { padding-right: calc(52px + var(--wc-total)); }
+}
+@media (max-width: 600px) {
+  :root[data-desktop-shell="1"] :is(.next-status, .schedules-header) {
+    padding-left: 16px;
+  }
+  :root[data-desktop-shell="1"] .next-status .top-right {
+    display: none;
+  }
+}
+@media (max-width: 520px) {
+  :root[data-desktop-shell="1"] .right-tabs-bar .tab-btn {
+    padding: 0 7px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  :root[data-desktop-shell="1"] .next-shell.is-ready:not(.is-dragging) :is(.next-status, .schedules-header) {
+    transition: none;
+  }
+}
 :root[data-desktop-shell="1"] .next-settings-ov { padding-top: calc(var(--wc-bar) + 8px); }
 :root[data-desktop-shell="1"] .search-palette-overlay { padding-top: max(14vh, calc(var(--wc-bar) + 8px)); }
 :root[data-desktop-shell="1"] .mp-mask { padding-top: max(8vh, calc(var(--wc-bar) + 8px)); }

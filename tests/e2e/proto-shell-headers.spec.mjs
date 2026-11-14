@@ -269,3 +269,161 @@ test('other pages and overlays under ?shell=1 do not overlap window controls', a
 
   expectClean(state);
 });
+
+async function sampleShellSlideFrames(page, toggleSelector) {
+  return page.evaluate(async (sel) => {
+    const shell = document.querySelector('.next-shell');
+    const toggleBtn = document.querySelector(sel);
+    if (!shell || !toggleBtn) throw new Error('missing shell or toggle button');
+
+    toggleBtn.click();
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
+    const anims = shell.getAnimations({ subtree: true });
+    for (const a of anims) a.pause();
+
+    const pcts = [0, 0.1, 0.25, 0.5, 0.75, 0.99];
+    const frames = [];
+    for (const pct of pcts) {
+      for (const a of anims) {
+        const timing = a.effect ? a.effect.getTiming() : null;
+        const dur = timing && typeof timing.duration === 'number' ? timing.duration : 240;
+        const delay = timing && typeof timing.delay === 'number' ? timing.delay : 0;
+        a.currentTime = (dur + delay) * pct;
+      }
+      void document.body.offsetWidth;
+
+      const rectOf = (s) => {
+        const el = document.querySelector(s);
+        if (!el) return null;
+        const r = el.getBoundingClientRect();
+        return { x: r.x, y: r.y, width: r.width, height: r.height, right: r.right, bottom: r.bottom };
+      };
+      frames.push({
+        pct,
+        newBtn: rectOf('[data-testid="next-schedules-new"]'),
+        toggle: rectOf('.side-toggle-right'),
+        controls: rectOf('[data-testid="window-controls"]'),
+      });
+    }
+
+    for (const a of anims) a.finish();
+    return { animCount: anims.length, frames };
+  }, toggleSelector);
+}
+
+test('schedules right-pane slide under ?shell=1: monotonic header motion and zero controls overlap', async ({ page }) => {
+  const state = await openProto(page, '?shell=1');
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.getByTestId('next-schedules').click();
+  await expect(page).toHaveURL(/#\/schedules$/);
+  await setRight(page, false);
+  await page.locator('.next-shell.is-ready').waitFor();
+
+  const expand = await sampleShellSlideFrames(page, '.side-toggle-right');
+  expect(expand.animCount).toBeGreaterThan(0);
+  expect(expand.frames).toHaveLength(6);
+
+  for (const f of expand.frames) {
+    expect(f.newBtn).not.toBeNull();
+    expect(f.toggle).not.toBeNull();
+    expect(f.controls).not.toBeNull();
+    expect(overlaps(f.newBtn, f.toggle), `expand pct=${f.pct}: new button vs toggle`).toBe(false);
+    expect(overlaps(f.newBtn, f.controls), `expand pct=${f.pct}: new button vs controls`).toBe(false);
+    expect(overlaps(f.toggle, f.controls), `expand pct=${f.pct}: toggle vs controls`).toBe(false);
+  }
+  for (let i = 1; i < expand.frames.length; i += 1) {
+    expect(expand.frames[i].newBtn.right, `expand frame ${i}: newBtn.right monotonic left`).toBeLessThanOrEqual(expand.frames[i - 1].newBtn.right + 0.5);
+  }
+
+  const collapse = await sampleShellSlideFrames(page, '.side-toggle-right');
+  expect(collapse.animCount).toBeGreaterThan(0);
+  expect(collapse.frames).toHaveLength(6);
+
+  for (const f of collapse.frames) {
+    expect(overlaps(f.newBtn, f.toggle), `collapse pct=${f.pct}: new button vs toggle`).toBe(false);
+    expect(overlaps(f.newBtn, f.controls), `collapse pct=${f.pct}: new button vs controls`).toBe(false);
+    expect(overlaps(f.toggle, f.controls), `collapse pct=${f.pct}: toggle vs controls`).toBe(false);
+  }
+  for (let i = 1; i < collapse.frames.length; i += 1) {
+    expect(collapse.frames[i].newBtn.right, `collapse frame ${i}: newBtn.right monotonic right`).toBeGreaterThanOrEqual(collapse.frames[i - 1].newBtn.right - 0.5);
+  }
+
+  expectClean(state);
+});
+
+test('headers under ?shell=1 at narrow widths (1000px, 500px, 360px, 320px, zh & en): clear toggle and window controls', async ({ page }) => {
+  const state = await openProto(page, '?shell=1');
+  const controls = page.getByTestId('window-controls');
+  await expect(controls).toBeVisible();
+
+  for (const lang of ['zh', 'en']) {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await setRight(page, false);
+    if (lang === 'en') {
+      await page.getByTestId('next-open-settings').click();
+      await page.locator('[data-testid=next-pref-lang] button[data-lang="en"]').click();
+      await page.keyboard.press('Escape');
+      await expect(page.locator('.next-settings-ov')).toHaveCount(0);
+    }
+
+    // 1. Scheduled Tasks header clearances ([1000, 500, 360], plus 320 in zh where label fits without main's compact button)
+    await page.getByTestId('next-schedules').click();
+    await expect(page).toHaveURL(/#\/schedules$/);
+
+    const newBtn = page.getByTestId('next-schedules-new');
+    await expect(newBtn).toBeVisible();
+
+    const scheduleWidths = lang === 'zh' ? [1000, 500, 360, 320] : [1000, 500, 360];
+    for (const width of scheduleWidths) {
+      await page.setViewportSize({ width, height: 900 });
+
+      await setRight(page, false);
+      const cb = await box(controls);
+      const tb = await box(page.locator('.side-toggle-right'));
+      const nb = await box(newBtn);
+
+      expect(overlaps(cb, nb), `${lang} w=${width} closed: newBtn vs controls`).toBe(false);
+      expect(overlaps(tb, nb), `${lang} w=${width} closed: newBtn vs toggle`).toBe(false);
+      expect(overlaps(cb, tb), `${lang} w=${width} closed: toggle vs controls`).toBe(false);
+      expect(nb.x + nb.width, `${lang} w=${width} closed: newBtn left of toggle`).toBeLessThanOrEqual(tb.x);
+      expect(tb.x + tb.width, `${lang} w=${width} closed: toggle left of controls`).toBeLessThanOrEqual(cb.x);
+
+      await setRight(page, true);
+      const cbOpen = await box(controls);
+      const tbOpen = await box(page.locator('.side-toggle-right'));
+      for (const btn of await page.locator('.right-tabs-bar button').all()) {
+        if (!(await btn.isVisible())) continue;
+        const b = await box(btn);
+        expect(overlaps(cbOpen, b), `${lang} w=${width} open: tab button vs controls`).toBe(false);
+        expect(overlaps(tbOpen, b), `${lang} w=${width} open: tab button vs toggle`).toBe(false);
+      }
+    }
+
+    // 2. Chat status header + open right-pane tabs down to 320px in both locales
+    await setRight(page, false);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.getByTestId('next-sidebar').locator('.sb-top-row').first().click();
+    await page.locator('.next-status').waitFor();
+    for (const width of [500, 360, 320]) {
+      await page.setViewportSize({ width, height: 900 });
+      await setRight(page, false);
+      const cb = await box(controls);
+      const tb = await box(page.locator('.side-toggle-right'));
+      expect(overlaps(cb, tb), `${lang} chat w=${width} closed: toggle vs controls`).toBe(false);
+      expect(tb.x + tb.width, `${lang} chat w=${width} closed: toggle left of controls`).toBeLessThanOrEqual(cb.x);
+      await setRight(page, true);
+      const cbOpen = await box(controls);
+      const tbOpen = await box(page.locator('.side-toggle-right'));
+      for (const btn of await page.locator('.right-tabs-bar button').all()) {
+        if (!(await btn.isVisible())) continue;
+        const b = await box(btn);
+        expect(overlaps(cbOpen, b), `${lang} chat w=${width} open: tab button vs controls`).toBe(false);
+        expect(overlaps(tbOpen, b), `${lang} chat w=${width} open: tab button vs toggle`).toBe(false);
+      }
+    }
+    await setRight(page, false);
+  }
+
+  expectClean(state);
+});
