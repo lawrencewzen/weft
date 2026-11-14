@@ -300,10 +300,13 @@ test('3. background task generates deduplicated short ids and delivers [task <id
       const live = await h.store.getConversation(h.conv.id);
       const view = await h.kernel.present(live, { includeMessages: true });
       const texts = (view.messages || []).map((m) => m.text || '');
+      const r1 = texts.find((t) => /^\[task (fix-login-test(?:-2)?) completed, no reply needed\] FIRST_BG_REPLY/.test(t));
+      const r2 = texts.find((t) => /^\[task (fix-login-test(?:-2)?) completed, no reply needed\] SECOND_BG_REPLY/.test(t));
+      const id1 = r1?.match(/^\[task (fix-login-test(?:-2)?) completed/)?.[1];
+      const id2 = r2?.match(/^\[task (fix-login-test(?:-2)?) completed/)?.[1];
       return {
         ok: (view.status === 'done' || view.status === 'idle')
-          && texts.some((t) => t.includes('[task fix-login-test completed, no reply needed] FIRST_BG_REPLY'))
-          && texts.some((t) => t.includes('[task fix-login-test-2 completed, no reply needed] SECOND_BG_REPLY')),
+          && Boolean(id1 && id2 && id1 !== id2),
         value: view,
         debug: texts,
       };

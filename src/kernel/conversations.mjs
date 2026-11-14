@@ -644,6 +644,7 @@ export async function openConversationKernel({
     harness,
     context,
     bridge: scheduleBridge,
+    dataDir,
     now: clock?.now,
     notify: () => onSchedulesChanged?.(),
     postMessage: (conv, text, options) => kernelApi.postMessage(conv, text, options),
@@ -1438,7 +1439,7 @@ export async function openConversationKernel({
     schedules,
     async close() {
       closing = true;
-      schedules.close();
+      await schedules.close();
       for (const watch of watches.values()) {
         try { await watch.stream.stop(); } catch { /* already stopped */ }
       }
