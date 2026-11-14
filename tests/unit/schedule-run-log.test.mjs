@@ -11,6 +11,7 @@ import {
   sanitizeValue,
 } from '../../src/kernel/schedule-run-log.mjs';
 import { createSqliteStore } from '../../src/store/sqlite.mjs';
+import { agentShellKind } from '../../src/platform/win/shell.mjs';
 import { createFakeClock } from './_fake-clock.mjs';
 import { withHarnessLock } from './_harness-lock.mjs';
 import { makeTempDir, removeTempDir } from './_tmp.mjs';
@@ -128,13 +129,17 @@ test('scheduled run writes complete JSONL execution log, updates SQLite metrics,
     const dataDir = await makeTempDir('weft-schedlog-e2e-');
     const wsDir = await makeTempDir('weft-schedlog-ws-');
     try {
+      const shell = agentShellKind();
+      const command = shell === 'powershell'
+        ? 'Write-Output "cron-bash-out-42"'
+        : 'printf "cron-bash-out-42\\n"';
       const scriptPath = path.join(dataDir, 'faux-script.json');
       await writeFile(scriptPath, JSON.stringify({
         turns: [
           {
             when: 'AUDIT_TASK',
-            tool: 'bash',
-            args: { command: 'printf "cron-bash-out-42\\n"' },
+            tool: shell,
+            args: { command },
             usage: { input: 110, output: 25 },
           },
           {
@@ -184,7 +189,7 @@ test('scheduled run writes complete JSONL execution log, updates SQLite metrics,
         assert.equal(dbRun.summary.llmCalls, 2);
         assert.equal(dbRun.summary.toolCalls, 1);
         assert.equal(dbRun.summary.toolErrors, 0);
-        assert.equal(dbRun.summary.tools.bash, 1);
+        assert.equal(dbRun.summary.tools[shell], 1);
         assert.equal(dbRun.summary.inputTokens, 250);
         assert.equal(dbRun.summary.outputTokens, 55);
         assert.equal(dbRun.summary.totalTokens, 305);
@@ -209,14 +214,14 @@ test('scheduled run writes complete JSONL execution log, updates SQLite metrics,
 
         const llmCalls = entries.filter((e) => e.type === 'llm_call');
         assert.equal(llmCalls.length, 2);
-        assert.equal(llmCalls[0].toolCalls[0].name, 'bash');
+        assert.equal(llmCalls[0].toolCalls[0].name, shell);
         assert.match(llmCalls[0].toolCalls[0].arguments.command, /cron-bash-out-42/);
         assert.equal(llmCalls[1].text.includes('audit summary complete'), true);
         assert.equal(llmCalls[1].text.includes('sk-secret9876543210'), false);
 
         const toolResults = entries.filter((e) => e.type === 'tool_result');
         assert.equal(toolResults.length, 1);
-        assert.equal(toolResults[0].toolName, 'bash');
+        assert.equal(toolResults[0].toolName, shell);
         assert.equal(toolResults[0].isError, false);
         assert.match(toolResults[0].output, /cron-bash-out-42/);
         assert.match(toolResults[0].command, /cron-bash-out-42/);
