@@ -14,6 +14,7 @@ import { EXT_SCHEDULES, SCHEDULE_TASK_KIND } from './ids.mjs';
 import { createScheduleTool } from './schedule-tool.mjs';
 import { readTaskGraph } from './subagents.mjs';
 import { log } from '../core/log.mjs';
+import { createScheduleRunLogger } from './schedule-run-log.mjs';
 
 /** A run later than this after its planned time is a catch-up (the server was off or asleep). */
 export const MISSED_GRACE_MS = 60_000;
@@ -160,6 +161,10 @@ export function createScheduleService({
   harness,
   context,
   bridge,
+  dataDir = null,
+  maxRunsPerSchedule,
+  runLogger: providedRunLogger = null,
+  logger = log,
   now = Date.now,
   notify = () => {},
   postMessage,
@@ -178,6 +183,17 @@ export function createScheduleService({
     if (closed) return;
     try { notify(); } catch { /* a view update must not fail a write */ }
   }
+
+  const runLogger = providedRunLogger || createScheduleRunLogger({
+    store,
+    harness,
+    context,
+    dataDir,
+    now,
+    maxKeep: maxRunsPerSchedule,
+    logger,
+    onRunUpdated: () => emit(),
+  });
 
   function withLock(id, fn) {
     const prev = locks.get(id) || Promise.resolve();
@@ -414,7 +430,14 @@ export function createScheduleService({
     }
     try {
       const sent = await postMessage(conv, row.message, { requestId, mode: 'queue' });
-      if (sent.status >= 200 && sent.status < 300) return { conversationId: conv.id };
+      if (sent.status >= 200 && sent.status < 300) {
+        const refreshed = await store.getConversation(conv.id);
+        return {
+          conversationId: conv.id,
+          harnessId: refreshed?.harnessId || conv.harnessId || null,
+          submissionId: sent.body?.runId ? String(sent.body.runId) : null,
+        };
+      }
       const reason = sent.body?.error ? String(sent.body.error) : `send failed (${sent.status})`;
       return { error: reason, conversationId: conv.id };
     } catch (err) {
@@ -426,6 +449,50 @@ export function createScheduleService({
     const fields = { schedule: id, status, cid: sent.conversationId, ...extra };
     if (sent.error) log.error('WEFT_SCHEDULE', `run failed: ${sent.error}`, fields);
     else log.info('WEFT_SCHEDULE', 'run triggered', fields);
+  }
+
+  async function recordAndTrackRun(row, { runId, at, due = at, trigger = 'scheduled', sent, extraLog = {} }) {
+    const status = sent.error
+      ? 'failed'
+      : (trigger === 'scheduled' && at - due > MISSED_GRACE_MS ? 'missed_caught_up' : 'ok');
+    const hasSubmission = !sent.error && Boolean(sent.submissionId);
+    const logFile = runLogger.logFileFor(row.id, runId, at);
+    const summary = runLogger.immediateSummary({
+      trigger,
+      state: hasSubmission ? 'running' : status,
+    });
+    const run = await store.addScheduleRun(row.id, {
+      id: runId,
+      at,
+      status,
+      conversationId: sent.conversationId,
+      error: sent.error ?? null,
+      submissionId: hasSubmission ? sent.submissionId : null,
+      finishedAt: hasSubmission ? null : at,
+      durationMs: hasSubmission ? null : 0,
+      summary,
+      logFile,
+    });
+    logScheduleRun(row.id, status, sent, extraLog);
+    if (hasSubmission) {
+      runLogger.trackRun({
+        schedule: row,
+        run,
+        trigger,
+        prompt: row.message,
+        initialStatus: status,
+        harnessId: sent.harnessId,
+        submissionId: sent.submissionId,
+      });
+    } else {
+      await runLogger.recordImmediate({
+        schedule: row,
+        run,
+        trigger,
+        prompt: row.message,
+      });
+    }
+    return run;
   }
 
   /** The task's fire phase. Safe to repeat: the run id and the message request id are fixed per planned time. */
@@ -441,15 +508,14 @@ export function createScheduleService({
     let run = await store.getScheduleRun(runId);
     if (!run) {
       const sent = await deliver(row, { requestId: `schedule:${runId}`, convId: stableUuid(`schedule:${runId}`) });
-      const status = sent.error ? 'failed' : (at - due > MISSED_GRACE_MS ? 'missed_caught_up' : 'ok');
-      run = await store.addScheduleRun(id, {
-        id: runId,
+      run = await recordAndTrackRun(row, {
+        runId,
         at,
-        status,
-        conversationId: sent.conversationId,
-        error: sent.error ?? null,
+        due,
+        trigger: 'scheduled',
+        sent,
+        extraLog: { lateMs: Math.max(0, at - due) },
       });
-      logScheduleRun(id, status, sent, { lateMs: Math.max(0, at - due) });
     }
     const gone = run.status === 'failed' && run.error === TARGET_DELETED_ERROR;
     let next = null;
@@ -585,6 +651,7 @@ export function createScheduleService({
       if (!row) return missing(lang);
       await abortTask(row.taskId);
       await store.deleteSchedule(id);
+      await runLogger.removeScheduleLogs(id);
       emit();
       return { status: 200, body: { ok: true, id } };
     }));
@@ -597,15 +664,15 @@ export function createScheduleService({
       const row = await store.getSchedule(id);
       if (!row) return missing(lang);
       const runId = `${id}:now:${randomUUID().slice(0, 8)}`;
+      const triggerAt = now();
       const sent = await deliver(row, { requestId: `schedule:${runId}` });
-      const run = await store.addScheduleRun(id, {
-        id: runId,
-        at: now(),
-        status: sent.error ? 'failed' : 'ok',
-        conversationId: sent.conversationId,
-        error: sent.error ?? null,
+      const run = await recordAndTrackRun(row, {
+        runId,
+        at: triggerAt,
+        trigger: 'manual',
+        sent,
+        extraLog: { manual: true },
       });
-      logScheduleRun(id, run.status, sent, { manual: true });
       if (sent.gone && row.enabled) {
         await abortTask(row.taskId);
         await store.updateSchedule(id, { enabled: false, taskId: null }, { now: now() });
@@ -627,12 +694,24 @@ export function createScheduleService({
         const current = await store.getSchedule(row.id);
         if (!current?.enabled) return;
         await store.updateSchedule(row.id, { enabled: false, taskId: null }, { now: now() });
-        await store.addScheduleRun(row.id, {
-          id: `${row.id}:deleted:${now()}`,
-          at: now(),
+        const delAt = now();
+        const delRunId = `${row.id}:deleted:${delAt}`;
+        const delRun = await store.addScheduleRun(row.id, {
+          id: delRunId,
+          at: delAt,
           status: 'failed',
           conversationId: null,
           error: TARGET_DELETED_ERROR,
+          finishedAt: delAt,
+          durationMs: 0,
+          summary: runLogger.immediateSummary({ trigger: 'target_deleted', state: 'failed' }),
+          logFile: runLogger.logFileFor(row.id, delRunId, delAt),
+        });
+        await runLogger.recordImmediate({
+          schedule: row,
+          run: delRun,
+          trigger: 'target_deleted',
+          prompt: row.message,
         });
         await abortTask(current.taskId);
       });
@@ -675,6 +754,7 @@ export function createScheduleService({
     } catch (err) {
       log.error('WEFT_SCHEDULE_RECONCILE', '', err);
     }
+    await runLogger.recoverUnfinished();
     emit();
   }
 
@@ -691,6 +771,7 @@ export function createScheduleService({
     planFirstRun,
     fire,
     conversationIdFor,
-    close() { closed = true; },
+    whenLogsIdle() { return runLogger.whenIdle(); },
+    close() { closed = true; return runLogger.close(); },
   };
 }
