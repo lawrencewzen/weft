@@ -6,7 +6,7 @@ import type { Lang } from '../data/lang';
 import { useSession } from '../data/session';
 import type { ConversationActions } from '../data/useConversation';
 import { useProviders } from '../data/useProviders';
-import { subagentTopic, type ThreadItem, type ToolCall } from '../data/store';
+import { conversationTopic, subagentTopic, type ThreadItem, type ToolCall } from '../data/store';
 import { useStoreTopics } from '../data/useStoreTopic';
 import { conversationPath, navigate } from '../data/nav';
 import { t } from '../i18n';
@@ -138,10 +138,19 @@ export const ToolGroupItem = memo(
       ? store.subagents(conversationId).map((agent) => store.subagent(conversationId, agent.id) || agent)
       : [];
     const match = matchDispatchSubagents(item, subagents);
+    const hasUnmatchedOther = !match?.allDispatch
+      && item.toolIds.some((id) => !toolsById[id] || toolsById[id].kind === 'other');
     const matchedTopics = useMemo(() => {
-      if (!conversationId || !match?.subagents.length) return [];
-      return match.subagents.map((agent) => subagentTopic(conversationId, agent.id));
-    }, [conversationId, match?.subagents]);
+      if (!conversationId) return [];
+      const topics: string[] = [];
+      if (hasUnmatchedOther) topics.push(`${conversationTopic(conversationId)}#subagent`);
+      if (match?.subagents.length) {
+        for (const agent of match.subagents) {
+          topics.push(subagentTopic(conversationId, agent.id));
+        }
+      }
+      return topics;
+    }, [conversationId, hasUnmatchedOther, match?.subagents]);
 
     useStoreTopics(store, matchedTopics);
 

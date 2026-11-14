@@ -4,9 +4,16 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DispatchCard } from './DispatchCard';
+import { ToolGroupItem } from './Thread';
 import { SessionContext, type SessionValue } from '../data/session';
 import { RightPaneProvider } from '../data/rightPaneContext';
-import { createEntityStore, type Subagent } from '../data/store';
+import {
+  conversationTopic,
+  createEntityStore,
+  type Subagent,
+  type ThreadItem,
+  type ToolCall,
+} from '../data/store';
 
 let root: Root | null = null;
 let host: HTMLDivElement | null = null;
@@ -120,5 +127,80 @@ describe('DispatchCard component', () => {
       (el) => el.textContent,
     );
     expect(names).toEqual(['worker-delta', 'worker-spaces']);
+  });
+
+  it('transitions ToolGroupItem to DispatchCard when subagent entity arrives after tool_group', async () => {
+    host = document.createElement('div');
+    document.body.appendChild(host);
+    root = createRoot(host);
+
+    const cid = 'c1';
+    const store = createEntityStore();
+    const sessionValue: SessionValue = {
+      store,
+      status: 'connected',
+      conversationId: cid,
+      lang: 'zh',
+      extraConversationIds: [],
+      setExtraConversationIds: vi.fn(),
+      retainTopic: vi.fn(),
+      releaseTopic: vi.fn(),
+      topics: [],
+    };
+
+    const item: Extract<ThreadItem, { kind: 'tool_group' }> = {
+      kind: 'tool_group',
+      id: 'tg:call-1',
+      toolIds: ['call-1'],
+      summary: { text: '启动任务…', failed: 0, running: true },
+      live: true,
+    };
+    const toolsById: Record<string, ToolCall> = {
+      'call-1': {
+        id: 'call-1',
+        groupId: 'tg:call-1',
+        kind: 'other',
+        status: 'running',
+        heading: { title: '修复加载顺序', detail: '', fromIntent: true },
+        hint: { text: '', failed: false },
+        failure: 'none',
+        diff: null,
+        output: { preview: '', truncated: false, totalLines: 0 },
+      },
+    };
+
+    await act(async () => {
+      root!.render(
+        <SessionContext.Provider value={sessionValue}>
+          <RightPaneProvider conversationId={cid} workspaceId={null} lang="zh" onToast={vi.fn()}>
+            <ToolGroupItem
+              item={item}
+              toolsById={toolsById}
+              lang="zh"
+              conversationId={cid}
+              onLoadOutput={async () => ({ text: '' })}
+            />
+          </RightPaneProvider>
+        </SessionContext.Provider>,
+      );
+    });
+
+    // Initially renders ToolGroup before subagent entity arrives
+    expect(host!.querySelector('[data-testid="next-dispatch-card"]')).toBeNull();
+
+    // Upsert subagent entity while item & toolsById references remain identical
+    await act(async () => {
+      store.applyUpsert({
+        topic: conversationTopic(cid),
+        entity: 'subagent',
+        id: 'c1:sub:sa-1',
+        value: makeAgent({ id: 'c1:sub:sa-1', toolCallId: 'call-1', title: '修复加载顺序' }),
+      });
+      store.flush();
+    });
+
+    const card = host!.querySelector('[data-testid="next-dispatch-card"]');
+    expect(card).toBeTruthy();
+    expect(host!.querySelector('[data-testid="next-dispatch-name"]')!.textContent).toBe('修复加载顺序');
   });
 });
