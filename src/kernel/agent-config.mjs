@@ -95,7 +95,7 @@ export function installAgentExtensions(registry, bridge, { dataDir } = {}) {
       ...systemPromptSections({ dataDir }),
       section('skills', async (input) => {
         try {
-          // Children drop delegate / subagent / skill; they stay self-contained.
+          // Children drop task / skill; they stay self-contained.
           if (!isMainAgent(input?.agent)) return undefined;
           if (typeof bridge.skillPrompt !== 'function') return undefined;
           const text = String((await bridge.skillPrompt()) || '').trim();

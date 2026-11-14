@@ -209,4 +209,102 @@ describe('SubagentReport component', () => {
     expect(summaryAfter!.textContent).toContain('子 Agent「晚到的子 Agent 标题」已交回结果');
     expect(summaryAfter!.textContent).not.toContain('sub-delta-test');
   });
+
+  it('handles failed report kind with 出错 and is-failed styling', async () => {
+    host = document.createElement('div');
+    document.body.appendChild(host);
+    root = createRoot(host);
+
+    const store = createEntityStore();
+    const cid = 'c1';
+
+    const sessionValue: SessionValue = {
+      store,
+      status: 'connected',
+      conversationId: cid,
+      lang: 'zh',
+      extraConversationIds: [],
+      setExtraConversationIds: vi.fn(),
+      retainTopic: vi.fn(),
+      releaseTopic: vi.fn(),
+      topics: [],
+    };
+
+    const failedReport = makeReport({
+      reportKind: 'failed',
+      name: 'worker-fail',
+      body: 'Network timeout during build',
+    });
+
+    await act(async () => {
+      root!.render(
+        <SessionContext.Provider value={sessionValue}>
+          <RightPaneProvider conversationId={cid} workspaceId={null} lang="zh" onToast={vi.fn()}>
+            <SubagentReport item={failedReport} lang="zh" conversationId={cid} />
+          </RightPaneProvider>
+        </SessionContext.Provider>,
+      );
+    });
+
+    const reportEl = host!.querySelector('[data-testid="next-item-subagent-report"]');
+    expect(reportEl).toBeTruthy();
+    expect(reportEl!.className).toContain('is-failed');
+
+    const summary = host!.querySelector('[data-testid="next-subagent-report-summary"]');
+    expect(summary).toBeTruthy();
+    expect(summary!.textContent).toContain('子 Agent「worker-fail」出错');
+    expect(summary!.textContent).toContain('Network timeout during build');
+
+    const icon = host!.querySelector('[data-testid="status-icon"]');
+    expect(icon?.getAttribute('data-status')).toBe('failed');
+  });
+
+  it('handles stopped report kind with 已停止 and clean styling', async () => {
+    host = document.createElement('div');
+    document.body.appendChild(host);
+    root = createRoot(host);
+
+    const store = createEntityStore();
+    const cid = 'c1';
+
+    const sessionValue: SessionValue = {
+      store,
+      status: 'connected',
+      conversationId: cid,
+      lang: 'zh',
+      extraConversationIds: [],
+      setExtraConversationIds: vi.fn(),
+      retainTopic: vi.fn(),
+      releaseTopic: vi.fn(),
+      topics: [],
+    };
+
+    const stoppedReport = makeReport({
+      reportKind: 'stopped',
+      name: 'worker-stopped',
+      body: '用户手动中止',
+    });
+
+    await act(async () => {
+      root!.render(
+        <SessionContext.Provider value={sessionValue}>
+          <RightPaneProvider conversationId={cid} workspaceId={null} lang="zh" onToast={vi.fn()}>
+            <SubagentReport item={stoppedReport} lang="zh" conversationId={cid} />
+          </RightPaneProvider>
+        </SessionContext.Provider>,
+      );
+    });
+
+    const reportEl = host!.querySelector('[data-testid="next-item-subagent-report"]');
+    expect(reportEl).toBeTruthy();
+    expect(reportEl!.className).not.toContain('is-failed');
+
+    const summary = host!.querySelector('[data-testid="next-subagent-report-summary"]');
+    expect(summary).toBeTruthy();
+    expect(summary!.textContent).toContain('子 Agent「worker-stopped」已停止');
+    expect(summary!.textContent).toContain('用户手动中止');
+
+    const icon = host!.querySelector('[data-testid="status-icon"]');
+    expect(icon?.getAttribute('data-status')).toBe('stopped');
+  });
 });

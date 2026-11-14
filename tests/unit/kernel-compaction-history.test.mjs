@@ -18,7 +18,7 @@ import {
 import { FAUX_MODEL } from '../../src/kernel/index.mjs';
 import { openConversationKernel } from '../../src/kernel/conversations.mjs';
 import { formatPasteBlock } from '../../src/core/user-message-parts.mjs';
-import { nameFromTask } from '../../src/kernel/subagents.mjs';
+import { taskIdFromDescription } from '../../src/kernel/task-tool.mjs';
 import { createSqliteStore } from '../../src/store/sqlite.mjs';
 import { conversationSnapshot } from '../../src/v2/views/conversation.ts';
 import { validateResponse } from '../../src/v2/validate.ts';
@@ -546,7 +546,7 @@ test('a fork-unrelated child still lists after the parent is compacted', { timeo
       text: SUMMARY_TEXT,
       usage: { total_tokens: DROPPED_USAGE, prompt_tokens: 88000, completion_tokens: 2000 },
     },
-    { tool: 'delegate', args: { task: taskText } },
+    { tool: 'task', args: { description: 'Child check', prompt: taskText } },
     { text: 'PARENT_AFTER_CHILD' },
     { when: taskText, text: 'CHILD_STILL_HERE' },
     { text: PAD_REPLY },
@@ -562,7 +562,7 @@ test('a fork-unrelated child still lists after the parent is compacted', { timeo
     await say(kernel, store, conv, PAD);
     await say(kernel, store, conv, KEPT);
     const before = await kernel.listSubagents(await store.getConversation(conv.id));
-    const child = before.find((agent) => agent.name === nameFromTask(taskText));
+    const child = before.find((agent) => agent.name === taskIdFromDescription('Child check'));
     assert.ok(child, JSON.stringify(before));
     const beforeMessages = await kernel.childMessages(conv.id, child.id);
     assert.equal(beforeMessages.status, 200);

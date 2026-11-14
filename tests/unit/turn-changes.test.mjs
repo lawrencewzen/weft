@@ -149,7 +149,7 @@ function scriptTurns() {
       { text: 'nothing' },
       { tool: agentShellKind(), args: { command: BASH } },
       { text: 'bash wrote' },
-      { tool: 'delegate', args: { task: 'Write child.txt with CHILD_FILE', title: '写文件' } },
+      { tool: 'task', args: { description: '写文件', prompt: 'Write child.txt with CHILD_FILE' } },
       { text: 'child wrote' },
       { when: 'Write child.txt', tool: 'write', args: { path: 'child.txt', content: 'CHILD_FILE\n' } },
       { when: 'Write child.txt', text: 'wrote child' },

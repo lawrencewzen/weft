@@ -26,6 +26,7 @@ export type ThreadMessage = {
   model?: unknown;
   stopReason?: unknown;
   request?: unknown;
+  skipped?: unknown;
   streaming?: unknown;
   tool?: ToolLike;
   images?: Array<{
@@ -54,6 +55,7 @@ export type ThreadSubagent = {
   id?: unknown;
   name?: unknown;
   status?: unknown;
+  mode?: unknown;
 };
 
 export type TurnChangeRecord = {
@@ -152,16 +154,18 @@ function isRealSubagent(agent: ThreadSubagent | null | undefined): boolean {
   return String(agent?.id || '').includes(':sub:');
 }
 
-/** Find a real subagent (`:sub:` in id) by exact name. */
+/** Find a real subagent (`:sub:` in id) by exact name, preferring background tasks. */
 export function findAgentForReport(
   name: unknown,
   subagents: ThreadSubagent[] | null | undefined,
 ): ThreadSubagent | null {
   const key = String(name || '');
   if (!key) return null;
-  return (subagents || []).find((agent) => (
+  const matches = (subagents || []).filter((agent) => (
     isRealSubagent(agent) && String(agent.name || '') === key
-  )) || null;
+  ));
+  if (!matches.length) return null;
+  return matches.find((agent) => agent.mode === 'background') || matches[0];
 }
 
 async function pathRefsFor(
@@ -242,12 +246,14 @@ export async function buildThread(
 
     if (m?.role === 'note' && m.kind === 'compaction') {
       const detail = String(m.text || '').trim();
+      const skipped = m.skipped === true;
       const note: components['schemas']['ThreadItemSystemNote'] = {
         kind: 'system_note',
         id: messageId(m),
         noteKind: 'compaction',
-        text: phrase(lang, 'compaction_note'),
+        text: phrase(lang, skipped ? 'compaction_skipped' : 'compaction_note'),
       };
+      if (skipped) note.skipped = true;
       if (detail) note.detail = detail;
       const request = noteRequest(m);
       if (request) note.request = request;
@@ -294,7 +300,7 @@ export async function buildThread(
           id: messageId(m),
           subagentId: agent?.id == null || String(agent.id) === '' ? null : String(agent.id),
           name: report.name,
-          reportKind: report.kind === 'failed' ? 'failed' : 'answered',
+          reportKind: report.kind === 'failed' ? 'failed' : report.kind === 'stopped' ? 'stopped' : 'answered',
           body: report.body,
         });
         continue;

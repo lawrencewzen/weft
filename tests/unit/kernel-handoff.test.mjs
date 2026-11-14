@@ -162,7 +162,7 @@ test('a child agent tool list drops handoff', async () => {
       { name: 'read' },
       { name: 'handoff' },
       { name: 'bash' },
-      { name: 'delegate' },
+      { name: 'task' },
       { name: 'ask_user_question' },
       { name: 'skill' },
     ],

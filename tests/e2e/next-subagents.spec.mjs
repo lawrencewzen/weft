@@ -93,7 +93,7 @@ test('demo model badges appear under the composer and not in the header', async 
 test('spawning a sub-agent does not show subagents in sidebar; appears in thread dispatch card', async ({ page }) => {
   const prepared = await prepareWorkspaces(['repo']);
   const script = await writeScript(prepared.root, 'spawn-hold.json', [
-    { tool: 'subagent', args: { action: 'spawn', name: 'worker', message: HOLD } },
+    { tool: 'task', args: { description: 'worker', prompt: HOLD, run_in_background: true } },
     { text: 'parent-idle' },
     { when: HOLD, delayMs: 12000, text: 'child-done' },
   ]);
@@ -119,7 +119,7 @@ test('spawning a sub-agent does not show subagents in sidebar; appears in thread
 test('short WEFT_SUBAGENT_STUCK_MS turns the row stuck with idle time without refresh', async ({ page }) => {
   const prepared = await prepareWorkspaces(['repo']);
   const script = await writeScript(prepared.root, 'spawn-stuck.json', [
-    { tool: 'subagent', args: { action: 'spawn', name: 'worker', message: HOLD } },
+    { tool: 'task', args: { description: 'worker', prompt: HOLD, run_in_background: true } },
     { text: 'parent-idle' },
     { when: HOLD, tool: 'ls', args: { path: '.' } },
     { when: HOLD, delayMs: 20000, text: 'child-done' },
@@ -150,7 +150,7 @@ test('short WEFT_SUBAGENT_STUCK_MS turns the row stuck with idle time without re
 test('status strip shows sub-agent; stop works; right pane has no subagent tab', async ({ page }) => {
   const prepared = await prepareWorkspaces(['repo']);
   const script = await writeScript(prepared.root, 'spawn-steer.json', [
-    { tool: 'subagent', args: { action: 'spawn', name: 'worker', message: HOLD } },
+    { tool: 'task', args: { description: 'worker', prompt: HOLD, run_in_background: true } },
     { text: 'parent-idle' },
     { when: HOLD, delayMs: 25000, text: 'child-first' },
   ]);
@@ -204,7 +204,7 @@ test('status strip shows sub-agent; stop works; right pane has no subagent tab',
 test('report open focuses the matching sub-agent in status strip', async ({ page }) => {
   const prepared = await prepareWorkspaces(['repo']);
   const script = await writeScript(prepared.root, 'spawn-report.json', [
-    { tool: 'subagent', args: { action: 'spawn', name: REPORT_NAME, message: REPORT_MSG } },
+    { tool: 'task', args: { description: REPORT_NAME, prompt: REPORT_MSG, run_in_background: true } },
     { text: '已派出巡查。' },
     { when: REPORT_MSG, text: REPORT_TEXT },
     { when: 'no reply needed', text: '已记下巡查结果。' },
@@ -235,7 +235,7 @@ test('report open focuses the matching sub-agent in status strip', async ({ page
 test('switching conversation leaves sidebar clean without subagents', async ({ page }) => {
   const prepared = await prepareWorkspaces(['repo']);
   const script = await writeScript(prepared.root, 'spawn-keep.json', [
-    { tool: 'subagent', args: { action: 'spawn', name: 'worker', message: HOLD } },
+    { tool: 'task', args: { description: 'worker', prompt: HOLD, run_in_background: true } },
     { text: 'parent-idle' },
     { when: HOLD, delayMs: 20000, text: 'child-done' },
   ]);
@@ -265,7 +265,7 @@ test('switching conversation leaves sidebar clean without subagents', async ({ p
 test('finished sub-agents report in thread and do not show in sidebar', async ({ page }) => {
   const prepared = await prepareWorkspaces(['repo']);
   const script = await writeScript(prepared.root, 'spawn-done-default.json', [
-    { tool: 'subagent', args: { action: 'spawn', name: 'worker', message: 'quick-task' } },
+    { tool: 'task', args: { description: 'worker', prompt: 'quick-task', run_in_background: true } },
     { text: 'parent-idle' },
     { when: 'quick-task', text: 'child-done' },
   ]);
@@ -289,8 +289,8 @@ test('opening a sub-agent keeps the parent lightweight and opens in right pane',
   const script = await writeScript(prepared.root, 'spawn-two-hold.json', [
     {
       tools: [
-        { tool: 'subagent', args: { action: 'spawn', name: 'alpha', message: 'hold-a' } },
-        { tool: 'subagent', args: { action: 'spawn', name: 'beta', message: 'hold-b' } },
+        { tool: 'task', args: { description: 'alpha', prompt: 'hold-a', run_in_background: true } },
+        { tool: 'task', args: { description: 'beta', prompt: 'hold-b', run_in_background: true } },
       ],
     },
     { text: 'parent-idle' },
@@ -328,7 +328,7 @@ test('opening a sub-agent keeps the parent lightweight and opens in right pane',
 test('dispatch card appears in thread when spawning sub-agent, transitioning from running to done', async ({ page }) => {
   const prepared = await prepareWorkspaces(['repo']);
   const script = await writeScript(prepared.root, 'spawn-card.json', [
-    { tool: 'subagent', args: { action: 'spawn', name: 'worker', message: HOLD } },
+    { tool: 'task', args: { description: 'worker', prompt: HOLD, run_in_background: true } },
     { text: 'parent-idle' },
     { when: HOLD, delayMs: 4000, text: 'child-done' },
   ]);
@@ -361,10 +361,10 @@ test('dispatch card appears in thread when spawning sub-agent, transitioning fro
   }
 });
 
-test('dispatch card and report display title instead of internal name when spawn provides title', async ({ page }) => {
+test('dispatch card displays description as title', async ({ page }) => {
   const prepared = await prepareWorkspaces(['repo']);
   const script = await writeScript(prepared.root, 'spawn-title.json', [
-    { tool: 'subagent', args: { action: 'spawn', name: 'worker-a', title: '核对代码覆盖率', message: HOLD } },
+    { tool: 'task', args: { description: '核对代码覆盖率', prompt: HOLD, run_in_background: true } },
     { text: 'parent-idle' },
     { when: HOLD, delayMs: 4000, text: 'child-done' },
   ]);
@@ -383,7 +383,6 @@ test('dispatch card and report display title instead of internal name when spawn
     await expect(row).toBeVisible();
     await expect(row.getByTestId('next-dispatch-name')).toHaveText('核对代码覆盖率');
     await expect(row.getByTestId('next-dispatch-task')).toHaveCount(0);
-    await expect(row).not.toContainText('worker-a');
 
     // Wait until done
     await expect(row).toHaveAttribute('data-status', 'done', { timeout: 30000 });

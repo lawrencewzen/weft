@@ -750,26 +750,33 @@ test('a failed ask that is also the last call still titles a failure', () => {
   assert.equal(summary.failed, 1);
 });
 
-test('delegate: title wins, else first line of task, heading and summary are localized', () => {
-  const titled = tool('delegate', { id: 'd1', input: { task: 'SUBTASK 写 sub.txt', title: '写文件子任务' } });
+test('task: description wins, else first line of prompt, heading and summary are localized', () => {
+  const titled = tool('task', { id: 'd1', input: { prompt: 'SUBTASK 写 sub.txt', description: '写文件子任务' } });
   assert.equal(toolRowHeading(titled).title, '写文件子任务');
   assert.equal(toolRowHeading(titled).detail, '');
+  assert.equal(toolRowHeading(titled).intent, false);
   const view = toolCallView(titled, [titled], { lang: 'zh' });
   assert.equal(view.kind, 'other');
   assert.equal(view.heading.title, '写文件子任务');
+  assert.equal(view.heading.detail, '');
+  assert.equal(view.heading.fromIntent, false);
   assert.equal(validateToolCall(view), true);
   assert.equal(summarizeToolGroup([titled], 'zh').text, '派出子 Agent：写文件子任务');
   assert.equal(summarizeToolGroup([titled], 'en').text, 'Dispatched sub-agent: 写文件子任务');
-  const bare = tool('delegate', { id: 'd2', input: { task: '  检查依赖\n然后升级\n' } });
+  const bare = tool('task', { id: 'd2', input: { prompt: '  检查依赖\n然后升级\n' } });
+  assert.equal(toolRowHeading(bare).title, '检查依赖');
+  assert.equal(toolRowHeading(bare).detail, '');
   assert.equal(toolCallView(bare, [bare], { lang: 'zh' }).heading.title, '检查依赖');
+  assert.equal(toolCallView(bare, [bare], { lang: 'zh' }).heading.detail, '');
   assert.equal(summarizeToolGroup([bare], 'zh').text, '派出子 Agent：检查依赖');
-  assert.equal(summarizeToolGroup([tool('delegate', { input: {} })], 'zh').text, '派出子 Agent');
+  assert.equal(summarizeToolGroup([tool('task', { input: {} })], 'zh').text, '派出子 Agent');
+  assert.equal(summarizeToolGroup([tool('task', { input: {} })], 'en').text, 'Dispatched a sub-agent');
 });
 
-test('delegate: several in one group are counted, mixed groups join with other clauses', () => {
+test('task: several in one group are counted, mixed groups join with other clauses', () => {
   const ds = [
-    tool('delegate', { id: 'd1', input: { task: 'a', title: 'A' } }),
-    tool('delegate', { id: 'd2', input: { task: 'b', title: 'B' } }),
+    tool('task', { id: 'd1', input: { prompt: 'a', description: 'A' } }),
+    tool('task', { id: 'd2', input: { prompt: 'b', description: 'B' } }),
   ];
   assert.equal(summarizeToolGroup(ds, 'zh').text, '派出 2 个子 Agent');
   assert.equal(summarizeToolGroup(ds, 'en').text, 'Dispatched 2 sub-agents');
@@ -783,56 +790,69 @@ test('delegate: several in one group are counted, mixed groups join with other c
   assert.equal(summarizeToolGroup(single, 'zh').text, '派出子 Agent：A · 读了 a.js');
 });
 
-test('delegate: running and failed phrases', () => {
-  const running = tool('delegate', { status: 'running', input: { task: 'x', title: '写文件子任务' } });
+test('task: running and failed phrases', () => {
+  const running = tool('task', { status: 'running', input: { prompt: 'x', description: '写文件子任务' } });
   assert.deepEqual(summarizeToolGroup([running], 'zh'), { text: '子 Agent 正在处理：写文件子任务', failed: 0, running: true });
-  assert.equal(summarizeToolGroup([tool('delegate', { status: 'running', input: {} })], 'zh').text, '子 Agent 正在处理…');
-  const failed = tool('delegate', { status: 'error', input: { task: 'x', title: 'T' } });
+  assert.equal(summarizeToolGroup([tool('task', { status: 'running', input: {} })], 'zh').text, '子 Agent 正在处理…');
+  assert.equal(summarizeToolGroup([tool('task', { status: 'running', input: {} })], 'en').text, 'Sub-agent working…');
+  const failed = tool('task', { status: 'error', input: { prompt: 'x', description: 'T' } });
   assert.equal(summarizeToolGroup([failed], 'zh').text, '派出子 Agent T 失败');
-  assert.equal(summarizeToolGroup([tool('delegate', { status: 'error', input: {} })], 'zh').text, '派出子 Agent 失败');
+  assert.equal(summarizeToolGroup([tool('task', { status: 'error', input: {} })], 'zh').text, '派出子 Agent 失败');
   assert.equal(
-    summarizeToolGroup([tool('subagent', { status: 'error', input: { action: 'stop' } })], 'zh').text,
-    '停止子 Agent 失败',
+    summarizeToolGroup([tool('task', { status: 'error', input: { action: 'stop' } })], 'zh').text,
+    '停止后台任务 失败',
   );
   assert.equal(
-    summarizeToolGroup([tool('subagent', { status: 'error', input: { action: 'list' } })], 'en').text,
-    'Listing sub-agents failed',
+    summarizeToolGroup([tool('task', { status: 'error', input: { action: 'list' } })], 'en').text,
+    'Listing background tasks failed',
   );
 });
 
-test('subagent: each action has its own phrase and heading', () => {
+test('task: management actions (send, wait, stop, list) have distinct phrases and row headings', () => {
   const cases = [
-    [{ action: 'spawn', name: 'w1', title: '后台任务' }, '启动后台子 Agent 后台任务', '正在启动后台子 Agent 后台任务…'],
-    [{ action: 'spawn', name: 'w1' }, '启动后台子 Agent w1', '正在启动后台子 Agent w1…'],
-    [{ action: 'send', name: 'w1', message: 'hi' }, '给子 Agent w1 发消息', '正在给子 Agent w1 发消息…'],
-    [{ action: 'wait', name: 'w1' }, '等待子 Agent w1', '正在等待子 Agent w1…'],
-    [{ action: 'stop', name: 'w1' }, '停止子 Agent w1', '正在停止子 Agent w1…'],
-    [{ action: 'list' }, '查看子 Agent 列表', '正在查看子 Agent 列表…'],
-    [{ action: 'wait' }, '等待子 Agent', '正在等待子 Agent…'],
+    [{ action: 'send', id: 'w1', message: 'hi' }, '给 w1 补充', '正在给 w1 补充…', 'Follow up with w1', 'Following up with w1…'],
+    [{ action: 'send', message: 'hi' }, '给后台任务补充', '正在给后台任务补充…', 'Follow up with background task', 'Following up with background task…'],
+    [{ action: 'wait', id: 'w1' }, '等待 w1', '正在等待 w1…', 'Wait for w1', 'Waiting for w1…'],
+    [{ action: 'wait' }, '等待后台任务', '正在等待后台任务…', 'Wait for background task', 'Waiting for background task…'],
+    [{ action: 'stop', id: 'w1' }, '停止 w1', '正在停止 w1…', 'Stop w1', 'Stopping w1…'],
+    [{ action: 'stop' }, '停止后台任务', '正在停止后台任务…', 'Stop background task', 'Stopping background task…'],
+    [{ action: 'list' }, '查看后台任务', '正在查看后台任务…', 'List background tasks', 'Listing background tasks…'],
   ];
-  for (const [input, done, run] of cases) {
-    const t = tool('subagent', { input });
-    assert.equal(summarizeToolGroup([t], 'zh').text, done);
-    assert.equal(summarizeToolGroup([{ ...t, status: 'running' }], 'zh').text, run);
-    const view = toolCallView(t, [t], { lang: 'zh' });
-    assert.equal(view.kind, 'other');
-    assert.equal(view.heading.title, input.title || input.name || '');
-    assert.equal(validateToolCall(view), true);
+  for (const [input, doneZh, runZh, doneEn, runEn] of cases) {
+    const t = tool('task', { input });
+    assert.equal(summarizeToolGroup([t], 'zh').text, doneZh);
+    assert.equal(summarizeToolGroup([{ ...t, status: 'running' }], 'zh').text, runZh);
+    assert.equal(summarizeToolGroup([t], 'en').text, doneEn);
+    assert.equal(summarizeToolGroup([{ ...t, status: 'running' }], 'en').text, runEn);
+    const viewZh = toolCallView(t, [t], { lang: 'zh' });
+    assert.equal(viewZh.kind, 'other');
+    assert.equal(viewZh.heading.title, doneZh);
+    assert.equal(viewZh.heading.detail, '');
+    assert.equal(viewZh.heading.fromIntent, false);
+    assert.equal(validateToolCall(viewZh), true);
+    const viewEn = toolCallView(t, [t], { lang: 'en' });
+    assert.equal(viewEn.heading.title, doneEn);
+    assert.equal(viewEn.heading.detail, '');
+    assert.equal(viewEn.heading.fromIntent, false);
+    assert.equal(validateToolCall(viewEn), true);
   }
   assert.equal(
-    summarizeToolGroup([tool('subagent', { status: 'error', input: { action: 'stop', name: 'w1' } })], 'zh').text,
-    '停止子 Agent w1 失败',
+    summarizeToolGroup([tool('task', { status: 'error', input: { action: 'stop', id: 'w1' } })], 'zh').text,
+    '停止后台任务 w1 失败',
   );
   assert.equal(
     summarizeToolGroup([
-      tool('subagent', { id: 's1', input: { action: 'spawn', name: 'w1' } }),
-      tool('subagent', { id: 's2', input: { action: 'wait', name: 'w1' } }),
+      tool('task', { id: 's1', input: { action: 'send', id: 'sub-docs' } }),
+      tool('task', { id: 's2', input: { action: 'wait', id: 'sub-load-order' } }),
     ], 'zh').text,
-    '启动后台子 Agent w1 · 等待子 Agent w1',
+    '给 sub-docs 补充 · 等待 sub-load-order',
   );
   assert.equal(
-    summarizeToolGroup([tool('subagent', { input: { action: 'send', name: 'w1' } })], 'en').text,
-    'Messaged sub-agent w1',
+    summarizeToolGroup([
+      tool('task', { id: 's1', input: { action: 'send', id: 'sub-docs' } }),
+      tool('task', { id: 's2', input: { action: 'wait', id: 'sub-load-order' } }),
+    ], 'en').text,
+    'Follow up with sub-docs · wait for sub-load-order',
   );
 });
 
