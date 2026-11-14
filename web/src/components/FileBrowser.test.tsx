@@ -149,4 +149,33 @@ describe('FileBrowser tree rows', () => {
     });
     expect(toggleDirMock).toHaveBeenCalledWith('dist');
   });
+
+  it('renders no-workspace placeholder instead of loading state when workspaceId is null', async () => {
+    vi.spyOn(rightPaneContext, 'useRightFiles').mockReturnValue({
+      workspaceId: null,
+      tree: [],
+      treeTruncated: false,
+      treeReady: false,
+      expandedDirs: new Set(),
+      toggleDirectory: toggleDirMock,
+      file: null,
+      activeFilePath: null,
+      editorMode: 'preview',
+      setEditorMode: vi.fn(),
+      draftText: '',
+      setDraftText: vi.fn(),
+      saveFile: vi.fn(async () => {}),
+      saveState: IDLE_SAVE,
+      reloadFile: vi.fn(async () => {}),
+      fileTargetLine: null,
+    });
+
+    await render(<FileBrowser lang="zh" workspaceLabel="" />);
+
+    const placeholder = host!.querySelector('[data-testid="next-file-no-workspace"]');
+    expect(placeholder).not.toBeNull();
+    expect(placeholder!.textContent).toBe('暂未选择项目');
+    expect(host!.querySelector('[data-testid="next-file-tree"]')).toBeNull();
+    expect(host!.textContent).not.toContain('正在读取文件');
+  });
 });

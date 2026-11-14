@@ -98,7 +98,7 @@ function protoButtonStyle(right: string): Record<string, string> {
     position: 'fixed',
     right,
     bottom: '8px',
-    zIndex: '2147483647',
+    zIndex: '180',
     padding: '3px 8px',
     borderRadius: '6px',
     border: '1px solid rgba(0,0,0,0.14)',

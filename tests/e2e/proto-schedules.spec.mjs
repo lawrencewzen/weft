@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { expectClean, openProto } from './helpers/proto.mjs';
+import { expectClean, layoutSettled, openProto } from './helpers/proto.mjs';
 
 /**
  * Scheduled tasks (T124-1): Sidebar clock button, active schedules count badge,
@@ -55,12 +55,14 @@ test('scheduled tasks: sidebar navigation, badge count, and empty footer note', 
   const rows = page.getByTestId('next-schedule-row');
   await expect(rows).toHaveCount(4);
 
-  // Assert multi-column grid: at 1440 viewport width, first two cards share the same y position
+  // Assert vertical single-column list: cards align horizontally and stack vertically
   const box0 = await rows.nth(0).boundingBox();
   const box1 = await rows.nth(1).boundingBox();
   expect(box0).not.toBeNull();
   expect(box1).not.toBeNull();
-  expect(Math.round(box0.y)).toBe(Math.round(box1.y));
+  expect(Math.abs(box0.x - box1.x)).toBeLessThanOrEqual(1);
+  expect(Math.abs(box0.width - box1.width)).toBeLessThanOrEqual(1);
+  expect(box1.y).toBeGreaterThanOrEqual(box0.y + box0.height + 8);
 
   // Assert paused toggle switch is visible with dimensions > 0 and opacity > 0
   const pausedRow = page.locator('[data-testid="next-schedule-row"][data-id="sched-4"]');
@@ -701,6 +703,172 @@ test('schedule dialog: once task default time is today later, changing time to p
 
   await page.getByTestId('next-schedule-cancel').click();
   await expect(dialog).toHaveCount(0);
+
+  expectClean(state);
+});
+
+function rectOverlaps(a, b) {
+  return !(a.x + a.width <= b.x || b.x + b.width <= a.x || a.y + a.height <= b.y || b.y + b.height <= a.y);
+}
+
+async function rectBox(locator) {
+  const b = await locator.boundingBox();
+  expect(b).not.toBeNull();
+  return b;
+}
+
+async function setRightPane(page, open) {
+  const isOpen = (await page.getByTestId('next-right-collapse').count()) > 0;
+  if (isOpen !== open) {
+    await page.locator('.side-toggle-right').click();
+    await layoutSettled(page);
+  }
+}
+
+async function sampleSchedulesSlideFrames(page, toggleSelector) {
+  return page.evaluate(async (sel) => {
+    const shell = document.querySelector('.next-shell');
+    const toggleBtn = document.querySelector(sel);
+    if (!shell || !toggleBtn) throw new Error('missing shell or toggle button');
+
+    toggleBtn.click();
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
+    const anims = shell.getAnimations({ subtree: true });
+    for (const a of anims) a.pause();
+
+    const pcts = [0, 0.1, 0.25, 0.5, 0.75, 0.99];
+    const frames = [];
+    for (const pct of pcts) {
+      for (const a of anims) {
+        const timing = a.effect ? a.effect.getTiming() : null;
+        const dur = timing && typeof timing.duration === 'number' ? timing.duration : 240;
+        const delay = timing && typeof timing.delay === 'number' ? timing.delay : 0;
+        a.currentTime = (dur + delay) * pct;
+      }
+      // Force layout flush before measuring rects at scrubbed currentTime.
+      void document.body.offsetWidth;
+
+      const rectOf = (s) => {
+        const el = document.querySelector(s);
+        if (!el) return null;
+        const r = el.getBoundingClientRect();
+        return { x: r.x, y: r.y, width: r.width, height: r.height, right: r.right, bottom: r.bottom };
+      };
+      frames.push({
+        pct,
+        newBtn: rectOf('[data-testid="next-schedules-new"]'),
+        toggle: rectOf('.side-toggle-right'),
+        card: rectOf('[data-testid="next-schedule-row"]'),
+        colRight: rectOf('.col-right'),
+        panelInner: rectOf('.col-right > .col-panel-inner'),
+      });
+    }
+
+    for (const a of anims) a.finish();
+    return { animCount: anims.length, frames };
+  }, toggleSelector);
+}
+
+test('schedules right-pane slide: monotonic header/card motion, zero overlap, aligned inner panel, clean files empty state', async ({ page }) => {
+  const state = await openProto(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.getByTestId('next-schedules').click();
+  await expect(page).toHaveURL(/#\/schedules$/);
+  await setRightPane(page, false);
+  await page.locator('.next-shell.is-ready').waitFor();
+
+  // 1. Expand right pane and scrub frames
+  const expand = await sampleSchedulesSlideFrames(page, '.side-toggle-right');
+  expect(expand.animCount).toBeGreaterThan(0);
+  expect(expand.frames).toHaveLength(6);
+
+  for (const f of expand.frames) {
+    expect(f.newBtn).not.toBeNull();
+    expect(f.toggle).not.toBeNull();
+    expect(f.card).not.toBeNull();
+    expect(f.colRight).not.toBeNull();
+    expect(f.panelInner).not.toBeNull();
+    expect(rectOverlaps(f.newBtn, f.toggle), `expand pct=${f.pct}: new button vs toggle`).toBe(false);
+    if (f.colRight.width > 1) {
+      expect(Math.abs(f.panelInner.x - f.colRight.x), `expand pct=${f.pct}: panelInner.x vs colRight.x`).toBeLessThanOrEqual(1.5);
+    }
+  }
+  for (let i = 1; i < expand.frames.length; i += 1) {
+    expect(expand.frames[i].newBtn.right, `expand frame ${i}: newBtn.right monotonic left`).toBeLessThanOrEqual(expand.frames[i - 1].newBtn.right + 0.5);
+    expect(expand.frames[i].card.width, `expand frame ${i}: card.width monotonic shrink`).toBeLessThanOrEqual(expand.frames[i - 1].card.width + 0.5);
+  }
+
+  // 2. While right pane is open on #/schedules, Files tab shows no-workspace placeholder (never stuck reading)
+  await page.getByTestId('next-right-tab-files').click();
+  const noWs = page.getByTestId('next-file-no-workspace');
+  await expect(noWs).toBeVisible();
+  await expect(noWs).toHaveText('暂未选择项目');
+  await expect(page.locator('.col-right')).not.toContainText('正在读取文件');
+
+  // 3. Collapse right pane and scrub frames
+  const collapse = await sampleSchedulesSlideFrames(page, '.side-toggle-right');
+  expect(collapse.animCount).toBeGreaterThan(0);
+  expect(collapse.frames).toHaveLength(6);
+
+  for (const f of collapse.frames) {
+    expect(rectOverlaps(f.newBtn, f.toggle), `collapse pct=${f.pct}: new button vs toggle`).toBe(false);
+    if (f.colRight.width > 1) {
+      expect(Math.abs(f.panelInner.x - f.colRight.x), `collapse pct=${f.pct}: panelInner.x vs colRight.x`).toBeLessThanOrEqual(1.5);
+    }
+  }
+  for (let i = 1; i < collapse.frames.length; i += 1) {
+    expect(collapse.frames[i].newBtn.right, `collapse frame ${i}: newBtn.right monotonic right`).toBeGreaterThanOrEqual(collapse.frames[i - 1].newBtn.right - 0.5);
+    expect(collapse.frames[i].card.width, `collapse frame ${i}: card.width monotonic expand`).toBeGreaterThanOrEqual(collapse.frames[i - 1].card.width - 0.5);
+  }
+
+  expectClean(state);
+});
+
+test('schedules and headers at ultra-narrow widths (500px, 360px, 320px, zh & en): single-line title, zero button overlap, readable card target', async ({ page }) => {
+  const state = await openProto(page);
+
+  for (const lang of ['zh', 'en']) {
+    if (lang === 'en') {
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await page.getByTestId('next-open-settings').click();
+      await page.locator('[data-testid=next-pref-lang] button[data-lang="en"]').click();
+      await page.keyboard.press('Escape');
+      await expect(page.locator('.next-settings-ov')).toHaveCount(0);
+    }
+
+    await page.getByTestId('next-schedules').click();
+    await expect(page).toHaveURL(/#\/schedules$/);
+
+    const newBtn = page.getByTestId('next-schedules-new');
+    const titleEl = page.getByTestId('next-schedules-title');
+    await expect(newBtn).toBeVisible();
+    await expect(titleEl).toBeVisible();
+
+    for (const width of [500, 360, 320]) {
+      await page.setViewportSize({ width, height: 900 });
+      await layoutSettled(page);
+
+      await setRightPane(page, false);
+      const tb = await rectBox(page.locator('.side-toggle-right'));
+      const nb = await rectBox(newBtn);
+      const titleBox = await rectBox(titleEl);
+      const targetBox = await rectBox(page.locator('.schedule-card-target-text').first());
+
+      expect(rectOverlaps(tb, nb), `${lang} w=${width} closed: newBtn vs toggle`).toBe(false);
+      expect(nb.x + nb.width, `${lang} w=${width} closed: newBtn left of toggle`).toBeLessThanOrEqual(tb.x);
+      expect(titleBox.height, `${lang} w=${width}: single-line title`).toBeLessThanOrEqual(28);
+      expect(targetBox.width, `${lang} w=${width}: card target readable width`).toBeGreaterThanOrEqual(60);
+
+      await setRightPane(page, true);
+      const tbOpen = await rectBox(page.locator('.side-toggle-right'));
+      for (const btn of await page.locator('.right-tabs-bar button').all()) {
+        if (!(await btn.isVisible())) continue;
+        const b = await rectBox(btn);
+        expect(rectOverlaps(tbOpen, b), `${lang} w=${width} open: tab button vs toggle`).toBe(false);
+      }
+    }
+  }
 
   expectClean(state);
 });

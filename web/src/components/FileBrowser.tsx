@@ -425,7 +425,10 @@ export function FileBrowser({ lang, workspaceLabel }: { lang: Lang; workspaceLab
   const rows = treeReady ? visibleTreeRows(tree, expandedDirs) : [];
   const changed = new Set(visibleChanges.map((item) => item.path));
 
+  const hasWorkspace = Boolean(workspaceId);
+
   useEffect(() => {
+    if (!hasWorkspace) return;
     const el = containerRef.current;
     if (!el) return;
     const ro = new ResizeObserver((entries) => {
@@ -436,7 +439,7 @@ export function FileBrowser({ lang, workspaceLabel }: { lang: Lang; workspaceLab
     ro.observe(el);
     setContainerWidth(el.clientWidth);
     return () => ro.disconnect();
-  }, []);
+  }, [hasWorkspace]);
 
   const isNarrow = containerWidth != null && containerWidth < FILE_LAYOUT_MIN_TOTAL;
 
@@ -524,6 +527,14 @@ export function FileBrowser({ lang, workspaceLabel }: { lang: Lang; workspaceLab
     ? Math.max(FILE_TREE_W_MIN, containerWidth - FILE_PREVIEW_W_MIN)
     : treeWidth;
   const effectiveTreeW = Math.max(FILE_TREE_W_MIN, Math.min(maxAllowedTreeW, treeWidth));
+
+  if (!hasWorkspace) {
+    return (
+      <div className="pane-empty" data-testid="next-file-no-workspace">
+        {t(lang, 'file_no_workspace')}
+      </div>
+    );
+  }
 
   return (
     <div
