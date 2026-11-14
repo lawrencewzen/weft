@@ -1,27 +1,41 @@
 {
-  "perConversation": true,
   "turns": [
-    { "delayMs": 800 },
-    { "text": "Coder: I'll add a tiny hello module." },
-    { "delayMs": 700 },
-    { "tool": "write", "args": { "path": "hello.js", "content": "export function hello() {\n  return 'hello';\n}\n" } },
-    { "delayMs": 500 },
-    { "text": "Coder done: wrote hello.js" },
-    { "end": true },
+    {
+      "text": "先并发派两个前台任务写模块和测试，再派一个后台任务检查仓库。",
+      "tools": [
+        {
+          "tool": "task",
+          "args": {
+            "description": "编写 hello 模块",
+            "prompt": "[coder] 新增 hello.js 导出 hello() 返回 'hello'，完成后汇报。"
+          }
+        },
+        {
+          "tool": "task",
+          "args": {
+            "description": "编写冒烟测试",
+            "prompt": "[tester] 新增 hello.test.js 验证 hello() === 'hello'，完成后汇报。"
+          }
+        },
+        {
+          "tool": "task",
+          "args": {
+            "description": "后台巡查代码",
+            "prompt": "[auditor] 检查 hello.js 是否有明显问题并汇报。",
+            "run_in_background": true
+          }
+        }
+      ]
+    },
+    { "text": "前台模块与测试已完成，后台巡查正在运行。" },
+    { "when": "no reply needed", "text": "后台巡查也已完成，未发现阻塞问题。" },
 
-    { "delayMs": 800 },
-    { "text": "Tester: I'll add a smoke test for hello()." },
-    { "delayMs": 700 },
-    { "tool": "write", "args": { "path": "hello.test.js", "content": "import { hello } from './hello.js';\nconsole.assert(hello() === 'hello');\n" } },
-    { "delayMs": 500 },
-    { "text": "Tester done: wrote hello.test.js" },
-    { "end": true },
+    { "when": "[coder]", "delayMs": 600, "tool": "write", "args": { "path": "hello.js", "content": "export function hello() {\n  return 'hello';\n}\n" } },
+    { "when": "[coder]", "delayMs": 400, "text": "已写入 hello.js。" },
 
-    { "delayMs": 800 },
-    { "text": "Auditor: Reviewing hello.js and the test for obvious issues." },
-    { "delayMs": 700 },
-    { "tool": "read", "args": { "path": "hello.js" } },
-    { "delayMs": 500 },
-    { "text": "Auditor done: no blocking issues." }
+    { "when": "[tester]", "delayMs": 600, "tool": "write", "args": { "path": "hello.test.js", "content": "import { hello } from './hello.js';\nconsole.assert(hello() === 'hello');\n" } },
+    { "when": "[tester]", "delayMs": 400, "text": "已写入 hello.test.js。" },
+
+    { "when": "[auditor]", "delayMs": 900, "text": "检查完毕，没有发现阻塞问题。" }
   ]
 }

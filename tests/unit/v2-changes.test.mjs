@@ -542,7 +542,7 @@ test('only a sub-agent write appears on the main conversation change list', { ti
   const script = path.join(dataDir, 'script.json');
   await writeFile(script, JSON.stringify({
     turns: [
-      { tool: 'delegate', args: { task: 'Write child.txt with CHILD_FILE' } },
+      { tool: 'task', args: { description: 'Write child', prompt: 'Write child.txt with CHILD_FILE' } },
       { text: 'parent-done' },
       { when: 'Write child.txt', tool: 'write', args: { path: 'child.txt', content: 'CHILD_FILE\n' }, id: 'cw' },
       { when: 'Write child.txt', text: 'wrote child' },
@@ -599,7 +599,7 @@ test('main then sub-agent on the same file: earliest baseline, last writer; reve
   await writeFile(script, JSON.stringify({
     turns: [
       { tool: 'write', args: { path: 'shared.txt', content: 'from-main\n' }, id: 'mw' },
-      { tool: 'delegate', args: { task: 'Edit shared.txt to add from-child' } },
+      { tool: 'task', args: { description: 'Edit shared', prompt: 'Edit shared.txt to add from-child' } },
       { text: 'parent-done' },
       {
         when: 'Edit shared.txt',

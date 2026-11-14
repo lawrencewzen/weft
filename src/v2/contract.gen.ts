@@ -1833,7 +1833,7 @@ export interface components {
              * @description 仅 ask_user_question，且参数通过插件校验时出现。kind 为 ask。
              *     questions 来自工具结果 details（插件校验后的题目）。
              *     answer 为 null：这条提问之后还没有真正的用户消息，界面继续等回答。
-             *     子 Agent 汇报（`[subagent …]`）和自动续写（`[auto-continue]`）虽是 pi.user，不算用户作答，answer 保持 null。
+             *     子 Agent 汇报（`[task …]`）和自动续写（`[auto-continue]`）虽是 pi.user，不算用户作答，answer 保持 null。
              *     之后若有 kind 为 weft.ask-answer 的条目（不以 pi. 开头），按其 data 回填 answer。
              *     用户没答就发了普通消息（之后出现普通 pi.user，且没有这条 toolCallId 的 weft.ask-answer）时，
              *     answer 为 { answers: [], skipped: true }。这时再提交 answer 返回 409 E_ASK_ANSWERED。
@@ -1937,7 +1937,7 @@ export interface components {
             subagentId: null | string;
             name: string;
             /** @enum {string} */
-            reportKind: "answered" | "failed";
+            reportKind: "answered" | "failed" | "stopped";
             body: string;
         };
         /**
@@ -1958,6 +1958,12 @@ export interface components {
             text: string;
             /** @description handoff 是交接说明全文，也用于 compaction 摘要。 */
             detail?: string;
+            /**
+             * @description 仅 compaction 可能有。为 true 表示这是一次手动压缩（POST /compact），但上下文还很短、没有可压缩的内容，Pi 没有生成摘要。
+             *     此时 text 是「上下文还很短，暂不需要压缩」一类的提示，没有 detail，request 是发起人和补充说明。
+             *     正常压缩不带这个字段（或为 false）。信息跟着对话历史持久化，重启后仍在。自动压缩跳过不记录。
+             */
+            skipped?: boolean;
             /**
              * @description 谁发起的这次交接或压缩，仅 handoff 与 compaction 可能有。
              *     用户通过 POST /handoff 或 /compact 发起的为 by=user，instructions 是请求体里的补充说明（没写则省略）。
@@ -2524,7 +2530,7 @@ export interface components {
                 step: number;
                 total: number;
             };
-            /** @description 派出该子 Agent 的那次 delegate / subagent 工具调用 id，与对话快照里 ToolCall.id 一致。从 roster 里来、找不到对应工具调用时为 null */
+            /** @description 派出该子 Agent 的那次 task 工具调用 id，与对话快照里 ToolCall.id 一致。从后台任务文档里来、找不到对应工具调用时为 null */
             toolCallId: null | string;
         };
         /** @description GET /api/v2/conversations/{id}/subagents/{agentId} 的响应。 */

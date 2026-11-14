@@ -78,10 +78,10 @@ export function projectCwd(input, { dataDir } = {}) {
   return envCwd;
 }
 
-/** Main agent keeps delegate / subagent. Children have neither. */
+/** Main agent keeps task. Children do not. */
 export function isMainAgent(agent) {
   const names = new Set((agent?.tools || []).map((tool) => tool?.name).filter(Boolean));
-  return names.has('delegate') || names.has('subagent');
+  return names.has('task');
 }
 
 export function platformLabel(platform = process.platform) {

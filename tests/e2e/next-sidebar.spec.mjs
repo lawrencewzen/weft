@@ -521,7 +521,7 @@ test('switching between conversations never flashes loading or empty thread, sub
     scriptFile,
     JSON.stringify({
       turns: [
-        { tool: 'subagent', args: { action: 'spawn', name: 'worker', message: HOLD } },
+        { tool: 'task', args: { description: 'worker', prompt: HOLD, run_in_background: true } },
         { text: 'parent-done' },
         { when: HOLD, delayMs: 60000, text: 'child-idle' },
       ],

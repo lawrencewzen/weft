@@ -130,7 +130,7 @@ test('POST messages steers a running subagent; parent write is a note and does n
   const dataDir = await mkdtemp(path.join(tmpdir(), 'piw-ksubctl-steer-'));
   const record = path.join(dataDir, 'record.jsonl');
   const script = await writeScript(dataDir, 'parent.json', [
-    { tool: 'subagent', args: { action: 'spawn', name: 'worker', message: 'hold-task' } },
+    { tool: 'task', args: { description: 'worker', prompt: 'hold-task', run_in_background: true } },
     { text: 'parent-idle' },
     { text: 'parent-woke' },
     { when: 'hold-task', delayMs: 4000, tool: 'ls', args: { path: '.' } },
@@ -226,7 +226,7 @@ test('POST messages steers a running subagent; parent write is a note and does n
 test('empty text 400, unknown 404, idle agent 409', { timeout: 60000 }, async () => {
   const dataDir = await mkdtemp(path.join(tmpdir(), 'piw-ksubctl-err-'));
   const script = await writeScript(dataDir, 'parent.json', [
-    { tool: 'subagent', args: { action: 'spawn', name: 'done-bot', message: 'finish-now' } },
+    { tool: 'task', args: { description: 'done-bot', prompt: 'finish-now', run_in_background: true } },
     { text: 'parent-idle' },
     { when: 'finish-now', text: 'child-done' },
   ]);
@@ -278,8 +278,8 @@ test('empty text 400, unknown 404, idle agent 409', { timeout: 60000 }, async ()
 test('POST stop aborts only that subagent and emits agent stopped', { timeout: 60000 }, async () => {
   const dataDir = await mkdtemp(path.join(tmpdir(), 'piw-ksubctl-stop-'));
   const script = await writeScript(dataDir, 'parent.json', [
-    { tool: 'subagent', args: { action: 'spawn', name: 'alpha', message: 'hold-alpha' } },
-    { tool: 'subagent', args: { action: 'spawn', name: 'beta', message: 'hold-beta' } },
+    { tool: 'task', args: { description: 'alpha', prompt: 'hold-alpha', run_in_background: true } },
+    { tool: 'task', args: { description: 'beta', prompt: 'hold-beta', run_in_background: true } },
     { text: 'both-idle' },
     { when: 'hold-alpha', delayMs: 20000, text: 'ALPHA_SHOULD_NOT' },
     { when: 'hold-beta', delayMs: 20000, text: 'BETA_SHOULD_NOT' },

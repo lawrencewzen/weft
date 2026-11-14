@@ -291,4 +291,82 @@ describe('SystemNote (T105-2)', () => {
     expect(host!.querySelector('[data-testid="next-item-user"]')).toBeNull();
     expect(host!.querySelector('[data-testid="next-compaction-divider"]')).not.toBeNull();
   });
+
+  it('renders user bubble and a lightweight skipped note line without divider when compaction is skipped with instructions', async () => {
+    const item = {
+      kind: 'system_note' as const,
+      id: 'sn-compact-skipped',
+      text: '上下文还很短，暂不需要压缩',
+      noteKind: 'compaction' as const,
+      skipped: true,
+      request: { by: 'user' as const, instructions: '保留要点' },
+    };
+
+    await act(async () => {
+      root!.render(<SystemNote item={item} lang="zh" />);
+    });
+
+    const userBubble = host!.querySelector('[data-testid="next-item-user"]');
+    expect(userBubble).not.toBeNull();
+    expect(userBubble?.getAttribute('data-command')).toBe('compaction');
+    const chip = userBubble?.querySelector('[data-testid="next-user-chip"]');
+    expect(chip?.textContent).toBe('压缩');
+    expect(chip?.getAttribute('data-kind')).toBe('compaction');
+    expect(userBubble?.textContent).toContain('保留要点');
+
+    const note = host!.querySelector('[data-testid="next-item-system-note"]');
+    expect(note).not.toBeNull();
+    expect(note?.getAttribute('data-kind')).toBe('compaction');
+    expect(note?.getAttribute('data-skipped')).toBe('true');
+    expect(note?.classList.contains('compaction-skipped-note')).toBe(true);
+    expect(note?.querySelector('.status-icon')).not.toBeNull();
+    expect(note?.textContent).toContain('上下文还很短，暂不需要压缩');
+
+    expect(host!.querySelector('[data-testid="next-compaction-divider"]')).toBeNull();
+    expect(host!.querySelector('[data-testid="next-compaction-toggle"]')).toBeNull();
+  });
+
+  it('renders user bubble without instructions and skipped note line when compaction is skipped without instructions', async () => {
+    const item = {
+      kind: 'system_note' as const,
+      id: 'sn-compact-skipped-no-inst',
+      text: '上下文还很短，暂不需要压缩',
+      noteKind: 'compaction' as const,
+      skipped: true,
+      request: { by: 'user' as const },
+    };
+
+    await act(async () => {
+      root!.render(<SystemNote item={item} lang="zh" />);
+    });
+
+    const userBubble = host!.querySelector('[data-testid="next-item-user"]');
+    expect(userBubble).not.toBeNull();
+    const chip = userBubble?.querySelector('[data-testid="next-user-chip"]');
+    expect(chip?.textContent).toBe('压缩');
+    expect(host!.querySelector('[data-testid="next-user-cmd-text"]')).toBeNull();
+
+    const note = host!.querySelector('[data-testid="next-item-system-note"]');
+    expect(note?.textContent).toContain('上下文还很短，暂不需要压缩');
+    expect(host!.querySelector('[data-testid="next-compaction-divider"]')).toBeNull();
+  });
+
+  it('renders English skipped message and falls back to i18n when text is empty', async () => {
+    const item = {
+      kind: 'system_note' as const,
+      id: 'sn-compact-skipped-en',
+      text: '',
+      noteKind: 'compaction' as const,
+      skipped: true,
+      request: { by: 'user' as const },
+    };
+
+    await act(async () => {
+      root!.render(<SystemNote item={item} lang="en" />);
+    });
+
+    const note = host!.querySelector('[data-testid="next-item-system-note"]');
+    expect(note?.textContent).toContain('Context is still short, compaction is not needed yet');
+    expect(host!.querySelector('[data-testid="next-compaction-divider"]')).toBeNull();
+  });
 });

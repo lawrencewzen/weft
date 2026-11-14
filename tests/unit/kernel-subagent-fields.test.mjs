@@ -4,14 +4,15 @@ import { agentEventData } from '../../src/core/agents.mjs';
 import {
   activityFields,
   cleanTitle,
-  createSubagentExtension,
   currentActionText,
-  DELEGATE_DESCRIPTION,
-  nameFromTask,
-  SUBAGENT_DESCRIPTION,
   SUBAGENT_INSTRUCTIONS,
-  TITLE_DESCRIPTION,
 } from '../../src/kernel/subagents.mjs';
+import {
+  createTaskExtension,
+  TASK_DESCRIPTION,
+  TASK_TOOL_NAME,
+  taskIdFromDescription,
+} from '../../src/kernel/task-tool.mjs';
 
 function userEntry(content, timestamp) {
   return { kind: 'pi.user', model: [{ role: 'user', content, ...(timestamp != null ? { timestamp } : {}) }] };
@@ -56,13 +57,16 @@ function schemaKeys(schema) {
   return Object.keys(schema?.properties || {});
 }
 
-test('nameFromTask uses the first line, flattened, capped at 30 characters', () => {
-  assert.equal(nameFromTask('Inspect auth.ts'), 'Inspect auth.ts');
-  assert.equal(nameFromTask('第一行标题\n第二行不要出现'), '第一行标题');
-  assert.equal(nameFromTask('  spaced\ttitle  \nrest'), 'spaced title');
-  const long = '请确认前台子代理已经收到了这一整段很长的任务说明并马上开始执行';
-  assert.equal(nameFromTask(long), long.slice(0, 30));
-  assert.equal(nameFromTask(long).length, 30);
+test('taskIdFromDescription slugs unicode letters/digits, caps at 24 chars, and deduplicates', () => {
+  assert.equal(taskIdFromDescription('Inspect auth.ts'), 'inspect-auth-ts');
+  assert.equal(taskIdFromDescription('第一行标题\n第二行'), '第一行标题-第二行');
+  assert.equal(taskIdFromDescription('  spaced\ttitle  '), 'spaced-title');
+  assert.equal(taskIdFromDescription('!!!'), 'task');
+  const long = 'fix-login-authentication-and-session-timeout';
+  const slug = taskIdFromDescription(long);
+  assert.equal(slug.length <= 24, true);
+  assert.equal(slug.endsWith('-'), false);
+  assert.equal(taskIdFromDescription('Fix login test', { 'fix-login-test': true }), 'fix-login-test-2');
 });
 
 test('cleanTitle flattens whitespace and omits empty values', () => {
@@ -75,38 +79,30 @@ test('cleanTitle flattens whitespace and omits empty values', () => {
   assert.equal(cleanTitle(12), undefined);
 });
 
-test('delegate and subagent tool schemas are self-contained', () => {
-  const extension = createSubagentExtension({
+test('task tool schema and subagent instructions are self-contained without legacy STATUS markers', () => {
+  const blocked = [];
+  const extension = createTaskExtension({
     prepareChild: async () => ({ change: { instructions: '' } }),
+    blocked,
   });
-  const delegate = extension.tools.find((tool) => tool.name === 'delegate');
-  const subagent = extension.tools.find((tool) => tool.name === 'subagent');
-  assert.ok(delegate);
-  assert.ok(subagent);
-  assert.deepEqual(schemaKeys(delegate.parameters), ['task', 'title']);
-  assert.deepEqual(delegate.parameters.required, ['task']);
-  assert.equal(schemaKeys(subagent.parameters).includes('agent'), false);
-  assert.equal(schemaKeys(subagent.parameters).includes('name'), true);
-  assert.equal(schemaKeys(subagent.parameters).includes('message'), true);
-  assert.equal(schemaKeys(subagent.parameters).includes('title'), true);
-  assert.equal((subagent.parameters.required || []).includes('title'), false);
-  assert.equal(delegate.parameters.properties.title.description, TITLE_DESCRIPTION);
-  assert.equal(subagent.parameters.properties.title.description, TITLE_DESCRIPTION);
-  assert.match(TITLE_DESCRIPTION, /20/);
-  assert.match(TITLE_DESCRIPTION, /path/i);
-  assert.equal(delegate.description, DELEGATE_DESCRIPTION);
-  assert.equal(subagent.description, SUBAGENT_DESCRIPTION);
-  assert.match(delegate.description, /self-contained/);
-  assert.match(delegate.description, /will not ask questions/);
-  assert.match(delegate.description, /incomplete/);
+  assert.equal(blocked.includes(extension), true);
+  assert.equal(extension.tools.length, 1);
+  const task = extension.tools.find((tool) => tool.name === TASK_TOOL_NAME);
+  assert.ok(task);
+  assert.equal(task.replay, 'safe');
+  assert.equal(task.executionMode, undefined);
+  assert.deepEqual(
+    schemaKeys(task.parameters),
+    ['description', 'prompt', 'run_in_background', 'action', 'id', 'message'],
+  );
+  assert.equal(schemaKeys(task.parameters).includes('subagent_type'), false);
+  assert.equal(task.description, TASK_DESCRIPTION);
+  assert.match(task.description, /self-contained/);
+  assert.match(task.description, /cannot see this conversation/);
   assert.match(SUBAGENT_INSTRUCTIONS, /cannot ask the user questions/);
-  assert.match(SUBAGENT_INSTRUCTIONS, /STATUS: done/);
-  assert.match(SUBAGENT_INSTRUCTIONS, /STATUS: incomplete/);
+  assert.equal(/STATUS:/i.test(SUBAGENT_INSTRUCTIONS), false);
   assert.equal(SUBAGENT_INSTRUCTIONS.includes('?'), false);
-  assert.equal(/role/i.test(delegate.description), false);
-  assert.equal(/agent id/i.test(delegate.description), false);
-  assert.equal(/role/i.test(subagent.description), false);
-  assert.equal(/agent id/i.test(subagent.description), false);
+  assert.equal(/role/i.test(task.description), false);
   assert.equal(Array.isArray(extension.sections) ? extension.sections.length : 0, 0);
 });
 

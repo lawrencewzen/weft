@@ -470,7 +470,7 @@ test('POST subagent messages 202; stop 202 then stopped; missing 404; no creds 4
   const script = path.join(dataDir, 'script.json');
   await writeFile(script, JSON.stringify({
     turns: [
-      { tool: 'subagent', args: { action: 'spawn', name: 'worker', message: 'hold-task' } },
+      { tool: 'task', args: { description: 'worker', prompt: 'hold-task', run_in_background: true } },
       { text: 'parent-idle' },
       { when: 'hold-task', delayMs: 20000, text: 'SHOULD_NOT' },
     ],
@@ -535,7 +535,7 @@ test('HTTP conversation topic snapshot includes subagent; child item arrives on 
   const script = path.join(dataDir, 'script.json');
   await writeFile(script, JSON.stringify({
     turns: [
-      { tool: 'subagent', args: { action: 'spawn', name: '巡查', message: 'please-look' } },
+      { tool: 'task', args: { description: '巡查', prompt: 'please-look', run_in_background: true } },
       { text: '已派出巡查。' },
       { when: 'please-look', delayMs: 600, text: '仓库干净，没有未提交改动。' },
     ],
@@ -733,13 +733,13 @@ test('in-process: subagent topic tool.delta throttles, trimStart, set, and skips
   }
 });
 
-test('subagent toolCallId matches parent ToolCall.id for delegate and subagent', { timeout: 60_000 }, async () => {
+test('subagent toolCallId matches parent ToolCall.id for foreground and background task', { timeout: 60_000 }, async () => {
   const dataDir = await mkdtemp(path.join(tmpdir(), 'piw-v2-sa-toolcall-'));
   const script = path.join(dataDir, 'script.json');
   await writeFile(script, JSON.stringify({
     turns: [
-      { tool: 'delegate', args: { task: 'do-fg', title: '前台项' }, id: 'call-fg' },
-      { tool: 'subagent', args: { action: 'spawn', name: '后台项', message: 'do-bg', title: '后台巡查' }, id: 'call-bg' },
+      { tool: 'task', args: { description: '前台项', prompt: 'do-fg' }, id: 'call-fg' },
+      { tool: 'task', args: { description: '后台巡查', prompt: 'do-bg', run_in_background: true }, id: 'call-bg' },
       { text: 'parent-done' },
       { when: 'do-fg', text: 'FG_OK' },
       { when: 'do-bg', text: 'BG_OK' },

@@ -140,7 +140,7 @@ export function RightPaneProvider({
   const [diffs, setDiffs] = useState<Record<string, Diff | 'loading' | 'error'>>({});
   const [tree, setTree] = useState<FileNode[]>([]);
   const [treeTruncated, setTreeTruncated] = useState(false);
-  const [treeReady, setTreeReady] = useState(false);
+  const [treeReady, setTreeReady] = useState(() => !workspaceId);
   const [expandedDirs, setExpandedDirs] = useState<Set<string>>(() => new Set());
   const [activeFilePath, setActiveFilePath] = useState<string | null>(null);
   const [fileTargetLine, setFileTargetLine] = useState<number | null>(null);
@@ -276,7 +276,7 @@ export function RightPaneProvider({
     treeDirsRef.current = new Set();
     setTree([]);
     setTreeTruncated(false);
-    setTreeReady(false);
+    setTreeReady(!wsId);
     setExpandedDirs(new Set());
     setActiveFilePath(null);
     setFile(null);
@@ -344,7 +344,11 @@ export function RightPaneProvider({
   }, [cid, visibleChanges]);
 
   useEffect(() => {
-    if (tab !== 'files' || !wsId) return;
+    if (tab !== 'files') return;
+    if (!wsId) {
+      if (!treeReady) setTreeReady(true);
+      return;
+    }
     if (treeWsRef.current === wsId && treeReady) return;
     void loadTree(wsId);
   }, [tab, wsId, treeReady, loadTree]);

@@ -16,7 +16,6 @@ import {
   isAllEndedAgents,
   isSubagentEnded,
   stripMarkdownInline,
-  stripStatusHeader,
 } from './agentsStripUtils';
 import { StatusIcon, statusIconFor } from './StatusIcon';
 
@@ -246,8 +245,8 @@ export function AgentsStrip({ cid, lang }: AgentsStripProps) {
               failReason = lastText || agent.currentAction || t(lang, 'status_failed');
             }
 
-            const cleanResText = stripStatusHeader(resText);
-            const cleanFailReason = stripStatusHeader(failReason);
+            const cleanResText = resText.trim();
+            const cleanFailReason = failReason.trim();
             const doing = formatAgentDoing(agent, { lang, resText: cleanResText });
             const elapsed = formatAgentElapsed(agent, now);
             const steps = extractSubagentSteps(subItems, subTools, lang);
@@ -309,6 +308,10 @@ export function AgentsStrip({ cid, lang }: AgentsStripProps) {
                     ) : agent.status === 'failed' ? (
                       <div className="agents-strip-res res" data-testid="next-agents-strip-detail-text">
                         {stripMarkdownInline(t(lang, 'agents_strip_failed_desc', { reason: stripMarkdownInline(cleanFailReason || failReason) }))}
+                      </div>
+                    ) : agent.status === 'stopped' ? (
+                      <div className="agents-strip-res res" data-testid="next-agents-strip-detail-text">
+                        {t(lang, 'status_stopped')}
                       </div>
                     ) : steps.length > 0 ? (
                       steps.map((st, idx) => (

@@ -38,6 +38,20 @@ export function compactionNote(id: string, before: number, instructions?: string
   };
 }
 
+export function compactionSkippedNote(id: string, instructions?: string): MockNote {
+  const textZh = '上下文还很短，暂不需要压缩';
+  const textEn = 'Context is still short, compaction is not needed yet';
+  return {
+    kind: 'system_note',
+    id,
+    noteKind: 'compaction',
+    skipped: true,
+    text: textZh,
+    i18n: { zh: textZh, en: textEn },
+    request: { by: 'user', ...(instructions ? { instructions } : {}) },
+  };
+}
+
 export type MockEffectiveModel = { providerId: string; modelId: string; name: string; percent: number };
 
 /** Same formula as src/kernel/compaction-settings.mjs (reserve, 5% margin, background start). */

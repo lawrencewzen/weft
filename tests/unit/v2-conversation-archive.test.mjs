@@ -327,7 +327,7 @@ test('deleting a conversation with subagents removes it; deleting a forked paren
   const script = path.join(dataDir, 'script.json');
   await writeFile(script, JSON.stringify({
     turns: [
-      { tool: 'delegate', args: { task } },
+      { tool: 'task', args: { description: 'Child check', prompt: task } },
       { text: 'parent-done' },
       { when: task, text: 'CHILD_OK' },
       { text: 'fork-follow-up' },

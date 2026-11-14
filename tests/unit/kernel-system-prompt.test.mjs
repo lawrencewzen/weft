@@ -8,10 +8,9 @@ import { SKILL_LIST_INTRO, buildSkillPrompt } from '../../src/core/skills.mjs';
 import { createExtensionHost } from '../../src/core/extensions.mjs';
 import { openConversationKernel } from '../../src/kernel/conversations.mjs';
 import {
-  DELEGATE_DESCRIPTION,
-  SUBAGENT_DESCRIPTION,
   SUBAGENT_INSTRUCTIONS,
 } from '../../src/kernel/subagents.mjs';
+import { TASK_DESCRIPTION } from '../../src/kernel/task-tool.mjs';
 import {
   AGENTS_BYTE_LIMIT,
   AGENTS_TRUNCATION_LINE,
@@ -31,7 +30,6 @@ import { createSqliteStore } from '../../src/store/sqlite.mjs';
 import { agentShellKind } from '../../src/platform/win/shell.mjs';
 import { ROOT } from './_root.mjs';
 
-const DELEGATE_LEAD = 'Use this for independent tasks that can run on their own. Do simple work yourself.';
 // Intranet ships no bundled skills, so the prompt test reads fixtures.
 const SKILL_DIRS = [path.join(import.meta.dirname, 'fixtures', 'skills')];
 
@@ -173,8 +171,7 @@ test('shell line follows the offered tool and chat directories are not projects'
     agent: { tools: [{ name: 'read' }] },
     env: { cwd: process.cwd() },
   }).includes('Working directory:'), false);
-  assert.equal(DELEGATE_DESCRIPTION.startsWith(`${DELEGATE_LEAD} `), true);
-  assert.equal(SUBAGENT_DESCRIPTION.startsWith(`${DELEGATE_LEAD} `), true);
+  assert.equal(TASK_DESCRIPTION.includes('self-contained'), true);
   assert.equal(SUBAGENT_INSTRUCTIONS.includes('?'), false);
   const limit = AGENTS_BYTE_LIMIT;
   const split = Buffer.concat([
@@ -399,7 +396,7 @@ test('rendered sub-agent prompt has environment and project context only', { tim
   const script = path.join(dataDir, 'child.json');
   await writeFile(script, JSON.stringify({
     turns: [
-      { when: 'dispatch child', tool: 'delegate', args: { task: taskText } },
+      { when: 'dispatch child', tool: 'task', args: { description: 'Apply rules', prompt: taskText } },
       { when: 'dispatch child', text: 'parent-done' },
       { when: taskText, text: 'CHILD_OK' },
     ],
@@ -436,18 +433,15 @@ test('rendered sub-agent prompt has environment and project context only', { tim
     assert.match(childView.prompt, /You are a subagent dispatched to complete one task independently/);
 
     const rows = (await readFile(record, 'utf8')).trim().split('\n').map((line) => JSON.parse(line));
-    const parentCall = rows.find((row) => (row.tools || []).includes('delegate'));
+    const parentCall = rows.find((row) => (row.tools || []).includes('task'));
     const childCall = rows.find((row) => (
-      !(row.tools || []).includes('delegate')
+      !(row.tools || []).includes('task')
       && (row.users || []).some((text) => String(text).includes(taskText))
     ));
     assert.ok(parentCall, JSON.stringify(rows.map((row) => row.tools)));
     assert.ok(childCall, JSON.stringify(rows.map((row) => row.users)));
-    assert.equal(parentCall.toolDescriptions.delegate.startsWith(`${DELEGATE_LEAD} `), true);
-    assert.equal(parentCall.toolDescriptions.subagent.startsWith(`${DELEGATE_LEAD} `), true);
-    assert.equal(parentCall.toolDescriptions.delegate, DELEGATE_DESCRIPTION);
-    assert.equal(parentCall.toolDescriptions.subagent, SUBAGENT_DESCRIPTION);
-    for (const name of ['delegate', 'subagent', 'skill']) {
+    assert.equal(parentCall.toolDescriptions.task, TASK_DESCRIPTION);
+    for (const name of ['task', 'delegate', 'subagent', 'skill']) {
       assert.equal((childCall.tools || []).includes(name), false, name);
     }
     assert.equal((childCall.tools || []).includes(SHELL_TOOL), true);

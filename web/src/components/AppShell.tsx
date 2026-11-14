@@ -240,7 +240,7 @@ function AppShellLayout({
     ? workspaces.find((item) => item.id === currentWorkspaceId)
     : undefined;
   const hasWorkspace = Boolean(workspace && !isChatWorkspace(workspace));
-  const workspaceLabel = workspace?.path || workspace?.name || t(lang, 'chats_label');
+  const workspaceLabel = workspace ? (workspace.path || workspace.name || t(lang, 'chats_label')) : '';
 
   useEffect(() => {
     const onKeyDown = (ev: KeyboardEvent) => {

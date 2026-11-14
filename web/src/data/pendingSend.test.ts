@@ -92,7 +92,7 @@ describe('settlePending by requestId', () => {
   });
 
   it('collects a send the server rendered as a subagent-report card', () => {
-    const entry = `[subagent 巡查 answered, no reply needed] 仓库干净`;
+    const entry = `[task 巡查 completed, no reply needed] 仓库干净`;
     const card: PendingUser = { key: 'r9', text: entry, baseline: 0, doneAt: 1000 };
     const sends = [{ requestId: 'r9', entryId: '40', dropped: false }];
     const items = [user('1', '请派子代理'), report('40', '巡查', '仓库干净')];
@@ -101,8 +101,8 @@ describe('settlePending by requestId', () => {
 
   it('collects a send the server reports only after the run ended, not just the newest one', () => {
     // 连发两条：服务端把两条都报回来，第一条（卡片）也照常收回。
-    const first: PendingUser = { key: 'a', text: '[subagent 巡查 answered] 一', baseline: 0, doneAt: 1000 };
-    const second: PendingUser = { key: 'b', text: '[subagent 编码 failed: x]', baseline: 0, doneAt: 1000 };
+    const first: PendingUser = { key: 'a', text: '[task 巡查 completed, no reply needed] 一', baseline: 0, doneAt: 1000 };
+    const second: PendingUser = { key: 'b', text: '[task 编码 failed: x]', baseline: 0, doneAt: 1000 };
     const sends = [
       { requestId: 'a', entryId: '13', dropped: false },
       { requestId: 'b', entryId: '17', dropped: false },

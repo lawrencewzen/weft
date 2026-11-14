@@ -35,7 +35,8 @@ import { installPluginReload } from './plugins.mjs';
 import { createAgentHost, installAgentExtensions } from './agent-config.mjs';
 import { maybeGenerateConversationTitle } from './title.mjs';
 import { createSubagentControl } from './subagent-control.mjs';
-import { createSubagentExtension, createSubagentHost, readTaskGraph } from './subagents.mjs';
+import { createSubagentHost, readTaskGraph } from './subagents.mjs';
+import { createTaskExtension } from './task-tool.mjs';
 import { createScheduleExtension, createScheduleService } from './schedules.mjs';
 import { SCHEDULE_TASK_KIND } from './ids.mjs';
 import { HANDOFF_REQUEST_KIND, handoffRequestText } from './handoff.mjs';
@@ -65,7 +66,7 @@ import {
 } from './turn-changes.mjs';
 import { activeContextUsage, installUsageExtension } from './usage.mjs';
 import { createWorkspaceEnv } from './workspace-env.mjs';
-import { createCompactionControl, effectiveTriggers, selectableModelKeys } from './compaction-settings.mjs';
+import { COMPACTION_SKIPPED_KIND, createCompactionControl, effectiveTriggers, selectableModelKeys } from './compaction-settings.mjs';
 import { readTriggerPercent } from '../core/settings.mjs';
 import {
   describeForkPoint,
@@ -248,7 +249,7 @@ export async function openConversationKernel({
   installUsageExtension(registry);
   installPluginReload(registry, agentBridge);
   const childBlocked = [];
-  const subagentExtension = createSubagentExtension({
+  const taskExtension = createTaskExtension({
     prepareChild: (parent) => subagentApi.prepareChild(parent),
     onChild: (parentId, childId) => subagentApi.onChild?.(parentId, childId),
     blocked: childBlocked,
@@ -257,10 +258,10 @@ export async function openConversationKernel({
   const scheduleExtension = createScheduleExtension(scheduleBridge);
   agentBridge.extraTools = () => [
     ...(agentBridge.skillTool ? [agentBridge.skillTool] : []),
-    ...(subagentExtension.tools || []),
+    ...(taskExtension.tools || []),
     ...(scheduleExtension.tools || []),
   ];
-  registry.install(subagentExtension);
+  registry.install(taskExtension);
   registry.install(scheduleExtension);
   childBlocked.push(scheduleExtension);
   if (String(env.WEFT_FAUX_SCRIPT || '').trim()) registry.install(createScriptFloorExtension());
@@ -635,6 +636,7 @@ export async function openConversationKernel({
     harness,
     context,
     bridge: scheduleBridge,
+    dataDir,
     now: clock?.now,
     notify: () => onSchedulesChanged?.(),
     postMessage: (conv, text, options) => kernelApi.postMessage(conv, text, options),
@@ -1210,7 +1212,7 @@ export async function openConversationKernel({
    * conversation is not found, and the note then has no instructions.
    */
   async function attachCompactionRequests(harnessId, messages, entries) {
-    const manual = messages.filter((m) => m?.role === 'note' && m.kind === 'compaction' && m.request?.by === 'user');
+    const manual = messages.filter((m) => m?.role === 'note' && m.kind === 'compaction' && !m.skipped && m.request?.by === 'user');
     if (!manual.length) return;
     const need = manual.filter((m) => !compactionRequests.has(String(m.id)));
     if (need.length) {
@@ -1245,6 +1247,32 @@ export async function openConversationKernel({
       const focus = compactionRequests.get(String(m.id));
       if (focus) m.request = { by: 'user', instructions: focus };
     }
+  }
+
+  let closing = false;
+
+  /**
+   * Official compaction completes with an empty result (no summary, no failure)
+   * when there is nothing old enough to compact. A manual request that ends that
+   * way leaves a weft.compaction-skipped entry (a write submission, so it follows
+   * the history and is placed at the next boundary if a turn is running).
+   * Automatic compactions are never recorded. The wait is Pi's in-memory
+   * waitForTask, so a restart before the task settles loses the record.
+   */
+  async function recordSkippedCompaction(conversation, taskId, instructions) {
+    const focus = typeof instructions === 'string' ? instructions.trim() : '';
+    // Official Harness.waitForTask: resolves with the terminal receipt, rejects if the harness closes.
+    const settled = await harness.waitForTask(taskId, context);
+    const outcome = settled?.state?.outcome;
+    const result = outcome?.status === 'completed' ? outcome.result : undefined;
+    if (!result || result.submissionId != null || result.entryId != null) return;
+    await conversation.submit({
+      type: 'write',
+      entry: {
+        kind: COMPACTION_SKIPPED_KIND,
+        ...(focus ? { data: { instructions: focus } } : {}),
+      },
+    }, context);
   }
 
   async function createConversation(fields) {
@@ -1402,7 +1430,8 @@ export async function openConversationKernel({
     },
     schedules,
     async close() {
-      schedules.close();
+      closing = true;
+      await schedules.close();
       for (const watch of watches.values()) {
         try { await watch.stream.stop(); } catch { /* already stopped */ }
       }
@@ -1530,6 +1559,9 @@ export async function openConversationKernel({
       try {
         const taskId = await conversation.compact(instructions, context);
         log.info('WEFT_COMPACTION', 'compaction requested', { cid, taskId: String(taskId), trigger: 'manual' });
+        recordSkippedCompaction(conversation, taskId, instructions).catch((err) => {
+          if (!closing) log.error('WEFT_COMPACTION', 'skipped record failed', { cid, taskId: String(taskId) }, err);
+        });
         return { status: 202, body: { taskId: String(taskId) } };
       } catch (err) {
         if (err?.name === 'ConversationBusy') {
