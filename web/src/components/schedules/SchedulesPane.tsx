@@ -81,13 +81,15 @@ export function SchedulesPane({ lang, highlightId, onToast, onConfirm }: Props) 
       data-testid="next-schedules-pane"
     >
       <header className="schedules-header" data-testid="next-schedules-header">
-        <h2 className="schedules-title" data-testid="next-schedules-title">
+        <h2 className="schedules-title" data-testid="next-schedules-title" title={t(lang, 'schedules_title')}>
           {t(lang, 'schedules_title')}
         </h2>
         <button
           type="button"
           className="btn p btn-sm schedules-new-btn"
           data-testid="next-schedules-new"
+          title={t(lang, 'schedules_new_btn')}
+          aria-label={t(lang, 'schedules_new_btn')}
           onClick={() => {
             setEditingSchedule(null);
             setDialogOpen(true);
