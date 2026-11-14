@@ -43,10 +43,16 @@ export function SubagentReport({
     : undefined;
   const name = (agent?.title && agent.title.trim()) || item.name;
   const failed = item.reportKind === 'failed';
+  const stopped = item.reportKind === 'stopped';
+  const status = failed ? 'failed' : stopped ? 'stopped' : 'done';
   const title = failed
     ? t(lang, 'subagent_report_failed', { name })
-    : t(lang, 'subagent_report_answered', { name });
-  const reason = failed ? item.body.replace(/\s+/g, ' ').trim().slice(0, 48) : '';
+    : stopped
+      ? t(lang, 'subagent_report_stopped', { name })
+      : t(lang, 'subagent_report_answered', { name });
+  const reason = (failed || (stopped && item.body))
+    ? item.body.replace(/\s+/g, ' ').trim().slice(0, 48)
+    : '';
 
   return (
     <div
@@ -64,7 +70,7 @@ export function SubagentReport({
           onClick={() => setOpen((value) => !value)}
         >
           <StatusIcon
-            status={failed ? 'failed' : 'done'}
+            status={status}
             size={14}
             className="subagent-report-icon"
             lang={lang}

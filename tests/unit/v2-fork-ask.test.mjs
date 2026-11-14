@@ -53,8 +53,8 @@ test('forking at an assistant message keeps its tool calls with their results', 
       {
         text: '先问一下。',
         tools: [
-          { tool: 'subagent', id: 'sp-1', args: { action: 'spawn', name: 'a', message: 'CHILD-A' } },
-          { tool: 'subagent', id: 'sp-2', args: { action: 'spawn', name: 'b', message: 'CHILD-B' } },
+          { tool: 'task', id: 'sp-1', args: { description: 'a', prompt: 'CHILD-A', run_in_background: true } },
+          { tool: 'task', id: 'sp-2', args: { description: 'b', prompt: 'CHILD-B', run_in_background: true } },
           { tool: 'ask_user_question', id: 'ask-1', args: { questions: [ASK] } },
         ],
       },

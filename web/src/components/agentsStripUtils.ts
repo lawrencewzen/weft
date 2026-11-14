@@ -64,20 +64,6 @@ export function stripMarkdownInline(text: string): string {
     .trim();
 }
 
-export function stripStatusHeader(text: string): string {
-  if (!text) return '';
-  const lines = text.split(/\r?\n/);
-  let start = 0;
-  while (start < lines.length && lines[start].trim() === '') start += 1;
-  if (start >= lines.length) return '';
-  if (/^STATUS:\s*(done|incomplete)\s*$/i.test(lines[start].trim())) {
-    let from = start + 1;
-    while (from < lines.length && lines[from].trim() === '') from += 1;
-    return lines.slice(from).join('\n').trim();
-  }
-  return text.trim();
-}
-
 export function formatAgentsHeadline(agents: readonly Subagent[], lang: Lang): string {
   if (!agents.length) return '';
   const r = agents.filter((a) => a.status === 'running').length;
@@ -105,7 +91,7 @@ export function formatAgentDoing(
   const { lang, resText } = options;
   if (agent.status === 'done') {
     if (resText) {
-      const cleaned = stripStatusHeader(resText);
+      const cleaned = resText.trim();
       if (cleaned) {
         const firstLine = cleaned.split('\n')[0].trim();
         if (firstLine) return stripMarkdownInline(firstLine);
@@ -118,6 +104,9 @@ export function formatAgentDoing(
   }
   if (agent.status === 'failed') {
     return t(lang, 'agents_strip_failed_doing');
+  }
+  if (agent.status === 'stopped') {
+    return t(lang, 'status_stopped');
   }
   return stripMarkdownInline(stripActionMarks(agent.currentAction || '')) || t(lang, 'status_running');
 }

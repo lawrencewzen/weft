@@ -575,9 +575,11 @@ test('kernel path: the main agent offers every workspace tool plus plugins and d
     const done = await waitFinished(srv.base, conv.id);
     assert.equal(done.status, 'done', JSON.stringify(done.messages));
     const offered = (await readFile(toolLog, 'utf8')).trim().split('\n').map((line) => JSON.parse(line));
-    for (const name of ['read', 'write', 'edit', 'ls', 'grep', 'bash', 'echo', 'skill', 'delegate', 'subagent']) {
+    for (const name of ['read', 'write', 'edit', 'ls', 'grep', 'bash', 'echo', 'skill', 'task']) {
       assert.equal(offered[0].includes(name), true, name);
     }
+    assert.equal(offered[0].includes('delegate'), false);
+    assert.equal(offered[0].includes('subagent'), false);
   } finally {
     await stopServer(srv);
     await rm(dataDir, { recursive: true, force: true });

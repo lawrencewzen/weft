@@ -227,8 +227,6 @@ export function seedSubThreads(now: number): Map<string, MockSubThread> {
       assistant(
         'sa2-a1',
         [
-          'STATUS: done',
-          '',
           '补好了，在 `web/src/data/store.test.ts` 里加了两条：',
           '',
           '- 偏移等于当前长度时追加',
@@ -390,11 +388,7 @@ export function seedSubThreads(now: number): Map<string, MockSubThread> {
       user('site-sa2-u1', '看一下首屏标题字重是不是合适。'),
       assistant(
         'site-sa2-a1',
-        [
-          'STATUS: done',
-          '',
-          '已核对字重，首屏标题保持 600，副标题 400，视觉层级清晰。',
-        ].join('\n'),
+        '已核对字重，首屏标题保持 600，副标题 400，视觉层级清晰。',
       ),
     ],
     tools: {},
@@ -413,8 +407,6 @@ export function seedSubagentReports(): MockItem[] {
       name: 'sub-delta-test',
       reportKind: 'answered',
       body: [
-        'STATUS: done',
-        '',
         '补好了 `text.delta` 偏移的两条用例，`npm run test:web` 全绿。',
         '',
         '- 偏移等于当前长度：追加',
@@ -575,18 +567,18 @@ export function createSubThread(db: MockDb, conv: MockConv, title: string): Mock
   const dispatch = tool({
     id: toolCallId,
     kind: 'other',
-    title: hint('subagent', 'subagent'),
+    title: hint(title, title),
     hint: hint('已派出', 'spawned'),
     preview: title,
     totalLines: 1,
-    output: `Started ${view.name}.`,
+    output: `Started background task ${view.name}.`,
   });
   conv.tools[dispatch.id] = dispatch;
   const groupRow: MockGroup = {
     kind: 'tool_group',
     id: `sub-dispatch-g-${seq}`,
     toolIds: [dispatch.id],
-    summary: { zh: '调用了 1 次工具', en: 'called a tool 1 time' },
+    summary: { zh: `派出子 Agent：${title}`, en: `Dispatched sub-agent: ${title}` },
     failed: 0,
     running: false,
     live: false,

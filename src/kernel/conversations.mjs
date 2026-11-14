@@ -35,7 +35,8 @@ import { installPluginReload } from './plugins.mjs';
 import { createAgentHost, installAgentExtensions } from './agent-config.mjs';
 import { maybeGenerateConversationTitle } from './title.mjs';
 import { createSubagentControl } from './subagent-control.mjs';
-import { createSubagentExtension, createSubagentHost, readTaskGraph } from './subagents.mjs';
+import { createSubagentHost, readTaskGraph } from './subagents.mjs';
+import { createTaskExtension } from './task-tool.mjs';
 import { createScheduleExtension, createScheduleService } from './schedules.mjs';
 import { SCHEDULE_TASK_KIND } from './ids.mjs';
 import { HANDOFF_REQUEST_KIND, handoffRequestText } from './handoff.mjs';
@@ -252,7 +253,7 @@ export async function openConversationKernel({
   installUsageExtension(registry);
   installPluginReload(registry, agentBridge);
   const childBlocked = [];
-  const subagentExtension = createSubagentExtension({
+  const taskExtension = createTaskExtension({
     prepareChild: (parent) => subagentApi.prepareChild(parent),
     onChild: (parentId, childId) => subagentApi.onChild?.(parentId, childId),
     blocked: childBlocked,
@@ -261,10 +262,10 @@ export async function openConversationKernel({
   const scheduleExtension = createScheduleExtension(scheduleBridge);
   agentBridge.extraTools = () => [
     ...(agentBridge.skillTool ? [agentBridge.skillTool] : []),
-    ...(subagentExtension.tools || []),
+    ...(taskExtension.tools || []),
     ...(scheduleExtension.tools || []),
   ];
-  registry.install(subagentExtension);
+  registry.install(taskExtension);
   registry.install(scheduleExtension);
   childBlocked.push(scheduleExtension);
   if (String(env.WEFT_FAUX_SCRIPT || '').trim()) registry.install(createScriptFloorExtension());

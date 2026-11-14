@@ -16,7 +16,7 @@
 
 ## 目标
 - 三栏界面：工作区与会话、对话（Markdown + 折叠工具行）、Diff / 文件 / Markdown 编辑器
-- 多个 Agent 并行；主 Agent 用 delegate / subagent 派子 Agent，子 Agent 是自包含派活，不套角色模板
+- 多个 Agent 并行；主 Agent 用 task 派子 Agent，子 Agent 是自包含派活，不套角色模板
 - 监控：卡住检测、模型中断自动续跑与重试，SQLite 检查点
 - 工作区内的 read / write / edit / grep / bash 工具，自动记录 diff
 - 任意 OpenAI 兼容模型接口（xAI、DeepSeek、内网）

@@ -17,7 +17,6 @@ import {
   hasUnendedAgents,
   isAllEndedAgents,
   stripMarkdownInline,
-  stripStatusHeader,
 } from './agentsStripUtils';
 
 function makeAgent(overrides: Partial<Subagent>): Subagent {
@@ -182,53 +181,44 @@ describe('agentsStripUtils', () => {
       expect(formatAgentDoing(queued, { lang: 'zh' })).toBe('排队中');
 
       const failed = makeAgent({ status: 'failed' });
-      expect(formatAgentDoing(failed, { lang: 'zh' })).toBe('没完成，原因已汇报给主 Agent');
+      expect(formatAgentDoing(failed, { lang: 'zh' })).toBe('出错，原因已汇报给主 Agent');
+      expect(formatAgentDoing(failed, { lang: 'en' })).toBe('Failed, reason reported to main agent');
+
+      const stopped = makeAgent({ status: 'stopped' });
+      expect(formatAgentDoing(stopped, { lang: 'zh' })).toBe('已停止');
+      expect(formatAgentDoing(stopped, { lang: 'en' })).toBe('Stopped');
 
       const running = makeAgent({ status: 'running', currentAction: '正在读取 `store.ts`' });
       expect(formatAgentDoing(running, { lang: 'zh' })).toBe('正在读取 store.ts');
     });
 
-    it('strips leading STATUS: done or STATUS: incomplete line and following blank lines', () => {
-      const doneText = 'STATUS: done\n\n补好了 `text.delta` 偏移的两条用例\n第二行';
-      expect(stripStatusHeader(doneText)).toBe('补好了 `text.delta` 偏移的两条用例\n第二行');
-
-      const incompleteText = 'STATUS: incomplete\n\nPowerShell 找不到 npm';
-      expect(stripStatusHeader(incompleteText)).toBe('PowerShell 找不到 npm');
-
-      const statusOnly = 'STATUS: done\n\n';
-      expect(stripStatusHeader(statusOnly)).toBe('');
-
-      const plain = '普通汇报内容\n第二行';
-      expect(stripStatusHeader(plain)).toBe('普通汇报内容\n第二行');
-    });
-
-    it('formatAgentDoing skips STATUS: done line and falls back to completed label when empty', () => {
-      const doneWithStatus = makeAgent({ status: 'done' });
+    it('formatAgentDoing uses first line of resText and falls back to completed label when empty', () => {
+      const doneAgent = makeAgent({ status: 'done' });
       expect(
-        formatAgentDoing(doneWithStatus, {
+        formatAgentDoing(doneAgent, {
           lang: 'zh',
-          resText: 'STATUS: done\n\n补好了 `text.delta` 偏移的两条用例\n第二行',
+          resText: '\n\n补好了 `text.delta` 偏移的两条用例\n第二行',
         }),
       ).toBe('补好了 text.delta 偏移的两条用例');
 
       expect(
-        formatAgentDoing(doneWithStatus, {
+        formatAgentDoing(doneAgent, {
           lang: 'zh',
-          resText: 'STATUS: done',
+          resText: '   ',
         }),
       ).toBe('已完成');
 
       expect(
-        formatAgentDoing(doneWithStatus, {
+        formatAgentDoing(doneAgent, {
           lang: 'en',
-          resText: 'STATUS: done\n\nFixed two cases',
+          resText: 'Fixed two cases\nSecond line',
         }),
       ).toBe('Fixed two cases');
 
       expect(
-        formatAgentDoing(doneWithStatus, {
+        formatAgentDoing(doneAgent, {
           lang: 'en',
-          resText: 'STATUS: done',
+          resText: '',
         }),
       ).toBe('Completed');
     });
@@ -520,7 +510,7 @@ describe('AgentsStrip component', () => {
       failRow!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
     const failDetail = host!.querySelector('[data-testid="next-agents-strip-detail-text"]');
-    expect(failDetail?.textContent).toContain('没完成：');
+    expect(failDetail?.textContent).toContain('出错：');
     expect(failDetail?.textContent).toContain('用例执行失败');
   });
 
@@ -617,7 +607,7 @@ describe('AgentsStrip component', () => {
       ],
     });
 
-    // Subagent sa2 topic with STATUS: done in assistant message
+    // Subagent sa2 topic with completed assistant message
     const doneTop = subagentTopic(cid, 'sa2');
     store.applySnapshot({
       protocolVersion: '2.0.0',
@@ -627,7 +617,7 @@ describe('AgentsStrip component', () => {
           topic: doneTop,
           entity: 'item',
           id: 'item-d1',
-          value: { kind: 'assistant', id: 'a1', text: 'STATUS: done\n\n核对完成，无异常。' },
+          value: { kind: 'assistant', id: 'a1', text: '核对完成，无异常。' },
         },
       ],
     });

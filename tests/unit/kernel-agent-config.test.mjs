@@ -82,9 +82,11 @@ test('new conversation: empty instructions, all tools, enabled skills, Agent nam
     assert.match(skills, /^- review-notes: /m);
     assert.equal(skills.includes('Subject line is imperative'), false);
     assert.equal(skills.includes('Lead with findings'), false);
-    for (const name of ['read', 'write', 'edit', 'ls', 'grep', 'bash', 'echo', 'skill', 'delegate', 'subagent']) {
+    for (const name of ['read', 'write', 'edit', 'ls', 'grep', 'bash', 'echo', 'skill', 'task']) {
       assert.equal(call.tools.includes(name), true, name);
     }
+    assert.equal(call.tools.includes('delegate'), false);
+    assert.equal(call.tools.includes('subagent'), false);
   } finally {
     await stopServer(srv);
     await rm(dataDir, { recursive: true, force: true });

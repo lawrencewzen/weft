@@ -7973,7 +7973,7 @@
           },
           "ask": {
             "$ref": "#/components/schemas/AskCall",
-            "description": "仅 ask_user_question，且参数通过插件校验时出现。kind 为 ask。\nquestions 来自工具结果 details（插件校验后的题目）。\nanswer 为 null：这条提问之后还没有真正的用户消息，界面继续等回答。\n子 Agent 汇报（`[subagent …]`）和自动续写（`[auto-continue]`）虽是 pi.user，不算用户作答，answer 保持 null。\n之后若有 kind 为 weft.ask-answer 的条目（不以 pi. 开头），按其 data 回填 answer。\n用户没答就发了普通消息（之后出现普通 pi.user，且没有这条 toolCallId 的 weft.ask-answer）时，\nanswer 为 { answers: [], skipped: true }。这时再提交 answer 返回 409 E_ASK_ANSWERED。\n"
+            "description": "仅 ask_user_question，且参数通过插件校验时出现。kind 为 ask。\nquestions 来自工具结果 details（插件校验后的题目）。\nanswer 为 null：这条提问之后还没有真正的用户消息，界面继续等回答。\n子 Agent 汇报（`[task …]`）和自动续写（`[auto-continue]`）虽是 pi.user，不算用户作答，answer 保持 null。\n之后若有 kind 为 weft.ask-answer 的条目（不以 pi. 开头），按其 data 回填 answer。\n用户没答就发了普通消息（之后出现普通 pi.user，且没有这条 toolCallId 的 weft.ask-answer）时，\nanswer 为 { answers: [], skipped: true }。这时再提交 answer 返回 409 E_ASK_ANSWERED。\n"
           }
         },
         "description": "单条工具调用的视图模型。全文按需拉 GET /api/v2/conversations/{id}/tools/{toolId}/output。ask_user_question 的 kind 为 ask。"
@@ -8252,7 +8252,8 @@
             "type": "string",
             "enum": [
               "answered",
-              "failed"
+              "failed",
+              "stopped"
             ]
           },
           "body": {
@@ -10149,7 +10150,7 @@
             ]
           },
           "toolCallId": {
-            "description": "派出该子 Agent 的那次 delegate / subagent 工具调用 id，与对话快照里 ToolCall.id 一致。从 roster 里来、找不到对应工具调用时为 null",
+            "description": "派出该子 Agent 的那次 task 工具调用 id，与对话快照里 ToolCall.id 一致。从后台任务文档里来、找不到对应工具调用时为 null",
             "oneOf": [
               {
                 "type": "null"

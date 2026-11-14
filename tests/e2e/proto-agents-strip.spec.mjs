@@ -70,7 +70,7 @@ test('status strip appearance, collapsed counts, expand, in-place details, and s
   await expect(failedRow).toBeVisible();
   await expect(failedRow.getByTestId('next-agents-strip-time')).toHaveText('');
   await expect(failedRow.getByTestId('next-agents-strip-stop')).toHaveCount(0);
-  await expect(failedRow.getByTestId('next-agents-strip-doing')).toContainText('没完成');
+  await expect(failedRow.getByTestId('next-agents-strip-doing')).toContainText('出错');
 
   // 3. In-place expansion
   // (a) Queued row: shows "还没开始", has no elapsed time, has stop button
