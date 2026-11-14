@@ -278,6 +278,12 @@ export function createSqliteStore(dir) {
     if (convCols.has('role_id')) {
       try { db.exec('ALTER TABLE conversations DROP COLUMN role_id'); } catch { /* keep the column, stop reading it */ }
     }
+    const runCols = new Set(db.prepare('PRAGMA table_info(schedule_runs)').all().map((c) => c.name));
+    if (!runCols.has('submission_id')) db.exec('ALTER TABLE schedule_runs ADD COLUMN submission_id TEXT');
+    if (!runCols.has('finished_at')) db.exec('ALTER TABLE schedule_runs ADD COLUMN finished_at INTEGER');
+    if (!runCols.has('duration_ms')) db.exec('ALTER TABLE schedule_runs ADD COLUMN duration_ms INTEGER');
+    if (!runCols.has('summary_json')) db.exec('ALTER TABLE schedule_runs ADD COLUMN summary_json TEXT');
+    if (!runCols.has('log_file')) db.exec('ALTER TABLE schedule_runs ADD COLUMN log_file TEXT');
   }
 
   db.exec('DROP TABLE IF EXISTS roles');
@@ -349,10 +355,21 @@ export function createSqliteStore(dir) {
     updSched: db.prepare(`UPDATE schedules SET
       name=?, message=?, target_json=?, rule_json=?, enabled=?, task_id=?, updated_at=? WHERE id=?`),
     delSched: db.prepare('DELETE FROM schedules WHERE id = ?'),
-    insSchedRun: db.prepare(`INSERT OR IGNORE INTO schedule_runs (id, schedule_id, at, status, conversation_id, error, seq)
-      VALUES (?,?,?,?,?,?, COALESCE((SELECT MAX(seq) FROM schedule_runs WHERE schedule_id = ?), 0) + 1)`),
+    insSchedRun: db.prepare(`INSERT OR IGNORE INTO schedule_runs (id, schedule_id, at, status, conversation_id, error, submission_id, finished_at, duration_ms, summary_json, log_file, seq)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?, COALESCE((SELECT MAX(seq) FROM schedule_runs WHERE schedule_id = ?), 0) + 1)`),
+    updSchedRun: db.prepare(`UPDATE schedule_runs
+      SET status = COALESCE(?, status),
+          conversation_id = COALESCE(?, conversation_id),
+          error = CASE WHEN ? THEN ? ELSE error END,
+          submission_id = COALESCE(?, submission_id),
+          finished_at = COALESCE(?, finished_at),
+          duration_ms = COALESCE(?, duration_ms),
+          summary_json = COALESCE(?, summary_json),
+          log_file = COALESCE(?, log_file)
+      WHERE id = ?`),
     getSchedRun: db.prepare('SELECT * FROM schedule_runs WHERE id = ?'),
     listSchedRuns: db.prepare('SELECT * FROM schedule_runs WHERE schedule_id = ? ORDER BY seq DESC LIMIT ?'),
+    listUnfinishedSchedRuns: db.prepare(`SELECT * FROM schedule_runs WHERE finished_at IS NULL AND status != 'failed' AND submission_id IS NOT NULL ORDER BY at ASC, seq ASC`),
     pruneSchedRuns: db.prepare(`DELETE FROM schedule_runs WHERE schedule_id = ? AND id NOT IN (
       SELECT id FROM schedule_runs WHERE schedule_id = ? ORDER BY seq DESC LIMIT ?)`),
     delSchedRuns: db.prepare('DELETE FROM schedule_runs WHERE schedule_id = ?'),
@@ -408,6 +425,11 @@ export function createSqliteStore(dir) {
     };
   }
 
+  function parseScheduleSummary(raw) {
+    if (raw == null || raw === '') return null;
+    try { return JSON.parse(String(raw)); } catch { return null; }
+  }
+
   function scheduleRunFromRow(row) {
     if (!row) return undefined;
     return {
@@ -417,6 +439,11 @@ export function createSqliteStore(dir) {
       status: row.status,
       conversationId: row.conversation_id == null || row.conversation_id === '' ? null : String(row.conversation_id),
       error: row.error == null || row.error === '' ? null : String(row.error),
+      submissionId: row.submission_id == null || row.submission_id === '' ? null : String(row.submission_id),
+      finishedAt: row.finished_at == null ? null : Number(row.finished_at),
+      durationMs: row.duration_ms == null ? null : Number(row.duration_ms),
+      summary: parseScheduleSummary(row.summary_json),
+      logFile: row.log_file == null || row.log_file === '' ? null : String(row.log_file),
     };
   }
 
@@ -703,17 +730,53 @@ export function createSqliteStore(dir) {
       return q.delSched.run(id).changes > 0;
     },
     /** One record per run id; a repeated id is ignored. Keeps the newest SCHEDULE_RUNS_KEPT. */
-    async addScheduleRun(scheduleId, { id, at, status, conversationId, error }) {
+    async addScheduleRun(scheduleId, { id, at, status, conversationId, error, submissionId, finishedAt, durationMs, summary, logFile }) {
       const runId = id || randomUUID();
-      q.insSchedRun.run(runId, scheduleId, at, status, conversationId ?? null, error ?? null, scheduleId);
+      const summaryJson = summary == null ? null : JSON.stringify(summary);
+      q.insSchedRun.run(
+        runId,
+        scheduleId,
+        at,
+        status,
+        conversationId ?? null,
+        error ?? null,
+        submissionId ?? null,
+        finishedAt ?? null,
+        durationMs ?? null,
+        summaryJson,
+        logFile ?? null,
+        scheduleId,
+      );
       q.pruneSchedRuns.run(scheduleId, scheduleId, SCHEDULE_RUNS_KEPT);
       return scheduleRunFromRow(q.getSchedRun.get(runId));
+    },
+    async updateScheduleRun(id, patch = {}) {
+      if (!id) return undefined;
+      const hasError = Object.prototype.hasOwnProperty.call(patch, 'error');
+      const errVal = patch.error == null ? null : String(patch.error);
+      const summaryJson = patch.summary == null ? null : JSON.stringify(patch.summary);
+      q.updSchedRun.run(
+        patch.status ?? null,
+        patch.conversationId ?? null,
+        hasError ? 1 : 0,
+        errVal,
+        patch.submissionId ?? null,
+        patch.finishedAt ?? null,
+        patch.durationMs ?? null,
+        summaryJson,
+        patch.logFile ?? null,
+        id,
+      );
+      return scheduleRunFromRow(q.getSchedRun.get(id));
     },
     async getScheduleRun(id) {
       return scheduleRunFromRow(q.getSchedRun.get(id));
     },
     async listScheduleRuns(scheduleId, limit = SCHEDULE_RUNS_KEPT) {
       return q.listSchedRuns.all(scheduleId, limit).map(scheduleRunFromRow);
+    },
+    async listUnfinishedScheduleRuns() {
+      return q.listUnfinishedSchedRuns.all().map(scheduleRunFromRow);
     },
     /** Replay of a write that carried a requestId: the stored status and body, or undefined. */
     async getScheduleRequest(scope, requestId) {
